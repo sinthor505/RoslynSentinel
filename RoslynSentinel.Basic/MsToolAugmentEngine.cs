@@ -72,6 +72,20 @@ public class MsToolAugmentEngine
         _workspaceManager = workspaceManager;
     }
 
+    /// <summary>
+    /// Replaces <paramref name="oldNode"/> with <paramref name="newNode"/> and formats only the
+    /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
+    /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
+    /// </summary>
+    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
+    {
+        var annotation = new SyntaxAnnotation();
+        var annotatedNewNode = newNode.WithAdditionalAnnotations(annotation);
+        var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+    }
+
     // ── 1. EncapsulateFieldSafe ───────────────────────────────────────────────
     // MS Bug: encapsulate_field generates `private int SuccessCount` + property
     // `get { return SuccessCount; }` — same name → infinite recursion / compile error.
@@ -204,8 +218,15 @@ public class MsToolAugmentEngine
             .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.CarriageReturnLineFeed, SyntaxFactory.CarriageReturnLineFeed))
             .WithTrailingTrivia(currentField.GetTrailingTrivia());
 
-        var finalRoot = renamedRoot.ReplaceNode(currentField, new SyntaxNode[] { backingField, property });
-        return MsAugmentResult.Ok(finalRoot.NormalizeWhitespace().ToFullString());
+        var annotation = new SyntaxAnnotation();
+        var annotatedReplacements = new SyntaxNode[]
+        {
+            backingField.WithAdditionalAnnotations(annotation),
+            property.WithAdditionalAnnotations(annotation)
+        };
+        var finalRoot = renamedRoot.ReplaceNode(currentField, annotatedReplacements);
+        var formattedDoc = await Formatter.FormatAsync(doc.WithSyntaxRoot(finalRoot), annotation, cancellationToken: cancellationToken);
+        return MsAugmentResult.Ok((await formattedDoc.GetTextAsync(cancellationToken)).ToString());
     }
 
     // ── 2. AnalyzeSwitchForPatternConversion ─────────────────────────────────
@@ -406,8 +427,7 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail("Could not determine replacement form (return/assignment). Manual conversion required.");
         }
 
-        var newRoot = root.ReplaceNode(sw, replacement);
-        return MsAugmentResult.Ok(newRoot.NormalizeWhitespace().ToFullString());
+        return MsAugmentResult.Ok(await ReplaceNodeFormattedAsync(doc, root, sw, replacement, cancellationToken));
     }
 
     // ── 4. ConvertStringFormatToInterpolatedSmart ─────────────────────────────
@@ -554,8 +574,7 @@ public class MsToolAugmentEngine
             SyntaxFactory.Token(SyntaxKind.InterpolatedStringEndToken))
             .WithTriviaFrom(invocation);
 
-        var newRoot = root.ReplaceNode(invocation, interpolated);
-        return MsAugmentResult.Ok(newRoot.NormalizeWhitespace().ToFullString());
+        return MsAugmentResult.Ok(await ReplaceNodeFormattedAsync(doc, root, invocation, interpolated, cancellationToken));
     }
 
     // ── 5. SortAndDeduplicateUsings ───────────────────────────────────────────
@@ -591,18 +610,21 @@ public class MsToolAugmentEngine
             .OrderBy(u => !IsSystemUsing(u))     // System.* first
             .ThenBy(u => u.Name?.ToString() ?? u.ToString(), StringComparer.OrdinalIgnoreCase);
 
+        var annotation = new SyntaxAnnotation();
         var newUsings = SyntaxFactory.List(sorted.Select((u, idx) =>
         {
             // Clean up trivia — each using on its own line, no extra blanks
             var clean = u.WithLeadingTrivia(SyntaxFactory.TriviaList())
-                         .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.CarriageReturnLineFeed));
+                         .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.CarriageReturnLineFeed))
+                         .WithAdditionalAnnotations(annotation);
             return idx == 0
                 ? clean.WithLeadingTrivia(root.Usings.First().GetLeadingTrivia())
                 : clean;
         }));
 
         var newRoot = root.WithUsings(newUsings);
-        var updatedContent = newRoot.NormalizeWhitespace().ToFullString();
+        var formattedDoc = await Formatter.FormatAsync(doc.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        var updatedContent = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
 
         if (writeToFile)
         {
@@ -1757,7 +1779,8 @@ public class MsToolAugmentEngine
         newStmts.Add(callStmt);
         newStmts.AddRange(stmtList.Skip(firstIdx + stmtsInSelection.Count));
 
-        var newBlock = block.WithStatements(SyntaxFactory.List(newStmts));
+        var editAnnotation = new SyntaxAnnotation();
+        var newBlock = block.WithStatements(SyntaxFactory.List(newStmts)).WithAdditionalAnnotations(editAnnotation);
         var newRoot1 = root.ReplaceNode(block, newBlock);
 
         // Locate the containing type in the modified tree (by name) and add the new method
@@ -1772,12 +1795,14 @@ public class MsToolAugmentEngine
         var methodWithTrivia = newMethodDecl
             .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed, SyntaxFactory.LineFeed))
             .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
-            .WithAddedByComment("ExtractMethodSafe");
+            .WithAddedByComment("ExtractMethodSafe")
+            .WithAdditionalAnnotations(editAnnotation);
 
         var updatedType = newContainingType.AddMembers(methodWithTrivia);
         var finalRoot = newRoot1.ReplaceNode(newContainingType, updatedType);
 
-        return MsAugmentResult.Ok(finalRoot.NormalizeWhitespace().ToFullString());
+        var formattedDoc = await Formatter.FormatAsync(doc.WithSyntaxRoot(finalRoot), editAnnotation, cancellationToken: cancellationToken);
+        return MsAugmentResult.Ok((await formattedDoc.GetTextAsync(cancellationToken)).ToString());
     }
 
     public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync()

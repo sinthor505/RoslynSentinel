@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Basic;
 
@@ -45,13 +46,15 @@ public class IDEStyleEngine
             };
         }
 
-        var newRoot = root!.ReplaceNodes(thisAccesses, (oldNode, _) => oldNode.Name);
+        var annotation = new SyntaxAnnotation();
+        var newRoot = root!.ReplaceNodes(thisAccesses, (oldNode, _) => oldNode.Name.WithAdditionalAnnotations(annotation));
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member accesses simplified.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
 

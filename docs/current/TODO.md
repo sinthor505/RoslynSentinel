@@ -512,13 +512,13 @@ being absent. 7 new tests in `RoslynSentinel.Tests.Battery/CreateFileDeleteFileT
 create-collision, parent-dir-autocreate, delete, delete-nonexistent, delete-then-undo,
 delete-refused-on-drift), all passing. Committed `35b115c`.
 
-**Related, smaller, unfixed finding from this same pass:** `SyncTypeAndFilename`'s own
-`File.Delete(filePath)` call (`SentinelRefactoringTools.cs`, ~line 1159) is a bare `System.IO` call,
-not routed through `FileIoHelper.DeleteAsync` — it doesn't hold the per-path lock the rest of the
-write path now uses. Worth migrating for consistency the next time that method is touched, but is a
-one-line lock-safety gap, not the same thing as the missing tool surface above.
+**Related, smaller finding from this same pass — closed 2026-08-27:** `SyncTypeAndFilename`'s own
+`File.Delete(filePath)` call (`SentinelRefactoringTools.cs`, ~line 1175) was a bare `System.IO` call,
+not routed through `FileIoHelper.DeleteAsync` — it didn't hold the per-path lock the rest of the
+write path uses. Fixed by switching to `await FileIoHelper.DeleteAsync(filePath, cancellationToken)`.
+Verified via `GetDiagnostics`: 0 errors/warnings.
 
-## `ApplyDiff` reflows far more of the file than the target hunk — root cause found: whole-file CRLF normalization
+## `ApplyDiff` reflows far more of the file than the target hunk — closed (commit 7e870e4)
 
 **Found:** 2026-08-19/20, while implementing the `Build` tool (original repro, unconfirmed root
 cause). **Root cause isolated:** 2026-08-20/21, while merging `SafeDeleteSymbolAsync`'s
@@ -565,6 +565,16 @@ ending — or at minimum detect the file's dominant line ending once and normali
 *to that*, rather than unconditionally forcing CRLF. Roslyn's `SourceText` already tracks per-file
 line-ending info; the fix likely means writing back through that instead of a raw string write that
 loses it.
+
+**Fixed 2026-08-27 (commit `7e870e4`, "Fix ApplyDiff forcing one line-ending convention onto the
+whole file"):** confirmed via direct inspection of `DiffEngine.ApplyDiff`
+(`RoslynSentinel.Common/DiffEngine.cs`) that the suggested approach above was implemented exactly as
+described. Each original line's own line-break characters (`\r\n`, `\n`, `\r`, or none for a
+file with no trailing newline) are now read per-line via `SourceText.Lines` and preserved
+individually instead of forcing one convention onto the whole file; newly-inserted lines get the
+file's dominant ending (by majority count) unless they land as the new last line. Discovered
+already-fixed while investigating an unrelated `ApplyDiff` hunk-anchoring question — this entry was
+stale (the fix predates this note but the doc was never updated). No further action needed.
 
 ## `AddConstructorParameter`/`ConstructorParameter` collapses multi-line signatures onto one line — closed (2026-08-27)
 
@@ -849,7 +859,7 @@ for validation instead of being `continue`-skipped. Also updated `RoslynSentinel
 and `docs/known-failing-tests.{Basic,Solution}.txt`. Confirmed via `git show 1b00f3f` during the
 2026-08-24 docs reorganization pass; no further action needed.
 
-## `RoslynSentinel.Advanced`'s NormalizeWhitespace occurrences never got a follow-up sweep
+## `RoslynSentinel.Advanced`'s NormalizeWhitespace occurrences never got a follow-up sweep — Basic side now fully closed 2026-08-27; Advanced still open
 
 **Found:** 2026-08-24, while auditing `docs/plan-normalize-whitespace-full-sweep-v1.md` (now filed
 `docs/obsolete/`) for the docs reorganization pass. That plan completed a sweep of `RoslynSentinel.Basic`
@@ -883,6 +893,39 @@ same audit. **Implication for this entry:** "the Basic sweep is done, only Advan
 longer be assumed — worth a fresh grep of `RoslynSentinel.Basic` too (not just `RoslynSentinel.Advanced`)
 for any other `.ReplaceNode(...).NormalizeWhitespace()`/bare `.NormalizeWhitespace()` call before
 scoping the Advanced-side follow-up work, since the "already fixed" premise just proved incomplete once.
+
+**Basic side fully closed 2026-08-27:** a fresh `SearchSolutionText` sweep of all of
+`RoslynSentinel.Basic` found 89 raw `.NormalizeWhitespace()` hits (not just the 1 `SortMembersAsync`
+miss above), across 17 files. Every hit was individually classified: 55 were the unscoped
+whole-root-reflow bug, 34 were legitimate uses (whole-document `SyntaxRewriter.Visit` passes where
+full-file reformatting is correct-by-design; small standalone nodes normalized before insertion,
+never a reflow of existing content; text built only for display/comparison, never written back; or
+brand-new output with the original root untouched). Of the 55 confirmed bugs, 52 were fixed by
+switching to `ReplaceNodeFormattedAsync`/`RemoveNodeFormattedAsync` (or a shared-`SyntaxAnnotation` +
+`Formatter.FormatAsync` pass for compound/multi-edit methods) — full per-file breakdown in the
+`RoslynSentinel.Basic/*.cs` diffs from this date. 3 were deliberately left unfixed, flagged for a
+human/architecture decision rather than a mechanical swap:
+- `RunMicroRefactoringAsync` (`GranularRefactoringEngine.cs`) — its 5 dispatched helpers return bare
+  `SyntaxNode?` with no way to identify which sub-node changed; scoping the fix requires changing
+  helper return contracts, not just wrapping the call site.
+- `ExtractConstantSafeAsync` and `GenerateToStringSafeAsync` (`MsToolAugmentEngine.cs`) — both
+  Document-less (parse from a raw string via `CSharpSyntaxTree.ParseText`/`File.ReadAllTextAsync`,
+  no `Document` available for `Formatter.FormatAsync`'s annotation-scoped overload). Would need an
+  `AdhocWorkspace`-based formatting variant; `FormatDocumentSafeAsync` in the same file was checked
+  as a possible existing precedent and doesn't cover this case.
+
+Verified via `dotnet build RoslynSentinel.slnx` (0 errors, only pre-existing test-project warnings)
+and the full test suite across all 5 test projects (0 new failures; every name in
+`docs/known-failing-tests.{Basic,Advanced}.txt` still fails/skips the same way, nothing new).
+`git diff --ignore-all-space` confirms each file's actual change is exactly the expected
+targeted-formatting swap — large raw `git diff` line counts in a few files (e.g. `AnalysisEngine.cs`)
+are pure pre-existing LF/CRLF line-ending noise, not scope creep.
+
+**Advanced side (~63-64 occurrences) remains explicitly out of scope** — not started this session
+per direct user instruction to do Basic only. Suggested approach section above still applies when
+that work is picked up; re-run `SearchSolutionText` fresh rather than trusting the old ~64 count,
+since this session's Basic count (89, not the originally-assumed handful) shows raw grep-style
+estimates for this pattern have been unreliable so far.
 
 ## Remaining `throw new` sites inside `[McpServerTool]`-adjacent code — CLOSED 2026-08-27
 

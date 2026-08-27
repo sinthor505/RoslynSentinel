@@ -971,13 +971,12 @@ public class RefactoringEngine
             };
         }
 
-        var newRoot = root!.ReplaceNode(indexer, getter);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Indexer converted to method.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, indexer, getter, cancellationToken)
         };
     }
 
@@ -1021,13 +1020,12 @@ public class RefactoringEngine
         var hasParams = lastParam.Modifiers.Any(m => m.IsKind(SyntaxKind.ParamsKeyword));
         var newModifiers = hasParams ? lastParam.Modifiers.Remove(lastParam.Modifiers.First(m => m.IsKind(SyntaxKind.ParamsKeyword))) : lastParam.Modifiers.Insert(0, SyntaxFactory.Token(SyntaxKind.ParamsKeyword));
         var newParam = lastParam.WithModifiers(newModifiers);
-        var newRoot = root!.ReplaceNode(lastParam, newParam);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Params keyword toggled.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, lastParam, newParam, cancellationToken)
         };
     }
 
@@ -1314,13 +1312,12 @@ public class RefactoringEngine
         var newClass = SyntaxFactory.ClassDeclaration(classNode.Identifier).WithModifiers(classNode.Modifiers).WithParameterList(ctor.ParameterList);
         var members = classNode.Members.Where(m => m is not ConstructorDeclarationSyntax && m is not FieldDeclarationSyntax).ToList();
         newClass = newClass.WithMembers(SyntaxFactory.List(members));
-        var newRoot = root!.ReplaceNode(classNode, newClass);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Class converted to primary constructor.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
         };
     }
 
@@ -1549,12 +1546,11 @@ public class RefactoringEngine
 
         var currentType = trackedRoot.GetCurrentNode(containingType)!;
         var newType = currentType.WithMembers(((TypeDeclarationSyntax)currentType).Members.Insert(0, constDecl));
-        trackedRoot = trackedRoot.ReplaceNode(currentType, newType);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = trackedRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, trackedRoot, currentType, newType, cancellationToken)
         };
     }
 
@@ -1746,12 +1742,11 @@ public class RefactoringEngine
 
         // Insert variable declaration before the statement
         var newBlock = currentBlock.WithStatements(currentBlock.Statements.Insert(idx, varDecl));
-        newRoot = newRoot.ReplaceNode(currentBlock, newBlock);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
         };
     }
 
@@ -2020,12 +2015,11 @@ public class RefactoringEngine
             };
         }
 
-        var newRoot = root.RemoveNode(existing, SyntaxRemoveOptions.KeepExteriorTrivia)!.NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await RemoveNodeFormattedAsync(document, root, existing, SyntaxRemoveOptions.KeepExteriorTrivia, cancellationToken)
         };
     }
 
@@ -2320,12 +2314,11 @@ public class RefactoringEngine
             }
 
             var newContainer = typeDecl.WithMembers(newMembers);
-            var newRoot = root!.ReplaceNode(container, newContainer).NormalizeWhitespace();
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = newRoot.ToFullString()
+                UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
             };
         }
 
@@ -2411,12 +2404,11 @@ public class RefactoringEngine
             }
 
             var newContainer = typeDecl.WithMembers(newMembers);
-            var newRoot = root!.ReplaceNode(container, newContainer).NormalizeWhitespace();
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = newRoot.ToFullString()
+                UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
             };
         }
 
@@ -2520,12 +2512,11 @@ public class RefactoringEngine
         }
 
         var newNode = targetNode is MemberDeclarationSyntax memberTarget ? (SyntaxNode)memberTarget.AddAttributeLists(attrList) : ((BaseTypeDeclarationSyntax)targetNode).AddAttributeLists(attrList);
-        var newRoot = root.ReplaceNode(targetNode, newNode).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, targetNode, newNode, cancellationToken)
         };
     }
 
@@ -2594,12 +2585,11 @@ public class RefactoringEngine
 
         var baseType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(baseTypeName));
         var newContainer = container.AddBaseListTypes(baseType);
-        var newRoot = root!.ReplaceNode(container, newContainer).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -2689,12 +2679,11 @@ public class RefactoringEngine
             };
         }
 
-        var newRoot = root.ReplaceNode(oldAttr, newAttr).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, oldAttr, newAttr, cancellationToken)
         };
     }
 
@@ -2768,12 +2757,11 @@ public class RefactoringEngine
 
         var newAttrLists = memberTarget.AttributeLists.Select(al => al.WithAttributes(SyntaxFactory.SeparatedList(al.Attributes.Where(a => !AttrMatches(a))))).Where(al => al.Attributes.Count > 0).ToList();
         var newMember = memberTarget.WithAttributeLists(SyntaxFactory.List(newAttrLists));
-        var newRoot = root.ReplaceNode(memberTarget, newMember).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, memberTarget, newMember, cancellationToken)
         };
     }
 
@@ -2840,12 +2828,11 @@ public class RefactoringEngine
 
         var remaining = container.BaseList.Types.Where(t => !t.ToString().Contains(baseTypeName)).ToList();
         var newContainer = remaining.Count == 0 ? container.WithBaseList(null) : container.WithBaseList(container.BaseList.WithTypes(SyntaxFactory.SeparatedList(remaining)));
-        var newRoot = root!.ReplaceNode(container, newContainer).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -2999,12 +2986,11 @@ public class RefactoringEngine
 
         var token = SyntaxFactory.Token(kind).WithTrailingTrivia(SyntaxFactory.Space);
         var newModifiers = target.Modifiers.Add(token);
-        var newRoot = root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
         };
     }
 
@@ -3077,12 +3063,11 @@ public class RefactoringEngine
         }
 
         var newModifiers = SyntaxFactory.TokenList(target.Modifiers.Where(m => !m.IsKind(kind)));
-        var newRoot = root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
         };
     }
 
@@ -3332,12 +3317,11 @@ public class RefactoringEngine
         }
 
         var stripped = target.GetLeadingTrivia().Where(t => !t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).ToList();
-        var newRoot = root.ReplaceNode(target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped))).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), cancellationToken)
         };
     }
 
@@ -3455,12 +3439,11 @@ public class RefactoringEngine
         static bool IsStatic(MemberDeclarationSyntax m) => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword));
         var sorted = container.Members.OrderBy(CategoryOf).ThenBy(m => IsStatic(m) ? 0 : 1).ThenBy(m => GetMemberName(m) ?? "").ToList();
         var newContainer = container.WithMembers(SyntaxFactory.List(sorted));
-        var newRoot = root!.ReplaceNode(container, newContainer).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -3545,12 +3528,11 @@ public class RefactoringEngine
             return s;
         }).Where(s => s != null).Select(s => s!).ToList();
         var newBlock = block.WithStatements(SyntaxFactory.List(newStatements));
-        var newRoot = root.ReplaceNode(block, newBlock).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
         };
     }
 
@@ -3658,12 +3640,11 @@ public class RefactoringEngine
                 return s;
             }).Where(s => s != null).Select(s => s!).ToList();
             var newBlock = block.WithStatements(SyntaxFactory.List(newStatements));
-            var newRoot = root.ReplaceNode(block, newBlock).NormalizeWhitespace();
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = newRoot.ToFullString()
+                UpdatedText = await ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
             };
         }
         catch (ToolException ex)
@@ -4550,7 +4531,6 @@ public class RefactoringEngine
         }
 
         var newInterfaceNode = interfaceNode.AddMembers(newMembers.ToArray());
-        var newInterfaceRoot = interfaceRoot.ReplaceNode(interfaceNode, newInterfaceNode);
         // If interface is in a different file, indicate which file was updated
         if (interfaceDocument != classDocument)
         {
@@ -4559,7 +4539,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = updatedPath,
-                UpdatedText = "// Updated file: " + updatedPath + "\n" + newInterfaceRoot.NormalizeWhitespace().ToFullString()
+                UpdatedText = "// Updated file: " + updatedPath + "\n" + await ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
             };
         }
 
@@ -4567,7 +4547,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = interfaceDocument.FilePath ?? interfaceDocument.Name,
-            UpdatedText = newInterfaceRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
         };
     }
 

@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Basic;
@@ -15,6 +16,28 @@ public class StructuralRefinementEngine
     {
         _workspaceManager = workspaceManager;
         _config = config;
+    }
+
+    /// <summary>
+    /// Removes <paramref name="nodeToRemove"/> and formats only the affected span (via a tracking
+    /// annotation on its former container), instead of the whole file.
+    /// </summary>
+    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken = default)
+    {
+        var container = nodeToRemove.Parent;
+        if (container == null)
+        {
+            var bareNewRoot = root.RemoveNode(nodeToRemove, removeOptions)!;
+            var bareFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(bareNewRoot), cancellationToken: cancellationToken);
+            return (await bareFormattedDoc.GetTextAsync(cancellationToken)).ToString();
+        }
+        var annotation = new SyntaxAnnotation();
+        var annotatedRoot = root.ReplaceNode(container, container.WithAdditionalAnnotations(annotation));
+        var annotatedContainer = annotatedRoot.GetAnnotatedNodes(annotation).Single();
+        var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
+        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     /// <summary>
@@ -119,12 +142,11 @@ public class StructuralRefinementEngine
             return reflectionRisk;
         }
 
-        var newRoot = root!.RemoveNode(node!, SyntaxRemoveOptions.KeepUnbalancedDirectives);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot!.NormalizeWhitespace().ToFullString()
+            UpdatedText = await RemoveNodeFormattedAsync(document, root!, node!, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
         };
     }
 
@@ -329,12 +351,11 @@ public class StructuralRefinementEngine
             };
         }
 
-        var newRoot = root.RemoveNode(node, SyntaxRemoveOptions.KeepUnbalancedDirectives);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot!.NormalizeWhitespace().ToFullString()
+            UpdatedText = await RemoveNodeFormattedAsync(document, root, node, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
         };
     }
 }

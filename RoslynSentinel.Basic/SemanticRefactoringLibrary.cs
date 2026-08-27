@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Basic;
 
@@ -11,6 +12,42 @@ public class SemanticRefactoringLibrary
     public SemanticRefactoringLibrary(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="oldNode"/> with <paramref name="newNode"/> and formats only the
+    /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
+    /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
+    /// </summary>
+    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
+    {
+        var annotation = new SyntaxAnnotation();
+        var annotatedNewNode = newNode.WithAdditionalAnnotations(annotation);
+        var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+    }
+
+    /// <summary>
+    /// Removes <paramref name="nodeToRemove"/> and formats only the affected span (via a tracking
+    /// annotation on its former container), instead of the whole file.
+    /// </summary>
+    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken = default)
+    {
+        var container = nodeToRemove.Parent;
+        if (container == null)
+        {
+            var bareNewRoot = root.RemoveNode(nodeToRemove, removeOptions)!;
+            var bareFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(bareNewRoot), cancellationToken: cancellationToken);
+            return (await bareFormattedDoc.GetTextAsync(cancellationToken)).ToString();
+        }
+        var annotation = new SyntaxAnnotation();
+        var annotatedRoot = root.ReplaceNode(container, container.WithAdditionalAnnotations(annotation));
+        var annotatedContainer = annotatedRoot.GetAnnotatedNodes(annotation).Single();
+        var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
+        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     /// <summary>
@@ -83,8 +120,7 @@ public class SemanticRefactoringLibrary
         {
             try
             {
-                var newRoot = root.RemoveNode(declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
-                return newRoot.NormalizeWhitespace().ToFullString();
+                return await RemoveNodeFormattedAsync(document, root, declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken);
             }
             catch
             {
@@ -92,7 +128,10 @@ public class SemanticRefactoringLibrary
             }
         }
 
-        // Replace each usage (process backwards to avoid position invalidation)
+        // Replace each usage (process backwards to avoid position invalidation). All replacement
+        // nodes share one annotation so the final formatting pass can reformat just the affected
+        // spans instead of reflowing the whole file.
+        var editAnnotation = new SyntaxAnnotation();
         var modifiedRoot = root;
         foreach (var usage in usages)
         {
@@ -106,7 +145,7 @@ public class SemanticRefactoringLibrary
                 var currentUsage = modifiedRoot.FindNode(usage.Span) as IdentifierNameSyntax;
                 if (currentUsage != null && currentUsage.Identifier.Text == variableName)
                 {
-                    modifiedRoot = modifiedRoot.ReplaceNode(currentUsage, replacement.WithTriviaFrom(currentUsage));
+                    modifiedRoot = modifiedRoot.ReplaceNode(currentUsage, replacement.WithTriviaFrom(currentUsage).WithAdditionalAnnotations(editAnnotation));
                 }
             }
             catch
@@ -129,7 +168,17 @@ public class SemanticRefactoringLibrary
             // If removal fails, return with usages replaced
         }
 
-        return modifiedRoot.NormalizeWhitespace().ToFullString();
+        // Format only the spans carrying the edit annotation (the replaced usages), unless every
+        // individual replacement above failed (e.g. all caught exceptions) — in which case nothing
+        // is annotated and Formatter.FormatAsync(document, annotation) would find no matching spans.
+        if (modifiedRoot.GetAnnotatedNodes(editAnnotation).Any())
+        {
+            var scopedFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(modifiedRoot), editAnnotation, cancellationToken: cancellationToken);
+            return (await scopedFormattedDoc.GetTextAsync(cancellationToken)).ToString();
+        }
+
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(modifiedRoot), cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     /// <summary>
@@ -189,8 +238,7 @@ public class SemanticRefactoringLibrary
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
 
         var newClass = classNode.ReplaceNode(propNode, new MemberDeclarationSyntax[] { field, getter, setter });
-        var newRoot = root!.ReplaceNode(classNode, newClass);
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -236,9 +284,8 @@ public class SemanticRefactoringLibrary
         newStatements.AddRange(origStatements.Skip(endIdx + 1));
 
         var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
-        var newRoot = root!.ReplaceNode(parentBlock, newBlock);
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await ReplaceNodeFormattedAsync(document, root!, parentBlock, newBlock, cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -308,9 +355,8 @@ public class SemanticRefactoringLibrary
             newStatements.AddRange(origStatements.Skip(endIdx + 1));
 
             var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
-            var newRoot = root.ReplaceNode(parentBlock, newBlock);
 
-            return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await ReplaceNodeFormattedAsync(document, root, parentBlock, newBlock, cancellationToken), FilePath = filePath };
         }
         catch (ToolException ex)
         {

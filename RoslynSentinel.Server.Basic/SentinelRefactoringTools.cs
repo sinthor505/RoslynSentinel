@@ -1172,7 +1172,7 @@ public class SentinelRefactoringTools
             // two never coexist as a validated on-disk duplicate of the same type.
             try
             {
-                File.Delete(filePath);
+                await FileIoHelper.DeleteAsync(filePath, cancellationToken);
             }
             catch (Exception ex)
             {

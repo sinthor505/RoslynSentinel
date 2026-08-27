@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Basic;
 
@@ -11,6 +12,20 @@ public class StandardRefactoringEngine
     public StandardRefactoringEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="oldNode"/> with <paramref name="newNode"/> and formats only the
+    /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
+    /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
+    /// </summary>
+    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
+    {
+        var annotation = new SyntaxAnnotation();
+        var annotatedNewNode = newNode.WithAdditionalAnnotations(annotation);
+        var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     /// <summary>
@@ -52,12 +67,11 @@ public class StandardRefactoringEngine
                     .WithExpressionBody(arrow)
                     .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
 
-                var newRoot = root!.ReplaceNode(methodNode, propertyNode);
                 return new DocumentEditResult
                 {
                     Outcome = EditOutcome.Modified,
                     FilePath = filePath,
-                    UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+                    UpdatedText = await ReplaceNodeFormattedAsync(document, root!, methodNode, propertyNode, cancellationToken)
                 };
             }
         }
@@ -127,12 +141,11 @@ public class StandardRefactoringEngine
         if (!hasInstanceAccess)
         {
             var newMethodNode = methodNode.AddModifiers(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
-            var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+                UpdatedText = await ReplaceNodeFormattedAsync(document, root!, methodNode, newMethodNode, cancellationToken)
             };
         }
 

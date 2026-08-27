@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Basic;
 
@@ -122,15 +123,17 @@ public class MappingEngine
             };
         }
 
+        var annotation = new SyntaxAnnotation();
         var newRoot = root!.ReplaceNodes(nodes, (oldNode, newNode) =>
-            newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left));
+            newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left).WithAdditionalAnnotations(annotation));
 
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Assignment expressions inverted in the specified range: {startLine}-{endLine}",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -201,15 +204,17 @@ public class MappingEngine
                 };
             }
 
+            var annotation = new SyntaxAnnotation();
             var newRoot = root.ReplaceNodes(nodes, (oldNode, newNode) =>
-                newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left));
+                newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left).WithAdditionalAnnotations(annotation));
 
+            var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = $"// Assignment expressions inverted in the snippet",
-                UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+                UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
             };
         }
         catch (ToolException ex)

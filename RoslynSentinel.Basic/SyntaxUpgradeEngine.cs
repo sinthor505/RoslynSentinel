@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Basic;
 
@@ -13,6 +14,20 @@ public class SyntaxUpgradeEngine
     {
         _workspaceManager = workspaceManager;
         _config = config;
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="oldNode"/> with <paramref name="newNode"/> and formats only the
+    /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
+    /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
+    /// </summary>
+    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
+    {
+        var annotation = new SyntaxAnnotation();
+        var annotatedNewNode = newNode.WithAdditionalAnnotations(annotation);
+        var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     public async Task<DocumentEditResult> UpgradeToModernGuardsAsync(FilePath filePath, CancellationToken cancellationToken = default)
@@ -205,12 +220,11 @@ public class SyntaxUpgradeEngine
         if (node != null)
         {
             var nameofExpr = SyntaxFactory.ParseExpression($"nameof({node.Token.ValueText})").WithTriviaFrom(node);
-            var newRoot = root!.ReplaceNode(node, nameofExpr);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+                UpdatedText = await ReplaceNodeFormattedAsync(document, root!, node, nameofExpr, cancellationToken)
             };
         }
         return new DocumentEditResult
@@ -279,13 +293,12 @@ public class SyntaxUpgradeEngine
 
         var switchExpr = SyntaxFactory.SwitchExpression(switchStmt.Expression, SyntaxFactory.SeparatedList(arms));
         var newReturn = SyntaxFactory.ReturnStatement(switchExpr);
-        var newRoot = root!.ReplaceNode(switchStmt, newReturn);
 
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, switchStmt, newReturn, cancellationToken)
         };
     }
 
@@ -543,12 +556,14 @@ public class SyntaxUpgradeEngine
             };
         }
 
-        var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig]);
+        var fieldBackedPropsAnnotation = new SyntaxAnnotation();
+        var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig].WithAdditionalAnnotations(fieldBackedPropsAnnotation));
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), fieldBackedPropsAnnotation, cancellationToken: cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -773,13 +788,12 @@ public class SyntaxUpgradeEngine
         var rewriter = new FieldToParamRewriter(rewriteMap);
         newClassNode = (ClassDeclarationSyntax)rewriter.Visit(newClassNode);
 
-        var newRoot = root.ReplaceNode(classNode, newClassNode);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Class converted to primary constructor.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, classNode, newClassNode, cancellationToken)
         };
     }
 
@@ -838,13 +852,12 @@ public class SyntaxUpgradeEngine
             .WithLeadingTrivia(nsDecl.GetLeadingTrivia())
             .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.ElasticCarriageReturnLineFeed));
 
-        var newRoot = root.ReplaceNode(nsDecl, fileScopedNs);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Converted to file-scoped namespace.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, nsDecl, fileScopedNs, cancellationToken)
         };
     }
 

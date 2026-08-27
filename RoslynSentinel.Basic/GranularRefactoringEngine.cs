@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Basic;
 
@@ -11,6 +12,43 @@ public class GranularRefactoringEngine
     public GranularRefactoringEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
+    }
+
+    /// <summary>
+    /// Replaces <paramref name = "oldNode"/> with <paramref name = "newNode"/> and formats only the
+    /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
+    /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
+    /// </summary>
+    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
+    {
+        var annotation = new SyntaxAnnotation();
+        var annotatedNewNode = newNode.WithAdditionalAnnotations(annotation);
+        var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+    }
+
+    /// <summary>
+    /// Removes <paramref name = "nodeToRemove"/> and formats only its former container (the nearest
+    /// ancestor whose node identity survives the removal), instead of the whole file.
+    /// </summary>
+    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken = default)
+    {
+        var container = nodeToRemove.Parent;
+        if (container == null)
+        {
+            var bareNewRoot = root.RemoveNode(nodeToRemove, removeOptions)!;
+            var bareFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(bareNewRoot), cancellationToken: cancellationToken);
+            return (await bareFormattedDoc.GetTextAsync(cancellationToken)).ToString();
+        }
+
+        var annotation = new SyntaxAnnotation();
+        var annotatedRoot = root.ReplaceNode(container, container.WithAdditionalAnnotations(annotation));
+        var annotatedContainer = annotatedRoot.GetAnnotatedNodes(annotation).Single();
+        var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
+        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     /// <summary>
@@ -244,13 +282,19 @@ public class GranularRefactoringEngine
         var newField = newRoot.GetCurrentNode(field);
         if (newField != null)
         {
-            newRoot = newRoot.RemoveNode(newField, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                UpdatedText = await RemoveNodeFormattedAsync(document, newRoot, newField, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
+            };
         }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = newRoot.ToFullString()
         };
     }
 
@@ -383,12 +427,11 @@ public class GranularRefactoringEngine
             .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.SingletonList(
                 SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithBody(getterBody))));
 
-        var newRoot = root!.ReplaceNode(method, indexer);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, method, indexer, cancellationToken)
         };
     }
 
@@ -479,13 +522,12 @@ public class GranularRefactoringEngine
         var newRoot = trackedRoot.ReplaceNode(trackedRoot.GetCurrentNode(expression)!, fieldRef);
         var currentClass = newRoot.GetCurrentNode(containingClass)!;
         var newClass = currentClass.WithMembers(currentClass.Members.Insert(0, fieldDeclaration));
-        newRoot = newRoot.ReplaceNode(currentClass, newClass);
 
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, newRoot, currentClass, newClass, cancellationToken)
         };
     }
 
@@ -628,13 +670,12 @@ public class GranularRefactoringEngine
         }
 
         var updatedMethod = currentMethod.WithParameterList(currentMethod.ParameterList.AddParameters(newParameter));
-        newRoot = newRoot.ReplaceNode(currentMethod, updatedMethod);
 
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, newRoot, currentMethod, updatedMethod, cancellationToken)
         };
     }
 
@@ -756,14 +797,13 @@ public class GranularRefactoringEngine
         }
 
         var newBlock = currentBlock.WithStatements(currentBlock.Statements.Insert(idx, varDecl));
-        newRoot = newRoot.ReplaceNode(currentBlock, newBlock);
 
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Local variable introduced.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
         };
     }
 
@@ -834,14 +874,16 @@ public class GranularRefactoringEngine
         var ns = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
         var fileScopedNs = root.DescendantNodes().OfType<FileScopedNamespaceDeclarationSyntax>().FirstOrDefault();
 
+        var annotation = new SyntaxAnnotation();
+        var annotatedNestedType = nestedType.WithAdditionalAnnotations(annotation);
         if (ns != null)
         {
-            var newNs = ns.AddMembers(nestedType);
+            var newNs = ns.AddMembers(annotatedNestedType);
             newRoot = newRoot!.ReplaceNode(ns, newNs);
         }
         else if (fileScopedNs != null)
         {
-            var newFileScopedNs = fileScopedNs.AddMembers(nestedType);
+            var newFileScopedNs = fileScopedNs.AddMembers(annotatedNestedType);
             newRoot = newRoot!.ReplaceNode(fileScopedNs, newFileScopedNs);
         }
         else
@@ -850,16 +892,28 @@ public class GranularRefactoringEngine
             var compilationUnit = root as CompilationUnitSyntax;
             if (compilationUnit != null)
             {
-                newRoot = compilationUnit.AddMembers(nestedType);
+                newRoot = compilationUnit.AddMembers(annotatedNestedType);
             }
         }
 
+        if (newRoot == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                Message = "// Nested type moved to outer scope.",
+                UpdatedText = root.ToFullString()
+            };
+        }
+
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Nested type moved to outer scope.",
-            UpdatedText = newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString()
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -1065,12 +1119,18 @@ public class GranularRefactoringEngine
         var classNode = methodNode.Parent as ClassDeclarationSyntax;
         var interfaceNode = methodNode.Parent as InterfaceDeclarationSyntax;
 
+        // Shared annotation for every node introduced/replaced below (the rewritten method and,
+        // further down, the newly-appended record declaration) — lets the final Formatter.FormatAsync
+        // pass reformat just these edited spans instead of reflowing the whole file.
+        var editAnnotation = new SyntaxAnnotation();
+        var annotatedNewMethodNode = newMethodNode.WithAdditionalAnnotations(editAnnotation);
+
         SyntaxNode newRoot = root;
 
         if (interfaceNode != null && methodSymbol?.ExplicitInterfaceImplementations.Length == 0)
         {
             // Update interface method
-            var newInterface = interfaceNode.ReplaceNode(methodNode, newMethodNode);
+            var newInterface = interfaceNode.ReplaceNode(methodNode, annotatedNewMethodNode);
             newRoot = root.ReplaceNode(interfaceNode, newInterface);
         }
         else if (classNode != null && methodSymbol?.ExplicitInterfaceImplementations.Length == 0)
@@ -1079,61 +1139,61 @@ public class GranularRefactoringEngine
             if (methodSymbol?.ContainingType?.Interfaces.Length > 0)
             {
                 // Method implements interface — add warning but update the implementation
-                newRoot = root.ReplaceNode(methodNode, newMethodNode);
+                newRoot = root.ReplaceNode(methodNode, annotatedNewMethodNode);
                 // Append warning comment
                 var warning = $"// WARNING: This method implements an interface. Update the interface signature in the corresponding interface file.\n";
+                var warningFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), editAnnotation, cancellationToken: cancellationToken);
                 return new DocumentEditResult
                 {
                     Outcome = EditOutcome.Modified,
                     FilePath = filePath,
                     Message = warning,
-                    UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+                    UpdatedText = (await warningFormattedDoc.GetTextAsync(cancellationToken)).ToString()
                 };
             }
             else
             {
-                newRoot = root.ReplaceNode(methodNode, newMethodNode);
+                newRoot = root.ReplaceNode(methodNode, annotatedNewMethodNode);
             }
         }
         else
         {
-            newRoot = root.ReplaceNode(methodNode, newMethodNode);
+            newRoot = root.ReplaceNode(methodNode, annotatedNewMethodNode);
         }
 
         // Append record declaration to end of file
         var compilationUnit = newRoot as CompilationUnitSyntax;
         if (compilationUnit != null)
         {
-            var recordMember = SyntaxFactory.GlobalStatement(
-                SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression("_placeholder_")));
-            // Actually append as a namespace member or top-level
+            var annotatedRecordDecl = recordDecl.WithAdditionalAnnotations(editAnnotation);
             // Find the namespace or use file-scoped namespace
             var nsNode = compilationUnit.Members.OfType<NamespaceDeclarationSyntax>().LastOrDefault();
             var fileScopeNs = compilationUnit.Members.OfType<FileScopedNamespaceDeclarationSyntax>().LastOrDefault();
 
             if (nsNode != null)
             {
-                var newNs = nsNode.AddMembers(recordDecl.NormalizeWhitespace());
+                var newNs = nsNode.AddMembers(annotatedRecordDecl);
                 newRoot = compilationUnit.ReplaceNode(nsNode, newNs);
             }
             else if (fileScopeNs != null)
             {
-                var newNs = fileScopeNs.AddMembers(recordDecl.NormalizeWhitespace());
+                var newNs = fileScopeNs.AddMembers(annotatedRecordDecl);
                 newRoot = compilationUnit.ReplaceNode(fileScopeNs, newNs);
             }
             else
             {
                 // Top-level: add after the last type declaration
-                newRoot = compilationUnit.AddMembers(recordDecl.NormalizeWhitespace());
+                newRoot = compilationUnit.AddMembers(annotatedRecordDecl);
             }
         }
 
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), editAnnotation, cancellationToken: cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Local variable introduced.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
 

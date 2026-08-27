@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Basic;
 
@@ -20,6 +21,20 @@ public class AnalysisEngine
     {
         _workspaceManager = workspaceManager;
         _config = config;
+    }
+
+    /// <summary>
+    /// Replaces <paramref name = "oldNode"/> with <paramref name = "newNode"/> and formats only the
+    /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
+    /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
+    /// </summary>
+    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
+    {
+        var annotation = new SyntaxAnnotation();
+        var annotatedNewNode = newNode.WithAdditionalAnnotations(annotation);
+        var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     private async Task<IEnumerable<(Document Document, SyntaxNode Root, SemanticModel? SemanticModel)>> GetTargetDocumentsAsync(
@@ -599,11 +614,10 @@ public class AnalysisEngine
                 .WithBody(SyntaxFactory.Block(statements));
 
             var newClassForBlock = classNode.AddMembers(equalsMethod, getHashBlockBody);
-            var updatedRootBlock = root.ReplaceNode(classNode, newClassForBlock);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = updatedRootBlock.NormalizeWhitespace().ToFullString(),
+                UpdatedText = await ReplaceNodeFormattedAsync(document, root, classNode, newClassForBlock, cancellationToken),
                 FilePath = filePath
             };
         }
@@ -618,11 +632,10 @@ public class AnalysisEngine
             .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
 
         var newClass = classNode.AddMembers(equalsMethod, getHashMethod);
-        var updatedRoot = root.ReplaceNode(classNode, newClass);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = updatedRoot.NormalizeWhitespace().ToFullString(),
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, classNode, newClass, cancellationToken),
             FilePath = filePath
         };
     }
