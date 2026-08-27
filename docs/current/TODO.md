@@ -458,6 +458,26 @@ validation/`workspaceVersion`/undo machinery as every other write, or (2) add sm
 `CreateFile`/`DeleteFile` tools. Whichever direction, the delete side should update the in-memory
 workspace and stamp `WorkspaceVersion` like other mutating tools, not bypass it.
 
+**Investigated 2026-08-27 (deferred, not fixed):** confirmed this is NOT resolved by the recent
+`FilePathLock`/`FileIoHelper` work (`RoslynSentinel.Common/FileIoHelper.cs`) — that's purely a
+per-path locking chokepoint around raw `File.ReadAllText`/`WriteAllText`/`Delete` calls to prevent
+write-vs-write/read-vs-write races; it adds no tool surface and doesn't touch `ApplyDiff`'s
+description or add any delete path. Still zero `CreateFile`/`DeleteFile` tools, and `ApplyDiff`'s
+create-on-new-path behavior is still undocumented. Confirmed the existing delete-adjacent machinery
+is thinner than the "suggested approach" above assumes: `IWorkspaceManager.RemoveDocumentByPathAsync`
+(used today only by `SyncTypeAndFilename`'s post-apply cleanup) only removes the in-memory Roslyn
+`Document` — it does not delete the file from disk, does not stamp `WorkspaceVersion`, does not go
+through `FileIoHelper`, and has no changeId/undo support. Building either of the two suggested
+designs to the standard "like other mutating tools" bar (changeId, undo, workspace-version stamping)
+is real end-to-end feature work, not a small fix — deliberately deferred rather than choosing a
+design unilaterally during unattended work; needs a decision on which direction before implementing.
+
+**Related, smaller, unfixed finding from this same pass:** `SyncTypeAndFilename`'s own
+`File.Delete(filePath)` call (`SentinelRefactoringTools.cs`, ~line 1159) is a bare `System.IO` call,
+not routed through `FileIoHelper.DeleteAsync` — it doesn't hold the per-path lock the rest of the
+write path now uses. Worth migrating for consistency the next time that method is touched, but is a
+one-line lock-safety gap, not the same thing as the missing tool surface above.
+
 ## `ApplyDiff` reflows far more of the file than the target hunk — root cause found: whole-file CRLF normalization
 
 **Found:** 2026-08-19/20, while implementing the `Build` tool (original repro, unconfirmed root
