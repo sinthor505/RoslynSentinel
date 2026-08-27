@@ -948,6 +948,64 @@ public enum OrderStatus
     }
 
     [Test]
+    public async Task AddSummaryComment_MethodWithParamsAndReturn_EmitsParamAndReturnsScaffold()
+    {
+        // Mirrors VS/Roslyn's native "///" auto-generate: the tag *shape* (param names taken from
+        // the real signature, <returns> only for a non-void/non-Task result) is mechanical and
+        // should always be right even though BulkComment's LLM-authored text only ever fills
+        // <summary> — the empty <param>/<returns> tags alone still improve IDE tooltip/IntelliSense
+        // quality over a bare <summary>.
+        SetSource(@"
+public class Calculator
+{
+    public int Add(int left, int right) => left + right;
+}
+", "Calculator.cs");
+
+        var result = await _engine.AddSummaryCommentAsync("Calculator.cs", "Add", "Adds two integers.");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("/// <param name=\"left\"></param>"));
+        Assert.That(result.UpdatedText, Does.Contain("/// <param name=\"right\"></param>"));
+        Assert.That(result.UpdatedText, Does.Contain("/// <returns></returns>"));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_VoidMethod_EmitsNoReturnsTag()
+    {
+        SetSource(@"
+public class Logger
+{
+    public void Log(string message) { }
+}
+", "Logger.cs");
+
+        var result = await _engine.AddSummaryCommentAsync("Logger.cs", "Log", "Logs a message.");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("/// <param name=\"message\"></param>"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("<returns>"));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_GenericMethod_EmitsTypeParamTag()
+    {
+        SetSource(@"
+public class Repository
+{
+    public T Get<T>(int id) => default!;
+}
+", "Repository.cs");
+
+        var result = await _engine.AddSummaryCommentAsync("Repository.cs", "Get", "Retrieves an entity by id.");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("/// <typeparam name=\"T\"></typeparam>"));
+        Assert.That(result.UpdatedText, Does.Contain("/// <param name=\"id\"></param>"));
+        Assert.That(result.UpdatedText, Does.Contain("/// <returns></returns>"));
+    }
+
+    [Test]
     public async Task SummaryComment_EnumMember_ViewAndRemoveRoundtrip()
     {
         SetSource(@"

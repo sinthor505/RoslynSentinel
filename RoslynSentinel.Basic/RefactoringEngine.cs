@@ -3149,7 +3149,7 @@ public class RefactoringEngine
         var baseIndent = target.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
         var indentText = baseIndent != default ? baseIndent.ToFullString() : "";
         var normalizedSummary = NormalizeSummaryText(summaryText);
-        var docText = $"{indentText}/// <summary>\n{indentText}/// {normalizedSummary}\n{indentText}/// </summary>\n{indentText}void __Dummy__() {{}}";
+        var docText = BuildDocCommentText(target, indentText, normalizedSummary);
         var parsedMember = SyntaxFactory.ParseMemberDeclaration(docText);
         var docTrivia = parsedMember!.GetLeadingTrivia().Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).ToList();
 
@@ -3183,6 +3183,54 @@ public class RefactoringEngine
             FilePath = filePath,
             UpdatedText = newRoot.ToFullString()
         };
+    }
+
+    // Mirrors VS/Roslyn's native "///" auto-generate scaffold: <param>/<typeparam> per declared
+    // parameter/type-parameter and <returns> when the member has a non-void return type, same as
+    // typing "///" above the member would produce — just with the tag bodies left empty rather than
+    // filled in by hand, exactly like the native feature does (see docs history: GitHub Copilot,
+    // not base VS, is what fills tag bodies with real prose — base VS only emits the empty shape).
+    // Only MethodDeclarationSyntax/ConstructorDeclarationSyntax carry a ParameterList; other taggable
+    // member kinds (property, enum, enum member) fall through to a bare <summary>, same as before.
+    private static string BuildDocCommentText(SyntaxNode target, string indentText, string normalizedSummary)
+    {
+        SeparatedSyntaxList<ParameterSyntax>? parameters = target switch
+        {
+            MethodDeclarationSyntax m => m.ParameterList.Parameters,
+            ConstructorDeclarationSyntax c => c.ParameterList.Parameters,
+            _ => null,
+        };
+        SeparatedSyntaxList<TypeParameterSyntax>? typeParameters = target is MethodDeclarationSyntax { TypeParameterList: { } tpl } ? tpl.Parameters : null;
+        TypeSyntax? returnType = target is MethodDeclarationSyntax methodForReturn ? methodForReturn.ReturnType : null;
+
+        var lines = new List<string> { $"{indentText}/// <summary>", $"{indentText}/// {normalizedSummary}", $"{indentText}/// </summary>" };
+
+        if (typeParameters != null)
+        {
+            foreach (var tp in typeParameters.Value)
+            {
+                lines.Add($"{indentText}/// <typeparam name=\"{tp.Identifier.Text}\"></typeparam>");
+            }
+        }
+
+        if (parameters != null)
+        {
+            foreach (var p in parameters.Value)
+            {
+                lines.Add($"{indentText}/// <param name=\"{p.Identifier.Text}\"></param>");
+            }
+        }
+
+        // "void"/"Task" (no result) get no <returns> — matches VS's own native behavior, which only
+        // emits <returns> for a genuinely non-void, non-plain-Task return type.
+        if (returnType != null && returnType is not PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.VoidKeyword }
+            && returnType is not IdentifierNameSyntax { Identifier.Text: "Task" })
+        {
+            lines.Add($"{indentText}/// <returns></returns>");
+        }
+
+        lines.Add($"{indentText}void __Dummy__() {{}}");
+        return string.Join("\n", lines);
     }
 
     // Callers sometimes pass summaryText already shaped as a doc comment (e.g. "/// <summary>...</summary>"
