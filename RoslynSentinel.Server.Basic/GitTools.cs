@@ -136,6 +136,14 @@ public class GitRevertResult
 [McpServerToolType]
 public class GitTools
 {
+    /// <summary>
+    /// Bound on how long a single git subprocess invocation may run. Applied whenever no caller-
+    /// supplied CancellationToken already carries a shorter deadline — MCP tool calls that omit
+    /// cancellationToken get CancellationToken.None here, which would otherwise let a hung git
+    /// process (see docs/TODO.md's "Git(operation: status) hung indefinitely" entry) block forever.
+    /// </summary>
+    private static readonly TimeSpan GitProcessTimeout = TimeSpan.FromSeconds(30);
+
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<GitTools> _logger;
 
@@ -173,7 +181,7 @@ public class GitTools
         return null;
     }
 
-    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunGitAsync(
+    private async Task<(int ExitCode, string Stdout, string Stderr)> RunGitAsync(
         string gitRoot, string[] args, CancellationToken cancellationToken)
     {
         using var process = new System.Diagnostics.Process();
@@ -194,12 +202,51 @@ public class GitTools
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
 
+        // A caller-supplied token (if any) can still cancel earlier than GitProcessTimeout — this
+        // only adds a ceiling for the common case (MCP call omits cancellationToken, so this method
+        // otherwise gets CancellationToken.None and would wait on a hung git process forever).
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(GitProcessTimeout);
+
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        await process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            TryKillGitProcess(process);
+            // Full detail (args, timeout value, TODO cross-reference) is server-side only, via the
+            // logger call below — every caller's catch block folds the thrown exception's Message
+            // straight into the ResultError text returned to the agent, so that Message must stay
+            // a plain, self-contained statement with no internal paths/docs the agent can't open.
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(
+                    "git {Args} did not exit within {TimeoutSeconds}s and was killed. Not a normal git " +
+                    "failure — see docs/TODO.md's 'Git(operation: status) hung indefinitely' entry.",
+                    string.Join(' ', args), GitProcessTimeout.TotalSeconds);
+            }
+            throw new TimeoutException($"Git operation timed out after {GitProcessTimeout.TotalSeconds:0}s and was cancelled.");
+        }
 
         return (process.ExitCode, stdout.ToString(), stderr.ToString());
+    }
+
+    private static void TryKillGitProcess(System.Diagnostics.Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Best-effort — the process may have exited between the check and the kill, or the
+            // handle may already be invalid. Nothing more useful to do here.
+        }
     }
 
     private static string StatusLabel(char code) => code switch
