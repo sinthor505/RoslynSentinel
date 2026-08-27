@@ -569,7 +569,7 @@ public enum Status { Active = 1, Pending = 2 }
             Assert.That(File.Exists(oldPath), Is.False, "Old file should be deleted after a successful rename.");
             Assert.That(File.Exists(newPath), Is.True, "New file should exist after a successful rename.");
 
-            var currentSolution = await _workspaceManager.GetCurrentSolutionAsync();
+            var currentSolution = await _workspaceManager.GetCurrentSolutionAsync(CancellationToken.None);
             Assert.That(currentSolution.GetDocumentIdsWithFilePath(oldPath), Is.Empty,
                 "Old path must not remain tracked as a Document after the rename, or the type would be seen as declared twice.");
             Assert.That(currentSolution.GetDocumentIdsWithFilePath(newPath), Is.Not.Empty,

@@ -4,6 +4,17 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
+## `ApplyMethodCodemod`/`ApplyClassCodemod`'s `contextSnippet` declared `required: true` but defaults to `null` and is actually optional
+
+**Found:** 2026-08-27, while auditing `contextSnippet` wording (`SentinelCodemodTools.cs:400,773`).
+Both parameters are `[Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet =
+null` — the attribute claims required, the C# default and the method's own `[Description]`
+("contextSnippet/lineBefore/lineAfter disambiguate convert_expression_body"/"...disambiguate
+convert_property_safe") both say it's an optional disambiguator used only for one transform among
+several. Not fixed in the same pass since it's a `required`-flag/attribute-contract question, not a
+wording one, and unclear whether anything downstream (schema generation, validation) actually trusts
+the `required` flag in a way changing it could break — needs checking before flipping it to `false`.
+
 ## `Git(operation: status)` hung indefinitely (30min timeout) on a freshly-loaded solution
 
 **Found:** 2026-08-27, during an autonomous overnight session, right after `LoadSolution` succeeded
@@ -292,7 +303,7 @@ current single-document flag, and deserves a deliberate design pass (e.g. should
 which files it touched? cap how many files it'll touch in one call? require a dry-run first?)
 rather than being bolted on as a same-shaped bool.
 
-## `contextSnippet` wording audit across tool descriptions
+## `contextSnippet` wording audit across tool descriptions — closed (2026-08-27)
 
 **Found:** 2026-08-19, while fixing `ReplaceMember`'s single-candidate `contextSnippet` bug (see
 SCENARIOS.md Scenario 4 / "Fixed" list).
@@ -308,20 +319,38 @@ Nothing in the current wording steers an agent toward the safest choice (shortes
 that's still copied verbatim) or away from the riskiest one (reconstructing a whole member from
 memory).
 
-**Why this matters:** with the 2026-08-19 fix, `contextSnippet` is now genuinely optional for any
-non-overloaded target — but agents don't know that from the description alone, and will likely keep
-supplying one defensively "just in case," reintroducing exactly the kind of avoidable mismatch this
-session fixed for `ReplaceMember` specifically, on some other tool or some other snippet shape not yet
-seen in a live run.
+**Findings 2026-08-27:** re-audited via `grep -i contextSnippet` across every `.cs` file. The shared
+`ToolParams.ContextSnippet` constant (`RoslynSentinel.Common/ToolParams.cs`) already contains exactly
+the wording this entry asked for — "only needed when ambiguous," "prefer the shortest unique
+fragment," "do NOT paste the whole body," "copy verbatim, not from memory" — and turned out to
+already be applied consistently at the parameter level everywhere it's the right fit (every
+optional/disambiguation-only `contextSnippet` parameter in `SentinelRefactoringTools.cs` and
+`SentinelAdvancedRefactoringTools.cs` already carries `[Description(ToolParams.ContextSnippet)]`).
+Unclear from history whether this was fixed in an earlier unlogged pass or was never as inconsistent
+as this entry assumed — either way, no wording change was needed on that front.
 
-**Suggested approach:** a single pass across every `[Description]` mentioning `contextSnippet` (grep
-for `ToolParams.ContextSnippet` and inline duplicated wording — some tools use the shared constant,
-others still inline their own text) to state consistently: (1) only needed when the name is ambiguous
-(2+ same-named declarations); (2) prefer the shortest substring that's still unique — a signature line
-is usually enough, a full body is rarely necessary and is more failure-prone to reproduce verbatim; (3)
-copy it verbatim from a prior tool result rather than retyping from memory. Not done as part of the
-`ReplaceMember` fix, which addressed the resolution *logic* but not the *wording* that leads callers to
-over-supply a snippet in the first place.
+**What was actually missing:** 6 `contextSnippet` parameters across `SentinelQualityTools.cs` (x2),
+`SentinelGenerationTools.cs`, `SentinelAdvancedRefactoringTools.cs` (`Introduce`), and
+`SentinelCodemodTools.cs` (x2) had no `[Description]` at all on the parameter. Of these, 4
+(`SentinelQualityTools.cs` x2, `SentinelGenerationTools.cs`, `Introduce`) are a genuinely different
+shape than `ToolParams.ContextSnippet` assumes: `contextSnippet` is `required: true` there and is the
+*sole* locator for the target (no separate `symbolName`/`memberName` parameter exists), not an
+optional disambiguator layered on top of a name — applying the generic "Optional. Only needed when
+ambiguous..." wording to these would be actively wrong. Each already has an adequate tool-specific
+explanation in its method-level `[Description]` (e.g. "contextSnippet: short foreach snippet (e.g.
+\"foreach (var item in\")"), so left alone. The remaining 2
+(`SentinelCodemodTools.cs`'s `ApplyMethodCodemod`/`ApplyClassCodemod`) are the genuine optional-
+disambiguator shape (default `null`, used only to disambiguate one transform among several,
+alongside a real name-based locator) but were missing `[Description(ToolParams.ContextSnippet)]`
+entirely — fixed by adding it to both.
+
+**Related, unfixed, logged separately below:** both `ApplyMethodCodemod`/`ApplyClassCodemod`'s
+`contextSnippet` parameters are declared `[Consumes(DataTag.ContextSnippet, required: true)]` while
+defaulting to `null` and being genuinely optional per the method's own description — an
+attribute/actual-optionality mismatch, not a wording problem. Not fixed here (out of scope for this
+pass; may affect other tooling/validation that trusts the `required` flag) — see the new entry below.
+
+Verified via `build.ps1 -Flavor Solution -Mode Test`: 0 new failures.
 
 ## Deferred: `contextSnippet` deprecation tracking, and `NearMissList`'s 3-candidate cap
 
