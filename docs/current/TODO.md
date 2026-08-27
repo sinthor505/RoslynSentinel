@@ -670,44 +670,69 @@ duplicating engine formatting logic, or (c) not available without either engine 
 the whole-file `UpdatedText`/diff (in which case, leave it out rather than duplicating engine logic
 or reintroducing the original context-bloat problem this mechanism was built to avoid).
 
-## `PullUpMember` tool is a no-op stub, but is exposed with a description implying it works
+## `PullUpMember` tool is a no-op stub, but is exposed with a description implying it works — CLOSED 2026-08-27 (findings revised — original diagnosis was stale)
 
 **Found:** 2026-08-22, during a brief Roslyn-duplication review pass of the remaining structural
 refactoring tools. See `docs/roslyn-duplication-audit-v1.md`.
 
-**What:** `StructuralRefinementEngine.PullUpMemberAsync` (`RoslynSentinel.Basic/StructuralRefinementEngine.cs:351`)
+**Original diagnosis (turned out to be wrong — the tool wrapper doesn't call this engine):**
+`StructuralRefinementEngine.PullUpMemberAsync` (`RoslynSentinel.Basic/StructuralRefinementEngine.cs`)
 is entirely unimplemented — its body is just a comment (`// logic to remove from class, add to base...`)
-and an immediate `return new Dictionary<FilePath, string>();`. No syntax tree is touched, nothing is
-awaited. It is nonetheless wired up to a fully-described, user-facing MCP tool
-(`SentinelAdvancedRefactoringTools.PullUpMember`, `RoslynSentinel.Server.Advanced/SentinelAdvancedRefactoringTools.cs:390`)
-whose `[Description]` reads: "Pulls a method or property from a derived class into its base class.
-Removes override, adds virtual (if not already abstract/virtual), and moves the declaration." None of
-that happens. Because the engine call always returns an empty dict, the tool wrapper's
-`changes.Count == 0` check (line 414) always fires, so every call fails with the misleading message
-`"Member 'X' not found or no accessible base class available."` — indistinguishable from a genuine
-"class/member doesn't exist" error, even when both exist and are eligible.
+and an immediate `return new Dictionary<FilePath, string>();`. The sibling
+`StructuralRefinementEngine.PushMembersDownAsync` has the identical stub shape.
 
-The sibling method `StructuralRefinementEngine.PushMembersDownAsync` (line 360, "push member down to
-derived classes") has the identical stub shape, but is **not** wired to any exposed MCP tool — lower
-priority since no caller can reach it today, but should be fixed alongside `PullUpMemberAsync` if that
-one gets implemented, or removed if push-down is out of scope.
+**Correction (2026-08-27):** `SentinelAdvancedRefactoringTools` injects *two* different, similarly-named
+engines: `_structuralRefinementEngine` (type `StructuralRefinementEngine`, from `RoslynSentinel.Basic`
+— the stub described above) and `_refinementEngine` (type `RefinementEngine`, from
+`RoslynSentinel.Advanced` — a real, working implementation). The `PullUpMember` tool method calls
+`_refinementEngine.PullUpMemberAsync`, **not** the stub — `_structuralRefinementEngine` is injected into
+this class but never called anywhere in it (dead field). So the original finding's premise (the tool
+always returns empty / always fails) was false; `PullUpMember` has always actually worked for valid
+inputs. Confirmed via `RoslynSentinel.Tests.Advanced/NewImplementationsTests.cs`'s
+`PullUpMember_MovesMember_FromDerivedToBaseFile` etc., which were passing the whole time.
 
-**Why this matters:** an agent (or user) calling `PullUpMember` gets a plausible-sounding "not found"
-error and will reasonably conclude their class/member names are wrong or the base class is
-inaccessible, and may spend real effort double-checking names, symbol resolution, etc. — when the
-actual cause is that the tool does nothing at all. This is worse than an honest
-`NotImplementedException` or a `FeatureDisabled` result, both of which exist elsewhere in this codebase
-as an established pattern for gating incomplete tools.
+**Real bug found instead, in `RoslynSentinel.Advanced/RefinementEngine.PullUpMemberAsync`:** every
+failure branch (file not found, class not found, member not found, no base class, base class external,
+etc.) returned `new Dictionary<FilePath, string> { { "error", message } }` instead of throwing. Because
+`Dictionary<FilePath, string>` has an implicit `string → FilePath` conversion
+(`RoslynSentinel.Common/FilePath.cs:97`), the key `"error"` silently became a real (if unvalidated)
+`FilePath`. With `autoStage=true` (the tool's default), that dict was then handed straight to
+`ValidateAndApplyAsync` — meaning any *failed* `PullUpMember` call would attempt to write the error
+message to disk as a file literally named `error`, staged as a real change, rather than surfacing a
+proper tool error. The `catch (Exception ex)` wrapping the whole method also meant genuine unexpected
+exceptions (e.g. a Roslyn API throwing) were silently folded into the same fake-file-error path instead
+of reaching the tool layer's own `catch`, which already knows how to map real exceptions correctly via
+`ToolErrorMapper`.
 
-**Suggested approach:** short-term, make the failure honest — either gate `PullUpMember` behind
-`_config.IsFeatureEnabled(...)` returning `FeatureDisabled` (the pattern already used elsewhere, e.g.
-`ExtractLocalVariableAsync`), or have the engine method throw/return a distinct "not implemented"
-outcome instead of a silently-empty dict that collapses into the generic not-found path. Longer-term,
-implement the real logic: locate `className`'s base class via `INamedTypeSymbol.BaseType`, find
-`memberName`'s declaration, clone it into the base class syntax tree with `override` removed and
-`virtual` added (if not already `abstract`/`virtual`), remove the original from the derived class, and
-replace both documents — this is genuinely new logic (Roslyn has no public or internal "pull member
-up" refactoring service to delegate to), not a duplication-avoidance case.
+**Fix (2026-08-27):**
+- `RoslynSentinel.Advanced/RefinementEngine.PullUpMemberAsync`: replaced every `return new
+  Dictionary<FilePath,string> { {"error", ...} }` with `throw new ToolNotFoundException(...)`, and
+  removed the outer `try/catch` that swallowed all exceptions into the same fake-error-dict shape —
+  unexpected exceptions now propagate to the tool wrapper's existing `catch`/`ToolErrorMapper` path.
+- Added `ToolErrorCode.NotImplemented` and a new `ToolNotImplementedException : ToolException`
+  (`RoslynSentinel.Common/ToolException.cs`), following the same one-exception-per-category pattern as
+  `SolutionNotLoadedException`/`ToolNotFoundException`/etc., for any future stub that needs an honest
+  "not implemented" failure instead of a misleading domain-specific error.
+- `RoslynSentinel.Basic/StructuralRefinementEngine.PullUpMemberAsync`/`PushMembersDownAsync` (the actual
+  unimplemented stubs — still dead code, unreachable from any tool) now throw
+  `ToolNotImplementedException` instead of silently returning an empty dict, in case they're ever wired
+  up by mistake or on purpose without their bodies being filled in first.
+- Simplified `SentinelAdvancedRefactoringTools.PullUpMember`: removed the now-permanently-dead
+  `changes.Count == 0` → `"Member 'X' not found..."` branch (real failures throw before reaching it now).
+- Updated 4 tests across `NewImplementationsTests.cs` and `BatterySeventeenTests.cs` /
+  `BugFixTests.cs` that asserted the old "returns a dict with an `error` key" contract to instead
+  assert `Assert.ThrowsAsync<ToolNotFoundException>`.
+
+**Still not addressed (separate, lower-priority finding, not part of this session's scope):**
+`RefinementEngine.InlineMethodAsync` in the same file has the identical `{ "__error__", message }`
+fake-dict anti-pattern on its failure branches. Not touched here since it wasn't part of the originally
+negotiated item list; worth fixing the same way if `Inline`/`InlineClass` is revisited.
+
+**Push-down member:** confirmed there is still no real push-down implementation anywhere in the
+codebase — `StructuralRefinementEngine.PushMembersDownAsync` (Basic, now throws `NotImplemented`) is
+the only method with that name, and it is not wired to any exposed MCP tool. No `PushDownMember` tool
+exists to expose it through. Out of scope to implement (real logic, not a duplication-avoidance case);
+noted here in case a future session wants to add the tool once the engine method is implemented.
 
 ## New-file validation gap — closed (commit 1b00f3f)
 

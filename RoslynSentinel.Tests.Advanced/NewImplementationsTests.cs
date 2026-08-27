@@ -1194,11 +1194,9 @@ public class Standalone
     public void Feature() { }
 }", "Standalone.cs");
 
-        Dictionary<FilePath, string> result = null!;
-        await Assert.DoesNotThrowAsync(async () =>
-            result = await _refinementEngine.PullUpMemberAsync("Standalone.cs", "Standalone", "Feature"),
-            "A class with no explicit base class should return an error dict, not throw.");
-        Assert.That(result, Contains.Key(new FilePath("error")));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _refinementEngine.PullUpMemberAsync("Standalone.cs", "Standalone", "Feature"),
+            "A class with no explicit base class should surface a real error, not a fake 'error' file change.");
     }
 
     [Test]

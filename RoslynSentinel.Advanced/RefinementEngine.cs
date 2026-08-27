@@ -19,119 +19,112 @@ public class RefinementEngine
     /// </summary>
     public async Task<Dictionary<FilePath, string>> PullUpMemberAsync(FilePath filePath, string className, string memberName, CancellationToken cancellationToken = default)
     {
-        try
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null)
         {
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-            if (document == null)
+            throw new ToolNotFoundException($"File '{filePath}' not found.");
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+        {
+            throw new ToolNotFoundException($"Failed to get syntax root for '{filePath}'.");
+        }
+
+        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        if (classNode == null)
+        {
+            throw new ToolNotFoundException($"Class '{className}' not found.");
+        }
+
+        var member = classNode.Members.FirstOrDefault(m =>
+        (m is MethodDeclarationSyntax meth && meth.Identifier.Text == memberName) ||
+        (m is PropertyDeclarationSyntax prop && prop.Identifier.Text == memberName));
+
+        if (member == null)
+        {
+            throw new ToolNotFoundException($"Member '{memberName}' not found in class '{className}'.");
+        }
+
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        var classSymbol = semanticModel?.GetDeclaredSymbol(classNode, cancellationToken);
+        var baseType = classSymbol?.BaseType;
+
+        if (baseType == null || baseType.SpecialType == SpecialType.System_Object)
+        {
+            throw new ToolNotFoundException("No base class found to pull up to.");
+        }
+
+        if (baseType.DeclaringSyntaxReferences.Length == 0)
+        {
+            throw new ToolNotFoundException("Base class is in an external assembly and cannot be modified.");
+        }
+
+        var baseFile = baseType.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree.FilePath;
+        if (baseFile == null)
+        {
+            throw new ToolNotFoundException("Base class source file not found.");
+        }
+
+        var baseDoc = solution.Projects.SelectMany(p => p.Documents)
+        .FirstOrDefault(d => d.FilePath == baseFile);
+        if (baseDoc == null)
+        {
+            throw new ToolNotFoundException($"Base class source document not found at '{baseFile}'.");
+        }
+
+        var baseRoot = await baseDoc.GetSyntaxRootAsync(cancellationToken);
+        if (baseRoot == null)
+        {
+            throw new ToolNotFoundException($"Failed to get syntax root for base class file '{baseFile}'.");
+        }
+
+        var baseClassNode = baseRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
+        .FirstOrDefault(c => c.Identifier.Text == baseType.Name);
+        if (baseClassNode == null)
+        {
+            throw new ToolNotFoundException($"Base class '{baseType.Name}' not found in '{baseFile}'.");
+        }
+
+        // Remove 'override', add 'virtual' (if not already abstract/virtual)
+        static SyntaxTokenList AdjustModifiers(SyntaxTokenList modifiers)
+        {
+            var overrideToken = modifiers.FirstOrDefault(m => m.IsKind(SyntaxKind.OverrideKeyword));
+            if (overrideToken != default)
             {
-                return new Dictionary<FilePath, string> { { "error", $"File '{filePath}' not found." } };
+                modifiers = modifiers.Remove(overrideToken);
             }
 
-            var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null)
+            if (!modifiers.Any(m => m.IsKind(SyntaxKind.VirtualKeyword) || m.IsKind(SyntaxKind.AbstractKeyword)))
             {
-                return new Dictionary<FilePath, string> { { "error", $"Failed to get syntax root for '{filePath}'." } };
+                modifiers = modifiers.Add(SyntaxFactory.Token(SyntaxKind.VirtualKeyword).WithLeadingTrivia(SyntaxFactory.Space));
             }
 
-            var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-            if (classNode == null)
-            {
-                return new Dictionary<FilePath, string> { { "error", $"Class '{className}' not found." } };
-            }
+            return modifiers;
+        }
 
-            var member = classNode.Members.FirstOrDefault(m =>
-            (m is MethodDeclarationSyntax meth && meth.Identifier.Text == memberName) ||
-            (m is PropertyDeclarationSyntax prop && prop.Identifier.Text == memberName));
+        MemberDeclarationSyntax memberForBase = member switch
+        {
+            MethodDeclarationSyntax m => m.WithModifiers(AdjustModifiers(m.Modifiers)),
+            PropertyDeclarationSyntax p => p.WithModifiers(AdjustModifiers(p.Modifiers)),
+            _ => member
+        };
 
-            if (member == null)
-            {
-                return new Dictionary<FilePath, string> { { "error", $"Member '{memberName}' not found in class '{className}'." } };
-            }
+        var newDerivedRoot = root.RemoveNode(member, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        if (newDerivedRoot == null)
+        {
+            throw new ToolNotFoundException("Failed to remove member from derived class.");
+        }
 
-            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            var classSymbol = semanticModel?.GetDeclaredSymbol(classNode, cancellationToken);
-            var baseType = classSymbol?.BaseType;
+        var newBaseClassNode = baseClassNode.AddMembers(memberForBase);
+        var newBaseRoot = baseRoot.ReplaceNode(baseClassNode, newBaseClassNode);
 
-            if (baseType == null || baseType.SpecialType == SpecialType.System_Object)
-            {
-                return new Dictionary<FilePath, string> { { "error", "No base class found to pull up to." } };
-            }
-
-            var baseFile = baseType.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree.FilePath;
-            if (baseFile == null)
-            {
-                return new Dictionary<FilePath, string> { { "error", "Base class source file not found." } };
-            }
-
-            if (baseType.DeclaringSyntaxReferences.Length == 0)
-            {
-                return new Dictionary<FilePath, string> { { "error", "Base class is in an external assembly and cannot be modified." } };
-            }
-
-            var baseDoc = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.FilePath == baseFile);
-            if (baseDoc == null)
-            {
-                return new Dictionary<FilePath, string> { { "error", $"Base class source document not found at '{baseFile}'." } };
-            }
-
-            var baseRoot = await baseDoc.GetSyntaxRootAsync(cancellationToken);
-            if (baseRoot == null)
-            {
-                return new Dictionary<FilePath, string> { { "error", $"Failed to get syntax root for base class file '{baseFile}'." } };
-            }
-
-            var baseClassNode = baseRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == baseType.Name);
-            if (baseClassNode == null)
-            {
-                return new Dictionary<FilePath, string> { { "error", $"Base class '{baseType.Name}' not found in '{baseFile}'." } };
-            }
-
-            // Remove 'override', add 'virtual' (if not already abstract/virtual)
-            static SyntaxTokenList AdjustModifiers(SyntaxTokenList modifiers)
-            {
-                var overrideToken = modifiers.FirstOrDefault(m => m.IsKind(SyntaxKind.OverrideKeyword));
-                if (overrideToken != default)
-                {
-                    modifiers = modifiers.Remove(overrideToken);
-                }
-
-                if (!modifiers.Any(m => m.IsKind(SyntaxKind.VirtualKeyword) || m.IsKind(SyntaxKind.AbstractKeyword)))
-                {
-                    modifiers = modifiers.Add(SyntaxFactory.Token(SyntaxKind.VirtualKeyword).WithLeadingTrivia(SyntaxFactory.Space));
-                }
-
-                return modifiers;
-            }
-
-            MemberDeclarationSyntax memberForBase = member switch
-            {
-                MethodDeclarationSyntax m => m.WithModifiers(AdjustModifiers(m.Modifiers)),
-                PropertyDeclarationSyntax p => p.WithModifiers(AdjustModifiers(p.Modifiers)),
-                _ => member
-            };
-
-            var newDerivedRoot = root.RemoveNode(member, SyntaxRemoveOptions.KeepUnbalancedDirectives);
-            if (newDerivedRoot == null)
-            {
-                return new Dictionary<FilePath, string> { { "error", "Failed to remove member from derived class." } };
-            }
-
-            var newBaseClassNode = baseClassNode.AddMembers(memberForBase);
-            var newBaseRoot = baseRoot.ReplaceNode(baseClassNode, newBaseClassNode);
-
-            return new Dictionary<FilePath, string>
+        return new Dictionary<FilePath, string>
         {
             { filePath, newDerivedRoot.NormalizeWhitespace().ToFullString() },
             { baseFile, newBaseRoot.NormalizeWhitespace().ToFullString() }
         };
-        }
-        catch (Exception ex)
-        {
-            return new Dictionary<FilePath, string> { { "error", ex.Message } };
-        }
     }
 
     /// <summary>

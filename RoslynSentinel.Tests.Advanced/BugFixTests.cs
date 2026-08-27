@@ -2605,14 +2605,10 @@ public class Standalone
                     Assert.Inconclusive("Document not found");
                 }
 
-                var result = await _refinementEngine.PullUpMemberAsync(document.FilePath!, "Standalone", "GetValue");
-
-                Assert.That(result, Is.Not.Null, "Should return non-null result (not crash)");
-                Assert.That(result, Is.InstanceOf<Dictionary<FilePath, string>>(), "Should return dictionary");
-                if (result.ContainsKey(new FilePath("error")))
-                {
-                    Assert.That(result[new FilePath("error")], Does.Contain("base"), "Error message should mention base class");
-                }
+                var ex = Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                    await _refinementEngine.PullUpMemberAsync(document.FilePath!, "Standalone", "GetValue"),
+                    "A class with no base class should surface a typed error, not crash the server");
+                Assert.That(ex!.Message, Does.Contain("base"), "Error message should mention base class");
             }
 
             [Test]
@@ -2639,11 +2635,12 @@ public class Derived : Base
                     Assert.Inconclusive("Document not found");
                 }
 
-                var result = await _refinementEngine.PullUpMemberAsync(document.FilePath!, "Derived", "DoWork");
-
+                Dictionary<FilePath, string> result = null!;
+                Assert.DoesNotThrowAsync(async () =>
+                    result = await _refinementEngine.PullUpMemberAsync(document.FilePath!, "Derived", "DoWork"),
+                    "A valid base/derived/member combination should succeed, not throw");
                 Assert.That(result, Is.Not.Null, "Should return non-null result (not crash)");
                 Assert.That(result, Is.InstanceOf<Dictionary<FilePath, string>>(), "Should return dictionary");
-                // Should either succeed or fail with error, but not crash
             }
         }
 

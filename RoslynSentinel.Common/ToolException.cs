@@ -81,6 +81,22 @@ public sealed class DiffApplyException : ToolException
 }
 
 /// <summary>
+/// The requested operation has no real implementation behind it — the engine method is a
+/// deliberate stub (e.g. always returns an empty change set) rather than something that ran and
+/// found nothing. Distinct from <see cref="ToolNotFoundException"/>: the caller's names may be
+/// perfectly valid, but the tool cannot act on them at all yet. Maps to
+/// <see cref="ToolErrorCode.NotImplemented"/>.
+/// </summary>
+public sealed class ToolNotImplementedException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.NotImplemented;
+
+    public ToolNotImplementedException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// Builds a <see cref="ResultError"/> from a caught exception without asserting a cause that may
 /// not be true. Replaces the old per-tool pattern of appending a fixed "Check that the solution is
 /// loaded and the file path is valid" sentence to every exception regardless of type. Call this

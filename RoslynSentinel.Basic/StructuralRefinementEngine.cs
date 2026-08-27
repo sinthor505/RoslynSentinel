@@ -341,22 +341,16 @@ public class StructuralRefinementEngine
     /// <summary>
     /// Pulls a member up to the base class.
     /// </summary>
-    public async Task<Dictionary<FilePath, string>> PullUpMemberAsync(FilePath filePath, string className, string memberName, CancellationToken cancellationToken = default)
+    public Task<Dictionary<FilePath, string>> PullUpMemberAsync(FilePath filePath, string className, string memberName, CancellationToken cancellationToken = default)
     {
-        _ = cancellationToken;
-
-        // logic to remove from class, add to base...
-        return new Dictionary<FilePath, string>();
+        throw new ToolNotImplementedException("PullUpMember has no implementation yet — StructuralRefinementEngine.PullUpMemberAsync is a stub that never moves any declaration.");
     }
 
     /// <summary>
     /// Pushes a member down to derived classes.
     /// </summary>
-    public async Task<Dictionary<FilePath, string>> PushMembersDownAsync(FilePath filePath, string className, string memberName, CancellationToken cancellationToken = default)
+    public Task<Dictionary<FilePath, string>> PushMembersDownAsync(FilePath filePath, string className, string memberName, CancellationToken cancellationToken = default)
     {
-        _ = cancellationToken;
-
-        // logic to move to children...
-        return new Dictionary<FilePath, string>();
+        throw new ToolNotImplementedException("PushMembersDown has no implementation yet — StructuralRefinementEngine.PushMembersDownAsync is a stub that never moves any declaration.");
     }
 }

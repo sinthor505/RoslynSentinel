@@ -417,11 +417,6 @@ public class SentinelAdvancedRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = changes };
             }
 
-            if (changes.Count == 0)
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member '{memberName}' not found or no accessible base class available.") };
-            }
-
             var apply = await ValidateAndApplyAsync(changes, $"Pull up '{memberName}' from '{className}' to base class.", "PullUpMember", dryRun, returnDiff, cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };

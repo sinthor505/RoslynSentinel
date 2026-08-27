@@ -182,15 +182,16 @@ public class RefinementEngineTests
     public void TearDown() => _mgr?.Dispose();
 
     [Test]
-    public async Task PullUpMember_UnknownFile_ReturnsErrorDictionary()
+    public void PullUpMember_UnknownFile_ThrowsToolNotFoundException()
     {
         // PullUpMemberAsync(filePath, className, memberName)
-        var dict = await _engine.PullUpMemberAsync("NoSuchFile.cs", "Base", "DoWork");
-        Assert.That(dict, Contains.Key(new FilePath("error")), "unknown file should return dict with 'error' key");
+        Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _engine.PullUpMemberAsync("NoSuchFile.cs", "Base", "DoWork"),
+            "unknown file should surface a real error, not a fake 'error' file change");
     }
 
     [Test]
-    public async Task PullUpMember_UnknownClass_ReturnsErrorDictionary()
+    public void PullUpMember_UnknownClass_ThrowsToolNotFoundException()
     {
         const string source = @"
 public class Derived
@@ -200,9 +201,9 @@ public class Derived
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Derived.cs", source)]));
 
-        var dict = await _engine.PullUpMemberAsync("Derived.cs", "NoBase", "DoWork");
-
-        Assert.That(dict, Contains.Key(new FilePath("error")), "unknown class should return dict with 'error' key");
+        Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _engine.PullUpMemberAsync("Derived.cs", "NoBase", "DoWork"),
+            "unknown class should surface a real error, not a fake 'error' file change");
     }
 
     [Test]
@@ -221,7 +222,6 @@ public class Dog : Animal
 
         var dict = await _engine.PullUpMemberAsync("Animals.cs", "Dog", "Speak");
 
-        // Either success (keys are file names) or error — both are valid
         Assert.That(dict, Is.Not.Null, "result dictionary should never be null");
         Assert.That(dict.Count, Is.GreaterThan(0), "result should have at least one entry");
     }
