@@ -67,14 +67,46 @@ function Get-HttpCopyProcess {
         Where-Object { $_.Path -eq $httpExe }
 }
 
+# Stop-Process -Force returns as soon as termination is requested - it does not wait for the
+# process to actually exit, and a Kestrel/.NET process's socket/handle teardown is not guaranteed
+# to finish within any fixed delay (especially under the CPU/IO load right after a full solution
+# build, which is exactly when this raced in practice). Confirmed via Get-NetTCPConnection: an
+# orphaned process was still holding the port in Listen state a full second after Stop-Process
+# -Force "completed". Racing a new instance's bind against an old one still mid-teardown risks a
+# port conflict for the new process. (This is a separate bug from the -UseBasicParsing fix in
+# Test-HttpCopyReachable below - that one caused the actual reported NRE; this one is a real but
+# independent race that stress-testing showed was also worth closing.)
+function Wait-ProcessExited {
+    param([Parameter(Mandatory)] $Process, [int]$TimeoutMs = 10000)
+
+    $exited = $Process.WaitForExit($TimeoutMs)
+    if (-not $exited) {
+        Write-Warning "PID $($Process.Id) did not exit within ${TimeoutMs}ms of Stop-Process -Force - proceeding anyway, but a port conflict is likely."
+    }
+    return $exited
+}
+
 function Test-HttpCopyReachable {
     # A real HTTP round-trip, not just "is something listening on the port" - a process can bind
     # the port and still fail every request (bad startup state, wrong transport args, etc.), and
     # that distinction is exactly what a plain TCP check would miss.
+    #
+    # Root-caused 2026-08-27 (was intermittently surfacing as "Object reference not set to an
+    # instance of an object." from this exact call, confirmed via full stack trace capture):
+    # Invoke-WebRequest's default (non-basic) parsing needs the legacy IE/mshtml COM engine, which
+    # Server 2025 doesn't have (IE was removed from Windows starting with 21H2/Server 2022) - so it
+    # always falls back to basic parsing here, but only after calling Cmdlet.ShouldContinue to ask
+    # permission first ("Basic parsing was used... Do you want to continue?"). In a -NonInteractive
+    # host (exactly how build.ps1/this script get invoked) there's no real console to prompt
+    # against, so that confirmation machinery itself throws
+    # (ConsoleHostUserInterface.PromptForChoice -> NullReferenceException) instead of failing
+    # cleanly or just silently using basic parsing. -UseBasicParsing skips the engine-availability
+    # check (and its prompt) entirely - this function only ever reads .StatusCode, so the richer
+    # parsing was never actually needed.
     try {
         $response = Invoke-WebRequest -Uri "http://localhost:$VSCodePort/mcp" -Method Post `
             -Headers @{ 'Content-Type' = 'application/json'; 'Accept' = 'application/json, text/event-stream' } `
-            -Body '{"jsonrpc":"2.0","id":0,"method":"ping"}' -TimeoutSec 5 -ErrorAction Stop
+            -Body '{"jsonrpc":"2.0","id":0,"method":"ping"}' -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
         return $true, "HTTP $($response.StatusCode)"
     }
     catch [System.Net.WebException] {
@@ -88,6 +120,23 @@ function Test-HttpCopyReachable {
         }
         return $false, $_.Exception.Message
     }
+}
+
+# Wraps Test-HttpCopyReachable with a short retry loop instead of one attempt after a fixed sleep -
+# a freshly (re)started process can take a variable amount of time to finish binding/initializing,
+# and a single fixed-delay probe either wastes time waiting when it's already up, or reports a
+# false failure when it isn't up quite yet.
+function Wait-HttpCopyReachable {
+    param([int]$TimeoutMs = 10000, [int]$IntervalMs = 250)
+
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    do {
+        $reachable, $detail = Test-HttpCopyReachable
+        if ($reachable) { return $true, $detail }
+        Start-Sleep -Milliseconds $IntervalMs
+    } while ($sw.ElapsedMilliseconds -lt $TimeoutMs)
+
+    return $false, $detail
 }
 
 function Show-Status {
@@ -115,7 +164,11 @@ function Show-Status {
     }
     Write-Host "Process running (PID $($proc.Id -join ', '))." -ForegroundColor Green
 
-    $reachable, $detail = Test-HttpCopyReachable
+    # Short retry window, not a single shot: a process that was just (re)started by another
+    # command (build.ps1, a concurrent restart) can still be finishing Kestrel startup or, on the
+    # other side of the same race, still finishing OS teardown of the port it's replacing - either
+    # way a bare `status` call landing in that narrow window shouldn't report a false failure.
+    $reachable, $detail = Wait-HttpCopyReachable -TimeoutMs 3000
     if ($reachable) {
         Write-Host "Reachable at http://localhost:$VSCodePort/mcp ($detail)." -ForegroundColor Green
         return $true
@@ -150,15 +203,19 @@ function Start-HttpCopy {
     }
 
     Start-Process -FilePath $httpExe -ArgumentList "--transport=http", "--port=$VSCodePort" -WindowStyle Hidden
-    Start-Sleep -Seconds 1
 
-    $started = Get-HttpCopyProcess
+    $started = $null
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not $started -and $sw.ElapsedMilliseconds -lt 5000) {
+        Start-Sleep -Milliseconds 100
+        $started = Get-HttpCopyProcess
+    }
     if (-not $started) {
         Write-Warning "Start-Process returned but no matching process was found afterward - it may have exited immediately. Check for a port conflict or a startup error."
         return $false
     }
 
-    $reachable, $detail = Test-HttpCopyReachable
+    $reachable, $detail = Wait-HttpCopyReachable
     if ($reachable) {
         Write-Host "Started (PID $($started.Id -join ', ')) on port $VSCodePort - reachable ($detail)." -ForegroundColor Green
         return $true
@@ -174,7 +231,7 @@ function Restart-HttpCopy {
     if ($existing) {
         Write-Host "Stopping existing copy (PID $($existing.Id -join ', '))..." -ForegroundColor Yellow
         $existing | Stop-Process -Force
-        Start-Sleep -Seconds 1
+        foreach ($proc in $existing) { Wait-ProcessExited -Process $proc }
     }
     return Start-HttpCopy -AssumeStopped
 }

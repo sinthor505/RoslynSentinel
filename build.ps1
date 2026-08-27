@@ -339,7 +339,10 @@ function Invoke-VSCodeServerRestart {
     if ($existing) {
         Write-Host "Stopping existing VS Code copy (PID $($existing.Id))..." -ForegroundColor Yellow
         $existing | Stop-Process -Force
-        Start-Sleep -Seconds 1
+        # Stop-Process -Force returns as soon as termination is requested, not once the process
+        # (and its listening socket) is actually gone - WaitForExit blocks until it really is, so
+        # the new instance started below doesn't race the old one for the port.
+        foreach ($proc in $existing) { $proc.WaitForExit(10000) | Out-Null }
     }
 
     $previousEap = $ErrorActionPreference
@@ -354,8 +357,14 @@ function Invoke-VSCodeServerRestart {
     }
 
     Start-Process -FilePath $vscodeExe -ArgumentList "--transport=http", "--port=$VSCodePort" -WindowStyle Hidden
-    Start-Sleep -Seconds 1
-    Write-Host "VS Code Advanced.Http copy restarted on port $VSCodePort (PID $((Get-Process -Name 'RoslynSentinel.Server.Advanced' | Where-Object { $_.Path -eq $vscodeExe }).Id))." -ForegroundColor Green
+
+    $started = $null
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not $started -and $sw.ElapsedMilliseconds -lt 5000) {
+        Start-Sleep -Milliseconds 100
+        $started = Get-Process -Name 'RoslynSentinel.Server.Advanced' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $vscodeExe }
+    }
+    Write-Host "VS Code Advanced.Http copy restarted on port $VSCodePort (PID $($started.Id))." -ForegroundColor Green
 }
 #endregion
 
