@@ -1,7 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
 #pragma warning disable CS8618
 
 namespace RoslynSentinel.Tests.Advanced;
@@ -1194,7 +1192,7 @@ public class Standalone
     public void Feature() { }
 }", "Standalone.cs");
 
-        Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
             await _refinementEngine.PullUpMemberAsync("Standalone.cs", "Standalone", "Feature"),
             "A class with no explicit base class should surface a real error, not a fake 'error' file change.");
     }
