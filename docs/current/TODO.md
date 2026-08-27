@@ -4,18 +4,24 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
-## `ApplyMethodCodemod`/`ApplyClassCodemod`'s `contextSnippet` declared `required: true` but defaults to `null` and is actually optional
+## `ApplyMethodCodemod`/`ApplyClassCodemod`'s `contextSnippet` declared `required: true` but defaults to `null` and is actually optional — closed (2026-08-27)
 
 **Found:** 2026-08-27, while auditing `contextSnippet` wording (`SentinelCodemodTools.cs:400,773`).
 Both parameters are `[Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet =
 null` — the attribute claims required, the C# default and the method's own `[Description]`
 ("contextSnippet/lineBefore/lineAfter disambiguate convert_expression_body"/"...disambiguate
 convert_property_safe") both say it's an optional disambiguator used only for one transform among
-several. Not fixed in the same pass since it's a `required`-flag/attribute-contract question, not a
-wording one, and unclear whether anything downstream (schema generation, validation) actually trusts
-the `required` flag in a way changing it could break — needs checking before flipping it to `false`.
+several.
 
-## `Git(operation: status)` hung indefinitely (30min timeout) on a freshly-loaded solution
+**Fixed 2026-08-27:** confirmed via live MCP schema inspection (`ApplyMethodCodemod`/
+`ApplyClassCodemod`) that a parameter's generated JSON-schema "required" status is driven entirely
+by its C# nullable-type/default-value shape, not by `ConsumesAttribute.Required` — nothing in the
+codebase reflects over that property (exhaustive grep confirmed it's inert, documentation-only
+metadata). Safe to drop the mismatched flag. Changed both sites
+(`SentinelCodemodTools.cs:400,773`) from `[Consumes(DataTag.ContextSnippet, required: true)]` to
+`[Consumes(DataTag.ContextSnippet)]`.
+
+## `Git(operation: status)` hung indefinitely (30min timeout) on a freshly-loaded solution — closed (2026-08-27)
 
 **Found:** 2026-08-27, during an autonomous overnight session, right after `LoadSolution` succeeded
 against `RoslynSentinel.slnx` on the VS Code Advanced.Http copy (port 5150, restarted minutes
@@ -26,8 +32,17 @@ burn overnight time debugging the server itself instead of the planned TODO item
 something about running immediately after a fresh `build.ps1 -Force` restart + reload, git-process
 spawning inside the server, or unrelated. Worked around by falling back to the plain `git` CLI via
 PowerShell for the rest of this session's commits, per the "try first, fall back, log the gap"
-instruction. Re-verify against a normally-running (not just-restarted) server before assuming this
-repros generally.
+instruction.
+
+**Resolution 2026-08-27:** decided not worth deep-diving further — a manual MCP Inspector test of
+`Git(status)` against a normally-running server worked fine, and the already-implemented 30s
+`GitProcessTimeout` fast-fail bound (from an earlier session) means a recurrence fails fast instead
+of hanging indefinitely, which was the actual pain point. Added
+`RoslynSentinel.Tests.Battery/GitToolsSmokeTests.cs` as cheap regression insurance instead of a
+repro: spins up a real `git init`-ed temp repo behind a `FakeWorkspaceManager`, then calls
+`Git(status)`/`Git(log)`/`Git(diff)` (the read-only operations) and asserts each completes well
+under a 10s bound. This won't catch the original hang's root cause, but will catch a regression
+that makes every Git call slow again.
 
 ## `SyncTypeAndFilename` validation always sees old+new documents coexisting — closed (2026-08-27)
 
@@ -429,9 +444,20 @@ failures.
   test's intent (a snippet that matches nothing should still fail when disambiguation is genuinely
   needed). `build.ps1 -Flavor Solution -Mode Test`: 0 new failures.
 
-**Still open:** `SymbolNavigationEngine.cs`'s 4 `contextSnippet != null` sites are unaudited — worth
-a follow-up pass to classify their shape (replace vs. fallback vs. something else) before assuming
-they're clean.
+**`SymbolNavigationEngine.cs` audit — closed 2026-08-27:** classified all 4 `contextSnippet != null`
+sites (`FindCallers` ~line 1327, `FindImplementations` ~line 1484, `ResolveSymbolByNameAsync` ~line
+1947, plus 2 message-text-only mentions at ~1366/~1557 that aren't resolution logic). Two are
+*replace* shape (contextSnippet exclusively decides resolution, no name-based fallback if it fails)
+and one is genuine *fallback* shape (`ResolveSymbolByNameAsync` falls through to
+`candidates.FirstOrDefault()` if the snippet doesn't resolve — the same benign shape already
+confirmed clean for `AnalyzeControlFlowAsync`/`AnalyzeDataFlowAsync`). Neither replace-shape site is
+the same bug class as `ReplaceMember`/`ConvertExpressionBody`, though: those are mutating edit-target
+resolvers, where a mismatched snippet either fails a resolution that should have succeeded, or worse,
+silently applies the edit to the wrong node. `FindCallers`/`FindImplementations` are read-only lookups
+— a mismatched snippet here throws a clear, actionable `InvalidOperationException` (already naming
+the likely cause and suggesting `GetMethodSource`/`GetFileOutline`/omitting the snippet), never
+returns a wrong answer silently. No code change needed; the risk this entry was tracking doesn't
+apply to read-only resolution.
 
 ## No tool for creating or deleting a whole file — CLOSED 2026-08-27
 
@@ -540,7 +566,7 @@ ending — or at minimum detect the file's dominant line ending once and normali
 line-ending info; the fix likely means writing back through that instead of a raw string write that
 loses it.
 
-## `AddConstructorParameter`/`ConstructorParameter` collapses multi-line signatures onto one line
+## `AddConstructorParameter`/`ConstructorParameter` collapses multi-line signatures onto one line — closed (2026-08-27)
 
 **Found:** 2026-08-19, while implementing the `Build` tool, using the (since renamed/consolidated)
 `AddConstructorParameter` tool to add a `BuildEngine` parameter to `SentinelWorkspaceTools`'s
@@ -560,10 +586,20 @@ severity, but worth fixing in the same pass if the formatting fix touches that c
 though possibly a different code path (constructor-parameter insertion, not a generic diff apply) —
 don't assume they share a root cause without checking.
 
-**Suggested approach:** repro against current `ConstructorParameter(operation: add)` on a
-multi-line constructor before diagnosing; if confirmed, the fix likely belongs in whatever formatting
-step runs after the new parameter/field/assignment are inserted (preserve existing line-break style
-rather than normalizing to single-line).
+**Fixed 2026-08-27:** reproduced against current `ConstructorParameter(operation: add)` via an
+isolated scratch MCP repro (throwaway `.slnx`/`.csproj` loaded via `LoadSolution`, confirmed the
+collapse live). Root cause: `RoslynSentinel.Basic/RefactoringEngine.cs`'s
+`AddConstructorParameterAsync`/`RemoveConstructorParameterAsync` both did
+`root.ReplaceNode(classDecl, newClassNode).NormalizeWhitespace()` — a whole-syntax-tree reflow, the
+same bug class as the `ApplyDiff` CRLF issue and the Basic-side `NormalizeWhitespace` sweep. Fixed
+by switching both to the file's own established `ReplaceNodeFormattedAsync` helper (annotates only
+the new/replaced node and scopes `Formatter.FormatAsync` to just that annotation) — already used by
+`AddMemberAsync`/`AddPropertyAsync`/`AddFieldAsync`/`ModifyEnum`/`ModifyModifier` in the same file.
+The field/assignment-ordering issue was not addressed (lower severity, separate from the formatting
+bug this entry was about). See also the correction note on the "`RoslynSentinel.Advanced`'s
+NormalizeWhitespace occurrences" entry below — the Basic-side sweep this fix's helper pattern came
+from wasn't actually fully applied; `SortMembersAsync` in the same file still has the unscoped
+`NormalizeWhitespace()` pattern and remains unfixed.
 
 ## Mutating tools don't return the resulting content, forcing a separate `ReadFile` to see the outcome
 
@@ -786,10 +822,16 @@ of reaching the tool layer's own `catch`, which already knows how to map real ex
   `BugFixTests.cs` that asserted the old "returns a dict with an `error` key" contract to instead
   assert `Assert.ThrowsAsync<ToolNotFoundException>`.
 
-**Still not addressed (separate, lower-priority finding, not part of this session's scope):**
-`RefinementEngine.InlineMethodAsync` in the same file has the identical `{ "__error__", message }`
-fake-dict anti-pattern on its failure branches. Not touched here since it wasn't part of the originally
-negotiated item list; worth fixing the same way if `Inline`/`InlineClass` is revisited.
+**Follow-up fixed 2026-08-27:** `RefinementEngine.InlineMethodAsync` in the same file had the
+identical `{ "__error__", message }` fake-dict anti-pattern on its 5 failure branches (document not
+found, syntax root null, method not found, complex-body-not-supported, symbol-resolution-failed).
+Converted all 5 to `throw new ToolNotFoundException(...)`, matching the pattern already applied
+elsewhere in this file. Removed the now-dead `methodChanges.Count == 0` check in
+`SentinelAdvancedRefactoringTools.Inline`'s `kind == "method"` branch (the existing
+`catch (Exception ex)` right below already maps the thrown exception via `ToolErrorMapper`).
+Updated 3 tests in `RoslynSentinel.Tests.Advanced/BugFixTests.cs` that asserted the old
+`__error__`-dict contract to instead assert `Assert.ThrowsAsync<ToolNotFoundException>` (or, for one
+stale assertion, to check for the actually-correct inlined output).
 
 **Push-down member:** confirmed there is still no real push-down implementation anywhere in the
 codebase — `StructuralRefinementEngine.PushMembersDownAsync` (Basic, now throws `NotImplemented`) is
@@ -826,7 +868,23 @@ re-serialize a whole document (vs. a narrowly-scoped single-node call, which is 
 against the Basic-side fix's shape (targeted formatting vs. whole-tree re-indent), and either confirm
 they're already narrow/safe or port the same fix pattern across.
 
-## Remaining `throw new` sites inside `[McpServerTool]`-adjacent code
+**Correction 2026-08-27 — the Basic-side sweep this entry assumed was "done" had two live misses of
+its own,** found while fixing the unrelated "`ConstructorParameter` collapses multi-line signatures"
+bug (separate TODO entry). `RoslynSentinel.Basic/RefactoringEngine.cs`'s `AddConstructorParameterAsync`
+and `RemoveConstructorParameterAsync` both did `root.ReplaceNode(classDecl, newClassNode)
+.NormalizeWhitespace()` — a whole-tree reflow identical to the pattern this entry describes, not a
+narrowly-scoped one. Fixed by switching both to the file's own established
+`ReplaceNodeFormattedAsync` helper (annotates only the new/replaced node and calls
+`Formatter.FormatAsync` scoped to that annotation — already used by `AddMemberAsync`/`AddPropertyAsync`
+/`AddFieldAsync` and others in the same file). `SortMembersAsync` (same file, ~line 3458) has the
+identical unscoped `.ReplaceNode(...).NormalizeWhitespace()` shape and was NOT fixed in this pass — out
+of scope for the `ConstructorParameter` bug, flagged here since it's the same bug class found by the
+same audit. **Implication for this entry:** "the Basic sweep is done, only Advanced is unswept" can no
+longer be assumed — worth a fresh grep of `RoslynSentinel.Basic` too (not just `RoslynSentinel.Advanced`)
+for any other `.ReplaceNode(...).NormalizeWhitespace()`/bare `.NormalizeWhitespace()` call before
+scoping the Advanced-side follow-up work, since the "already fixed" premise just proved incomplete once.
+
+## Remaining `throw new` sites inside `[McpServerTool]`-adjacent code — CLOSED 2026-08-27
 
 **Found:** 2026-08-24, while auditing `docs/spec-replace-throws-in-mcp-tools-v1.md` (kept in
 `docs/current/` as still-partial) for the docs reorganization pass. That spec's goal — replace
@@ -836,9 +894,40 @@ catch — is not fully executed. Grep at the time of this pass found 11 remainin
 `SentinelSymbolTools.cs:210`, `ServerStartupHelpers.cs:216`, `SentinelScanTools.cs:549`, and 6 sites in
 `SentinelAsyncifyTools.cs` (lines 2939, 2953, 2962, 3060, 3424, 3444).
 
-**Suggested approach:** re-grep `throw new` across both Server projects to get a current count (this
-list may already be smaller if fixed piecemeal since), then work through the remainder using the same
-result-shape conversion the rest of the spec already applied elsewhere.
+**Re-audited 2026-08-27 — all 11 sites already handled correctly, no code change needed:**
+- `Program.cs` (both projects, line 19, `ArgumentException` on unknown `--transport`): process-startup
+  CLI arg validation in `Main`, before any MCP request loop exists — not tool-adjacent at all;
+  crashing at boot on a bad launch flag is the correct behavior, not a leak risk.
+- `ServerStartupHelpers.cs:216` (`SmokeResolveToolTypes`, `InvalidOperationException` on an
+  unresolvable DI tool type): `[Conditional("DEBUG")]`, runs once at process boot before any tool
+  call — a dev-only DI-wiring smoke check, not reachable from a live agent request.
+- `SentinelSymbolTools.cs:210` (`RunRelationshipQueryAsync`'s `ArgumentOutOfRangeException` default
+  arm): `searchKind` is a strongly-typed enum MCP parameter (framework rejects invalid values before
+  this code runs); the only way to hit this arm is `Enum.GetValues<FindUsagesSearchKind>()` finding a
+  real value the switch forgot to handle — a genuine bug-guard, and it's already caught by
+  `QuerySymbolRelationships`'s own `catch (Exception ex)` → `ToolErrorMapper.ToResultError`, same as
+  every other unmapped exception in this codebase. Already agent-safe.
+- `SentinelScanTools.cs:549` (`RequireFile`, `ArgumentException` when `scope != "file"`): message is
+  already clean/self-contained (states what's wrong and what was received, no internals). Its ~29 call
+  sites are all inside `RunScanDetector`'s single dispatch method, which has a dedicated
+  `catch (ArgumentException aex)` immediately above the general catch that passes `aex.Message`
+  straight through — already correctly wired, not a leak.
+- `SentinelAsyncifyTools.cs`'s 6 sites (line numbers shifted since 2026-08-24 from unrelated
+  `AsyncifyCore` decomposition work — now at 3024/3038/3047/3151/3516/3536, same 6 logical sites):
+  5 of the 6 (all but 3516/3536's containing block) are caught by an immediately-following per-item
+  `catch (Exception ex)` inside the same candidate loop and never reach an agent-visible `ResultError`
+  at all — logged via `_logger.LogWarning`/`LogInformation` and folded into a per-item failure record
+  instead. The remaining pair (3516, 3536, inside a loop whose catch sets `OperationItemRecord.Reason
+  = ex.Message`) does surface the message to the agent, but the message itself
+  (`"Conversion failed: {Outcome} — {Message}"` / `"Validation: N error(s) — ..."`) is already clean,
+  matching the established convention for `Reason` everywhere else in this file — not a leak.
+
+**Conclusion:** the spec's stated goal (replace throws with result returns) was never fully executed
+as originally scoped, but every one of the 11 sites this entry tracked turned out to already be either
+non-tool-adjacent, DEBUG-only, or already correctly mapped/caught with an agent-safe message by the
+time of this re-audit — very likely fixed piecemeal across other sessions' work since 2026-08-24
+(see [[project_concurrent_sessions]]) rather than by a dedicated pass on this spec. No remaining risk
+identified; closing rather than re-scoping into a rename/restructure task nothing currently needs.
 
 ## Read-tool metadata envelope (`isComplete`/truncation flag) — entirely unimplemented
 
