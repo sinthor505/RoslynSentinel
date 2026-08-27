@@ -2553,7 +2553,7 @@ public class Math
                     Assert.Inconclusive("Document not found");
                 }
 
-                Assert.ThrowsAsync<ToolNotFoundException>(
+                await Assert.ThrowsAsync<ToolNotFoundException>(
                     async () => await _refinementEngine.InlineMethodAsync(document.FilePath!, "Add"),
                     "Multi-statement method should fail gracefully via a typed exception, not crash");
             }
@@ -3516,7 +3516,7 @@ public class Service
 
             SetSource(code, "Service.cs");
 
-            Assert.ThrowsAsync<ToolNotFoundException>(
+            await Assert.ThrowsAsync<ToolNotFoundException>(
                 async () => await _refinementEngine.InlineMethodAsync("Service.cs", "Process"),
                 "Multi-statement method should fail gracefully via a typed exception, not crash");
         }
