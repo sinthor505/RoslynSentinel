@@ -2,10 +2,13 @@ namespace RoslynSentinel.Tests;
 
 /// <summary>
 /// Real-disk fixture for tests that need <see cref="PersistentWorkspaceManager.LoadSolutionAsync(string, System.Threading.CancellationToken)"/>
-/// to succeed against an actual MSBuild-openable solution (FakeWorkspaceManager only covers the
-/// pure in-memory path via SetTestSolution). Copies the repo's Samples/ContosoOrders scenario
-/// project into a fresh temp directory per instance so tests can load/watch/write real files
-/// without touching the checked-in sample or colliding with other tests. Dispose() deletes the copy.
+/// to succeed against an actual MSBuild-openable solution (<c>RoslynSentinel.Tests.Fakes.FakeWorkspaceManager</c>
+/// only covers the pure in-memory path via SetTestSolution, or a bare directory via its settable
+/// SolutionPath when no Roslyn solution is needed at all - see <see cref="IWorkspaceManager"/>'s
+/// doc comment for the full picture of which implementation to use). Copies the repo's
+/// Samples/ContosoOrders scenario project into a fresh temp directory per instance so tests can
+/// load/watch/write real files without touching the checked-in sample or colliding with other
+/// tests. Dispose() deletes the copy.
 /// </summary>
 public sealed class TestSolutionFixture : IDisposable
 {

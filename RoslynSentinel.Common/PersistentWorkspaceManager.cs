@@ -15,6 +15,15 @@ using ModelContextProtocol;
 
 namespace RoslynSentinel.Common;
 
+/// <summary>
+/// Production <see cref="IWorkspaceManager"/>: loads and mutates a real MSBuild-backed
+/// <see cref="Microsoft.CodeAnalysis.Solution"/> on disk. For tests, prefer
+/// <c>RoslynSentinel.Tests.Fakes.FakeWorkspaceManager</c> (lightweight, in-memory, throws
+/// NotImplementedException on unstubbed members) unless the test specifically needs this class's
+/// real load/write/watch behavior against actual files — in that case use
+/// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
+/// the Samples/ContosoOrders scenario and loads it through this class.
+/// </summary>
 public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, ICircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
 {
     private readonly ILogger<IWorkspaceManager> _logger;

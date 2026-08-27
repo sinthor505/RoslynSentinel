@@ -1,7 +1,16 @@
 using Microsoft.CodeAnalysis;
 namespace RoslynSentinel.Common;
 
-/// <summary>Full workspace contract: solution access, mutation, health reporting, and breaker/session bookkeeping. Prefer a narrower interface (ISolutionProvider, etc.) where possible.</summary>
+/// <summary>
+/// Full workspace contract: solution access, mutation, health reporting, and breaker/session
+/// bookkeeping. Prefer a narrower interface (ISolutionProvider, etc.) where possible.
+/// Implementations: <see cref="PersistentWorkspaceManager"/> (production, real MSBuild-backed
+/// solution) and <c>RoslynSentinel.Tests.Fakes.FakeWorkspaceManager</c> (test double, throws
+/// NotImplementedException on anything not explicitly stubbed). For tests that need a real
+/// on-disk solution rather than the fake's in-memory/SetTestSolution path, see
+/// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which loads via
+/// <see cref="PersistentWorkspaceManager"/>.
+/// </summary>
 public interface IWorkspaceManager :
     ISolutionProvider, ICircuitBreaker, IWorkspaceHealthReporter,
     IWorkspaceMutator, IRateLimiter, ISymbolResolver
