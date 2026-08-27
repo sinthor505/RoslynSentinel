@@ -2326,6 +2326,68 @@ public class SentinelAsyncifyTools
         };
     }
 
+    // Shared mutable state threaded through AsyncifyCore's phase methods. Each phase mutates this
+    // in place (items/failures/counters) rather than closing over ~15 separate locals; the phase
+    // methods return bool (true = stop early) in place of the old `goto WriteSummary` jumps.
+    private sealed class AsyncifyRunState
+    {
+        public readonly List<OperationItemRecord> Items = new();
+        public readonly List<FailureDetail> Failures = new();
+        public int Succeeded, Failed, Skipped;
+
+        // Per-phase shadow counters — assembled into PhaseBreakdown at the end of AsyncifyCore.
+        public int P0Succeeded, P0Failed;                              // Phase 0: handler_extract
+        public int P1Succeeded, P1Failed, P1Skipped;                   // Phase 1: flag
+        public int P2Succeeded, P2Failed, P2Skipped;                   // Phase 2: bridge
+        public int P3Succeeded, P3Failed, P3Skipped;                   // Phase 3: uplift
+        public int P3aSucceeded, P3aFailed;                            // Phase 3a: handler_to_async
+        public int P3bSucceeded, P3bFailed, P3bSkipped;                // Phase 3b: handler
+        public int P4Succeeded, P4Failed;                              // Phase 4: propagate_ct
+
+        public readonly CancellationTokenSource Cts;
+        public readonly CancellationToken InnerToken;
+        public int IterationsUsed;
+        public bool StoppedEarly;
+        public string StopReason = "";
+
+        public int? BridgeMinScore;
+        public string BridgeStopReason = "";
+        public int BridgeSkippedCount;
+        public int BridgeRemainingCandidates;
+        public int BridgeBodyRewriteFailures;
+        public int BridgeStaleFlagSkips;
+        public int FlagPhaseScanned;
+        public int FlagPhaseNewFlags;
+        public readonly List<FilePath> HandlerConvertedFiles = new();
+        public readonly List<FilePath> HandlerBridgedFiles = new();
+
+        public AsyncifyRunState(CancellationToken cancellationToken, int maxRuntimeSeconds)
+        {
+            Cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            if (maxRuntimeSeconds > 0)
+                Cts.CancelAfter(TimeSpan.FromSeconds(maxRuntimeSeconds));
+            InnerToken = Cts.Token;
+        }
+
+        /// <summary>Advances the shared iteration budget; cancels the run if maxIterations is now reached.</summary>
+        public void CheckIterations(int phaseItems, int maxIterations)
+        {
+            IterationsUsed += phaseItems;
+            if (maxIterations > 0 && IterationsUsed >= maxIterations && !Cts.IsCancellationRequested)
+            {
+                Cts.Cancel();
+                StopReason = $"maxIterations ({maxIterations}) reached after {IterationsUsed} items";
+            }
+        }
+
+        /// <summary>Marks the run as stopped early with <paramref name="reason"/>, unless a reason was already recorded.</summary>
+        public void MarkStoppedEarly(string reason)
+        {
+            StoppedEarly = true;
+            if (StopReason.Length == 0) StopReason = reason;
+        }
+    }
+
     private async Task<BatchResultSummary> AsyncifyCore(
         AsyncifyInput input,
         IProgress<ProgressNotificationValue>? progress,
@@ -2340,911 +2402,32 @@ public class SentinelAsyncifyTools
         await _ledger.EnsureLoadedAsync(_workspaceManager.GetSolutionRoot());
         _ledger.BeginRun();
 
-        var items = new List<OperationItemRecord>();
-        var failures = new List<FailureDetail>();
-        int succeeded = 0, failed = 0, skipped = 0;
-        // Per-phase shadow counters — assembled into PhaseBreakdown at return.
-        int p0s = 0, p0f = 0;              // Phase 0: handler_extract
-        int p1s = 0, p1f = 0, p1k = 0;    // Phase 1: flag
-        int p2s = 0, p2f = 0, p2k = 0;    // Phase 2: bridge
-        int p3s = 0, p3f = 0, p3k = 0;   // Phase 3: uplift
-        int p3as = 0, p3af = 0;           // Phase 3a: handler_to_async
-        int p3bs = 0, p3bf = 0, p3bk = 0; // Phase 3b: handler
-        int p4s = 0, p4f = 0;             // Phase 4: propagate_ct
         var changeId = Guid.NewGuid().ToString("N")[..8];
-
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        if (input.MaxRuntimeSeconds > 0)
-            cts.CancelAfter(TimeSpan.FromSeconds(input.MaxRuntimeSeconds));
-
-        var innerToken = cts.Token;
-        int iterationsUsed = 0;
-        bool stoppedEarly = false;
-        string stopReason = "";
-        int? bridgeMinScore = null;
-        string bridgeStopReason = "";
-        int bridgeSkippedCount = 0;
-        int bridgeRemainingCandidates = 0;
-        int bridgeBodyRewriteFailures = 0;
-        int bridgeStaleFlagSkips = 0;
-        int flagPhaseScanned = 0;
-        int flagPhaseNewFlags = 0;
-        var handlerConvertedFiles = new List<FilePath>();
-        var handlerBridgedFiles = new List<FilePath>();
-
-        void CheckIterations(int phaseItems)
-        {
-            iterationsUsed += phaseItems;
-            if (input.MaxIterations > 0 && iterationsUsed >= input.MaxIterations && !cts.IsCancellationRequested)
-            {
-                cts.Cancel();
-                stopReason = $"maxIterations ({input.MaxIterations}) reached after {iterationsUsed} items";
-            }
-        }
+        var state = new AsyncifyRunState(cancellationToken, input.MaxRuntimeSeconds);
 
         try
         {
-            // ── Phase 0: Extract HandlerExtractCandidate event handler bodies ──
-            // Event handlers flagged HandlerExtractCandidate have async-eligible business logic
-            // inline. Extract the entire body into a new private method (PascalCase name derived
-            // from the handler name) so Phase 3a can bridge it. ExtractEntireBody=true means the
-            // method name from the scan finding is the only input needed — no ContextSnippet.
-            {
-                List<MigrationCandidateFinding> extractCandidates;
-                try
-                {
-                    extractCandidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
-                        filePath: null, projectName: input.ProjectName, pattern: "HandlerExtractCandidate",
-                        cancellationToken: innerToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "AsyncifyCore Phase 0: HandlerExtractCandidate discovery failed — skipping");
-                    extractCandidates = new List<MigrationCandidateFinding>();
-                }
+            if (await RunHandlerExtractPhaseAsync(input, state)) goto WriteSummary;
+            if (await RunFlagPhaseAsync(input, state)) goto WriteSummary;
 
-                var extractTargets = extractCandidates
-                    .Where(h => input.Exclusions?.Contains(h.MethodName) != true)
-                    .ToList();
+            var bridgeResult = await RunBridgePhaseAsync(input, state, progress);
+            if (state.StoppedEarly) goto WriteSummary;
 
-                foreach (var candidate in extractTargets)
-                {
-                    CheckIterations(1);
-                    if (innerToken.IsCancellationRequested)
-                    {
-                        stoppedEarly = true;
-                        if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded during handler-extract phase";
-                        goto WriteSummary;
-                    }
+            if (await RunUpliftPhaseAsync(input, state, bridgeResult, progress)) goto WriteSummary;
+            if (await RunHandlerToAsyncBridgePhaseAsync(input, state, progress)) goto WriteSummary;
+            if (await RunHandlerConvertPhaseAsync(input, state)) goto WriteSummary;
 
-                    var newMethodName = ToPascalCase(candidate.MethodName);
-
-                    if (input.DryRun)
-                    {
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = candidate.FilePath,
-                            MethodName = candidate.MethodName,
-                            Outcome = ItemRecordOutcome.Skipped,
-                            Reason = $"dry_run phase:handler_extract → would extract to '{newMethodName}'",
-                        });
-                        p0s++; succeeded++;
-                        continue;
-                    }
-
-                    try
-                    {
-                        var extractResult = await _msToolAugmentEngine.ExtractMethodSafeAsync(
-                            candidate.FilePath,
-                            newMethodName,
-                            candidate.MethodName,
-                            lineBefore: null,
-                            lineAfter: null,
-                            extractEntireBody: true,
-                            cancellationToken: innerToken);
-
-                        if (!extractResult.Success)
-                        {
-                            var reason = extractResult.Error ?? "extraction returned no error message";
-                            items.Add(new OperationItemRecord
-                            {
-                                FilePath = candidate.FilePath,
-                                MethodName = candidate.MethodName,
-                                Outcome = ItemRecordOutcome.Failed,
-                                Reason = reason,
-                            });
-                            if (failures.Count < 10)
-                            {
-                                failures.Add(new FailureDetail
-                                {
-                                    FilePath = candidate.FilePath,
-                                    MethodName = candidate.MethodName,
-                                    Reason = reason,
-                                    Outcome = ItemRecordOutcome.Failed,
-                                });
-                            }
-                            p0f++; failed++;
-                            continue;
-                        }
-
-                        var extractValidation = await _validationEngine.ValidateChangesAsync(
-                            new Dictionary<FilePath, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
-                            cancellationToken: innerToken);
-                        if (!extractValidation.Success)
-                        {
-                            var diagMsg = string.Join("; ", extractValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                            var valReason = $"Validation: {extractValidation.Diagnostics.Count} error(s) — {diagMsg}";
-                            items.Add(new OperationItemRecord { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Outcome = ItemRecordOutcome.Failed, Reason = valReason, CompilerDiagnostics = extractValidation.Diagnostics });
-                            if (failures.Count < 10) failures.Add(new FailureDetail { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Reason = valReason, Outcome = ItemRecordOutcome.Failed, CompilerDiagnostics = extractValidation.Diagnostics });
-                            p0f++; failed++;
-                            continue;
-                        }
-
-                        await _workspaceManager.ApplyProposedChangesAsync(
-                            new Dictionary<FilePath, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
-                            validateChanges: true);
-
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = candidate.FilePath,
-                            MethodName = candidate.MethodName,
-                            Outcome = ItemRecordOutcome.Succeeded,
-                            Reason = $"phase:handler_extract → '{newMethodName}'",
-                        });
-                        p0s++; succeeded++;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex,
-                            "AsyncifyCore Phase 0: extraction failed for '{Method}'", candidate.MethodName);
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = candidate.FilePath,
-                            MethodName = candidate.MethodName,
-                            Outcome = ItemRecordOutcome.Failed,
-                            Reason = ex.Message,
-                        });
-                        if (failures.Count < 10)
-                        {
-                            failures.Add(new FailureDetail
-                            {
-                                FilePath = candidate.FilePath,
-                                MethodName = candidate.MethodName,
-                                Reason = ex.Message,
-                                Outcome = ItemRecordOutcome.Failed,
-                            });
-                        }
-                        p0f++; failed++;
-                    }
-                }
-            }
-
-            // ── Phase 1: Flag ─────────────────────────────────────────────────
-            if (input.MethodTargets == null || input.MethodTargets.Count == 0)
-            {
-                var flagResult = await _asyncOptimizationEngine.FlagCandidatesInProjectAsync(
-                    input.ProjectName, "AsyncBridgeCandidate", input.MinScore,
-                    input.DryRun, forceRescan: false);
-
-                flagPhaseNewFlags = flagResult.Flagged.Count;
-                flagPhaseScanned = flagResult.Flagged.Count + flagResult.Skipped.Count + flagResult.AlreadyFlagged.Count;
-
-                if (!input.DryRun && flagResult.Changes.Count > 0)
-                {
-                    var applyResult1317 = await _workspaceManager.ApplyProposedChangesAsync(
-                        flagResult.Changes, validateChanges: true);
-                    if (!applyResult1317.Success && applyResult1317.ValidationResult != null)
-                        _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in flag attribute changes — skipping write",
-                            applyResult1317.ValidationResult.Diagnostics.Count);
-
-                    foreach (var f in flagResult.Flagged)
-                    {
-                        if (input.Exclusions?.Contains(f.MethodName) == true)
-                        {
-                            items.Add(new OperationItemRecord
-                            {
-                                FilePath = f.FilePath,
-                                MethodName = f.MethodName,
-                                Outcome = ItemRecordOutcome.Skipped,
-                                Reason = "excluded",
-                            });
-                            p1k++; skipped++;
-                            continue;
-                        }
-
-                        string? beforeSource1339 = null;
-                        applyResult1317.PreImages?.TryGetValue(f.FilePath, out beforeSource1339);
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = f.FilePath,
-                            MethodName = f.MethodName,
-                            Outcome = ItemRecordOutcome.Succeeded,
-                            Reason = "phase:flag",
-                            BeforeSource = beforeSource1339,
-                        });
-                        p1s++;
-                    }
-                }
-                else
-                {
-                    foreach (var f in flagResult.Flagged)
-                    {
-                        if (input.Exclusions?.Contains(f.MethodName) == true)
-                        {
-                            items.Add(new OperationItemRecord
-                            {
-                                FilePath = f.FilePath,
-                                MethodName = f.MethodName,
-                                Outcome = ItemRecordOutcome.Skipped,
-                                Reason = "excluded",
-                            });
-                            p1k++; skipped++;
-                            continue;
-                        }
-
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = f.FilePath,
-                            MethodName = f.MethodName,
-                            Outcome = ItemRecordOutcome.Skipped,
-                            Reason = "dry_run:flag",
-                        });
-                        p1k++; skipped++;
-                    }
-                }
-                foreach (var s in flagResult.Skipped)
-                {
-                    items.Add(new OperationItemRecord
-                    {
-                        FilePath = s.FilePath,
-                        MethodName = s.MethodName,
-                        Outcome = ItemRecordOutcome.Skipped,
-                        Reason = $"phase:flag — score {s.Score} below minScore {input.MinScore}",
-                    });
-                    p1k++; skipped++;
-                }
-                foreach (var a in flagResult.AlreadyFlagged)
-                {
-                    items.Add(new OperationItemRecord
-                    {
-                        FilePath = a.FilePath,
-                        MethodName = a.MethodName,
-                        Outcome = ItemRecordOutcome.Skipped,
-                        Reason = "phase:flag — already flagged",
-                    });
-                    p1k++; skipped++;
-                }
-            }
-            else
-            {
-                var tuples = input.MethodTargets
-                    .Where(t => input.Exclusions?.Contains(t.MethodName) != true)
-                    .Select(t => (FilePath: t.FilePath, MethodName: t.MethodName,
-                                  Pattern: t.Pattern, Score: t.Score, Reason: t.Reason))
-                    .ToList();
-
-                if (tuples.Count > 0)
-                {
-                    var (flagResults, flagErrors) =
-                        await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples);
-
-                    var allChanges = new Dictionary<FilePath, string>();
-                    for (int i = 0; i < flagResults.Count; i++)
-                    {
-                        var r = flagResults[i];
-                        if (r == null || r.Line == -1) { continue; }
-
-                        foreach (var kv in r.Changes) { allChanges[kv.Key] = kv.Value; }
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = tuples[i].FilePath,
-                            MethodName = tuples[i].MethodName,
-                            Outcome = ItemRecordOutcome.Succeeded,
-                            Reason = "phase:flag",
-                        });
-                        p1s++;
-                    }
-                    foreach (var (idx, err) in flagErrors)
-                    {
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = tuples[idx].FilePath,
-                            MethodName = tuples[idx].MethodName,
-                            Outcome = ItemRecordOutcome.Failed,
-                            Reason = $"phase:flag — {err}",
-                        });
-                        if (failures.Count < 10)
-                        {
-                            failures.Add(new FailureDetail
-                            {
-                                FilePath = tuples[idx].FilePath,
-                                MethodName = tuples[idx].MethodName,
-                                Reason = err,
-                                Outcome = ItemRecordOutcome.Failed,
-                            });
-                        }
-                        p1f++; failed++;
-                    }
-                    if (!input.DryRun && allChanges.Count > 0)
-                    {
-                        var applyResult1421 = await _workspaceManager.ApplyProposedChangesAsync(
-                            allChanges, validateChanges: true);
-                        if (!applyResult1421.Success && applyResult1421.ValidationResult != null)
-                            _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in explicit-target flag changes — skipping write",
-                                applyResult1421.ValidationResult.Diagnostics.Count);
-                        if (applyResult1421.PreImages != null)
-                        {
-                            foreach (var item in items)
-                            {
-                                if (item.Outcome == ItemRecordOutcome.Succeeded && item.BeforeSource == null)
-                                {
-                                    applyResult1421.PreImages.TryGetValue(item.FilePath, out var pre);
-                                    item.BeforeSource = pre;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── Phase 2: Bridge ───────────────────────────────────────────────
-            var bridgeResult = await _asyncBatchEngine.RunBridgeBatchAsync(
-                input.ProjectName,
-                input.MaxMethods,
-                input.ScoreThreshold,
-                input.DryRun,
-                input.PropagateCancellationTokens,
-                progress: progress,
-                cancellationToken: innerToken);
-
-            bridgeMinScore = bridgeResult.MinCandidateScore;
-            bridgeStopReason = bridgeResult.StopReason;
-            bridgeSkippedCount = bridgeResult.Skipped.Count;
-            bridgeRemainingCandidates = bridgeResult.RemainingCandidates;
-            bridgeBodyRewriteFailures = bridgeResult.Skipped
-                .Count(s => s.Reason.Contains("Body-rewrite validation failed", StringComparison.OrdinalIgnoreCase));
-            bridgeStaleFlagSkips = bridgeResult.Skipped
-                .Count(s => s.Reason.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase));
-
-            foreach (var a in bridgeResult.Applied)
-            {
-                if (input.Exclusions?.Contains(a.MethodName) == true) { continue; }
-                items.Add(new OperationItemRecord
-                {
-                    FilePath = a.FilePath,
-                    MethodName = a.MethodName,
-                    Outcome = ItemRecordOutcome.Succeeded,
-                    Reason = "phase:bridge",
-                });
-                p2s++; succeeded++;
-            }
-            foreach (var s in bridgeResult.Skipped)
-            {
-                bool alreadyDone = s.Reason.Contains("already has CancellationToken");
-                bool requiresManualReview = s.Reason.Contains("NeedsManualReview")
-                    || s.Reason.Contains("event handler");
-                var bridgeDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
-                items.Add(new OperationItemRecord
-                {
-                    FilePath = s.FilePath,
-                    MethodName = s.MethodName,
-                    Outcome = alreadyDone ? ItemRecordOutcome.Skipped
-                            : requiresManualReview ? ItemRecordOutcome.NeedsManualReview
-                            : ItemRecordOutcome.Failed,
-                    Reason = $"phase:bridge — {s.Reason}",
-                    CompilerDiagnostics = bridgeDiags,
-                    AfterSource = s.AttemptedSource,
-                });
-                if (alreadyDone || requiresManualReview)
-                {
-                    p2k++; skipped++;
-                }
-                else
-                {
-                    if (failures.Count < 10)
-                    {
-                        failures.Add(new FailureDetail
-                        {
-                            FilePath = s.FilePath,
-                            MethodName = s.MethodName,
-                            Reason = s.Reason,
-                            Outcome = ItemRecordOutcome.Failed,
-                            CompilerDiagnostics = bridgeDiags,
-                        });
-                    }
-                    p2f++; failed++;
-                }
-            }
-            if (bridgeResult.RemainingCandidates > 0)
-            {
-                p2k += bridgeResult.RemainingCandidates;
-                skipped += bridgeResult.RemainingCandidates;
-            }
-
-            CheckIterations(bridgeResult.Applied.Count + bridgeResult.Skipped.Count);
-            if (innerToken.IsCancellationRequested)
-            {
-                stoppedEarly = true;
-                if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded after bridge phase";
-                goto WriteSummary;
-            }
-
-            // ── Phase 3: Uplift ───────────────────────────────────────────────
-            // Uplift targets come from three sources:
-            //   1. Methods applied (body-rewritten) this bridge run.
-            //   2. Methods with stale AsyncBridgeCandidate flags (already had CT, body correct).
-            //   3. ALL [Obsolete("Asyncify-bridge: ...")] wrappers in the project — covers methods
-            //      bridged in prior runs whose flags were stripped and are invisible to the current
-            //      batch's scope. The idempotency guard in RunUpliftBatch makes this a no-op for
-            //      callers already converted.
-            var alreadyBridgedSkipped = bridgeResult.Skipped
-                .Where(s => s.Reason.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            var allBridgeWrappers = await _asyncBatchEngine.FindAllBridgeWrapperMethodsAsync(
-                input.ProjectName, innerToken);
-
-            var upliftTargets = bridgeResult.Applied
-                .Where(a => input.Exclusions?.Contains(a.MethodName) != true)
-                .Select(a => new UpliftBatchMultiTarget
-                {
-                    BridgedMethodName = a.MethodName,
-                    ProjectName = input.ProjectName,
-                })
-                .Concat(alreadyBridgedSkipped
-                    .Where(s => input.Exclusions?.Contains(s.MethodName) != true)
-                    .Select(s => new UpliftBatchMultiTarget
-                    {
-                        BridgedMethodName = s.MethodName,
-                        ProjectName = input.ProjectName,
-                    }))
-                .Concat(allBridgeWrappers
-                    .Where(m => input.Exclusions?.Contains(m) != true)
-                    .Select(m => new UpliftBatchMultiTarget
-                    {
-                        BridgedMethodName = m,
-                        ProjectName = input.ProjectName,
-                    }))
-                .DistinctBy(t => t.BridgedMethodName)
-                .ToList();
-
-            if (upliftTargets.Count > 0)
-            {
-                var upliftResult = await _asyncBatchEngine.RunUpliftBatchMultiAsync(
-                        new UpliftBatchMultiInput
-                        {
-                            Targets = upliftTargets,
-                            MaxCallersPerMethod = input.MaxCallersPerMethod,
-                            DryRun = input.DryRun,
-                            PropagateCancellationTokens = input.PropagateCancellationTokens,
-                        },
-                        progress: progress, cancellationToken: innerToken);
-
-                foreach (var pm in upliftResult.PerMethod)
-                {
-                    foreach (var u in pm.Result.Uplifted)
-                    {
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = u.FilePath,
-                            MethodName = u.CallerMethod,
-                            Outcome = ItemRecordOutcome.Succeeded,
-                            Reason = "phase:uplift",
-                        });
-                        p3s++; succeeded++;
-                    }
-                    foreach (var s in pm.Result.Skipped)
-                    {
-                        var upliftDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
-                        // NeedsManualReview = non-method caller (constructor, accessor, lambda).
-                        // Idempotent skips (no diagnostics, not NMR) = already transformed in a prior run.
-                        // Compiler-error skips (have diagnostics) = failures.
-                        var upliftOutcome = s.NeedsManualReview ? ItemRecordOutcome.NeedsManualReview
-                            : (upliftDiags == null ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Failed);
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = s.FilePath,
-                            MethodName = s.CallerMethod,
-                            Outcome = upliftOutcome,
-                            Reason = $"phase:uplift — {s.Reason}",
-                            CompilerDiagnostics = upliftDiags,
-                            AfterSource = s.AttemptedSource,
-                        });
-                        if (upliftOutcome == ItemRecordOutcome.Failed)
-                        {
-                            if (failures.Count < 10)
-                            {
-                                failures.Add(new FailureDetail
-                                {
-                                    FilePath = s.FilePath,
-                                    MethodName = s.CallerMethod,
-                                    Reason = s.Reason,
-                                    Outcome = ItemRecordOutcome.Failed,
-                                    CompilerDiagnostics = upliftDiags,
-                                });
-                            }
-                            p3f++; failed++;
-                        }
-                        else
-                        {
-                            p3k++; skipped++;
-                        }
-                    }
-                }
-
-                CheckIterations(upliftResult.TotalUplifted + upliftResult.TotalSkipped);
-                if (innerToken.IsCancellationRequested)
-                {
-                    stoppedEarly = true;
-                    if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded after uplift phase";
-                    goto WriteSummary;
-                }
-            }
-
-            // ── Phase 3a: Bridge HandlerToAsyncCandidate extracted methods ─────────
-            // Extracted event-handler bodies that have been flagged HandlerToAsyncCandidate need
-            // the same bridge conversion as AsyncBridgeCandidate — but they weren't discovered in
-            // Phase 1 (which only flags AsyncBridgeCandidate). After bridging, their event-handler
-            // callers typically become AsyncHandlerCandidate and are picked up by Phase 3b below.
-            {
-                List<MigrationCandidateFinding> handlerToAsyncCandidates;
-                try
-                {
-                    handlerToAsyncCandidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
-                        filePath: null, projectName: input.ProjectName, pattern: "HandlerToAsyncCandidate",
-                        cancellationToken: innerToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "AsyncifyCore Phase 3a: HandlerToAsyncCandidate discovery failed — skipping");
-                    handlerToAsyncCandidates = new List<MigrationCandidateFinding>();
-                }
-
-                var handlerToAsyncTargets = handlerToAsyncCandidates
-                    .Where(h => input.Exclusions?.Contains(h.MethodName) != true)
-                    .ToList();
-
-                foreach (var candidate in handlerToAsyncTargets)
-                {
-                    CheckIterations(1);
-                    if (innerToken.IsCancellationRequested)
-                    {
-                        stoppedEarly = true;
-                        if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded during handler-to-async phase";
-                        goto WriteSummary;
-                    }
-
-                    if (input.DryRun)
-                    {
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = candidate.FilePath,
-                            MethodName = candidate.MethodName,
-                            Outcome = ItemRecordOutcome.Skipped,
-                            Reason = "dry_run phase:handler_to_async",
-                        });
-                        p3as++; succeeded++;
-                        continue;
-                    }
-
-                    try
-                    {
-                        string? updatedSource;
-                        var convertResult = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
-                            candidate.FilePath, candidate.MethodName, progress: progress!, cancellationToken: innerToken);
-                        updatedSource = convertResult.UpdatedText;
-
-                        if (string.IsNullOrEmpty(updatedSource))
-                        {
-                            throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} — {convertResult.Message}");
-                        }
-
-                        if (input.PropagateCancellationTokens)
-                        {
-                            var asyncMethod = candidate.MethodName + "Async";
-                            var propagationResult = await _asyncOptimizationEngine
-                                .PropagateCancellationTokenInMethodAsync(candidate.FilePath, asyncMethod, progress: progress!, cancellationToken: innerToken);
-                            if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
-                                updatedSource = propagationResult.UpdatedText;
-                        }
-
-                        if (string.IsNullOrEmpty(updatedSource))
-                        {
-                            throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} — {convertResult.Message}");
-                        }
-
-                        var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
-                            new Dictionary<FilePath, string> { { candidate.FilePath, updatedSource } },
-                            validateChanges: true, cancellationToken: innerToken);
-                        if (!applyResult3a.Success && applyResult3a.ValidationResult != null)
-                        {
-                            var diagMsg = string.Join("; ", applyResult3a.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                            throw new InvalidOperationException($"Validation: {applyResult3a.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}");
-                        }
-                        handlerBridgedFiles.Add(candidate.FilePath);
-
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = candidate.FilePath,
-                            MethodName = candidate.MethodName,
-                            Outcome = ItemRecordOutcome.Succeeded,
-                            Reason = "phase:handler_to_async",
-                        });
-                        p3as++; succeeded++;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex,
-                            "AsyncifyCore Phase 3a: bridge conversion failed for '{Method}'", candidate.MethodName);
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = candidate.FilePath,
-                            MethodName = candidate.MethodName,
-                            Outcome = ItemRecordOutcome.Failed,
-                            Reason = ex.Message,
-                        });
-                        if (failures.Count < 10)
-                        {
-                            failures.Add(new FailureDetail
-                            {
-                                FilePath = candidate.FilePath,
-                                MethodName = candidate.MethodName,
-                                Reason = ex.Message,
-                                Outcome = ItemRecordOutcome.Failed,
-                            });
-                        }
-                        p3af++; failed++;
-                    }
-                }
-            }
-
-            // ── Phase 3b: Convert AsyncHandlerCandidate event handlers in-place ──
-            // Event handlers flagged as AsyncHandlerCandidate call obsolete bridge wrappers but
-            // cannot be uplifted via the standard caller-bridge path (fixed delegate signatures).
-            // Convert each in-place: add async modifier, replace bridge call with await asyncCall().
-            {
-                List<MigrationCandidateFinding> handlerCandidates;
-                try
-                {
-                    handlerCandidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
-                        filePath: null, projectName: input.ProjectName, pattern: "AsyncHandlerCandidate",
-                        cancellationToken: innerToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "AsyncifyCore Phase 3b: candidate discovery failed — skipping handler phase");
-                    handlerCandidates = new List<MigrationCandidateFinding>();
-                }
-
-                var handlerTargets = handlerCandidates
-                    .Where(h => input.Exclusions?.Contains(h.MethodName) != true)
-                    .ToList();
-
-                foreach (var handler in handlerTargets)
-                {
-                    CheckIterations(1);
-                    if (innerToken.IsCancellationRequested)
-                    {
-                        stoppedEarly = true;
-                        if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded during handler phase";
-                        goto WriteSummary;
-                    }
-
-                    if (input.DryRun)
-                    {
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = handler.FilePath,
-                            MethodName = handler.MethodName,
-                            Outcome = ItemRecordOutcome.Skipped,
-                            Reason = "dry_run phase:handler",
-                        });
-                        p3bs++; succeeded++;
-                        continue;
-                    }
-
-                    try
-                    {
-                        var handlerResult = await _asyncOptimizationEngine
-                            .ConvertEventHandlerCallerToAsyncVoidAsync(
-                                handler.FilePath, handler.MethodName, cancellationToken: innerToken);
-
-                        if (!string.IsNullOrEmpty(handlerResult.UpdatedText))
-                        {
-                            var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
-                                new Dictionary<FilePath, string> { { handler.FilePath, handlerResult.UpdatedText } },
-                                validateChanges: true, cancellationToken: innerToken);
-                            if (!applyResult3b.Success && applyResult3b.ValidationResult != null)
-                            {
-                                var diagMsg = string.Join("; ", applyResult3b.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                                throw new InvalidOperationException($"Validation: {applyResult3b.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}");
-                            }
-                            handlerConvertedFiles.Add(handler.FilePath);
-                        }
-
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = handler.FilePath,
-                            MethodName = handler.MethodName,
-                            Outcome = ItemRecordOutcome.Succeeded,
-                            Reason = "phase:handler",
-                        });
-                        p3bs++; succeeded++;
-                    }
-                    catch (Exception ex) when (ex.Message.Contains("is already async"))
-                    {
-                        // Already converted in a prior run — flag is genuinely stale. Strip only.
-                        _logger.LogInformation(
-                            "AsyncifyCore Phase 3b: '{Method}' already async — stripping stale flag", handler.MethodName);
-                        try
-                        {
-                            var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
-                                filePath: handler.FilePath.Absolute,
-                                pattern: "AsyncHandlerCandidate",
-                                cancellationToken: innerToken);
-                            if (removeResult.Changes.Count > 0)
-                                await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
-                        }
-                        catch (Exception removeEx)
-                        {
-                            _logger.LogWarning(removeEx,
-                                "Could not strip stale flag for '{Method}'", handler.MethodName);
-                        }
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = handler.FilePath,
-                            MethodName = handler.MethodName,
-                            Outcome = ItemRecordOutcome.Skipped,
-                            Reason = "stale-flag: already async — stripped",
-                        });
-                        p3bk++; skipped++;
-                    }
-                    catch (Exception ex) when (ex.Message.Contains("does not call any Asyncify-bridge"))
-                    {
-                        // Scored by heuristic (blocking-calls) but has no bridge wrappers to replace.
-                        // Strip AsyncHandlerCandidate and add NeedsManualReview so Phase 1 does not
-                        // re-flag on subsequent runs — this method requires manual async conversion.
-                        _logger.LogInformation(
-                            "AsyncifyCore Phase 3b: '{Method}' has no bridge calls — flagging NeedsManualReview", handler.MethodName);
-                        try
-                        {
-                            var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
-                                filePath: handler.FilePath.Absolute,
-                                pattern: "AsyncHandlerCandidate",
-                                cancellationToken: innerToken);
-                            if (removeResult.Changes.Count > 0)
-                                await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
-
-                            var neeReviewResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
-                                handler.FilePath, handler.MethodName, "NeedsManualReview",
-                                score: 0,
-                                reason: "Handler has blocking calls but no Asyncify-bridge wrappers — manual async conversion required",
-                                cancellationToken: innerToken);
-                            await _workspaceManager.ApplyProposedChangesAsync(neeReviewResult.Changes);
-                        }
-                        catch (Exception removeEx)
-                        {
-                            _logger.LogWarning(removeEx,
-                                "Could not update flags for '{Method}'", handler.MethodName);
-                        }
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = handler.FilePath,
-                            MethodName = handler.MethodName,
-                            Outcome = ItemRecordOutcome.Skipped,
-                            Reason = "stale-flag: no bridge calls — flagged NeedsManualReview",
-                        });
-                        p3bk++; skipped++;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex,
-                            "AsyncifyCore Phase 3b: handler conversion failed for '{Method}'", handler.MethodName);
-
-                        try
-                        {
-                            // Remove AsyncHandlerCandidate first so it doesn't stack with NeedsManualReview.
-                            var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
-                                filePath: handler.FilePath.Absolute,
-                                pattern: "AsyncHandlerCandidate",
-                                cancellationToken: innerToken);
-                            if (removeResult.Changes.Count > 0)
-                                await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
-
-                            var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
-                                handler.FilePath, handler.MethodName, "NeedsManualReview",
-                                score: 0,
-                                reason: $"Handler in-place: {ex.Message}",
-                                cancellationToken: innerToken);
-                            await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
-                        }
-                        catch (Exception flagEx)
-                        {
-                            _logger.LogWarning(flagEx,
-                                "Could not flag handler '{Method}' as NeedsManualReview", handler.MethodName);
-                        }
-
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = handler.FilePath,
-                            MethodName = handler.MethodName,
-                            Outcome = ItemRecordOutcome.Failed,
-                            Reason = ex.Message,
-                        });
-                        if (failures.Count < 10)
-                        {
-                            failures.Add(new FailureDetail
-                            {
-                                FilePath = handler.FilePath.Absolute,
-                                MethodName = handler.MethodName,
-                                Reason = ex.Message,
-                                Outcome = ItemRecordOutcome.Failed,
-                            });
-                        }
-                        p3bf++; failed++;
-                    }
-                }
-            }
-
-            // ── Phase 4: Propagate CT ─────────────────────────────────────────
-            if (input.PropagateCancellationTokens && !input.DryRun)
-            {
-                var bridgedFiles = bridgeResult.Applied
-                    .Select(a => a.FilePath)
-                    .Concat(handlerConvertedFiles)
-                    .Concat(handlerBridgedFiles)
-                    .Distinct()
-                    .ToList();
-
-                if (bridgedFiles.Count > 0)
-                {
-                    var ctResult = await _asyncBatchEngine.PropagateCancellationTokenBatchAsync(
-                        new PropagateCtBatchInput
-                        {
-                            Targets = bridgedFiles.Select(fp => new PropagateCtFileTarget
-                            {
-                                FilePath = fp,
-                                MethodNames = null
-                            }).ToList(),
-                            DryRun = false,
-                            MaxFiles = bridgedFiles.Count,
-                            FlagFailures = false,
-                        },
-                        progress: progress, cancellationToken: innerToken);
-
-                    foreach (var a in ctResult.Applied)
-                    {
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = a.FilePath,
-                            Outcome = ItemRecordOutcome.Succeeded,
-                            Reason = $"phase:propagate_ct — {a.TotalForwarded} call sites forwarded",
-                        });
-                        p4s++; succeeded++;
-                    }
-                    foreach (var f in ctResult.Failed)
-                    {
-                        items.Add(new OperationItemRecord
-                        {
-                            FilePath = f.FilePath,
-                            Outcome = ItemRecordOutcome.Failed,
-                            Reason = $"phase:propagate_ct — {f.Reason}",
-                            CompilerDiagnostics = f.Diagnostics.Count > 0 ? f.Diagnostics : null,
-                        });
-                        p4f++; failed++;
-                    }
-                }
-            }
+            await RunPropagateCtPhaseAsync(input, state, bridgeResult, progress);
 
         WriteSummary:;
         }
-        catch (OperationCanceledException) when (innerToken.IsCancellationRequested
+        catch (OperationCanceledException) when (state.InnerToken.IsCancellationRequested
                                                   && !cancellationToken.IsCancellationRequested)
         {
-            stoppedEarly = true;
-            if (stopReason.Length == 0)
-                stopReason = "maxRuntimeSeconds exceeded mid-phase";
-            _logger.LogInformation("Asyncify stopped early: {Reason}", stopReason);
+            state.StoppedEarly = true;
+            if (state.StopReason.Length == 0)
+                state.StopReason = "maxRuntimeSeconds exceeded mid-phase";
+            _logger.LogInformation("Asyncify stopped early: {Reason}", state.StopReason);
         }
         catch (Exception ex) when (ex is not ToolException)
         {
@@ -3252,23 +2435,932 @@ public class SentinelAsyncifyTools
             throw;
         }
 
-        _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
+        return await BuildAsyncifySummaryAsync(input, changeId, state);
+    }
+
+    // ── Phase 0: Extract HandlerExtractCandidate event handler bodies ──────────
+    // Event handlers flagged HandlerExtractCandidate have async-eligible business logic inline.
+    // Extract the entire body into a new private method (PascalCase name derived from the handler
+    // name) so Phase 3a can bridge it. ExtractEntireBody=true means the method name from the scan
+    // finding is the only input needed — no ContextSnippet. Returns true if the run should stop early.
+    private async Task<bool> RunHandlerExtractPhaseAsync(AsyncifyInput input, AsyncifyRunState state)
+    {
+        List<MigrationCandidateFinding> extractCandidates;
+        try
+        {
+            extractCandidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
+                filePath: null, projectName: input.ProjectName, pattern: "HandlerExtractCandidate",
+                cancellationToken: state.InnerToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AsyncifyCore Phase 0: HandlerExtractCandidate discovery failed — skipping");
+            extractCandidates = new List<MigrationCandidateFinding>();
+        }
+
+        var extractTargets = extractCandidates
+            .Where(h => input.Exclusions?.Contains(h.MethodName) != true)
+            .ToList();
+
+        foreach (var candidate in extractTargets)
+        {
+            state.CheckIterations(1, input.MaxIterations);
+            if (state.InnerToken.IsCancellationRequested)
+            {
+                state.MarkStoppedEarly("maxRuntimeSeconds exceeded during handler-extract phase");
+                return true;
+            }
+
+            var newMethodName = ToPascalCase(candidate.MethodName);
+
+            if (input.DryRun)
+            {
+                state.Items.Add(new OperationItemRecord
+                {
+                    FilePath = candidate.FilePath,
+                    MethodName = candidate.MethodName,
+                    Outcome = ItemRecordOutcome.Skipped,
+                    Reason = $"dry_run phase:handler_extract → would extract to '{newMethodName}'",
+                });
+                state.P0Succeeded++; state.Succeeded++;
+                continue;
+            }
+
+            try
+            {
+                var extractResult = await _msToolAugmentEngine.ExtractMethodSafeAsync(
+                    candidate.FilePath,
+                    newMethodName,
+                    candidate.MethodName,
+                    lineBefore: null,
+                    lineAfter: null,
+                    extractEntireBody: true,
+                    cancellationToken: state.InnerToken);
+
+                if (!extractResult.Success)
+                {
+                    var reason = extractResult.Error ?? "extraction returned no error message";
+                    state.Items.Add(new OperationItemRecord
+                    {
+                        FilePath = candidate.FilePath,
+                        MethodName = candidate.MethodName,
+                        Outcome = ItemRecordOutcome.Failed,
+                        Reason = reason,
+                    });
+                    if (state.Failures.Count < 10)
+                    {
+                        state.Failures.Add(new FailureDetail
+                        {
+                            FilePath = candidate.FilePath,
+                            MethodName = candidate.MethodName,
+                            Reason = reason,
+                            Outcome = ItemRecordOutcome.Failed,
+                        });
+                    }
+                    state.P0Failed++; state.Failed++;
+                    continue;
+                }
+
+                var extractValidation = await _validationEngine.ValidateChangesAsync(
+                    new Dictionary<FilePath, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
+                    cancellationToken: state.InnerToken);
+                if (!extractValidation.Success)
+                {
+                    var diagMsg = string.Join("; ", extractValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                    var valReason = $"Validation: {extractValidation.Diagnostics.Count} error(s) — {diagMsg}";
+                    state.Items.Add(new OperationItemRecord { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Outcome = ItemRecordOutcome.Failed, Reason = valReason, CompilerDiagnostics = extractValidation.Diagnostics });
+                    if (state.Failures.Count < 10) state.Failures.Add(new FailureDetail { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Reason = valReason, Outcome = ItemRecordOutcome.Failed, CompilerDiagnostics = extractValidation.Diagnostics });
+                    state.P0Failed++; state.Failed++;
+                    continue;
+                }
+
+                await _workspaceManager.ApplyProposedChangesAsync(
+                    new Dictionary<FilePath, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
+                    validateChanges: true);
+
+                state.Items.Add(new OperationItemRecord
+                {
+                    FilePath = candidate.FilePath,
+                    MethodName = candidate.MethodName,
+                    Outcome = ItemRecordOutcome.Succeeded,
+                    Reason = $"phase:handler_extract → '{newMethodName}'",
+                });
+                state.P0Succeeded++; state.Succeeded++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "AsyncifyCore Phase 0: extraction failed for '{Method}'", candidate.MethodName);
+                state.Items.Add(new OperationItemRecord
+                {
+                    FilePath = candidate.FilePath,
+                    MethodName = candidate.MethodName,
+                    Outcome = ItemRecordOutcome.Failed,
+                    Reason = ex.Message,
+                });
+                if (state.Failures.Count < 10)
+                {
+                    state.Failures.Add(new FailureDetail
+                    {
+                        FilePath = candidate.FilePath,
+                        MethodName = candidate.MethodName,
+                        Reason = ex.Message,
+                        Outcome = ItemRecordOutcome.Failed,
+                    });
+                }
+                state.P0Failed++; state.Failed++;
+            }
+        }
+
+        return false;
+    }
+
+    // ── Phase 1: Flag ────────────────────────────────────────────────────────
+    private async Task<bool> RunFlagPhaseAsync(AsyncifyInput input, AsyncifyRunState state)
+    {
+        var items = state.Items;
+        var failures = state.Failures;
+
+        if (input.MethodTargets == null || input.MethodTargets.Count == 0)
+        {
+            var flagResult = await _asyncOptimizationEngine.FlagCandidatesInProjectAsync(
+                input.ProjectName, "AsyncBridgeCandidate", input.MinScore,
+                input.DryRun, forceRescan: false);
+
+            state.FlagPhaseNewFlags = flagResult.Flagged.Count;
+            state.FlagPhaseScanned = flagResult.Flagged.Count + flagResult.Skipped.Count + flagResult.AlreadyFlagged.Count;
+
+            if (!input.DryRun && flagResult.Changes.Count > 0)
+            {
+                var applyResult1317 = await _workspaceManager.ApplyProposedChangesAsync(
+                    flagResult.Changes, validateChanges: true);
+                if (!applyResult1317.Success && applyResult1317.ValidationResult != null)
+                    _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in flag attribute changes — skipping write",
+                        applyResult1317.ValidationResult.Diagnostics.Count);
+
+                foreach (var f in flagResult.Flagged)
+                {
+                    if (input.Exclusions?.Contains(f.MethodName) == true)
+                    {
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = f.FilePath,
+                            MethodName = f.MethodName,
+                            Outcome = ItemRecordOutcome.Skipped,
+                            Reason = "excluded",
+                        });
+                        state.P1Skipped++; state.Skipped++;
+                        continue;
+                    }
+
+                    string? beforeSource1339 = null;
+                    applyResult1317.PreImages?.TryGetValue(f.FilePath, out beforeSource1339);
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath = f.FilePath,
+                        MethodName = f.MethodName,
+                        Outcome = ItemRecordOutcome.Succeeded,
+                        Reason = "phase:flag",
+                        BeforeSource = beforeSource1339,
+                    });
+                    state.P1Succeeded++;
+                }
+            }
+            else
+            {
+                foreach (var f in flagResult.Flagged)
+                {
+                    if (input.Exclusions?.Contains(f.MethodName) == true)
+                    {
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = f.FilePath,
+                            MethodName = f.MethodName,
+                            Outcome = ItemRecordOutcome.Skipped,
+                            Reason = "excluded",
+                        });
+                        state.P1Skipped++; state.Skipped++;
+                        continue;
+                    }
+
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath = f.FilePath,
+                        MethodName = f.MethodName,
+                        Outcome = ItemRecordOutcome.Skipped,
+                        Reason = "dry_run:flag",
+                    });
+                    state.P1Skipped++; state.Skipped++;
+                }
+            }
+            foreach (var s in flagResult.Skipped)
+            {
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = s.FilePath,
+                    MethodName = s.MethodName,
+                    Outcome = ItemRecordOutcome.Skipped,
+                    Reason = $"phase:flag — score {s.Score} below minScore {input.MinScore}",
+                });
+                state.P1Skipped++; state.Skipped++;
+            }
+            foreach (var a in flagResult.AlreadyFlagged)
+            {
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = a.FilePath,
+                    MethodName = a.MethodName,
+                    Outcome = ItemRecordOutcome.Skipped,
+                    Reason = "phase:flag — already flagged",
+                });
+                state.P1Skipped++; state.Skipped++;
+            }
+        }
+        else
+        {
+            var tuples = input.MethodTargets
+                .Where(t => input.Exclusions?.Contains(t.MethodName) != true)
+                .Select(t => (FilePath: t.FilePath, MethodName: t.MethodName,
+                              Pattern: t.Pattern, Score: t.Score, Reason: t.Reason))
+                .ToList();
+
+            if (tuples.Count > 0)
+            {
+                var (flagResults, flagErrors) =
+                    await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples);
+
+                var allChanges = new Dictionary<FilePath, string>();
+                for (int i = 0; i < flagResults.Count; i++)
+                {
+                    var r = flagResults[i];
+                    if (r == null || r.Line == -1) { continue; }
+
+                    foreach (var kv in r.Changes) { allChanges[kv.Key] = kv.Value; }
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath = tuples[i].FilePath,
+                        MethodName = tuples[i].MethodName,
+                        Outcome = ItemRecordOutcome.Succeeded,
+                        Reason = "phase:flag",
+                    });
+                    state.P1Succeeded++;
+                }
+                foreach (var (idx, err) in flagErrors)
+                {
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath = tuples[idx].FilePath,
+                        MethodName = tuples[idx].MethodName,
+                        Outcome = ItemRecordOutcome.Failed,
+                        Reason = $"phase:flag — {err}",
+                    });
+                    if (failures.Count < 10)
+                    {
+                        failures.Add(new FailureDetail
+                        {
+                            FilePath = tuples[idx].FilePath,
+                            MethodName = tuples[idx].MethodName,
+                            Reason = err,
+                            Outcome = ItemRecordOutcome.Failed,
+                        });
+                    }
+                    state.P1Failed++; state.Failed++;
+                }
+                if (!input.DryRun && allChanges.Count > 0)
+                {
+                    var applyResult1421 = await _workspaceManager.ApplyProposedChangesAsync(
+                        allChanges, validateChanges: true);
+                    if (!applyResult1421.Success && applyResult1421.ValidationResult != null)
+                        _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in explicit-target flag changes — skipping write",
+                            applyResult1421.ValidationResult.Diagnostics.Count);
+                    if (applyResult1421.PreImages != null)
+                    {
+                        foreach (var item in items)
+                        {
+                            if (item.Outcome == ItemRecordOutcome.Succeeded && item.BeforeSource == null)
+                            {
+                                applyResult1421.PreImages.TryGetValue(item.FilePath, out var pre);
+                                item.BeforeSource = pre;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // ── Phase 2: Bridge ─────────────────────────────────────────────────────
+    private async Task<BridgeBatchResult> RunBridgePhaseAsync(
+        AsyncifyInput input, AsyncifyRunState state, IProgress<ProgressNotificationValue>? progress)
+    {
+        var items = state.Items;
+        var failures = state.Failures;
+
+        var bridgeResult = await _asyncBatchEngine.RunBridgeBatchAsync(
+            input.ProjectName,
+            input.MaxMethods,
+            input.ScoreThreshold,
+            input.DryRun,
+            input.PropagateCancellationTokens,
+            progress: progress,
+            cancellationToken: state.InnerToken);
+
+        state.BridgeMinScore = bridgeResult.MinCandidateScore;
+        state.BridgeStopReason = bridgeResult.StopReason;
+        state.BridgeSkippedCount = bridgeResult.Skipped.Count;
+        state.BridgeRemainingCandidates = bridgeResult.RemainingCandidates;
+        state.BridgeBodyRewriteFailures = bridgeResult.Skipped
+            .Count(s => s.Reason.Contains("Body-rewrite validation failed", StringComparison.OrdinalIgnoreCase));
+        state.BridgeStaleFlagSkips = bridgeResult.Skipped
+            .Count(s => s.Reason.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase));
+
+        foreach (var a in bridgeResult.Applied)
+        {
+            if (input.Exclusions?.Contains(a.MethodName) == true) { continue; }
+            items.Add(new OperationItemRecord
+            {
+                FilePath = a.FilePath,
+                MethodName = a.MethodName,
+                Outcome = ItemRecordOutcome.Succeeded,
+                Reason = "phase:bridge",
+            });
+            state.P2Succeeded++; state.Succeeded++;
+        }
+        foreach (var s in bridgeResult.Skipped)
+        {
+            bool alreadyDone = s.Reason.Contains("already has CancellationToken");
+            bool requiresManualReview = s.Reason.Contains("NeedsManualReview")
+                || s.Reason.Contains("event handler");
+            var bridgeDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
+            items.Add(new OperationItemRecord
+            {
+                FilePath = s.FilePath,
+                MethodName = s.MethodName,
+                Outcome = alreadyDone ? ItemRecordOutcome.Skipped
+                        : requiresManualReview ? ItemRecordOutcome.NeedsManualReview
+                        : ItemRecordOutcome.Failed,
+                Reason = $"phase:bridge — {s.Reason}",
+                CompilerDiagnostics = bridgeDiags,
+                AfterSource = s.AttemptedSource,
+            });
+            if (alreadyDone || requiresManualReview)
+            {
+                state.P2Skipped++; state.Skipped++;
+            }
+            else
+            {
+                if (failures.Count < 10)
+                {
+                    failures.Add(new FailureDetail
+                    {
+                        FilePath = s.FilePath,
+                        MethodName = s.MethodName,
+                        Reason = s.Reason,
+                        Outcome = ItemRecordOutcome.Failed,
+                        CompilerDiagnostics = bridgeDiags,
+                    });
+                }
+                state.P2Failed++; state.Failed++;
+            }
+        }
+        if (bridgeResult.RemainingCandidates > 0)
+        {
+            state.P2Skipped += bridgeResult.RemainingCandidates;
+            state.Skipped += bridgeResult.RemainingCandidates;
+        }
+
+        state.CheckIterations(bridgeResult.Applied.Count + bridgeResult.Skipped.Count, input.MaxIterations);
+        if (state.InnerToken.IsCancellationRequested)
+        {
+            state.MarkStoppedEarly("maxRuntimeSeconds exceeded after bridge phase");
+        }
+
+        return bridgeResult;
+    }
+
+    // ── Phase 3: Uplift ─────────────────────────────────────────────────────
+    // Uplift targets come from three sources:
+    //   1. Methods applied (body-rewritten) this bridge run.
+    //   2. Methods with stale AsyncBridgeCandidate flags (already had CT, body correct).
+    //   3. ALL [Obsolete("Asyncify-bridge: ...")] wrappers in the project — covers methods
+    //      bridged in prior runs whose flags were stripped and are invisible to the current
+    //      batch's scope. The idempotency guard in RunUpliftBatch makes this a no-op for
+    //      callers already converted.
+    // Returns true if the run should stop early.
+    private async Task<bool> RunUpliftPhaseAsync(
+        AsyncifyInput input, AsyncifyRunState state, BridgeBatchResult bridgeResult, IProgress<ProgressNotificationValue>? progress)
+    {
+        var items = state.Items;
+        var failures = state.Failures;
+
+        var alreadyBridgedSkipped = bridgeResult.Skipped
+            .Where(s => s.Reason.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var allBridgeWrappers = await _asyncBatchEngine.FindAllBridgeWrapperMethodsAsync(
+            input.ProjectName, state.InnerToken);
+
+        var upliftTargets = bridgeResult.Applied
+            .Where(a => input.Exclusions?.Contains(a.MethodName) != true)
+            .Select(a => new UpliftBatchMultiTarget
+            {
+                BridgedMethodName = a.MethodName,
+                ProjectName = input.ProjectName,
+            })
+            .Concat(alreadyBridgedSkipped
+                .Where(s => input.Exclusions?.Contains(s.MethodName) != true)
+                .Select(s => new UpliftBatchMultiTarget
+                {
+                    BridgedMethodName = s.MethodName,
+                    ProjectName = input.ProjectName,
+                }))
+            .Concat(allBridgeWrappers
+                .Where(m => input.Exclusions?.Contains(m) != true)
+                .Select(m => new UpliftBatchMultiTarget
+                {
+                    BridgedMethodName = m,
+                    ProjectName = input.ProjectName,
+                }))
+            .DistinctBy(t => t.BridgedMethodName)
+            .ToList();
+
+        if (upliftTargets.Count > 0)
+        {
+            var upliftResult = await _asyncBatchEngine.RunUpliftBatchMultiAsync(
+                    new UpliftBatchMultiInput
+                    {
+                        Targets = upliftTargets,
+                        MaxCallersPerMethod = input.MaxCallersPerMethod,
+                        DryRun = input.DryRun,
+                        PropagateCancellationTokens = input.PropagateCancellationTokens,
+                    },
+                    progress: progress, cancellationToken: state.InnerToken);
+
+            foreach (var pm in upliftResult.PerMethod)
+            {
+                foreach (var u in pm.Result.Uplifted)
+                {
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath = u.FilePath,
+                        MethodName = u.CallerMethod,
+                        Outcome = ItemRecordOutcome.Succeeded,
+                        Reason = "phase:uplift",
+                    });
+                    state.P3Succeeded++; state.Succeeded++;
+                }
+                foreach (var s in pm.Result.Skipped)
+                {
+                    var upliftDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
+                    // NeedsManualReview = non-method caller (constructor, accessor, lambda).
+                    // Idempotent skips (no diagnostics, not NMR) = already transformed in a prior run.
+                    // Compiler-error skips (have diagnostics) = failures.
+                    var upliftOutcome = s.NeedsManualReview ? ItemRecordOutcome.NeedsManualReview
+                        : (upliftDiags == null ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Failed);
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath = s.FilePath,
+                        MethodName = s.CallerMethod,
+                        Outcome = upliftOutcome,
+                        Reason = $"phase:uplift — {s.Reason}",
+                        CompilerDiagnostics = upliftDiags,
+                        AfterSource = s.AttemptedSource,
+                    });
+                    if (upliftOutcome == ItemRecordOutcome.Failed)
+                    {
+                        if (failures.Count < 10)
+                        {
+                            failures.Add(new FailureDetail
+                            {
+                                FilePath = s.FilePath,
+                                MethodName = s.CallerMethod,
+                                Reason = s.Reason,
+                                Outcome = ItemRecordOutcome.Failed,
+                                CompilerDiagnostics = upliftDiags,
+                            });
+                        }
+                        state.P3Failed++; state.Failed++;
+                    }
+                    else
+                    {
+                        state.P3Skipped++; state.Skipped++;
+                    }
+                }
+            }
+
+            state.CheckIterations(upliftResult.TotalUplifted + upliftResult.TotalSkipped, input.MaxIterations);
+            if (state.InnerToken.IsCancellationRequested)
+            {
+                state.MarkStoppedEarly("maxRuntimeSeconds exceeded after uplift phase");
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // ── Phase 3a: Bridge HandlerToAsyncCandidate extracted methods ─────────────
+    // Extracted event-handler bodies that have been flagged HandlerToAsyncCandidate need the same
+    // bridge conversion as AsyncBridgeCandidate — but they weren't discovered in Phase 1 (which
+    // only flags AsyncBridgeCandidate). After bridging, their event-handler callers typically
+    // become AsyncHandlerCandidate and are picked up by Phase 3b below. Returns true if the run
+    // should stop early.
+    private async Task<bool> RunHandlerToAsyncBridgePhaseAsync(
+        AsyncifyInput input, AsyncifyRunState state, IProgress<ProgressNotificationValue>? progress)
+    {
+        var items = state.Items;
+        var failures = state.Failures;
+
+        List<MigrationCandidateFinding> handlerToAsyncCandidates;
+        try
+        {
+            handlerToAsyncCandidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
+                filePath: null, projectName: input.ProjectName, pattern: "HandlerToAsyncCandidate",
+                cancellationToken: state.InnerToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AsyncifyCore Phase 3a: HandlerToAsyncCandidate discovery failed — skipping");
+            handlerToAsyncCandidates = new List<MigrationCandidateFinding>();
+        }
+
+        var handlerToAsyncTargets = handlerToAsyncCandidates
+            .Where(h => input.Exclusions?.Contains(h.MethodName) != true)
+            .ToList();
+
+        foreach (var candidate in handlerToAsyncTargets)
+        {
+            state.CheckIterations(1, input.MaxIterations);
+            if (state.InnerToken.IsCancellationRequested)
+            {
+                state.MarkStoppedEarly("maxRuntimeSeconds exceeded during handler-to-async phase");
+                return true;
+            }
+
+            if (input.DryRun)
+            {
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = candidate.FilePath,
+                    MethodName = candidate.MethodName,
+                    Outcome = ItemRecordOutcome.Skipped,
+                    Reason = "dry_run phase:handler_to_async",
+                });
+                state.P3aSucceeded++; state.Succeeded++;
+                continue;
+            }
+
+            try
+            {
+                string? updatedSource;
+                var convertResult = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
+                    candidate.FilePath, candidate.MethodName, progress: progress!, cancellationToken: state.InnerToken);
+                updatedSource = convertResult.UpdatedText;
+
+                if (string.IsNullOrEmpty(updatedSource))
+                {
+                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} — {convertResult.Message}");
+                }
+
+                if (input.PropagateCancellationTokens)
+                {
+                    var asyncMethod = candidate.MethodName + "Async";
+                    var propagationResult = await _asyncOptimizationEngine
+                        .PropagateCancellationTokenInMethodAsync(candidate.FilePath, asyncMethod, progress: progress!, cancellationToken: state.InnerToken);
+                    if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
+                        updatedSource = propagationResult.UpdatedText;
+                }
+
+                if (string.IsNullOrEmpty(updatedSource))
+                {
+                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} — {convertResult.Message}");
+                }
+
+                var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
+                    new Dictionary<FilePath, string> { { candidate.FilePath, updatedSource } },
+                    validateChanges: true, cancellationToken: state.InnerToken);
+                if (!applyResult3a.Success && applyResult3a.ValidationResult != null)
+                {
+                    var diagMsg = string.Join("; ", applyResult3a.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                    throw new InvalidOperationException($"Validation: {applyResult3a.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}");
+                }
+                state.HandlerBridgedFiles.Add(candidate.FilePath);
+
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = candidate.FilePath,
+                    MethodName = candidate.MethodName,
+                    Outcome = ItemRecordOutcome.Succeeded,
+                    Reason = "phase:handler_to_async",
+                });
+                state.P3aSucceeded++; state.Succeeded++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "AsyncifyCore Phase 3a: bridge conversion failed for '{Method}'", candidate.MethodName);
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = candidate.FilePath,
+                    MethodName = candidate.MethodName,
+                    Outcome = ItemRecordOutcome.Failed,
+                    Reason = ex.Message,
+                });
+                if (failures.Count < 10)
+                {
+                    failures.Add(new FailureDetail
+                    {
+                        FilePath = candidate.FilePath,
+                        MethodName = candidate.MethodName,
+                        Reason = ex.Message,
+                        Outcome = ItemRecordOutcome.Failed,
+                    });
+                }
+                state.P3aFailed++; state.Failed++;
+            }
+        }
+
+        return false;
+    }
+
+    // ── Phase 3b: Convert AsyncHandlerCandidate event handlers in-place ────────
+    // Event handlers flagged as AsyncHandlerCandidate call obsolete bridge wrappers but cannot be
+    // uplifted via the standard caller-bridge path (fixed delegate signatures). Convert each
+    // in-place: add async modifier, replace bridge call with await asyncCall(). Returns true if
+    // the run should stop early.
+    private async Task<bool> RunHandlerConvertPhaseAsync(AsyncifyInput input, AsyncifyRunState state)
+    {
+        var items = state.Items;
+        var failures = state.Failures;
+
+        List<MigrationCandidateFinding> handlerCandidates;
+        try
+        {
+            handlerCandidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
+                filePath: null, projectName: input.ProjectName, pattern: "AsyncHandlerCandidate",
+                cancellationToken: state.InnerToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AsyncifyCore Phase 3b: candidate discovery failed — skipping handler phase");
+            handlerCandidates = new List<MigrationCandidateFinding>();
+        }
+
+        var handlerTargets = handlerCandidates
+            .Where(h => input.Exclusions?.Contains(h.MethodName) != true)
+            .ToList();
+
+        foreach (var handler in handlerTargets)
+        {
+            state.CheckIterations(1, input.MaxIterations);
+            if (state.InnerToken.IsCancellationRequested)
+            {
+                state.MarkStoppedEarly("maxRuntimeSeconds exceeded during handler phase");
+                return true;
+            }
+
+            if (input.DryRun)
+            {
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = handler.FilePath,
+                    MethodName = handler.MethodName,
+                    Outcome = ItemRecordOutcome.Skipped,
+                    Reason = "dry_run phase:handler",
+                });
+                state.P3bSucceeded++; state.Succeeded++;
+                continue;
+            }
+
+            try
+            {
+                var handlerResult = await _asyncOptimizationEngine
+                    .ConvertEventHandlerCallerToAsyncVoidAsync(
+                        handler.FilePath, handler.MethodName, cancellationToken: state.InnerToken);
+
+                if (!string.IsNullOrEmpty(handlerResult.UpdatedText))
+                {
+                    var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
+                        new Dictionary<FilePath, string> { { handler.FilePath, handlerResult.UpdatedText } },
+                        validateChanges: true, cancellationToken: state.InnerToken);
+                    if (!applyResult3b.Success && applyResult3b.ValidationResult != null)
+                    {
+                        var diagMsg = string.Join("; ", applyResult3b.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                        throw new InvalidOperationException($"Validation: {applyResult3b.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}");
+                    }
+                    state.HandlerConvertedFiles.Add(handler.FilePath);
+                }
+
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = handler.FilePath,
+                    MethodName = handler.MethodName,
+                    Outcome = ItemRecordOutcome.Succeeded,
+                    Reason = "phase:handler",
+                });
+                state.P3bSucceeded++; state.Succeeded++;
+            }
+            catch (Exception ex) when (ex.Message.Contains("is already async"))
+            {
+                // Already converted in a prior run — flag is genuinely stale. Strip only.
+                _logger.LogInformation(
+                    "AsyncifyCore Phase 3b: '{Method}' already async — stripping stale flag", handler.MethodName);
+                try
+                {
+                    var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
+                        filePath: handler.FilePath.Absolute,
+                        pattern: "AsyncHandlerCandidate",
+                        cancellationToken: state.InnerToken);
+                    if (removeResult.Changes.Count > 0)
+                        await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+                }
+                catch (Exception removeEx)
+                {
+                    _logger.LogWarning(removeEx,
+                        "Could not strip stale flag for '{Method}'", handler.MethodName);
+                }
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = handler.FilePath,
+                    MethodName = handler.MethodName,
+                    Outcome = ItemRecordOutcome.Skipped,
+                    Reason = "stale-flag: already async — stripped",
+                });
+                state.P3bSkipped++; state.Skipped++;
+            }
+            catch (Exception ex) when (ex.Message.Contains("does not call any Asyncify-bridge"))
+            {
+                // Scored by heuristic (blocking-calls) but has no bridge wrappers to replace.
+                // Strip AsyncHandlerCandidate and add NeedsManualReview so Phase 1 does not
+                // re-flag on subsequent runs — this method requires manual async conversion.
+                _logger.LogInformation(
+                    "AsyncifyCore Phase 3b: '{Method}' has no bridge calls — flagging NeedsManualReview", handler.MethodName);
+                try
+                {
+                    var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
+                        filePath: handler.FilePath.Absolute,
+                        pattern: "AsyncHandlerCandidate",
+                        cancellationToken: state.InnerToken);
+                    if (removeResult.Changes.Count > 0)
+                        await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+
+                    var neeReviewResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                        handler.FilePath, handler.MethodName, "NeedsManualReview",
+                        score: 0,
+                        reason: "Handler has blocking calls but no Asyncify-bridge wrappers — manual async conversion required",
+                        cancellationToken: state.InnerToken);
+                    await _workspaceManager.ApplyProposedChangesAsync(neeReviewResult.Changes);
+                }
+                catch (Exception removeEx)
+                {
+                    _logger.LogWarning(removeEx,
+                        "Could not update flags for '{Method}'", handler.MethodName);
+                }
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = handler.FilePath,
+                    MethodName = handler.MethodName,
+                    Outcome = ItemRecordOutcome.Skipped,
+                    Reason = "stale-flag: no bridge calls — flagged NeedsManualReview",
+                });
+                state.P3bSkipped++; state.Skipped++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "AsyncifyCore Phase 3b: handler conversion failed for '{Method}'", handler.MethodName);
+
+                try
+                {
+                    // Remove AsyncHandlerCandidate first so it doesn't stack with NeedsManualReview.
+                    var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
+                        filePath: handler.FilePath.Absolute,
+                        pattern: "AsyncHandlerCandidate",
+                        cancellationToken: state.InnerToken);
+                    if (removeResult.Changes.Count > 0)
+                        await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+
+                    var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                        handler.FilePath, handler.MethodName, "NeedsManualReview",
+                        score: 0,
+                        reason: $"Handler in-place: {ex.Message}",
+                        cancellationToken: state.InnerToken);
+                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                }
+                catch (Exception flagEx)
+                {
+                    _logger.LogWarning(flagEx,
+                        "Could not flag handler '{Method}' as NeedsManualReview", handler.MethodName);
+                }
+
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = handler.FilePath,
+                    MethodName = handler.MethodName,
+                    Outcome = ItemRecordOutcome.Failed,
+                    Reason = ex.Message,
+                });
+                if (failures.Count < 10)
+                {
+                    failures.Add(new FailureDetail
+                    {
+                        FilePath = handler.FilePath.Absolute,
+                        MethodName = handler.MethodName,
+                        Reason = ex.Message,
+                        Outcome = ItemRecordOutcome.Failed,
+                    });
+                }
+                state.P3bFailed++; state.Failed++;
+            }
+        }
+
+        return false;
+    }
+
+    // ── Phase 4: Propagate CT ───────────────────────────────────────────────
+    private async Task RunPropagateCtPhaseAsync(
+        AsyncifyInput input, AsyncifyRunState state, BridgeBatchResult bridgeResult, IProgress<ProgressNotificationValue>? progress)
+    {
+        if (!input.PropagateCancellationTokens || input.DryRun)
+        {
+            return;
+        }
+
+        var bridgedFiles = bridgeResult.Applied
+            .Select(a => a.FilePath)
+            .Concat(state.HandlerConvertedFiles)
+            .Concat(state.HandlerBridgedFiles)
+            .Distinct()
+            .ToList();
+
+        if (bridgedFiles.Count == 0)
+        {
+            return;
+        }
+
+        var ctResult = await _asyncBatchEngine.PropagateCancellationTokenBatchAsync(
+            new PropagateCtBatchInput
+            {
+                Targets = bridgedFiles.Select(fp => new PropagateCtFileTarget
+                {
+                    FilePath = fp,
+                    MethodNames = null
+                }).ToList(),
+                DryRun = false,
+                MaxFiles = bridgedFiles.Count,
+                FlagFailures = false,
+            },
+            progress: progress, cancellationToken: state.InnerToken);
+
+        foreach (var a in ctResult.Applied)
+        {
+            state.Items.Add(new OperationItemRecord
+            {
+                FilePath = a.FilePath,
+                Outcome = ItemRecordOutcome.Succeeded,
+                Reason = $"phase:propagate_ct — {a.TotalForwarded} call sites forwarded",
+            });
+            state.P4Succeeded++; state.Succeeded++;
+        }
+        foreach (var f in ctResult.Failed)
+        {
+            state.Items.Add(new OperationItemRecord
+            {
+                FilePath = f.FilePath,
+                Outcome = ItemRecordOutcome.Failed,
+                Reason = $"phase:propagate_ct — {f.Reason}",
+                CompilerDiagnostics = f.Diagnostics.Count > 0 ? f.Diagnostics : null,
+            });
+            state.P4Failed++; state.Failed++;
+        }
+    }
+
+    // Builds the final BatchResultSummary from accumulated run state: writes the operation blob,
+    // derives the human-readable Directive (which zero-result reason applies, if any), and
+    // assembles the per-phase breakdown. Split out of AsyncifyCore so the phase-orchestration and
+    // summary-assembly concerns don't share one body.
+    private async Task<BatchResultSummary> BuildAsyncifySummaryAsync(
+        AsyncifyInput input, string changeId, AsyncifyRunState state)
+    {
+        _workspaceManager.RecordBatchOutcome(state.Succeeded, state.Failed, rolledBack: 0, skipped: state.Skipped);
 
         var blobName2 = await OperationBlobWriter.WriteAsync(
-            "asyncify", changeId, items, _workspaceManager.GetSolutionRoot());
+            "asyncify", changeId, state.Items, _workspaceManager.GetSolutionRoot());
         var status2 = _workspaceManager.GetBreakerStatus();
 
         string directive;
-        if (stoppedEarly)
+        if (state.StoppedEarly)
         {
-            directive = $"stopped_early — {stopReason}. Phases completed are in blob: {blobName2}.";
+            directive = $"stopped_early — {state.StopReason}. Phases completed are in blob: {blobName2}.";
         }
-        else if (succeeded == 0 && !status2.Open && !stoppedEarly
-                 && bridgeStopReason == "no_candidates" && !bridgeMinScore.HasValue)
+        else if (state.Succeeded == 0 && !status2.Open && !state.StoppedEarly
+                 && state.BridgeStopReason == "no_candidates" && !state.BridgeMinScore.HasValue)
         {
-            if (flagPhaseScanned > 0 && flagPhaseNewFlags == 0)
+            if (state.FlagPhaseScanned > 0 && state.FlagPhaseNewFlags == 0)
             {
-                directive = $"Phase 1 (flag) scanned {flagPhaseScanned} methods but none qualified for async bridging " +
+                directive = $"Phase 1 (flag) scanned {state.FlagPhaseScanned} methods but none qualified for async bridging " +
                             $"— all scored below minScore={input.MinScore} or were already marked for manual review. " +
                             $"Re-run Asyncify with a lower minScore (e.g., minScore=25), or run " +
                             $"flag_migration_candidates(scope=\"project\", minScore=25) first to review the candidate pool.";
@@ -3280,24 +3372,24 @@ public class SentinelAsyncifyTools
                             "and tag async migration candidates, then re-run asyncify.";
             }
         }
-        else if (succeeded == 0 && !status2.Open && !stoppedEarly && bridgeMinScore.HasValue)
+        else if (state.Succeeded == 0 && !status2.Open && !state.StoppedEarly && state.BridgeMinScore.HasValue)
         {
             directive = $"No candidates scored at or above scoreThreshold={input.ScoreThreshold}; " +
-                        $"the highest-scoring candidate found has score={bridgeMinScore.Value}. " +
-                        $"Re-run with scoreThreshold={bridgeMinScore.Value} (or lower) to include it.";
+                        $"the highest-scoring candidate found has score={state.BridgeMinScore.Value}. " +
+                        $"Re-run with scoreThreshold={state.BridgeMinScore.Value} (or lower) to include it.";
         }
-        else if (succeeded == 0 && !status2.Open && !stoppedEarly
-                 && bridgeStopReason == "batch_complete" && bridgeSkippedCount > 0)
+        else if (state.Succeeded == 0 && !status2.Open && !state.StoppedEarly
+                 && state.BridgeStopReason == "batch_complete" && state.BridgeSkippedCount > 0)
         {
-            if (bridgeBodyRewriteFailures > 0)
+            if (state.BridgeBodyRewriteFailures > 0)
             {
-                directive = $"{bridgeBodyRewriteFailures} candidate(s) required manual review — " +
+                directive = $"{state.BridgeBodyRewriteFailures} candidate(s) required manual review — " +
                             $"the async body rewrite produced compiler errors after replacing sync bridge calls with async equivalents. " +
                             $"Call get_operation_detail(changeId=\"{changeId}\", filter=\"manual_review\") to see per-method compiler diagnostics.";
             }
             else
             {
-                directive = $"{bridgeStaleFlagSkips} candidate(s) skipped — async overloads already exist with CancellationToken " +
+                directive = $"{state.BridgeStaleFlagSkips} candidate(s) skipped — async overloads already exist with CancellationToken " +
                             $"(stale [AsyncBridgeCandidate] flags from a prior Asyncify run). " +
                             $"Run ScanAsyncMigrationCandidates to refresh the candidate list, or " +
                             $"call get_operation_detail(changeId=\"{changeId}\", filter=\"skipped\") to inspect skip reasons.";
@@ -3305,15 +3397,15 @@ public class SentinelAsyncifyTools
         }
         else
         {
-            var stopDesc = bridgeStopReason switch
+            var stopDesc = state.BridgeStopReason switch
             {
                 "batch_complete" => "All eligible candidates were processed in this run.",
-                "budget_exhausted" => $"Stopped after maxMethods={input.MaxMethods} limit — {bridgeRemainingCandidates} eligible candidate(s) remain; re-run to continue.",
+                "budget_exhausted" => $"Stopped after maxMethods={input.MaxMethods} limit — {state.BridgeRemainingCandidates} eligible candidate(s) remain; re-run to continue.",
                 "dry_run" => "Dry run complete — no files were written to disk.",
-                _ when bridgeStopReason.Length > 0 => $"Bridge phase ended: {bridgeStopReason}.",
+                _ when state.BridgeStopReason.Length > 0 => $"Bridge phase ended: {state.BridgeStopReason}.",
                 _ => string.Empty,
             };
-            var writeNote = WriteStatusNote(input.DryRun, succeeded);
+            var writeNote = WriteStatusNote(input.DryRun, state.Succeeded);
             directive = stopDesc.Length > 0
                 ? $"{writeNote}{stopDesc} {status2.Directive}".TrimEnd()
                 : $"{writeNote}{status2.Directive}".TrimEnd();
@@ -3323,28 +3415,28 @@ public class SentinelAsyncifyTools
         {
             ChangeId = changeId,
             BlobName = blobName2,
-            Succeeded = succeeded,
-            Failed = failed,
-            Skipped = skipped,
+            Succeeded = state.Succeeded,
+            Failed = state.Failed,
+            Skipped = state.Skipped,
             RolledBack = 0,
-            Attempted = succeeded + failed + skipped,
-            Failures = failures,
-            FailuresTruncated = failed > 10,
-            FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
+            Attempted = state.Succeeded + state.Failed + state.Skipped,
+            Failures = state.Failures,
+            FailuresTruncated = state.Failed > 10,
+            FailuresByReason = state.Failed > 10 ? state.Failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status2.Severity,
             Directive = directive,
             BreakerOpen = status2.Open,
-            MinCandidateScore = bridgeMinScore,
-            Suggestions = AsyncMigrationDiagnostic.Analyse(succeeded, failed, changeId, items),
+            MinCandidateScore = state.BridgeMinScore,
+            Suggestions = AsyncMigrationDiagnostic.Analyse(state.Succeeded, state.Failed, changeId, state.Items),
             PhaseBreakdown = new AsyncifyPhaseBreakdown
             {
-                HandlerExtract = new AsyncifyPhaseCount { Succeeded = p0s, Failed = p0f },
-                Flag = new AsyncifyPhaseCount { Succeeded = p1s, Failed = p1f, Skipped = p1k },
-                Bridge = new AsyncifyPhaseCount { Succeeded = p2s, Failed = p2f, Skipped = p2k },
-                Uplift = new AsyncifyPhaseCount { Succeeded = p3s, Failed = p3f, Skipped = p3k },
-                HandlerToAsync = new AsyncifyPhaseCount { Succeeded = p3as, Failed = p3af },
-                Handler = new AsyncifyPhaseCount { Succeeded = p3bs, Failed = p3bf, Skipped = p3bk },
-                PropagateCt = new AsyncifyPhaseCount { Succeeded = p4s, Failed = p4f },
+                HandlerExtract = new AsyncifyPhaseCount { Succeeded = state.P0Succeeded, Failed = state.P0Failed },
+                Flag = new AsyncifyPhaseCount { Succeeded = state.P1Succeeded, Failed = state.P1Failed, Skipped = state.P1Skipped },
+                Bridge = new AsyncifyPhaseCount { Succeeded = state.P2Succeeded, Failed = state.P2Failed, Skipped = state.P2Skipped },
+                Uplift = new AsyncifyPhaseCount { Succeeded = state.P3Succeeded, Failed = state.P3Failed, Skipped = state.P3Skipped },
+                HandlerToAsync = new AsyncifyPhaseCount { Succeeded = state.P3aSucceeded, Failed = state.P3aFailed },
+                Handler = new AsyncifyPhaseCount { Succeeded = state.P3bSucceeded, Failed = state.P3bFailed, Skipped = state.P3bSkipped },
+                PropagateCt = new AsyncifyPhaseCount { Succeeded = state.P4Succeeded, Failed = state.P4Failed },
             },
         };
 
