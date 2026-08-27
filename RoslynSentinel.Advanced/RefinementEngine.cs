@@ -111,6 +111,37 @@ public class RefinementEngine
             _ => member
         };
 
+        // Base and derived class routinely live in the same file (a small hierarchy kept together
+        // rather than split one-type-per-file). When they do, `root` and `baseRoot` are the same
+        // tree, so removing the member and adding it to the base class must happen against a
+        // single root passed through both edits — building the two edits independently and then
+        // keying a Dictionary<FilePath,string> by filePath/baseFile would try to add the same key
+        // twice and throw, and even before that, ReplaceNode against the stale pre-removal
+        // baseClassNode would silently drop the member-removal edit.
+        if (filePath == baseFile)
+        {
+            var combinedRoot = root.RemoveNode(member, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+            if (combinedRoot == null)
+            {
+                throw new ToolNotFoundException("Failed to remove member from derived class.");
+            }
+
+            var baseClassAfterRemoval = combinedRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
+                .FirstOrDefault(c => c.Identifier.Text == baseType.Name);
+            if (baseClassAfterRemoval == null)
+            {
+                throw new ToolNotFoundException($"Base class '{baseType.Name}' not found in '{baseFile}' after removing member.");
+            }
+
+            var combinedBaseClassNode = baseClassAfterRemoval.AddMembers(memberForBase);
+            var finalRoot = combinedRoot.ReplaceNode(baseClassAfterRemoval, combinedBaseClassNode);
+
+            return new Dictionary<FilePath, string>
+            {
+                { filePath, finalRoot.NormalizeWhitespace().ToFullString() }
+            };
+        }
+
         var newDerivedRoot = root.RemoveNode(member, SyntaxRemoveOptions.KeepUnbalancedDirectives);
         if (newDerivedRoot == null)
         {
