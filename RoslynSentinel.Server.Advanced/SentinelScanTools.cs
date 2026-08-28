@@ -1,7 +1,5 @@
 using System.ComponentModel;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.Logging;
@@ -37,15 +35,6 @@ public class SentinelScanTools
     private readonly BreakingChangeEngine _breakingChangeEngine;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<SentinelScanTools> _logger;
-    private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
-        Converters =
-            {
-                new JsonStringEnumConverter()
-            }
-    };
 
     public SentinelScanTools(
         AnalysisEngine analysisEngine,
@@ -101,7 +90,7 @@ public class SentinelScanTools
     }
 
     [McpServerTool(Name = "RunScanDetector")]
-    [Produces(DataTag.ScanId)]
+    [Produces(DataTag.ResultId)]
     [Description("""
     Dispatches a named detector across a file, project, or solution.
     scope: file | project | solution. scopeName: filePath when scope=file;
@@ -561,278 +550,7 @@ public class SentinelScanTools
         return scopeName;
     }
 
-    // ── get_scan_result ────────────────────────────────────────────────────────
 
-    [McpServerTool(Name = "GetScanResult")]
-    [Produces(DataTag.Report)]
-    [Description("""
-        Pages through a large scan result written to disk when output result payload exceeded the inline size threshold. Supply either scanId (resolves to .roslynsentinel/scans/scan_*_{scanId}.json) or filePath (must match the scan_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
-        """)]
-    public async Task<ToolResult<object>> GetScanResult(
-        [Consumes(DataTag.ScanId)] string? scanId = null,
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
-        [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
-        [ToolOption(ToolOptionTag.Offset)] int offset = 0,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePath filePath = _workspaceManager.SetFilePath(filepath);
-        var solutionRoot = _workspaceManager.GetSolutionRoot();
-        string? resolvedPath = null;
-
-        if (!string.IsNullOrEmpty(scanId) && !string.IsNullOrEmpty(solutionRoot))
-        {
-            var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans");
-            if (Directory.Exists(dir))
-            {
-                resolvedPath = Directory
-                    .EnumerateFiles(dir, $"scan_*_{scanId}.json")
-                    .FirstOrDefault();
-            }
-        }
-        else if (!string.IsNullOrEmpty(filePath))
-        {
-            // Validate: path must be inside the scans directory and match the scan_*.json pattern.
-            var fileName = System.IO.Path.GetFileName(filePath);
-            if (!string.IsNullOrEmpty(solutionRoot))
-            {
-                var scansDir = System.IO.Path.GetFullPath(
-                    System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans"));
-                var candidate = System.IO.Path.GetFullPath(filePath);
-                if (candidate.StartsWith(scansDir, StringComparison.OrdinalIgnoreCase)
-                    && fileName.StartsWith("scan_", StringComparison.OrdinalIgnoreCase)
-                    && fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
-                    && File.Exists(candidate))
-                {
-                    resolvedPath = candidate;
-                }
-            }
-        }
-
-        if (resolvedPath == null)
-        {
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError("Exception",
-                              "Scan file not found. Supply a valid scanId or filePath pointing to a scan_*.json file in the scans directory.")
-            };
-        }
-
-        ScanWapper all;
-        try
-        {
-            var json = await File.ReadAllTextAsync(resolvedPath, cancellationToken);
-            all = JsonSerializer.Deserialize<ScanWapper>(
-                      json,
-                      _jsonOptions)
-                  ?? new ScanWapper();
-
-            if (all.Data == null)
-            {
-                return new ToolResult<object>
-                {
-                    Success = false,
-                    Error = new ResultError("Exception", "Scan file has no Data payload — it may be corrupt.")
-                };
-            }
-
-            ToolResult<object> result;
-
-            switch (all.Type)
-            {
-                case ScanWrapperType.MigrationCandidateFindingList:
-                    {
-                        var findings = JsonSerializer.Deserialize<List<MigrationCandidateFinding>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            // limit/offset were previously accepted but never applied — the full
-                            // on-disk list was returned regardless of the requested page.
-                            Data = findings.Skip(offset).Take(limit).ToList()
-                        };
-                        break;
-                    }
-
-                case ScanWrapperType.ApiSurfaceEntryList:
-                    {
-                        var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = entries.Skip(offset).Take(limit).ToList()
-                        };
-                        break;
-                    }
-                case ScanWrapperType.CodeInventoryReport:
-                    {
-                        var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = entries.Skip(offset).Take(limit).ToList()
-                        };
-                        break;
-                    }
-                case ScanWrapperType.MethodSource:
-                    {
-                        // Single object, not a list - limit/offset don't apply, matching the shape
-                        // GetMethodSource returns inline when the result is small enough not to offload.
-                        var methodSource = JsonSerializer.Deserialize<MethodSourceResult>(all.Data.ToString(), _jsonOptions);
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = methodSource
-                        };
-                        break;
-                    }
-                case ScanWrapperType.MigrationScanSummary:
-                    {
-                        // Single object, not a list - limit/offset don't apply, matching the shape
-                        // returned inline when the summary is small enough not to offload.
-                        var migrationScanSummary = JsonSerializer.Deserialize<MigrationScanSummary>(all.Data.ToString(), _jsonOptions);
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = migrationScanSummary
-                        };
-                        break;
-                    }
-                case ScanWrapperType.FileSource:
-                    {
-                        // Single object, not a list - limit/offset don't apply, matching the shape
-                        // ReadFile returns inline when the result is small enough not to offload.
-                        var fileSource = JsonSerializer.Deserialize<FileSourceResult>(all.Data.ToString(), _jsonOptions);
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = fileSource
-                        };
-                        break;
-                    }
-                case ScanWrapperType.MemberChangedContent:
-                    {
-                        // Single object, not a list - limit/offset don't apply, matching the shape
-                        // returned inline when the changed content is small enough not to offload.
-                        var memberChangedContent = JsonSerializer.Deserialize<MemberChangedContentResult>(all.Data.ToString(), _jsonOptions);
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = memberChangedContent
-                        };
-                        break;
-                    }
-                case ScanWrapperType.BreakingChangeList:
-                    {
-                        var changes = JsonSerializer.Deserialize<List<BreakingChange>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = changes.Skip(offset).Take(limit).ToList()
-                        };
-                        break;
-                    }
-                case ScanWrapperType.TextSearchMatchList:
-                    {
-                        var matches = JsonSerializer.Deserialize<List<TextSearchMatch>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = matches.Skip(offset).Take(limit).ToList()
-                        };
-                        break;
-                    }
-                case ScanWrapperType.ProjectFileList:
-                    {
-                        var files = JsonSerializer.Deserialize<List<string>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = files.Skip(offset).Take(limit).ToList()
-                        };
-                        break;
-                    }
-                case ScanWrapperType.ProjectInfoList:
-                    {
-                        var projects = JsonSerializer.Deserialize<List<ProjectInfoEntry>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = projects.Skip(offset).Take(limit).ToList()
-                        };
-                        break;
-                    }
-                case ScanWrapperType.SolutionItemFileList:
-                    {
-                        var solutionItems = JsonSerializer.Deserialize<List<SolutionItemFile>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
-                        result = new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = solutionItems.Skip(offset).Take(limit).ToList()
-                        };
-                        break;
-                    }
-                default:
-                    {
-                        return new ToolResult<object>
-                        {
-                            Success = false,
-                            Error = new ResultError("Exception",
-                                          "Unknown scan result type.")
-                        };
-                    }
-            }
-            ;
-
-            // MethodSource/FileSource/MigrationScanSummary/MemberChangedContent wrap a single object, not a list - the array-shaped
-            // TotalRecords/HasMorePages computation below doesn't apply (and AsArray() on a
-            // single-object payload's first property, e.g. a string Signature, throws rather than
-            // returning null, since it's the wrong node kind rather than a missing one).
-            int totalRecords;
-            bool hasMorePages;
-            if (all.Type is ScanWrapperType.MethodSource or ScanWrapperType.FileSource or ScanWrapperType.MigrationScanSummary or ScanWrapperType.MemberChangedContent)
-            {
-                totalRecords = 1;
-                hasMorePages = false;
-            }
-            else
-            {
-                var dataArray = all.Data as JsonArray
-                    ?? all.Data?.AsObject().FirstOrDefault().Value?.AsArray()
-                    ?? [];
-                totalRecords = dataArray.Count;
-                hasMorePages = (offset + limit) < totalRecords;
-            }
-
-            return new ToolResult<object>
-            {
-                Success = true,
-                // Unwrap: `result` is itself a ToolResult<object> built above per ScanWrapperType.
-                // Returning it as-is here double-wraps the payload (Data.Data instead of Data),
-                // which doesn't match every other tool's flat ToolResult<object> shape.
-                Data = result.Data,
-                TotalRecords = totalRecords,
-                HasMorePages = hasMorePages,
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError("Exception",
-                              "Failed to read scan file.", ex.Message)
-            };
-        }
-    }
 
     internal sealed record ScanDescriptor(DetectorId Id, string Domain, string ScopeHint, string Description);
 
@@ -1013,7 +731,7 @@ public class SentinelScanTools
                 result,
                 _workspaceManager.GetSolutionRoot(),
                 typeof(BreakingChange).Name,
-                ScanWrapperType.BreakingChangeList,
+                ResultWrapperType.BreakingChangeList,
                 totalRecords: result.Count,
                 cancellationToken: cancellationToken);
         }
@@ -1064,7 +782,7 @@ public class SentinelScanTools
 
     [McpServerTool(Name = "GetPublicApiSurface")]
     [Produces(DataTag.Report)]
-    [Description("Returns the public API surface of a project. persistBaseline=false (default) → full List<ApiSurfaceEntry> with signatures, virtuality, and XML docs (for SDK documentation/API review). persistBaseline=true → compact List<PublicApiMember> baseline for passing to scan_breaking_changes. filePath scopes to a single file (persistBaseline=true only). includeMethods/includeProperties/includeTypes filter output (persistBaseline=false only). Returns a scanId and writes scan results to disk when output result payload exceeds the inline size threshold. Use get_scan_result(scanId) to retrieve the results.")]
+    [Description("Returns the public API surface of a project. persistBaseline=false (default) → full List<ApiSurfaceEntry> with signatures, virtuality, and XML docs (for SDK documentation/API review). persistBaseline=true → compact List<PublicApiMember> baseline for passing to scan_breaking_changes. filePath scopes to a single file (persistBaseline=true only). includeMethods/includeProperties/includeTypes filter output (persistBaseline=false only). Returns a resultId and writes scan results to disk when output result payload exceeds the inline size threshold. Use get_large_result(resultId) to retrieve the results.")]
     public async Task<ToolResult<object>> GetPublicApiSurface(
         [Consumes(DataTag.ProjectName, required: true)] string? projectName = null,
         [ToolOption(ToolOptionTag.PersistBaseline)] bool persistBaseline = false,
@@ -1085,7 +803,7 @@ public class SentinelScanTools
             {
                 var apiResult = await _breakingChangeEngine.GetPublicApiSurfaceAsync(projectName, filePath);
 
-                var summaryResults = await ScanResultHelper.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList, cancellationToken);
+                var summaryResults = await LargeResultHelper.StoreLargeResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ResultWrapperType.ApiSurfaceEntryList, cancellationToken);
 
                 if (summaryResults.offloaded)
                 {
@@ -1098,11 +816,11 @@ public class SentinelScanTools
                             resultType: typeof(ApiSurfaceEntry).Name,
                             writtenToFile: true,
                             filePath: summaryResults.filePath.Absolute.ToString(),
-                            scanId: summaryResults.scanId!,
+                            resultId: summaryResults.resultId!,
                             sizeBytes: summaryResults.jsonBytes.Length,
                             totalRecords: apiResult.Count,
                             message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
-                                           $"Use get_scan_result(scanId: \"{summaryResults.scanId}\") to page through results. " +
+                                           $"Use get_large_result(resultId: \"{summaryResults.resultId}\") to page through results. " +
                                            "Pass limit and offset to control page size (default limit: 50).")
                     };
                 }
@@ -1130,7 +848,7 @@ public class SentinelScanTools
 
                 var apiResult = await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
 
-                var summaryResults = await ScanResultHelper.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList, cancellationToken);
+                var summaryResults = await LargeResultHelper.StoreLargeResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ResultWrapperType.ApiSurfaceEntryList, cancellationToken);
 
                 if (summaryResults.offloaded)
                 {
@@ -1143,11 +861,11 @@ public class SentinelScanTools
                             resultType: typeof(ApiSurfaceEntry).Name,
                             writtenToFile: true,
                             filePath: summaryResults.filePath.Absolute.ToString(),
-                            scanId: summaryResults.scanId!,
+                            resultId: summaryResults.resultId!,
                             sizeBytes: summaryResults.jsonBytes.Length,
                             totalRecords: apiResult.Count,
                             message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
-                                           $"Use get_scan_result(scanId: \"{summaryResults.scanId}\") to page through results. " +
+                                           $"Use get_large_result(resultId: \"{summaryResults.resultId}\") to page through results. " +
                                            "Pass limit and offset to control page size (default limit: 50).")
                     };
                 }

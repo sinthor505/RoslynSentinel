@@ -195,17 +195,17 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_RegexLikePatternWithoutIsRegex_ReturnsWarning()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SearchSolutionText(@"^\s*public enum OrderStatus");
+        var result = await _tools.SearchSolutionText(@"^\s*public enum OrderStatus", searchMode: TextSearchMode.literal);
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Warning, Does.Contain("isRegex=true"));
+        Assert.That(result.Warning, Does.Contain("searchMode=regex"));
     }
 
     [Test]
     public async Task SearchSolutionText_RegexLikePatternWithIsRegex_ReturnsNoWarning()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SearchSolutionText(@"^namespace TestProj", isRegex: true);
+        var result = await _tools.SearchSolutionText(@"^namespace TestProj", searchMode: TextSearchMode.regex);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Warning, Is.Null);

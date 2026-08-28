@@ -49,5 +49,6 @@ public enum ToolOptionTag
     TopN,
     RepoDirectory,
     DryRun,
-    ReturnDiff
+    ReturnDiff,
+    SearchMode
 }

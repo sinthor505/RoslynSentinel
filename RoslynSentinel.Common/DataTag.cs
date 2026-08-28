@@ -14,7 +14,7 @@ public enum DataTag
     ClassName,
     MethodName,
     DataType,
-    ScanId,
+    ResultId,
     OperationId,
     SessionId,
     SymbolId,

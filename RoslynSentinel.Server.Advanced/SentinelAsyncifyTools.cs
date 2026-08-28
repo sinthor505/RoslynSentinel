@@ -96,7 +96,7 @@ public class SentinelAsyncifyTools
 
         summarize=false + limit/offset → full paged List<MigrationCandidateFinding>. minScore filters in
         both modes; TotalRecords reflects post-filter count. A method flagged for two patterns appears twice.
-        When results exceed the inline threshold, LargeResultInfo is populated with a scanId for paging.
+        When results exceed the inline threshold, LargeResultInfo is populated with a resultId for paging.
         """)]
     public async Task<ToolResult<object>> ScanAsyncMigrationCandidates(
         ToolScope scope = ToolScope.solution,
@@ -233,7 +233,7 @@ public class SentinelAsyncifyTools
                 _logger.LogInformation("Summary JSON size: {SizeBytes} bytes", summaryJson.Length);
             }
 
-            if (summaryJson.Length > ScanResultHelper.OffloadThresholdBytes)
+            if (summaryJson.Length > LargeResultHelper.OffloadThresholdBytes)
             {
                 _logger.LogWarning("Summary JSON size {SizeBytes} bytes exceeds expected limits. " +
                                    "This may indicate an issue with the summarization logic or unusually large data. " +
@@ -245,7 +245,7 @@ public class SentinelAsyncifyTools
                 summary,
                 _workspaceManager.GetSolutionRoot(),
                 nameof(MigrationScanSummary),
-                ScanWrapperType.MigrationScanSummary,
+                ResultWrapperType.MigrationScanSummary,
                 totalRecords: aggregateFindings.Count);
         }
         else
@@ -283,8 +283,8 @@ public class SentinelAsyncifyTools
             var page = allFindings.Skip(offset).Take(limit).ToList();
             bool hasMorePages = (offset + limit) < totalCount;
 
-            var (offloaded, storedPath, scanId, allBytes) = await ScanResultHelper.StoreScanResultAsync(
-                allFindings, _workspaceManager.GetSolutionRoot(), ScanWrapperType.MigrationCandidateFindingList, cancellationToken);
+            var (offloaded, storedPath, resultId, allBytes) = await LargeResultHelper.StoreLargeResultAsync(
+                allFindings, _workspaceManager.GetSolutionRoot(), ResultWrapperType.MigrationCandidateFindingList, cancellationToken);
 
             if (offloaded)
             {
@@ -297,11 +297,11 @@ public class SentinelAsyncifyTools
                         resultType: typeof(MigrationCandidateFinding).Name,
                         writtenToFile: true,
                         filePath: storedPath.ToString(),
-                        scanId: scanId!,
+                        resultId: resultId!,
                         sizeBytes: allBytes.Length,
                         totalRecords: totalCount,
                         message: $"Result written to file ({allBytes.Length} bytes, {totalCount} records). " +
-                                       $"Use get_scan_result(scanId: \"{scanId}\") to page through results. " +
+                                       $"Use get_large_result(resultId: \"{resultId}\") to page through results. " +
                                        "Pass limit and offset to control page size (default limit: 50).")
                 };
             }

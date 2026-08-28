@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace RoslynSentinel.Common;
 
-public static class ScanResultHelper
+public static class LargeResultHelper
 {
     internal static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
     {
@@ -20,14 +20,14 @@ public static class ScanResultHelper
 
     /// <summary>
     /// Serializes <paramref name="data"/> and, if it exceeds <see cref="OffloadThresholdBytes"/>, writes it
-    /// to <c>.roslynsentinel/scans/scan_&lt;timestamp&gt;_&lt;scanId&gt;.json</c> wrapped in a
-    /// <see cref="ScanWapper"/> tagged with <paramref name="wrapperType"/> so <c>GetScanResult</c> can
+    /// to <c>.roslynsentinel/largeresults/largeresult_&lt;timestamp&gt;_&lt;resultId&gt;.json</c> wrapped in a
+    /// <see cref="ResultWrapper"/> tagged with <paramref name="wrapperType"/> so <c>GetLargeResult</c> can
     /// deserialize it back. Callers that skip this and hand-write their own file (as GetMethodSource/
-    /// ReadFile once did) produce a file GetScanResult cannot read - always go through this method
+    /// ReadFile once did) produce a file GetLargeResult cannot read - always go through this method
     /// instead of reimplementing the write.
     /// </summary>
-    public static async Task<(bool offloaded, FilePath filePath, string? scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(
-        T data, string? solutionRoot, ScanWrapperType wrapperType, CancellationToken cancellationToken)
+    public static async Task<(bool offloaded, FilePath filePath, string? resultId, byte[] jsonBytes)> StoreLargeResultAsync<T>(
+        T data, string? solutionRoot, ResultWrapperType wrapperType, CancellationToken cancellationToken)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
         if (jsonBytes.Length <= OffloadThresholdBytes || string.IsNullOrEmpty(solutionRoot) || data == null)
@@ -35,25 +35,25 @@ public static class ScanResultHelper
             return (false, default, null, jsonBytes);
         }
 
-        var wrapper = new ScanWapper
+        var wrapper = new ResultWrapper
         {
             Type = wrapperType,
             Data = JsonSerializer.SerializeToNode(data, JsonOptions)
         };
 
-        var scanId = Guid.NewGuid().ToString("N");
-        var dir = Path.Combine(solutionRoot, ".roslynsentinel", "scans");
+        var resultId = Guid.NewGuid().ToString("N");
+        var dir = Path.Combine(solutionRoot, ".roslynsentinel", "largeresults");
         Directory.CreateDirectory(dir);
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-        var filePathString = Path.Combine(dir, $"scan_{timestamp}_{scanId}.json");
+        var filePathString = Path.Combine(dir, $"largeresult_{timestamp}_{resultId}.json");
         await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
-        return (true, new FilePath(filePathString, solutionRoot, validated: true), scanId, jsonBytes);
+        return (true, new FilePath(filePathString, solutionRoot, validated: true), resultId, jsonBytes);
     }
 }
 
-public record ScanWapper
+public record ResultWrapper
 {
-    public ScanWrapperType Type
+    public ResultWrapperType Type
     {
         get; init;
     }
@@ -63,7 +63,7 @@ public record ScanWapper
     }
 }
 
-public enum ScanWrapperType
+public enum ResultWrapperType
 {
     MigrationCandidateFindingList,
     ApiSurfaceEntryList,

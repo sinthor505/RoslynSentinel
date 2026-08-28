@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis;
@@ -46,6 +48,16 @@ public class SentinelWorkspaceTools
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelWorkspaceTools> _logger;
+    private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+        Converters =
+            {
+                new JsonStringEnumConverter()
+            }
+    };
+
     public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine)
     {
         _workspaceManager = workspaceManager;
@@ -120,7 +132,7 @@ public class SentinelWorkspaceTools
                     projectInfos,
                     _workspaceManager.GetSolutionRoot(),
                     typeof(ProjectInfoEntry).Name,
-                    ScanWrapperType.ProjectInfoList,
+                    ResultWrapperType.ProjectInfoList,
                     totalRecords: projectInfos.Count,
                     cancellationToken: cancellationToken);
             }
@@ -142,7 +154,7 @@ public class SentinelWorkspaceTools
                     items,
                     solutionRoot,
                     typeof(SolutionItemFile).Name,
-                    ScanWrapperType.SolutionItemFileList,
+                    ResultWrapperType.SolutionItemFileList,
                     totalRecords: items.Count,
                     cancellationToken: cancellationToken);
             }
@@ -177,7 +189,7 @@ public class SentinelWorkspaceTools
                         files,
                         _workspaceManager.GetSolutionRoot(),
                         "ProjectFile",
-                        ScanWrapperType.ProjectFileList,
+                        ResultWrapperType.ProjectFileList,
                         totalRecords: files.Count,
                         cancellationToken: cancellationToken);
                 }
@@ -1087,7 +1099,7 @@ public class SentinelWorkspaceTools
             var attributes = ExtractAttributes(method);
             var signature = BuildSignature(method);
             _logger.LogInformation("GetMethodSource: {SizeBytes} bytes for '{MethodName}'", methodBytes, methodName);
-            const int thresholdBytes = ScanResultHelper.OffloadThresholdBytes;
+            const int thresholdBytes = LargeResultHelper.OffloadThresholdBytes;
             var solutionRoot = _workspaceManager.GetSolutionRoot();
 
             var fileText = await document.GetTextAsync(cancellationToken);
@@ -1102,11 +1114,11 @@ public class SentinelWorkspaceTools
             if (methodBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {
                 var fullResult = new MethodSourceResult { Envelope = envelope, Signature = signature, Source = methodSource, Attributes = attributes };
-                var stored = await ScanResultHelper.StoreScanResultAsync(fullResult, solutionRoot, ScanWrapperType.MethodSource, cancellationToken);
+                var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.MethodSource, cancellationToken);
                 return new ToolResult<object>
                 {
                     Success = true,
-                    LargeResult = new LargeResultInfo(resultType: "MethodSource", writtenToFile: stored.offloaded, filePath: stored.filePath, scanId: stored.scanId!, sizeBytes: methodBytes, totalRecords: 1, message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " + $"Use get_scan_result(scanId: \"{stored.scanId}\") to page through results."),
+                    LargeResult = new LargeResultInfo(resultType: "MethodSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: methodBytes, totalRecords: 1, message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " + $"Use get_large_result(resultId: \"{stored.resultId}\") to page through results."),
                     Data = new
                     {
                         envelope,
@@ -1143,7 +1155,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "ReadFile")]
     [Produces(DataTag.SourceCode)]
-    [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file — useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/scans and returned as a scanId (see GetMethodSource) instead of inline text.")]
+    [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file — useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/largeresults and returned as a resultId (see GetMethodSource) instead of inline text.")]
     public async Task<ToolResult<object>> ReadFile([Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null, [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
@@ -1197,16 +1209,39 @@ public class SentinelWorkspaceTools
 
             var fullText = sourceText.ToString();
             var textBytes = System.Text.Encoding.UTF8.GetByteCount(fullText);
-            const int thresholdBytes = ScanResultHelper.OffloadThresholdBytes;
+            const int thresholdBytes = LargeResultHelper.OffloadThresholdBytes;
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             if (textBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {
                 var fullResult = new FileSourceResult { FilePath = (string)filePath, StartLine = 1, EndLine = totalLines, TotalLines = totalLines, Source = fullText };
-                var stored = await ScanResultHelper.StoreScanResultAsync(fullResult, solutionRoot, ScanWrapperType.FileSource, cancellationToken);
+                var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.FileSource, cancellationToken);
+
+                try
+                {
+                    var fileOutline = await GetFileOutline(filepath, cancellationToken);
+                    if (fileOutline.LargeResult is null)
+                    {
+                        return new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = new
+                            {
+                                largeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"The file content exceeds the threshold, only the file outline is shown here. The full result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use get_large_result(resultId: \"{stored.resultId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need."),
+                                fileOutline.Data
+                            },
+                            WorkspaceVersion = _workspaceManager.WorkspaceVersion,
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "GetFileOutline failed for '{FilePath}'", filePath);
+                }
+
                 return new ToolResult<object>
                 {
                     Success = true,
-                    LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, scanId: stored.scanId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use get_scan_result(scanId: \"{stored.scanId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need."),
+                    LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use get_large_result(resultId: \"{stored.resultId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need, or use GetFileOutline to get the constructors, methods, helpers, members, enums, fields, properties, etc of a file without reading the entire file."),
                     Data = new
                     {
                         totalLines
@@ -1379,44 +1414,56 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "SearchSolutionText")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
-    [Description("Searches all source files in the loaded solution for a text pattern or regex. Only searches documents that are part of a loaded project's compilation (e.g. .cs files) — files attached via the .sln's Solution Folders and other non-project files are never included, no matter the pattern; use ListSolutionItems(kind: solutionItems) to see those, and ProjectDoc to read plan/handoff/documentation files directly. Returns file path, 1-based line and column, a preview, and enclosingMember (the name of the method/property/constructor/field/etc. containing the match, or null if the match isn't inside any member) per match. isRegex=true treats pattern as a regular expression (default false, literal substring match); if pattern contains regex metacharacters (e.g. ^ $ . * + ? ( ) [ ] { } | \\) but isRegex is false, the result includes a Warning suggesting isRegex=true. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
-    public async Task<ToolResult<object>> SearchSolutionText([ToolOption(ToolOptionTag.Pattern, required: true)] string pattern, [ToolOption(ToolOptionTag.IsRegex)] bool isRegex = false, [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null, [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200, // RequestContext<CallToolRequestParams> requestParams = null,
+    [Description("Searches all source files in the loaded solution for a text pattern or regex. Only searches documents that are part of a loaded project's source code (e.g. .cs files). Use ListSolutionItems(kind: solutionItems) to see files attached via the .sln's Solution Folders and other non-project files, use ProjectDoc to read plan/handoff/documentation files directly, and use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file. Returns file path, 1-based line and column, a preview, and enclosingMember (the name of the method/property/constructor/field/etc. containing the match, or null if the match isn't inside any member) per match. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
+    public async Task<ToolResult<object>> SearchSolutionText([ToolOption(ToolOptionTag.Pattern, required: true)] string pattern, [ToolOption(ToolOptionTag.SearchMode)] TextSearchMode searchMode = TextSearchMode.literal, [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null, [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         try
         {
             var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var results = new List<TextSearchMatch>();
+            var warnings = new List<string>();
             Regex? regex = null;
-            if (isRegex)
+            TextSearchMode actualSearchMode = searchMode;
+
+            if (searchMode == TextSearchMode.regex)
             {
                 regex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase, matchTimeout: TimeSpan.FromSeconds(5));
             }
-
-            foreach (var project in solution.Projects)
+            else if (searchMode == TextSearchMode.literal && LikelyRegexPattern.IsMatch(pattern))
             {
-                foreach (var document in project.Documents)
+                warnings.Add($"Pattern '{pattern}' contains regex metacharacters but searchMode is literal - performed search as regex.");
+                actualSearchMode = TextSearchMode.regex;
+            }
+
+            var options1 = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount };
+
+            await Parallel.ForEachAsync(solution.Projects, options1, async (project, ct1) =>
+            {
+                var options2 = new ParallelOptions { CancellationToken = ct1, MaxDegreeOfParallelism = Environment.ProcessorCount };
+
+                await Parallel.ForEachAsync(project.Documents, options2, async (document, ct2) =>
                 {
                     if (results.Count >= maxResults)
                     {
-                        break;
+                        return;
                     }
 
                     var docPath = new FilePath(document.FilePath ?? "", _workspaceManager.GetSolutionRoot());
                     if (!string.IsNullOrEmpty(fileGlob) && !GlobMatchesFileName(docPath, fileGlob))
                     {
-                        continue;
+                        return;
                     }
 
-                    var text = await document.GetTextAsync(cancellationToken);
+                    var text = await document.GetTextAsync(ct2);
                     var sourceText = text.ToString();
                     var lines = sourceText.Split('\n');
-                    var root = await document.GetSyntaxRootAsync(cancellationToken);
+                    var root = await document.GetSyntaxRootAsync(ct2);
                     for (int i = 0; i < lines.Length && results.Count < maxResults; i++)
                     {
                         var line = lines[i];
                         int col = -1;
-                        if (isRegex && regex != null)
+                        if (actualSearchMode == TextSearchMode.regex && regex != null)
                         {
                             try
                             {
@@ -1456,22 +1503,25 @@ public class SentinelWorkspaceTools
                             results.Add(new TextSearchMatch(docPath.Absolute, i + 1, col + 1, preview, enclosingMember));
                         }
                     }
-                }
-            }
-
-            var warnings = new List<string>();
-            if (!isRegex && LikelyRegexPattern.IsMatch(pattern))
-            {
-                warnings.Add($"Pattern '{pattern}' contains regex metacharacters but isRegex is false, so it was matched as a literal substring. If you intended a regex, retry with isRegex=true.");
-            }
+                });
+            });
 
             if (results.Count == 0)
             {
-                warnings.Add("No matches. SearchSolutionText only searches documents that are part of a loaded project's compilation (e.g. .cs files) — it does not see files attached via the .sln's Solution Folders, docs/ files, or other non-project files. Use ListSolutionItems(kind: solutionItems) to list files attached via Solution Folders, or ProjectDoc to read plan/handoff/documentation files directly.");
+                // warnings.Add("No matches. SearchSolutionText only searches documents that are part of a loaded project's compilation (e.g. .cs files) — it does not see files attached via the .sln's Solution Folders, docs/ files, or other non-project files. Use ListSolutionItems(kind: solutionItems) to list files attached via Solution Folders, or ProjectDoc to read plan/handoff/documentation files directly.");
+
+                if (actualSearchMode == TextSearchMode.literal)
+                {
+                    warnings.Add($"No matches were found for the literal substring '{pattern}'. Try adjusting the search pattern or using the regex search mode. Use ProjectDoc to read plan/handoff/documentation files directly or use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
+                }
+                else if (actualSearchMode == TextSearchMode.regex)
+                {
+                    warnings.Add($"No matches were found for the regex pattern '{pattern}'. Try adjusting the search pattern or using the literal search mode. Use ProjectDoc to read plan/handoff/documentation files directly or use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
+                }
             }
             else if (results.Count >= maxResults)
             {
-                warnings.Add($"Hit maxResults ({maxResults}) — there may be more matches not shown. Narrow fileGlob/pattern or increase maxResults to see more.");
+                warnings.Add($"{results.Count} matches found — returning first ({maxResults}) matches — Narrow fileGlob/pattern or increase maxResults to see more.");
             }
 
             string? warning = warnings.Count > 0 ? string.Join(" ", warnings) : null;
@@ -1479,7 +1529,7 @@ public class SentinelWorkspaceTools
                 results,
                 _workspaceManager.GetSolutionRoot(),
                 typeof(TextSearchMatch).Name,
-                ScanWrapperType.TextSearchMatchList,
+                ResultWrapperType.TextSearchMatchList,
                 totalRecords: results.Count,
                 workspaceVersion: _workspaceManager.WorkspaceVersion,
                 cancellationToken: cancellationToken);
@@ -1801,7 +1851,7 @@ public class SentinelWorkspaceTools
     [Description("Resets the circuit breaker and all failure counters, re-enabling mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker.")]
     public ToolResult<object> ResetBreaker(
         // RequestContext<CallToolRequestParams> requestParams = null,
-        //CancellationToken cancellationToken = default
+        //CancellationToken ct2 = default
         )
     {
         _workspaceManager.ResetBreaker();
@@ -1817,7 +1867,7 @@ public class SentinelWorkspaceTools
     [Description("Returns the current circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations.")]
     public ToolResult<object> GetBreakerStatus(
         // RequestContext<CallToolRequestParams> requestParams = null,
-        //CancellationToken cancellationToken = default
+        //CancellationToken ct2 = default
         )
     {
         return new ToolResult<object>()
@@ -1936,6 +1986,279 @@ public class SentinelWorkspaceTools
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetProjectFrameworkSummary")
+            };
+        }
+    }
+
+    // ── get_large_result ────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "GetLargeResult")]
+    [Produces(DataTag.Report)]
+    [Description("""
+        Pages through a large result written to disk when output result payload exceeded the inline size threshold. Supply either resultId (resolves to .roslynsentinel/largeresults/largeresult_*_{resultId}.json) or filePath (must match the largeresult_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
+        """)]
+    public async Task<ToolResult<object>> GetLargeResult(
+        [Consumes(DataTag.ResultId)] string? resultId = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
+        [ToolOption(ToolOptionTag.Offset)] int offset = 0,
+        // RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
+    {
+        FilePath filePath = _workspaceManager.SetFilePath(filepath);
+        var solutionRoot = _workspaceManager.GetSolutionRoot();
+        string? resolvedPath = null;
+
+        if (!string.IsNullOrEmpty(resultId) && !string.IsNullOrEmpty(solutionRoot))
+        {
+            var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "largeresults");
+            if (Directory.Exists(dir))
+            {
+                resolvedPath = Directory
+                    .EnumerateFiles(dir, $"largeresult_*_{resultId}.json")
+                    .FirstOrDefault();
+            }
+        }
+        else if (!string.IsNullOrEmpty(filePath))
+        {
+            // Validate: path must be inside the largeresults directory and match the largeresult_*.json pattern.
+            var fileName = System.IO.Path.GetFileName(filePath);
+            if (!string.IsNullOrEmpty(solutionRoot))
+            {
+                var resultsDir = System.IO.Path.GetFullPath(
+                    System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "largeresults"));
+                var candidate = System.IO.Path.GetFullPath(filePath);
+                if (candidate.StartsWith(resultsDir, StringComparison.OrdinalIgnoreCase)
+                    && fileName.StartsWith("scan_", StringComparison.OrdinalIgnoreCase)
+                    && fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                    && File.Exists(candidate))
+                {
+                    resolvedPath = candidate;
+                }
+            }
+        }
+
+        if (resolvedPath == null)
+        {
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("Exception",
+                                           "Result file not found. Supply a valid resultId or filePath pointing to a scan_*.json file in the scans directory.")
+            };
+        }
+
+        ResultWrapper all;
+        try
+        {
+            var json = await File.ReadAllTextAsync(resolvedPath, cancellationToken);
+            all = JsonSerializer.Deserialize<ResultWrapper>(
+                      json,
+                      _jsonOptions)
+                  ?? new ResultWrapper();
+
+            if (all.Data == null)
+            {
+                return new ToolResult<object>
+                {
+                    Success = false,
+                    Error = new ResultError("Exception", "Result file has no Data payload — it may be corrupt.")
+                };
+            }
+
+            ToolResult<object> result;
+
+            switch (all.Type)
+            {
+                case ResultWrapperType.MigrationCandidateFindingList:
+                    {
+                        var findings = JsonSerializer.Deserialize<List<MigrationCandidateFinding>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            // limit/offset were previously accepted but never applied — the full
+                            // on-disk list was returned regardless of the requested page.
+                            Data = findings.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+
+                case ResultWrapperType.ApiSurfaceEntryList:
+                    {
+                        var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = entries.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ResultWrapperType.CodeInventoryReport:
+                    {
+                        var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = entries.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ResultWrapperType.MethodSource:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // GetMethodSource returns inline when the result is small enough not to offload.
+                        var methodSource = JsonSerializer.Deserialize<MethodSourceResult>(all.Data.ToString(), _jsonOptions);
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = methodSource
+                        };
+                        break;
+                    }
+                case ResultWrapperType.MigrationScanSummary:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // returned inline when the summary is small enough not to offload.
+                        var migrationScanSummary = JsonSerializer.Deserialize<MigrationScanSummary>(all.Data.ToString(), _jsonOptions);
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = migrationScanSummary
+                        };
+                        break;
+                    }
+                case ResultWrapperType.FileSource:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // ReadFile returns inline when the result is small enough not to offload.
+                        var fileSource = JsonSerializer.Deserialize<FileSourceResult>(all.Data.ToString(), _jsonOptions);
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = fileSource
+                        };
+                        break;
+                    }
+                case ResultWrapperType.MemberChangedContent:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // returned inline when the changed content is small enough not to offload.
+                        var memberChangedContent = JsonSerializer.Deserialize<MemberChangedContentResult>(all.Data.ToString(), _jsonOptions);
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = memberChangedContent
+                        };
+                        break;
+                    }
+                case ResultWrapperType.BreakingChangeList:
+                    {
+                        var changes = JsonSerializer.Deserialize<List<BreakingChange>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = changes.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ResultWrapperType.TextSearchMatchList:
+                    {
+                        var matches = JsonSerializer.Deserialize<List<TextSearchMatch>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = matches.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ResultWrapperType.ProjectFileList:
+                    {
+                        var files = JsonSerializer.Deserialize<List<string>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = files.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ResultWrapperType.ProjectInfoList:
+                    {
+                        var projects = JsonSerializer.Deserialize<List<ProjectInfoEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = projects.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ResultWrapperType.SolutionItemFileList:
+                    {
+                        var solutionItems = JsonSerializer.Deserialize<List<SolutionItemFile>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = solutionItems.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                default:
+                    {
+                        return new ToolResult<object>
+                        {
+                            Success = false,
+                            Error = new ResultError("Exception",
+                                          "Unknown scan result type.")
+                        };
+                    }
+            }
+            ;
+
+            // MethodSource/FileSource/MigrationScanSummary/MemberChangedContent wrap a single object, not a list - the array-shaped
+            // TotalRecords/HasMorePages computation below doesn't apply (and AsArray() on a
+            // single-object payload's first property, e.g. a string Signature, throws rather than
+            // returning null, since it's the wrong node kind rather than a missing one).
+            int totalRecords;
+            bool hasMorePages;
+            if (all.Type is ResultWrapperType.MethodSource or ResultWrapperType.FileSource or ResultWrapperType.MigrationScanSummary or ResultWrapperType.MemberChangedContent)
+            {
+                totalRecords = 1;
+                hasMorePages = false;
+            }
+            else
+            {
+                var dataArray = all.Data as JsonArray
+                    ?? all.Data?.AsObject().FirstOrDefault().Value?.AsArray()
+                    ?? [];
+                totalRecords = dataArray.Count;
+                hasMorePages = (offset + limit) < totalRecords;
+            }
+
+            return new ToolResult<object>
+            {
+                Success = true,
+                // Unwrap: `result` is itself a ToolResult<object> built above per ResultWrapperType.
+                // Returning it as-is here double-wraps the payload (Data.Data instead of Data),
+                // which doesn't match every other tool's flat ToolResult<object> shape.
+                Data = result.Data,
+                TotalRecords = totalRecords,
+                HasMorePages = hasMorePages,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("Exception",
+                              "Failed to read scan file.", ex.Message)
             };
         }
     }

@@ -350,7 +350,7 @@ public class SentinelRefactoringTools
                         Summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Replaces '{memberName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff),
                         ChangedContent = newMemberSource
                     },
-                    _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                    _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
                     workspaceVersion: _workspaceManager.WorkspaceVersion);
             }
 
@@ -465,7 +465,7 @@ public class SentinelRefactoringTools
                     Summary = new AppliedChangeSummary(addApply.ChangeId, [filePath], description, addApply.DryRun, addApply.Diff),
                     ChangedContent = addedMemberSource ?? ""
                 },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
                 workspaceVersion: _workspaceManager.WorkspaceVersion);
         }
         catch (Exception ex)
@@ -546,7 +546,7 @@ public class SentinelRefactoringTools
                     Summary = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion),
                     ChangedContent = addedUsing
                 },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
                 workspaceVersion: _workspaceManager.WorkspaceVersion);
         }
         catch (Exception ex)
@@ -712,7 +712,7 @@ public class SentinelRefactoringTools
 
             return await ToolResult<object>.ForPossiblyLargeDataAsync(
                 new MemberChangedContentResult { Summary = summary, ChangedContent = summaryText! },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
                 workspaceVersion: _workspaceManager.WorkspaceVersion);
         }
         catch (Exception ex)
@@ -811,7 +811,7 @@ public class SentinelRefactoringTools
                     Summary = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff),
                     ChangedContent = changedContent
                 },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
                 workspaceVersion: _workspaceManager.WorkspaceVersion);
         }
         catch (Exception ex)
@@ -1008,7 +1008,7 @@ public class SentinelRefactoringTools
             var changedAttribute = action == AttributeModifyAction.add ? existingAttribute : newAttribute;
             return await ToolResult<object>.ForPossiblyLargeDataAsync(
                 new MemberChangedContentResult { Summary = summary, ChangedContent = changedAttribute ?? "" },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
                 workspaceVersion: _workspaceManager.WorkspaceVersion);
         }
         catch (Exception ex)

@@ -2,8 +2,6 @@ using System.Text;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
 #pragma warning disable CS8618
 
 namespace RoslynSentinel.Tests.Asyncify;
@@ -14,7 +12,7 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   T2  – paginated scan (inline, fits) sets TotalRecords / HasMore / Data.
 ///   T3  – ~9 KB result (~50-60 candidates) stays inline (threshold regression anchor).
 ///   T4  – genuinely large result triggers file write (LargeResult populated, Data null).
-///   T5  – get_scan_result reads T4's file, paging works, TotalRecords matches.
+///   T5  – get_large_result reads T4's file, paging works, TotalRecords matches.
 ///   T6  – full absolute filePath gives the same records as filename-only input.
 ///   T7  – filePath matching nothing → Success=false, ErrorCode="InvalidArgument".
 ///   T8  – get_async_migration_progress, no solution → ErrorCode="SolutionNotLoaded".
@@ -26,9 +24,11 @@ public class MigrationScanResultTests
     private IWorkspaceManager _workspaceManager;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AntiPatternEngine _antiPatternEngine;
+    private DiffEngine _diffEngine;
     private SentinelQualityTools _qualityTools;
     private SentinelAsyncifyTools _asyncifyTools;
     private SentinelScanTools _scanTools;
+    private SentinelWorkspaceTools _workspaceTools;
     private string _tempDir;
 
     // ── attribute stub included in every source snippet ──────────────────────
@@ -48,6 +48,7 @@ public class MigrationScanResultTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
+        _diffEngine = new DiffEngine();
 
         _qualityTools = new SentinelQualityTools(
             new TestingEngine(_workspaceManager),
@@ -110,6 +111,8 @@ public class MigrationScanResultTests
             new BreakingChangeEngine(_workspaceManager),
             _workspaceManager,
             NullLogger<SentinelScanTools>.Instance);
+
+        _workspaceTools = new SentinelWorkspaceTools(_workspaceManager, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)));
 
         // Create a temp dir so GetSolutionRoot() returns a valid path for file-write tests.
         _tempDir = Path.Combine(Path.GetTempPath(), "MigrationScanResultTests_" + Guid.NewGuid().ToString("N"));
@@ -319,7 +322,7 @@ public class Svc
             "A page > 256 KB should trigger the file-write path.");
         Assert.That(result.LargeResult!.WrittenToFile, Is.True);
         Assert.That(result.LargeResult.FilePath.Absolute, Is.Not.Null.And.Not.Empty);
-        Assert.That(result.LargeResult.ScanId, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.LargeResult.ResultId, Is.Not.Null.And.Not.Empty);
         Assert.That(result.LargeResult.SizeBytes, Is.GreaterThan(256 * 1024));
         Assert.That(result.LargeResult.TotalRecords, Is.GreaterThan(0));
         Assert.That(result.Data, Is.Null, "Data should be null when LargeResult is set.");
@@ -328,11 +331,11 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T5 – get_scan_result on T4's file → structured records, paging works, TotalRecords matches
+    // T5 – get_large_result on T4's file → structured records, paging works, TotalRecords matches
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(60000)]
-    public async Task T5_GetScanResult_ReadsFile_PagingWorks_TotalRecordsMatchesT4()
+    public async Task T5_GetLargeResult_ReadsFile_PagingWorks_TotalRecordsMatchesT4()
     {
         var reason = new string('x', 300);
         SetSource(BuildManyFlaggedMethods(500, reason));
@@ -342,16 +345,16 @@ public class Svc
         var scanResult = Wrap<List<MigrationCandidateFinding>>(scanRaw);
         Assert.That(scanResult?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
 
-        var operationId = scanResult!.LargeResult!.ScanId;
+        var operationId = scanResult!.LargeResult!.ResultId;
         var totalFromT4 = scanResult.LargeResult.TotalRecords;
 
         // ── page 1 (limit=10, offset=0) ───────────────────────────────────────
-        var page1Result = Wrap<List<MigrationCandidateFinding>>(await _scanTools.GetScanResult(scanId: operationId, limit: 10, offset: 0));
+        var page1Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResult(resultId: operationId, limit: 10, offset: 0));
         Assert.That(page1Result.Success, Is.True);
         Assert.That(page1Result.Data, Is.Not.Null);
         Assert.That(page1Result.Data!.Count, Is.EqualTo(10));
         Assert.That(page1Result.TotalRecords, Is.EqualTo(totalFromT4),
-            "TotalRecords from get_scan_result must match TotalRecords from the original scan.");
+            "TotalRecords from get_large_result must match TotalRecords from the original scan.");
         Assert.That(page1Result.HasMorePages, Is.True);
 
         // ── verify structured records (not preview text) ──────────────────────
@@ -362,7 +365,7 @@ public class Svc
         Assert.That(first.Score, Is.EqualTo(75));
 
         // ── page 2 (limit=10, offset=10) — must be disjoint from page 1 ──────
-        var page2Result = Wrap<List<MigrationCandidateFinding>>(await _scanTools.GetScanResult(scanId: operationId, limit: 10, offset: 10));
+        var page2Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResult(resultId: operationId, limit: 10, offset: 10));
         Assert.That(page2Result.Success, Is.True);
         var page1Names = page1Result.Data!.Select(f => f.MethodName).ToHashSet();
         var page2Names = page2Result.Data!.Select(f => f.MethodName).ToHashSet();
@@ -699,7 +702,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T19 – large-result offload message contains get_scan_result and OperationId; no read_file
+    // T19 – large-result offload message contains get_large_result and OperationId; no read_file
     // ══════════════════════════════════════════════════════════════════════════
 
     // Flaky under full/parallel test runs (fails intermittently in the full Asyncify suite,
@@ -707,7 +710,7 @@ public class Svc
     // due to the large synthetic payload used to force the offload spill. Not a regression from
     // any single change; retriage if it starts failing in isolation too.
     [Test, CancelAfter(60000)]
-    public async Task T19_LargeResult_Message_ContainsGetScanResult_AndOperationId()
+    public async Task T19_LargeResult_Message_ContainsGetLargeResult_AndOperationId()
     {
         // Reuse T4 conditions: 500 methods with padded Reason to exceed 256 KB.
         var reason = new string('x', 300);
@@ -721,12 +724,12 @@ public class Svc
         var largeResult = result!.LargeResult!;
         Assert.That(largeResult.Message, Is.Not.Null.And.Not.Empty,
             "LargeResult.Message must be populated for agent guidance.");
-        Assert.That(largeResult.Message, Does.Contain("get_scan_result"),
+        Assert.That(largeResult.Message, Does.Contain("get_large_result"),
             "Message must name the correct recovery tool.");
         Assert.That(largeResult.Message, Does.Not.Contain("read_file"),
             "Message must not reference the non-existent read_file tool.");
-        Assert.That(largeResult.Message, Does.Contain(largeResult.ScanId),
-            "Message must embed the ScanId so the agent can copy it directly.");
+        Assert.That(largeResult.Message, Does.Contain(largeResult.ResultId),
+            "Message must embed the ResultId so the agent can copy it directly.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

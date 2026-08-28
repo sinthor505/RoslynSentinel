@@ -151,7 +151,7 @@ public class SentinelIntelligenceTools
                 results,
                 _workspaceManager.GetSolutionRoot(),
                 typeof(CodeInventoryReport).Name,
-                ScanWrapperType.CodeInventoryReport,
+                ResultWrapperType.CodeInventoryReport,
                 totalRecords: results.Methods.Count,
                 cancellationToken: cancellationToken);
         }

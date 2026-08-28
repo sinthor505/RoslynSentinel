@@ -74,16 +74,16 @@ public record ToolResult<T>
 
     /// <summary>
     /// Builds a <see cref="ToolResult{T}"/> for <paramref name="data"/>, offloading to disk via
-    /// <see cref="ScanResultHelper.StoreScanResultAsync{T}"/> (populating <see cref="LargeResult"/>
+    /// <see cref="LargeResultHelper.StoreLargeResultAsync{T}"/> (populating <see cref="LargeResult"/>
     /// instead of <see cref="Data"/>) when the serialized payload exceeds
-    /// <see cref="ScanResultHelper.OffloadThresholdBytes"/>. Use this instead of hand-rolling a
+    /// <see cref="LargeResultHelper.OffloadThresholdBytes"/>. Use this instead of hand-rolling a
     /// size-check/write-to-disk block per tool (that duplication is what let GetMethodSource and
-    /// ReadFile's offload paths silently diverge from GetScanResult's expected file format).
+    /// ReadFile's offload paths silently diverge from GetLargeResult's expected file format).
     /// </summary>
     public static async Task<ToolResult<T>> ForPossiblyLargeDataAsync(
-        T data, string? solutionRoot, string resultType, ScanWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null, CancellationToken cancellationToken = default)
+        T data, string? solutionRoot, string resultType, ResultWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null, CancellationToken cancellationToken = default)
     {
-        var stored = await ScanResultHelper.StoreScanResultAsync(data, solutionRoot, wrapperType, cancellationToken);
+        var stored = await LargeResultHelper.StoreLargeResultAsync(data, solutionRoot, wrapperType, cancellationToken);
         if (!stored.offloaded)
         {
             return new ToolResult<T> { Success = true, Data = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion };
@@ -98,11 +98,11 @@ public record ToolResult<T>
                 resultType: resultType,
                 writtenToFile: true,
                 filePath: stored.filePath,
-                scanId: stored.scanId!,
+                resultId: stored.resultId!,
                 sizeBytes: stored.jsonBytes.Length,
                 totalRecords: totalRecords ?? 1,
-                message: $"Result is {stored.jsonBytes.Length} bytes (threshold: {ScanResultHelper.OffloadThresholdBytes}). " +
-                         $"Use GetScanResult(scanId: \"{stored.scanId}\") to page through results.")
+                message: $"Result is {stored.jsonBytes.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}). " +
+                         $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results.")
         };
     }
 
@@ -114,7 +114,7 @@ public record ToolResult<T>
 
     /// <summary>
     /// Present when the result exceeded the inline-size threshold and was written to disk.
-    /// Use <c>get_scan_result</c> with <see cref="LargeResultInfo.ScanId"/> to page through it.
+    /// Use <c>get_large_result</c> with <see cref="LargeResultInfo.ResultId"/> to page through it.
     /// </summary>
     public LargeResultInfo? LargeResult
     {
@@ -170,7 +170,7 @@ public record ResultError(
 // ── Large-result descriptor ───────────────────────────────────────────────────
 
 /// <summary>
-/// Metadata for a scan result written to <c>.roslynsentinel/scans/scan_*.json</c>.
+/// Metadata for a large result written to <c>.roslynsentinel/largeresults/largeresult_*.json</c>.
 /// </summary>
 public record LargeResultInfo
 {
@@ -186,7 +186,7 @@ public record LargeResultInfo
     {
         get; init;
     }
-    public string ScanId
+    public string ResultId
     {
         get; init;
     }
@@ -207,7 +207,7 @@ public record LargeResultInfo
     string resultType,
     bool writtenToFile,
     FilePath filePath,
-    string scanId,
+    string resultId,
     long sizeBytes,
     int totalRecords,
     string? message = null
@@ -216,7 +216,7 @@ public record LargeResultInfo
         this.ResultType = resultType ?? throw new ArgumentNullException(nameof(resultType));
         this.WrittenToFile = writtenToFile;
         this.FilePath = filePath;
-        this.ScanId = scanId ?? throw new ArgumentNullException(nameof(scanId));
+        this.ResultId = resultId ?? throw new ArgumentNullException(nameof(resultId));
         this.SizeBytes = sizeBytes == 0 ? throw new ArgumentOutOfRangeException(nameof(sizeBytes)) : sizeBytes;
         this.TotalRecords = totalRecords < 0 ? throw new ArgumentOutOfRangeException(nameof(totalRecords)) : totalRecords;
         this.Message = message;
