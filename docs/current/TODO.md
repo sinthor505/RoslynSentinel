@@ -992,11 +992,19 @@ suggested defaults). Wired into:
   { Envelope, Symbols }` record (this is a breaking shape change to `Data`; the one existing test
   asserting the old bare-list shape was updated).
 
-Step 4 (make thresholds configurable via `read-limits.json`/env vars, rather than the in-process
-static properties shipped here) and step 5 (fold the contract into the tools-review doc) were **not**
-done — the static-property form was judged sufficient for now and matches the existing precedent
-(`ScanResultHelper.ThresholdBytes` is likewise a hardcoded constant, not file/env-configurable). `Read
-File` was left unwired: it already has its own startLine/endLine slicing and inline
+**Steps 4–5 resolved 2026-08-27, no code change:**
+- Step 4 (configurable thresholds) — decided the existing `ReadEnvelopeThresholds` static settable
+  properties (`ReadWholeMaxLines`/`OutlineAvailableMinLines`/`MaxReturnedLines`) already *are* the
+  tuning surface; a `read-limits.json`/env-var loader was judged unnecessary since nothing else in the
+  repo loads per-feature JSON config at startup, and this matches the existing precedent
+  (`ScanResultHelper.ThresholdBytes` is likewise a hardcoded constant, not file/env-configurable).
+- Step 5 (fold the contract into "the tools-review doc") — that doc is `docs/obsolete/tool_review_v1.md`
+  (where `BatchResultSummary` is documented), already retired to `obsolete/`. No live successor exists
+  to fold this into; `tool-terminology-refinement-reference-v1.md` is a different, naming-focused doc,
+  not a shared-contract catalog. Decided this TODO.md entry plus `ReadEnvelope.cs`'s own doc comments
+  are the durable record — no new doc created.
+
+`Read` File was left unwired: it already has its own startLine/endLine slicing and inline
 `filePath/startLine/endLine/totalLines/source` shape; folding it into `ReadEnvelope` would touch three
 response shapes (whole-file, ranged, offloaded) and wasn't part of this pass's scope. `MethodNotFound`
 also still returns a plain error rather than `MethodFound=false` + populated envelope, since
@@ -1007,8 +1015,9 @@ Verified via `dotnet build RoslynSentinel.slnx` (0 errors) and the full test sui
 projects (0 new failures): new `ReadEnvelopeBuilderTests` (8 tests, spec's "BuildEnvelope helper" list)
 plus envelope assertions added to `GetMethodSourceTests` and the `GetFileOutline` enum test.
 
-**Remaining work if picked up again:** wire `ReadFile`, decide `MethodNotFound`'s contract, externalize
-the thresholds, and update the tools-review doc per spec steps 4–5.
+**Remaining work if picked up again:** wire `ReadFile` into the envelope, and decide `MethodNotFound`'s
+contract (`MethodFound` field + populated envelope instead of a plain error). Steps 4–5 are closed, not
+just deferred.
 
 ## Tool terminology/naming backlog — open, unactioned
 
