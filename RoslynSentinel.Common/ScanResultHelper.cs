@@ -16,10 +16,10 @@ public static class ScanResultHelper
                 new JsonStringEnumConverter()
             }
     };
-    public const int ThresholdBytes = 30 * 1024;
+    public const int OffloadThresholdBytes = 30 * 1024;
 
     /// <summary>
-    /// Serializes <paramref name="data"/> and, if it exceeds <see cref="ThresholdBytes"/>, writes it
+    /// Serializes <paramref name="data"/> and, if it exceeds <see cref="OffloadThresholdBytes"/>, writes it
     /// to <c>.roslynsentinel/scans/scan_&lt;timestamp&gt;_&lt;scanId&gt;.json</c> wrapped in a
     /// <see cref="ScanWapper"/> tagged with <paramref name="wrapperType"/> so <c>GetScanResult</c> can
     /// deserialize it back. Callers that skip this and hand-write their own file (as GetMethodSource/
@@ -30,7 +30,7 @@ public static class ScanResultHelper
         T data, string? solutionRoot, ScanWrapperType wrapperType, CancellationToken cancellationToken)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
-        if (jsonBytes.Length <= ThresholdBytes || string.IsNullOrEmpty(solutionRoot) || data == null)
+        if (jsonBytes.Length <= OffloadThresholdBytes || string.IsNullOrEmpty(solutionRoot) || data == null)
         {
             return (false, default, null, jsonBytes);
         }

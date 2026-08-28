@@ -222,7 +222,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                 }));
 
             // Cheap large-result logging: sums the length of text content blocks in the response
-            // (no JSON serialization) and logs a warning above ScanResultHelper.ThresholdBytes.
+            // (no JSON serialization) and logs a warning above ScanResultHelper.OffloadThresholdBytes.
             // This is deliberately shape-agnostic — it exists because most tool result types
             // aren't individually wired into LargeResultInfo (see RoslynSentinel.Common.ScanResultHelper),
             // so this is the only signal for "this tool call returned a lot of data" for those tools.
@@ -248,12 +248,12 @@ public static class RoslynSentinelServiceExtensionsBasic
                             }
                         }
 
-                        if (sizeChars > RoslynSentinel.Common.ScanResultHelper.ThresholdBytes)
+                        if (sizeChars > RoslynSentinel.Common.ScanResultHelper.OffloadThresholdBytes)
                         {
                             var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
                             logger?.LogWarning(
-                                "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {ThresholdBytes})",
-                                context.Params?.Name, sizeChars, RoslynSentinel.Common.ScanResultHelper.ThresholdBytes);
+                                "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {OffloadThresholdBytes})",
+                                context.Params?.Name, sizeChars, RoslynSentinel.Common.ScanResultHelper.OffloadThresholdBytes);
                         }
                     }
                     catch (Exception ex)

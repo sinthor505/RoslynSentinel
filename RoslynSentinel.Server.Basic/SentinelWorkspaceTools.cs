@@ -1087,7 +1087,7 @@ public class SentinelWorkspaceTools
             var attributes = ExtractAttributes(method);
             var signature = BuildSignature(method);
             _logger.LogInformation("GetMethodSource: {SizeBytes} bytes for '{MethodName}'", methodBytes, methodName);
-            const int thresholdBytes = 8 * 1024;
+            const int thresholdBytes = ScanResultHelper.OffloadThresholdBytes;
             var solutionRoot = _workspaceManager.GetSolutionRoot();
 
             var fileText = await document.GetTextAsync(cancellationToken);
@@ -1197,7 +1197,7 @@ public class SentinelWorkspaceTools
 
             var fullText = sourceText.ToString();
             var textBytes = System.Text.Encoding.UTF8.GetByteCount(fullText);
-            const int thresholdBytes = 8 * 1024;
+            const int thresholdBytes = ScanResultHelper.OffloadThresholdBytes;
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             if (textBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {

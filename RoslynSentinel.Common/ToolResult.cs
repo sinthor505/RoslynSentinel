@@ -76,7 +76,7 @@ public record ToolResult<T>
     /// Builds a <see cref="ToolResult{T}"/> for <paramref name="data"/>, offloading to disk via
     /// <see cref="ScanResultHelper.StoreScanResultAsync{T}"/> (populating <see cref="LargeResult"/>
     /// instead of <see cref="Data"/>) when the serialized payload exceeds
-    /// <see cref="ScanResultHelper.ThresholdBytes"/>. Use this instead of hand-rolling a
+    /// <see cref="ScanResultHelper.OffloadThresholdBytes"/>. Use this instead of hand-rolling a
     /// size-check/write-to-disk block per tool (that duplication is what let GetMethodSource and
     /// ReadFile's offload paths silently diverge from GetScanResult's expected file format).
     /// </summary>
@@ -101,7 +101,7 @@ public record ToolResult<T>
                 scanId: stored.scanId!,
                 sizeBytes: stored.jsonBytes.Length,
                 totalRecords: totalRecords ?? 1,
-                message: $"Result is {stored.jsonBytes.Length} bytes (threshold: {ScanResultHelper.ThresholdBytes}). " +
+                message: $"Result is {stored.jsonBytes.Length} bytes (threshold: {ScanResultHelper.OffloadThresholdBytes}). " +
                          $"Use GetScanResult(scanId: \"{stored.scanId}\") to page through results.")
         };
     }

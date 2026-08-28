@@ -233,7 +233,7 @@ public class SentinelAsyncifyTools
                 _logger.LogInformation("Summary JSON size: {SizeBytes} bytes", summaryJson.Length);
             }
 
-            if (summaryJson.Length > ScanResultHelper.ThresholdBytes)
+            if (summaryJson.Length > ScanResultHelper.OffloadThresholdBytes)
             {
                 _logger.LogWarning("Summary JSON size {SizeBytes} bytes exceeds expected limits. " +
                                    "This may indicate an issue with the summarization logic or unusually large data. " +
