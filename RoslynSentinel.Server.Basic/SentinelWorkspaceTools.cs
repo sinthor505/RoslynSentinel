@@ -13,6 +13,14 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Basic;
 /// <summary>Structural outline entry returned by get_file_outline.</summary>
 public record OutlineItem(string Kind, string Name, string? Container, int StartLine, int EndLine);
+/// <summary>Return payload for <c>GetFileOutline</c>.</summary>
+public record FileOutlineResult
+{
+    /// <summary>Scope/truncation metadata for the file. See <see cref="ReadEnvelope"/>.</summary>
+    public ReadEnvelope Envelope { get; init; } = null!;
+    /// <summary>The parsed structural outline.</summary>
+    public List<OutlineItem> Symbols { get; init; } = new();
+}
 /// <summary>Single text-search hit returned by search_solution_text.</summary>
 public record TextSearchMatch(FilePath filePath, int Line, int Column, string Preview, string? EnclosingMember = null);
 /// <summary>
@@ -1081,9 +1089,19 @@ public class SentinelWorkspaceTools
             _logger.LogInformation("GetMethodSource: {SizeBytes} bytes for '{MethodName}'", methodBytes, methodName);
             const int thresholdBytes = 8 * 1024;
             var solutionRoot = _workspaceManager.GetSolutionRoot();
+
+            var fileText = await document.GetTextAsync(cancellationToken);
+            var fileLineCount = fileText.Lines.Count;
+            var fileByteCount = System.Text.Encoding.UTF8.GetByteCount(fileText.ToString());
+            var methodSpan = method.GetLocation().GetLineSpan();
+            var envelope = ReadEnvelopeBuilder.Build(
+                fileLineCount, fileByteCount,
+                returnedFromLine: methodSpan.StartLinePosition.Line + 1,
+                returnedToLine: methodSpan.EndLinePosition.Line + 1);
+
             if (methodBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {
-                var fullResult = new MethodSourceResult { Signature = signature, Source = methodSource, Attributes = attributes };
+                var fullResult = new MethodSourceResult { Envelope = envelope, Signature = signature, Source = methodSource, Attributes = attributes };
                 var stored = await ScanResultHelper.StoreScanResultAsync(fullResult, solutionRoot, ScanWrapperType.MethodSource, cancellationToken);
                 return new ToolResult<object>
                 {
@@ -1091,6 +1109,7 @@ public class SentinelWorkspaceTools
                     LargeResult = new LargeResultInfo(resultType: "MethodSource", writtenToFile: stored.offloaded, filePath: stored.filePath, scanId: stored.scanId!, sizeBytes: methodBytes, totalRecords: 1, message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " + $"Use get_scan_result(scanId: \"{stored.scanId}\") to page through results."),
                     Data = new
                     {
+                        envelope,
                         signature,
                         attributes
                     },
@@ -1103,6 +1122,7 @@ public class SentinelWorkspaceTools
                 Success = true,
                 Data = new MethodSourceResult
                 {
+                    Envelope = envelope,
                     Signature = signature,
                     Source = methodSource,
                     Attributes = attributes
@@ -1331,10 +1351,15 @@ public class SentinelWorkspaceTools
                 items.Add(new OutlineItem(Kind: kind, Name: name, Container: container, StartLine: span.StartLinePosition.Line + 1, EndLine: span.EndLinePosition.Line + 1));
             }
 
+            var fileText = await document.GetTextAsync(cancellationToken);
+            var fileLineCount = fileText.Lines.Count;
+            var fileByteCount = System.Text.Encoding.UTF8.GetByteCount(fileText.ToString());
+            var envelope = ReadEnvelopeBuilder.Build(fileLineCount, fileByteCount, returnedFromLine: 1, returnedToLine: fileLineCount);
+
             return new ToolResult<object>()
             {
                 Success = true,
-                Data = items,
+                Data = new FileOutlineResult { Envelope = envelope, Symbols = items },
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion
             };
         }
@@ -1919,6 +1944,8 @@ public class SentinelWorkspaceTools
 /// <summary>Return payload for <c>GetMethodSource</c>.</summary>
 public record MethodSourceResult
 {
+    /// <summary>Scope/truncation metadata for the containing file. See <see cref="ReadEnvelope"/>.</summary>
+    public ReadEnvelope Envelope { get; init; } = null!;
     /// <summary>Condensed method declaration: modifiers, return type, name, and parameter list — no body.</summary>
     public string Signature { get; init; } = "";
     /// <summary>Attributes declared on the method, in declaration order.</summary>

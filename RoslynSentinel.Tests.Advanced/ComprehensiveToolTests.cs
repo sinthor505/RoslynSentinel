@@ -257,7 +257,7 @@ public class ComprehensiveToolTests
         var result = await _workspaceTools.GetFileOutline("Status.cs");
 
         Assert.That(result.Success, Is.True);
-        var items = (List<OutlineItem>)result.Data!;
+        var items = ((FileOutlineResult)result.Data!).Symbols;
         Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum", "Status")));
         Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Pending")));
         Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Shipped")));

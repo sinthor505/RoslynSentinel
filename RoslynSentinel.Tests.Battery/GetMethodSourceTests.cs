@@ -62,6 +62,10 @@ public class GetMethodSourceTests
         var data = (MethodSourceResult)result.Data!;
         Assert.That(data.Source, Does.Contain("return x + 1;"));
         Assert.That(data.Signature, Does.Contain("Bar"));
+        Assert.That(data.Envelope, Is.Not.Null);
+        Assert.That(data.Envelope.LineCount, Is.EqualTo(8));
+        Assert.That(data.Envelope.ReturnedFromLine, Is.EqualTo(3));
+        Assert.That(data.Envelope.ReturnedToLine, Is.EqualTo(6));
     }
 
     [Test]

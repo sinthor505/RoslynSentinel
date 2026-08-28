@@ -972,15 +972,43 @@ time of this re-audit — very likely fixed piecemeal across other sessions' wor
 (see [[project_concurrent_sessions]]) rather than by a dedicated pass on this spec. No remaining risk
 identified; closing rather than re-scoping into a rename/restructure task nothing currently needs.
 
-## Read-tool metadata envelope (`isComplete`/truncation flag) — entirely unimplemented
+## Read-tool metadata envelope (`isComplete`/truncation flag) — `GetMethodSource`/`GetFileOutline` done 2026-08-27
 
 **Found:** 2026-08-24, while auditing `docs/spec-read-tool-metadata-envelope-v1.md` (kept in
 `docs/current/`) for the docs reorganization pass. Zero `isComplete`/`IsTruncated`-style fields exist
 anywhere in the codebase — the spec's proposed metadata envelope for read tools (so a caller can tell
 whether a returned excerpt is the whole thing or was cut short) has not been started.
 
-**Suggested approach:** see the spec doc itself for the proposed shape; flagging here mainly so this
-doesn't get lost now that the originating spec lives outside `docs/TODO.md`'s usual discovery path.
+**Implemented 2026-08-27** (spec's steps 1–3): added `ReadEnvelope`
+(`RoslynSentinel.Common/ReadEnvelope.cs`) — `SchemaVersion`, `LineCount`/`ByteCount` (total file, not
+slice), `IsComplete`, `ReturnedFromLine`/`ReturnedToLine`, `ContinuationOffset`, `OutlineAvailable` —
+plus `ReadEnvelopeBuilder.Build`/`BuildForWholeFile` and configurable `ReadEnvelopeThresholds`
+(`ReadWholeMaxLines`=800, `OutlineAvailableMinLines`=400, `MaxReturnedLines`=1200, matching the spec's
+suggested defaults). Wired into:
+- `GetMethodSource` — `MethodSourceResult` gained an `Envelope` property; the envelope describes the
+  **containing file's** scope while `ReturnedFromLine`/`ReturnedToLine` are the method's own line span
+  (per spec, so a caller gets file-level scope even when it only asked for one method).
+- `GetFileOutline` — return shape changed from a bare `List<OutlineItem>` to a new `FileOutlineResult
+  { Envelope, Symbols }` record (this is a breaking shape change to `Data`; the one existing test
+  asserting the old bare-list shape was updated).
+
+Step 4 (make thresholds configurable via `read-limits.json`/env vars, rather than the in-process
+static properties shipped here) and step 5 (fold the contract into the tools-review doc) were **not**
+done — the static-property form was judged sufficient for now and matches the existing precedent
+(`ScanResultHelper.ThresholdBytes` is likewise a hardcoded constant, not file/env-configurable). `Read
+File` was left unwired: it already has its own startLine/endLine slicing and inline
+`filePath/startLine/endLine/totalLines/source` shape; folding it into `ReadEnvelope` would touch three
+response shapes (whole-file, ranged, offloaded) and wasn't part of this pass's scope. `MethodNotFound`
+also still returns a plain error rather than `MethodFound=false` + populated envelope, since
+`GetMethodSource`'s result type has no `MethodFound` field today — a further contract change, not
+attempted here.
+
+Verified via `dotnet build RoslynSentinel.slnx` (0 errors) and the full test suite across all 5 test
+projects (0 new failures): new `ReadEnvelopeBuilderTests` (8 tests, spec's "BuildEnvelope helper" list)
+plus envelope assertions added to `GetMethodSourceTests` and the `GetFileOutline` enum test.
+
+**Remaining work if picked up again:** wire `ReadFile`, decide `MethodNotFound`'s contract, externalize
+the thresholds, and update the tools-review doc per spec steps 4–5.
 
 ## Tool terminology/naming backlog — open, unactioned
 
