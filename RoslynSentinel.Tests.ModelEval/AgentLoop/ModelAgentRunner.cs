@@ -26,7 +26,7 @@ public sealed class ModelAgentRunner
         McpClient mcpClient,
         int turnCap = 25,
         TimeSpan? wallClockCap = null,
-        int maxTokensPerTurn = 2048)
+        int maxTokensPerTurn = 8192)
     {
         _llm = llm;
         _mcpClient = mcpClient;
