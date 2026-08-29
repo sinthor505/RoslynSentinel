@@ -50,5 +50,6 @@ public enum ToolOptionTag
     RepoDirectory,
     DryRun,
     ReturnDiff,
-    SearchMode
+    SearchMode,
+    ConfirmationCode
 }

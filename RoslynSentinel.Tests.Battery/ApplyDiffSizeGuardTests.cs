@@ -1,0 +1,194 @@
+// ApplyDiff whole-file-rewrite size guard (changesetFormat=files, action=apply): a files-format
+// apply that would shrink a file by more than 50% is rejected with errorCode=ConfirmationRequired
+// and a confirmation code instead of being applied — this is the guard against an agent submitting
+// only a changed fragment as if it were the entire file (see
+// docs/current/blockers/blocking_error_searchmode_literal_override_and_iserror_flag.md, "reported
+// symptom" section, for the real incident this replays). action=confirmationCode replays the exact
+// cached changeset from the rejected call without resending file content.
+//
+// The percentage check reads "old content" from disk via FileIoHelper.ReadAllTextIfExistsAsync
+// (same helper ApplyProposedChangesAsync uses for pre-image capture), so these tests need a real
+// on-disk file — TestSolutionFixture + PersistentWorkspaceManager, not the in-memory
+// TestSolutionBuilder path (see UndoLastApplyTests.cs for the same real-revert-path rationale).
+
+using Microsoft.Extensions.Logging.Abstractions;
+
+#pragma warning disable CS8618
+namespace RoslynSentinel.Tests.Battery;
+
+[TestFixture]
+public class ApplyDiffSizeGuardTests
+{
+    private static SentinelWorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
+    {
+        var config = new SentinelConfiguration();
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
+        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var dependencyEngine = new DependencyEngine(workspaceManager);
+        var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
+        return new SentinelWorkspaceTools(
+            workspaceManager, validationEngine, diffEngine, diagnosticEngine,
+            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
+            projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
+            new BuildEngine(workspaceManager, diagnosticEngine));
+    }
+
+    [Test]
+    public async Task ApplyDiff_FilesFormatShrinksOver50Percent_RejectsWithConfirmationRequiredAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var originalContent = await File.ReadAllTextAsync(targetFile);
+        Assert.That(originalContent.Split('\n').Length, Is.GreaterThan(4), "fixture file must have enough lines for a >50% shrink to be meaningful");
+
+        var fragment = "using System;\n";
+        var result = await tools.ApplyDiff(
+            ChangesetFormat.files, ProposedChangeAction.apply,
+            changes: new Dictionary<FilePath, string> { [targetFile] = fragment });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
+        Assert.That(result.Error!.Message, Does.Contain("confirmationCode"));
+        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
+    }
+
+    [Test]
+    public async Task ApplyDiff_ConfirmationCodeFromRejectedApply_AppliesOriginalChangesetAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var fragment = "using System;\n";
+
+        // validateOnApply:false — this test is about the confirmation-code replay mechanism, not
+        // ValidateChangesAsync; the arbitrary "first .cs file" the fixture picks may be a type
+        // other files in the solution depend on, which would otherwise fail pre-apply validation
+        // for unrelated reasons (a real compile break, correctly caught — see
+        // project_searchmode_literal_override_bug.md's validation-scope fix).
+        var rejected = await tools.ApplyDiff(
+            ChangesetFormat.files, ProposedChangeAction.apply,
+            changes: new Dictionary<FilePath, string> { [targetFile] = fragment },
+            validateOnApply: false);
+        Assert.That(rejected.Success, Is.False);
+
+        var code = ExtractConfirmationCode(rejected.Error!.Message);
+
+        var confirmed = await tools.ApplyDiff(
+            ChangesetFormat.files, ProposedChangeAction.confirmationCode,
+            confirmationCode: code);
+
+        Assert.That(confirmed.Success, Is.True, confirmed.Error?.Message);
+        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(fragment));
+    }
+
+    [Test]
+    public async Task ApplyDiff_ConfirmationCodeUnrecognized_ReturnsInvalidArgumentAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var result = await tools.ApplyDiff(
+            ChangesetFormat.files, ProposedChangeAction.confirmationCode,
+            confirmationCode: "not-a-real-code");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+    }
+
+    [Test]
+    public async Task ApplyDiff_ConfirmationCodeMissing_ReturnsInvalidArgumentAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var result = await tools.ApplyDiff(ChangesetFormat.files, ProposedChangeAction.confirmationCode);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+    }
+
+    [Test]
+    public async Task ApplyDiff_ConfirmationCodeIsSingleUse_SecondReplayFailsAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var rejected = await tools.ApplyDiff(
+            ChangesetFormat.files, ProposedChangeAction.apply,
+            changes: new Dictionary<FilePath, string> { [targetFile] = "using System;\n" },
+            validateOnApply: false);
+        var code = ExtractConfirmationCode(rejected.Error!.Message);
+
+        var firstReplay = await tools.ApplyDiff(ChangesetFormat.files, ProposedChangeAction.confirmationCode, confirmationCode: code);
+        Assert.That(firstReplay.Success, Is.True, firstReplay.Error?.Message);
+
+        var secondReplay = await tools.ApplyDiff(ChangesetFormat.files, ProposedChangeAction.confirmationCode, confirmationCode: code);
+        Assert.That(secondReplay.Success, Is.False);
+        Assert.That(secondReplay.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+    }
+
+    [Test]
+    public async Task ApplyDiff_FilesFormatSmallEdit_AppliesWithoutConfirmationAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var originalContent = await File.ReadAllTextAsync(targetFile);
+        var lightlyModified = originalContent + "\n// small trailing comment\n";
+
+        var result = await tools.ApplyDiff(
+            ChangesetFormat.files, ProposedChangeAction.apply,
+            changes: new Dictionary<FilePath, string> { [targetFile] = lightlyModified });
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(lightlyModified));
+    }
+
+    [Test]
+    public async Task ApplyDiff_FilesFormatNewFile_ExemptFromSizeGuardAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var newFilePath = Path.Combine(fixture.SolutionDirectory, Path.GetDirectoryName(
+            Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First())!, "BrandNewFile.cs");
+        var content = "namespace ContosoOrders;\npublic class BrandNewFile { }\n";
+
+        var result = await tools.ApplyDiff(
+            ChangesetFormat.files, ProposedChangeAction.apply,
+            changes: new Dictionary<FilePath, string> { [newFilePath] = content });
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(await File.ReadAllTextAsync(newFilePath), Is.EqualTo(content));
+    }
+
+    private static string ExtractConfirmationCode(string message)
+    {
+        var marker = "confirmationCode=\"";
+        var start = message.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
+        var end = message.IndexOf('"', start);
+        return message[start..end];
+    }
+}

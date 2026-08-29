@@ -33,7 +33,15 @@ public enum SolutionItemsKind
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ProposedChangeAction
 {
-    apply, validate
+    apply, validate,
+
+    /// <summary>
+    /// Confirms and applies a changeset that a prior <c>apply</c> call rejected for exceeding
+    /// the whole-file-rewrite size threshold (see <see cref="ToolErrorCode.ConfirmationRequired"/>).
+    /// Pass only <c>confirmationCode</c> — the original changeset is cached server-side from the
+    /// rejected call, so <c>changes</c>/<c>filepath</c>/<c>unifiedDiff</c> do not need to be resent.
+    /// </summary>
+    confirmationCode
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

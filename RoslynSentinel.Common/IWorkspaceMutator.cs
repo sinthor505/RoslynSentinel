@@ -14,4 +14,17 @@ public interface IWorkspaceMutator
     Task RemoveDocumentByPathAsync(FilePath filePath, CancellationToken cancellationToken = default);
     /// <summary>Retries previously failed writes, optionally scoped to specific files.</summary>
     Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Caches a changeset that <c>ApplyDiff</c>'s whole-file-rewrite size guard rejected, under a
+    /// fresh confirmation code, so a caller that intended the large rewrite can replay just the
+    /// code via <see cref="TakePendingChangeset"/> instead of resending file content.
+    /// </summary>
+    string CachePendingChangeset(Dictionary<FilePath, string> changes, int retryCount, bool validateOnApply);
+
+    /// <summary>
+    /// Retrieves and removes (one-time use) the changeset cached under <paramref name="confirmationCode"/>
+    /// by <see cref="CachePendingChangeset"/>. Returns null if the code is unrecognized or expired.
+    /// </summary>
+    (Dictionary<FilePath, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode);
 }

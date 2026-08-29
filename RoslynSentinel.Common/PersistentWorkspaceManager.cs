@@ -38,6 +38,58 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private volatile bool _disposed = false;
     private readonly ConcurrentDictionary<FilePath, string> _failedChangesCache = new();
     private readonly ConcurrentDictionary<string, (DateTime Timestamp, string Content)> _internalChanges = new();
+
+    /// <summary>
+    /// Changesets rejected by <c>ApplyDiff</c>'s whole-file-rewrite size guard, keyed by a
+    /// randomly generated confirmation code. A caller that intended the large rewrite replays
+    /// <c>ApplyDiff(action: confirmationCode, confirmationCode: "...")</c> to apply the exact
+    /// changeset that was rejected, without resending file content. Entries expire after
+    /// <see cref="PendingConfirmationTtl"/> and are swept lazily on each cache/take call.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, PendingChangeset> _pendingConfirmations = new();
+    private static readonly TimeSpan PendingConfirmationTtl = TimeSpan.FromMinutes(10);
+
+    private sealed record PendingChangeset(
+        Dictionary<FilePath, string> Changes, int RetryCount, bool ValidateOnApply, DateTime ExpiresAtUtc);
+
+    /// <summary>
+    /// Caches <paramref name="changes"/> under a fresh confirmation code and returns the code.
+    /// Also opportunistically sweeps expired entries so the cache doesn't grow unbounded across
+    /// a long-running server session.
+    /// </summary>
+    public string CachePendingChangeset(Dictionary<FilePath, string> changes, int retryCount, bool validateOnApply)
+    {
+        foreach (var kvp in _pendingConfirmations)
+        {
+            if (kvp.Value.ExpiresAtUtc <= DateTime.UtcNow)
+            {
+                _pendingConfirmations.TryRemove(kvp.Key, out _);
+            }
+        }
+
+        var code = Guid.NewGuid().ToString("N")[..8];
+        _pendingConfirmations[code] = new PendingChangeset(changes, retryCount, validateOnApply, DateTime.UtcNow.Add(PendingConfirmationTtl));
+        return code;
+    }
+
+    /// <summary>
+    /// Retrieves and removes the changeset cached under <paramref name="confirmationCode"/>.
+    /// Returns null if the code is unrecognized or has expired (one-time use).
+    /// </summary>
+    public (Dictionary<FilePath, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode)
+    {
+        if (!_pendingConfirmations.TryRemove(confirmationCode, out var pending))
+        {
+            return null;
+        }
+
+        if (pending.ExpiresAtUtc <= DateTime.UtcNow)
+        {
+            return null;
+        }
+
+        return (pending.Changes, pending.RetryCount, pending.ValidateOnApply);
+    }
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
     private readonly Timer _debounceTimer;

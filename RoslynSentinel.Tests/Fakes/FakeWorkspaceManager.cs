@@ -75,6 +75,8 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public Task<SymbolResolution> ResolveFromWireAsync(string sessionId, string projectName, string docCommentId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public string CachePendingChangeset(Dictionary<FilePath, string> changes, int retryCount, bool validateOnApply) => throw new NotImplementedException();
+    public (Dictionary<FilePath, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode) => throw new NotImplementedException();
 
     // Mirrors PersistentWorkspaceManager.SetFilePath(): resolves a wire path against
     // GetSolutionRoot(). Returns an unvalidated FilePath (SolutionRoot null/empty) rather than

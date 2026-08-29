@@ -34,6 +34,15 @@ public static class ToolErrorCode
     public const string DiffApplyFailed = "DiffApplyFailed";
     public const string Exception = "Exception";
     public const string NotImplemented = "NotImplemented";
+
+    /// <summary>
+    /// A <c>files</c>-format apply was rejected because one or more files would shrink by more
+    /// than <c>ApplyDiff</c>'s whole-file-rewrite size threshold (a common signature of the
+    /// caller submitting only a fragment as if it were the entire file). The response's
+    /// <c>message</c> carries a confirmation code the caller can replay via
+    /// <c>action: confirmationCode</c> to proceed with the same (cached) changeset.
+    /// </summary>
+    public const string ConfirmationRequired = "ConfirmationRequired";
 }
 
 // ── Envelope ──────────────────────────────────────────────────────────────────

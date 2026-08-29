@@ -395,14 +395,91 @@ public class SentinelWorkspaceTools
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
     }
 
+    /// <summary>
+    /// Fraction of <paramref name="oldContent"/>'s line count that <paramref name="newContent"/>
+    /// would remove. Only shrinkage counts — a large *increase* (codegen, genuine expansion) is
+    /// not the "submitted a fragment as if it were the whole file" failure mode this guards
+    /// against, so it's exempt. Returns 0 for a new file (no oldContent to shrink from) or a
+    /// same-size-or-larger replacement.
+    /// </summary>
+    private static double PercentLinesRemoved(string? oldContent, string newContent)
+    {
+        if (string.IsNullOrEmpty(oldContent))
+        {
+            return 0;
+        }
+
+        int oldLines = oldContent.Split('\n').Length;
+        int newLines = newContent.Split('\n').Length;
+        if (newLines >= oldLines || oldLines == 0)
+        {
+            return 0;
+        }
+
+        return (oldLines - newLines) / (double)oldLines;
+    }
+
+    /// <summary>
+    /// A files-format apply where any file would lose more than this fraction of its line count
+    /// is rejected (see <see cref="ToolErrorCode.ConfirmationRequired"/>) rather than applied —
+    /// this is the signature of a caller submitting only a changed fragment as if it were the
+    /// entire file, rather than an intentional whole-file rewrite. Only shrinkage is checked (see
+    /// <see cref="PercentLinesRemoved"/>); a large increase is exempt.
+    /// </summary>
+    private const double LargeShrinkRejectionThreshold = 0.5;
+
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead.")]
-    public async Task<ToolResult<object>> ApplyDiff([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
+    [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. IMPORTANT: for changesetFormat=files with action=apply, any file whose content would shrink by more than 50% is rejected with errorCode=ConfirmationRequired — this is a strong signal you submitted only a changed fragment as if it were the whole file, rather than a genuine whole-file rewrite. If the rewrite is really intended, call ApplyDiff again with action=confirmationCode and confirmationCode set to the code from the rejection — do not resend changes/filepath/unifiedDiff on that call, the original changeset is already cached server-side.")]
+    public async Task<ToolResult<object>> ApplyDiff([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [ToolOption(ToolOptionTag.ConfirmationCode)][Description("Required when action=confirmationCode. The code returned by a prior apply call that was rejected for exceeding the whole-file-rewrite size threshold. Replays that exact cached changeset — do not also pass changes/filepath/unifiedDiff.")] string? confirmationCode = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         try
         {
+            if (action == ProposedChangeAction.confirmationCode)
+            {
+                if (string.IsNullOrEmpty(confirmationCode))
+                {
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.InvalidArgument, "confirmationCode is required when action=confirmationCode.")
+                    };
+                }
+
+                var pending = _workspaceManager.TakePendingChangeset(confirmationCode);
+                if (pending == null)
+                {
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.InvalidArgument, $"confirmationCode '{confirmationCode}' is unrecognized or has expired (codes are single-use and expire after 10 minutes). Resubmit the original ApplyDiff(changesetFormat: files, action: apply, ...) call to get a fresh code.")
+                    };
+                }
+
+                var confirmedResult = await _workspaceManager.ApplyProposedChangesAsync(pending.Value.Changes, pending.Value.RetryCount, validateChanges: pending.Value.ValidateOnApply);
+                if (!confirmedResult.Success && confirmedResult.ValidationResult != null)
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {confirmedResult.ValidationResult.Diagnostics.ToJson()}")
+                    };
+                await WriteBlobForApplyAsync("apply_diff", confirmedResult);
+                var strippedConfirmedResult = confirmedResult with { PreImages = null };
+                object confirmedResponseData = returnDiff
+                    ? new
+                    {
+                        result = strippedConfirmedResult,
+                        diff = SentinelRefactoringTools.BuildDiffFromPreImages(pending.Value.Changes, confirmedResult.PreImages)
+                    }
+                    : strippedConfirmedResult;
+                return new ToolResult<object>()
+                {
+                    Success = true,
+                    Data = confirmedResponseData
+                };
+            }
+
             FilePath filePath = _workspaceManager.SetFilePath(filepath);
             if (changesetFormat == ChangesetFormat.files)
             {
@@ -417,6 +494,33 @@ public class SentinelWorkspaceTools
 
                 if (action == ProposedChangeAction.apply)
                 {
+                    string? oversizedFile = null;
+                    double oversizedPercent = 0;
+                    foreach (var (changedPath, newContent) in changes)
+                    {
+                        var oldContent = await FileIoHelper.ReadAllTextIfExistsAsync(changedPath, cancellationToken);
+                        var percentRemoved = PercentLinesRemoved(oldContent, newContent);
+                        if (percentRemoved > LargeShrinkRejectionThreshold)
+                        {
+                            oversizedFile = changedPath;
+                            oversizedPercent = percentRemoved;
+                            break;
+                        }
+                    }
+
+                    if (oversizedFile != null)
+                    {
+                        var code = _workspaceManager.CachePendingChangeset(changes, retryCount, validateOnApply);
+                        return new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = new ResultError(ToolErrorCode.ConfirmationRequired,
+                                $"File '{oversizedFile}' would shrink by {oversizedPercent:P0}, exceeding the {LargeShrinkRejectionThreshold:P0} threshold for a files-format apply. " +
+                                "This usually means only a changed fragment was submitted instead of the complete file content — use changesetFormat=diff for a partial edit instead. " +
+                                $"If a whole-file rewrite to this size is genuinely intended, call ApplyDiff again with action=confirmationCode and confirmationCode=\"{code}\" to apply the exact changeset just submitted (no need to resend changes). This code expires in 10 minutes.")
+                        };
+                    }
+
                     var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount, validateChanges: validateOnApply);
                     if (!result.Success && result.ValidationResult != null)
                         return new ToolResult<object>()
