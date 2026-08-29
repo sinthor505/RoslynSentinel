@@ -187,6 +187,55 @@ public static class RoslynSentinelServiceExtensionsBasic
                     }
                 }));
 
+            // Domain-failure → protocol-error sync: every tool in this codebase (by design, see
+            // docs/current/feedback_agent_friendly_error_messages.md) catches its own exceptions
+            // and returns a ToolResult<T>/ApplyChangesResult/etc. with Success=false instead of
+            // throwing, so the MCP SDK's own exception-based IsError detection never fires for a
+            // domain-level failure. Set IsError=true whenever the serialized response body's
+            // top-level "success" field is false, so a client relying on the protocol-level flag
+            // (rather than parsing the JSON body) sees an accurate signal.
+            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+                ModelContextProtocol.Protocol.CallToolRequestParams,
+                ModelContextProtocol.Protocol.CallToolResult>(
+                async (context, cancellationToken) =>
+                {
+                    var result = await next(context, cancellationToken);
+
+                    try
+                    {
+                        if (result.IsError != true && result.Content is not null)
+                        {
+                            foreach (var block in result.Content)
+                            {
+                                if (block is not ModelContextProtocol.Protocol.TextContentBlock textBlock ||
+                                    string.IsNullOrEmpty(textBlock.Text))
+                                {
+                                    continue;
+                                }
+
+                                using var doc = System.Text.Json.JsonDocument.Parse(textBlock.Text);
+                                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                                    doc.RootElement.TryGetProperty("success", out var successProp) &&
+                                    successProp.ValueKind == System.Text.Json.JsonValueKind.False)
+                                {
+                                    result.IsError = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch (System.Text.Json.JsonException)
+                    {
+                        // Response text isn't JSON (or isn't a ToolResult-shaped object) — leave IsError as-is.
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"IsError sync filter failed: {ex}");
+                    }
+
+                    return result;
+                }));
+
             // Diagnostic drift check: after every tool call, compare each tracked document's
             // in-memory text against the bytes on disk and log any mismatch. This is a content-level
             // check (unlike GetExternalFileChanges, which depends on the FileSystemWatcher and can miss

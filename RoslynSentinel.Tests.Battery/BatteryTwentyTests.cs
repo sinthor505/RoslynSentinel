@@ -198,7 +198,9 @@ public class BatteryTwentyTests
         var result = await _tools.SearchSolutionText(@"^\s*public enum OrderStatus", searchMode: TextSearchMode.literal);
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Warning, Does.Contain("searchMode=regex"));
+        Assert.That(result.Warning, Does.Contain("contains regex metacharacters"));
+        Assert.That(result.Warning, Does.Contain("searched for the literal substring as requested"));
+        Assert.That(result.TotalRecords, Is.Zero, "explicit literal mode must actually search literally, not silently switch to regex");
     }
 
     [Test]

@@ -155,6 +155,17 @@ public class ValidationEngine
             return new DiagnosticReport(true, new List<DiagnosticInfo>());
         }
 
+        // A change can compile cleanly within its own project (e.g. removing a public member
+        // nothing in that project calls) while breaking every other project that references it.
+        // Expand to transitive dependents so validation reflects solution-wide impact, not just
+        // the edited project's own internal call graph.
+        var dependencyGraph = baseline.GetProjectDependencyGraph();
+        var directlyAffected = affectedProjectIds.ToList();
+        foreach (var projectId in directlyAffected)
+        {
+            affectedProjectIds.UnionWith(dependencyGraph.GetProjectsThatTransitivelyDependOnThisProject(projectId));
+        }
+
         var introducedDiagnostics = new List<DiagnosticInfo>();
 
         foreach (var projectId in affectedProjectIds)

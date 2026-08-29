@@ -1432,8 +1432,7 @@ public class SentinelWorkspaceTools
             }
             else if (searchMode == TextSearchMode.literal && LikelyRegexPattern.IsMatch(pattern))
             {
-                warnings.Add($"Pattern '{pattern}' contains regex metacharacters but searchMode is literal - performed search as regex.");
-                actualSearchMode = TextSearchMode.regex;
+                warnings.Add($"Pattern '{pattern}' contains regex metacharacters ({LikelyRegexPattern}) but searchMode is literal - searched for the literal substring as requested. Pass searchMode: regex if you meant to search as a regex.");
             }
 
             var options1 = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount };

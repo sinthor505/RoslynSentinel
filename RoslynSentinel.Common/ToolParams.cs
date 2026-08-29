@@ -22,7 +22,10 @@ public static class ToolParams
         "false → returns updated file content without validating or writing.";
 
     public const string ValidateOnApply =
-        "true (default) → delta compile before writing; returns errors without touching disk if new errors found. " +
+        "true (default) → delta-compiles the edited project(s) plus every project that transitively " +
+        "references them (so removing/narrowing a public member is caught even if nothing inside the " +
+        "edited project itself calls it) before writing; returns errors without touching disk if new " +
+        "errors found. " +
         "false → writes regardless (for intentional intermediate broken-state edits).";
 
     public const string DryRun =
