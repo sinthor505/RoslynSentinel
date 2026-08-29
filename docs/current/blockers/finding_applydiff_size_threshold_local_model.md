@@ -102,6 +102,59 @@ before use, in a single monolithic diff) is harder than either part alone.
   empty/no-tool-call turn as a distinct outcome from both success and an errored tool call, not
   assume silence means "nothing left to do."
 
+## Batch 4: two-step prompt A/B experiment
+
+Following the recommendation above, a fourth batch tested whether splitting "bring the helper in"
+and "rewire the call to use it" into two explicit, separately-verified prompt steps
+(`TwoStepUserPromptTemplate` in `SizeThresholdAgentTests.cs`) reduces the dominant CS0103
+sequencing mistake (mode 2/3 above). Run at the two noisiest boundary sizes from batches 1-3 (20
+and 33 padding methods), 4 repeats each, compared against the existing 3-repeat `SingleStep`
+baseline at those same sizes:
+
+| Size | Variant | turnCount per run | applyDiffErrorCount per run | fixCorrect | Notes |
+|---|---|---|---|---|---|
+| 20 | SingleStep (batch 3, n=3) | 8, 7, 7 | 1, 1, 1 | True, True, True | baseline |
+| 20 | TwoStep (batch 4, n=4) | 26, 6, 8, 27 | 3, 0, 1, 5 | True, True, True, True | 2 of 4 runs badly regressed |
+| 33 | SingleStep (batch 3, n=3) | 6, 3, 7 | 0, 0, 1 | True, False (abandon), True | 1 abandonment |
+| 33 | TwoStep (batch 4, n=4) | 6, 10, 9, 7 | 0, 0, 0, 0 | True, True, True, True | clean, no abandonment |
+
+**Bottom line: mixed result, not a clean win.** At size 33 the two-step prompt looks like a genuine
+improvement — zero `ApplyDiff` errors across all 4 runs versus 1 error and 1 outright abandonment
+in the single-step baseline. But at size 20 it's a regression: 2 of 4 runs ballooned to 26-27 turns
+with 3-5 `ApplyDiff` errors each, worse than anything seen in the single-step baseline at that size
+(max 1 error, max 8 turns). Both cells are still `fixCorrect=True` in every batch-4 run — the model
+eventually gets there — but "eventually, after a much longer and noisier struggle" is a worse
+outcome for an unattended agent than the baseline's already-adequate performance at that size, so
+this is not a strict improvement. Sample size (n=3-4 per cell) is too small to be confident in
+either direction; this reads as "worth another look with a bigger N," not as validated.
+
+**A genuinely new failure mode surfaced in the rocky size-20 runs**, read in full from
+`n20/20260829-110908-188/transcript.json` (26 turns, 3 errors): after two clean `ApplyDiff` applies
+(turns 5-6), the model's turn 7 invents an `action: "confirmationCode"` call with
+`confirmationCode: "0"` — not a value the server ever issued, just a hallucinated placeholder — and
+gets a real `InvalidArgument` error back (`ApplyDiff`'s confirmation-code flow, added for the
+whole-file-rewrite size guard, was never actually triggered; the model appears to have
+misremembered or invented the two-phase-confirm protocol from training data rather than reacting to
+anything the server said). Turn 9 similarly invents an `UndoLastApply` call with
+`changeId: "workspaceVersion:5"`, a plausible-looking but nonexistent ID, and gets
+`NoOperationBlobFound`. Only turns 11 and 13 are the familiar CS0103 sequencing mistake. Once the
+fix actually lands correctly at turn 17, the model doesn't stop — it spends turns 18-25 (8 more
+turns) repeatedly re-reading the same already-correct file and finally calls
+`ListExternalDiskChanges` before giving a final report at turn 26, a pattern of excessive
+re-verification after already succeeding, not further mistakes. This "hallucinate a plausible tool
+call/parameter instead of using only what the server actually returned" behavior, and the
+post-success over-verification loop, were not seen in any of the 36 single-step runs from batches
+1-3 — plausibly because the two-step prompt's extra "verify this compiles" instruction per sub-step
+gives the model two chances to get anxious and improvise rather than one. This is worth watching
+for in future prompt-engineering work on this model, independent of the sizing question: **explicit
+multi-step verification instructions may trade one failure mode (sequencing mistakes) for another
+(protocol hallucination and over-verification loops)** rather than cleanly eliminating it.
+
+Given the mixed result and small sample size, this doesn't justify further immediate investment in
+tuning the two-step prompt specifically — a different intervention (e.g., giving the model a
+worked example of the copy-then-call sequencing, rather than restructuring the step boundaries)
+might be a more promising next experiment, but that's future work, not pursued in this session.
+
 ## Two test-fixture bugs found and fixed during this investigation
 
 Both in `RoslynSentinel.Tests.ModelEval/SizeThresholdAgentTests.cs` (and the first also in
