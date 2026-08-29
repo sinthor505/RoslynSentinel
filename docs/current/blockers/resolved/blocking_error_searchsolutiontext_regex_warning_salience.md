@@ -1,10 +1,22 @@
 # Blocking error: SearchSolutionText's warning wording misleads agents on zero-result searches
 
-**Status:** two related, independently-confirmed usability gaps in the tool's response shape, both
-reproduced via 9B-model dog-food transcripts. Neither is a missing-feature bug — the underlying
-detection logic exists and fires correctly in both reproducing cases; the problem is what the
-model does with the wording it gets back. Blocking per the dog-fooding policy — stopping here, no
-fix attempted in this session.
+**RESOLVED** — fixed as part of commit `b537249` ("Fix validation scope, searchMode literal
+override, and MCP IsError signaling") and a related follow-up. The `isRegex: bool` parameter this
+doc describes has since been replaced by an explicit `TextSearchMode searchMode` enum
+([SentinelWorkspaceTools.cs:1522](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1522)),
+removing the silent-default-bool root complaint. The salience problem itself is also gone: the
+generic "Solution-Folder scope limitations" warning that used to bury the specific regex-metachar
+warning is now commented out
+([SentinelWorkspaceTools.cs:1614](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1614)),
+so a zero-result literal search with a regex-like pattern surfaces only the specific, actionable
+warning. Verified against current code 2026-08-29. Moved here for history; no further action
+needed.
+
+**Original status:** two related, independently-confirmed usability gaps in the tool's response
+shape, both reproduced via 9B-model dog-food transcripts. Neither is a missing-feature bug — the
+underlying detection logic exists and fires correctly in both reproducing cases; the problem is
+what the model does with the wording it gets back. Blocking per the dog-fooding policy — stopping
+here, no fix attempted in this session.
 
 ## Issue 1: regex-metacharacter warning exists but agents miss it
 
@@ -30,7 +42,7 @@ to surface.)
 
 ### Root cause — confirmed by reading the source, not just inferred
 
-[SentinelWorkspaceTools.cs:1377-1497](../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1377-L1497)
+[SentinelWorkspaceTools.cs:1377-1497](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1377-L1497)
 (`SearchSolutionText`):
 
 1. The detection logic is real and correct:

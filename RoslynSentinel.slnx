@@ -11,5 +11,6 @@
   <Project Path="RoslynSentinel.Tests.Asyncify/RoslynSentinel.Tests.Asyncify.csproj" Id="1a7f4726-11b3-476a-9d7a-13b2f14af9f2" />
   <Project Path="RoslynSentinel.Tests.Basic/RoslynSentinel.Tests.Basic.csproj" Id="aa71cbde-35e3-4017-a013-e138d8e34060" />
   <Project Path="RoslynSentinel.Tests.Battery/RoslynSentinel.Tests.Battery.csproj" Id="0ccd2484-f855-4a5c-81bb-709723842a4a" />
+  <Project Path="RoslynSentinel.Tests.ModelEval/RoslynSentinel.Tests.ModelEval.csproj" />
   <Project Path="RoslynSentinel.Tests/RoslynSentinel.Tests.csproj" />
 </Solution>

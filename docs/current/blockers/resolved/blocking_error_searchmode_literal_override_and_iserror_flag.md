@@ -1,15 +1,46 @@
 # Blocking errors found while investigating a reported ApplyDiff false-failure
 
-**Status:** the specific symptom the user asked me to investigate (`ApplyDiff` reported failure
-but a following `ReadFile` showed the file had changed) turned out to be fully explained by the
-model's own actions — not a tool bug. But investigating it surfaced three real, separate issues:
-a validation-scope gap that let the model's own destructive first `ApplyDiff` call report
+**RESOLVED** — all three real issues fixed in commit `b537249` ("Fix validation scope, searchMode
+literal override, and MCP IsError signaling"):
+- Issue 0 (validation scope): `ValidationEngine.ValidateChangesAsync` now expands
+  `affectedProjectIds` to transitive dependents via `GetProjectDependencyGraph()`
+  ([ValidationEngine.cs](../../../../RoslynSentinel.Common/ValidationEngine.cs)), so
+  `validateOnApply: true` catches breaks in callers, not just the edited project's own call graph.
+- Issue 1 (searchMode literal override): confirmed `searchMode: literal` no longer silently
+  coerces to regex — it stays literal and only warns
+  ([SentinelWorkspaceTools.cs:1531-1539](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1531-L1539)).
+- Issue 3 (missing MCP `IsError`): a `CallToolFilter` now sets `CallToolResult.IsError = true`
+  whenever the response body's top-level `success` field is false
+  ([ServiceRegistrationExtensionsBasic.cs:197-233](../../../../RoslynSentinel.Server.Basic/ServiceRegistrationExtensionsBasic.cs#L197-L233)).
+
+A separate, related fix (commit `5561d58`) added a whole-file-rewrite size guard to `ApplyDiff`
+(files-format applies that would shrink a file >50% are rejected with a confirmation-code escape
+hatch), addressing the broader "agent submits truncated content as a full file" risk this doc's
+investigation also touched on. The ~25-minute stall documented in the run 2d follow-up below was
+independently assessed as a debugger-pause artifact on the dev machine, not a server bug — no fix
+applicable. Verified against current code 2026-08-29. Moved here for history; no further action
+needed.
+
+**Original status:** the specific symptom the user asked me to investigate (`ApplyDiff` reported
+failure but a following `ReadFile` showed the file had changed) turned out to be fully explained by
+the model's own actions — not a tool bug. But investigating it surfaced three real, separate
+issues: a validation-scope gap that let the model's own destructive first `ApplyDiff` call report
 `success:true` with zero diagnostics despite gutting a whole class, a live regression in
 `SearchSolutionText`'s new `searchMode` parameter, and one systemic MCP-protocol-level gap
 affecting every tool that returns `Success: false` without throwing. Documenting all three per the
 dog-fooding policy — no fix attempted. Issue 0 (validation scope) is the most serious of the
 three: it means `validateOnApply: true` (the default, and the tool's main safety net) does not
 actually protect against a large, common class of real mistakes.
+
+A follow-up review of run 2d (see "Real issue 3" below) found a fourth, unrelated observation: a
+~25-minute silent stall on one `ApplyDiff` call, with the entire server process producing zero log
+output for the whole window (not just this request — every log source across the process went
+quiet). No code path explains a wait that long (traced to a trivial semaphore-guarded field read
+with no other logged operation holding the lock), no OS sleep/resume event fired, and the process
+never restarted — the shape (silent, then resumes instantly into a deterministic, already-correct
+exception) matches a debugger paused at an exception/breakpoint on the dev machine hosting the
+server more than any server-side deadlock. Documented for the record per the dog-fooding policy,
+but this is most likely a debugging-session artifact, not a RoslynSentinel tool bug.
 
 Source transcript:
 `RoslynSentinel-AgentTesting/RoslynSentinel NormalizeWhitespace Test - 9B - run 2c - 2026-08-28 16.36.md`,
@@ -25,7 +56,7 @@ transcript misdiagnoses this several times):
    — i.e. it submitted **only the 5 using-directive lines** as the file's entire new content,
    intending this as "step 1 of 3" (add a using directive) rather than a full-file replacement.
    `changesetFormat: files` is documented as whole-file replacement
-   ([SentinelWorkspaceTools.cs:400](../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L400)),
+   ([SentinelWorkspaceTools.cs:400](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L400)),
    so the tool did exactly what it was told: log line 323 confirms
    `Wrote changes to ...AdvancedStructuralEngine.cs (Attempt 1)`, and the call legitimately
    returned `success:true`. **This truncated the 552-line file to 6 lines, correctly, per the
@@ -62,7 +93,7 @@ a process/prompt concern, not something to fix in the MCP tools themselves).
 The user pushed back on the above and asked the sharper question directly: the first `ApplyDiff`
 call's response wasn't just "success" — it carried `validationResult: {success:true, diagnostics:[]}`.
 `validateOnApply` defaults to `true`
-([SentinelWorkspaceTools.cs:401](../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L401)),
+([SentinelWorkspaceTools.cs:401](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L401)),
 so this was the tool's actual pre-apply safety check reporting a clean bill of health for a change
 that deleted every public method of a class — `ConvertAbstractClassToInterfaceAsync`,
 `ReplaceConstructorWithFactoryAsync`, `ExtractSuperclassAsync`, `ExtractClassAsync`,
@@ -76,7 +107,7 @@ gap, not something the "the model did this to itself" framing above excuses.
 
 ### Root cause
 
-[ValidationEngine.cs:103-206](../../../RoslynSentinel.Common/ValidationEngine.cs#L103-L206)
+[ValidationEngine.cs:103-206](../../../../RoslynSentinel.Common/ValidationEngine.cs#L103-L206)
 (`ValidateChangesAsync`):
 
 1. For each changed file, it resolves that file's own `documentId` and adds only
@@ -125,7 +156,7 @@ This codebase has evidently already been updated since the earlier
 [[blocking_error_searchsolutiontext_regex_warning_salience]] write-up: `isRegex: bool` has become
 `searchMode: TextSearchMode` (`literal` | `regex`) — exactly the "mandatory enum instead of
 optional bool" fix direction that was suggested there. Confirmed at
-[SentinelWorkspaceTools.cs:1418](../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1418).
+[SentinelWorkspaceTools.cs:1418](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1418).
 
 But the new implementation has a worse problem than the one it replaced:
 
@@ -232,3 +263,106 @@ real success at that layer.
   payload-level failure signaling agree.
 - Audit whether this is a per-tool decorator/attribute question or a single choke point; given how
   many tools return `ToolResult<T>`, this should be fixable in one place rather than per-tool.
+
+## Follow-up: run 2d review (`ReadFile`/`GetFileOutline` improvement confirmed; no new tool bug)
+
+Reviewed at the user's request:
+`RoslynSentinel-AgentTesting/RoslynSentinel NormalizeWhitespace Test - 9B - run 2d - 2026-08-29 00.31.md`
+(and the raw exported JSON transcript, `1787947349101.conversation.json`, which was more reliable
+than the markdown export for exact tool-call payloads), cross-referenced against
+`RoslynSentinel.Server.Advanced/bin/Debug/net10.0/logs/http-host-20260828-231820.log`.
+
+### The `ReadFile` → `GetFileOutline` fallback worked as intended
+
+Confirmed directly: `ReadFile` on `RoslynSentinel.Basic/RefactoringEngine.cs` (4769 lines, 231014
+bytes, over the 30720-byte threshold) returned a structured symbol outline instead of a bare
+"too large" message. The outline listed, among ~90 other symbols,
+`{"kind":"method","name":"ReplaceNodeFormattedAsync","container":"RefactoringEngine","startLine":56,"endLine":63}`
+and `RemoveNodeFormattedAsync` (lines 69-86) by their real names. The model went straight to
+`ReadFile(startLine:50, endLine:90)` and got both helpers verbatim on the first try — no repeated
+guessing at wrong names like "FormatNode," which was the failure mode this change was meant to
+fix. This is a clear, confirmed improvement.
+
+### The `ApplyDiff` calls in this run: all four explained, none are new tool bugs
+
+Four `ApplyDiff` calls total, all against `AdvancedStructuralEngine.cs`:
+
+1. **`changesetFormat: diff`, two-hunk patch** (add a `using` line + rewrite the buggy method body
+   + append two new helper methods) → `DiffApplyFailed`: hunk `@@ -38,10 +39,45 @@` declared line
+   39, actual content not found within 60 lines. Root cause, confirmed against the pristine
+   original file (`git show d8c6f82:...AdvancedStructuralEngine.cs`): the hunk's context lines
+   (`var interfaceNode = ...` / `.WithModifiers(...)` / `.WithMembers(...);`) are real and correctly
+   placed, but the model then emitted only `+` insertion lines for its replacement code and never
+   marked the old lines it meant to replace — a blank line plus the 8-line
+   `var newRoot = ...; return new DocumentEditResult { ... };` block — for **removal** (`-`). A
+   correct hunk here needed `-` lines for that old block; instead the diff asks to *insert new code
+   after* the three context lines while leaving the old code that follows completely unmentioned.
+   Since `ReanchorHunk` requires a hunk's full context/removal sequence to match some contiguous
+   span of the real file exactly, and this hunk's sequence (3 context lines immediately followed by
+   `}` as if it were the very next line) never actually occurs contiguously anywhere in the file —
+   the real next line after the 3 context lines is a blank line, not `}` — no search window, however
+   large, could have found a match. This is not a line-number-offset problem the ±60-line search
+   should have absorbed; it's a hunk body that doesn't describe any real span of the file. Verified
+   the search window itself is not at fault: the file has only ever had one commit in this test
+   repo (no intermediate edits between attempts), and the anchor text the error names does appear
+   in the file, just not contiguously with what the hunk claims follows it. Correctly rejected,
+   nothing written both times this hunk was submitted (confirmed: model re-read the file afterward
+   and it was unchanged).
+2. **`changesetFormat: diff`, single hunk** (just the `using RoslynSentinel.Basic;` line) →
+   succeeded cleanly, file written, `validationResult: {success:true, diagnostics:[]}` genuinely
+   correct here (adding a using directive can't break callers).
+3. **`changesetFormat: files`, full corrected file content** → pre-apply validation correctly
+   caught `CS1525`/`CS1002`/`CS1003` at line 428 (`Invalid expression term '<'`, `'/' `, `; expected`) —
+   the model had pasted a malformed XML doc comment (missing `///` or a stray unescaped `<`/`/`)
+   when copying the helper methods' doc comments from `RefactoringEngine.cs`. Correctly blocked,
+   nothing written.
+4. **`changesetFormat: diff`, identical two-hunk patch to call 1** (model retried the exact same
+   hunk, still missing the `-` deletion lines for the old code block) → same `DiffApplyFailed`
+   exception, but this time the
+   request took **1,494,141 ms (~25 minutes)** end-to-end before the client (LM Studio) gave up and
+   aborted the connection (log: `"The request was aborted by the client."` — the exception itself
+   was thrown by the server at essentially the same instant the connection closed, so the server
+   was not stuck retrying after the client left).
+
+None of these four are tool defects — 1 and 4 are the identical genuinely-malformed hunk (missing
+its `-` deletion lines, so no window size could have anchored it — correctly rejected both times),
+2 is a correct success, 3 is a correct pre-apply validation catch.
+
+### The ~25-minute stall on call 4 (documented, not a confirmed tool bug)
+
+Investigated because a 25-minute wait for what should be a sub-second parse-and-fail is worth
+explaining even though the *outcome* (rejection) was correct both times this diff was submitted.
+
+- The exception is thrown from `SentinelWorkspaceTools.ApplyDiff` at
+  [SentinelWorkspaceTools.cs:624](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L624)
+  (`_diffEngine.ApplyDiff(oldText, unifiedDiff)`), caught immediately by the `catch` two lines
+  below it — so all the wall-clock time was spent before or during that call, not in some later
+  handler.
+- `DiffEngine.ReanchorHunk`
+  ([DiffEngine.cs:202-236](../../../../RoslynSentinel.Common/DiffEngine.cs#L202-L236)) is bounded — at
+  most `HunkReanchorWindow` (60) iterations of a cheap list-slice comparison — so it cannot itself
+  account for anywhere near 25 minutes.
+- The one blocking call upstream of it is
+  `GetCurrentSolutionAsync` ([PersistentWorkspaceManager.cs:924-936](../../../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L924-L936)),
+  which does `await _solutionLock.WaitAsync(cancellationToken)` around a **trivial field read** —
+  meaning if this call waited 25 minutes, something else was holding the single global
+  `_solutionLock` for that entire window.
+- Ruled out the file-watcher-triggered full reload path (`OnDebounceTimerElapsed`, which the
+  in-code comment at
+  [PersistentWorkspaceManager.cs:487-489](../../../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L487-L489)
+  already documents as capable of holding the lock for "tens of seconds"): that method
+  unconditionally logs `"Processing {Count} file system changes..."` when it runs
+  ([PersistentWorkspaceManager.cs:579](../../../../RoslynSentinel.Common/PersistentWorkspaceManager.cs#L579)),
+  and that line never appears anywhere in this session's log.
+- The log shows **zero output from the entire process** (every log source, not just this request)
+  for the full window between the request arriving (23:44:42) and the exception firing
+  (00:09:37) — every other idle minute in this same log file has dozens of DBG-level connection
+  lines. `systeminfo`/`wevtutil` show no reboot and no sleep/resume event in that window either.
+- Best-evidence conclusion: this matches a debugger paused at a breakpoint/first-chance exception
+  on the machine hosting the server (the user noted this possibility directly) more closely than
+  any server-side deadlock — a debugger break would silently freeze the whole process with no log
+  output, then resume instantly into the exact same deterministic exception the instant it's
+  dismissed, which is exactly the observed pattern. Not treating this as a confirmed RoslynSentinel
+  bug; noting it here only because a 25-minute unexplained silence is worth a paper trail, and
+  because it's a useful reminder that a debugger left attached to the dev-facing server during a
+  live dogfood run can make an unrelated call look like a hang.
