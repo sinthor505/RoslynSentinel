@@ -13,8 +13,9 @@ public static class WholeFileRewriteReproducer
 {
     /// <summary>
     /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/BlockEditHelpers.cs — the "already
-    /// has the fix pattern" file, standing in for a file like RefactoringEngine.cs where the
-    /// scoped-edit helper already exists and is used elsewhere.
+    /// has the fix pattern" file, standing in for a file like RefactoringEngine.cs. The scoped-edit
+    /// helper is private, so BlockConverter.cs can't call it directly — the model has to copy the
+    /// method's source into BlockConverter.cs itself, matching plan-9b-model-test-step2.md step 4.
     /// </summary>
     public const string HelperFileContent = """
         namespace ContosoOrders.Core.FixtureHelpers;
@@ -27,7 +28,7 @@ public static class WholeFileRewriteReproducer
             /// surrounding indentation — everything else in fileText is returned byte-for-byte
             /// unchanged.
             /// </summary>
-            public static string ReplaceBlockFormatted(string fileText, string oldBlock, string newBlock)
+            private static string ReplaceBlockFormatted(string fileText, string oldBlock, string newBlock)
             {
                 var index = fileText.IndexOf(oldBlock, StringComparison.Ordinal);
                 if (index < 0)

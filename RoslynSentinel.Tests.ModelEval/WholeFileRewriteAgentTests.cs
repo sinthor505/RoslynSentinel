@@ -46,7 +46,8 @@ public class WholeFileRewriteAgentTests
         in the same file.
 
         This exact bug was already fixed, using the same fix pattern, in the sibling file
-        `{0}/FixtureHelpers/BlockEditHelpers.cs`. Your job is to apply that same fix pattern to
+        `{0}/FixtureHelpers/BlockEditHelpers.cs` — but the helper there is private, so
+        `BlockConverter.cs` can't call it directly. Your job is to apply that same fix pattern to
         `ConvertAbstractClassToInterface` in `BlockConverter.cs`.
 
         ## Steps
@@ -55,14 +56,17 @@ public class WholeFileRewriteAgentTests
            Identify the exact call responsible for the whole-file-rewrite bug described above.
 
         2. Find the existing fix pattern already used elsewhere in this codebase for this same bug.
-           Look at `{0}/FixtureHelpers/BlockEditHelpers.cs` — there is a public helper method there
-           that solves exactly this problem by rewriting only the changed block instead of the
-           whole file. Locate it and read its full source.
+           Look at `{0}/FixtureHelpers/BlockEditHelpers.cs` — there is a private helper method
+           there that solves exactly this problem by rewriting only the changed block instead of
+           the whole file. Locate it and read its full source.
 
         3. Apply the same fix to `ConvertAbstractClassToInterface`:
-           - Call the existing helper (`BlockEditHelpers.ReplaceBlockFormatted`) instead of
-             `ReformatWholeFile`.
-           - Update `ConvertAbstractClassToInterface` so it produces the same edit (still renaming
+           - Bring the helper method (`ReplaceBlockFormatted`) into `BlockConverter.cs` — this
+             class doesn't have it yet, and the original in `BlockEditHelpers.cs` is private, so
+             it can't be called cross-file.
+           - Add whatever `using` directive the helper needs to compile.
+           - Update `ConvertAbstractClassToInterface` so it uses the helper instead of
+             `ReformatWholeFile`, producing the same edit (still renaming
              `public abstract class {{className}}` to `public interface I{{className}}`), but
              formatting only that change.
 
@@ -78,8 +82,9 @@ public class WholeFileRewriteAgentTests
 
         - Don't touch `UnrelatedMethodBefore` or `UnrelatedMethodAfter` in the file — they are
           explicitly out of scope for this task.
-        - Don't invent a new helper method or a different fix approach — reuse
-          `BlockEditHelpers.ReplaceBlockFormatted` as-is; don't rename it or change its behavior.
+        - Don't invent a new helper method or a different fix approach — reuse the
+          `ReplaceBlockFormatted` logic as-is; don't rename it or change its behavior.
+        - Don't modify `BlockEditHelpers.cs` — it's reference only; leave it exactly as-is.
         - Preserve the original method's behavior (same inputs/outputs) — only the rewrite
           mechanism should change.
         """;
@@ -125,7 +130,11 @@ public class WholeFileRewriteAgentTests
         hostBuilder.Services.AddHttpClient<LmStudioAgentClient>(client =>
         {
             client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(LlmOptions.TimeoutSeconds * 4);
+            // A slow local GPU (e.g. a GTX 1080) can take several minutes per completion on
+            // larger prompts/diffs — floor well above LlmOptions.TimeoutSeconds's default-30s*4
+            // so per-turn latency alone never trips the HTTP timeout ahead of the runner's own
+            // wall-clock cap.
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
         });
         foreach (var descriptor in services)
         {
@@ -247,7 +256,11 @@ public class WholeFileRewriteAgentTests
 
     private async Task<AgentRunResult> RunOnceAsync(CancellationToken cancellationToken)
     {
-        var runner = new ModelAgentRunner(_agentClient, _mcpClient, turnCap: 25, wallClockCap: TimeSpan.FromMinutes(10));
+        // Generous caps for a slow local GPU (e.g. a GTX 1080): individual turns have been
+        // observed to take 1-2 minutes, so a 10-minute cap can cut off a run mid-recovery
+        // before the model genuinely gets stuck. 40 turns / 30 minutes gives real room to
+        // either converge or fail on its own rather than on an artificial clock.
+        var runner = new ModelAgentRunner(_agentClient, _mcpClient, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30));
         var userPrompt = string.Format(UserPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
         return await runner.RunAsync(SystemPrompt, userPrompt, _runDirectory, cancellationToken);
     }
@@ -259,10 +272,22 @@ public class WholeFileRewriteAgentTests
 
         var fixedText = File.ReadAllText(fixedPath);
 
-        Assert.That(fixedText, Does.Not.Contain("ReformatWholeFile("),
-            $"The whole-file-rewrite call should be gone. Transcript: {result.TranscriptPath}");
+        // Only the *call* to ReformatWholeFile needs to be gone — the prompt never asks the
+        // model to delete the now-unused method definition (matching plan-9b-step2.md step 4,
+        // which only asks to stop calling the whole-file rewrite), so leaving
+        // "private static string ReformatWholeFile(...)" as dead code is a valid fix, not a
+        // failure. Checking for the bare substring here previously false-failed several runs
+        // that fixed the bug correctly but left the dead method in place.
+        Assert.That(fixedText, Does.Not.Contain("return ReformatWholeFile("),
+            $"ConvertAbstractClassToInterface should no longer call ReformatWholeFile. Transcript: {result.TranscriptPath}");
         Assert.That(fixedText, Does.Contain("ReplaceBlockFormatted"),
-            $"The fix should call the existing BlockEditHelpers.ReplaceBlockFormatted helper. Transcript: {result.TranscriptPath}");
+            $"The fix should bring a ReplaceBlockFormatted helper into BlockConverter.cs itself " +
+            $"(the original in BlockEditHelpers.cs is private and unreachable cross-file). Transcript: {result.TranscriptPath}");
+
+        var helperPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "BlockEditHelpers.cs");
+        var helperText = File.ReadAllText(helperPath);
+        Assert.That(helperText, Does.Contain("private static string ReplaceBlockFormatted"),
+            $"BlockEditHelpers.cs is reference-only and should be untouched by the model. Transcript: {result.TranscriptPath}");
 
         // Unrelated methods must be byte-for-byte untouched — this is the actual bug signature
         // (whole-file reformat silently reindents code the model never meant to touch).
