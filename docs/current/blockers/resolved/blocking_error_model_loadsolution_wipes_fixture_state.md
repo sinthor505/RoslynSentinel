@@ -1,6 +1,12 @@
 # Blocking error: `LoadSolution` reports success on a nonexistent/bogus solution path
 
-## Status: blocking — root cause confirmed via LM Studio server logs; paused pending user go-ahead
+## Status: RESOLVED — fixed in commit 2c4bc35 (2026-08-29)
+
+`LoadSolutionAsync` now throws `ToolNotFoundException` when the open failed and zero projects
+loaded, which the `LoadSolution` tool wrapper's existing catch block converts into a correct
+`Success=false` `ToolResult`. See commit 2c4bc35 for the exact change; suggested next steps below
+are now historical context, not open items — item 4 (re-run ministral-3-3b) remains worth doing
+opportunistically but is not blocking.
 
 ## Revision note
 
