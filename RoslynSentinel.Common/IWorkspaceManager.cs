@@ -12,7 +12,7 @@ namespace RoslynSentinel.Common;
 /// <see cref="PersistentWorkspaceManager"/>.
 /// </summary>
 public interface IWorkspaceManager :
-    ISolutionProvider, ICircuitBreaker, IWorkspaceHealthReporter,
+    ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IWorkspaceHealthReporter,
     IWorkspaceMutator, IRateLimiter, ISymbolResolver
 {
     /// <summary>Unique identifier for this workspace manager instance's session.</summary>

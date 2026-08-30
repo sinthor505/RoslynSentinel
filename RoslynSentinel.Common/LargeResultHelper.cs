@@ -77,7 +77,8 @@ public enum ResultWrapperType
     ProjectFileList,
     ProjectInfoList,
     SolutionItemFileList,
-    SolutionSymbolEntryList
+    SolutionSymbolEntryList,
+    SolutionItemsAllResult
 }
 
 /// <summary>Offloaded payload shape for a whole-file ReadFile result too large to inline (mirrors the anonymous shape ReadFile returns inline for the non-offloaded case).</summary>

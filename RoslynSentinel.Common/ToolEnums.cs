@@ -27,7 +27,9 @@ public enum FeaturesAction
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum SolutionItemsKind
 {
-    projects, files, dependencies, solutionItems
+    projects, files, dependencies, solutionItems,
+    /// <summary>Aggregates projects, solutionItems, and every project's files and dependencies in one call. Ignores projectName.</summary>
+    all
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

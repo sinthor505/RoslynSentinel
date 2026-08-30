@@ -24,7 +24,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, ICircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
+public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
@@ -131,6 +131,15 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private int _totalAttempts;
     private int _totalFailures;
     private int _weightedRollbackScore;
+
+    // ── Orientation breaker state ─────────────────────────────────────────────
+    // Independent from the mutating-tools breaker above: trips after repeated zero-match
+    // SearchSolutionText calls, auto-resets on the next successful allowlisted call. See
+    // IAutomaticCircuitBreaker.
+    private const int OrientationBreakerTripThreshold = 3;
+    private readonly Lock _orientationBreakerLock = new();
+    private bool _orientationBreakerOpen;
+    private int _consecutiveZeroMatchSearches;
 
     public PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger)
     {
@@ -1676,7 +1685,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// Clears all circuit breaker state and re-enables mutating tools.
     /// Manual only — never auto-reset by design.
     /// </summary>
-    public void ResetBreaker()
+    void IManualCircuitBreaker.Reset()
     {
         lock (_breakerLock)
         {
@@ -1688,6 +1697,38 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
 
         _logger.LogInformation("Circuit breaker manually reset.");
+    }
+
+    // This class implements two distinct breakers (IManualCircuitBreaker, IAutomaticCircuitBreaker)
+    // that both redeclare ICircuitBreaker's members with their own meaning — there is no single
+    // correct answer for "IsTripped()" on the bare ICircuitBreaker view, so it isn't meant to be
+    // called through that type. Cast to IManualCircuitBreaker or IAutomaticCircuitBreaker instead.
+    bool ICircuitBreaker.IsTripped() => throw new NotSupportedException($"Ambiguous: cast to {nameof(IManualCircuitBreaker)} or {nameof(IAutomaticCircuitBreaker)} instead of calling through the base {nameof(ICircuitBreaker)}.");
+    string? ICircuitBreaker.StateMessage() => throw new NotSupportedException($"Ambiguous: cast to {nameof(IManualCircuitBreaker)} or {nameof(IAutomaticCircuitBreaker)} instead of calling through the base {nameof(ICircuitBreaker)}.");
+    void ICircuitBreaker.Reset() => throw new NotSupportedException($"Ambiguous: cast to {nameof(IManualCircuitBreaker)} or {nameof(IAutomaticCircuitBreaker)} instead of calling through the base {nameof(ICircuitBreaker)}.");
+
+    /// <summary>True when the mutating-tools breaker is currently open.</summary>
+    bool IManualCircuitBreaker.IsTripped()
+    {
+        lock (_breakerLock)
+        {
+            return _breakerOpen;
+        }
+    }
+
+    /// <summary>Same directive text as CheckBreaker()/GetBreakerStatus(); null when not tripped.</summary>
+    string? IManualCircuitBreaker.StateMessage()
+    {
+        lock (_breakerLock)
+        {
+            if (!_breakerOpen)
+            {
+                return null;
+            }
+
+            double failureRatePct = _totalAttempts > 0 ? (double)_totalFailures / _totalAttempts * 100 : 0;
+            return ComputeDirectiveUnlocked("halt", failureRatePct);
+        }
     }
 
     /// <summary>Returns the current severity tier for inclusion in BatchResultSummary.</summary>
@@ -1732,6 +1773,66 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 RateTripThresholdPct: BreakerRateThreshold * 100,
                 RateMinAttempts: BreakerRateMinAttempts
             );
+        }
+    }
+
+    // ── Orientation breaker public API ────────────────────────────────────────
+
+    /// <summary>Records a SearchSolutionText outcome; trips after OrientationBreakerTripThreshold consecutive zero-match calls.</summary>
+    public void RecordSearchOutcome(int matchCount)
+    {
+        lock (_orientationBreakerLock)
+        {
+            if (matchCount > 0)
+            {
+                _consecutiveZeroMatchSearches = 0;
+                return;
+            }
+
+            _consecutiveZeroMatchSearches++;
+            if (_consecutiveZeroMatchSearches >= OrientationBreakerTripThreshold && !_orientationBreakerOpen)
+            {
+                _orientationBreakerOpen = true;
+                _logger.LogWarning(
+                    "Orientation breaker TRIPPED after {Count} consecutive zero-match SearchSolutionText calls.",
+                    _consecutiveZeroMatchSearches);
+            }
+        }
+    }
+
+    /// <summary>True when the orientation breaker is currently restricting tool calls to the orienting allowlist.</summary>
+    bool IAutomaticCircuitBreaker.IsTripped()
+    {
+        lock (_orientationBreakerLock)
+        {
+            return _orientationBreakerOpen;
+        }
+    }
+
+    /// <summary>Directive describing the orientation breaker's tripped state; null when not tripped.</summary>
+    string? IAutomaticCircuitBreaker.StateMessage()
+    {
+        lock (_orientationBreakerLock)
+        {
+            if (!_orientationBreakerOpen)
+            {
+                return null;
+            }
+
+            return $"Orientation breaker tripped: {_consecutiveZeroMatchSearches} consecutive SearchSolutionText " +
+                   "calls returned no matches. Only ListAll, ListSolutionItems, GetFileOutline, and ReadFile are " +
+                   "available until one of them succeeds. Call ListAll(kind: all) or ListSolutionItems(kind: all) " +
+                   "to find what you're looking for by browsing instead of guessing.";
+        }
+    }
+
+    /// <summary>Clears the orientation breaker and its zero-match streak. Called automatically by the request filter — no manual reset tool.</summary>
+    void IAutomaticCircuitBreaker.Reset()
+    {
+        lock (_orientationBreakerLock)
+        {
+            _orientationBreakerOpen = false;
+            _consecutiveZeroMatchSearches = 0;
         }
     }
 

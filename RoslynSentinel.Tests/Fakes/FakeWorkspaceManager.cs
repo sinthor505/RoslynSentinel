@@ -12,7 +12,7 @@ namespace RoslynSentinel.Tests.Fakes;
 // NotImplementedException - extend as a test actually needs a member. If a test needs a real
 // on-disk solution instead (actual file I/O, MSBuild load, watcher behavior), use
 // RoslynSentinel.Tests.TestSolutionFixture (backed by PersistentWorkspaceManager) instead of this class.
-public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider, ICircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
+public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
 {
     public Solution? CurrentSolution { get; private set; }
 
@@ -70,7 +70,16 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public void RecordBatchOutcome(int succeeded, int failed, int rolledBack, int skipped) => throw new NotImplementedException();
     public Task RemoveDocumentByPathAsync(FilePath filePath, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public void ResetBreaker() => throw new NotImplementedException();
+    bool ICircuitBreaker.IsTripped() => throw new NotImplementedException();
+    string? ICircuitBreaker.StateMessage() => throw new NotImplementedException();
+    void ICircuitBreaker.Reset() => throw new NotImplementedException();
+    void IManualCircuitBreaker.Reset() => throw new NotImplementedException();
+    bool IManualCircuitBreaker.IsTripped() => throw new NotImplementedException();
+    string? IManualCircuitBreaker.StateMessage() => throw new NotImplementedException();
+    void IAutomaticCircuitBreaker.RecordSearchOutcome(int matchCount) => throw new NotImplementedException();
+    bool IAutomaticCircuitBreaker.IsTripped() => throw new NotImplementedException();
+    string? IAutomaticCircuitBreaker.StateMessage() => throw new NotImplementedException();
+    void IAutomaticCircuitBreaker.Reset() => throw new NotImplementedException();
     public Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<SymbolResolution> ResolveFromWireAsync(string sessionId, string projectName, string docCommentId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();

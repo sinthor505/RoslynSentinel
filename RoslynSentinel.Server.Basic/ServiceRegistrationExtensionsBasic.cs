@@ -312,6 +312,89 @@ public static class RoslynSentinelServiceExtensionsBasic
 
                     return result;
                 }));
+
+            // Orientation breaker: after OrientationBreakerTripThreshold consecutive zero-match
+            // SearchSolutionText calls (see PersistentWorkspaceManager.RecordSearchOutcome), restrict
+            // tool calls to a small orienting allowlist until one of them succeeds. Exists because
+            // agents repeatedly retry SearchSolutionText with reworded guesses instead of switching to
+            // ListAll/GetFileOutline, even though both the system prompt and SearchSolutionText's own
+            // zero-match response already say to do so — see docs/current/plan-orientation-breaker.md.
+            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+                ModelContextProtocol.Protocol.CallToolRequestParams,
+                ModelContextProtocol.Protocol.CallToolResult>(
+                async (context, cancellationToken) =>
+                {
+                    IAutomaticCircuitBreaker? automaticBreaker = null;
+                    var toolName = context.Params?.Name;
+
+                    try
+                    {
+                        automaticBreaker = context.Server.Services?.GetService<PersistentWorkspaceManager>();
+
+                        if (automaticBreaker is not null && automaticBreaker.IsTripped() &&
+                            toolName is not ("ListAll" or "ListSolutionItems" or "GetFileOutline" or "ReadFile"))
+                        {
+                            return new ModelContextProtocol.Protocol.CallToolResult
+                            {
+                                Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage() ?? "Orientation breaker tripped." }],
+                                IsError = true,
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Orientation breaker pre-check failed: {ex}");
+                    }
+
+                    var result = await next(context, cancellationToken);
+
+                    try
+                    {
+                        if (automaticBreaker is not null)
+                        {
+                            if (toolName == "SearchSolutionText")
+                            {
+                                int totalRecords = 0;
+                                if (result.Content is not null)
+                                {
+                                    foreach (var block in result.Content)
+                                    {
+                                        if (block is ModelContextProtocol.Protocol.TextContentBlock textBlock &&
+                                            !string.IsNullOrEmpty(textBlock.Text))
+                                        {
+                                            try
+                                            {
+                                                using var doc = System.Text.Json.JsonDocument.Parse(textBlock.Text);
+                                                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                                                    doc.RootElement.TryGetProperty("totalRecords", out var totalRecordsProp) &&
+                                                    totalRecordsProp.ValueKind == System.Text.Json.JsonValueKind.Number)
+                                                {
+                                                    totalRecords = totalRecordsProp.GetInt32();
+                                                }
+                                            }
+                                            catch (System.Text.Json.JsonException)
+                                            {
+                                                // Response text isn't JSON — leave totalRecords at 0 (treated as a zero-match outcome).
+                                            }
+                                        }
+                                    }
+                                }
+
+                                automaticBreaker.RecordSearchOutcome(totalRecords);
+                            }
+                            else if (automaticBreaker.IsTripped() && result.IsError != true)
+                            {
+                                automaticBreaker.Reset();
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Orientation breaker post-check failed: {ex}");
+                    }
+
+                    return result;
+                }));
         });
 
         return mcpBuilder;

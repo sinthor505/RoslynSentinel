@@ -35,6 +35,10 @@ public record TextSearchMatch(FilePath filePath, int Line, int Column, string Pr
 public record SolutionItemFile(FilePath FilePath, string SolutionFolder);
 /// <summary>A project entry returned by ListSolutionItems(kind: projects).</summary>
 public record ProjectInfoEntry(string Name, string? FilePath);
+/// <summary>One project's aggregated files and dependencies, as returned within ListSolutionItems(kind: all).</summary>
+public record ProjectFilesAndDependencies(string ProjectName, List<string> Files, ProjectDependencyReport Dependencies);
+/// <summary>Combined payload for ListSolutionItems(kind: all): everything the other kinds return in one call, deduplicated by file where applicable.</summary>
+public record SolutionItemsAllResult(List<ProjectInfoEntry> Projects, List<SolutionItemFile> SolutionItems, List<ProjectFilesAndDependencies> ProjectDetails);
 [McpServerToolType]
 public class SentinelWorkspaceTools
 {
@@ -120,7 +124,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
-    [Description("Lists projects, files, dependencies, or solution-folder items. files and dependencies require projectName. solutionItems (no projectName needed) returns files attached via the .sln's Solution Folders — e.g. plan/handoff docs referenced there for discoverability in an IDE. These are never part of any project's compiled Documents, so SearchSolutionText and kind=files will never find them; read their content with ProjectDoc.")]
+    [Description("Lists projects, files, dependencies, or solution-folder items. files and dependencies require projectName. solutionItems (no projectName needed) returns files attached via the .sln's Solution Folders — e.g. plan/handoff docs referenced there for discoverability in an IDE. These are never part of any project's compiled Documents, so SearchSolutionText and kind=files will never find them; read their content with ProjectDoc. all (no projectName needed/used) returns everything in one call: every project, every solution-folder item, and every project's files and dependencies — use this when you want a complete, guaranteed-non-empty view of the solution instead of guessing which project or kind to ask for.")]
     public async Task<ToolResult<object>> ListSolutionItems([ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind, [Consumes(DataTag.ProjectName)] string? projectName = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
@@ -223,6 +227,56 @@ public class SentinelWorkspaceTools
                     Success = true,
                     Data = result
                 };
+            }
+
+            if (kind == SolutionItemsKind.all)
+            {
+                var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+                var solutionRoot = _workspaceManager.GetSolutionRoot();
+
+                var projectInfos = solution.Projects.Select(p => new ProjectInfoEntry(p.Name, p.FilePath)).ToList();
+
+                var solutionItems = new List<SolutionItemFile>();
+                if (solutionRoot is not null)
+                {
+                    solutionItems = _workspaceManager.GetSolutionFolderItems()
+                        .Select(i => new SolutionItemFile(new FilePath(Path.GetFullPath(Path.Combine(solutionRoot, i.RelativePath)), solutionRoot), i.SolutionFolder))
+                        .ToList();
+                }
+
+                var sep = Path.DirectorySeparatorChar;
+                var projectDetails = new List<ProjectFilesAndDependencies>();
+                // Files are deduped by path within each project's own list (a document can be
+                // linked into a project more than once); dependencies are inherently per-project,
+                // so they're kept as one report per project rather than merged.
+                foreach (var project in solution.Projects)
+                {
+                    var filesByPath = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var document in project.Documents)
+                    {
+                        var path = document.FilePath ?? document.Name;
+                        if (path.Contains($"{sep}obj{sep}", StringComparison.OrdinalIgnoreCase) ||
+                            path.Contains($"{sep}bin{sep}", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        filesByPath[path] = path;
+                    }
+
+                    var dependencies = await _dependencyEngine.GetProjectDependenciesAsync(project.Name, cancellationToken);
+                    projectDetails.Add(new ProjectFilesAndDependencies(project.Name, filesByPath.Values.ToList(), dependencies));
+                }
+
+                var combined = new SolutionItemsAllResult(projectInfos, solutionItems, projectDetails);
+                var totalRecords = projectInfos.Count + solutionItems.Count + projectDetails.Sum(p => p.Files.Count);
+                return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                    combined,
+                    solutionRoot,
+                    typeof(SolutionItemsAllResult).Name,
+                    ResultWrapperType.SolutionItemsAllResult,
+                    totalRecords: totalRecords,
+                    cancellationToken: cancellationToken);
             }
 
             return new ToolResult<object>()
@@ -2263,7 +2317,7 @@ public class SentinelWorkspaceTools
         //CancellationToken ct2 = default
         )
     {
-        _workspaceManager.ResetBreaker();
+        ((IManualCircuitBreaker)_workspaceManager).Reset();
         return new ToolResult<object>()
         {
             Success = true,
@@ -2618,6 +2672,18 @@ public class SentinelWorkspaceTools
                         };
                         break;
                     }
+                case ResultWrapperType.SolutionItemsAllResult:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // ListSolutionItems(kind: all) returns inline when small enough not to offload.
+                        var solutionItemsAll = JsonSerializer.Deserialize<SolutionItemsAllResult>(all.Data.ToString(), _jsonOptions);
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = solutionItemsAll
+                        };
+                        break;
+                    }
                 default:
                     {
                         return new ToolResult<object>
@@ -2636,7 +2702,7 @@ public class SentinelWorkspaceTools
             // returning null, since it's the wrong node kind rather than a missing one).
             int totalRecords;
             bool hasMorePages;
-            if (all.Type is ResultWrapperType.MethodSource or ResultWrapperType.FileSource or ResultWrapperType.MigrationScanSummary or ResultWrapperType.MemberChangedContent)
+            if (all.Type is ResultWrapperType.MethodSource or ResultWrapperType.FileSource or ResultWrapperType.MigrationScanSummary or ResultWrapperType.MemberChangedContent or ResultWrapperType.SolutionItemsAllResult)
             {
                 totalRecords = 1;
                 hasMorePages = false;
