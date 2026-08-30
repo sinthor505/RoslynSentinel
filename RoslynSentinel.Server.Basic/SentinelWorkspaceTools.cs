@@ -15,6 +15,8 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Basic;
 /// <summary>Structural outline entry returned by get_file_outline.</summary>
 public record OutlineItem(string Kind, string Name, string? Container, int StartLine, int EndLine);
+/// <summary>Single solution-wide symbol entry returned by ListAll — an OutlineItem plus the file it was found in.</summary>
+public record SolutionSymbolEntry(FilePath FilePath, string Kind, string Name, string? Container, int StartLine, int EndLine);
 /// <summary>Return payload for <c>GetFileOutline</c>.</summary>
 public record FileOutlineResult
 {
@@ -1410,85 +1412,7 @@ public class SentinelWorkspaceTools
                 };
             }
 
-            var items = new List<OutlineItem>();
-            foreach (var node in root.DescendantNodes())
-            {
-                string? kind = null;
-                string? name = null;
-                string? container = null;
-                switch (node)
-                {
-                    case BaseNamespaceDeclarationSyntax ns:
-                        kind = "namespace";
-                        name = ns.Name.ToString();
-                        break;
-                    case ClassDeclarationSyntax cls:
-                        kind = "class";
-                        name = cls.Identifier.Text;
-                        container = (cls.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (cls.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                        break;
-                    case InterfaceDeclarationSyntax iface:
-                        kind = "interface";
-                        name = iface.Identifier.Text;
-                        container = (iface.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (iface.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                        break;
-                    case MethodDeclarationSyntax method:
-                        kind = "method";
-                        name = method.Identifier.Text;
-                        container = (method.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                        break;
-                    case PropertyDeclarationSyntax prop:
-                        kind = "property";
-                        name = prop.Identifier.Text;
-                        container = (prop.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                        break;
-                    // Struct/record/enum, and enum members, constructors, and fields were never
-                    // covered here — a file containing only these (e.g. a pure enum file) produced
-                    // an outline with nothing but a "namespace" entry, silently implying the file had
-                    // no commentable/editable members at all. Confirmed live: an agent asked to add
-                    // summary comments to every member skipped OrderStatus.cs's enum entirely because
-                    // GetFileOutline gave no indication OrderStatus existed, then SummaryComment also
-                    // failed once the agent tried it anyway (separate gap, see GetMemberName).
-                    case StructDeclarationSyntax @struct:
-                        kind = "struct";
-                        name = @struct.Identifier.Text;
-                        container = (@struct.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (@struct.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                        break;
-                    case RecordDeclarationSyntax record:
-                        kind = "record";
-                        name = record.Identifier.Text;
-                        container = (record.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (record.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                        break;
-                    case EnumDeclarationSyntax @enum:
-                        kind = "enum";
-                        name = @enum.Identifier.Text;
-                        container = (@enum.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (@enum.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                        break;
-                    case EnumMemberDeclarationSyntax enumMember:
-                        kind = "enum member";
-                        name = enumMember.Identifier.Text;
-                        container = (enumMember.Parent as EnumDeclarationSyntax)?.Identifier.Text;
-                        break;
-                    case ConstructorDeclarationSyntax ctor:
-                        kind = "constructor";
-                        name = ctor.Identifier.Text;
-                        container = (ctor.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                        break;
-                    case FieldDeclarationSyntax field:
-                        kind = "field";
-                        name = field.Declaration.Variables.FirstOrDefault()?.Identifier.Text;
-                        container = (field.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                        break;
-                }
-
-                if (kind == null || name == null)
-                {
-                    continue;
-                }
-
-                var span = node.GetLocation().GetLineSpan();
-                items.Add(new OutlineItem(Kind: kind, Name: name, Container: container, StartLine: span.StartLinePosition.Line + 1, EndLine: span.EndLinePosition.Line + 1));
-            }
+            var items = ExtractOutlineItems(root);
 
             var fileText = await document.GetTextAsync(cancellationToken);
             var fileLineCount = fileText.Lines.Count;
@@ -1509,6 +1433,164 @@ public class SentinelWorkspaceTools
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetFileOutline")
+            };
+        }
+    }
+
+    /// <summary>Walks a document's syntax tree and extracts the same outline entries GetFileOutline returns for one file — shared with ListAll, which runs this across every document in the solution.</summary>
+    private static List<OutlineItem> ExtractOutlineItems(SyntaxNode root)
+    {
+        var items = new List<OutlineItem>();
+        foreach (var node in root.DescendantNodes())
+        {
+            string? kind = null;
+            string? name = null;
+            string? container = null;
+            switch (node)
+            {
+                case BaseNamespaceDeclarationSyntax ns:
+                    kind = "namespace";
+                    name = ns.Name.ToString();
+                    break;
+                case ClassDeclarationSyntax cls:
+                    kind = "class";
+                    name = cls.Identifier.Text;
+                    container = (cls.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (cls.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case InterfaceDeclarationSyntax iface:
+                    kind = "interface";
+                    name = iface.Identifier.Text;
+                    container = (iface.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (iface.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case MethodDeclarationSyntax method:
+                    kind = "method";
+                    name = method.Identifier.Text;
+                    container = (method.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case PropertyDeclarationSyntax prop:
+                    kind = "property";
+                    name = prop.Identifier.Text;
+                    container = (prop.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                // Struct/record/enum, and enum members, constructors, and fields were never
+                // covered here — a file containing only these (e.g. a pure enum file) produced
+                // an outline with nothing but a "namespace" entry, silently implying the file had
+                // no commentable/editable members at all. Confirmed live: an agent asked to add
+                // summary comments to every member skipped OrderStatus.cs's enum entirely because
+                // GetFileOutline gave no indication OrderStatus existed, then SummaryComment also
+                // failed once the agent tried it anyway (separate gap, see GetMemberName).
+                case StructDeclarationSyntax @struct:
+                    kind = "struct";
+                    name = @struct.Identifier.Text;
+                    container = (@struct.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (@struct.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case RecordDeclarationSyntax record:
+                    kind = "record";
+                    name = record.Identifier.Text;
+                    container = (record.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (record.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case EnumDeclarationSyntax @enum:
+                    kind = "enum";
+                    name = @enum.Identifier.Text;
+                    container = (@enum.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (@enum.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case EnumMemberDeclarationSyntax enumMember:
+                    kind = "enum member";
+                    name = enumMember.Identifier.Text;
+                    container = (enumMember.Parent as EnumDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case ConstructorDeclarationSyntax ctor:
+                    kind = "constructor";
+                    name = ctor.Identifier.Text;
+                    container = (ctor.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case FieldDeclarationSyntax field:
+                    kind = "field";
+                    name = field.Declaration.Variables.FirstOrDefault()?.Identifier.Text;
+                    container = (field.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+            }
+
+            if (kind == null || name == null)
+            {
+                continue;
+            }
+
+            var span = node.GetLocation().GetLineSpan();
+            items.Add(new OutlineItem(Kind: kind, Name: name, Container: container, StartLine: span.StartLinePosition.Line + 1, EndLine: span.EndLinePosition.Line + 1));
+        }
+
+        return items;
+    }
+
+    [McpServerTool(Name = "ListAll")]
+    [Produces(DataTag.Report)]
+    [Description("Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared anywhere in the loaded solution, one row per symbol with its file, kind, name, container, and line range — the solution-wide equivalent of GetFileOutline. Call this FIRST when you don't already know the exact name of the type/method/field you need — it is cheaper and more reliable than guessing plausible-sounding names and searching for each one individually with SearchSolutionText. kind filters to one symbol kind (default: all — every kind). Optional projectName restricts to one project. Can return a lot of rows on a large solution; narrow with kind and/or projectName first.")]
+    public async Task<ToolResult<object>> ListAll(
+        [Description(ToolParams.ListAllKindValues)][ExternalInputRequired(DataTag.SymbolKind, required: false)] ListAllKind kind = ListAllKind.all,
+        [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var projects = solution.Projects.AsEnumerable();
+            if (!string.IsNullOrEmpty(projectName))
+            {
+                projects = projects.Where(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            var kindFilter = kind switch
+            {
+                ListAllKind.all => null,
+                ListAllKind.enumMember => "enum member",
+                _ => kind.ToString()
+            };
+            var entries = new List<SolutionSymbolEntry>();
+            foreach (var project in projects)
+            {
+                foreach (var document in project.Documents)
+                {
+                    if (string.IsNullOrEmpty(document.FilePath))
+                    {
+                        continue;
+                    }
+
+                    var root = await document.GetSyntaxRootAsync(cancellationToken);
+                    if (root == null)
+                    {
+                        continue;
+                    }
+
+                    var filePath = new FilePath(document.FilePath, solutionRoot);
+                    foreach (var item in ExtractOutlineItems(root))
+                    {
+                        if (kindFilter != null && item.Kind != kindFilter)
+                        {
+                            continue;
+                        }
+
+                        entries.Add(new SolutionSymbolEntry(filePath, item.Kind, item.Name, item.Container, item.StartLine, item.EndLine));
+                    }
+                }
+            }
+
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                entries,
+                solutionRoot,
+                typeof(SolutionSymbolEntry).Name,
+                ResultWrapperType.SolutionSymbolEntryList,
+                totalRecords: entries.Count,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ListAll failed (kind={Kind}, projectName={ProjectName})", kind, projectName);
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ListAll")
             };
         }
     }

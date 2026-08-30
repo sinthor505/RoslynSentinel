@@ -608,11 +608,11 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ChangeAccessibility")]
     [Produces(DataTag.ChangeId)]
-    [Description("Changes the accessibility modifier (private, public, internal, protected, protected internal, private protected) of a type or member. For overloaded members, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. This tool covers accessibility only — use ChangeAccessibility for modifiers, ModifyAttribute for [Attribute] syntax, and ModifyModifier for non-accessibility keywords. Returns changeId.")]
+    [Description("Changes the accessibility (private, public, internal, protected, protected internal, private protected) of a type or member to the given target level in one step — replaces whatever accessibility is currently present, so there's no separate remove/add pairing to get wrong. For overloaded members, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. This tool covers accessibility only — use ChangeAccessibility for accessibility, ModifyAttribute for [Attribute] syntax, and ModifyModifier for non-accessibility keywords (virtual/abstract/static/etc.). Returns changeId.")]
     public async Task<ToolResult<object>> ChangeAccessibility(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility, required: true)] string accessibility,
+        [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility, required: true)] AccessibilityLevel accessibility,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
@@ -634,14 +634,20 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "ChangeAccessibility", filePath) is { } guardResult)
                 return guardResult;
 
+            var accessibilityKeyword = accessibility switch
+            {
+                AccessibilityLevel.protectedInternal => "protected internal",
+                AccessibilityLevel.privateProtected => "private protected",
+                _ => accessibility.ToString()
+            };
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
+            var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibilityKeyword}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
             // No ChangedContent here: the only "new" text is the accessibility keyword itself,
             // which the caller already passed in verbatim — echoing it back adds nothing the
             // caller doesn't already have, unlike a reconstructed multi-part snippet.
-            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Changes accessibility of '{targetName}' to '{accessibilityKeyword}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
         }
         catch (Exception ex)
         {

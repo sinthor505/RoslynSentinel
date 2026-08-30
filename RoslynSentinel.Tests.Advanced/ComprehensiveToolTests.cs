@@ -267,4 +267,55 @@ public class ComprehensiveToolTests
     {
         _workspaceManager.SetTestSolution(CreateSolution(source, fileName));
     }
+
+    [Test]
+    public async Task ListAll_MultiFileSolution_ListsSymbolsFromEveryFile()
+    {
+        _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProject",
+        [
+            ("Order.cs", "namespace N;\npublic class Order { public int Id { get; set; } public void Ship() {} }"),
+            ("Status.cs", "namespace N;\npublic enum Status { Pending, Shipped }")
+        ]));
+
+        var result = await _workspaceTools.ListAll();
+
+        Assert.That(result.Success, Is.True);
+        var entries = (List<SolutionSymbolEntry>)result.Data!;
+        Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("class", "Order")));
+        Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("method", "Ship")));
+        Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("enum", "Status")));
+        Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("enum member", "Pending")));
+        Assert.That(entries.Select(e => e.FilePath.ToString()), Has.Some.Contains("Order.cs"));
+        Assert.That(entries.Select(e => e.FilePath.ToString()), Has.Some.Contains("Status.cs"));
+    }
+
+    [Test]
+    public async Task ListAll_KindFilter_ReturnsOnlyThatKind()
+    {
+        _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProject",
+        [
+            ("Order.cs", "namespace N;\npublic class Order { public int Id { get; set; } public void Ship() {} }"),
+            ("Status.cs", "namespace N;\npublic enum Status { Pending, Shipped }")
+        ]));
+
+        var result = await _workspaceTools.ListAll(kind: ListAllKind.method);
+
+        Assert.That(result.Success, Is.True);
+        var entries = (List<SolutionSymbolEntry>)result.Data!;
+        Assert.That(entries, Has.All.Matches<SolutionSymbolEntry>(e => e.Kind == "method"));
+        Assert.That(entries.Select(e => e.Name), Contains.Item("Ship"));
+    }
+
+    [Test]
+    public async Task ListAll_EnumMemberKindFilter_MatchesTwoWordKind()
+    {
+        SetSource("namespace N;\npublic enum Status { Pending, Shipped }", "Status.cs");
+
+        var result = await _workspaceTools.ListAll(kind: ListAllKind.enumMember);
+
+        Assert.That(result.Success, Is.True);
+        var entries = (List<SolutionSymbolEntry>)result.Data!;
+        Assert.That(entries, Has.Count.EqualTo(2));
+        Assert.That(entries.Select(e => e.Name), Is.EquivalentTo(new[] { "Pending", "Shipped" }));
+    }
 }

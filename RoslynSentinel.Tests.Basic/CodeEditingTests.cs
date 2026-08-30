@@ -549,7 +549,7 @@ public class Calc
 }
 ", "Calc.cs");
 
-        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "Add", "private");
+        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "Add", AccessibilityLevel.@private);
 
         Assert.That(result.UpdatedText, Does.Contain("private int Add"), "Method should now be private.");
         Assert.That(result.UpdatedText, Does.Not.Contain("public int Add"));
@@ -565,7 +565,7 @@ public class Calc
 }
 ", "Calc.cs");
 
-        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "_value", "public");
+        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "_value", AccessibilityLevel.@public);
 
         Assert.That(result.UpdatedText, Does.Contain("public int _value"));
     }
@@ -580,7 +580,7 @@ public class Base
 }
 ", "Base.cs");
 
-        var result = await _engine.ChangeAccessibilityAsync("Base.cs", "Hook", "internal");
+        var result = await _engine.ChangeAccessibilityAsync("Base.cs", "Hook", AccessibilityLevel.@internal);
 
         Assert.That(result.UpdatedText, Does.Contain("internal void Hook"), "Should be internal.");
         Assert.That(result.UpdatedText, Does.Not.Contain("protected internal void Hook"));
@@ -604,7 +604,7 @@ public class Base
         """;
         SetSource(source, "Calc.cs");
 
-        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "Add", "private");
+        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "Add", AccessibilityLevel.@private);
 
         Assert.That(result.UpdatedText, Does.Contain("private int Add"), "Method should now be private.");
         Assert.That(result.UpdatedText, Does.Contain("public int Subtract(int a, int b) => a - b;\r\n\r\n\r\n    public int Multiply")

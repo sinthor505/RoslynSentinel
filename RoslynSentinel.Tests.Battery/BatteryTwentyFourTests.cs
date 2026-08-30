@@ -376,7 +376,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ChangeAccessibility_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ChangeAccessibility("Order.cs", "OrderId", "internal");
+        var result = await _tools.ChangeAccessibility("Order.cs", "OrderId", AccessibilityLevel.@internal);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -386,12 +386,12 @@ public enum Status { Active = 1, Pending = 2 }
         SetSource(SimpleSource, "Order.cs");
         var versionBeforeAnyMutation = _workspaceManager.WorkspaceVersion;
 
-        var first = await _tools.ChangeAccessibility("Order.cs", "OrderId", "internal");
+        var first = await _tools.ChangeAccessibility("Order.cs", "OrderId", AccessibilityLevel.@internal);
         var firstSummary = (AppliedChangeSummary)first.Data!;
         Assert.That(firstSummary.WorkspaceVersion, Is.Not.Null);
         Assert.That(firstSummary.WorkspaceVersion, Is.GreaterThan(versionBeforeAnyMutation));
 
-        var second = await _tools.ChangeAccessibility("Order.cs", "CustomerName", "internal");
+        var second = await _tools.ChangeAccessibility("Order.cs", "CustomerName", AccessibilityLevel.@internal);
         var secondSummary = (AppliedChangeSummary)second.Data!;
         Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion!),
             "A second mutation must stamp a strictly higher version than the first.");
@@ -431,18 +431,9 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result.Error.Message, Does.Contain("ChangeAccessibility"));
     }
 
-    // --- ChangeAccessibility ---
-
-    [Test]
-    public async Task ChangeAccessibility_UnrecognizedValue_ReturnsError()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ChangeAccessibility("Order.cs", "GetLabel", "puplic");
-
-        Assert.That(result.Success, Is.False,
-            "An unrecognized accessibility string must be rejected, not silently treated as 'public' " +
-            "(a typo like 'puplic' should never widen a member's accessibility unintentionally).");
-    }
+    // accessibility is now AccessibilityLevel (an enum), so a typo like "puplic" can no longer
+    // reach this method at all — JSON schema/binding rejects it before ChangeAccessibility runs,
+    // which is what ChangeAccessibility_UnrecognizedValue_ReturnsError used to test at this layer.
 
     // --- SummaryComment ---
 

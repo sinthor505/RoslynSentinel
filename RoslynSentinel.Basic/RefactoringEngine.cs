@@ -2836,7 +2836,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePath filePath, string targetName, string accessibility, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePath filePath, string targetName, AccessibilityLevel accessibility, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2887,25 +2887,16 @@ public class RefactoringEngine
             };
         }
 
-        SyntaxKind[]? newKinds = accessibility.ToLowerInvariant() switch
+        SyntaxKind[] newKinds = accessibility switch
         {
-            "public" => [SyntaxKind.PublicKeyword],
-            "private" => [SyntaxKind.PrivateKeyword],
-            "internal" => [SyntaxKind.InternalKeyword],
-            "protected" => [SyntaxKind.ProtectedKeyword],
-            "protected internal" => [SyntaxKind.ProtectedKeyword, SyntaxKind.InternalKeyword],
-            "private protected" => [SyntaxKind.PrivateKeyword, SyntaxKind.ProtectedKeyword],
-            _ => null
+            AccessibilityLevel.@public => [SyntaxKind.PublicKeyword],
+            AccessibilityLevel.@private => [SyntaxKind.PrivateKeyword],
+            AccessibilityLevel.@internal => [SyntaxKind.InternalKeyword],
+            AccessibilityLevel.@protected => [SyntaxKind.ProtectedKeyword],
+            AccessibilityLevel.protectedInternal => [SyntaxKind.ProtectedKeyword, SyntaxKind.InternalKeyword],
+            AccessibilityLevel.privateProtected => [SyntaxKind.PrivateKeyword, SyntaxKind.ProtectedKeyword],
+            _ => throw new ArgumentOutOfRangeException(nameof(accessibility), accessibility, null)
         };
-        if (newKinds == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Cannot edit: unrecognized accessibility '{accessibility}'. Valid values: public, private, internal, protected, protected internal, private protected."
-            };
-        }
         var accessModifierKinds = new HashSet<SyntaxKind>
         {
             SyntaxKind.PublicKeyword,

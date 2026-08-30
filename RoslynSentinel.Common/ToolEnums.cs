@@ -88,12 +88,30 @@ public enum TypeInfoInclude
     hierarchy, members, both
 }
 
+// ── ListAll ───────────────────────────────────────────────────────────────────
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ListAllKind
+{
+    all, @namespace, @class, @interface, method, property, @struct, record, @enum,
+    [JsonStringEnumMemberName("enum member")] enumMember,
+    constructor, field,
+}
+
 // ── Refactoring ───────────────────────────────────────────────────────────────
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum AddRemoveAction
 {
     add, remove
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum AccessibilityLevel
+{
+    @public, @private, @internal, @protected,
+    [JsonStringEnumMemberName("protected internal")] protectedInternal,
+    [JsonStringEnumMemberName("private protected")] privateProtected,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
