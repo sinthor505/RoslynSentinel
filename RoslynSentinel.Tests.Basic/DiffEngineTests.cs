@@ -1,3 +1,5 @@
+using System.Linq;
+
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -87,6 +89,136 @@ public class DiffEngineTests
 
         var expected = string.Join(Environment.NewLine, new[] { "line1", "added1", "line2", "line3", "line4", "added2", "line5" });
         Assert.That(newText, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void ApplyDiff_LastHunk_TrailingNewlineAfterFinalContextLine_DoesNotPhantomAnchor()
+    {
+        // Regression for a real model-eval failure (SizeThreshold n60 transcript,
+        // docs/current/blockers/blocking_error_searchmode_literal_override_and_iserror_flag.md):
+        // the diff text's own trailing newline after the final hunk's last body line was being
+        // read by ReadHunkBody as one more (empty) body line, which IsContextOrRemovalLine then
+        // treated as an implicit blank context line. ReanchorHunk then required a blank line
+        // immediately after "line5" that the real file doesn't have there — defeating an
+        // otherwise-exact reanchor match at every position in the search window, even though
+        // hunk 1 was purely additive and hunk 2's real content sat exactly where the shifted
+        // offset predicted.
+        var oldText = SourceText.From(
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\n" +
+            "target1\ntarget2\ntarget3\nafter1\n");
+        // Hunk 1 inserts 2 lines after line1 (purely additive). Hunk 2's declared old-start (11)
+        // is stale by exactly the 2-line shift hunk 1 introduces, so the exact match at the
+        // recomputed declared line should succeed — the phantom trailing "" must not be
+        // included as a 4th anchor line requiring a blank line after "target3" that isn't there.
+        var diff = "@@ -1,1 +1,3 @@\n line1\n+ins1\n+ins2\n" +
+                    "@@ -11,3 +13,3 @@\n target1\n target2\n-target3\n+target3-changed\n";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        Assert.That(newText, Does.Contain("target3-changed"));
+        Assert.That(newText, Does.Not.Contain("target3\nafter1"));
+    }
+
+    [Test]
+    public void ApplyDiff_LastHunk_GenuineBlankContextLineAtEnd_StillMatches()
+    {
+        // A hunk whose real last body line is an intentional blank context line (marked with a
+        // leading space, the normal encoding) must still anchor correctly — the fix for the
+        // phantom-trailing-newline case above must not eat a genuine blank context line.
+        var oldText = SourceText.From("line1\nline2\nline3\n\nline5\n");
+        var diff = "@@ -2,3 +2,4 @@\n line2\n+added\n line3\n \n";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        Assert.That(newText, Is.EqualTo("line1\nline2\nadded\nline3\n\nline5\n"));
+    }
+
+    [Test]
+    public void ApplyDiff_Size60ModelEvalTranscript_ReplaysRecordedFailingDiff()
+    {
+        // Full end-to-end reproduction of the exact transcript that surfaced the phantom-anchor
+        // bug: a 60-padding-method fixture plus the model's real two-hunk diff (hunk 1 inserts a
+        // private helper after the class's opening brace; hunk 2 rewires one call site 329 lines
+        // later). Recorded failure: "hunk '@@ -320,7 +329,7 @@' declares line 335, but its
+        // content wasn't found there or within 60 lines in either direction."
+        var sb = new System.Text.StringBuilder();
+        sb.Append("namespace ContosoOrders.Core.FixtureHelpers;\n\n");
+        sb.Append("public class BlockConverter\n{\n");
+        sb.Append("    private readonly object _unrelatedField = new();\n\n");
+        for (var i = 0; i < 60; i++)
+        {
+            sb.Append($"    public string UnrelatedMethod{i}(  int {(i % 2 == 0 ? " " : "")} value  )\n    {{\n            return $\"unrelated-{i}-{{value}}\";\n    }}\n\n");
+        }
+        sb.Append("""
+                /// <summary>
+                /// Converts a "public abstract class Name { ... }" block into a "public interface IName
+                /// { ... }" block by rewriting its header and stripping method bodies down to
+                /// semicolons. BUG: rebuilds the whole file's text via ReformatWholeFile(), which
+                /// re-indents every line in the file, not just the converted block.
+                /// </summary>
+                public string ConvertAbstractClassToInterface(string fileText, string className)
+                {
+                    var oldHeader = $"public abstract class {className}";
+                    if (!fileText.Contains(oldHeader, StringComparison.Ordinal))
+                    {
+                        return fileText;
+                    }
+
+                    var newHeader = $"public interface I{className}";
+                    var rewritten = fileText.Replace(oldHeader, newHeader, StringComparison.Ordinal);
+                    return ReformatWholeFile(rewritten);
+                }
+
+                private static string ReformatWholeFile(string fileText)
+                {
+                    var lines = fileText.Split('\n');
+                    var normalized = lines.Select(line => line.TrimEnd());
+                    return string.Join("\n", normalized);
+                }
+
+
+            """);
+        sb.Append("    public string UnrelatedMethodAfter(  string   s  )\n");
+        sb.Append("    {\n");
+        sb.Append("            return s?.Trim() ?? \"\";\n");
+        sb.Append("    }\n");
+        sb.Append("}\n");
+
+        var oldText = SourceText.From(sb.ToString());
+
+        var diff =
+            "@@ -3,6 +3,15 @@ namespace ContosoOrders.Core.FixtureHelpers;\n" +
+            "\n" +
+            " public class BlockConverter\n" +
+            " {\n" +
+            "+    private static string ReplaceBlockFormatted(string fileText, string oldBlock, string newBlock)\n" +
+            "+    {\n" +
+            "+        var index = fileText.IndexOf(oldBlock, StringComparison.Ordinal);\n" +
+            "+        if (index < 0)\n" +
+            "+        {\n" +
+            "+            throw new InvalidOperationException(\"oldBlock not found in fileText.\");\n" +
+            "+        }\n" +
+            "+\n" +
+            "+        var lineStart = fileText.LastIndexOf('\\n', Math.Max(0, index - 1)) + 1;\n" +
+            "+        var indent = fileText[lineStart..index];\n" +
+            "+\n" +
+            "+        var formattedNewBlock = string.Join(\"\\n\" + indent, newBlock.Split('\\n').Select(line => line.TrimEnd()));\n" +
+            "+\n" +
+            "+        return fileText[..index] + formattedNewBlock + fileText[(index + oldBlock.Length)..];\n" +
+            "+    }\n" +
+            "     private readonly object _unrelatedField = new();\n" +
+            "\n" +
+            "@@ -320,7 +329,7 @@ namespace ContosoOrders.Core.FixtureHelpers;\n" +
+            "         var newHeader = $\"public interface I{className}\";\n" +
+            "         var rewritten = fileText.Replace(oldHeader, newHeader, StringComparison.Ordinal);\n" +
+            "-        return ReformatWholeFile(rewritten);\n" +
+            "+        return ReplaceBlockFormatted(fileText, oldHeader, newHeader);\n";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        Assert.That(newText, Does.Contain("private static string ReplaceBlockFormatted"));
+        Assert.That(newText, Does.Contain("return ReplaceBlockFormatted(fileText, oldHeader, newHeader);"));
+        Assert.That(newText, Does.Not.Contain("return ReformatWholeFile(rewritten);"));
     }
 
     [Test]

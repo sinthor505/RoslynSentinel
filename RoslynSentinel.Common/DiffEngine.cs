@@ -3,12 +3,24 @@ using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Common;
 
 public class DiffEngine
 {
     private static readonly string[] separatorArray = new[] { "\r\n", "\r", "\n" };
+    private readonly ILogger<DiffEngine> _logger;
+
+    public DiffEngine() : this(NullLogger<DiffEngine>.Instance)
+    {
+    }
+
+    public DiffEngine(ILogger<DiffEngine> logger)
+    {
+        _logger = logger;
+    }
 
     /// <summary>
     /// How far (in lines, either direction) a hunk's declared line number may drift from its
@@ -29,7 +41,35 @@ public class DiffEngine
     /// can be found within the window, this throws rather than guessing and silently corrupting
     /// unrelated lines.
     /// </summary>
+    /// <remarks>
+    /// Every call is also run through <see cref="DiffHunkAnalyzer"/>, logged via the constructor's
+    /// <see cref="ILogger{TCategoryName}"/>: as a warning on success if the analyzer found
+    /// something worth flagging (e.g. a header whose declared counts don't match its actual body,
+    /// even though the apply itself tolerated it structurally), or always on a
+    /// <see cref="DiffApplyException"/> — so a failure comes with a ready-made per-hunk breakdown
+    /// instead of requiring the kind of manual line-by-line archaeology that root-caused the
+    /// original bug this analyzer exists to catch automatically (see docs/current/blockers).
+    /// </remarks>
     public SourceText ApplyDiff(SourceText sourceText, string unifiedDiff)
+    {
+        try
+        {
+            var result = ApplyDiffCore(sourceText, unifiedDiff);
+            var report = DiffHunkAnalyzer.Analyze(unifiedDiff);
+            if (report.HasFindings)
+            {
+                _logger.LogWarning("ApplyDiff succeeded but its diff has findings: {Report}", report.Describe());
+            }
+            return result;
+        }
+        catch (DiffApplyException ex)
+        {
+            _logger.LogWarning(ex, "ApplyDiff failed: {Report}", DiffHunkAnalyzer.Analyze(unifiedDiff).Describe());
+            throw;
+        }
+    }
+
+    private SourceText ApplyDiffCore(SourceText sourceText, string unifiedDiff)
     {
         var lines = sourceText.Lines.Select(l => l.ToString()).ToList();
 
@@ -75,7 +115,13 @@ public class DiffEngine
                 while (i < diffLines.Length && !hunkHeaderRegex.IsMatch(diffLines[i]))
                 {
                     var diffLine = diffLines[i];
-                    if (string.IsNullOrEmpty(diffLine) && i + 1 < diffLines.Length && hunkHeaderRegex.IsMatch(diffLines[i + 1]))
+                    // A blank line right before the next hunk header, or right at the end of the
+                    // diff text, isn't a real blank context line from the file — it's a split
+                    // artifact from the diff's own trailing newline (or the blank separator line
+                    // conventionally placed between hunks). See ReadHunkBody's comment.
+                    var isTrailingArtifact = i == diffLines.Length - 1
+                        || (i + 1 < diffLines.Length && hunkHeaderRegex.IsMatch(diffLines[i + 1]));
+                    if (string.IsNullOrEmpty(diffLine) && isTrailingArtifact)
                     {
                         break;
                     }
@@ -163,14 +209,29 @@ public class DiffEngine
         return SourceText.From(sb.ToString(), sourceText.Encoding);
     }
 
-    /// <summary>Collects a hunk's raw lines (context/+/-) up to the next hunk header or diff end.</summary>
+    /// <summary>
+    /// Collects a hunk's raw lines (context/+/-) up to the next hunk header or diff end. The
+    /// hunk header's own declared old/new counts are not used as the boundary — a model-generated
+    /// diff routinely gets them wrong even when its line content is otherwise fine (see
+    /// docs/current/blockers for a real transcript whose header claimed 7 old-side lines when the
+    /// body only had 3) — so this scans structurally instead: everything up to the next "@@" or
+    /// end of input belongs to this hunk.
+    /// </summary>
     private static List<string> ReadHunkBody(string[] diffLines, int start)
     {
         var body = new List<string>();
         var hunkHeaderRegex = new Regex(@"^@@\s+\-(\d+),?(\d*)\s+\+(\d+),?(\d*)\s+@@");
         for (int i = start; i < diffLines.Length && !hunkHeaderRegex.IsMatch(diffLines[i]); i++)
         {
-            if (string.IsNullOrEmpty(diffLines[i]) && i + 1 < diffLines.Length && hunkHeaderRegex.IsMatch(diffLines[i + 1]))
+            // A blank line right before the next hunk header, or right at the end of the diff
+            // text, isn't a real blank context line from the file — it's a split artifact from
+            // the diff's own trailing newline (or the blank separator line conventionally placed
+            // between hunks). Including it in the body would make ReanchorHunk require a blank
+            // line the file doesn't actually have there, defeating an otherwise-correct match at
+            // every position in the search window.
+            var isTrailingArtifact = i == diffLines.Length - 1
+                || (i + 1 < diffLines.Length && hunkHeaderRegex.IsMatch(diffLines[i + 1]));
+            if (string.IsNullOrEmpty(diffLines[i]) && isTrailingArtifact)
             {
                 break;
             }

@@ -22,3 +22,6 @@ ClaudeFiles/
 *.json
 
 *.trx
+
+_scratchbuild/
+lmstudio_logs/
