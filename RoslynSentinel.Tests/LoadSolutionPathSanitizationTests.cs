@@ -104,16 +104,21 @@ public class LoadSolutionPathSanitizationTests
     {
         // An absolute path wrapped in quotes/whitespace must still resolve to the real file
         // (i.e. the quotes must be stripped, not treated as part of the filename), so loading
-        // proceeds to MSBuild instead of failing fast with ToolNotFoundException.
+        // proceeds to MSBuild instead of failing fast with ToolNotFoundException from
+        // ResolveSolutionPath. The temp file has no real projects, so MSBuild itself finds
+        // nothing to load — that failure is distinguishable by its message (which names the
+        // resolved, unquoted path) from a path-resolution failure (which says "Tried: ...").
         var tempFile = Path.Combine(Path.GetTempPath(), $"RoslynSentinelTests_{Guid.NewGuid()}.sln");
         await File.WriteAllTextAsync(tempFile, "Microsoft Visual Studio Solution File, Format Version 12.00");
         try
         {
             var wrappedPath = $"  '{tempFile}'  ";
 
-            // Must not throw ToolNotFoundException from ResolveSolutionPath; any failure past
-            // that point (e.g. MSBuild parse errors) is swallowed internally by LoadSolutionAsync.
-            await Assert.DoesNotThrowAsync(async () => await _workspaceManager.LoadSolutionAsync(wrappedPath));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
+                async () => await _workspaceManager.LoadSolutionAsync(wrappedPath));
+
+            Assert.That(ex!.Message, Does.Contain(tempFile).And.Not.Contain("Tried: "),
+                "Failure must come from MSBuild finding no projects in the resolved path, not from path resolution itself.");
         }
         finally
         {

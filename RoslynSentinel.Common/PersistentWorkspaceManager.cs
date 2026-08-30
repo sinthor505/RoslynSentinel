@@ -346,6 +346,19 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             var solutionDirectory = Path.GetDirectoryName(solutionPath)!;
             SetupWatcher(solutionDirectory);
             SetupOutOfTreeWatchers(solutionDirectory);
+
+            // OpenSolutionAsync throwing (e.g. solutionPath doesn't exist on disk) previously left
+            // _workspaceLoadErrors populated but returned normally, so a bad path silently reported
+            // success with an empty CurrentSolution. Surface it as a real failure instead — the
+            // LoadSolution tool wrapper's catch block already turns a thrown ToolException into a
+            // correct Success=false ToolResult.
+            if (CurrentSolution == null || CurrentSolution.ProjectIds.Count == 0)
+            {
+                var detail = _workspaceLoadErrors.Count > 0
+                    ? string.Join(" ", _workspaceLoadErrors)
+                    : "no projects were found.";
+                throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {detail}");
+            }
         }
         finally
         {
