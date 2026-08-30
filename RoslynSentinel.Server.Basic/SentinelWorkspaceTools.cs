@@ -432,8 +432,231 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
+    [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. IMPORTANT: for changesetFormat=files with action=apply, any file whose content would shrink by more than 50% is rejected with errorCode=ConfirmationRequired — this is a strong signal you submitted only a changed fragment as if it were the whole file, rather than a genuine whole-file rewrite. If that happens, re-submit the complete, unabridged file content in a fresh ApplyDiff call (or switch to changesetFormat=diff for a partial edit) — do not retry with a different action.")]
+    public async Task<ToolResult<object>> ApplyDiff([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
+    CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            if (changesetFormat == ChangesetFormat.files)
+            {
+                if (changes == null)
+                {
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.InvalidArgument, "changes is required when changesetFormat=files.")
+                    };
+                }
+
+                if (action == ProposedChangeAction.apply)
+                {
+                    string? oversizedFile = null;
+                    double oversizedPercent = 0;
+                    foreach (var (changedPath, newContent) in changes)
+                    {
+                        var oldContent = await FileIoHelper.ReadAllTextIfExistsAsync(changedPath, cancellationToken);
+                        var percentRemoved = PercentLinesRemoved(oldContent, newContent);
+                        if (percentRemoved > LargeShrinkRejectionThreshold)
+                        {
+                            oversizedFile = changedPath;
+                            oversizedPercent = percentRemoved;
+                            break;
+                        }
+                    }
+
+                    if (oversizedFile != null)
+                    {
+                        return new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = new ResultError(ToolErrorCode.ConfirmationRequired,
+                                $"File '{oversizedFile}' would shrink by {oversizedPercent:P0}, exceeding the {LargeShrinkRejectionThreshold:P0} threshold for a files-format apply. " +
+                                "This usually means only a changed fragment was submitted instead of the complete file content. If this is a genuine whole-file rewrite, re-submit ApplyDiff with the complete file content included in 'changes'. For a partial edit, use changesetFormat=diff instead.")
+                        };
+                    }
+
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount, validateChanges: validateOnApply);
+                    if (!result.Success && result.ValidationResult != null)
+                        return new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}")
+                        };
+                    await WriteBlobForApplyAsync("apply_diff", result);
+                    // PreImages (full pre-edit file content) is dropped from the default response -
+                    // it's already captured in the undo blob written above (GetOperationDetail/
+                    // UndoLastApply can retrieve it) and was the single largest contributor to
+                    // ApplyDiff responses exceeding the calling harness's token limit on large files.
+                    var strippedResult = result with { PreImages = null };
+                    object responseData = returnDiff
+                        ? new
+                        {
+                            result = strippedResult,
+                            diff = SentinelRefactoringTools.BuildDiffFromPreImages(changes, result.PreImages)
+                        }
+                        : strippedResult;
+                    return new ToolResult<object>()
+                    {
+                        Success = true,
+                        Data = responseData
+                    };
+                }
+
+                if (action == ProposedChangeAction.validate)
+                {
+                    try
+                    {
+                        var validationResult = await _validationEngine.ValidateChangesAsync(changes);
+                        return validationResult.Success ? new ToolResult<object>()
+                        {
+                            Success = true,
+                            Data = validationResult
+                        }
+
+                        : new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed: {validationResult.Diagnostics}")
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "ApplyDiff validate unexpected exception");
+                        return new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff validate")
+                        };
+                    }
+                }
+            }
+            else if (changesetFormat == ChangesetFormat.diff)
+            {
+                if (!filePath.Validated && string.IsNullOrEmpty(unifiedDiff))
+                {
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filepath' and 'unifiedDiff' are required when changesetFormat=diff.")
+                    };
+                }
+
+                if (!filePath.Validated)
+                {
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filepath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
+                    };
+                }
+
+                if (string.IsNullOrEmpty(unifiedDiff))
+                {
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'unifiedDiff' is required when changesetFormat=diff.")
+                    };
+                }
+
+                if (action == ProposedChangeAction.apply)
+                {
+                    try
+                    {
+                        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+                        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePath == filePath.Absolute);
+                        if (document == null)
+                        {
+                            return new ToolResult<object>()
+                            {
+                                Success = false,
+                                Error = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                            };
+                        }
+
+                        var oldText = await document.GetTextAsync();
+                        var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+                        var targetPath = document.FilePath ?? filePath;
+                        var diffChanges = new Dictionary<FilePath, string>
+                        {
+                            [targetPath] = newContent
+                        };
+                        var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
+                        if (!result.Success && result.ValidationResult != null)
+                            return new ToolResult<object>()
+                            {
+                                Success = false,
+                                Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {result.ValidationResult.Diagnostics.ToJson()}")
+                            };
+                        await WriteBlobForApplyAsync("apply_diff", result);
+                        var strippedDiffResult = result with { PreImages = null };
+                        object diffResponseData = returnDiff
+                            ? new
+                            {
+                                result = strippedDiffResult,
+                                diff = SentinelRefactoringTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
+                            }
+                            : strippedDiffResult;
+                        return new ToolResult<object>()
+                        {
+                            Success = true,
+                            Data = diffResponseData
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePath}'", filePath);
+                        return new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePath}'")
+                        };
+                    }
+                }
+
+                if (action == ProposedChangeAction.validate)
+                {
+                    var validationResult = await _validationEngine.ValidateDiffAsync(filePath.Absolute, unifiedDiff);
+                    return validationResult.Success ? new ToolResult<object>()
+                    {
+                        Success = true,
+                        Data = validationResult
+                    }
+
+                    : new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult}")
+                    };
+                }
+            }
+
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.")
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ApplyDiff ({ChangesetFormat}/{Action}) failed", changesetFormat, action);
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff")
+            };
+        }
+    }
+
+    // The confirmationCode paramater was causing hallucinations and invalid tool calls. Reverted back to the original ApplyDiff tool but keeping this here (block-commented, since it depends
+    // on ProposedChangeAction.confirmationCode, which is also commented out in ToolEnums.cs) in case we want to reintroduce ApplyDiff with a confirmationCode in the future.
+    /*
+    //[McpServerTool(Name = "ApplyDiffWithConfirmationCode")]
+    [Produces(DataTag.ChangeId)]
     [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. IMPORTANT: for changesetFormat=files with action=apply, any file whose content would shrink by more than 50% is rejected with errorCode=ConfirmationRequired — this is a strong signal you submitted only a changed fragment as if it were the whole file, rather than a genuine whole-file rewrite. If the rewrite is really intended, call ApplyDiff again with action=confirmationCode and confirmationCode set to the code from the rejection — do not resend changes/filepath/unifiedDiff on that call, the original changeset is already cached server-side.")]
-    public async Task<ToolResult<object>> ApplyDiff([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [ToolOption(ToolOptionTag.ConfirmationCode)][Description("Required when action=confirmationCode. The code returned by a prior apply call that was rejected for exceeding the whole-file-rewrite size threshold. Replays that exact cached changeset — do not also pass changes/filepath/unifiedDiff.")] string? confirmationCode = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<ToolResult<object>> ApplyDiffWithConfirmationCode([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [ToolOption(ToolOptionTag.ConfirmationCode)][Description("Required when action=confirmationCode. The code returned by a prior apply call that was rejected for exceeding the whole-file-rewrite size threshold. Replays that exact cached changeset — do not also pass changes/filepath/unifiedDiff.")] string? confirmationCode = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         try
@@ -695,6 +918,7 @@ public class SentinelWorkspaceTools
             };
         }
     }
+    */
 
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]

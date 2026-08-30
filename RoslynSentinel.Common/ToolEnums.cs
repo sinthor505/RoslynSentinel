@@ -35,13 +35,15 @@ public enum ProposedChangeAction
 {
     apply, validate,
 
-    /// <summary>
-    /// Confirms and applies a changeset that a prior <c>apply</c> call rejected for exceeding
-    /// the whole-file-rewrite size threshold (see <see cref="ToolErrorCode.ConfirmationRequired"/>).
-    /// Pass only <c>confirmationCode</c> — the original changeset is cached server-side from the
-    /// rejected call, so <c>changes</c>/<c>filepath</c>/<c>unifiedDiff</c> do not need to be resent.
-    /// </summary>
-    confirmationCode
+    // confirmationCode was removed from the live ApplyDiff tool — it reliably caused model
+    // hallucination (agents fabricated a confirmationCode and called action=confirmationCode
+    // even when the real problem was unrelated; see docs/current/overnight-run-2026-08-30.md
+    // section 5b) and was never used correctly in practice. Commented out (not deleted) so the
+    // value can't appear in ApplyDiff's JSON schema at all, while keeping the old mechanism
+    // available to reintroduce later — see the commented-out ApplyDiffWithConfirmationCode in
+    // SentinelWorkspaceTools.cs, which depends on this value and is commented out alongside it.
+    // confirmationCode
+
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

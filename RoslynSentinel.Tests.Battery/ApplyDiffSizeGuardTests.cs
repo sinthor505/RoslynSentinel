@@ -1,10 +1,16 @@
 // ApplyDiff whole-file-rewrite size guard (changesetFormat=files, action=apply): a files-format
 // apply that would shrink a file by more than 50% is rejected with errorCode=ConfirmationRequired
-// and a confirmation code instead of being applied — this is the guard against an agent submitting
-// only a changed fragment as if it were the entire file (see
+// instead of being applied — this is the guard against an agent submitting only a changed fragment
+// as if it were the entire file (see
 // docs/current/blockers/blocking_error_searchmode_literal_override_and_iserror_flag.md, "reported
-// symptom" section, for the real incident this replays). action=confirmationCode replays the exact
-// cached changeset from the rejected call without resending file content.
+// symptom" section, for the real incident this replays). ApplyDiff itself no longer offers a
+// confirmationCode replay path — that mechanism reliably caused model hallucination (agents would
+// fabricate a confirmationCode and call action=confirmationCode even when the true problem was
+// something else entirely; see docs/current/overnight-run-2026-08-30.md section 5b for the traced
+// root cause) and was never used correctly in practice. The rejected caller is expected to just
+// re-submit the complete file content. The old replay mechanism is preserved, unregistered, on
+// ApplyDiffWithConfirmationCode in case it's wanted again — the confirmationCode-specific tests
+// below target that method directly rather than ApplyDiff.
 //
 // The percentage check reads "old content" from disk via FileIoHelper.ReadAllTextIfExistsAsync
 // (same helper ApplyProposedChangesAsync uses for pre-image capture), so these tests need a real
@@ -55,12 +61,19 @@ public class ApplyDiffSizeGuardTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
-        Assert.That(result.Error!.Message, Does.Contain("confirmationCode"));
+        Assert.That(result.Error!.Message, Does.Contain("re-submit"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
     }
 
+    // The following confirmationCode-replay tests targeted ApplyDiffWithConfirmationCode directly —
+    // that mechanism was removed from the registered ApplyDiff tool (see comment at top of file).
+    // ApplyDiffWithConfirmationCode and ProposedChangeAction.confirmationCode are now both
+    // block-commented out (SentinelWorkspaceTools.cs / ToolEnums.cs) rather than deleted, so these
+    // tests are commented out alongside them — un-comment all three together if the mechanism is
+    // ever reintroduced.
+    /*
     [Test]
-    public async Task ApplyDiff_ConfirmationCodeFromRejectedApply_AppliesOriginalChangesetAsync()
+    public async Task ApplyDiffWithConfirmationCode_ConfirmationCodeFromRejectedApply_AppliesOriginalChangesetAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -75,7 +88,7 @@ public class ApplyDiffSizeGuardTests
         // other files in the solution depend on, which would otherwise fail pre-apply validation
         // for unrelated reasons (a real compile break, correctly caught — see
         // project_searchmode_literal_override_bug.md's validation-scope fix).
-        var rejected = await tools.ApplyDiff(
+        var rejected = await tools.ApplyDiffWithConfirmationCode(
             ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePath, string> { [targetFile] = fragment },
             validateOnApply: false);
@@ -83,7 +96,7 @@ public class ApplyDiffSizeGuardTests
 
         var code = ExtractConfirmationCode(rejected.Error!.Message);
 
-        var confirmed = await tools.ApplyDiff(
+        var confirmed = await tools.ApplyDiffWithConfirmationCode(
             ChangesetFormat.files, ProposedChangeAction.confirmationCode,
             confirmationCode: code);
 
@@ -92,14 +105,14 @@ public class ApplyDiffSizeGuardTests
     }
 
     [Test]
-    public async Task ApplyDiff_ConfirmationCodeUnrecognized_ReturnsInvalidArgumentAsync()
+    public async Task ApplyDiffWithConfirmationCode_ConfirmationCodeUnrecognized_ReturnsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var tools = BuildTools(workspaceManager);
 
-        var result = await tools.ApplyDiff(
+        var result = await tools.ApplyDiffWithConfirmationCode(
             ChangesetFormat.files, ProposedChangeAction.confirmationCode,
             confirmationCode: "not-a-real-code");
 
@@ -108,21 +121,21 @@ public class ApplyDiffSizeGuardTests
     }
 
     [Test]
-    public async Task ApplyDiff_ConfirmationCodeMissing_ReturnsInvalidArgumentAsync()
+    public async Task ApplyDiffWithConfirmationCode_ConfirmationCodeMissing_ReturnsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var tools = BuildTools(workspaceManager);
 
-        var result = await tools.ApplyDiff(ChangesetFormat.files, ProposedChangeAction.confirmationCode);
+        var result = await tools.ApplyDiffWithConfirmationCode(ChangesetFormat.files, ProposedChangeAction.confirmationCode);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]
-    public async Task ApplyDiff_ConfirmationCodeIsSingleUse_SecondReplayFailsAsync()
+    public async Task ApplyDiffWithConfirmationCode_ConfirmationCodeIsSingleUse_SecondReplayFailsAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -130,19 +143,20 @@ public class ApplyDiffSizeGuardTests
         var tools = BuildTools(workspaceManager);
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
-        var rejected = await tools.ApplyDiff(
+        var rejected = await tools.ApplyDiffWithConfirmationCode(
             ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePath, string> { [targetFile] = "using System;\n" },
             validateOnApply: false);
         var code = ExtractConfirmationCode(rejected.Error!.Message);
 
-        var firstReplay = await tools.ApplyDiff(ChangesetFormat.files, ProposedChangeAction.confirmationCode, confirmationCode: code);
+        var firstReplay = await tools.ApplyDiffWithConfirmationCode(ChangesetFormat.files, ProposedChangeAction.confirmationCode, confirmationCode: code);
         Assert.That(firstReplay.Success, Is.True, firstReplay.Error?.Message);
 
-        var secondReplay = await tools.ApplyDiff(ChangesetFormat.files, ProposedChangeAction.confirmationCode, confirmationCode: code);
+        var secondReplay = await tools.ApplyDiffWithConfirmationCode(ChangesetFormat.files, ProposedChangeAction.confirmationCode, confirmationCode: code);
         Assert.That(secondReplay.Success, Is.False);
         Assert.That(secondReplay.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
+    */
 
     [Test]
     public async Task ApplyDiff_FilesFormatSmallEdit_AppliesWithoutConfirmationAsync()
