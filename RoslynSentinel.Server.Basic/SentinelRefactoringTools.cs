@@ -10,6 +10,9 @@ namespace RoslynSentinel.Server.Basic;
 [McpServerToolType]
 public class SentinelRefactoringTools
 {
+    private static readonly HashSet<string> AccessibilityModifiers =
+        ["public", "private", "internal", "protected", "protected internal", "private protected"];
+
     private readonly RefactoringEngine _refactoringEngine;
     private readonly StandardRefactoringEngine _standardRefactoringEngine;
     // private readonly AdvancedStructuralEngine _advancedStructuralEngine;
@@ -1038,6 +1041,11 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
+            if (AccessibilityModifiers.Contains(modifier.Trim().ToLowerInvariant()))
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"ModifyModifier does not handle accessibility keywords (got '{modifier}'). Use ChangeAccessibility instead — it replaces whatever accessibility is present in one step, rather than requiring separate remove+add calls.") };
+            }
+
             DocumentEditResult updated;
             if (action == AddRemoveAction.add)
             {

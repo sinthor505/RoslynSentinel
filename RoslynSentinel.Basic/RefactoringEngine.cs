@@ -2887,7 +2887,7 @@ public class RefactoringEngine
             };
         }
 
-        SyntaxKind[] newKinds = accessibility.ToLowerInvariant() switch
+        SyntaxKind[]? newKinds = accessibility.ToLowerInvariant() switch
         {
             "public" => [SyntaxKind.PublicKeyword],
             "private" => [SyntaxKind.PrivateKeyword],
@@ -2895,8 +2895,17 @@ public class RefactoringEngine
             "protected" => [SyntaxKind.ProtectedKeyword],
             "protected internal" => [SyntaxKind.ProtectedKeyword, SyntaxKind.InternalKeyword],
             "private protected" => [SyntaxKind.PrivateKeyword, SyntaxKind.ProtectedKeyword],
-            _ => [SyntaxKind.PublicKeyword]
+            _ => null
         };
+        if (newKinds == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Cannot edit: unrecognized accessibility '{accessibility}'. Valid values: public, private, internal, protected, protected internal, private protected."
+            };
+        }
         var accessModifierKinds = new HashSet<SyntaxKind>
         {
             SyntaxKind.PublicKeyword,

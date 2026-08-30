@@ -417,6 +417,33 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
+    [Test]
+    public async Task ModifyModifier_RejectsAccessibilityKeyword()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _tools.ModifyModifier("Order.cs", "GetLabel", "private", AddRemoveAction.remove);
+
+        Assert.That(result.Success, Is.False,
+            "ModifyModifier must reject accessibility keywords — removing 'private' with no add of 'public' silently " +
+            "leaves a class member at C#'s implicit-private default, which looks like success but changes nothing " +
+            "observable. ChangeAccessibility is the correct tool for accessibility changes.");
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.Error.Message, Does.Contain("ChangeAccessibility"));
+    }
+
+    // --- ChangeAccessibility ---
+
+    [Test]
+    public async Task ChangeAccessibility_UnrecognizedValue_ReturnsError()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _tools.ChangeAccessibility("Order.cs", "GetLabel", "puplic");
+
+        Assert.That(result.Success, Is.False,
+            "An unrecognized accessibility string must be rejected, not silently treated as 'public' " +
+            "(a typo like 'puplic' should never widen a member's accessibility unintentionally).");
+    }
+
     // --- SummaryComment ---
 
     [Test]
