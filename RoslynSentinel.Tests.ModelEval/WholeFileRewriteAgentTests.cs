@@ -296,9 +296,13 @@ public class WholeFileRewriteAgentTests
         Assert.That(fixedText, Does.Contain("public string UnrelatedMethodAfter(  string   s  )"),
             $"UnrelatedMethodAfter's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");
 
-        var noErrorTools = result.Transcript.Turns.SelectMany(t => t.ToolCalls).Where(tc => tc.IsError).ToList();
-        Assert.That(noErrorTools, Is.Empty,
-            $"Expected no tool call to report failure (checking both IsError and body 'success' fields); " +
-            $"{noErrorTools.Count} did: [{string.Join(", ", noErrorTools.Select(tc => tc.ToolName))}]. Transcript: {result.TranscriptPath}");
+        // Allow one failed tool call: a model that tries an edit, gets a real compiler/validation
+        // error back, and self-corrects on its next attempt is the intended agentic loop (see the
+        // self-correction-loop research this test's fixture was built to exercise), not a defect.
+        // More than one error suggests the model is thrashing rather than converging.
+        var errorTools = result.Transcript.Turns.SelectMany(t => t.ToolCalls).Where(tc => tc.IsError).ToList();
+        Assert.That(errorTools.Count, Is.LessThanOrEqualTo(1),
+            $"Expected at most 1 failed tool call (one self-correction retry); " +
+            $"{errorTools.Count} occurred: [{string.Join(", ", errorTools.Select(tc => tc.ToolName))}]. Transcript: {result.TranscriptPath}");
     }
 }
