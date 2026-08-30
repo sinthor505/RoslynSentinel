@@ -65,7 +65,16 @@ public static class AgentSystemPrompts
           understanding why it failed.
         - Always verify your change compiles using an MCP build tool before reporting that you are
           done. A task is not complete until verified, and "I believe this should work" is not a
-          substitute for actually running the build tool and checking its result.
+          substitute for actually running the build tool and checking its result. Use the
+          cheapest build level that covers your change (a single project's quick build) unless
+          you have a specific reason a full build is required — an unnecessarily expensive build
+          can eat most of your turn/time budget for no benefit.
+        - A successful build does NOT mean the task is done — it only means the code is
+          syntactically valid. Before reporting success, compare each unrelated method/section
+          you touched against the exact text you originally read: if anything outside the
+          intended fix reads differently (a changed operator, a reformatted line, a renamed
+          identifier), that is a failure even though the build passed. Re-read the final file and
+          check it against the original, don't rely on the build result alone.
         - If you are blocked, cannot find something the task references, or cannot complete the
           task as described, say so explicitly in your final response rather than guessing,
           inventing a plausible-sounding answer, or declaring success prematurely.
