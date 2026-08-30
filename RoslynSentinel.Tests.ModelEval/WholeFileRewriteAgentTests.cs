@@ -2,6 +2,7 @@ using System.IO.Pipelines;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol.Client;
@@ -25,11 +26,6 @@ namespace RoslynSentinel.Tests.ModelEval;
 [TestFixture]
 public class WholeFileRewriteAgentTests
 {
-    private const string SystemPrompt = """
-        You have access to RoslynSentinel MCP tools only — no terminal/bash access. Use only those
-        tools for every step, including verifying your fix compiles.
-        """;
-
     private const string UserPromptTemplate = """
         # Task: Fix a whole-file-rewrite bug in FixtureHelpers/BlockConverter.cs (level 2)
 
@@ -89,9 +85,39 @@ public class WholeFileRewriteAgentTests
           mechanism should change.
         """;
 
+    // Level 3: no method/file names, no fix mechanism, no step list — just the observable symptom.
+    // The model has to locate the bug by reading BlockConverter.cs, discover BlockEditHelpers.cs's
+    // existing fix pattern itself (e.g. via SearchSolutionText/ListSolutionItems), and decide how to
+    // reuse it. Reuses the same fixture and AssertFixApplied as the level-2 test above — only the
+    // prompt differs, so a pass/fail delta between the two tests isolates how much the scripted
+    // guidance in the level-2 prompt was doing versus the model's own reasoning.
+    private const string MinimalGuidanceUserPromptTemplate = """
+        # Task: Fix a bug in FixtureHelpers/BlockConverter.cs
+
+        Users report that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs` sometimes
+        changes unrelated formatting elsewhere in the same file, even though they only asked for
+        one class to be converted.
+
+        Investigate `BlockConverter.cs`, find the root cause, and fix it. A similar bug was
+        already fixed elsewhere in this codebase using a reusable pattern — look for it and reuse
+        that same approach rather than inventing a new one.
+
+        Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
+        to just the `ContosoOrders.Core` project rather than the whole solution.
+
+        Don't touch code unrelated to the bug. Report what you changed and the verification
+        result.
+        """;
+
+    // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
+    // AddRoslynSentinelToolsBasic checks — these two together register everything the prompts in
+    // this file need (ApplyDiff, Build, ReadFile, SearchSolutionText, ListSolutionItems via
+    // SentinelWorkspaceTools; SentinelRefactoringTools/SentinelAugmentTools for edits) without
+    // pulling in Advanced's much larger scanner/analyzer/asyncify tool catalog, which only adds
+    // context bloat and slows the model down for tasks that never call those tools.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Generation", "Refactoring", "Workspace",
+        "Refactor", "Workspace",
     };
 
     private IHost _host = null!;
@@ -117,14 +143,20 @@ public class WholeFileRewriteAgentTests
         var serverToClient = new Pipe();
 
         var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesAdvanced();
+        services.AddRoslynSentinelEnginesBasic();
 
         var mcpBuilder = services.AddMcpServer();
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
+        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+
+        _runDirectory = Path.Combine(
+            TestContext.CurrentContext.WorkDirectory,
+            "model-eval",
+            TestContext.CurrentContext.Test.Name,
+            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
         var hostBuilder = Host.CreateApplicationBuilder();
         hostBuilder.Services.AddHttpClient<LmStudioAgentClient>(client =>
@@ -140,6 +172,11 @@ public class WholeFileRewriteAgentTests
         {
             hostBuilder.Services.Add(descriptor);
         }
+
+        // dotnet test's console logger block-buffers stdout when it's redirected to a file, so
+        // ModelAgentRunner's per-turn logging is invisible until the whole test process exits —
+        // this file sink writes+flushes independently so a run can be tailed live.
+        hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
 
         _host = hostBuilder.Build();
         _ = _host.RunAsync();
@@ -173,12 +210,6 @@ public class WholeFileRewriteAgentTests
 
         _mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
         _agentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
-
-        _runDirectory = Path.Combine(
-            TestContext.CurrentContext.WorkDirectory,
-            "model-eval",
-            TestContext.CurrentContext.Test.Name,
-            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
     }
 
     [TearDown]
@@ -203,7 +234,24 @@ public class WholeFileRewriteAgentTests
     [Test]
     public async Task Model_FixesWholeFileRewriteBug_UsingExistingHelperPattern()
     {
-        var result = await RunOnceAsync(TestContext.CurrentContext.CancellationToken);
+        var result = await RunOnceAsync(UserPromptTemplate, TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.Converged, Is.True,
+            $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
+
+        AssertFixApplied(result);
+    }
+
+    /// <summary>
+    /// Harder variant of <see cref="Model_FixesWholeFileRewriteBug_UsingExistingHelperPattern"/>:
+    /// same bug, same fixture, same assertions, but the prompt gives only the observable symptom —
+    /// no method name, no sibling-file pointer, no step list. The model must locate the bug and
+    /// discover the existing BlockEditHelpers.cs fix pattern on its own.
+    /// </summary>
+    [Test]
+    public async Task Model_FixesWholeFileRewriteBug_MinimalGuidance()
+    {
+        var result = await RunOnceAsync(MinimalGuidanceUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
 
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
@@ -233,7 +281,7 @@ public class WholeFileRewriteAgentTests
                 await SetUp();
             }
 
-            var result = await RunOnceAsync(TestContext.CurrentContext.CancellationToken);
+            var result = await RunOnceAsync(UserPromptTemplate, TestContext.CurrentContext.CancellationToken);
             turnCounts.Add(result.TurnCount);
 
             if (result.Converged)
@@ -254,15 +302,17 @@ public class WholeFileRewriteAgentTests
         Assert.That(passCount, Is.GreaterThan(0), $"Model never succeeded across {runs} runs — see per-run transcripts under {_runDirectory}/../");
     }
 
-    private async Task<AgentRunResult> RunOnceAsync(CancellationToken cancellationToken)
+    private async Task<AgentRunResult> RunOnceAsync(string userPromptTemplate, CancellationToken cancellationToken)
     {
         // Generous caps for a slow local GPU (e.g. a GTX 1080): individual turns have been
         // observed to take 1-2 minutes, so a 10-minute cap can cut off a run mid-recovery
         // before the model genuinely gets stuck. 40 turns / 30 minutes gives real room to
         // either converge or fail on its own rather than on an artificial clock.
-        var runner = new ModelAgentRunner(_agentClient, _mcpClient, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30));
-        var userPrompt = string.Format(UserPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
-        return await runner.RunAsync(SystemPrompt, userPrompt, _runDirectory, cancellationToken);
+        var runner = new ModelAgentRunner(
+            _agentClient, _mcpClient, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
+            logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
+        var userPrompt = string.Format(userPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
+        return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);
     }
 
     private void AssertFixApplied(AgentRunResult result)

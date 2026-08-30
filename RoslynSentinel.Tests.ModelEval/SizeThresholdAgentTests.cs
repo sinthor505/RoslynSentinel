@@ -2,6 +2,7 @@ using System.IO.Pipelines;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol.Client;
@@ -27,11 +28,6 @@ namespace RoslynSentinel.Tests.ModelEval;
 [TestFixture]
 public class SizeThresholdAgentTests
 {
-    private const string SystemPrompt = """
-        You have access to RoslynSentinel MCP tools only — no terminal/bash access. Use only those
-        tools for every step, including verifying your fix compiles.
-        """;
-
     private const string UserPromptTemplate = """
         # Task: Fix a whole-file-rewrite bug in FixtureHelpers/BlockConverter.cs (level 2)
 
@@ -166,9 +162,12 @@ public class SizeThresholdAgentTests
           mechanism should change.
         """;
 
+    // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
+    // AddRoslynSentinelToolsBasic checks — see WholeFileRewriteAgentTests.cs's ActiveModes comment
+    // for why Basic is used instead of Advanced here.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Generation", "Refactoring", "Workspace",
+        "Refactor", "Workspace",
     };
 
     private IHost _host = null!;
@@ -195,14 +194,21 @@ public class SizeThresholdAgentTests
         var serverToClient = new Pipe();
 
         var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesAdvanced();
+        services.AddRoslynSentinelEnginesBasic();
 
         var mcpBuilder = services.AddMcpServer();
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
+        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+
+        _runDirectory = Path.Combine(
+            TestContext.CurrentContext.WorkDirectory,
+            "model-eval",
+            "SizeThreshold",
+            $"n{_unrelatedMethodCount}",
+            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
         var hostBuilder = Host.CreateApplicationBuilder();
         hostBuilder.Services.AddHttpClient<LmStudioAgentClient>(client =>
@@ -214,6 +220,11 @@ public class SizeThresholdAgentTests
         {
             hostBuilder.Services.Add(descriptor);
         }
+
+        // dotnet test's console logger block-buffers stdout when it's redirected to a file, so
+        // ModelAgentRunner's per-turn logging is invisible until the whole test process exits —
+        // this file sink writes+flushes independently so a run can be tailed live.
+        hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
 
         _host = hostBuilder.Build();
         _ = _host.RunAsync();
@@ -247,13 +258,6 @@ public class SizeThresholdAgentTests
 
         _mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
         _agentClient = _host.Services.GetRequiredService<LmStudioAgentClient>();
-
-        _runDirectory = Path.Combine(
-            TestContext.CurrentContext.WorkDirectory,
-            "model-eval",
-            "SizeThreshold",
-            $"n{_unrelatedMethodCount}",
-            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
     }
 
     [TearDown]
@@ -344,7 +348,7 @@ public class SizeThresholdAgentTests
                 catch (Exception ex)
                 {
                     harnessFailures++;
-                    TestContext.Out.WriteLine($"[size={size} run={i}] Harness-level exception: {ex}");
+                    TestContext.Progress.WriteLine($"[size={size} run={i}] Harness-level exception: {ex}");
                 }
 
                 var row = string.Join(',', new[]
@@ -362,20 +366,22 @@ public class SizeThresholdAgentTests
                     result?.TranscriptPath ?? "",
                 });
                 await File.AppendAllTextAsync(csvPath, row + "\n");
-                TestContext.Out.WriteLine($"[size={size} chars={fileSizeChars} run={i}] converged={result?.Converged} fixCorrect={fixCorrect} applyDiffErrors={applyDiffErrorCount} stopReason={result?.StopReason}");
+                TestContext.Progress.WriteLine($"[size={size} chars={fileSizeChars} run={i}] converged={result?.Converged} fixCorrect={fixCorrect} applyDiffErrors={applyDiffErrorCount} stopReason={result?.StopReason}");
             }
         }
 
-        TestContext.Out.WriteLine($"Sweep complete: {totalRuns} runs across {sizes.Count} sizes. Results: {csvPath}");
+        TestContext.Progress.WriteLine($"Sweep complete: {totalRuns} runs across {sizes.Count} sizes. Results: {csvPath}");
         Assert.That(harnessFailures, Is.LessThan(totalRuns), "Every single run failed at the harness level (not a model failure) — check LM Studio reachability/config before trusting these results.");
     }
 
     private async Task<AgentRunResult> RunOnceAsync(string promptVariant, CancellationToken cancellationToken)
     {
-        var runner = new ModelAgentRunner(_agentClient, _mcpClient, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30));
+        var runner = new ModelAgentRunner(
+            _agentClient, _mcpClient, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
+            logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var template = promptVariant == "TwoStep" ? TwoStepUserPromptTemplate : UserPromptTemplate;
         var userPrompt = string.Format(template, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
-        return await runner.RunAsync(SystemPrompt, userPrompt, _runDirectory, cancellationToken);
+        return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);
     }
 
     private void AssertFixApplied(AgentRunResult result)

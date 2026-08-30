@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json;
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -20,19 +23,22 @@ public sealed class ModelAgentRunner
     private readonly int _turnCap;
     private readonly TimeSpan _wallClockCap;
     private readonly int _maxTokensPerTurn;
+    private readonly ILogger<ModelAgentRunner> _logger;
 
     public ModelAgentRunner(
         LmStudioAgentClient llm,
         McpClient mcpClient,
         int turnCap = 25,
         TimeSpan? wallClockCap = null,
-        int maxTokensPerTurn = 8192)
+        int maxTokensPerTurn = 8192,
+        ILogger<ModelAgentRunner>? logger = null)
     {
         _llm = llm;
         _mcpClient = mcpClient;
         _turnCap = turnCap;
         _wallClockCap = wallClockCap ?? TimeSpan.FromMinutes(10);
         _maxTokensPerTurn = maxTokensPerTurn;
+        _logger = logger ?? NullLogger<ModelAgentRunner>.Instance;
     }
 
     public async Task<AgentRunResult> RunAsync(
@@ -56,6 +62,10 @@ public sealed class ModelAgentRunner
             new() { Role = "user", Content = userPrompt },
         };
 
+        _logger.LogInformation(
+            "Agent run starting in {Directory}. Exposing {ToolCount} tool(s): {ToolNames}. User prompt:\n{UserPrompt}",
+            transcriptDirectory, toolDefinitions.Count, string.Join(", ", knownToolNames), userPrompt);
+
         var transcript = new AgentTranscript();
         var overallStopwatch = Stopwatch.StartNew();
         var stopReason = AgentStopReason.TurnCapExceeded;
@@ -66,6 +76,7 @@ public sealed class ModelAgentRunner
             if (overallStopwatch.Elapsed > _wallClockCap)
             {
                 stopReason = AgentStopReason.WallClockCapExceeded;
+                _logger.LogWarning("Turn {Turn}: wall-clock cap ({Cap}) exceeded, stopping.", turnNumber, _wallClockCap);
                 break;
             }
 
@@ -73,6 +84,11 @@ public sealed class ModelAgentRunner
             var turnStopwatch = Stopwatch.StartNew();
             var modelMessage = await _llm.CompleteAsync(messages, toolDefinitions, _maxTokensPerTurn, cancellationToken);
             turnStopwatch.Stop();
+
+            _logger.LogInformation(
+                "Turn {Turn}: model responded in {Latency} — {ToolCallCount} tool call(s). Content: {Content}",
+                turnNumber, turnStopwatch.Elapsed, modelMessage.ToolCalls.Count,
+                string.IsNullOrWhiteSpace(modelMessage.Content) ? "(none)" : modelMessage.Content);
 
             var turnRecord = new AgentTranscriptTurn
             {
@@ -86,6 +102,7 @@ public sealed class ModelAgentRunner
             if (modelMessage.ToolCalls.Count == 0)
             {
                 stopReason = AgentStopReason.ModelFinished;
+                _logger.LogInformation("Turn {Turn}: model made no tool calls, treating as finished.", turnNumber);
                 break;
             }
 
@@ -93,11 +110,16 @@ public sealed class ModelAgentRunner
             if (unknownCall is not null)
             {
                 stopReason = AgentStopReason.UnknownToolRequested;
+                _logger.LogWarning("Turn {Turn}: model requested unknown tool '{Tool}', stopping.", turnNumber, unknownCall.Name);
                 break;
             }
 
             foreach (var toolCall in modelMessage.ToolCalls)
             {
+                _logger.LogInformation(
+                    "Turn {Turn}: calling {Tool} with args: {Args}",
+                    turnNumber, toolCall.Name, toolCall.ArgumentsJson);
+
                 var (resultJson, isError, latency) = await ExecuteToolCallAsync(toolCall, cancellationToken);
                 turnRecord.ToolCalls.Add(new AgentToolCallRecord
                 {
@@ -108,6 +130,19 @@ public sealed class ModelAgentRunner
                     Latency = latency,
                 });
 
+                if (isError)
+                {
+                    _logger.LogWarning(
+                        "Turn {Turn}: {Tool} FAILED in {Latency}. Result: {Result}",
+                        turnNumber, toolCall.Name, latency, resultJson);
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "Turn {Turn}: {Tool} succeeded in {Latency}. Result: {Result}",
+                        turnNumber, toolCall.Name, latency, resultJson);
+                }
+
                 messages.Add(new AgentChatMessage
                 {
                     Role = "tool",
@@ -116,6 +151,8 @@ public sealed class ModelAgentRunner
                 });
             }
         }
+
+        _logger.LogInformation("Agent run finished: {StopReason} after {TurnCount} turn(s), {Elapsed}.", stopReason, turnNumber, overallStopwatch.Elapsed);
 
         var transcriptPath = await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
 

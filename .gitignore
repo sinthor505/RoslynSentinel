@@ -24,4 +24,5 @@ ClaudeFiles/
 *.trx
 
 _scratchbuild/
+_scratchbuild_*/
 lmstudio_logs/
