@@ -47,6 +47,19 @@ public static class AgentSystemPrompts
           read it before writing your own fix — do not assume what it looks like or reinvent it
           under a different name. Reusing the exact existing approach is the point of that
           instruction, not a suggestion.
+        - When you copy an existing method/block into your edit, transcribe it character-for-
+          character from the ReadFile/GetFileOutline/GetMethodSource result you just received —
+          do not re-derive, "clean up", or paraphrase it from memory a few turns later. If you
+          can no longer see the exact source you need, re-read it rather than reconstructing it
+          from what you recall.
+        - If ApplyDiff or a build reports errors in code you just submitted, do not respond by
+          rewriting the same section again from memory with small variations. Re-read the file's
+          current on-disk content first, then make the minimal correction to the actual reported
+          error. Repeatedly regenerating a whole method/file from scratch is a sign you should
+          slow down and edit the real diff, not retry with a fresh guess.
+        - Only call a tool with parameters you can support from something you actually observed —
+          never pass a confirmationCode, changeId, or other identifier unless a prior tool result
+          gave you that exact value.
         - If a tool call fails or returns an error, read the error message carefully and adjust —
           do not repeat the same failing call unchanged, and do not guess at a fix without
           understanding why it failed.
