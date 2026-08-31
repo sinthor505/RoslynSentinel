@@ -99,6 +99,7 @@ public sealed class ModelAgentRunner
             };
             transcript.Turns.Add(turnRecord);
             messages.Add(modelMessage);
+            await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
 
             if (modelMessage.ToolCalls.Count == 0)
             {
@@ -150,6 +151,7 @@ public sealed class ModelAgentRunner
                     ToolCallId = toolCall.Id,
                     Content = resultJson,
                 });
+                await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
             }
         }
 

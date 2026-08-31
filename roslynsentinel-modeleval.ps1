@@ -49,7 +49,10 @@
     bare `for` loop calling `dotnet test --artifacts-path <dir>` repeatedly WILL race the
     next build's DLL copy against the previous run's still-exiting testhost.exe and fail
     with MSB3027 "locked by testhost" (seen in practice 2026-08-31). Use -Repeats instead of
-    a caller-side loop so this wait always happens.
+    a caller-side loop so this wait always happens. After each individual run (pass or fail),
+    its own run directory is copied to ModelTestingResults\<host-suffix>\<TestName>\ right
+    away - this happens unconditionally, independent of -Clean, so results are available in
+    the common folder as soon as each run finishes rather than only on the next -Clean.
 
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
@@ -160,17 +163,49 @@ function Wait-ForTesthostExit {
     Write-Warning "testhost.exe under $artifactsPath did not exit within 60s of the test run finishing - the next iteration's build may hit MSB3027."
 }
 
+$testDir = Join-Path $artifactsPath "bin\RoslynSentinel.Tests.ModelEval\debug\model-eval\$testName"
+$resultsDir = Join-Path $repoRoot "ModelTestingResults\$suffix\$testName"
+
+function Get-RunLeafDirs {
+    # Each individual run's own directory is a UTC-timestamp-named leaf (yyyyMMdd-HHmmss[-fff]).
+    # MinimalGuidance lays these out flat (model-eval\<TestName>\<timestamp>\); SizeThreshold
+    # nests them one level deeper (model-eval\SizeThreshold\n<size>\<timestamp>\) - matching by
+    # name pattern rather than a fixed depth handles both without hardcoding either shape.
+    if (-not (Test-Path $testDir)) { return @() }
+    Get-ChildItem -Path $testDir -Directory -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^\d{8}-\d{6}' } |
+        Select-Object -ExpandProperty FullName
+}
+
+function Copy-NewRunDirectories {
+    param([string[]]$Before)
+
+    $after = Get-RunLeafDirs
+    $new = $after | Where-Object { $_ -notin $Before }
+    foreach ($runPath in $new) {
+        $relative = $runPath.Substring($testDir.Length).TrimStart('\')
+        $dest = Join-Path $resultsDir $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
+        Write-Host "Archiving run to $dest" -ForegroundColor DarkGray
+        Copy-Item -Path $runPath -Destination $dest -Recurse -Force
+    }
+}
+
 $exitCode = 0
 for ($i = 1; $i -le $Repeats; $i++) {
     if ($Repeats -gt 1) {
         Write-Host "--- Run $i of $Repeats ---" -ForegroundColor DarkCyan
     }
 
+    $before = @(Get-RunLeafDirs)
+
     & dotnet test $csproj -c Debug `
         --artifacts-path $artifactsPath `
         --filter "Name=$testName" `
         --logger "console;verbosity=detailed"
     $exitCode = $LASTEXITCODE
+
+    Copy-NewRunDirectories -Before $before
 
     if ($i -lt $Repeats) {
         Wait-ForTesthostExit
