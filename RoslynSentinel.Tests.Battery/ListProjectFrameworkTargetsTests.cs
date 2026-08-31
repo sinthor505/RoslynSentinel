@@ -38,7 +38,8 @@ public class ListProjectFrameworkTargetsTests
             _workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
-            new BuildEngine(_workspaceManager, diagnosticEngine));
+            new BuildEngine(_workspaceManager, diagnosticEngine),
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
     }
 
     [TearDown]

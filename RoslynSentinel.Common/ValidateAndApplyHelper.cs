@@ -26,7 +26,8 @@ public static class ValidateAndApplyHelper
         IProgress<ProgressNotificationValue>? progress = default,
         IReadOnlyCollection<FilePath>? removePaths = null,
         CancellationToken cancellationToken = default,
-        IReadOnlyCollection<FilePath>? deletePaths = null)
+        IReadOnlyCollection<FilePath>? deletePaths = null,
+        Func<DiagnosticReport, CancellationToken, Task<string>>? describeValidationFailure = null)
     {
         DiagnosticReport validation;
         try
@@ -47,9 +48,12 @@ public static class ValidateAndApplyHelper
 
         if (!validation.Success)
         {
+            var detail = describeValidationFailure != null
+                ? await describeValidationFailure(validation, cancellationToken)
+                : validation.Diagnostics.ToJson();
             return new ApplyOutcome(null, new ResultError(ToolErrorCode.Exception,
-                $"{operationName} introduces new compiler errors — change not applied. " +
-                $"Fix diagnostics and retry: {validation.Diagnostics.ToJson()}"), dryRun);
+                $"{operationName}: the change was valid and matched its target(s), but introduces new compiler errors — change not applied. " +
+                $"Fix the issue(s) below and retry:\n{detail}"), dryRun);
         }
 
         if (dryRun)

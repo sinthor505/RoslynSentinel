@@ -43,6 +43,7 @@ public record SolutionItemsAllResult(List<ProjectInfoEntry> Projects, List<Solut
 public class SentinelWorkspaceTools
 {
     // Added by AddConstructorParameter
+    private readonly SymbolNavigationEngine _symbolNavigationEngine;    // Added by AddConstructorParameter
     private readonly BuildEngine _buildEngine;
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
@@ -64,7 +65,7 @@ public class SentinelWorkspaceTools
             }
     };
 
-    public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine)
+    public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine)
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
@@ -77,6 +78,7 @@ public class SentinelWorkspaceTools
         _config = config;
         _logger = logger;
         _buildEngine = buildEngine;
+        _symbolNavigationEngine = symbolNavigationEngine;
     }
 
     [McpServerTool(Name = "Features")]
@@ -536,7 +538,9 @@ public class SentinelWorkspaceTools
                         return new ToolResult<object>()
                         {
                             Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}")
+                            Error = new ResultError(ToolErrorCode.Exception,
+                                "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
+                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
                     await WriteBlobForApplyAsync("apply_diff", result);
                     // PreImages (full pre-edit file content) is dropped from the default response -
@@ -642,7 +646,9 @@ public class SentinelWorkspaceTools
                             return new ToolResult<object>()
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {result.ValidationResult.Diagnostics.ToJson()}")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
+                                    await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                             };
                         await WriteBlobForApplyAsync("apply_diff", result);
                         var strippedDiffResult = result with { PreImages = null };
@@ -805,7 +811,9 @@ public class SentinelWorkspaceTools
                         return new ToolResult<object>()
                         {
                             Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}")
+                            Error = new ResultError(ToolErrorCode.Exception,
+                                "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
+                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
                     await WriteBlobForApplyAsync("apply_diff", result);
                     // PreImages (full pre-edit file content) is dropped from the default response -
@@ -911,7 +919,9 @@ public class SentinelWorkspaceTools
                             return new ToolResult<object>()
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {result.ValidationResult.Diagnostics.ToJson()}")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
+                                    await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                             };
                         await WriteBlobForApplyAsync("apply_diff", result);
                         var strippedDiffResult = result with { PreImages = null };

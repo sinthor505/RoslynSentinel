@@ -117,7 +117,8 @@ public class SentinelAdvancedRefactoringTools
         CancellationToken cancellationToken = default) =>
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
-            dryRun, returnDiff, progress: null, cancellationToken: cancellationToken);
+            dryRun, returnDiff, progress: null, cancellationToken: cancellationToken,
+            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
 
     private Task<string> BuildDiffAsync(Dictionary<FilePath, string> changes, CancellationToken cancellationToken = default) =>
         ValidateAndApplyHelper.BuildDiffAsync(_workspaceManager, changes, cancellationToken);

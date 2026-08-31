@@ -134,7 +134,8 @@ public class ComprehensiveToolTests
             new ProjectConsistencyEngine(_workspaceManager),
             _config,
             NullLogger<SentinelWorkspaceTools>.Instance,
-            new BuildEngine(_workspaceManager, _diagnosticEngine));
+            new BuildEngine(_workspaceManager, _diagnosticEngine),
+            _symbolNavigationEngine);
         _intelligenceTools = new SentinelIntelligenceTools(_impactAnalyzer,
             _semanticSearchEngine,
             _metricsEngine,

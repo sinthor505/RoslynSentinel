@@ -26,7 +26,8 @@ public class CreateFileDeleteFileTests
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
-            new BuildEngine(workspaceManager, diagnosticEngine));
+            new BuildEngine(workspaceManager, diagnosticEngine),
+            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
     }
 
     [Test]

@@ -37,7 +37,8 @@ public class BatteryTwentyTests
         _tools = new SentinelWorkspaceTools(
             _workspaceManager, _validationEngine, _diffEngine, _diagnosticEngine,
             _solutionManagementEngine, _structuralRefinementEngine, _dependencyEngine,
-            _projectConsistencyEngine, _config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, _diagnosticEngine));
+            _projectConsistencyEngine, _config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, _diagnosticEngine),
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
     }
 
     [TearDown]
