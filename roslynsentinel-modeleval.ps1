@@ -37,8 +37,19 @@
     downloaded model, not which one is actually loaded).
 
 .PARAMETER Clean
-    Delete this host's _scratchbuild_<suffix>\bin\...\model-eval directory before running, so
-    stale run-history/CSV rows from a previous session aren't mixed in with this run's data.
+    Archive this host's _scratchbuild_<suffix>\bin\...\model-eval directory (transcripts,
+    agent.log, results.csv - everything) to ModelTestingResults\<host-suffix>\<timestamp>\
+    under the repo root, then delete the original, before running - so stale run-history from
+    a previous session isn't mixed in with this run's data, but nothing is lost. Skipped
+    silently if there's no existing model-eval directory to archive.
+
+.PARAMETER Repeats
+    Run the test this many times in sequence (default: 1). Between iterations, waits for
+    this scratch path's own testhost.exe to fully exit before starting the next build — a
+    bare `for` loop calling `dotnet test --artifacts-path <dir>` repeatedly WILL race the
+    next build's DLL copy against the previous run's still-exiting testhost.exe and fail
+    with MSB3027 "locked by testhost" (seen in practice 2026-08-31). Use -Repeats instead of
+    a caller-side loop so this wait always happens.
 
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
@@ -68,7 +79,9 @@ param(
 
     [string]$Model = 'qwen3.5-9b-coder',
 
-    [switch]$Clean
+    [switch]$Clean,
+
+    [int]$Repeats = 1
 )
 
 $ErrorActionPreference = 'Stop'
@@ -103,8 +116,11 @@ $artifactsPath = Join-Path $repoRoot "_scratchbuild_$suffix"
 if ($Clean) {
     $modelEvalDir = Join-Path $artifactsPath 'bin\RoslynSentinel.Tests.ModelEval\debug\model-eval'
     if (Test-Path $modelEvalDir) {
-        Write-Host "Removing stale run history: $modelEvalDir" -ForegroundColor Yellow
-        Remove-Item -Recurse -Force $modelEvalDir
+        $archiveStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        $archiveDir = Join-Path $repoRoot "ModelTestingResults\$suffix\$archiveStamp"
+        Write-Host "Archiving stale run history to $archiveDir before removing $modelEvalDir" -ForegroundColor Yellow
+        New-Item -ItemType Directory -Force -Path (Split-Path $archiveDir -Parent) | Out-Null
+        Move-Item -Path $modelEvalDir -Destination $archiveDir
     }
 }
 
@@ -126,10 +142,39 @@ else {
 }
 
 $csproj = Join-Path $repoRoot 'RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj'
+$testhostPath = Join-Path $artifactsPath 'bin\RoslynSentinel.Tests.ModelEval\debug\testhost.exe'
 
-& dotnet test $csproj -c Debug `
-    --artifacts-path $artifactsPath `
-    --filter "Name=$testName" `
-    --logger "console;verbosity=detailed"
+function Wait-ForTesthostExit {
+    # dotnet test's own process can return before the testhost.exe it spawned has fully
+    # released its file locks on this scratch path's DLLs - the next iteration's build
+    # then races that teardown and fails with MSB3027 "locked by testhost". Poll for any
+    # testhost.exe whose path is under this run's own --artifacts-path (never touch a
+    # testhost.exe belonging to a different host's scratch build or the plain bin/ output).
+    $deadline = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $deadline) {
+        $stillLocked = Get-CimInstance Win32_Process -Filter "Name='testhost.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.ExecutablePath -eq $testhostPath }
+        if (-not $stillLocked) { return }
+        Start-Sleep -Milliseconds 500
+    }
+    Write-Warning "testhost.exe under $artifactsPath did not exit within 60s of the test run finishing - the next iteration's build may hit MSB3027."
+}
 
-exit $LASTEXITCODE
+$exitCode = 0
+for ($i = 1; $i -le $Repeats; $i++) {
+    if ($Repeats -gt 1) {
+        Write-Host "--- Run $i of $Repeats ---" -ForegroundColor DarkCyan
+    }
+
+    & dotnet test $csproj -c Debug `
+        --artifacts-path $artifactsPath `
+        --filter "Name=$testName" `
+        --logger "console;verbosity=detailed"
+    $exitCode = $LASTEXITCODE
+
+    if ($i -lt $Repeats) {
+        Wait-ForTesthostExit
+    }
+}
+
+exit $exitCode
