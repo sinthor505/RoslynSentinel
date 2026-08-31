@@ -86,8 +86,9 @@ public sealed class ModelAgentRunner
             turnStopwatch.Stop();
 
             _logger.LogInformation(
-                "Turn {Turn}: model responded in {Latency} — {ToolCallCount} tool call(s). Content: {Content}",
+                "Turn {Turn}: model responded in {Latency} — {ToolCallCount} tool call(s). Reasoning: {Reasoning} Content: {Content}",
                 turnNumber, turnStopwatch.Elapsed, modelMessage.ToolCalls.Count,
+                string.IsNullOrWhiteSpace(modelMessage.ReasoningContent) ? "(none)" : modelMessage.ReasoningContent,
                 string.IsNullOrWhiteSpace(modelMessage.Content) ? "(none)" : modelMessage.Content);
 
             var turnRecord = new AgentTranscriptTurn
