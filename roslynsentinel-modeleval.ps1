@@ -11,6 +11,11 @@
                           -Size sets ROSLYNSENTINEL_MODELEVAL_SIZES (single value, e.g. 60).
       MinimalGuidance  - Model_FixesWholeFileRewriteBug_MinimalGuidance (runs by default).
                           Level-3 symptom-only prompt for the whole-file-rewrite bug fix.
+      MinimalGuidanceDisambiguated - Same fixture/assertions as MinimalGuidance, but the
+                          prompt adds one sentence closing the "reuse that same approach"
+                          ambiguity a 2026-08-31 reasoning-level analysis found was the
+                          dominant fork between pass (34%) and fail on the plain prompt —
+                          see project_minimalguidance_reasoning_pattern_analysis memory.
 
     Each host gets its own --artifacts-path (RoslynSentinel\_scratchbuild_<host-suffix>) so
     that two hosts can be launched concurrently without racing on shared project references'
@@ -74,7 +79,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'MinimalGuidance')]
+    [ValidateSet('SizeThreshold', 'MinimalGuidance', 'MinimalGuidanceDisambiguated')]
     [string]$Test,
 
     [Parameter(Position = 2)]
@@ -109,8 +114,9 @@ else {
 }
 
 $testNames = @{
-    'SizeThreshold'   = 'Model_SizeThresholdSweep'
-    'MinimalGuidance' = 'Model_FixesWholeFileRewriteBug_MinimalGuidance'
+    'SizeThreshold'                 = 'Model_SizeThresholdSweep'
+    'MinimalGuidance'               = 'Model_FixesWholeFileRewriteBug_MinimalGuidance'
+    'MinimalGuidanceDisambiguated'  = 'Model_FixesWholeFileRewriteBug_MinimalGuidanceDisambiguated'
 }
 $testName = $testNames[$Test]
 

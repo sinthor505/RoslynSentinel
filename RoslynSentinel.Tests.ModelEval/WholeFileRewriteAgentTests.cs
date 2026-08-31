@@ -109,6 +109,37 @@ public class WholeFileRewriteAgentTests
         result.
         """;
 
+    // Level 3.5: same symptom-only framing as MinimalGuidanceUserPromptTemplate above (no method/
+    // file names, no step list) but closes one specific ambiguity that a 50-run reasoning-level
+    // analysis (see project_minimalguidance_reasoning_pattern_analysis memory, 2026-08-31) showed
+    // was the dominant fork between pass and fail: "reuse that same approach" says nothing about
+    // *how* to reuse a private method, and the model's own next thought decides everything — 17/17
+    // passing runs treated it as "copy this pattern into my file," while 16/33 failing runs treated
+    // it as "call this method, so I need to make it public first" and mutated the reference-only
+    // file. This variant adds one sentence disambiguating exactly that, without reintroducing the
+    // method/file names or step list that would make this level-2 in disguise.
+    private const string DisambiguatedMinimalGuidanceUserPromptTemplate = """
+        # Task: Fix a bug in FixtureHelpers/BlockConverter.cs
+
+        Users report that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs` sometimes
+        changes unrelated formatting elsewhere in the same file, even though they only asked for
+        one class to be converted.
+
+        Investigate `BlockConverter.cs`, find the root cause, and fix it. A similar bug was
+        already fixed elsewhere in this codebase using a reusable pattern — look for it and reuse
+        that same approach rather than inventing a new one.
+
+        If the existing fix lives in a private method in another file, treat it as a pattern to
+        copy into your own fix, not a method to call directly — do not change any other file's
+        access modifiers, and do not modify any file other than `BlockConverter.cs`.
+
+        Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
+        to just the `ContosoOrders.Core` project rather than the whole solution.
+
+        Don't touch code unrelated to the bug. Report what you changed and the verification
+        result.
+        """;
+
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
     // AddRoslynSentinelToolsBasic checks — these two together register everything the prompts in
     // this file need (ApplyDiff, Build, ReadFile, SearchSolutionText, ListSolutionItems via
@@ -252,6 +283,25 @@ public class WholeFileRewriteAgentTests
     public async Task Model_FixesWholeFileRewriteBug_MinimalGuidance()
     {
         var result = await RunOnceAsync(MinimalGuidanceUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.Converged, Is.True,
+            $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
+
+        AssertFixApplied(result);
+    }
+
+    /// <summary>
+    /// Same as <see cref="Model_FixesWholeFileRewriteBug_MinimalGuidance"/> but with the
+    /// disambiguated prompt (see <see cref="DisambiguatedMinimalGuidanceUserPromptTemplate"/>) —
+    /// compare pass rates between the two over N repeats to check whether closing the "reuse the
+    /// approach" ambiguity actually raises the pass rate, per
+    /// project_minimalguidance_reasoning_pattern_analysis's finding that this ambiguity is the
+    /// dominant fork between pass and fail on the plain MinimalGuidance prompt.
+    /// </summary>
+    [Test]
+    public async Task Model_FixesWholeFileRewriteBug_MinimalGuidanceDisambiguated()
+    {
+        var result = await RunOnceAsync(DisambiguatedMinimalGuidanceUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
 
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
