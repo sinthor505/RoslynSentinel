@@ -10,12 +10,14 @@ namespace RoslynSentinel.Basic;
 /// message have been observed pattern-matching the wrong fix category (e.g. adding a `using` for a
 /// CS0103 that's actually a missing `ClassName.` qualifier) and then repeating that wrong fix under
 /// slightly different framing rather than re-reading the diagnostic. For known diagnostic IDs this
-/// adds a targeted hint (and, for CS0103, symbol-search candidates); anything unrecognized falls
-/// through to the plain diagnostics text so nothing regresses for codes not taught yet.
+/// adds a targeted hint and symbol-search candidates (CS0103 unresolved names, CS0117/CS1061
+/// missing members); anything unrecognized falls through to the plain diagnostics text so nothing
+/// regresses for codes not taught yet.
 /// </summary>
 public static class CompilerErrorLookupHelper
 {
     private static readonly Regex Cs0103NameRegex = new(@"The name '([^']+)' does not exist in the current context", RegexOptions.Compiled);
+    private static readonly Regex MissingMemberRegex = new(@"'([^']+)' does not contain a definition for '([^']+)'", RegexOptions.Compiled);
 
     public static async Task<string> DescribeAsync(
         DiagnosticReport report,
@@ -42,6 +44,11 @@ public static class CompilerErrorLookupHelper
         if (diagnostic.Id == "CS0103")
         {
             return baseText + "\n" + await DescribeCs0103Async(diagnostic, symbolNavigationEngine, cancellationToken);
+        }
+
+        if (diagnostic.Id is "CS0117" or "CS1061")
+        {
+            return baseText + "\n" + await DescribeMissingMemberAsync(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
         return baseText;
@@ -83,5 +90,68 @@ public static class CompilerErrorLookupHelper
 
         return $"  '{name}' exists elsewhere in the solution but is not in scope here — most likely it needs to be called with its containing type as a qualifier (a `using` directive does not import another class's static members). Candidates found:\n"
             + string.Join("\n", suggestions);
+    }
+
+    private static async Task<string> DescribeMissingMemberAsync(
+        DiagnosticInfo diagnostic,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        var match = MissingMemberRegex.Match(diagnostic.Message);
+        if (!match.Success)
+        {
+            return "  This is a missing-member error, but the type/member names could not be extracted from the diagnostic text to search for them.";
+        }
+
+        var typeName = match.Groups[1].Value;
+        var memberName = match.Groups[2].Value;
+        var isExtensionCandidate = diagnostic.Id == "CS1061";
+
+        // LocateSymbolAsync's containingType filter matches MinimallyQualifiedFormat (simple name,
+        // no generic arguments) exactly — the diagnostic's type name may be fully-qualified or
+        // generic-decorated (e.g. "System.Collections.Generic.List<int>"), so reduce to a simple
+        // name before using it as a scope filter. If reduction still doesn't match, the solution-wide
+        // fallback below still finds the member by name alone.
+        var simpleTypeName = typeName.Split('.').Last().Split('<').First();
+
+        List<SymbolLocation> candidates;
+        try
+        {
+            // Scope to the named type first — a typo'd member on the right type is the common case.
+            candidates = await symbolNavigationEngine.LocateSymbolAsync(
+                memberName, exactMatch: true, containingType: simpleTypeName, cancellationToken: cancellationToken);
+
+            if (candidates.Count == 0)
+            {
+                // Not on that type at all — search the whole solution in case the member exists on a
+                // different, similarly-named type (or the model has the wrong receiver entirely).
+                candidates = await symbolNavigationEngine.LocateSymbolAsync(
+                    memberName, exactMatch: true, cancellationToken: cancellationToken);
+            }
+        }
+        catch (Exception)
+        {
+            candidates = [];
+        }
+
+        if (candidates.Count == 0)
+        {
+            return isExtensionCandidate
+                ? $"  No member or extension method named '{memberName}' was found anywhere in the solution for type '{typeName}'. This is likely a typo, a member that needs to be added to '{typeName}', or an extension method whose defining namespace needs a `using` — check FindExtensionMethods if one is expected to exist."
+                : $"  No member named '{memberName}' was found anywhere in the solution. This is likely a typo, or '{memberName}' needs to be added to '{typeName}'.";
+        }
+
+        var suggestions = candidates
+            .Take(5)
+            .Select(c => c.ContainingType != null
+                ? $"    - {c.ContainingType}.{c.SymbolName} ({c.Signature}) — {c.FilePath}:{c.Line}"
+                : $"    - {c.SymbolName} ({c.Signature}) — {c.FilePath}:{c.Line}");
+
+        var onNamedType = candidates.Any(c => string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase));
+        var explanation = onNamedType
+            ? $"  '{memberName}' exists on '{typeName}' but isn't accessible the way it was called (wrong overload, wrong accessibility, or a static/instance mismatch)."
+            : $"  '{memberName}' was not found on '{typeName}', but a member with that name exists elsewhere — likely the wrong receiver type, or '{memberName}' needs to be added to '{typeName}' instead. Candidates found:";
+
+        return explanation + "\n" + string.Join("\n", suggestions);
     }
 }
