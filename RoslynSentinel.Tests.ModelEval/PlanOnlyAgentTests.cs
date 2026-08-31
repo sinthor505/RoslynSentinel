@@ -21,11 +21,13 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// DeleteFile are blocked by a request filter — the model can only read, search, and list, then must
 /// state its plan in its final response instead of executing it. Cheaper (fewer turns, no build/edit
 /// round-trips) than the full execute-and-verify tests, and isolates whether the "private" fork found
-/// in project_minimalguidance_reasoning_pattern_analysis (0/17 passing runs vs 16/33 failing runs
-/// mention it) already exists at planning time, before any tool-call commitment — as opposed to
-/// something that only emerges once the model starts improvising edits turn-by-turn. See also
-/// PlanThenExecuteAgentTests, which tests whether forcing this same plan before editing changes the
-/// execution-time outcome (the actual anchoring hypothesis this test alone can't confirm).
+/// in project_minimalguidance_reasoning_pattern_analysis already exists at planning time, before any
+/// tool-call commitment — as opposed to something that only emerges once the model starts
+/// improvising edits turn-by-turn. Note that analysis's pass/fail labels predate the AssertFixApplied
+/// flip (see WholeFileRewriteAgentTests) and should be read with "calling/exposing the helper" as the
+/// CORRECT outcome, not the failure. See also PlanThenExecuteAgentTests, which tests whether forcing
+/// this same plan before editing changes the execution-time outcome (the actual anchoring hypothesis
+/// this test alone can't confirm).
 /// </summary>
 [TestFixture]
 public class PlanOnlyAgentTests
@@ -46,9 +48,10 @@ public class PlanOnlyAgentTests
         already fixed elsewhere in this codebase using a reusable pattern — look for it and plan to
         reuse that same approach rather than inventing a new one.
 
-        If the existing fix lives in a private method in another file, treat it as a pattern to
-        copy into your own fix, not a method to call directly — your plan should not change any
-        other file's access modifiers, and should not modify any file other than `BlockConverter.cs`.
+        If the existing fix lives in a private method in another file, plan to call it directly
+        rather than copying its body — your plan should raise its accessibility (e.g. to
+        `internal`) so it can be called cross-file, but should not duplicate its logic, and should
+        not modify anything else in that file.
 
         You do NOT have access to any file-editing tool in this session (ApplyDiff, CreateFile,
         DeleteFile, ChangeAccessibility, and ModifyModifier are all unavailable and will return an
@@ -217,12 +220,13 @@ public class PlanOnlyAgentTests
     /// <summary>
     /// The model investigates and states a plan, but never calls ApplyDiff — scores the plan's own
     /// text for the same "private"/"public"/"call" vs. "copy"/"pattern" fork found in
-    /// project_minimalguidance_reasoning_pattern_analysis. A model that says "make it public" here,
-    /// before ever attempting an edit, shows the fork happens at interpretation time, not as a
-    /// consequence of iterative "make it work" pressure during editing.
+    /// project_minimalguidance_reasoning_pattern_analysis. Per WholeFileRewriteAgentTests.
+    /// AssertFixApplied's flipped scoring, "make it public and call it" is now the CORRECT plan
+    /// (matching the real-world consolidation precedent, commit 8a8963d) — a model that instead
+    /// plans to copy the pattern into a new private method is the fork this experiment surfaces.
     /// </summary>
     [Test]
-    public async Task Model_PlansWholeFileRewriteFix_NeverMentionsPrivate()
+    public async Task Model_PlansWholeFileRewriteFix_PrefersCallingHelper()
     {
         var runner = new ModelAgentRunner(
             _agentClient, _mcpClient, turnCap: 15, wallClockCap: TimeSpan.FromMinutes(15),
@@ -241,8 +245,16 @@ public class PlanOnlyAgentTests
             $"Model attempted a blocked mutating tool ({string.Join(", ", blockedCalls.Select(c => c.ToolName))}) " +
             $"instead of only planning. Transcript: {result.TranscriptPath}");
 
-        var finalMessage = result.Transcript.Turns
-            .LastOrDefault(t => !string.IsNullOrWhiteSpace(t.ModelMessage.Content))?.ModelMessage.Content ?? string.Empty;
+        // This model streams its final answer as ReasoningContent (not Content) on a turn that
+        // makes no tool calls — observed across every run of this fixture 2026-08-31, where
+        // Content was consistently empty ("(none)" in agent.log) despite the model's full plan,
+        // including exact code, appearing under Reasoning instead. Fall back to ReasoningContent
+        // so a plan-bearing turn isn't scored as an empty response.
+        var finalTurn = result.Transcript.Turns
+            .LastOrDefault(t => !string.IsNullOrWhiteSpace(t.ModelMessage.Content) || !string.IsNullOrWhiteSpace(t.ModelMessage.ReasoningContent));
+        var finalMessage = finalTurn is null
+            ? string.Empty
+            : (string.IsNullOrWhiteSpace(finalTurn.ModelMessage.Content) ? finalTurn.ModelMessage.ReasoningContent : finalTurn.ModelMessage.Content) ?? string.Empty;
         Assert.That(finalMessage, Does.Contain("ReplaceBlockFormatted"),
             $"The plan should name ReplaceBlockFormatted as the pattern to reuse. Transcript: {result.TranscriptPath}");
 
@@ -251,7 +263,7 @@ public class PlanOnlyAgentTests
         // per run, but intentionally does not fail the test: a run that reasons "make it public" here
         // is exactly the data point this experiment exists to surface, not a defect in the harness.
         TestContext.Out.WriteLine(finalMessage.Contains("private", StringComparison.OrdinalIgnoreCase)
-            ? "PLAN MENTIONS 'private' — model's stated plan leans toward calling/exposing the helper."
-            : "Plan does not mention 'private' — model's stated plan leans toward copying the pattern.");
+            ? "PLAN MENTIONS 'private' — model's stated plan leans toward calling/exposing the helper (correct)."
+            : "Plan does not mention 'private' — model's stated plan leans toward copying the pattern (incorrect).");
     }
 }

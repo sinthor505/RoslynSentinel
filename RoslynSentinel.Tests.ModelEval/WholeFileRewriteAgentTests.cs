@@ -43,8 +43,9 @@ public class WholeFileRewriteAgentTests
 
         This exact bug was already fixed, using the same fix pattern, in the sibling file
         `{0}/FixtureHelpers/BlockEditHelpers.cs` — but the helper there is private, so
-        `BlockConverter.cs` can't call it directly. Your job is to apply that same fix pattern to
-        `ConvertAbstractClassToInterface` in `BlockConverter.cs`.
+        `BlockConverter.cs` can't call it directly yet. Your job is to apply that same fix pattern
+        to `ConvertAbstractClassToInterface` in `BlockConverter.cs` by reusing the existing helper,
+        not by writing a second copy of it.
 
         ## Steps
 
@@ -57,11 +58,10 @@ public class WholeFileRewriteAgentTests
            the whole file. Locate it and read its full source.
 
         3. Apply the same fix to `ConvertAbstractClassToInterface`:
-           - Bring the helper method (`ReplaceBlockFormatted`) into `BlockConverter.cs` — this
-             class doesn't have it yet, and the original in `BlockEditHelpers.cs` is private, so
-             it can't be called cross-file.
-           - Add whatever `using` directive the helper needs to compile.
-           - Update `ConvertAbstractClassToInterface` so it uses the helper instead of
+           - Raise `ReplaceBlockFormatted`'s accessibility in `BlockEditHelpers.cs` (e.g. to
+             `internal`) so `BlockConverter.cs` can call it directly — don't copy its body.
+           - Add whatever `using` directive the call site needs to compile.
+           - Update `ConvertAbstractClassToInterface` so it calls the shared helper instead of
              `ReformatWholeFile`, producing the same edit (still renaming
              `public abstract class {{className}}` to `public interface I{{className}}`), but
              formatting only that change.
@@ -70,7 +70,7 @@ public class WholeFileRewriteAgentTests
            to just the `ContosoOrders.Core` project rather than the whole solution.
 
         5. Confirm the fix: re-read `ConvertAbstractClassToInterface` and check that the
-           whole-file-rewrite call is gone and the helper is being used instead.
+           whole-file-rewrite call is gone and the shared helper is being called instead.
 
         6. Report what you changed and the verification result.
 
@@ -78,9 +78,11 @@ public class WholeFileRewriteAgentTests
 
         - Don't touch `UnrelatedMethodBefore` or `UnrelatedMethodAfter` in the file — they are
           explicitly out of scope for this task.
-        - Don't invent a new helper method or a different fix approach — reuse the
-          `ReplaceBlockFormatted` logic as-is; don't rename it or change its behavior.
-        - Don't modify `BlockEditHelpers.cs` — it's reference only; leave it exactly as-is.
+        - Don't invent a new helper method or a different fix approach, and don't duplicate
+          `ReplaceBlockFormatted`'s body into `BlockConverter.cs` — call the existing method as-is;
+          don't rename it or change its behavior.
+        - Don't change anything in `BlockEditHelpers.cs` other than `ReplaceBlockFormatted`'s
+          accessibility modifier.
         - Preserve the original method's behavior (same inputs/outputs) — only the rewrite
           mechanism should change.
         """;
@@ -112,12 +114,14 @@ public class WholeFileRewriteAgentTests
     // Level 3.5: same symptom-only framing as MinimalGuidanceUserPromptTemplate above (no method/
     // file names, no step list) but closes one specific ambiguity that a 50-run reasoning-level
     // analysis (see project_minimalguidance_reasoning_pattern_analysis memory, 2026-08-31) showed
-    // was the dominant fork between pass and fail: "reuse that same approach" says nothing about
-    // *how* to reuse a private method, and the model's own next thought decides everything — 17/17
-    // passing runs treated it as "copy this pattern into my file," while 16/33 failing runs treated
-    // it as "call this method, so I need to make it public first" and mutated the reference-only
-    // file. This variant adds one sentence disambiguating exactly that, without reintroducing the
-    // method/file names or step list that would make this level-2 in disguise.
+    // was a major fork between pass and fail under the ORIGINAL (since-flipped) assertion: "reuse
+    // that same approach" says nothing about *how* to reuse a private method, and the model's own
+    // next thought decides everything. That original analysis scored "call it directly, raising
+    // its accessibility" as a failure — but per the real-world precedent this fixture is modeled
+    // on (commit 8a8963d: consolidate 52 duplicate call sites onto one shared helper, not grow more
+    // copies), calling the shared helper directly is actually the correct fix, and AssertFixApplied
+    // was flipped to match. This variant's disambiguating sentence now points at that same correct
+    // outcome instead of away from it — see AssertFixApplied's comment for the full rationale.
     private const string DisambiguatedMinimalGuidanceUserPromptTemplate = """
         # Task: Fix a bug in FixtureHelpers/BlockConverter.cs
 
@@ -129,9 +133,10 @@ public class WholeFileRewriteAgentTests
         already fixed elsewhere in this codebase using a reusable pattern — look for it and reuse
         that same approach rather than inventing a new one.
 
-        If the existing fix lives in a private method in another file, treat it as a pattern to
-        copy into your own fix, not a method to call directly — do not change any other file's
-        access modifiers, and do not modify any file other than `BlockConverter.cs`.
+        If the existing fix lives in a private method in another file, call it directly rather
+        than copying its body into your own fix — raise its accessibility (e.g. to `internal`) so
+        it can be called cross-file, but don't duplicate its logic, and don't modify anything else
+        in that file.
 
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
@@ -381,13 +386,25 @@ public class WholeFileRewriteAgentTests
         Assert.That(fixedText, Does.Not.Contain("return ReformatWholeFile("),
             $"ConvertAbstractClassToInterface should no longer call ReformatWholeFile. Transcript: {result.TranscriptPath}");
         Assert.That(fixedText, Does.Contain("ReplaceBlockFormatted"),
-            $"The fix should bring a ReplaceBlockFormatted helper into BlockConverter.cs itself " +
-            $"(the original in BlockEditHelpers.cs is private and unreachable cross-file). Transcript: {result.TranscriptPath}");
+            $"The fix should call ReplaceBlockFormatted (directly or qualified) — bringing it into " +
+            $"scope, not duplicating its body. Transcript: {result.TranscriptPath}");
 
+        // The real-world incident this fixture is modeled on (commit 8a8963d, "Fix
+        // NormalizeWhitespace whole-file reflow bug") was 52 call sites each reimplementing the
+        // same fix independently — the actual fix was to consolidate onto ONE shared helper, not
+        // to keep growing copies of it. So the correct model behavior here is to expose
+        // ReplaceBlockFormatted (raise its accessibility) and call the existing method from
+        // BlockConverter.cs — leaving it private and duplicating its body into BlockConverter.cs
+        // is the failure mode this assertion now catches, matching the precedent instead of
+        // fighting it.
         var helperPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "BlockEditHelpers.cs");
         var helperText = File.ReadAllText(helperPath);
-        Assert.That(helperText, Does.Contain("private static string ReplaceBlockFormatted"),
-            $"BlockEditHelpers.cs is reference-only and should be untouched by the model. Transcript: {result.TranscriptPath}");
+        Assert.That(helperText, Does.Not.Contain("private static string ReplaceBlockFormatted"),
+            $"ReplaceBlockFormatted should have its accessibility raised (internal/public) so " +
+            $"BlockConverter.cs can call it directly instead of duplicating it. Transcript: {result.TranscriptPath}");
+        Assert.That(fixedText, Does.Not.Match(@"(?:private\s+)?static\s+string\s+ReplaceBlockFormatted\s*\("),
+            $"BlockConverter.cs should call the shared ReplaceBlockFormatted, not define its own " +
+            $"copy of it. Transcript: {result.TranscriptPath}");
 
         // Unrelated methods must be byte-for-byte untouched — this is the actual bug signature
         // (whole-file reformat silently reindents code the model never meant to touch).

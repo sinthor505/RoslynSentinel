@@ -45,9 +45,10 @@ public class PlanThenExecuteAgentTests
         already fixed elsewhere in this codebase using a reusable pattern — look for it and reuse
         that same approach rather than inventing a new one.
 
-        If the existing fix lives in a private method in another file, treat it as a pattern to
-        copy into your own fix, not a method to call directly — do not change any other file's
-        access modifiers, and do not modify any file other than `BlockConverter.cs`.
+        If the existing fix lives in a private method in another file, call it directly rather
+        than copying its body into your own fix — raise its accessibility (e.g. to `internal`) so
+        it can be called cross-file, but don't duplicate its logic, and don't modify anything else
+        in that file.
 
         Before making any tool call that edits a file, first write out your complete plan as plain
         text: the root cause, exactly which method(s)/file(s) you will touch, and the specific
@@ -205,13 +206,21 @@ public class PlanThenExecuteAgentTests
         Assert.That(fixedText, Does.Not.Contain("return ReformatWholeFile("),
             $"ConvertAbstractClassToInterface should no longer call ReformatWholeFile. Transcript: {result.TranscriptPath}");
         Assert.That(fixedText, Does.Contain("ReplaceBlockFormatted"),
-            $"The fix should bring a ReplaceBlockFormatted helper into BlockConverter.cs itself " +
-            $"(the original in BlockEditHelpers.cs is private and unreachable cross-file). Transcript: {result.TranscriptPath}");
+            $"The fix should call ReplaceBlockFormatted (directly or qualified) — bringing it into " +
+            $"scope, not duplicating its body. Transcript: {result.TranscriptPath}");
 
+        // See WholeFileRewriteAgentTests.AssertFixApplied for the full rationale: the real-world
+        // precedent (commit 8a8963d) was consolidating 52 duplicate call sites onto one shared
+        // helper, so exposing and calling ReplaceBlockFormatted is the correct fix here, not
+        // duplicating it.
         var helperPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "BlockEditHelpers.cs");
         var helperText = File.ReadAllText(helperPath);
-        Assert.That(helperText, Does.Contain("private static string ReplaceBlockFormatted"),
-            $"BlockEditHelpers.cs is reference-only and should be untouched by the model. Transcript: {result.TranscriptPath}");
+        Assert.That(helperText, Does.Not.Contain("private static string ReplaceBlockFormatted"),
+            $"ReplaceBlockFormatted should have its accessibility raised (internal/public) so " +
+            $"BlockConverter.cs can call it directly instead of duplicating it. Transcript: {result.TranscriptPath}");
+        Assert.That(fixedText, Does.Not.Match(@"(?:private\s+)?static\s+string\s+ReplaceBlockFormatted\s*\("),
+            $"BlockConverter.cs should call the shared ReplaceBlockFormatted, not define its own " +
+            $"copy of it. Transcript: {result.TranscriptPath}");
 
         Assert.That(fixedText, Does.Contain("public string UnrelatedMethodBefore( int    x , int y )"),
             $"UnrelatedMethodBefore's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");

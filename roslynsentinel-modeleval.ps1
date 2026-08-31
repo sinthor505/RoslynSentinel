@@ -16,12 +16,14 @@
                           ambiguity a 2026-08-31 reasoning-level analysis found was the
                           dominant fork between pass (34%) and fail on the plain prompt —
                           see project_minimalguidance_reasoning_pattern_analysis memory.
-      PlanOnly          - Model_PlansWholeFileRewriteFix_NeverMentionsPrivate. Same
+      PlanOnly          - Model_PlansWholeFileRewriteFix_PrefersCallingHelper. Same
                           disambiguated task, but ApplyDiff/ChangeAccessibility/ModifyModifier/
                           CreateFile/DeleteFile are blocked by a filter — the model can only
                           investigate and state a plan, never edit. Cheaper/faster than the
                           execute-and-verify tests; checks whether the "private" reasoning fork
                           already exists at planning time before any tool-call commitment.
+                          Note: calling/exposing the helper is now the CORRECT plan (flipped
+                          scoring, see WholeFileRewriteAgentTests.AssertFixApplied).
       PlanThenExecute   - Model_FixesWholeFileRewriteBug_PlanThenExecute. Same disambiguated
                           task and full toolset as MinimalGuidanceDisambiguated, but the prompt
                           also asks the model to state its complete plan in prose before making
@@ -129,7 +131,7 @@ $testNames = @{
     'SizeThreshold'                 = 'Model_SizeThresholdSweep'
     'MinimalGuidance'               = 'Model_FixesWholeFileRewriteBug_MinimalGuidance'
     'MinimalGuidanceDisambiguated'  = 'Model_FixesWholeFileRewriteBug_MinimalGuidanceDisambiguated'
-    'PlanOnly'                      = 'Model_PlansWholeFileRewriteFix_NeverMentionsPrivate'
+    'PlanOnly'                      = 'Model_PlansWholeFileRewriteFix_PrefersCallingHelper'
     'PlanThenExecute'               = 'Model_FixesWholeFileRewriteBug_PlanThenExecute'
 }
 $testName = $testNames[$Test]
