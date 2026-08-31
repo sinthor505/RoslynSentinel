@@ -2318,38 +2318,6 @@ public class SentinelWorkspaceTools
         }
     }
 
-    // ── Phase 3 — Circuit breaker tools ────────────────────────────────────
-    [McpServerTool(Name = "ResetBreaker")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Resets the circuit breaker and all failure counters, re-enabling mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker.")]
-    public ToolResult<object> ResetBreaker(
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        //CancellationToken ct2 = default
-        )
-    {
-        ((IManualCircuitBreaker)_workspaceManager).Reset();
-        return new ToolResult<object>()
-        {
-            Success = true,
-            Data = "Circuit breaker reset. Failure counters cleared. Mutating tools re-enabled."
-        };
-    }
-
-    [McpServerTool(Name = "GetBreakerStatus")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Returns the current circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations.")]
-    public ToolResult<object> GetBreakerStatus(
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        //CancellationToken ct2 = default
-        )
-    {
-        return new ToolResult<object>()
-        {
-            Success = true,
-            Data = _workspaceManager.GetBreakerStatus()
-        };
-    }
-
     // ── 8. GetWorkspaceHealthAsync ─────────────────────────────────────────────────
     // Reads actual workspace/solution state directly rather than inferring health from
     // environment probes (e.g. MSBuild path existence), which can false-negative a fully

@@ -3832,4 +3832,36 @@ public class SentinelAsyncifyTools
         var parts = name.Split('_', StringSplitOptions.RemoveEmptyEntries);
         return string.Concat(parts.Select(p => char.ToUpper(p[0]) + p[1..]));
     }
+
+    // ── Mutation circuit breaker tools ──────────────────────────────────────
+    // Named "Mutation" (not just "Breaker") to distinguish from the separate, auto-resetting
+    // orientation breaker (SearchSolutionText thrashing guard) — a model that trips the
+    // orientation breaker previously reached for the identically-named ResetBreaker tool here,
+    // which only ever controlled this batch-failure breaker and left the model stuck retrying
+    // a tool that could never unblock it. Moved out of the base/Basic toolset into Advanced
+    // since this breaker only gates the Asyncify/BulkComment batch-mutation tools that live here.
+    [McpServerTool(Name = "ResetMutationBreaker")]
+    [Produces(DataTag.ResultOnly)]
+    [Description("Resets the batch-mutation circuit breaker and all failure counters, re-enabling Asyncify/BulkComment-style batch mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker. Unrelated to the SearchSolutionText orientation breaker, which resets itself automatically.")]
+    public ToolResult<object> ResetMutationBreaker()
+    {
+        ((IManualCircuitBreaker)_workspaceManager).Reset();
+        return new ToolResult<object>()
+        {
+            Success = true,
+            Data = "Mutation circuit breaker reset. Failure counters cleared. Batch mutating tools re-enabled."
+        };
+    }
+
+    [McpServerTool(Name = "GetMutationBreakerStatus")]
+    [Produces(DataTag.ResultOnly)]
+    [Description("Returns the current batch-mutation circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations. Unrelated to the SearchSolutionText orientation breaker, which resets itself automatically.")]
+    public ToolResult<object> GetMutationBreakerStatus()
+    {
+        return new ToolResult<object>()
+        {
+            Success = true,
+            Data = _workspaceManager.GetBreakerStatus()
+        };
+    }
 }
