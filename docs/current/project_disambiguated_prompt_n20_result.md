@@ -1,11 +1,11 @@
 ---
 name: project_disambiguated_prompt_n20_result
-description: "n=20 result for the disambiguated MinimalGuidance prompt against .113: 8/20 (40%) pass vs 34% baseline — not a strong signal at this N, but the ChangeAccessibility-on-helper failure mode collapsed (48%→17% of fails) while re-invents-own-helper became dominant (24%→75% of fails). Supports 'constraint adherence is secondary to make-it-work' over pure prompt-ambiguity."
+description: "Disambiguated MinimalGuidance prompt result across two hosts: .113 n=20 (8/20, 40%) and .112 Top P 0.3 n=5 (2/5, 40%) — not a strong signal at either N, but both show the same failure-mode shift: ChangeAccessibility-on-helper collapses while re-invents-own-helper becomes dominant. Supports 'constraint adherence is secondary to make-it-work' over pure prompt-ambiguity."
 metadata:
   node_type: memory
   type: project
   originSessionId: baae58f2-ea41-48a8-b6da-6d65bc32d78d
-  modified: 2026-08-31T20:48:19.194Z
+  modified: 2026-08-31T20:52:13.473Z
 ---
 
 Follow-up to [[project_minimalguidance_reasoning_pattern_analysis]] — ran
@@ -51,10 +51,15 @@ prompt that more forcefully demanded verbatim transcription (rather than just cl
    version under a different name" — rather than further tweaking the "reuse"/"call" wording,
    since that specific ambiguity is now demonstrably closed.
 
-Also ran a small n=5 batch against `.112` at Top P 0.3 concurrently (not yet analyzed in
-depth) — first observed run also re-invented the helper (as `ReformatBlock`) despite the
-disambiguated prompt, consistent with the re-invention mode appearing across hosts/sampling
-configs, not specific to `.113`/Top P 0.7.
+**Second data point — `.112` at Top P 0.3, n=5:** 2/5 (40%) pass, identical rate to `.113`'s
+n=20. Same failure-mode shift: 0/3 fails were `ChangeAccessibility`-on-helper, 2/3 were
+re-invents-own-helper. Too small a sample to weight heavily on its own, but it's a second
+independent host/sampling-config landing on the same shift — the "closing the accessibility
+loophole redirects into re-invention rather than eliminating the failure" pattern isn't
+specific to `.113`/Top P 0.7. One run (`20260831-201753-271`) is a striking thrashing case:
+correct final code (real `ReplaceBlockFormatted` call, 0 ApplyDiff errors) but 8 total
+error-tool calls getting there — still failed the "at most 1 failed tool call" gate despite
+ultimately writing the right fix.
 
 **Methodology note:** analysis script `C:\tmp\analyze_disambiguated_113_n20.ps1` (scratch, not
 committed) reuses the transcript-reconstruction approach from
