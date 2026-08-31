@@ -16,6 +16,18 @@
                           ambiguity a 2026-08-31 reasoning-level analysis found was the
                           dominant fork between pass (34%) and fail on the plain prompt —
                           see project_minimalguidance_reasoning_pattern_analysis memory.
+      PlanOnly          - Model_PlansWholeFileRewriteFix_NeverMentionsPrivate. Same
+                          disambiguated task, but ApplyDiff/ChangeAccessibility/ModifyModifier/
+                          CreateFile/DeleteFile are blocked by a filter — the model can only
+                          investigate and state a plan, never edit. Cheaper/faster than the
+                          execute-and-verify tests; checks whether the "private" reasoning fork
+                          already exists at planning time before any tool-call commitment.
+      PlanThenExecute   - Model_FixesWholeFileRewriteBug_PlanThenExecute. Same disambiguated
+                          task and full toolset as MinimalGuidanceDisambiguated, but the prompt
+                          also asks the model to state its complete plan in prose before making
+                          any edit tool call (not server-enforced - see PlanThenExecuteAgentTests
+                          doc comment). Tests whether a plan committed up front changes the
+                          execution-time fork rate versus deciding turn-by-turn.
 
     Each host gets its own --artifacts-path (RoslynSentinel\_scratchbuild_<host-suffix>) so
     that two hosts can be launched concurrently without racing on shared project references'
@@ -79,7 +91,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'MinimalGuidance', 'MinimalGuidanceDisambiguated')]
+    [ValidateSet('SizeThreshold', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute')]
     [string]$Test,
 
     [Parameter(Position = 2)]
@@ -117,6 +129,8 @@ $testNames = @{
     'SizeThreshold'                 = 'Model_SizeThresholdSweep'
     'MinimalGuidance'               = 'Model_FixesWholeFileRewriteBug_MinimalGuidance'
     'MinimalGuidanceDisambiguated'  = 'Model_FixesWholeFileRewriteBug_MinimalGuidanceDisambiguated'
+    'PlanOnly'                      = 'Model_PlansWholeFileRewriteFix_NeverMentionsPrivate'
+    'PlanThenExecute'               = 'Model_FixesWholeFileRewriteBug_PlanThenExecute'
 }
 $testName = $testNames[$Test]
 
@@ -205,11 +219,22 @@ for ($i = 1; $i -le $Repeats; $i++) {
 
     $before = @(Get-RunLeafDirs)
 
+    # A failing test makes `dotnet test` exit non-zero, which PowerShell 7 promotes to a
+    # terminating NativeCommandError under $ErrorActionPreference = 'Stop' - that would jump
+    # straight out of this loop, skipping Copy-NewRunDirectories below and every remaining
+    # repeat, silently truncating the batch on the FIRST test failure (not just a crash).
+    # Suppress that promotion for just this call so a real test failure is archived and
+    # counted like any other run; $LASTEXITCODE still reflects the real per-run outcome.
+    $ErrorActionPreference = 'Continue'
     & dotnet test $csproj -c Debug `
         --artifacts-path $artifactsPath `
         --filter "Name=$testName" `
         --logger "console;verbosity=detailed"
     $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($exitCode -ne 0) {
+        Write-Warning "Run $i of $Repeats failed (dotnet test exit code $exitCode) - archiving it anyway and continuing."
+    }
 
     Copy-NewRunDirectories -Before $before
 
