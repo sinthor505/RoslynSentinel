@@ -1,7 +1,15 @@
 # Blocking error — `PersistentWorkspaceManager.Dispose()` races `OnDebounceTimerElapsed`, crashes the process
 
-**Status:** OPEN — reported per docs/current/feedback_dogfood_mcp_blocking_errors.md, waiting for
-fix/confirmation. Found while writing Battery tests for the new `RunTest` tool
+**Status:** FIXED — commit 14f8229. `Dispose()` now disposes `_debounceTimer` via the blocking
+`Dispose(WaitHandle)` overload before tearing down `_workspace`/`_solutionLock`, and
+`OnDebounceTimerElapsed`'s `finally` block guards `_solutionLock.Release()` against
+`ObjectDisposedException` for the remaining async-continuation race window `Dispose(WaitHandle)`
+cannot close on its own. Verified: full `RoslynSentinel.Tests` (211/211) and
+`RoslynSentinel.Tests.Battery` (873 passed, 1 known pre-existing unrelated failure — see
+docs/current/reference_known_failing_tests.md — 89 skipped, needs `ROSLYN_SENTINEL_TEST_SLN`) both
+green post-fix, including the `RunTestTests.cs` scenarios that originally reproduced the crash.
+
+Found while writing Battery tests for the new `RunTest` tool
 (docs/current/plan-runtest-tool-v1.md Task 3) — not a bug in the tool being added, but hit directly
 by that work.
 
