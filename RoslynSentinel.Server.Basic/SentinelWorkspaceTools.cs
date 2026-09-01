@@ -45,6 +45,7 @@ public class SentinelWorkspaceTools
     // Added by AddConstructorParameter
     private readonly SymbolNavigationEngine _symbolNavigationEngine;    // Added by AddConstructorParameter
     private readonly BuildEngine _buildEngine;
+    private readonly TestRunEngine _testRunEngine;
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
     private readonly DiffEngine _diffEngine;
@@ -65,7 +66,7 @@ public class SentinelWorkspaceTools
             }
     };
 
-    public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine)
+    public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine)
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
@@ -79,6 +80,7 @@ public class SentinelWorkspaceTools
         _logger = logger;
         _buildEngine = buildEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
+        _testRunEngine = testRunEngine;
     }
 
     [McpServerTool(Name = "Features")]
@@ -1267,6 +1269,42 @@ public class SentinelWorkspaceTools
         {
             _logger.LogError(ex, "Build ({Level}) failed", level);
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Build failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and dotnet is on PATH. Details: {ex.Message}") };
+        }
+    }
+
+    [McpServerTool(Name = "RunTest")]
+    [Produces(DataTag.Report)]
+    [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). filter is passed through to `dotnet test --filter` — an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests.")]
+    public async Task<ToolResult<object>> RunTest(
+        ToolScope scope = ToolScope.solution,
+        string? scopeName = null,
+        string? filter = null,
+        TestResultsFilter resultsType = TestResultsFilter.all,
+        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
+        int timeoutSeconds = 300,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var rateLimitError = _workspaceManager.CheckRateLimit("RunTest", 10);
+            if (rateLimitError is not null)
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.TestRunFailed, rateLimitError) };
+            }
+
+            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, cancellationToken);
+
+            if (!result.TryGetData(out var testRunResult))
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? "Test run failed unexpectedly.") };
+            }
+
+            return new ToolResult<object>() { Success = true, Data = testRunResult, WorkspaceVersion = _workspaceManager.WorkspaceVersion };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RunTest failed");
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RunTest failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and dotnet is on PATH. Details: {ex.Message}") };
         }
     }
 

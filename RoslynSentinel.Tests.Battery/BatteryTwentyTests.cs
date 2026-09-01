@@ -38,7 +38,8 @@ public class BatteryTwentyTests
             _workspaceManager, _validationEngine, _diffEngine, _diagnosticEngine,
             _solutionManagementEngine, _structuralRefinementEngine, _dependencyEngine,
             _projectConsistencyEngine, _config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, _diagnosticEngine),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            new TestRunEngine(_workspaceManager));
     }
 
     [TearDown]

@@ -65,7 +65,8 @@ public class UndoLastApplyTests
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
             new BuildEngine(workspaceManager, diagnosticEngine),
-            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            new TestRunEngine(workspaceManager));
     }
 
     private string WriteBlob(string changeId, object items)

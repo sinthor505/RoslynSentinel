@@ -40,7 +40,8 @@ public class ApplyDiffSizeGuardTests
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
             new BuildEngine(workspaceManager, diagnosticEngine),
-            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            new TestRunEngine(workspaceManager));
     }
 
     [Test]

@@ -45,7 +45,8 @@ public class GetOperationDetailTests
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
             new BuildEngine(_workspaceManager, diagnosticEngine),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            new TestRunEngine(_workspaceManager));
     }
 
     [TearDown]
