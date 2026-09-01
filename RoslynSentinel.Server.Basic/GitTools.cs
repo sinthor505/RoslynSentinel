@@ -144,6 +144,13 @@ public class GitTools
     /// </summary>
     private static readonly TimeSpan GitProcessTimeout = TimeSpan.FromSeconds(30);
 
+    // Resolved once and reused: repeatedly letting CreateProcess re-resolve the bare "git" name
+    // through PATH on every call is themselves a plausible source of the intermittent 30s stalls
+    // documented in docs/current/blockers/blocking_error_git_status_timeout.md (first hang is always
+    // the process-spawn itself, not anything git does once running). Falls back to "git" if PATH
+    // resolution fails here, preserving prior behavior.
+    private static readonly string GitExecutablePath = ResolveGitExecutablePath();
+
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<GitTools> _logger;
 
@@ -187,10 +194,11 @@ public class GitTools
         using var process = new System.Diagnostics.Process();
         process.StartInfo = new System.Diagnostics.ProcessStartInfo
         {
-            FileName = "git",
+            FileName = GitExecutablePath,
             WorkingDirectory = gitRoot,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = true,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
@@ -209,6 +217,10 @@ public class GitTools
         timeoutCts.CancelAfter(GitProcessTimeout);
 
         process.Start();
+        // Close stdin immediately: an inherited/open but undrained stdin handle is a known cause of
+        // a spawned console child stalling indefinitely waiting for input it will never receive,
+        // even for commands (like rev-parse) that never read from it.
+        process.StandardInput.Close();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         try
@@ -233,6 +245,31 @@ public class GitTools
         }
 
         return (process.ExitCode, stdout.ToString(), stderr.ToString());
+    }
+
+    private static string ResolveGitExecutablePath()
+    {
+        var pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var extensions = OperatingSystem.IsWindows()
+            ? (Environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE").Split(';')
+            : [""];
+
+        foreach (var dir in pathVar.Split(Path.PathSeparator))
+        {
+            if (dir.Length == 0)
+                continue;
+
+            foreach (var ext in extensions)
+            {
+                var candidate = Path.Combine(dir, "git" + ext);
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+        }
+
+        // Fall back to bare "git" (prior behavior) so a PATH this scan couldn't see (e.g. an App
+        // Paths registry redirect) still has a chance to work rather than failing outright.
+        return "git";
     }
 
     private static void TryKillGitProcess(System.Diagnostics.Process process)
