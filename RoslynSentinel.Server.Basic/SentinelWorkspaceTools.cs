@@ -670,7 +670,7 @@ public class SentinelWorkspaceTools
                     : new ToolResult<object>()
                     {
                         Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult}")
+                        Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult.Diagnostics.ToInfo()}")
                     };
                 }
             }
@@ -943,7 +943,7 @@ public class SentinelWorkspaceTools
                     : new ToolResult<object>()
                     {
                         Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult}")
+                        Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult.Diagnostics.ToInfo()}")
                     };
                 }
             }
