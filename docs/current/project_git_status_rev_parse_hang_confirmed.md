@@ -1,11 +1,11 @@
 ---
 name: project_git_status_rev_parse_hang_confirmed
-description: "MCP Git(status) reproducibly timed out at 30s on 'git rev-parse --abbrev-ref HEAD' across 4 occurrences; fix applied 2026-09-01 (absolute exe path + stdin close in GitTools.RunGitAsync), not yet confirmed to have eliminated it since the hang was never on-demand reproducible"
+description: "MCP Git(status) reproducibly timed out at 30s on 'git rev-parse --abbrev-ref HEAD' across 4 occurrences; fix applied 2026-09-01 (absolute exe path + stdin close in GitTools.RunGitAsync) and confirmed working in a fresh session — status/commit both instant, blocker doc moved to obsolete"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 1eb62413-88c5-4b73-98a5-413d813d544b
-  modified: 2026-09-01T00:00:00.000Z
+  modified: 2026-09-01T08:42:18.749Z
 ---
 
 `Git(operation: "status")` in the RoslynSentinel MCP server timed out at exactly 30s
@@ -33,10 +33,13 @@ immediately closes `StandardInput` after `process.Start()`. Build verified clean
 errors/warnings) on `RoslynSentinel.Server.Basic`, which `RoslynSentinel.Server.Advanced`
 project-references (see [[project_advanced_extends_basic]]) — no separate fix needed for Advanced.
 
-**How to apply:** if `Git(status/diff/commit)` times out again in this repo — especially after a
-server rebuild that includes this fix — that disproves the stdin/PATH theory and this needs a live
-repro with Process Monitor on the spawned `git.exe` to see what handle/syscall it's actually blocked
-on. Don't re-chase the concurrent-server-processes or PATHEXT-shim leads; both were checked and
-ruled out this session. Check `docs/current/blockers/blocking_error_git_status_timeout.md` for the
-latest state before writing a new blocker doc (append an update section there rather than creating a
-differently-named duplicate file, since that happened once already and had to be merged).
+**Confirmed 2026-09-01 (later session):** after the fix commit (945ce12), `Git(status)` and
+`Git(commit)` both returned instantly against this same repo — no timeout, first try. Used to
+commit the CS0122 lookup-helper work (commit d4397b3). Blocker doc moved to
+`docs/obsolete/blockers/blocking_error_git_status_timeout.md`.
+
+**How to apply:** treat this as resolved. If `Git(status/diff/commit)` ever times out again in this
+repo, that would be a genuinely new occurrence post-fix (not a continuation of this one) — check
+`docs/obsolete/blockers/blocking_error_git_status_timeout.md` for prior history/theories already
+ruled out (concurrent server processes, PATHEXT/shim wrapping) before re-investigating, and open a
+fresh blocker doc rather than reviving the obsolete one.
