@@ -260,6 +260,11 @@ public class DiffEngine
     /// if the hunk has no context/removal lines to anchor on (a pure insertion at file start/end).
     /// Throws if the declared position doesn't match and no nearby match can be found either.
     /// </summary>
+    // If a DiffApplyFailed error from this method is confusing, use DiffHunkAnalyzer to check the
+    // hunk's header-declared counts against its actual body first — it catches a different, cheaper
+    // class of malformed-hunk bug than the anchor-mismatch diagnosis produced here. For a worked
+    // example of reproducing a failure by replaying a recorded diff against known file content, see
+    // DiffEngineTests.ApplyDiff_Size60ModelEvalTranscript_ReplaysRecordedFailingDiff.
     private static int ReanchorHunk(List<string> lines, List<string> hunkBody, int declaredLine, string hunkHeader)
     {
         var anchorLines = hunkBody
