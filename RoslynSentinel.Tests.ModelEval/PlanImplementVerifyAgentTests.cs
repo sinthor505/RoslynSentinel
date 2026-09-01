@@ -169,6 +169,7 @@ public class PlanImplementVerifyAgentTests
         // just re-loads this same on-disk solution path, so all three phases see identical starting
         // content without needing this manager (or the tool server it would require) to stay alive.
         var writerServices = new ServiceCollection();
+        writerServices.AddLogging();
         writerServices.AddRoslynSentinelEnginesBasic();
         var writerProvider = writerServices.BuildServiceProvider();
         var writerWorkspaceManager = writerProvider.GetRequiredService<IWorkspaceManager>();
