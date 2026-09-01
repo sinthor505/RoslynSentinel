@@ -148,6 +148,40 @@ public class WholeFileRewriteAgentTests
         leave it exactly as you found it. Report what you changed and the verification result.
         """;
 
+    // Scripted-plan variant: same symptom-only framing as DisambiguatedMinimalGuidanceUserPromptTemplate,
+    // but instead of asking the model to locate the bug and derive a plan itself, the plan is handed
+    // to it verbatim — lifted from a real model's own successful PlanThenExecute run (transcript
+    // 20260901-005448-159, see project_seed_investigation_result's sibling analysis memories) so the
+    // steps are exactly what a 9B model already proved it can conceive on its own. This isolates
+    // execution fidelity from planning/bug-location: if pass rate here is much higher than
+    // MinimalGuidanceDisambiguated's, the bottleneck is planning, not mechanical tool use.
+    private const string ScriptedPlanUserPromptTemplate = """
+        # Task: Fix a bug in FixtureHelpers/BlockConverter.cs
+
+        Users report that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs` sometimes
+        changes unrelated formatting elsewhere in the same file, even though they only asked for
+        one class to be converted.
+
+        The root cause and fix have already been worked out for you. Apply exactly this plan:
+
+        1. In `{0}/FixtureHelpers/BlockEditHelpers.cs`, raise `ReplaceBlockFormatted`'s
+           accessibility from `private` to `internal` (it stays `static`). Don't change anything
+           else in that file.
+        2. In `{0}/FixtureHelpers/BlockConverter.cs`, in `ConvertAbstractClassToInterface`,
+           replace the line `return ReformatWholeFile(rewritten);` with a call to the now-internal
+           `BlockEditHelpers.ReplaceBlockFormatted(rewritten, oldHeader, newHeader)`, returning its
+           result instead.
+        3. Delete the now-unused `ReformatWholeFile` method from `BlockConverter.cs` entirely.
+
+        Do not modify any other method, field, or class in either file, even ones that look
+        unused or unrelated — leave everything else exactly as you found it.
+
+        Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
+        to just the `ContosoOrders.Core` project rather than the whole solution.
+
+        Report what you changed and the verification result.
+        """;
+
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
     // AddRoslynSentinelToolsBasic checks — these two together register everything the prompts in
     // this file need (ApplyDiff, Build, ReadFile, SearchSolutionText, ListSolutionItems via
@@ -310,6 +344,25 @@ public class WholeFileRewriteAgentTests
     public async Task Model_FixesWholeFileRewriteBug_MinimalGuidanceDisambiguated()
     {
         var result = await RunOnceAsync(DisambiguatedMinimalGuidanceUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.Converged, Is.True,
+            $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
+
+        AssertFixApplied(result);
+    }
+
+    /// <summary>
+    /// Same fixture/assertions as <see cref="Model_FixesWholeFileRewriteBug_MinimalGuidanceDisambiguated"/>,
+    /// but the prompt hands the model an exact, already-correct plan (see
+    /// <see cref="ScriptedPlanUserPromptTemplate"/>) instead of asking it to find the bug and derive
+    /// one. Isolates whether failures on the disambiguated prompt come from planning/bug-location or
+    /// from mechanical execution — a model that still fails here despite a scripted correct plan
+    /// points at execution fidelity, not reasoning, as the bottleneck.
+    /// </summary>
+    [Test]
+    public async Task Model_FixesWholeFileRewriteBug_ScriptedPlan()
+    {
+        var result = await RunOnceAsync(ScriptedPlanUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
 
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");

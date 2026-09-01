@@ -30,6 +30,13 @@
                           any edit tool call (not server-enforced - see PlanThenExecuteAgentTests
                           doc comment). Tests whether a plan committed up front changes the
                           execution-time fork rate versus deciding turn-by-turn.
+      ScriptedPlan       - Model_FixesWholeFileRewriteBug_ScriptedPlan. Same fixture/assertions
+                          as MinimalGuidanceDisambiguated, but the prompt hands the model an
+                          exact, already-correct 3-step plan (lifted from a real model's own
+                          successful PlanThenExecute run) instead of asking it to find the bug
+                          and derive one. Isolates execution fidelity from planning/bug-location:
+                          a much higher pass rate here than MinimalGuidanceDisambiguated's points
+                          at planning as the bottleneck, not mechanical tool use.
 
     Each host gets its own --artifacts-path (RoslynSentinel\_scratchbuild_<host-suffix>) so
     that two hosts can be launched concurrently without racing on shared project references'
@@ -93,7 +100,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute')]
+    [ValidateSet('SizeThreshold', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan')]
     [string]$Test,
 
     [Parameter(Position = 2)]
@@ -133,6 +140,7 @@ $testNames = @{
     'MinimalGuidanceDisambiguated'  = 'Model_FixesWholeFileRewriteBug_MinimalGuidanceDisambiguated'
     'PlanOnly'                      = 'Model_PlansWholeFileRewriteFix_PrefersCallingHelper'
     'PlanThenExecute'               = 'Model_FixesWholeFileRewriteBug_PlanThenExecute'
+    'ScriptedPlan'                   = 'Model_FixesWholeFileRewriteBug_ScriptedPlan'
 }
 $testName = $testNames[$Test]
 
