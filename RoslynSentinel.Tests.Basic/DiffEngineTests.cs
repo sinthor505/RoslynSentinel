@@ -319,6 +319,55 @@ public class DiffEngineTests
     }
 
     [Test]
+    [Description("A hunk whose context lines span BOTH sides of a +-only insertion block must reanchor "
+                 + "successfully when every anchor line (leading and trailing) is valid at the shifted "
+                 + "position — not just the leading ones. Regression for a live DiffApplyFailed hit during "
+                 + "the 2026-09-01 external-drift-hard-blocker session: see docs/current/blockers.")]
+    public void ApplyDiff_ContextSpansBothSidesOfInsertionBlock_ReanchorsUsingAllAnchorLines()
+    {
+        var nl = Environment.NewLine;
+        // Real file has 5 extra lines inserted above (by an earlier, unrelated hunk) compared to
+        // what this hunk's author assumed, shifting everything below down by 5.
+        var oldText = SourceText.From(string.Join(nl,
+            "// extra 1", "// extra 2", "// extra 3", "// extra 4", "// extra 5",
+            "    while (x) { }", "}", "", "existing member"));
+
+        // Diff was authored believing "while (x) { }" was at line 1; it's actually at line 6.
+        // Context lines appear both BEFORE the +-only insertion block ("while...", "}", blank) and
+        // AFTER it ("existing member") — both sides must be checked at the same shifted position.
+        var diff = "@@ -1,3 +1,10 @@\n     while (x) { }\n }\n \n+    public void NewMember()\n+    {\n+    }\n+\n existing member";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        Assert.That(newText, Is.EqualTo(string.Join(nl,
+            "// extra 1", "// extra 2", "// extra 3", "// extra 4", "// extra 5",
+            "    while (x) { }", "}", "",
+            "    public void NewMember()", "    {", "    }", "",
+            "existing member")));
+    }
+
+    [Test]
+    [Description("When a hunk's trailing context (after a +-only insertion block) is stale — e.g. copied "
+                 + "from a different part of the file — the error must name the actual divergence point, "
+                 + "not just the hunk's first anchor line, which would misleadingly suggest the start "
+                 + "position itself is wrong when it's actually correct.")]
+    public void ApplyDiff_TrailingContextAfterInsertionIsStale_ErrorNamesActualDivergencePoint()
+    {
+        var nl = Environment.NewLine;
+        var oldText = SourceText.From(string.Join(nl,
+            "    while (x) { }", "}", "", "existing member", "// unrelated trailer"));
+
+        // Leading context ("while...", "}", blank) is correct, but the trailing context line after
+        // the +-only block is stale — "wrong trailer" doesn't exist anywhere in the file.
+        var diff = "@@ -1,3 +1,10 @@\n     while (x) { }\n }\n \n+    public void NewMember()\n+    {\n+    }\n+\n wrong trailer";
+
+        var ex = Assert.Throws<DiffApplyException>(() => _diffEngine.ApplyDiff(oldText, diff));
+        Assert.That(ex!.Message, Does.Contain("Matched the first 3 anchor line(s)"));
+        Assert.That(ex.Message, Does.Contain("wrong trailer"));
+        Assert.That(ex.Message, Does.Contain("stale"));
+    }
+
+    [Test]
     [Description("Exact, non-stale line numbers (the common case) must continue to apply without any "
                  + "re-anchoring search overhead changing the result.")]
     public void ApplyDiff_ExactLineNumbers_StillAppliesUnchanged()
