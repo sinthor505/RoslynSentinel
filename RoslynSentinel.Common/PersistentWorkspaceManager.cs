@@ -356,6 +356,12 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             SetupWatcher(solutionDirectory);
             SetupOutOfTreeWatchers(solutionDirectory);
 
+            // A full reload re-derives CurrentSolution from disk, so any drift flagged against the
+            // previous in-memory state is stale by construction — otherwise a flag raised before
+            // the reload permanently blocks writes to that file for the rest of the session, since
+            // only ClearExternalFileChanges (not a reload) ever drains _externalChanges.
+            ClearExternalFileChanges();
+
             // OpenSolutionAsync throwing (e.g. solutionPath doesn't exist on disk) previously left
             // _workspaceLoadErrors populated but returned normally, so a bad path silently reported
             // success with an empty CurrentSolution. Surface it as a real failure instead — the
@@ -1077,11 +1083,14 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             return new ApplyChangesResult(
                 Success: false,
                 SucceededFiles: [],
-                FailedFiles: driftedTargets.ToDictionary(f => f, _ => "Modified externally since last sync."),
-                Summary: $"Refused to write — {driftedTargets.Count} target file(s) were modified externally since the " +
-                         $"last sync: {string.Join(", ", driftedTargets.Select(f => Path.GetFileName(f)))}. Call " +
-                         "ListExternalDiskChanges to review what changed, then either re-derive the proposed change " +
-                         "against the current content, or call ClearExternalDrift to acknowledge and overwrite anyway.");
+                FailedFiles: driftedTargets.ToDictionary(f => f, _ => "File changed on disk since last sync."),
+                Summary: $"Refused to write — {driftedTargets.Count} target file(s) changed on disk since the last " +
+                         $"sync: {string.Join(", ", driftedTargets.Select(f => Path.GetFileName(f)))}. This is usually " +
+                         "your own prior write that wasn't recognized as such (e.g. a path-formatting mismatch), not " +
+                         "necessarily another process or person editing the file. Call ListExternalDiskChanges to " +
+                         "review what changed — if it matches what you intended, calling ClearExternalDrift to " +
+                         "acknowledge and overwrite is safe; only re-derive the change first if the content is " +
+                         "actually unexpected.");
         }
 
         // Pre-lock validation: compiles an in-memory fork without holding the write lock,

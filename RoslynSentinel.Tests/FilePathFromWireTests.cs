@@ -31,7 +31,8 @@ public class FilePathFromWireTests
     {
         var result = FilePath.FromWire("Sub/Test.cs", "   ");
 
-        Assert.That(result.Absolute, Is.EqualTo("Sub/Test.cs"));
+        Assert.That(result.Absolute, Is.EqualTo(Path.Combine("Sub", "Test.cs")),
+            "Path content is preserved but separators are canonicalized to the platform separator.");
     }
 
     [Test]
@@ -107,5 +108,31 @@ public class FilePathFromWireTests
 
         Assert.That(result, Is.EqualTo(@"\\server\share\Test.cs"),
             "Quote-stripping must not consume the UNC path's leading double backslash.");
+    }
+
+    // Regression coverage for the PlanImplementVerify run-5 harness bug: a model submitting
+    // forward-slash paths for every ApplyDiff call got a FilePath whose Absolute never matched
+    // FileSystemWatcher's always-backslash e.FullPath, silently defeating the self-write
+    // drift-suppression dictionary lookup and flagging the model's own write as "external drift"
+    // that no amount of reloading could ever clear.
+    [Test]
+    public void Constructor_ForwardSlashPath_CanonicalizesToPlatformSeparator()
+    {
+        var forwardSlash = new FilePath("C:/Users/dev/Foo.cs");
+        var backSlash = new FilePath(@"C:\Users\dev\Foo.cs");
+
+        Assert.That(forwardSlash.Absolute, Is.EqualTo(backSlash.Absolute),
+            "A path submitted with forward slashes must produce the same Absolute value as the "
+            + "equivalent backslash path, so dictionary lookups keyed by FileSystemWatcher's "
+            + "backslash-only e.FullPath still find it.");
+    }
+
+    [Test]
+    public void FromWire_UncPath_PreservesLeadingDoubleSlash()
+    {
+        var result = FilePath.FromWire(@"\\server\share\Test.cs", null);
+
+        Assert.That(result.Absolute, Does.StartWith(@"\\"),
+            "Canonicalization must not collapse the UNC path's required leading double separator.");
     }
 }

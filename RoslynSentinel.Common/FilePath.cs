@@ -13,9 +13,22 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
 
     public FilePath(string path, string? solutionRoot = "", bool validated = false)
     {
-        Absolute = string.IsNullOrWhiteSpace(path) ? string.Empty : path;
-        Relative = string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(solutionRoot) ? string.Empty : Path.GetRelativePath(solutionRoot, path);
+        Absolute = string.IsNullOrWhiteSpace(path) ? string.Empty : CanonicalizeSeparators(path);
+        Relative = string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(solutionRoot) ? string.Empty : Path.GetRelativePath(solutionRoot, Absolute);
         Validated = validated || File.Exists(Absolute);
+    }
+
+    // Models frequently submit forward-slash paths (e.g. "C:/Users/.../Foo.cs") regardless of
+    // platform. FileSystemWatcher's e.FullPath always reports backslashes on Windows, so an
+    // uncanonicalized forward-slash FilePath used as a dictionary key (e.g. _internalChanges in
+    // PersistentWorkspaceManager) can never match the watcher's own-write-suppression lookup —
+    // a deterministic miss, not a race. Canonicalize here so every construction path (bare
+    // constructor, FromWire, JSON converter) agrees on separators. UNC prefix (\\) is preserved.
+    private static string CanonicalizeSeparators(string path)
+    {
+        bool isUnc = path.StartsWith(@"\\", StringComparison.Ordinal) || path.StartsWith("//", StringComparison.Ordinal);
+        string normalized = path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        return isUnc ? @"\\" + normalized.TrimStart(Path.DirectorySeparatorChar) : normalized;
     }
 
     // construct from whatever the wire sent, against the known root
