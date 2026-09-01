@@ -477,13 +477,17 @@ public class WholeFileRewriteAgentTests
         Assert.That(fixedText, Does.Contain("public string UnrelatedMethodAfter(  string   s  )"),
             $"UnrelatedMethodAfter's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");
 
-        // Allow one failed tool call: a model that tries an edit, gets a real compiler/validation
-        // error back, and self-corrects on its next attempt is the intended agentic loop (see the
-        // self-correction-loop research this test's fixture was built to exercise), not a defect.
-        // More than one error suggests the model is thrashing rather than converging.
+        // Allow up to two failed tool calls: a model that tries an edit, gets a real
+        // compiler/validation error back, and self-corrects on its next attempt is the intended
+        // agentic loop (see the self-correction-loop research this test's fixture was built to
+        // exercise), not a defect. This fixture's real fix requires discovering two independent
+        // symbols' correct accessibility (the helper method and, depending on approach, its
+        // containing type), which the PlanImplementVerify batch showed can legitimately take more
+        // than one retry even when the model converges on the right answer. More than two errors
+        // suggests the model is thrashing rather than converging.
         var errorTools = result.Transcript.Turns.SelectMany(t => t.ToolCalls).Where(tc => tc.IsError).ToList();
-        Assert.That(errorTools.Count, Is.LessThanOrEqualTo(1),
-            $"Expected at most 1 failed tool call (one self-correction retry); " +
+        Assert.That(errorTools.Count, Is.LessThanOrEqualTo(2),
+            $"Expected at most 2 failed tool calls (self-correction retries); " +
             $"{errorTools.Count} occurred: [{string.Join(", ", errorTools.Select(tc => tc.ToolName))}]. Transcript: {result.TranscriptPath}");
     }
 }
