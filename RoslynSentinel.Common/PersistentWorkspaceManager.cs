@@ -35,9 +35,32 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private readonly List<string> _workspaceLoadErrors = new();
     private readonly ConcurrentBag<string> _externalChanges = new();
     private volatile bool _watcherOverflowed;
+    // Session-wide fatal latch: set once by ApplyProposedChangesAsync on a confirmed hash-backed
+    // drift hit (see docs/current/ideas/external-drift-hard-blocker.md proposal item 2). While
+    // true, every mutating call fails immediately via SessionHaltedException, regardless of which
+    // file it targets. Cleared only out-of-band via ClearSessionHalt (SentinelAdminTools), never
+    // by the exception's own throw path.
+    private volatile bool _sessionHalted;
     private volatile bool _disposed = false;
     private readonly ConcurrentDictionary<FilePath, string> _failedChangesCache = new();
+    // _internalChanges/_externalChanges are the older path-key + ~5s-freshness-window
+    // self-write-suppression mechanism (see OnFileSystemChanged). _knownFileHashes (below) is a
+    // newer, content-based check layered IN FRONT of this one, not a replacement — deliberately,
+    // per docs/current/ideas/external-drift-hard-blocker.md's "Decisions" section. The hash check
+    // is the authoritative signal for "did this file's content actually change"; these older
+    // fields remain unreplaced behind it for now. Do not read the coexistence of both mechanisms
+    // as an unintentional half-finished migration — it is a deliberate staged rollout, and
+    // _internalChanges/_externalChanges are an intentional future-removal candidate once the
+    // hash-based gate has proven itself in production, not a bug to "clean up" reflexively.
     private readonly ConcurrentDictionary<string, (DateTime Timestamp, string Content)> _internalChanges = new();
+    // Content-hash baseline: path (normalized via FilePath's own case-insensitive, separator-
+    // canonicalized equality/hashing) → SHA-256 of the last content RoslynSentinel itself wrote or
+    // loaded for that file. Populated wholesale on LoadSolutionAsync, updated per-file on a
+    // successful ApplyProposedChangesAsync write, and consulted first in OnFileSystemChanged: a
+    // watcher event whose on-disk hash still matches the recorded hash is provably our own echo or
+    // a no-op, regardless of path-key formatting or timing — see the hard-blocker doc for why this
+    // closes a whole class of false positive, not just today's two known bugs.
+    private readonly ConcurrentDictionary<FilePath, string> _knownFileHashes = new();
 
     /// <summary>
     /// Changesets rejected by <c>ApplyDiff</c>'s whole-file-rewrite size guard, keyed by a
@@ -247,6 +270,67 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     }
 
     /// <summary>
+    /// True once a confirmed drift hit has tripped the session-wide halt latch. See
+    /// <see cref="SessionHaltedException"/> and docs/current/ideas/external-drift-hard-blocker.md.
+    /// </summary>
+    public bool IsSessionHalted() => _sessionHalted;
+
+    /// <summary>
+    /// Out-of-band recovery: clears the session-wide halt latch after a human/operator has
+    /// reviewed the drift that tripped it. Deliberately not reachable from the model's normal
+    /// tool surface — only via the Admin-gated SentinelAdminTools.
+    /// </summary>
+    public void ClearSessionHalt()
+    {
+        _sessionHalted = false;
+    }
+
+    // SHA-256 of the given content, hex-encoded lowercase. Cheap relative to the I/O already
+    // being done on both the write side (content is already in memory) and the watcher side
+    // (which already reads the file to do an equivalent content comparison — see
+    // OnFileSystemChanged). Not a security boundary — just a fast, collision-safe-enough content
+    // fingerprint — so SHA-256 is used for its BCL support and zero extra dependency, not because
+    // cryptographic strength matters here.
+    private static string ComputeContentHash(string content)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(content));
+        return Convert.ToHexStringLower(bytes);
+    }
+
+    // Rebuilds _knownFileHashes wholesale from CurrentSolution's just-loaded documents. Must fully
+    // reset (clear then repopulate), not merge, so a hash left over from a previous load can never
+    // survive a reload and be compared against unrelated new content — the same "stale state
+    // survives reload" shape ClearExternalFileChanges already guards against for _externalChanges.
+    // Called with _solutionLock already held (from within LoadSolutionAsync).
+    private void PopulateKnownFileHashes()
+    {
+        _knownFileHashes.Clear();
+        if (CurrentSolution is null)
+        {
+            return;
+        }
+
+        foreach (var document in CurrentSolution.Projects.SelectMany(p => p.Documents))
+        {
+            if (document.FilePath is null || !File.Exists(document.FilePath))
+            {
+                continue;
+            }
+
+            try
+            {
+                var content = File.ReadAllText(document.FilePath);
+                _knownFileHashes[new FilePath(document.FilePath)] = ComputeContentHash(content);
+            }
+            catch (IOException)
+            {
+                // Locked/mid-write during load — leave unhashed; the next write or watcher event
+                // that touches this path will populate it then.
+            }
+        }
+    }
+
+    /// <summary>
     /// Compares every tracked document's in-memory text against the bytes currently on disk.
     /// Unlike <see cref="GetExternalFileChanges"/> (which relies on the FileSystemWatcher and can miss
     /// events under overflow), this reads disk directly, so it also catches drift the watcher
@@ -361,6 +445,12 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             // the reload permanently blocks writes to that file for the rest of the session, since
             // only ClearExternalFileChanges (not a reload) ever drains _externalChanges.
             ClearExternalFileChanges();
+
+            // Rebuild the content-hash baseline from what was just loaded — same "full reset, not
+            // just added-to" requirement as ClearExternalFileChanges just above, so a stale hash
+            // from a previous load never survives a reload and is compared against genuinely new
+            // content.
+            PopulateKnownFileHashes();
 
             // OpenSolutionAsync throwing (e.g. solutionPath doesn't exist on disk) previously left
             // _workspaceLoadErrors populated but returned normally, so a bad path silently reported
@@ -512,6 +602,51 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             return;
         }
 
+        // ── Content-hash baseline gate (layered in FRONT of the older path-key/timestamp check
+        // below — see _knownFileHashes's declaration-site comment for why both exist) ──────────
+        // Only meaningful for Changed/Created, which have real on-disk content to compare;
+        // Renamed/Deleted fall through to the older check unchanged, same as that check already
+        // treats them specially.
+        if (e.ChangeType is WatcherChangeTypes.Changed or WatcherChangeTypes.Created)
+        {
+            var hashKey = new FilePath(e.FullPath);
+            if (_knownFileHashes.TryGetValue(hashKey, out var recordedHash))
+            {
+                try
+                {
+                    if (FilePathLock.IsLocked(e.FullPath))
+                    {
+                        // Write in flight for this exact path — same race the older check guards
+                        // against below; skip the verification read rather than race the writer's
+                        // open handle.
+                        return;
+                    }
+
+                    var onDiskContent = File.Exists(e.FullPath) ? File.ReadAllText(e.FullPath) : null;
+                    var onDiskHash = onDiskContent is null ? null : ComputeContentHash(onDiskContent);
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                    {
+                        _logger.LogDebug(
+                            "Drift hash check for {PathKey}: recorded={RecordedHash} onDisk={OnDiskHash} match={Match}",
+                            hashKey, recordedHash, onDiskHash ?? "(missing)", onDiskHash == recordedHash);
+                    }
+                    if (onDiskHash == recordedHash)
+                    {
+                        // Hash-confirmed no-op or echo of our own write — never flag as drift,
+                        // regardless of what the older path-key/timestamp check below would decide.
+                        return;
+                    }
+                }
+                catch (IOException)
+                {
+                    // Locked/being written concurrently — can't verify; assume it's our own write
+                    // in progress rather than false-positive an external edit, matching the older
+                    // check's identical fallback below.
+                    return;
+                }
+            }
+        }
+
         // Ignore files written by ApplyProposedChangesAsync — they are already reflected in
         // the in-memory workspace and a redundant reload would hold _solutionLock for tens of
         // seconds, starving every other caller. Path+timing alone isn't enough to tell our own
@@ -572,6 +707,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             e.FullPath.Contains($"{sep}bin{sep}", StringComparison.OrdinalIgnoreCase))
         {
             return;
+        }
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "Flagging external drift for {PathKey} (ChangeType={ChangeType}) — hash gate found no recorded baseline or a mismatch, falling through to path-key/timestamp tracking.",
+                e.FullPath, e.ChangeType);
         }
 
         _pendingChanges[e.FullPath] = DateTime.UtcNow;
@@ -1059,6 +1201,16 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         IReadOnlyCollection<FilePath>? deletePaths = null)
     {
         deletePaths ??= [];
+
+        // Session-wide fatal latch (see docs/current/ideas/external-drift-hard-blocker.md
+        // proposal item 2): once tripped by a confirmed drift hit below, every subsequent
+        // mutating call fails immediately and unconditionally, regardless of which file it
+        // targets — checked first, ahead of every other validation in this method.
+        if (_sessionHalted)
+        {
+            throw new SessionHaltedException(
+                "Session halted: external file drift was detected on a tracked file. This session cannot safely continue. Stop and report to the user/operator.");
+        }
         if (deletePaths.Count > 0 && changes.Keys.Any(deletePaths.Contains))
         {
             var overlap = changes.Keys.Where(deletePaths.Contains).ToList();
@@ -1070,27 +1222,20 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                          $"{string.Join(", ", overlap.Select(f => Path.GetFileName(f)))}.");
         }
 
-        // Refuse to write through unacknowledged external drift. A proposed change is always
-        // computed against CurrentSolution's in-memory text; if the target file was touched on
-        // disk after that (a human editing alongside the agent, git, a build step) and the drift
-        // hasn't been acknowledged, the proposed content is stale and writing it would silently
-        // clobber whatever changed it externally. Fail loud instead — same "no silent overwrites"
-        // rule the rest of this write path already follows for no-op/whitespace-only writes.
+        // Confirmed external drift: a proposed change is always computed against
+        // CurrentSolution's in-memory text; if the target file was touched on disk after that
+        // and the hash-baseline gate (OnFileSystemChanged) still flagged it as real drift, the
+        // proposed content is stale and writing it would silently clobber whatever changed it
+        // externally. Under the single-session/no-concurrent-actors assumption this is an
+        // anomaly, not something for the in-task model to reconcile — trip the session-wide
+        // latch and fail terminally rather than returning a soft, retryable result.
         var drift = new HashSet<string>(GetExternalFileChanges(), StringComparer.OrdinalIgnoreCase);
         var driftedTargets = changes.Keys.Concat(deletePaths).Where(k => drift.Contains(k)).Distinct().ToList();
         if (driftedTargets.Count > 0)
         {
-            return new ApplyChangesResult(
-                Success: false,
-                SucceededFiles: [],
-                FailedFiles: driftedTargets.ToDictionary(f => f, _ => "File changed on disk since last sync."),
-                Summary: $"Refused to write — {driftedTargets.Count} target file(s) changed on disk since the last " +
-                         $"sync: {string.Join(", ", driftedTargets.Select(f => Path.GetFileName(f)))}. This is usually " +
-                         "your own prior write that wasn't recognized as such (e.g. a path-formatting mismatch), not " +
-                         "necessarily another process or person editing the file. Call ListExternalDiskChanges to " +
-                         "review what changed — if it matches what you intended, calling ClearExternalDrift to " +
-                         "acknowledge and overwrite is safe; only re-derive the change first if the content is " +
-                         "actually unexpected.");
+            _sessionHalted = true;
+            throw new SessionHaltedException(
+                "Session halted: external file drift was detected on a tracked file. This session cannot safely continue. Stop and report to the user/operator.");
         }
 
         // Pre-lock validation: compiles an in-memory fork without holding the write lock,
@@ -1165,6 +1310,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 {
                     await FileIoHelper.DeleteAsync(filePath, cancellationToken);
                     succeeded.Add(filePath);
+                    _knownFileHashes.TryRemove(filePath, out _);
                     if (_logger.IsEnabled(LogLevel.Information))
                     {
                         _logger.LogInformation("Deleted {FilePath}", filePath);
@@ -1262,6 +1408,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         await FileIoHelper.WriteAllTextAsync(filePath, newContent, cancellationToken);
                         success = true;
                         succeeded.Add(filePath);
+                        // Update the hash baseline with what we just wrote — no extra I/O, newContent
+                        // is already in memory. See _knownFileHashes's declaration-site comment.
+                        _knownFileHashes[filePath] = ComputeContentHash(newContent);
                         if (_logger.IsEnabled(LogLevel.Information))
                         {
                             _logger.LogInformation("Wrote changes to {FilePath} (Attempt {Attempt})", filePath, attempt + 1);
@@ -1316,10 +1465,12 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         if (original is null)
                         {
                             await FileIoHelper.DeleteAsync(filePath, CancellationToken.None);
+                            _knownFileHashes.TryRemove(filePath, out _);
                         }
                         else
                         {
                             await FileIoHelper.WriteAllTextAsync(filePath, original, CancellationToken.None);
+                            _knownFileHashes[filePath] = ComputeContentHash(original);
                         }
                         rolledBack.Add(filePath);
                     }

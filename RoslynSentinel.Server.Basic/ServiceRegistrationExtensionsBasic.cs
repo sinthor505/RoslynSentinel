@@ -110,6 +110,13 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<GitTools>();
             mcpBuilder.WithTools<GitTools>();
         }
+        if (activeModes.Contains("Admin"))
+        {
+            // Restricted/operator-only tools — deliberately NOT included in AllModes (see
+            // ServerStdio.cs/ServerHttp.cs), so this only activates via an explicit --mode=Admin.
+            services.AddSingleton<SentinelAdminTools>();
+            mcpBuilder.WithTools<SentinelAdminTools>();
+        }
         if (activeModes.Contains("Intelligence"))
         {
             // services.AddSingleton<SentinelIntelligenceTools>();

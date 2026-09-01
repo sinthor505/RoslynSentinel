@@ -418,27 +418,9 @@ public class SentinelWorkspaceTools
         return parts.Count > 0 ? " " + string.Join(" ", parts) : "";
     }
 
-    [McpServerTool(Name = "ListExternalDiskChanges")]
-    [Produces(DataTag.FileList)]
-    [Description("Returns files modified on disk since the AI last synced. No parameters.")]
-    public List<string> ListExternalDiskChanges(// RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
-    {
-        _ = cancellationToken;
-        return _workspaceManager.GetExternalFileChanges();
-    }
-
-    [McpServerTool(Name = "AcknowledgeExternalFileChanges")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Clears the external-change list after the AI has read the latest file changes. No parameters.")]
-    public string AcknowledgeExternalFileChanges(// RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
-    {
-        _ = cancellationToken;
-        var count = _workspaceManager.GetExternalFileChanges().Count;
-        _workspaceManager.ClearExternalFileChanges();
-        return $"Cleared {count} tracked external file change(s).";
-    }
+    // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to SentinelAdminTools.cs,
+    // gated behind the "Admin" mode — see docs/current/ideas/external-drift-hard-blocker.md.
+    // Not model-visible by default anymore; reconciliation is an out-of-band operator action now.
 
     private static string PreviewFileContent(string content)
     {
@@ -1048,7 +1030,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "DeleteFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Deletes a file from disk. Fails if the file does not exist. Routes through the same write-path chokepoint as every other mutating tool: refused if the file was modified externally since the last sync (see ListExternalDiskChanges/ClearExternalDrift), and undoable via UndoLastApply (the pre-delete content is captured). If the file is a tracked Roslyn Document, it's removed from the in-memory solution as part of the same operation.")]
+    [Description("Deletes a file from disk. Fails if the file does not exist. Routes through the same write-path chokepoint as every other mutating tool: refused if the file was modified externally since the last sync (see ListExternalDiskChanges/AcknowledgeExternalFileChanges), and undoable via UndoLastApply (the pre-delete content is captured). If the file is a tracked Roslyn Document, it's removed from the in-memory solution as part of the same operation.")]
     public async Task<ToolResult<object>> DeleteFile([Consumes(DataTag.SourceFilepath, required: true)] string filepath, CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());

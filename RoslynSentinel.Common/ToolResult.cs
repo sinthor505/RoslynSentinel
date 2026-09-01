@@ -34,6 +34,7 @@ public static class ToolErrorCode
     public const string DiffApplyFailed = "DiffApplyFailed";
     public const string Exception = "Exception";
     public const string NotImplemented = "NotImplemented";
+    public const string SessionHalted = "SessionHalted";
 
     /// <summary>
     /// A search ran successfully but matched zero results. Distinct from <see cref="NotFound"/>

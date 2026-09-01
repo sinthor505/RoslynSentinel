@@ -112,6 +112,26 @@ public sealed class ToolNotImplementedException : ToolException
 }
 
 /// <summary>
+/// A confirmed external content-drift hit tripped the session-wide halt latch (see
+/// docs/current/ideas/external-drift-hard-blocker.md). Once thrown, every subsequent mutating
+/// call on this <see cref="PersistentWorkspaceManager"/> instance throws this same exception —
+/// deliberately terminal and non-actionable by the in-task model, since a genuine drift hit under
+/// the single-session/no-concurrent-actors assumption means the session's whole view of disk may
+/// be untrustworthy, not just the one file that tripped it. Maps to
+/// <see cref="ToolErrorCode.SessionHalted"/>. Clearing the latch is an out-of-band operation
+/// (<c>IWorkspaceHealthReporter.ClearSessionHalt</c>), not something reachable from this
+/// exception's own catch path.
+/// </summary>
+public sealed class SessionHaltedException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.SessionHalted;
+
+    public SessionHaltedException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// Builds a <see cref="ResultError"/> from a caught exception without asserting a cause that may
 /// not be true. Replaces the old per-tool pattern of appending a fixed "Check that the solution is
 /// loaded and the file path is valid" sentence to every exception regardless of type. Call this

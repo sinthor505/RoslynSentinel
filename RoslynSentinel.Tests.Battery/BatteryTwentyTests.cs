@@ -355,22 +355,10 @@ public class BatteryTwentyTests
 
     // --- Diagnose ---
 
-    // --- GetExternalChanges (sync) ---
-
-    [Test]
-    public void GetExternalChanges_Always_ReturnsList()
-    {
-        var result = _tools.ListExternalDiskChanges();
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- AcknowledgeSync (void sync) ---
-
-    [Test]
-    public void ClearExternalDrift_Always_DoesNotThrow()
-    {
-        Assert.DoesNotThrow(() => _tools.AcknowledgeExternalFileChanges());
-    }
+    // GetExternalChanges/AcknowledgeSync tests moved to SentinelAdminToolsTests.cs —
+    // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to SentinelAdminTools
+    // (RoslynSentinel.Server.Basic/SentinelAdminTools.cs), gated behind the "Admin" mode. See
+    // docs/current/ideas/external-drift-hard-blocker.md.
 
     // --- ApplyDiff (consolidated: format × action; formerly named ProposedChange) ---
 

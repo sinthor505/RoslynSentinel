@@ -35,6 +35,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public BatchResultSummary? CheckBreaker() => throw new NotImplementedException();
     public string? CheckRateLimit(string toolName, int defaultLimit) => throw new NotImplementedException();
     public void ClearExternalFileChanges() => throw new NotImplementedException();
+    public void ClearSessionHalt() => throw new NotImplementedException();
     public void Dispose() { }
     public string GetBreakerDirective() => throw new NotImplementedException();
     public string GetBreakerSeverity() => throw new NotImplementedException();
@@ -43,6 +44,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public IEnumerable<string> GetDiagnostics() => throw new NotImplementedException();
     public List<string> GetExternalFileChanges() => throw new NotImplementedException();
     public HealthComponents GetHealthComponents() => throw new NotImplementedException();
+    public bool IsSessionHalted() => false;
     public List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems() => throw new NotImplementedException();
 
     // Mirrors PersistentWorkspaceManager.GetSolutionRoot(): CurrentSolution built via

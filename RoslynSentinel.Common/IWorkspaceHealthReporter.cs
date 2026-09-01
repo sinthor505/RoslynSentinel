@@ -18,4 +18,10 @@ public interface IWorkspaceHealthReporter
     List<string> GetWorkspaceLoadErrors();
     /// <summary>Returns a summary of whether a solution is loaded and how large it is.</summary>
     WorkspaceStatus GetWorkspaceStatus();
+    /// <summary>Returns true if a confirmed drift hit has tripped the session-wide halt latch (see
+    /// docs/current/ideas/external-drift-hard-blocker.md) — every mutating call fails while true.</summary>
+    bool IsSessionHalted();
+    /// <summary>Out-of-band recovery: clears the session-wide halt latch after a human/operator has
+    /// reviewed the drift that tripped it. Not reachable from the model's normal tool surface.</summary>
+    void ClearSessionHalt();
 }
