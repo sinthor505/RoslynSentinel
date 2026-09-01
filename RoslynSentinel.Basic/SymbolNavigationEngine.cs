@@ -42,6 +42,21 @@ public record ReadonlyFieldCandidate(
     int Line
 );
 
+/// <summary>
+/// The namespaces already visible in a file without qualification: its own declared namespace
+/// plus every `using` directive (including any global usings from the project's compilation
+/// options). Used to tell a genuinely-missing-using CS0103 apart from one where the candidate's
+/// namespace is already in scope and the real fix is a qualifier or accessibility change instead.
+/// </summary>
+public record FileUsingContext(
+    string? DeclaredNamespace,
+    List<string> UsingNamespaces
+)
+{
+    public bool IsNamespaceInScope(string? ns) =>
+        ns == null || ns == DeclaredNamespace || UsingNamespaces.Contains(ns);
+}
+
 public record TypeMemberDetail(
     string Name,
     string Kind,
@@ -974,6 +989,75 @@ public class SymbolNavigationEngine
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Returns the namespaces already in scope in a file without qualification — its own declared
+    /// namespace plus every `using` directive local to the file and every `global using` anywhere
+    /// in the containing project. Intended for CS0103 triage: a candidate symbol whose namespace is
+    /// already in this set cannot be fixed by adding a `using`, so the real problem is a missing
+    /// qualifier, accessibility, or a genuinely different symbol.
+    /// </summary>
+    public async Task<FileUsingContext?> GetFileUsingContextAsync(
+        FilePath filePath, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return null;
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        if (root == null)
+        {
+            return null;
+        }
+
+        string? declaredNamespace = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()
+            .FirstOrDefault()?.Name.ToString();
+
+        var namespaces = new HashSet<string>(StringComparer.Ordinal);
+
+        void CollectUsings(CompilationUnitSyntax compilationUnit, bool globalOnly)
+        {
+            foreach (var usingDirective in compilationUnit.Usings)
+            {
+                if (usingDirective.Alias != null || usingDirective.StaticKeyword != default)
+                {
+                    continue;
+                }
+
+                var isGlobal = usingDirective.GlobalKeyword != default;
+                if (globalOnly && !isGlobal)
+                {
+                    continue;
+                }
+
+                namespaces.Add(usingDirective.Name?.ToString() ?? usingDirective.NamespaceOrType.ToString());
+            }
+        }
+
+        CollectUsings(root, globalOnly: false);
+
+        if (document.Project.CompilationOptions != null)
+        {
+            foreach (var otherDocument in document.Project.Documents)
+            {
+                if (otherDocument.Id == document.Id)
+                {
+                    continue;
+                }
+
+                if (await otherDocument.GetSyntaxRootAsync(cancellationToken) is CompilationUnitSyntax otherRoot)
+                {
+                    CollectUsings(otherRoot, globalOnly: true);
+                }
+            }
+        }
+
+        return new FileUsingContext(declaredNamespace, namespaces.ToList());
     }
 
     public async Task<CallGraphNode?> GetCallGraphAsync(

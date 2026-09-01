@@ -82,13 +82,41 @@ public static class CompilerErrorLookupHelper
             return $"  No symbol named '{name}' was found anywhere in the solution. This is likely a typo, or the member genuinely doesn't exist yet and needs to be added.";
         }
 
+        FileUsingContext? usingContext = null;
+        try
+        {
+            usingContext = await symbolNavigationEngine.GetFileUsingContextAsync(diagnostic.FilePath, cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Fall through without namespace triage below — the plain candidate list still helps.
+        }
+
+        var missingUsingCandidates = usingContext != null
+            ? candidates.Where(c => !usingContext.IsNamespaceInScope(c.ContainingNamespace)).ToList()
+            : [];
+
         var suggestions = candidates
             .Take(5)
             .Select(c => c.ContainingType != null
                 ? $"    - {c.ContainingType}.{c.SymbolName} ({c.Signature}) — {c.FilePath}:{c.Line}"
                 : $"    - {c.SymbolName} ({c.Signature}) — {c.FilePath}:{c.Line}");
 
-        return $"  '{name}' exists elsewhere in the solution but is not in scope here — most likely it needs to be called with its containing type as a qualifier (a `using` directive does not import another class's static members). Candidates found:\n"
+        if (usingContext != null && missingUsingCandidates.Count > 0)
+        {
+            var missingNamespaces = missingUsingCandidates
+                .Select(c => c.ContainingNamespace)
+                .Where(ns => ns != null)
+                .Distinct()
+                .Select(ns => $"using {ns};");
+
+            return $"  '{name}' exists elsewhere in the solution in a namespace not currently imported here — add one of the following `using` directives:\n"
+                + string.Join("\n", missingNamespaces.Select(u => "    " + u))
+                + "\n  Candidates found:\n"
+                + string.Join("\n", suggestions);
+        }
+
+        return $"  '{name}' exists elsewhere in the solution but is not in scope here — most likely it needs to be called with its containing type as a qualifier (a `using` directive does not import another class's static members" + (usingContext != null ? "; its namespace is already imported or is this file's own namespace" : "") + "). Candidates found:\n"
             + string.Join("\n", suggestions);
     }
 
