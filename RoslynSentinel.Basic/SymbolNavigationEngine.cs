@@ -1060,6 +1060,36 @@ public class SymbolNavigationEngine
         return new FileUsingContext(declaredNamespace, namespaces.ToList());
     }
 
+    /// <summary>
+    /// Returns the simple name of the type declaration enclosing the given source position, or
+    /// null if the position isn't inside any type (e.g. top-level statements) or the document
+    /// can't be found. Intended for CS0122 triage: naming the caller's enclosing type turns
+    /// "inaccessible due to its protection level" into a concrete "accessible from X" instruction
+    /// without needing full caller-method resolution.
+    /// </summary>
+    public async Task<string?> GetEnclosingTypeNameAsync(
+        FilePath filePath, int line, int column, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return null;
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var text = await document.GetTextAsync(cancellationToken);
+        if (root == null || line < 1 || line > text.Lines.Count)
+        {
+            return null;
+        }
+
+        var position = text.Lines[line - 1].Start + Math.Max(0, column - 1);
+        var token = root.FindToken(Math.Min(position, root.FullSpan.End));
+        return token.Parent?.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text;
+    }
+
     public async Task<CallGraphNode?> GetCallGraphAsync(
         FilePath filePath,
         string methodName,

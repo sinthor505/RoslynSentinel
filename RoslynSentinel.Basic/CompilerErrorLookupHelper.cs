@@ -12,12 +12,15 @@ namespace RoslynSentinel.Basic;
 /// slightly different framing rather than re-reading the diagnostic. For known diagnostic IDs this
 /// adds a targeted hint and symbol-search candidates (CS0103 unresolved names, CS0117/CS1061
 /// missing members); anything unrecognized falls through to the plain diagnostics text so nothing
-/// regresses for codes not taught yet.
+/// regresses for codes not taught yet. CS0122 (inaccessible due to protection level) additionally
+/// states the member's current accessibility and the caller's enclosing type directly, rather than
+/// leaving the model to infer accessibility from the absence of an error.
 /// </summary>
 public static class CompilerErrorLookupHelper
 {
     private static readonly Regex Cs0103NameRegex = new(@"The name '([^']+)' does not exist in the current context", RegexOptions.Compiled);
     private static readonly Regex MissingMemberRegex = new(@"'([^']+)' does not contain a definition for '([^']+)'", RegexOptions.Compiled);
+    private static readonly Regex Cs0122InaccessibleRegex = new(@"'([^']+)' is inaccessible due to its protection level", RegexOptions.Compiled);
 
     public static async Task<string> DescribeAsync(
         DiagnosticReport report,
@@ -49,6 +52,11 @@ public static class CompilerErrorLookupHelper
         if (diagnostic.Id is "CS0117" or "CS1061")
         {
             return baseText + "\n" + await DescribeMissingMemberAsync(diagnostic, symbolNavigationEngine, cancellationToken);
+        }
+
+        if (diagnostic.Id == "CS0122")
+        {
+            return baseText + "\n" + await DescribeCs0122Async(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
         return baseText;
@@ -181,5 +189,56 @@ public static class CompilerErrorLookupHelper
             : $"  '{memberName}' was not found on '{typeName}', but a member with that name exists elsewhere — likely the wrong receiver type, or '{memberName}' needs to be added to '{typeName}' instead. Candidates found:";
 
         return explanation + "\n" + string.Join("\n", suggestions);
+    }
+
+    private static async Task<string> DescribeCs0122Async(
+        DiagnosticInfo diagnostic,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        var match = Cs0122InaccessibleRegex.Match(diagnostic.Message);
+        if (!match.Success)
+        {
+            return "  This is an accessibility error, but the member name could not be extracted from the diagnostic text to search for it.";
+        }
+
+        var qualifiedName = match.Groups[1].Value;
+        var lastDot = qualifiedName.LastIndexOf('.');
+        var simpleTypeName = lastDot >= 0 ? qualifiedName[..lastDot] : qualifiedName;
+        simpleTypeName = simpleTypeName.Split('.').Last();
+        var memberName = lastDot >= 0 ? qualifiedName[(lastDot + 1)..].Split('(').First() : simpleTypeName;
+
+        List<SymbolLocation> candidates;
+        try
+        {
+            candidates = await symbolNavigationEngine.LocateSymbolAsync(
+                memberName, exactMatch: true, containingType: simpleTypeName, cancellationToken: cancellationToken);
+        }
+        catch (Exception)
+        {
+            candidates = [];
+        }
+
+        var symbol = candidates.FirstOrDefault();
+        if (symbol == null)
+        {
+            return $"  '{qualifiedName}' is inaccessible from this call site, but its declaration could not be located to report its current accessibility.";
+        }
+
+        string? callerType = null;
+        try
+        {
+            callerType = await symbolNavigationEngine.GetEnclosingTypeNameAsync(
+                diagnostic.FilePath, diagnostic.StartLine, diagnostic.StartColumn, cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Fall through without a caller type name below — the accessibility guidance still helps.
+        }
+
+        var accessibility = symbol.Accessibility.ToLowerInvariant();
+        var calledFrom = callerType != null ? $" from {callerType}" : string.Empty;
+        return $"  '{qualifiedName}' is currently {accessibility}. It must be changed to a level accessible{calledFrom} ({diagnostic.FilePath}:{diagnostic.StartLine}).\n"
+            + $"  Note: accessibility is set per-member, not inherited from the containing type's accessibility — raising {simpleTypeName}'s own accessibility does not change {symbol.SymbolName}'s.";
     }
 }
