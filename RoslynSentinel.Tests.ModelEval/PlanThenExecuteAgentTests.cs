@@ -48,18 +48,21 @@ public class PlanThenExecuteAgentTests
         If the existing fix lives in a private method in another file, call it directly rather
         than copying its body into your own fix — raise its accessibility (e.g. to `internal`) so
         it can be called cross-file, but don't duplicate its logic, and don't modify anything else
-        in that file.
+        in that file. Once you switch the buggy method's call site to the shared method, delete
+        only that one now-unused old method (the one the bug report is about) instead of leaving
+        it behind — do not delete, rename, or otherwise modify any other method, field, or class,
+        even ones that look unused, unrelated, or like dead code to you.
 
         Before making any tool call that edits a file, first write out your complete plan as plain
-        text: the root cause, exactly which method(s)/file(s) you will touch, and the specific
+        text: the root cause, exactly which method(s)/file(s) you will modify, and the specific
         content you will place in `BlockConverter.cs`. Only after stating that plan in full should
         you begin making edit tool calls — do not interleave planning and editing.
 
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
 
-        Don't touch code unrelated to the bug. Report what you changed and the verification
-        result.
+        Do not modify any code unrelated to this specific bug, including code that looks unused —
+        leave it exactly as you found it. Report what you changed and the verification result.
         """;
 
     // Same as WholeFileRewriteAgentTests.ActiveModes — full read+write toolset, nothing blocked here;
@@ -205,6 +208,9 @@ public class PlanThenExecuteAgentTests
 
         Assert.That(fixedText, Does.Not.Contain("return ReformatWholeFile("),
             $"ConvertAbstractClassToInterface should no longer call ReformatWholeFile. Transcript: {result.TranscriptPath}");
+        Assert.That(fixedText, Does.Not.Match(@"static\s+string\s+ReformatWholeFile\s*\("),
+            $"The old ReformatWholeFile method should be deleted once its call site is replaced, " +
+            $"not left behind unused. Transcript: {result.TranscriptPath}");
         Assert.That(fixedText, Does.Contain("ReplaceBlockFormatted"),
             $"The fix should call ReplaceBlockFormatted (directly or qualified) — bringing it into " +
             $"scope, not duplicating its body. Transcript: {result.TranscriptPath}");
@@ -227,9 +233,16 @@ public class PlanThenExecuteAgentTests
         Assert.That(fixedText, Does.Contain("public string UnrelatedMethodAfter(  string   s  )"),
             $"UnrelatedMethodAfter's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");
 
+        // Threshold is 2, not 1: CompilerErrorLookupHelper's guidance (see RoslynSentinel.Basic
+        // CompilerErrorLookupHelper.cs) is designed to be *read after* a failed ApplyDiff, so a
+        // model that mis-qualifies a call (e.g. CS0103 on a static member of another class) and
+        // then correctly follows the guidance on retry legitimately costs 2 error tool calls, not
+        // 1 - observed directly in a 2026-08-31 PlanThenExecute run that fully fixed the bug in 2
+        // ApplyDiff attempts but tripped a <=1 gate. 3+ still fails: that's real thrashing, not a
+        // single guided recovery.
         var errorTools = result.Transcript.Turns.SelectMany(t => t.ToolCalls).Where(tc => tc.IsError).ToList();
-        Assert.That(errorTools.Count, Is.LessThanOrEqualTo(1),
-            $"Expected at most 1 failed tool call (one self-correction retry); {errorTools.Count} occurred: " +
+        Assert.That(errorTools.Count, Is.LessThanOrEqualTo(2),
+            $"Expected at most 2 failed tool calls (one mistake plus one guided self-correction retry); {errorTools.Count} occurred: " +
             $"[{string.Join(", ", errorTools.Select(t => t.ToolName))}]. Transcript: {result.TranscriptPath}");
     }
 }

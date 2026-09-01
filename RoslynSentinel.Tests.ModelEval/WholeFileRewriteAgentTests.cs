@@ -76,7 +76,7 @@ public class WholeFileRewriteAgentTests
 
         ## Constraints
 
-        - Don't touch `UnrelatedMethodBefore` or `UnrelatedMethodAfter` in the file — they are
+        - Don't modify `UnrelatedMethodBefore` or `UnrelatedMethodAfter` in the file — they are
           explicitly out of scope for this task.
         - Don't invent a new helper method or a different fix approach, and don't duplicate
           `ReplaceBlockFormatted`'s body into `BlockConverter.cs` — call the existing method as-is;
@@ -107,8 +107,8 @@ public class WholeFileRewriteAgentTests
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
 
-        Don't touch code unrelated to the bug. Report what you changed and the verification
-        result.
+        Do not modify any code unrelated to this specific bug. Report what you changed and the
+        verification result.
         """;
 
     // Level 3.5: same symptom-only framing as MinimalGuidanceUserPromptTemplate above (no method/
@@ -136,13 +136,16 @@ public class WholeFileRewriteAgentTests
         If the existing fix lives in a private method in another file, call it directly rather
         than copying its body into your own fix — raise its accessibility (e.g. to `internal`) so
         it can be called cross-file, but don't duplicate its logic, and don't modify anything else
-        in that file.
+        in that file. Once you switch the buggy method's call site to the shared method, delete
+        only that one now-unused old method (the one the bug report is about) instead of leaving
+        it behind — do not delete, rename, or otherwise modify any other method, field, or class,
+        even ones that look unused, unrelated, or like dead code to you.
 
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
 
-        Don't touch code unrelated to the bug. Report what you changed and the verification
-        result.
+        Do not modify any code unrelated to this specific bug, including code that looks unused —
+        leave it exactly as you found it. Report what you changed and the verification result.
         """;
 
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
