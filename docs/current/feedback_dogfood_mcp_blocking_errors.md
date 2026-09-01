@@ -40,6 +40,16 @@ exactly the failures this effort exists to find.
 5. Once resolved, move the file from `docs/current/blockers/` to `docs/obsolete/blockers/` (mirrors
    the existing current/obsolete docs-tier convention already used elsewhere in this repo).
 
+**VS Code's server is a separate build, not affected by editing this repo:** the MCP server VS Code
+connects to runs from `bin-vscode\Advanced` (stdio) — see [[project_vscode_control_script]] for the
+HTTP sibling copy at `bin-vscode\Advanced.Http`, port 5150. `build.ps1` only refreshes these two
+copies after a successful build of whatever flavor it was invoked for (see its VS Code server
+restart region); editing source files or running tests in this repo does **not** touch them. So a
+tool call made mid-edit is exercising the last `build.ps1`-refreshed binary, not the working tree —
+don't assume an in-progress code change is already live in the tool you're dog-fooding, and don't
+treat a build/test failure elsewhere in the repo as evidence the VS Code server is unhealthy (or
+vice versa) without checking timestamps per [[feedback_stale_server_before_rebuild]].
+
 **Known reachability flake (already diagnosed, not a fresh bug to re-investigate each time):**
 MCP server access can fail / appear offline / show no tools loaded, typically on the *first* tool
 attempt right after a `/compact`. The second or third attempt usually succeeds. This has been
