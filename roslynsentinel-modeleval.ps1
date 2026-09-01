@@ -37,6 +37,14 @@
                           and derive one. Isolates execution fidelity from planning/bug-location:
                           a much higher pass rate here than MinimalGuidanceDisambiguated's points
                           at planning as the bottleneck, not mechanical tool use.
+      PlanImplementVerify - Model_FixesWholeFileRewriteBug_PlanImplementVerify. Three separate
+                          model calls, each with its own fresh context: a read-only plan phase
+                          (same prompt shape as PlanOnly), a full-tool-access implement phase fed
+                          THAT MODEL'S OWN plan text (not a hand-picked one, unlike ScriptedPlan),
+                          and a read-only verify phase that independently judges the on-disk
+                          result. Pass requires both AssertFixApplied AND the verify phase's own
+                          "VERIFIED: PASS" verdict. Each phase capped at 5 minutes wall-clock;
+                          not supported against .112 (too slow for a 3-call test).
 
     Each host gets its own --artifacts-path (RoslynSentinel\_scratchbuild_<host-suffix>) so
     that two hosts can be launched concurrently without racing on shared project references'
@@ -100,7 +108,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan')]
+    [ValidateSet('SizeThreshold', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify')]
     [string]$Test,
 
     [Parameter(Position = 2)]
@@ -141,6 +149,7 @@ $testNames = @{
     'PlanOnly'                      = 'Model_PlansWholeFileRewriteFix_PrefersCallingHelper'
     'PlanThenExecute'               = 'Model_FixesWholeFileRewriteBug_PlanThenExecute'
     'ScriptedPlan'                   = 'Model_FixesWholeFileRewriteBug_ScriptedPlan'
+    'PlanImplementVerify'           = 'Model_FixesWholeFileRewriteBug_PlanImplementVerify'
 }
 $testName = $testNames[$Test]
 

@@ -426,9 +426,17 @@ public class WholeFileRewriteAgentTests
         return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);
     }
 
-    private void AssertFixApplied(AgentRunResult result)
+    private void AssertFixApplied(AgentRunResult result) => AssertFixApplied(_fixture, result);
+
+    /// <summary>
+    /// Shared with <see cref="PlanImplementVerifyAgentTests"/>, which runs this same fixture/bug
+    /// through its own separate <see cref="RoslynSentinel.Tests.TestSolutionFixture"/> instance —
+    /// static + explicit fixture parameter instead of an instance method so both test classes can
+    /// call it without one depending on the other's private state.
+    /// </summary>
+    internal static void AssertFixApplied(RoslynSentinel.Tests.TestSolutionFixture fixture, AgentRunResult result)
     {
-        var fixedPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "BlockConverter.cs");
+        var fixedPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "BlockConverter.cs");
         Assert.That(File.Exists(fixedPath), Is.True, "BlockConverter.cs should still exist after the model's edits.");
 
         var fixedText = File.ReadAllText(fixedPath);
@@ -453,7 +461,7 @@ public class WholeFileRewriteAgentTests
         // BlockConverter.cs — leaving it private and duplicating its body into BlockConverter.cs
         // is the failure mode this assertion now catches, matching the precedent instead of
         // fighting it.
-        var helperPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "BlockEditHelpers.cs");
+        var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "BlockEditHelpers.cs");
         var helperText = File.ReadAllText(helperPath);
         Assert.That(helperText, Does.Not.Contain("private static string ReplaceBlockFormatted"),
             $"ReplaceBlockFormatted should have its accessibility raised (internal/public) so " +
