@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: baae58f2-ea41-48a8-b6da-6d65bc32d78d
-  modified: 2026-08-31T06:42:04.376Z
+  modified: 2026-09-01T02:28:03.262Z
 ---
 
 Real-model integration tests live in `RoslynSentinel.Tests.ModelEval`. They drive an actual
@@ -115,24 +115,55 @@ the project's own `bin/Debug/net10.0/model-eval/...` when using this flag — ad
 a fresh run if old CSV rows/run-history from a prior session would otherwise be mixed in
 with the new run's data (`rm -rf _scratchbuild_112/model-eval`).
 
-## Front-door script: `roslynsentinel-modeleval.ps1`
+## Front-door script: `roslynsentinel-modeleval.ps1` — USE THIS INSTEAD OF A HAND-ROLLED LOOP
 
-Wraps everything above (env vars, `--artifacts-path`, filter syntax) into one command, in
-the same style as `roslynsentinel-vscode-control.ps1`:
+Repo-root PowerShell script. Wraps everything above (env vars, `--artifacts-path`, filter
+syntax) into one command, in the same style as `roslynsentinel-vscode-control.ps1`. **Always
+use this for N-repeat batches** — do not hand-roll a bash/PowerShell `for` loop calling
+`dotnet test` repeatedly. Two distinct build races are in play, and each is solved by a
+different mechanism, not by the same one:
+- **Two hosts launched in parallel** (each its own `dotnet test` process, same time) race on
+  shared project references' `obj`/`bin` output → CS2012/VBCSCompiler (see above). Solved by
+  each invocation getting its **own `--artifacts-path`** — this is true whether or not the
+  script is used; a hand-rolled parallel launch that sets `--artifacts-path` per host also
+  avoids this one.
+- **One host's `-Repeats N` sequential iterations** (same `--artifacts-path`, one after
+  another) race the next iteration's build against the previous run's still-exiting
+  `testhost.exe` → MSB3027 "locked by testhost". This is the one the *script itself* is
+  needed for — its internal loop waits for that scratch path's `testhost.exe` to fully exit
+  before starting the next iteration's build. A hand-rolled loop, even with
+  `--artifacts-path` set correctly, still hits this one because it has no such wait.
 
 ```
 .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
 .\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test MinimalGuidance
+.\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test PlanThenExecute -Repeats 5
 .\roslynsentinel-modeleval.ps1 112 SizeThreshold 60          # positional shorthand
 ```
 
 - `-HostAddress` accepts the `112`/`113` aliases (resolved to their base URLs and to
   `_scratchbuild_112`/`_scratchbuild_113`) or any other base URL, which gets a sanitized
   `--artifacts-path` suffix derived from it.
-- `-Test` is `SizeThreshold` or `MinimalGuidance` (maps to the two test names above).
+- `-Test` is one of: `SizeThreshold`, `MinimalGuidance`, `MinimalGuidanceDisambiguated`,
+  `PlanOnly`, `PlanThenExecute` (see the "Test names" section above for what each maps to
+  and does — `PlanOnly`/`PlanThenExecute` live in `PlanThenExecuteAgentTests.cs`, not
+  `WholeFileRewriteAgentTests.cs`).
 - `-Size` only applies to `SizeThreshold` (sets `ROSLYNSENTINEL_MODELEVAL_SIZES`).
 - `-Model` defaults to `qwen3.5-9b-coder`.
-- `-Clean` wipes that host's stale `model-eval/` run-history dir first.
+- `-Clean` archives that host's stale `model-eval/` run-history dir to
+  `ModelTestingResults\<host-suffix>\<archive-timestamp>\` (not deleted — moved) before
+  running, so old CSV rows/transcripts from a prior session aren't mixed in with the new
+  run's data.
+- `-Repeats N` (default 1): runs the test N times in sequence. **This is the only supported
+  way to do a multi-run batch** — a caller-side loop invoking `dotnet test --artifacts-path
+  <dir>` repeatedly races the next iteration's build against the previous run's still-exiting
+  `testhost.exe` and fails with `MSB3027 "locked by testhost"` (confirmed in practice
+  2026-08-31). The script's internal loop waits for that scratch path's own `testhost.exe` to
+  fully exit between iterations before starting the next build. After each run (pass or
+  fail), that run's directory is copied unconditionally to
+  `ModelTestingResults\<host-suffix>\<TestName>\<timestamp>\` — independent of `-Clean`, so
+  results land in the common folder as soon as each run finishes, not only at the next
+  `-Clean`.
 
 Launch two hosts concurrently by running the script twice (background jobs / separate
 terminals) — each gets its own `--artifacts-path` automatically, so they won't collide.
