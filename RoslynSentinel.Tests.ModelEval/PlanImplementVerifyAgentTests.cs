@@ -146,7 +146,7 @@ public class PlanImplementVerifyAgentTests
     private string _runDirectory = null!;
 
     [SetUp]
-    public void SetUp()
+    public async Task SetUp()
     {
         LlmOptions.Configure([]);
         if (string.IsNullOrEmpty(LlmOptions.Model))
@@ -163,6 +163,37 @@ public class PlanImplementVerifyAgentTests
             "model-eval",
             TestContext.CurrentContext.Test.Name,
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+
+        // The fixture files are written once, up front, via a throwaway workspace manager that is
+        // never used again — each phase's RunPhaseAsync spins up its own real host/workspace and
+        // just re-loads this same on-disk solution path, so all three phases see identical starting
+        // content without needing this manager (or the tool server it would require) to stay alive.
+        var writerServices = new ServiceCollection();
+        writerServices.AddRoslynSentinelEnginesBasic();
+        var writerProvider = writerServices.BuildServiceProvider();
+        var writerWorkspaceManager = writerProvider.GetRequiredService<IWorkspaceManager>();
+        await writerWorkspaceManager.LoadSolutionAsync(_fixture.SolutionPath, TestContext.CurrentContext.CancellationToken);
+
+        await _fixture.AddFileToSolution(
+            writerWorkspaceManager,
+            Path.Combine("ContosoOrders.Core", "FixtureHelpers", "BlockEditHelpers.cs"),
+            WholeFileRewriteReproducer.HelperFileContent,
+            reloadSolution: false,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+        await _fixture.AddFileToSolution(
+            writerWorkspaceManager,
+            Path.Combine("ContosoOrders.Core", "FixtureHelpers", "BlockConverter.cs"),
+            WholeFileRewriteReproducer.BuggyFileContent,
+            reloadSolution: false,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+        await _fixture.AddFileToSolution(
+            writerWorkspaceManager,
+            Path.Combine("ContosoOrders.Core", "FixtureHelpers", "Shape.cs"),
+            WholeFileRewriteReproducer.TargetAbstractClassFileContent,
+            reloadSolution: true,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        (writerProvider as IDisposable)?.Dispose();
     }
 
     [TearDown]
