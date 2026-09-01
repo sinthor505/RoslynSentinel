@@ -172,6 +172,19 @@ public enum BuildVerifyLevel
     noBuild, quickBuild, fullBuild
 }
 
+// ── RunTest ───────────────────────────────────────────────────────────────────
+
+public enum TestOutcome
+{
+    Passed, Failed, Skipped, NotExecuted
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum TestResultsFilter
+{
+    all, failed, skipped
+}
+
 // ── Content hashing ───────────────────────────────────────────────────────────
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
