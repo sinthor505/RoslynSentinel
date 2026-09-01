@@ -1981,16 +1981,12 @@ public class SentinelWorkspaceTools
 
             if (results.Count == 0)
             {
-                // warnings.Add("No matches. SearchSolutionText only searches documents that are part of a loaded project's compilation (e.g. .cs files) — it does not see files attached via the .sln's Solution Folders, docs/ files, or other non-project files. Use ListSolutionItems(kind: solutionItems) to list files attached via Solution Folders, or ProjectDoc to read plan/handoff/documentation files directly.");
-
-                if (actualSearchMode == TextSearchMode.literal)
-                {
-                    warnings.Add($"No matches were found for the literal substring '{pattern}'. Try adjusting the search pattern or using the regex search mode. Use ProjectDoc to read plan/handoff/documentation files directly or use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
-                }
-                else if (actualSearchMode == TextSearchMode.regex)
-                {
-                    warnings.Add($"No matches were found for the regex pattern '{pattern}'. Try adjusting the search pattern or using the literal search mode. Use ProjectDoc to read plan/handoff/documentation files directly or use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
-                }
+                string modeLabel = actualSearchMode == TextSearchMode.literal ? "literal substring" : "regex pattern";
+                string switchModeHint = actualSearchMode == TextSearchMode.literal ? "using the regex search mode" : "using the literal search mode";
+                warnings.Add(
+                    $"No matches were found for the {modeLabel} '{pattern}'. Try adjusting the search pattern or {switchModeHint}. " +
+                    "Use ProjectDoc to read plan/handoff/documentation files directly or use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
+                throw new NoSearchMatchesException(string.Join(" ", warnings));
             }
             else if (results.Count >= maxResults)
             {

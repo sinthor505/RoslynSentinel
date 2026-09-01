@@ -102,7 +102,7 @@ public class OrientationBreakerFilterTests
         for (int i = 0; i < 3; i++)
         {
             var result = await SearchForGuaranteedNoMatchAsync($"ZzzNoSuchTokenAnywhereInTheSolution{i}Zzz");
-            Assert.That(result.IsError, Is.Not.True, "SearchSolutionText itself should still succeed (zero matches is not a tool error).");
+            Assert.That(result.IsError, Is.True, "Zero matches should surface as a protocol-level error so the agent treats it as a signal to change approach.");
         }
 
         // ListWorkspaceSolutions is not on the allowlist (ListAll, ListSolutionItems, GetFileOutline, ReadFile).

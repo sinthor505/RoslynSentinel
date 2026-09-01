@@ -198,10 +198,10 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _tools.SearchSolutionText(@"^\s*public enum OrderStatus", searchMode: TextSearchMode.literal);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Warning, Does.Contain("contains regex metacharacters"));
-        Assert.That(result.Warning, Does.Contain("searched for the literal substring as requested"));
-        Assert.That(result.TotalRecords, Is.Zero, "explicit literal mode must actually search literally, not silently switch to regex");
+        Assert.That(result.Success, Is.False, "explicit literal mode must actually search literally, not silently switch to regex, and zero matches is now a failure");
+        Assert.That(result.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
+        Assert.That(result.Error?.Message, Does.Contain("contains regex metacharacters"));
+        Assert.That(result.Error?.Message, Does.Contain("searched for the literal substring as requested"));
     }
 
     [Test]
@@ -215,13 +215,14 @@ public class BatteryTwentyTests
     }
 
     [Test]
-    public async Task SearchSolutionText_NoMatches_ReturnsScopeWarning()
+    public async Task SearchSolutionText_NoMatches_ReturnsNoMatchesError()
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _tools.SearchSolutionText("ThisPatternDoesNotAppearAnywhere");
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Warning, Does.Contain("ProjectDoc"));
+        Assert.That(result.Success, Is.False, "Zero matches should surface as a failure so the protocol-level IsError filter picks it up.");
+        Assert.That(result.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
+        Assert.That(result.Error?.Message, Does.Contain("ProjectDoc"));
     }
 
     [Test]

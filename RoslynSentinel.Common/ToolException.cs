@@ -81,6 +81,21 @@ public sealed class DiffApplyException : ToolException
 }
 
 /// <summary>
+/// A search ran to completion but matched zero results. Distinct from
+/// <see cref="ToolNotFoundException"/>: the search itself is valid and did run — it just found
+/// nothing, and the caller (an agent guessing at names/patterns) should treat that as a signal to
+/// browse instead of retrying near-identical guesses. Maps to <see cref="ToolErrorCode.NoMatches"/>.
+/// </summary>
+public sealed class NoSearchMatchesException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.NoMatches;
+
+    public NoSearchMatchesException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// The requested operation has no real implementation behind it — the engine method is a
 /// deliberate stub (e.g. always returns an empty change set) rather than something that ran and
 /// found nothing. Distinct from <see cref="ToolNotFoundException"/>: the caller's names may be
