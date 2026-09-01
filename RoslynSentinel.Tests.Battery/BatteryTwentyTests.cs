@@ -556,6 +556,31 @@ public class Order
     }
 
     [Test]
+    public async Task Build_QuickBuild_RepeatedDiagnosticAcrossFiles_ErrorSummaryGroupsByIdAsync()
+    {
+        static string MissingUsingSource(string className) => $"namespace TestProj; public class {className} {{ public UndeclaredType Field; }}";
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
+        [
+            ("A.cs", MissingUsingSource("A")),
+            ("B.cs", MissingUsingSource("B")),
+            ("C.cs", MissingUsingSource("C")),
+        ]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _tools.Build(BuildVerifyLevel.quickBuild);
+
+        Assert.That(result.Success, Is.True);
+        var data = (BuildResult)result.Data!;
+        Assert.That(data.BuildSucceeded, Is.False);
+        Assert.That(data.ErrorCount, Is.EqualTo(3), "one CS0246 (undeclared type) per file.");
+        Assert.That(data.ErrorSummary, Is.Not.Empty);
+        var group = data.ErrorSummary.Single(g => g.DiagnosticId == "CS0246");
+        Assert.That(group.Count, Is.EqualTo(3));
+        Assert.That(group.Locations, Has.Count.EqualTo(3));
+        Assert.That(data.WarningSummary, Is.Empty);
+    }
+
+    [Test]
     public async Task GetDiagnostics_VerifyQuickBuild_AttachesBuildVerification()
     {
         SetSource(SimpleSource, "Test.cs");

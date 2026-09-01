@@ -1213,12 +1213,7 @@ public class SentinelWorkspaceTools
             }
 
             var relevant = result.Data.Details.Where(d => d.Severity is "Error" or "Warning").ToList();
-            var groups = relevant.GroupBy(d => d.Id).Select(g =>
-            {
-                var first = g.First();
-                var locations = g.Select(d => $"{d.FilePath}:{d.StartLine}").Distinct().Take(10).ToList();
-                return new DiagnosticGroupSummary(DiagnosticId: g.Key, Severity: first.Severity, MessageTemplate: first.Message, Count: g.Count(), Locations: locations);
-            }).OrderByDescending(g => g.Count).Take(topN).ToList();
+            var groups = relevant.GroupBySeverity(topN);
             return new ToolResult<object>()
             {
                 Success = true,
@@ -1238,7 +1233,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "Build")]
     [Produces(DataTag.Report)]
-    [Description("Compiles the loaded solution and reports errors/warnings. level=quickBuild uses in-memory Roslyn diagnostics (fast, same check GetDiagnostics does). level=fullBuild shells out to `dotnet build` (slower, catches MSBuild-only failures — NuGet restore, resource copy, post-build events — that quickBuild can't see). Returns BuildSucceeded, ExitCode, ErrorCount/WarningCount, capped Errors/Warnings lists, Duration.")]
+    [Description("Compiles the loaded solution and reports errors/warnings. level=quickBuild uses in-memory Roslyn diagnostics (fast, same check GetDiagnostics does). level=fullBuild shells out to `dotnet build` (slower, catches MSBuild-only failures — NuGet restore, resource copy, post-build events — that quickBuild can't see). Returns BuildSucceeded, ExitCode, ErrorCount/WarningCount, capped Errors/Warnings lists, ErrorSummary/WarningSummary (grouped by diagnostic Id, uncapped, for spotting one cause behind many errors), Duration.")]
     public async Task<ToolResult<object>> Build(
         BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
         ToolScope scope = ToolScope.solution,

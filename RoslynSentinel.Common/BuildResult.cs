@@ -8,6 +8,8 @@ public record BuildResult(
     int WarningCount,
     List<DiagnosticInfo> Errors,
     List<DiagnosticInfo> Warnings,
+    List<DiagnosticGroupSummary> ErrorSummary,
+    List<DiagnosticGroupSummary> WarningSummary,
     string? StdoutTail,
     string? StderrTail,
     TimeSpan Duration,

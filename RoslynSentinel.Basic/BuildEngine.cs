@@ -58,6 +58,7 @@ public class BuildEngine
 
         var errors = summary!.Details.Where(d => d.Severity == "Error").ToList();
         var warnings = summary!.Details.Where(d => d.Severity == "Warning").ToList();
+        const int SummaryTopN = 50;
 
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
             BuildSucceeded: summary.Errors == 0,
@@ -67,6 +68,8 @@ public class BuildEngine
             WarningCount: summary.Warnings,
             Errors: errors,
             Warnings: warnings,
+            ErrorSummary: errors.GroupBySeverity(SummaryTopN),
+            WarningSummary: warnings.GroupBySeverity(SummaryTopN),
             StdoutTail: null,
             StderrTail: null,
             Duration: DateTime.UtcNow - start
@@ -146,6 +149,7 @@ public class BuildEngine
         const int TailLines = 40;
         static string Tail(string text) => string.Join(Environment.NewLine, text.Split(Environment.NewLine).TakeLast(TailLines));
 
+        const int SummaryTopN = 50;
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
             BuildSucceeded: process.ExitCode == 0,
             Level: BuildVerifyLevel.fullBuild,
@@ -154,6 +158,8 @@ public class BuildEngine
             WarningCount: warnings.Count,
             Errors: errors,
             Warnings: warnings,
+            ErrorSummary: errors.GroupBySeverity(SummaryTopN),
+            WarningSummary: warnings.GroupBySeverity(SummaryTopN),
             StdoutTail: Tail(stdoutText),
             StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
             Duration: DateTime.UtcNow - start,

@@ -23,6 +23,22 @@ public static class DiagnosticReportExtensions
     {
         return System.Text.Json.JsonSerializer.Serialize(diagnostics, _jsonOptions);
     }
+
+    /// <summary>
+    /// Groups diagnostics by <see cref="DiagnosticInfo.Id"/>, sorted by group size descending and
+    /// capped to the top <paramref name="topN"/> groups. Shared by GetDiagnostics' summarize=true
+    /// path and Build's ErrorSummary/WarningSummary — call this on the full, uncapped diagnostic
+    /// list (before any maxDetails truncation) so the summary reflects the whole run.
+    /// </summary>
+    public static List<DiagnosticGroupSummary> GroupBySeverity(this IEnumerable<DiagnosticInfo> diagnostics, int topN)
+    {
+        return diagnostics.GroupBy(d => d.Id).Select(g =>
+        {
+            var first = g.First();
+            var locations = g.Select(d => $"{d.FilePath}:{d.StartLine}").Distinct().Take(10).ToList();
+            return new DiagnosticGroupSummary(DiagnosticId: g.Key, Severity: first.Severity, MessageTemplate: first.Message, Count: g.Count(), Locations: locations);
+        }).OrderByDescending(g => g.Count).Take(topN).ToList();
+    }
 }
 
 public record DiagnosticInfo(
