@@ -168,6 +168,12 @@ public class PlanImplementVerifyAgentTests
         // never used again — each phase's RunPhaseAsync spins up its own real host/workspace and
         // just re-loads this same on-disk solution path, so all three phases see identical starting
         // content without needing this manager (or the tool server it would require) to stay alive.
+        // Deliberately NOT disposed: PersistentWorkspaceManager.Dispose() tears down its debounce
+        // timer/semaphore synchronously, and a FileSystemWatcher event from the writes below can
+        // still have OnDebounceTimerElapsed in flight on the thread pool at that point — disposing
+        // immediately after the last write crashes the whole test host with an
+        // ObjectDisposedException on the semaphore (observed on a real run). Left to be GC'd once
+        // this method returns instead; nothing else in the test references it.
         var writerServices = new ServiceCollection();
         writerServices.AddLogging();
         writerServices.AddRoslynSentinelEnginesBasic();
@@ -193,8 +199,6 @@ public class PlanImplementVerifyAgentTests
             WholeFileRewriteReproducer.TargetAbstractClassFileContent,
             reloadSolution: true,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
-
-        (writerProvider as IDisposable)?.Dispose();
     }
 
     [TearDown]
