@@ -874,7 +874,15 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         {
             if (acquired)
             {
-                _solutionLock.Release();
+                try
+                {
+                    _solutionLock.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Dispose() raced us between WaitAsync() returning and this Release() —
+                    // the lock object is gone, nothing left to release into.
+                }
             }
         }
     }
@@ -1755,6 +1763,20 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     public void Dispose()
     {
         _disposed = true;
+
+        // Block until any in-flight OnDebounceTimerElapsed callback (including its finally block)
+        // has fully returned before tearing down _workspace/_solutionLock below. A plain
+        // _debounceTimer.Dispose() does not wait for an already-running callback to finish, which
+        // previously let a callback's _solutionLock.Release() run concurrently with (or after)
+        // _solutionLock.Dispose() and throw ObjectDisposedException from inside a finally block —
+        // unobservable by the callback's own catches and fatal for the process since the callback
+        // is async void. See docs/current/blockers/blocking_error_persistentworkspacemanager_dispose_race_crashes_process.md.
+        using (var waitHandle = new ManualResetEvent(false))
+        {
+            _debounceTimer.Dispose(waitHandle);
+            waitHandle.WaitOne();
+        }
+
         _workspace?.Dispose();
         _watcher?.Dispose();
         foreach (var watcher in _outOfTreeWatchers)
@@ -1762,7 +1784,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             watcher.Dispose();
         }
         _outOfTreeWatchers.Clear();
-        _debounceTimer.Dispose();
         _solutionLock.Dispose();
         GC.SuppressFinalize(this);
     }
