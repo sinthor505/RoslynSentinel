@@ -118,7 +118,10 @@ public class PlanImplementVerifyAgentTests
            files — byte-for-byte unchanged from what an unrelated method should look like (i.e. no
            incidental reformatting)?
         4. Does the affected project actually build? Verify this yourself with an MCP build tool
-           scoped to the `ContosoOrders.Core` project — do not take it on faith.
+           scoped to the `ContosoOrders.Core` project — do not take it on faith. Use the cheapest
+           build level that answers this (a quick build of just that one project), not a full or
+           solution-wide build — this task only needs a yes/no compile signal, not a full
+           rebuild, and an expensive build can eat your whole time budget for no benefit.
 
         State your verdict as described in your system prompt.
         """;
