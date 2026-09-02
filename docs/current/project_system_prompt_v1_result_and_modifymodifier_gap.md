@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: baae58f2-ea41-48a8-b6da-6d65bc32d78d
-  modified: 2026-08-30T08:56:21.065Z
+  modified: 2026-09-02T08:35:25.955Z
 ---
 
 After adding [[project_applydiff_fixes_unblocked_model_eval]]'s follow-up — a longer,
@@ -53,3 +53,13 @@ remove-without-complementary-add behavior directly (or renaming the parameter/do
 sharply) — that's a tool-design fix, not a prompt problem, and likely has higher leverage than
 further prompt iteration. If more model-eval runs hit the same `ModifyModifier` trap, that
 confirms it's worth fixing before continuing to harden the prompt further.
+
+**Update 2026-09-02**: confirmed — see [[project_modifymodifier_accessibility_footgun]]. A
+sibling gap recurs at high frequency across the corpus: models calling `ModifyModifier(modifier:
+"public")` directly (not remove-then-add) get a correct, by-design rejection telling them to use
+`ChangeAccessibility` instead, and reliably self-correct on the next turn — but that two-tool
+error sequence trips `AssertWithinBudget`'s total cap even though each tool's own per-tool cap is
+fine, turning ~27 otherwise-correct fixes into scored failures. Both gaps point the same
+direction: fix `ModifyModifier` at the tool layer (route accessibility keywords to
+`ChangeAccessibility` internally) rather than continuing to patch around it with prompts or test
+budgets.
