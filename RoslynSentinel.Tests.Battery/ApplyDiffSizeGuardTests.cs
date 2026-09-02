@@ -1,9 +1,15 @@
 // ApplyDiff whole-file-rewrite size guard (changesetFormat=files, action=apply): a files-format
-// apply that would shrink a file by more than 50% is rejected with errorCode=ConfirmationRequired
-// instead of being applied — this is the guard against an agent submitting only a changed fragment
-// as if it were the entire file (see
+// apply that would shrink a file by more than 50% — either by raw line count, or by active
+// (non-comment) C# code lines — is rejected with errorCode=ConfirmationRequired instead of being
+// applied. The raw line-count check guards against an agent submitting only a changed fragment as
+// if it were the entire file (see
 // docs/current/blockers/blocking_error_searchmode_literal_override_and_iserror_flag.md, "reported
-// symptom" section, for the real incident this replays). ApplyDiff itself no longer offers a
+// symptom" section, for the real incident this replays). The active-code-line check guards against
+// the same intent expressed differently: commenting out every line of the file one-for-one, which
+// leaves the raw line count unchanged (so the first check alone misses it) but leaves the file with
+// no working code (see ModelTestingResults/113/Model_FixesWholeFileRewriteBug_PlanImplementVerify/
+// 20260902-062730-159, where ApplyDiff replaced BlockConverter.cs with every line prefixed "//" and
+// reported success because the line count and compile both looked fine). ApplyDiff itself no longer offers a
 // confirmationCode replay path — that mechanism reliably caused model hallucination (agents would
 // fabricate a confirmationCode and call action=confirmationCode even when the true problem was
 // something else entirely; see docs/current/overnight-run-2026-08-30.md section 5b for the traced
@@ -64,6 +70,31 @@ public class ApplyDiffSizeGuardTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
         Assert.That(result.Error!.Message, Does.Contain("re-submit"));
+        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
+    }
+
+    [Test]
+    public async Task ApplyDiff_FilesFormatCommentsOutWholeFile_RejectsWithConfirmationRequiredAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var originalContent = await File.ReadAllTextAsync(targetFile);
+
+        // Same line count as the original (each line prefixed "// " rather than removed), so the
+        // raw line-count guard sees 0% shrink — only the active-code-line guard should catch this.
+        var commentedOut = string.Join('\n', originalContent.Split('\n').Select(line => "// " + line));
+
+        var result = await tools.ApplyDiff(
+            ChangesetFormat.files, ProposedChangeAction.apply,
+            changes: new Dictionary<FilePath, string> { [targetFile] = commentedOut });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
+        Assert.That(result.Error!.Message, Does.Contain("active code lines"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
     }
 

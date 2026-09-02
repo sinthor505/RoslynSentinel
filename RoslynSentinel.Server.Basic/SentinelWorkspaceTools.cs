@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
@@ -462,17 +463,83 @@ public class SentinelWorkspaceTools
     }
 
     /// <summary>
+    /// Count of non-blank source lines in <paramref name="content"/> that contain real C# syntax
+    /// (tokens), as opposed to lines that are blank or entirely comment trivia. Parsed rather than
+    /// regex-matched so that comment markers appearing inside string literals don't skew the count.
+    /// Returns 0 (guard exempt — see <see cref="PercentActiveCodeLinesRemoved"/>) if the content
+    /// doesn't parse as C#, since a non-.cs file has no meaningful "active code line" notion here.
+    /// </summary>
+    private static int CountActiveCodeLines(string content)
+    {
+        var tree = CSharpSyntaxTree.ParseText(content);
+        var text = tree.GetText();
+        var activeLines = new HashSet<int>();
+        foreach (var token in tree.GetRoot().DescendantTokens())
+        {
+            if (token.IsKind(SyntaxKind.None) || token.IsKind(SyntaxKind.EndOfFileToken))
+            {
+                continue;
+            }
+
+            int startLine = text.Lines.GetLineFromPosition(token.SpanStart).LineNumber;
+            int endLine = text.Lines.GetLineFromPosition(token.Span.End).LineNumber;
+            for (int line = startLine; line <= endLine; line++)
+            {
+                activeLines.Add(line);
+            }
+        }
+
+        return activeLines.Count;
+    }
+
+    /// <summary>
+    /// Fraction of <paramref name="oldContent"/>'s active (non-comment, non-blank) C# code lines
+    /// that <paramref name="newContent"/> would remove. This catches the case the raw
+    /// <see cref="PercentLinesRemoved"/> line-count guard misses entirely: an agent that comments
+    /// out every existing line one-for-one (e.g. prefixing each with "// ") produces a file with
+    /// the SAME line count as before, so the shrink guard sees 0% change, even though the file now
+    /// contains no working code. Only files that still look like C# after the edit are checked
+    /// (both old and new content must parse to at least one active line) — a genuine full-file
+    /// deletion-to-near-empty is already caught by the line-count guard, and non-.cs content has no
+    /// "active code line" concept to compare. Returns 0 (exempt) for a new file or malformed content.
+    /// </summary>
+    private static double PercentActiveCodeLinesRemoved(string filePath, string? oldContent, string newContent)
+    {
+        if (string.IsNullOrEmpty(oldContent) || !filePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        int oldActive = CountActiveCodeLines(oldContent);
+        if (oldActive == 0)
+        {
+            return 0;
+        }
+
+        int newActive = CountActiveCodeLines(newContent);
+        if (newActive >= oldActive)
+        {
+            return 0;
+        }
+
+        return (oldActive - newActive) / (double)oldActive;
+    }
+
+    /// <summary>
     /// A files-format apply where any file would lose more than this fraction of its line count
-    /// is rejected (see <see cref="ToolErrorCode.ConfirmationRequired"/>) rather than applied —
-    /// this is the signature of a caller submitting only a changed fragment as if it were the
-    /// entire file, rather than an intentional whole-file rewrite. Only shrinkage is checked (see
-    /// <see cref="PercentLinesRemoved"/>); a large increase is exempt.
+    /// (see <see cref="PercentLinesRemoved"/>), or of its active C# code lines (see
+    /// <see cref="PercentActiveCodeLinesRemoved"/>), is rejected (see
+    /// <see cref="ToolErrorCode.ConfirmationRequired"/>) rather than applied — the first check
+    /// catches a caller submitting only a changed fragment as if it were the entire file; the
+    /// second catches the same intent expressed by commenting out the whole file instead of
+    /// shortening it, which leaves the raw line count unchanged. A large increase in either
+    /// dimension is exempt from both.
     /// </summary>
     private const double LargeShrinkRejectionThreshold = 0.5;
 
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. IMPORTANT: for changesetFormat=files with action=apply, any file whose content would shrink by more than 50% is rejected with errorCode=ConfirmationRequired — this is a strong signal you submitted only a changed fragment as if it were the whole file, rather than a genuine whole-file rewrite. If that happens, re-submit the complete, unabridged file content in a fresh ApplyDiff call (or switch to changesetFormat=diff for a partial edit) — do not retry with a different action.")]
+    [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. IMPORTANT: for changesetFormat=files with action=apply, any file whose content would shrink by more than 50% (by line count, OR by active/non-comment C# code lines — so commenting out the whole file instead of shortening it is caught too) is rejected with errorCode=ConfirmationRequired — this is a strong signal you submitted only a changed fragment as if it were the whole file, or commented out code instead of actually editing/removing it, rather than a genuine whole-file rewrite. If that happens, re-submit the complete, unabridged file content in a fresh ApplyDiff call (or switch to changesetFormat=diff for a partial edit) — do not retry with a different action.")]
     public async Task<ToolResult<object>> ApplyDiff([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
@@ -494,14 +561,17 @@ public class SentinelWorkspaceTools
                 {
                     string? oversizedFile = null;
                     double oversizedPercent = 0;
+                    bool oversizedIsCommentCollapse = false;
                     foreach (var (changedPath, newContent) in changes)
                     {
                         var oldContent = await FileIoHelper.ReadAllTextIfExistsAsync(changedPath, cancellationToken);
                         var percentRemoved = PercentLinesRemoved(oldContent, newContent);
-                        if (percentRemoved > LargeShrinkRejectionThreshold)
+                        var percentActiveRemoved = PercentActiveCodeLinesRemoved(changedPath, oldContent, newContent);
+                        if (percentRemoved > LargeShrinkRejectionThreshold || percentActiveRemoved > LargeShrinkRejectionThreshold)
                         {
                             oversizedFile = changedPath;
-                            oversizedPercent = percentRemoved;
+                            oversizedPercent = Math.Max(percentRemoved, percentActiveRemoved);
+                            oversizedIsCommentCollapse = percentActiveRemoved > LargeShrinkRejectionThreshold && percentRemoved <= LargeShrinkRejectionThreshold;
                             break;
                         }
                     }
@@ -512,8 +582,11 @@ public class SentinelWorkspaceTools
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.ConfirmationRequired,
-                                $"File '{oversizedFile}' would shrink by {oversizedPercent:P0}, exceeding the {LargeShrinkRejectionThreshold:P0} threshold for a files-format apply. " +
-                                "This usually means only a changed fragment was submitted instead of the complete file content. If this is a genuine whole-file rewrite, re-submit ApplyDiff with the complete file content included in 'changes'. For a partial edit, use changesetFormat=diff instead.")
+                                oversizedIsCommentCollapse
+                                    ? $"File '{oversizedFile}' would have {oversizedPercent:P0} of its active code lines turned into comments, exceeding the {LargeShrinkRejectionThreshold:P0} threshold for a files-format apply. " +
+                                      "This usually means the intended change (or a partial rewrite) was commented out instead of actually being edited or removed, rather than a genuine intentional deletion. If this is a genuine intentional removal of this code, re-submit ApplyDiff with the complete file content included in 'changes'. For a partial edit, use changesetFormat=diff instead."
+                                    : $"File '{oversizedFile}' would shrink by {oversizedPercent:P0}, exceeding the {LargeShrinkRejectionThreshold:P0} threshold for a files-format apply. " +
+                                      "This usually means only a changed fragment was submitted instead of the complete file content. If this is a genuine whole-file rewrite, re-submit ApplyDiff with the complete file content included in 'changes'. For a partial edit, use changesetFormat=diff instead.")
                         };
                     }
 
