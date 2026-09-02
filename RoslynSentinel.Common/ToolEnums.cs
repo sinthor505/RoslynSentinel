@@ -124,6 +124,14 @@ public enum AttributeModifyAction
     add, replace, remove
 }
 
+// Deliberately excludes accessibility keywords (public/private/internal/protected/...) so it is
+// impossible to pass one to ModifyModifier — use ChangeAccessibility/AccessibilityLevel instead.
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum NonAccessibilityModifier
+{
+    @virtual, @abstract, @sealed, @static, @readonly, @override, @partial, @async, @new, @extern, @unsafe, @volatile
+}
+
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TypedMemberKind
 {

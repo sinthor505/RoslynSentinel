@@ -10,9 +10,6 @@ namespace RoslynSentinel.Server.Basic;
 [McpServerToolType]
 public class SentinelRefactoringTools
 {
-    private static readonly HashSet<string> AccessibilityModifiers =
-        ["public", "private", "internal", "protected", "protected internal", "private protected"];
-
     private readonly RefactoringEngine _refactoringEngine;
     private readonly StandardRefactoringEngine _standardRefactoringEngine;
     // private readonly AdvancedStructuralEngine _advancedStructuralEngine;
@@ -1030,11 +1027,11 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyModifier")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes non-accessibility modifier keywords: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. Action: add or remove. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Does NOT cover accessibility (private/public/etc.) — use ChangeAccessibility for those, or ModifyAttribute for [Attribute] syntax. Returns changeId.")]
+    [Description("Adds or removes a non-accessibility modifier keyword. Action: add or remove. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Does NOT cover accessibility (private/public/etc.) — use ChangeAccessibility for those, or ModifyAttribute for [Attribute] syntax. Returns changeId.")]
     public async Task<ToolResult<object>> ModifyModifier(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        [ExternalInputRequired(DataTag.Modifier, required: true)] string modifier,
+        [ExternalInputRequired(DataTag.Modifier, required: true)] NonAccessibilityModifier modifier,
         [Consumes(DataTag.Action, required: true)] AddRemoveAction action,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -1046,21 +1043,17 @@ public class SentinelRefactoringTools
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        var modifierText = modifier.ToString();
         try
         {
-            if (AccessibilityModifiers.Contains(modifier.Trim().ToLowerInvariant()))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"ModifyModifier does not handle accessibility keywords (got '{modifier}'). Use ChangeAccessibility instead — it replaces whatever accessibility is present in one step, rather than requiring separate remove+add calls.") };
-            }
-
             DocumentEditResult updated;
             if (action == AddRemoveAction.add)
             {
-                updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifier, contextSnippet, lineBefore, lineAfter);
+                updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifierText, contextSnippet, lineBefore, lineAfter);
             }
             else if (action == AddRemoveAction.remove)
             {
-                updated = await _refactoringEngine.RemoveModifierAsync(filePath, targetName, modifier, contextSnippet, lineBefore, lineAfter);
+                updated = await _refactoringEngine.RemoveModifierAsync(filePath, targetName, modifierText, contextSnippet, lineBefore, lineAfter);
             }
             else
             {
@@ -1074,12 +1067,12 @@ public class SentinelRefactoringTools
                 return guardResult;
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifier}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
+            var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifierText}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
             // No ChangedContent: the only "new" text is the single modifier keyword the caller
             // already passed in — same reasoning as ChangeAccessibility.
-            var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AddRemoveAction.add ? "Added" : "Removed")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
+            var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AddRemoveAction.add ? "Added" : "Removed")} '{modifierText}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)

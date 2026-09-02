@@ -403,7 +403,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddModifier_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier("Order.cs", "Order", "sealed", AddRemoveAction.add);
+        var result = await _tools.ModifyModifier("Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -413,27 +413,14 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveModifier_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier("Order.cs", "Order", "sealed", AddRemoveAction.remove);
+        var result = await _tools.ModifyModifier("Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
-    [Test]
-    public async Task ModifyModifier_RejectsAccessibilityKeyword()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier("Order.cs", "GetLabel", "private", AddRemoveAction.remove);
-
-        Assert.That(result.Success, Is.False,
-            "ModifyModifier must reject accessibility keywords — removing 'private' with no add of 'public' silently " +
-            "leaves a class member at C#'s implicit-private default, which looks like success but changes nothing " +
-            "observable. ChangeAccessibility is the correct tool for accessibility changes.");
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(result.Error.Message, Does.Contain("ChangeAccessibility"));
-    }
-
-    // accessibility is now AccessibilityLevel (an enum), so a typo like "puplic" can no longer
-    // reach this method at all — JSON schema/binding rejects it before ChangeAccessibility runs,
-    // which is what ChangeAccessibility_UnrecognizedValue_ReturnsError used to test at this layer.
+    // modifier is now NonAccessibilityModifier (an enum that excludes public/private/internal/
+    // protected/etc.), so passing an accessibility keyword can no longer reach this method at all
+    // — JSON schema/binding rejects it before ModifyModifier runs, which is what
+    // ModifyModifier_RejectsAccessibilityKeyword used to test at this layer.
 
     // --- SummaryComment ---
 
@@ -666,7 +653,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MakeMethodStatic_ValidMethod_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier("Order.cs", "GetLabel", "static", AddRemoveAction.add);
+        var result = await _tools.ModifyModifier("Order.cs", "GetLabel", NonAccessibilityModifier.@static, AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
