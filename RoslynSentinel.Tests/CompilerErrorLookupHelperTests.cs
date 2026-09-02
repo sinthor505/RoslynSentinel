@@ -80,4 +80,42 @@ public class CompilerErrorLookupHelperTests
         Assert.That(description.ToLowerInvariant(), Does.Contain("containing type"),
             "must warn that raising the class's accessibility does not change the member's own accessibility");
     }
+
+    /// <summary>
+    /// Regression coverage for the CS0101/CS0111 branch. See
+    /// docs/current/project_readfile_createfile_path_inconsistency_bug.md — a model that guesses a
+    /// wrong-but-plausible path for an existing file gets a CS0101/CS0111 "already contains a
+    /// definition" collision with no pointer to the real file, and (per that doc's transcript) can
+    /// burn its whole turn budget unable to tell a genuine duplicate apart from a wrong path.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_Cs0111DuplicateMember_NamesTheRealCollidingFilePath()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("FixtureHelpers/BlockEditHelpers.cs", """
+            namespace TestProj.FixtureHelpers;
+
+            public static class BlockEditHelpers
+            {
+                public static string ReplaceBlockFormatted(string a, string b, string c) => a + b + c;
+            }
+            """),
+            ("BlockEditHelpers.cs", """
+            namespace TestProj.FixtureHelpers;
+
+            public static class BlockEditHelpers
+            {
+                public static string ReplaceBlockFormatted(string a, string b, string c) => a + b + c;
+            }
+            """));
+
+        Assert.That(report.Success, Is.False, "two files declaring the same type/member should collide");
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0111").Or.Contain("CS0101"));
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Contain("FixtureHelpers/BlockEditHelpers.cs"),
+            "the real (other) file's path must be named so a model with a wrong path can redirect to it");
+        Assert.That(description, Does.Contain("ReplaceBlockFormatted"));
+    }
 }

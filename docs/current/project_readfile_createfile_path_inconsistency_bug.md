@@ -123,5 +123,25 @@ file that genuinely existed on disk. Fixed by adding a disk-read fallback to `Re
 That fix does **not** address the collision-message gap documented above (a wrong path that
 happens to match an *existing* project-owned `.cs` file's project directory) — the two bugs share
 a symptom category (`ReadFile` and `CreateFile` disagreeing about a path) but different root
-mechanisms and different fixes. This doc's proposed fix (name the colliding file's real path in
-the CS0101/CS0111 message) is still open.
+mechanisms and different fixes.
+
+## Fixed: collision message now names the real colliding file
+
+Implemented the "Possible fix" above directly in `CompilerErrorLookupHelper`
+(`RoslynSentinel.Basic/CompilerErrorLookupHelper.cs`), which is the single chokepoint all four
+`CreateFile`/`ApplyDiff` (Basic + Advanced) validation-failure paths already route their
+`DiagnosticReport` through (`SentinelWorkspaceTools.cs`) — the same place CS0122 accessibility
+guidance was added earlier. Added a `DescribeDuplicateDefinitionAsync` branch for CS0101 ("the
+namespace already contains a definition for X") and CS0111 ("type already defines a member called
+X with the same parameter types"): extracts the colliding member name (and containing type, for
+CS0111) via regex, looks it up with `SymbolNavigationEngine.LocateSymbolAsync`, and — if a
+declaration is found at a path other than the diagnostic's own (wrong) path — names that real
+file's path and line directly, e.g. "A declaration of 'ReplaceBlockFormatted' already exists at
+FixtureHelpers/BlockEditHelpers.cs:5. ... did you mean to ReadFile/ApplyDiff
+FixtureHelpers/BlockEditHelpers.cs instead of creating a new file here?"
+
+Regression test: `CompilerErrorLookupHelperTests.DescribeAsync_Cs0111DuplicateMember_NamesTheRealCollidingFilePath`
+(`RoslynSentinel.Tests/CompilerErrorLookupHelperTests.cs`) — two files declaring the same
+namespace/type/member (mirroring this doc's `FixtureHelpers/BlockEditHelpers.cs` transcript
+scenario), asserting the description names the real file's path. Passes alongside the existing
+CS0122 test. Build: 0 errors.

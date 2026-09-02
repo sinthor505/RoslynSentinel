@@ -14,13 +14,20 @@ namespace RoslynSentinel.Basic;
 /// missing members); anything unrecognized falls through to the plain diagnostics text so nothing
 /// regresses for codes not taught yet. CS0122 (inaccessible due to protection level) additionally
 /// states the member's current accessibility and the caller's enclosing type directly, rather than
-/// leaving the model to infer accessibility from the absence of an error.
+/// leaving the model to infer accessibility from the absence of an error. CS0101/CS0111 (duplicate
+/// namespace member / duplicate member signature) name the real file the colliding symbol is
+/// already declared in — these fire when CreateFile/ApplyDiff targets a wrong-but-plausible path
+/// for a file that already exists elsewhere in the same project, and without the real path the
+/// model has no way to distinguish "you introduced a genuine duplicate" from "you guessed the
+/// wrong path for an existing file" (see docs/current/project_readfile_createfile_path_inconsistency_bug.md).
 /// </summary>
 public static class CompilerErrorLookupHelper
 {
     private static readonly Regex Cs0103NameRegex = new(@"The name '([^']+)' does not exist in the current context", RegexOptions.Compiled);
     private static readonly Regex MissingMemberRegex = new(@"'([^']+)' does not contain a definition for '([^']+)'", RegexOptions.Compiled);
     private static readonly Regex Cs0122InaccessibleRegex = new(@"'([^']+)' is inaccessible due to its protection level", RegexOptions.Compiled);
+    private static readonly Regex Cs0101DuplicateNamespaceMemberRegex = new(@"The namespace '([^']+)' already contains a definition for '([^']+)'", RegexOptions.Compiled);
+    private static readonly Regex Cs0111DuplicateMemberRegex = new(@"Type '([^']+)' already defines a member called '([^']+)'", RegexOptions.Compiled);
 
     public static async Task<string> DescribeAsync(
         DiagnosticReport report,
@@ -57,6 +64,11 @@ public static class CompilerErrorLookupHelper
         if (diagnostic.Id == "CS0122")
         {
             return baseText + "\n" + await DescribeCs0122Async(diagnostic, symbolNavigationEngine, cancellationToken);
+        }
+
+        if (diagnostic.Id is "CS0101" or "CS0111")
+        {
+            return baseText + "\n" + await DescribeDuplicateDefinitionAsync(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
         return baseText;
@@ -240,5 +252,69 @@ public static class CompilerErrorLookupHelper
         var calledFrom = callerType != null ? $" from {callerType}" : string.Empty;
         return $"  '{qualifiedName}' is currently {accessibility}. It must be changed to a level accessible{calledFrom} ({diagnostic.FilePath}:{diagnostic.StartLine}).\n"
             + $"  Note: accessibility is set per-member, not inherited from the containing type's accessibility — raising {simpleTypeName}'s own accessibility does not change {symbol.SymbolName}'s.";
+    }
+
+    /// <summary>
+    /// CS0101 ("namespace already contains a definition for X") and CS0111 ("type already defines a
+    /// member called X with the same parameter types") both fire when the file being validated is a
+    /// wrong-but-plausible path for a file that already exists elsewhere in the same project — see
+    /// docs/current/project_readfile_createfile_path_inconsistency_bug.md. Neither diagnostic's raw
+    /// message says where the *other* declaration lives, which leaves a model with no way to tell
+    /// "I introduced a genuine duplicate" apart from "I guessed the wrong path for an existing file."
+    /// This looks up the colliding symbol by name and, if found at a location other than the
+    /// diagnostic's own (wrong) path, names that real file directly.
+    /// </summary>
+    private static async Task<string> DescribeDuplicateDefinitionAsync(
+        DiagnosticInfo diagnostic,
+        SymbolNavigationEngine symbolNavigationEngine,
+        CancellationToken cancellationToken)
+    {
+        string? typeName = null;
+        string? memberName = null;
+
+        var cs0111Match = Cs0111DuplicateMemberRegex.Match(diagnostic.Message);
+        if (cs0111Match.Success)
+        {
+            typeName = cs0111Match.Groups[1].Value.Split('.').Last();
+            memberName = cs0111Match.Groups[2].Value;
+        }
+        else
+        {
+            var cs0101Match = Cs0101DuplicateNamespaceMemberRegex.Match(diagnostic.Message);
+            if (cs0101Match.Success)
+            {
+                memberName = cs0101Match.Groups[2].Value;
+            }
+        }
+
+        if (memberName == null)
+        {
+            return "  This is a duplicate-definition error, but the colliding name could not be extracted from the diagnostic text to search for it.";
+        }
+
+        List<SymbolLocation> candidates;
+        try
+        {
+            candidates = await symbolNavigationEngine.LocateSymbolAsync(
+                memberName, exactMatch: true, containingType: typeName, cancellationToken: cancellationToken);
+        }
+        catch (Exception)
+        {
+            candidates = [];
+        }
+
+        var realLocation = candidates.FirstOrDefault(c =>
+            !string.IsNullOrEmpty(c.FilePath) &&
+            !string.Equals(c.FilePath, diagnostic.FilePath.ToString(), StringComparison.OrdinalIgnoreCase));
+
+        if (realLocation == null)
+        {
+            return $"  '{memberName}' collides with an existing declaration, but its real location could not be found — this may be a genuine duplicate rather than a wrong-path new file.";
+        }
+
+        return $"  A declaration of '{memberName}' already exists at {realLocation.FilePath}:{realLocation.Line}. " +
+            $"If '{diagnostic.FilePath}' was meant to be that same file, this path is likely wrong — " +
+            $"did you mean to ReadFile/ApplyDiff {realLocation.FilePath} instead of creating a new file here? " +
+            "If this really is meant to be a new, separate declaration, rename it to avoid the collision.";
     }
 }
