@@ -77,15 +77,20 @@ counting artifact either.
 knowledge gap fixable by prompt wording — the 9B model cannot reliably reconcile "the helper
 already does the replace" with "I want to also change the header text" as the same operation,
 even when told directly not to conflate them. Don't attempt further prompt-wording iterations
-on this specific bug; that lever is now empirically closed. Two remaining options, neither
-tried yet:
-1. **Harden `ReplaceBlockFormatted` itself** to be idempotent (if `oldBlock` isn't found but
-   `newBlock` already is present, treat as already-applied and return unchanged) — previously
-   deferred over masking-risk concerns, but now the more promising lever since the prompt-level
-   fix is confirmed ineffective. Would need care to avoid silently accepting a genuinely wrong
-   fix that happens to already contain `newBlock` for unrelated reasons.
-2. Accept this as a real ~50% ceiling on this specific fixture/pattern combination for this
-   model size, and treat it as expected baseline noise rather than something to chase further —
-   consistent with [[project_scriptedplan_5run_result]]'s finding that this model's bottleneck
-   is planning/reasoning depth, not tool execution, and this bug is exactly that: a reasoning
-   depth failure in code synthesis, not a tool-use or ambiguity problem.
+on this specific bug; that lever is now empirically closed.
+
+**"Harden `ReplaceBlockFormatted`" is NOT a valid fix and should not be attempted**:
+`ReplaceBlockFormatted` isn't a real RoslynSentinel tool — it's synthesized fixture content
+(`RoslynSentinel.Tests.ModelEval/Fixtures/WholeFileRewriteReproducer.cs:31`) that the test
+hands the model as a pre-existing helper representing a realistic reusable pattern already in
+the target codebase. Making it silently idempotent (tolerate being called on already-mutated
+text) would mean the test stops actually checking whether the model calls it correctly — it
+would quietly bail out a genuinely wrong call instead of that call correctly throwing, changing
+what the test measures rather than fixing anything real.
+
+**Conclusion: accept this as a real ~50% ceiling** on this specific fixture/pattern
+combination for this model size, and treat it as expected baseline noise rather than something
+to chase further — consistent with [[project_scriptedplan_5run_result]]'s finding that this
+model's bottleneck is planning/reasoning depth, not tool execution or prompt ambiguity. This
+bug is exactly that kind of failure: a reasoning-depth gap in code synthesis that persists even
+under a maximally explicit warning, not a tool-use or ambiguity problem this harness can fix.
