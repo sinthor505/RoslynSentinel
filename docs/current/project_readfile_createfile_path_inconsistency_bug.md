@@ -108,3 +108,20 @@ not "is the resulting error message actionable for an agent that doesn't know th
 This finding fills that specific, previously-unscoped gap. The proposed fix above (name the
 colliding file's real path in the CS0101/CS0111-style message) is additive to `1b00f3f`, not a
 correction of it.
+
+## Related but distinct issue, found and fixed independently on the same day
+
+A separate Claude session, working from a branch named after this same bug report (before it could
+actually see this doc, which hadn't been pushed to a shared branch it fetched from yet), found and
+fixed a **different** `ReadFile`/`CreateFile` asymmetry under the same-sounding description: files
+`CreateFile` writes that fall outside `PersistentWorkspaceManager`'s `.cs`-only, project-owned-only
+Document-sync filter (any non-`.cs` file, or a `.cs` file outside every project's directory tree)
+never became tracked Documents, so `ReadFile`'s Document-only lookup reported `FileNotFound` for a
+file that genuinely existed on disk. Fixed by adding a disk-read fallback to `ReadFile` — see
+[[project_readfile_createfile_disk_fallback_fixed]] for that writeup (merged into master).
+
+That fix does **not** address the collision-message gap documented above (a wrong path that
+happens to match an *existing* project-owned `.cs` file's project directory) — the two bugs share
+a symptom category (`ReadFile` and `CreateFile` disagreeing about a path) but different root
+mechanisms and different fixes. This doc's proposed fix (name the colliding file's real path in
+the CS0101/CS0111 message) is still open.

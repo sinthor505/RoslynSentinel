@@ -84,6 +84,30 @@ public class ReadFileTests
     }
 
     [Test]
+    public async Task ReadFile_FileOnDiskButNotTrackedAsDocument_FallsBackToDiskReadAsync()
+    {
+        // Mirrors CreateFile writing a file that PersistentWorkspaceManager's in-memory sync
+        // never turns into a Roslyn Document (any non-.cs file, or a .cs file outside every
+        // project's globs) — ReadFile must still be able to see it, matching what CreateFile wrote.
+        var onDiskOnlyPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "OnDiskOnly.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(onDiskOnlyPath)!);
+        var content = "not part of the solution, but present on disk";
+        await File.WriteAllTextAsync(onDiskOnlyPath, content);
+
+        try
+        {
+            var result = await _tools.ReadFile(onDiskOnlyPath);
+
+            Assert.That(result.Success, Is.True, result.Error?.Message);
+            Assert.That((string)GetProp(result.Data!, "source")!, Is.EqualTo(content));
+        }
+        finally
+        {
+            File.Delete(onDiskOnlyPath);
+        }
+    }
+
+    [Test]
     public async Task ReadFile_WithLineRange_ReturnsRequestedSliceAsync()
     {
         var result = await _tools.ReadFile(_documentPath, startLine: 2, endLine: 3);

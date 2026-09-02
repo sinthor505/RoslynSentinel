@@ -84,6 +84,32 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
+    public async Task CreateFile_NonCsFile_ThenReadFile_ReturnsContentAsync()
+    {
+        // CreateFile writes any file regardless of extension; PersistentWorkspaceManager's
+        // post-write in-memory sync only tracks `.cs` files as Roslyn Documents (see
+        // ApplyInMemoryDocumentUpdatesAsync). Before the ReadFile disk-fallback fix, this left
+        // CreateFile able to write files that ReadFile could never see again.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "Notes.txt");
+        var content = "plain text notes, not a Roslyn document";
+
+        var createResult = await tools.CreateFile(newFile, content);
+        Assert.That(createResult.Success, Is.True);
+
+        var readResult = await tools.ReadFile(newFile);
+
+        Assert.That(readResult.Success, Is.True, readResult.Error?.Message);
+        var data = readResult.Data!;
+        var source = (string)data.GetType().GetProperty("source")!.GetValue(data)!;
+        Assert.That(source, Is.EqualTo(content));
+    }
+
+    [Test]
     public async Task DeleteFile_ExistingFile_RemovesFromDiskAsync()
     {
         using var fixture = new TestSolutionFixture();
