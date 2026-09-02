@@ -23,6 +23,7 @@
 | **[tool-terminology-refinement-reference-v1.md](./tool-terminology-refinement-reference-v1.md)** | Open naming/terminology backlog for MCP tool surface |
 | **[spec-read-tool-metadata-envelope-v1.md](./spec-read-tool-metadata-envelope-v1.md)** | Unimplemented spec: truncation/scope metadata envelope for read tools |
 | **[spec-replace-throws-in-mcp-tools-v1.md](./spec-replace-throws-in-mcp-tools-v1.md)** | Partially-implemented plan: convert throws to string returns in `[McpServerTool]` methods |
+| **[project_readfile_createfile_path_inconsistency_bug.md](./project_readfile_createfile_path_inconsistency_bug.md)** | Fixed: `ReadFile` couldn't see files `CreateFile` wrote outside the `.cs`-only Document sync; `ReadFile` now falls back to a disk read |
 
 ### Obsolete (`docs/obsolete/`)
 

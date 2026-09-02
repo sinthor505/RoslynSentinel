@@ -1541,16 +1541,32 @@ public class SentinelWorkspaceTools
             var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var normalizedPath = Path.GetFullPath(filePath);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
-            if (document == null)
+
+            SourceText sourceText;
+            if (document != null)
             {
-                return new ToolResult<object>()
+                sourceText = await document.GetTextAsync(cancellationToken);
+            }
+            else
+            {
+                // CreateFile writes any file to disk regardless of extension or whether it belongs
+                // to a loaded project — non-.cs files, and .cs files outside every project's globs,
+                // never become tracked Documents (PersistentWorkspaceManager only syncs .cs files
+                // belonging to a resolvable project into CurrentSolution). Fall back to a raw disk
+                // read so ReadFile can see everything CreateFile is able to write.
+                var diskContent = await FileIoHelper.ReadAllTextIfExistsAsync(filePath, cancellationToken);
+                if (diskContent == null)
                 {
-                    Success = false,
-                    Error = new ResultError("FileNotFound", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).")
-                };
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError("FileNotFound", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).")
+                    };
+                }
+
+                sourceText = SourceText.From(diskContent);
             }
 
-            var sourceText = await document.GetTextAsync(cancellationToken);
             var totalLines = sourceText.Lines.Count;
             if (startLine.HasValue || endLine.HasValue)
             {
