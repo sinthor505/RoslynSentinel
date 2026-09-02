@@ -151,6 +151,12 @@ public class WholeFileRewriteAgentTests
         it behind — do not delete, rename, or otherwise modify any other method, field, or class,
         even ones that look unused, unrelated, or like dead code to you.
 
+        If the reusable pattern is a "find and replace a block, re-indenting only that block"
+        helper, call it exactly once on the original, unmodified text, passing it both the old and
+        new block content — do not call `string.Replace` (or similar) yourself first and then pass
+        the ALREADY-replaced text into the helper along with the old block content, since the old
+        block no longer exists in that text at that point and the helper will fail to find it.
+
         Before making any tool call that edits a file, first write out your complete plan as plain
         text: the root cause, exactly which method(s)/file(s) you will modify, and the specific
         content you will place in `BlockConverter.cs`. Only after stating that plan in full should
