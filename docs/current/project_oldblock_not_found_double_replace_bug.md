@@ -1,6 +1,6 @@
 ---
 name: project_oldblock_not_found_double_replace_bug
-description: "CONFIRMED root cause: on PlanImplementVerify this is a PLAN-PHASE bug, not an implement-phase one — the plan model itself writes the buggy double-replace code into its 'Content for BlockConverter.cs' block roughly half the time, and the implement phase faithfully transcribes it. 10/20 (50%) on a clean, confound-free .113 PlanImplementVerify batch 2026-09-02; also seen in MinimalGuidanceDisambiguated (3/20)."
+description: "CONFIRMED root cause: on PlanImplementVerify this is a PLAN-PHASE bug, not an implement-phase one — the plan model itself writes the buggy double-replace code into its 'Content for BlockConverter.cs' block roughly half the time, and the implement phase faithfully transcribes it. 10/20 (50%) on a clean, confound-free .113 PlanImplementVerify batch 2026-09-02; also seen in MinimalGuidanceDisambiguated (3/20). An explicit prompt warning against this exact mistake (commit 5f6d193) had ZERO measurable effect on a same-night re-run: still 10/20 (50%) with the warning text confirmed present and correctly wired into the model's actual prompt."
 metadata:
   type: project
 ---
@@ -59,17 +59,33 @@ implements both steps literally and sequentially instead of recognizing they're 
 operation — `ReplaceBlockFormatted` already performs the replace, the model doesn't need (and
 must not do) its own `.Replace()` call first.
 
-**How to apply**: this is a model capability gap, not a harness or prompt-structure defect —
-the existing prompts already show the correct single-call pattern implicitly via the
-`ReplaceBlockFormatted` doc comment the model reads via `ReadFile` before editing, and the
-model still gets it wrong about half the time when generating a plan from scratch. Confirmed
-at 50% on a clean, confound-free batch — high enough to act on now. **Fix applied**: added an
-explicit warning to `PlanOnlyUserPromptTemplate` in `PlanImplementVerifyAgentTests.cs`
-(the plan phase's own prompt) calling out this exact mistake by name, since that's where the
-bug is actually introduced — not the implement phase's prompt, which was the wrong target for
-a fix (implement is just faithfully transcribing what plan already got wrong). Also considered:
-hardening `ReplaceBlockFormatted` itself to be idempotent (if `oldBlock` isn't found but
-`newBlock` already is, treat as already-applied) — deferred, since it risks masking genuinely
-wrong fixes elsewhere and the prompt-level fix targets the actual point of failure more
-precisely. Re-run `.113` `PlanImplementVerify` (20 runs) to check whether the plan-phase
-warning meaningfully reduces this specific bucket.
+**Prompt-warning fix tested — NEGATIVE RESULT**: added an explicit warning to
+`PlanUserPromptTemplate` in `PlanImplementVerifyAgentTests.cs` (the plan phase's own prompt,
+commit `5f6d193`) naming this exact mistake — "do not call `string.Replace` yourself first and
+then pass the ALREADY-replaced text into the helper along with the old block content." Same
+warning also added to `DisambiguatedMinimalGuidanceUserPromptTemplate`. Re-ran a fresh,
+clean-rebuilt 20-run `.113` `PlanImplementVerify` batch afterward: **still 10/20 (50%)** —
+byte-identical rate to the pre-fix batch. Directly confirmed the warning text reached the
+model correctly (read a v3 run's `plan/transcript.json.UserPrompt` and found the exact warning
+paragraph present verbatim). This rules out "the model doesn't know this is wrong" — it's
+being told explicitly, in the same prompt, immediately before generating the plan, and still
+produces the buggy pattern at the same rate. Spot-checked one run whose plan happened to be
+correct despite matching a loose grep for the buggy substring, confirming the failure isn't a
+counting artifact either.
+
+**How to apply**: this is confirmed to be a genuine model reasoning-depth limitation, not a
+knowledge gap fixable by prompt wording — the 9B model cannot reliably reconcile "the helper
+already does the replace" with "I want to also change the header text" as the same operation,
+even when told directly not to conflate them. Don't attempt further prompt-wording iterations
+on this specific bug; that lever is now empirically closed. Two remaining options, neither
+tried yet:
+1. **Harden `ReplaceBlockFormatted` itself** to be idempotent (if `oldBlock` isn't found but
+   `newBlock` already is present, treat as already-applied and return unchanged) — previously
+   deferred over masking-risk concerns, but now the more promising lever since the prompt-level
+   fix is confirmed ineffective. Would need care to avoid silently accepting a genuinely wrong
+   fix that happens to already contain `newBlock` for unrelated reasons.
+2. Accept this as a real ~50% ceiling on this specific fixture/pattern combination for this
+   model size, and treat it as expected baseline noise rather than something to chase further —
+   consistent with [[project_scriptedplan_5run_result]]'s finding that this model's bottleneck
+   is planning/reasoning depth, not tool execution, and this bug is exactly that: a reasoning
+   depth failure in code synthesis, not a tool-use or ambiguity problem.
