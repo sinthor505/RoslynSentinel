@@ -102,6 +102,20 @@ public class DiffEngine
             var line = diffLines[i];
             var match = hunkHeaderRegex.Match(line);
 
+            if (!match.Success && line.StartsWith("@@"))
+            {
+                // A line starting with "@@" that doesn't match the full "@@ -N,M +N,M @@" header
+                // format (e.g. a bare "@@" with no line numbers) must not be silently treated as
+                // inert body text: falling through would skip the entire hunk — including every
+                // "+"/"-" line that follows, up to the next real header or end of diff — with no
+                // error and no lines changed, exactly as if the whole hunk had never been submitted.
+                // See docs/current/blockers/blocking_error_applydiff_silent_noop_false_success.md.
+                throw new DiffApplyException(
+                    $"Malformed hunk header \"{line}\": expected the form \"@@ -oldStart,oldCount " +
+                    "+newStart,newCount @@\" (counts may be omitted, e.g. \"@@ -5 +5 @@\", but the " +
+                    "old/new start line numbers are required). Regenerate the diff with a well-formed header.");
+            }
+
             if (match.Success)
             {
                 int oldStart = int.Parse(match.Groups[1].Value) - 1;

@@ -413,4 +413,29 @@ public class DiffEngineTests
         Assert.That(newText, Does.Contain("var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("));
         Assert.That(newText, Does.Not.Contain("var result = await _refactoringEngine.SafeDeleteSymbolAsync("));
     }
+
+    [Test(Description =
+        "Reproduces the silent-no-op-with-false-success bug: a hunk header of bare \"@@\" (no " +
+        "-oldStart,oldCount +newStart,newCount numbers) matched none of the header regexes, so the " +
+        "entire hunk — including every \"+\" line — was skipped as ordinary body text with no error " +
+        "and no content changed. The caller (ApplyProposedChangesAsync) then saw newContent == " +
+        "preImage and reported a clean no-op success, even though the requested insertion never " +
+        "happened. See docs/current/blockers/blocking_error_applydiff_silent_noop_false_success.md.")]
+    public void ApplyDiff_BareAtAtHeaderWithNoLineNumbers_ThrowsInsteadOfSilentNoOp()
+    {
+        var nl = Environment.NewLine;
+        var oldText = SourceText.From(string.Join(nl,
+            "[JsonConverter(typeof(JsonStringEnumConverter))]",
+            "public enum BuildVerifyLevel",
+            "{",
+            "    noBuild, quickBuild, fullBuild",
+            "}",
+            "",
+            "// ── Content hashing ───────────────────────────────────────────────────────────"));
+
+        var diff = "@@\n [JsonConverter(typeof(JsonStringEnumConverter))]\n public enum BuildVerifyLevel\n {\n     noBuild, quickBuild, fullBuild\n }\n \n+// ── RunTest ───────────────────────────────────────────────────────────────────\n+\n+public enum TestOutcome\n+{\n+    Passed, Failed, Skipped, NotExecuted\n+}\n+\n+[JsonConverter(typeof(JsonStringEnumConverter))]\n+public enum TestResultsFilter\n+{\n+    all, failed, skipped\n+}\n+\n // ── Content hashing ───────────────────────────────────────────────────────────";
+
+        var ex = Assert.Throws<DiffApplyException>(() => _diffEngine.ApplyDiff(oldText, diff));
+        Assert.That(ex!.Message, Does.Contain("Malformed hunk header"));
+    }
 }
