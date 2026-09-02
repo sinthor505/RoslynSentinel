@@ -25,6 +25,7 @@
 | **[spec-replace-throws-in-mcp-tools-v1.md](./spec-replace-throws-in-mcp-tools-v1.md)** | Partially-implemented plan: convert throws to string returns in `[McpServerTool]` methods |
 | **[project_readfile_createfile_path_inconsistency_bug.md](./project_readfile_createfile_path_inconsistency_bug.md)** | Fixed: CS0101/CS0111 collision messages from wrong-path CreateFile/ApplyDiff now name the real colliding file's path (CompilerErrorLookupHelper) |
 | **[project_readfile_createfile_disk_fallback_fixed.md](./project_readfile_createfile_disk_fallback_fixed.md)** | Fixed: `ReadFile` couldn't see files `CreateFile` wrote outside the `.cs`-only Document sync; `ReadFile` now falls back to a disk read |
+| **[project_dispose_waithandle_deadlock_found.md](./project_dispose_waithandle_deadlock_found.md)** | Fixed: `PersistentWorkspaceManager.Dispose()`'s blocking `Timer.Dispose(WaitHandle)` wait could deadlock against `_solutionLock` contention, hanging Battery and ModelEval tests; removed, redundant with an existing guard |
 
 ### Obsolete (`docs/obsolete/`)
 

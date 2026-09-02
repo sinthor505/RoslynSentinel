@@ -113,6 +113,13 @@ public class RunTestTests
         Assert.That(data.FailedCount, Is.EqualTo(1));
     }
 
+    // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun):
+    // TestSolutionFixture.Dispose()'s Directory.Delete can race this test's own RunTest subprocess
+    // not having fully released its file handles yet, throwing IOException on a .csproj file still
+    // "in use by another process." Documented as a known, pre-existing, distinct issue in
+    // docs/obsolete/blockers/blocking_error_persistentworkspacemanager_dispose_race_crashes_process.md's
+    // "Secondary symptom" section — not the PersistentWorkspaceManager.Dispose() deadlock fixed in
+    // project_dispose_waithandle_deadlock_found.md, which this test also exercises but did not cause.
     [Test]
     public async Task RunTest_FilterMatchesZeroTests_DetailReportsZeroMatchAsync()
     {

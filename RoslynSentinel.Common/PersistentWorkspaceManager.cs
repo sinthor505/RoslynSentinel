@@ -1764,18 +1764,20 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     {
         _disposed = true;
 
-        // Block until any in-flight OnDebounceTimerElapsed callback (including its finally block)
-        // has fully returned before tearing down _workspace/_solutionLock below. A plain
-        // _debounceTimer.Dispose() does not wait for an already-running callback to finish, which
-        // previously let a callback's _solutionLock.Release() run concurrently with (or after)
-        // _solutionLock.Dispose() and throw ObjectDisposedException from inside a finally block —
-        // unobservable by the callback's own catches and fatal for the process since the callback
-        // is async void. See docs/current/blockers/blocking_error_persistentworkspacemanager_dispose_race_crashes_process.md.
-        using (var waitHandle = new ManualResetEvent(false))
-        {
-            _debounceTimer.Dispose(waitHandle);
-            waitHandle.WaitOne();
-        }
+        // A plain _debounceTimer.Dispose() does not wait for an already-running
+        // OnDebounceTimerElapsed callback to finish, so that callback's finally block can still run
+        // concurrently with (or after) _solutionLock.Dispose() below. That used to throw an unguarded
+        // ObjectDisposedException from inside the finally block — fatal, since the callback is async
+        // void and the exception has no caller to propagate to. Blocking here on the callback's
+        // completion (via the Dispose(WaitHandle) overload) was tried as the fix, but that wait is
+        // itself unbounded on _solutionLock contention the callback is waiting on — if the lock is
+        // held by slow, unrelated work (an LLM round-trip, a build) when Dispose() runs, this blocks
+        // indefinitely instead of crashing, trading a crash for a silent hang. See
+        // docs/current/project_dispose_waithandle_deadlock_found.md. The actual fix is the guard
+        // directly around the throwing call, in OnDebounceTimerElapsed's finally block below (catches
+        // ObjectDisposedException from _solutionLock.Release()) — that alone closes the crash without
+        // Dispose() ever needing to block on the callback.
+        _debounceTimer.Dispose();
 
         _workspace?.Dispose();
         _watcher?.Dispose();
