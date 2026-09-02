@@ -238,11 +238,9 @@ public class PlanThenExecuteAgentTests
         // model that mis-qualifies a call (e.g. CS0103 on a static member of another class) and
         // then correctly follows the guidance on retry legitimately costs 2 error tool calls, not
         // 1 - observed directly in a 2026-08-31 PlanThenExecute run that fully fixed the bug in 2
-        // ApplyDiff attempts but tripped a <=1 gate. 3+ still fails: that's real thrashing, not a
-        // single guided recovery.
-        var errorTools = result.Transcript.Turns.SelectMany(t => t.ToolCalls).Where(tc => tc.IsError).ToList();
-        Assert.That(errorTools.Count, Is.LessThanOrEqualTo(2),
-            $"Expected at most 2 failed tool calls (one mistake plus one guided self-correction retry); {errorTools.Count} occurred: " +
-            $"[{string.Join(", ", errorTools.Select(t => t.ToolName))}]. Transcript: {result.TranscriptPath}");
+        // ApplyDiff attempts but tripped a <=1 gate. 3+ on the same tool is real thrashing, not a
+        // single guided recovery — see AgentToolErrorAssertions for why the cap is per-tool, not
+        // just total.
+        AgentToolErrorAssertions.AssertWithinBudget(result);
     }
 }
