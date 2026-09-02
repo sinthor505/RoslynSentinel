@@ -484,17 +484,17 @@ public class WholeFileRewriteAgentTests
         Assert.That(fixedText, Does.Contain("public string UnrelatedMethodAfter(  string   s  )"),
             $"UnrelatedMethodAfter's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");
 
-        // Allow up to two failed tool calls, and no more than two on any single tool: a model that
-        // tries an edit, gets a real compiler/validation error back, and self-corrects on its next
-        // attempt is the intended agentic loop (see the self-correction-loop research this test's
-        // fixture was built to exercise), not a defect. This fixture's real fix requires
-        // discovering two independent symbols' correct accessibility (the helper method and,
-        // depending on approach, its containing type), which the PlanImplementVerify batch showed
-        // can legitimately take more than one retry even when the model converges on the right
-        // answer. The per-tool cap (not just the total) is what catches thrashing — e.g. the same
-        // CS0103 hit 6 times via repeated using-directive attempts, see
-        // docs/current/project_directive_error_messages_wiggle_room_theory.md.
-        AgentToolErrorAssertions.AssertWithinBudget(result);
+        // Total cap raised 2 -> 8 (2026-09-02, see docs/current/project_modifymodifier_accessibility_footgun.md):
+        // the 2026-09-02 165-run excavation found ~27 runs (mostly MinimalGuidance) produced a
+        // byte-perfect, functionally correct fix and still failed here, because a legitimate
+        // self-correction sequence spanning two DIFFERENT tools (e.g. a real compiler error on
+        // ApplyDiff, then a ModifyModifier/ChangeAccessibility retry) never trips the per-tool cap
+        // but does trip a tight total cap the moment any third, unrelated benign hiccup occurs
+        // (almost always a zero-match SearchSolutionText). The per-tool cap stays at 2 — it's the
+        // one that actually catches thrashing (repeated failure on ONE tool); the total cap only
+        // needs to be loose enough to tolerate several independent single-retry corrections across
+        // a longer agentic run without also becoming a thrashing check by proxy.
+        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8);
 
         // Text-scan checks above only prove the edited source LOOKS right — they can't catch
         // code that compiles but is functionally broken (e.g. the whole file replaced with every

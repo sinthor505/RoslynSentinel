@@ -305,12 +305,14 @@ public class PlanImplementVerifyAgentTests
             mcpClient = await McpClient.CreateAsync(clientTransport, cancellationToken: cancellationToken);
             var agentClient = host.Services.GetRequiredService<LmStudioAgentClient>();
 
-            // 5-minute wall-clock cap per phase per the user's instruction (.113 alone completes
-            // today's single-call prompts in ~1-3 minutes; three narrower-scoped calls should each
-            // need less, not more). Turn cap is just a safety ceiling underneath that, not the real
-            // constraint.
+            // 10-minute wall-clock cap per phase (raised from 5, 2026-09-02: see
+            // docs/current/project_planimplementverify_phase_transition_gap.md — 5/39 implement-phase
+            // runs stumbled on a wrong/guessed workspace path early, self-corrected, but then still
+            // ran out the tighter budget before applying+verifying a fix, something the single-call
+            // variants' much larger budget absorbs comfortably). Turn cap is just a safety ceiling
+            // underneath that, not the real constraint.
             var runner = new ModelAgentRunner(
-                agentClient, mcpClient, turnCap: turnCap, wallClockCap: TimeSpan.FromMinutes(5),
+                agentClient, mcpClient, turnCap: turnCap, wallClockCap: TimeSpan.FromMinutes(10),
                 logger: host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
 
             return await runner.RunAsync(systemPrompt, userPrompt, phaseRunDirectory, cancellationToken);
@@ -359,8 +361,13 @@ public class PlanImplementVerifyAgentTests
             $"Plan phase converged but produced no readable plan text. Transcript: {planResult.TranscriptPath}");
 
         var implementPrompt = string.Format(ImplementUserPromptTemplate, fixtureCorePath, planText);
+        // Turn cap raised 25 -> 35 alongside the 5->10 min wall-clock cap (2026-09-02, see
+        // docs/current/project_planimplementverify_phase_transition_gap.md): 2 of the 5 known
+        // wrong-workspace-stumble runs stopped on TurnCapExceeded specifically, not just
+        // WallClockCapExceeded, so raising only the time budget would have left those runs still
+        // capped out on turns before finishing.
         var implementResult = await RunPhaseAsync(
-            "implement", AgentSystemPrompts.CodingAgent, implementPrompt, blockMutatingTools: false, turnCap: 25, cancellationToken);
+            "implement", AgentSystemPrompts.CodingAgent, implementPrompt, blockMutatingTools: false, turnCap: 35, cancellationToken);
 
         Assert.That(implementResult.Converged, Is.True,
             $"Implement phase did not converge (stopped: {implementResult.StopReason}) within {implementResult.TurnCount} turns. " +

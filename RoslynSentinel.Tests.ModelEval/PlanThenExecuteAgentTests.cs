@@ -246,6 +246,12 @@ public class PlanThenExecuteAgentTests
         // ApplyDiff attempts but tripped a <=1 gate. 3+ on the same tool is real thrashing, not a
         // single guided recovery — see AgentToolErrorAssertions for why the cap is per-tool, not
         // just total.
-        AgentToolErrorAssertions.AssertWithinBudget(result);
+        //
+        // Total cap raised 2 -> 8 (2026-09-02), matching WholeFileRewriteAgentTests.AssertFixApplied
+        // — see docs/current/project_modifymodifier_accessibility_footgun.md: 9/45 (20%) of this
+        // variant's runs hit the same cross-tool self-correction false negative (a real error on one
+        // tool, a guided retry on a DIFFERENT tool, then any third unrelated benign hiccup tripping
+        // a tight total cap even though no single tool ever thrashed).
+        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8);
     }
 }
