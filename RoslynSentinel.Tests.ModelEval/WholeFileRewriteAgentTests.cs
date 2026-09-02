@@ -302,6 +302,11 @@ public class WholeFileRewriteAgentTests
         }
 
         _fixture?.Dispose();
+
+        if (_runDirectory is not null)
+        {
+            ModelTestingResultsArchiver.ArchiveRunDirectory(_runDirectory);
+        }
     }
 
     [Test]
