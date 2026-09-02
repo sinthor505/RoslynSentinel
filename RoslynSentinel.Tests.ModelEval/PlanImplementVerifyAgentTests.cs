@@ -379,7 +379,7 @@ public class PlanImplementVerifyAgentTests
         // Combined gate the user specifically asked for: mechanical correctness (the hard floor,
         // catches broken/wrong-but-approved code) AND the verify phase's own independent judgment
         // (an additional required signal, not a replacement for the mechanical check).
-        WholeFileRewriteAgentTests.AssertFixApplied(_fixture, implementResult);
+        await WholeFileRewriteAgentTests.AssertFixApplied(_fixture, implementResult, TestContext.CurrentContext.CancellationToken);
         Assert.That(modelApproved, Is.True,
             $"Model's own verify pass did not report VERIFIED: PASS. Verify transcript: {verifyResult.TranscriptPath}");
     }

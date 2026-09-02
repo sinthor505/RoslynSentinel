@@ -312,7 +312,7 @@ public class WholeFileRewriteAgentTests
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
 
-        AssertFixApplied(result);
+        await AssertFixApplied(result);
     }
 
     /// <summary>
@@ -329,7 +329,7 @@ public class WholeFileRewriteAgentTests
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
 
-        AssertFixApplied(result);
+        await AssertFixApplied(result);
     }
 
     /// <summary>
@@ -348,7 +348,7 @@ public class WholeFileRewriteAgentTests
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
 
-        AssertFixApplied(result);
+        await AssertFixApplied(result);
     }
 
     /// <summary>
@@ -367,7 +367,7 @@ public class WholeFileRewriteAgentTests
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
 
-        AssertFixApplied(result);
+        await AssertFixApplied(result);
     }
 
     /// <summary>
@@ -399,12 +399,14 @@ public class WholeFileRewriteAgentTests
             {
                 try
                 {
-                    AssertFixApplied(result);
+                    await AssertFixApplied(result);
                     passCount++;
                 }
-                catch (AssertionException)
+                catch (Exception ex) when (ex is AssertionException or InvalidOperationException or IOException)
                 {
-                    // Counted as a failed run below; transcript already on disk for inspection.
+                    // Text-check failure (AssertionException) or a functional-check failure from
+                    // FunctionalFixVerifier (build/reflection failure) — both mean this run failed;
+                    // counted as a failed run below, transcript already on disk for inspection.
                 }
             }
         }
@@ -426,7 +428,7 @@ public class WholeFileRewriteAgentTests
         return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);
     }
 
-    private void AssertFixApplied(AgentRunResult result) => AssertFixApplied(_fixture, result);
+    private Task AssertFixApplied(AgentRunResult result) => AssertFixApplied(_fixture, result, TestContext.CurrentContext.CancellationToken);
 
     /// <summary>
     /// Shared with <see cref="PlanImplementVerifyAgentTests"/>, which runs this same fixture/bug
@@ -434,7 +436,7 @@ public class WholeFileRewriteAgentTests
     /// static + explicit fixture parameter instead of an instance method so both test classes can
     /// call it without one depending on the other's private state.
     /// </summary>
-    internal static void AssertFixApplied(RoslynSentinel.Tests.TestSolutionFixture fixture, AgentRunResult result)
+    internal static async Task AssertFixApplied(RoslynSentinel.Tests.TestSolutionFixture fixture, AgentRunResult result, CancellationToken cancellationToken)
     {
         var fixedPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "BlockConverter.cs");
         Assert.That(File.Exists(fixedPath), Is.True, "BlockConverter.cs should still exist after the model's edits.");
@@ -488,5 +490,27 @@ public class WholeFileRewriteAgentTests
         // CS0103 hit 6 times via repeated using-directive attempts, see
         // docs/current/project_directive_error_messages_wiggle_room_theory.md.
         AgentToolErrorAssertions.AssertWithinBudget(result);
+
+        // Text-scan checks above only prove the edited source LOOKS right — they can't catch
+        // code that compiles but is functionally broken (e.g. the whole file replaced with every
+        // line commented out, which still builds with 0 errors and can coincidentally satisfy
+        // substring checks). Actually build the project and invoke the real method to confirm the
+        // fixed code still produces the correct transformation, not just plausible-looking text.
+        // See project_planimplementverify_5run_result_postfix_verify.md's run 3 for the incident
+        // that motivated this.
+        var coreProjectDirectory = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core");
+        var convertedOutput = await FunctionalFixVerifier.InvokeConvertAbstractClassToInterfaceAsync(
+            coreProjectDirectory, WholeFileRewriteReproducer.TargetAbstractClassFileContent, "Shape", cancellationToken);
+
+        Assert.That(convertedOutput, Does.Contain("public interface IShape"),
+            $"ConvertAbstractClassToInterface should still convert 'public abstract class Shape' to " +
+            $"'public interface IShape' after the fix — the code compiles but produced the wrong " +
+            $"output. Transcript: {result.TranscriptPath}");
+        Assert.That(convertedOutput, Does.Not.Contain("public abstract class Shape"),
+            $"The original abstract class declaration should be gone from the real converted output. " +
+            $"Transcript: {result.TranscriptPath}");
+        Assert.That(convertedOutput, Does.Contain("double GetArea()"),
+            $"The converted output should still retain the abstract methods (as interface members). " +
+            $"Transcript: {result.TranscriptPath}");
     }
 }
