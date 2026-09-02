@@ -7,6 +7,12 @@ namespace RoslynSentinel.Tests.ModelEval.AgentLoop;
 /// </summary>
 public sealed class AgentTranscript
 {
+    /// <summary>The system prompt the run was seeded with — set once, before any turn runs.</summary>
+    public string SystemPrompt { get; set; } = "";
+
+    /// <summary>The user prompt the run was seeded with — set once, before any turn runs.</summary>
+    public string UserPrompt { get; set; } = "";
+
     public List<AgentTranscriptTurn> Turns { get; } = [];
 }
 

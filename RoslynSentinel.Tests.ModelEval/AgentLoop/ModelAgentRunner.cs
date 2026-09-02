@@ -66,7 +66,8 @@ public sealed class ModelAgentRunner
             "Agent run starting in {Directory}. Exposing {ToolCount} tool(s): {ToolNames}. User prompt:\n{UserPrompt}",
             transcriptDirectory, toolDefinitions.Count, string.Join(", ", knownToolNames), userPrompt);
 
-        var transcript = new AgentTranscript();
+        var transcript = new AgentTranscript { SystemPrompt = systemPrompt, UserPrompt = userPrompt };
+        await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
         var overallStopwatch = Stopwatch.StartNew();
         var stopReason = AgentStopReason.TurnCapExceeded;
         var turnNumber = 0;
