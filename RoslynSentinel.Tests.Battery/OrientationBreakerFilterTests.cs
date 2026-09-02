@@ -113,7 +113,7 @@ public class OrientationBreakerFilterTests
 
         Assert.That(blocked.IsError, Is.True, "A non-allowlisted tool call should be short-circuited while the orientation breaker is tripped.");
         var text = string.Join(" ", blocked.Content.OfType<TextContentBlock>().Select(b => b.Text));
-        Assert.That(text, Does.Contain("Orientation breaker"));
+        Assert.That(text, Does.Contain("SearchSolutionText is DISABLED"));
     }
 
     [Test]

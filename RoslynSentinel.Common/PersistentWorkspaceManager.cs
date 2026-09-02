@@ -2002,10 +2002,11 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 return null;
             }
 
-            return $"Orientation breaker tripped: {_consecutiveZeroMatchSearches} consecutive SearchSolutionText " +
-                   "calls returned no matches. Only ListAll, ListSolutionItems, GetFileOutline, and ReadFile are " +
-                   "available until one of them succeeds. Call ListAll(kind: all) or ListSolutionItems(kind: all) " +
-                   "to find what you're looking for by browsing instead of guessing.";
+            return $"SearchSolutionText is DISABLED after {_consecutiveZeroMatchSearches} consecutive calls returned " +
+                   "no matches. It will not run again until one of the tools below succeeds. You MUST call " +
+                   "ListAll(kind: all) or ListSolutionItems(kind: all) now — browse the returned list for what " +
+                   "you're looking for. GetFileOutline and ReadFile are also available once you have a real path " +
+                   "from that list.";
         }
     }
 

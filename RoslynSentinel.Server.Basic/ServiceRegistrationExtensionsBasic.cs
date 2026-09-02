@@ -344,7 +344,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                         {
                             return new ModelContextProtocol.Protocol.CallToolResult
                             {
-                                Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage() ?? "Orientation breaker tripped." }],
+                                Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage() ?? "SearchSolutionText is DISABLED. You MUST call ListAll(kind: all) or ListSolutionItems(kind: all) now." }],
                                 IsError = true,
                             };
                         }

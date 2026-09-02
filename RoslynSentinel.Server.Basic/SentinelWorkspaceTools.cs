@@ -1458,6 +1458,38 @@ public class SentinelWorkspaceTools
         }
     }
 
+    // Shared by ReadFile/GetMethodSource/GetFileOutline's document-not-found path. Models that
+    // guess a wrong-but-plausible path (most often a missing subfolder) were observed retrying the
+    // identical wrong path 2-3 times before giving up, even when ListSolutionItems's own earlier
+    // output already showed the real path — the plain "file not found" message gave them nothing to
+    // act on. Searching the solution for files sharing the requested filename turns most of these
+    // into a one-shot redirect; when nothing matches by filename either, the message issues an
+    // explicit, unhedged directive rather than a suggestion, since softer phrasing ("consider
+    // calling X") was observed not changing the model's next action.
+    private static ResultError BuildFileNotFoundError(Solution solution, string normalizedPath)
+    {
+        var requestedFileName = Path.GetFileName(normalizedPath);
+        var candidates = solution.Projects
+            .SelectMany(p => p.Documents)
+            .Where(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFileName(d.FilePath), requestedFileName, StringComparison.OrdinalIgnoreCase))
+            .Select(d => d.FilePath!)
+            .Distinct()
+            .Take(5)
+            .ToList();
+
+        if (candidates.Count > 0)
+        {
+            return new ResultError("FileNotFound",
+                $"'{requestedFileName}' does not exist at '{normalizedPath}'. A file with this name exists at a different path. " +
+                $"You MUST retry with the correct path:\n" +
+                string.Join("\n", candidates.Select(c => $"  - {c}")));
+        }
+
+        return new ResultError("FileNotFound",
+            $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). " +
+            "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.");
+    }
+
     // ── Phase 1 — Low-level fallback tools ──────────────────────────────────
     [McpServerTool(Name = "GetMethodSource")]
     [Produces(DataTag.SourceCode)]
@@ -1476,7 +1508,7 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError("FileNotFound", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).")
+                    Error = BuildFileNotFoundError(solution, normalizedPath)
                 };
             }
 
@@ -1593,7 +1625,7 @@ public class SentinelWorkspaceTools
                     return new ToolResult<object>()
                     {
                         Success = false,
-                        Error = new ResultError("FileNotFound", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).")
+                        Error = BuildFileNotFoundError(solution, normalizedPath)
                     };
                 }
 
@@ -1717,7 +1749,7 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError("FileNotFound", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).")
+                    Error = BuildFileNotFoundError(solution, normalizedPath)
                 };
             }
 

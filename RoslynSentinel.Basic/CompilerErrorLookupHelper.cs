@@ -130,13 +130,16 @@ public static class CompilerErrorLookupHelper
                 .Distinct()
                 .Select(ns => $"using {ns};");
 
-            return $"  '{name}' exists elsewhere in the solution in a namespace not currently imported here — add one of the following `using` directives:\n"
+            return $"  '{name}' is not accessible because its namespace is not imported here. You MUST add one " +
+                "of the following `using` directives:\n"
                 + string.Join("\n", missingNamespaces.Select(u => "    " + u))
                 + "\n  Candidates found:\n"
                 + string.Join("\n", suggestions);
         }
 
-        return $"  '{name}' exists elsewhere in the solution but is not in scope here — most likely it needs to be called with its containing type as a qualifier (a `using` directive does not import another class's static members" + (usingContext != null ? "; its namespace is already imported or is this file's own namespace" : "") + "). Candidates found:\n"
+        return $"  '{name}' is not accessible unqualified from this file. You MUST call it using the fully " +
+            "qualified name shown below (ContainingType.MemberName) — do not add a `using` directive, it will " +
+            "not fix this. Candidates found:\n"
             + string.Join("\n", suggestions);
     }
 
