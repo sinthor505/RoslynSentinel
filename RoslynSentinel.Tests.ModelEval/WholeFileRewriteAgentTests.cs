@@ -122,6 +122,16 @@ public class WholeFileRewriteAgentTests
     // copies), calling the shared helper directly is actually the correct fix, and AssertFixApplied
     // was flipped to match. This variant's disambiguating sentence now points at that same correct
     // outcome instead of away from it — see AssertFixApplied's comment for the full rationale.
+    //
+    // Plan-before-edit paragraph added 2026-09-02 (see docs/current/project_own_copy_helper_dominant_failure.md
+    // and docs/current/model_eval_pattern_analysis_2026_09_02.md §4.4): a 165-run excavation found
+    // this exact disambiguating text, on its own, did NOT reduce the dominant failure (the model
+    // finds BlockEditHelpers.cs but still pastes a second copy of the method's body instead of
+    // calling it — 45-55% of runs) — wording alone wasn't the lever. PlanThenExecute uses this
+    // identical disambiguating text plus only one added instruction (state a complete plan before
+    // any edit tool call) and reaches 80% mechanical correctness on the same ambiguity. Porting
+    // that instruction here directly, rather than trying yet another wording of the ambiguity
+    // itself, since that's the variable the excavation found actually correlates with success.
     private const string DisambiguatedMinimalGuidanceUserPromptTemplate = """
         # Task: Fix a bug in FixtureHelpers/BlockConverter.cs
 
@@ -140,6 +150,11 @@ public class WholeFileRewriteAgentTests
         only that one now-unused old method (the one the bug report is about) instead of leaving
         it behind — do not delete, rename, or otherwise modify any other method, field, or class,
         even ones that look unused, unrelated, or like dead code to you.
+
+        Before making any tool call that edits a file, first write out your complete plan as plain
+        text: the root cause, exactly which method(s)/file(s) you will modify, and the specific
+        content you will place in `BlockConverter.cs`. Only after stating that plan in full should
+        you begin making edit tool calls — do not interleave planning and editing.
 
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
