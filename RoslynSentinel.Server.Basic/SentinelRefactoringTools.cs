@@ -828,6 +828,97 @@ public class SentinelRefactoringTools
         }
     }
 
+    [McpServerTool(Name = "MethodSignature")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Add, remove, or view a method's parameters (general-purpose — not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). OPERATION add: appends a new parameter to the end of the parameter list (paramName, paramType required; defaultValue is an optional literal/expression, e.g. \"null\" or \"3\", making the parameter backward-compatible with existing call sites). OPERATION remove: only the LAST parameter can be removed (paramName must match it) — this is a deliberate restriction, since removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely; call sites passing the removed argument positionally are updated automatically, but a call site using named arguments or one that can't be safely re-parsed causes the whole operation to be refused with no changes made. OPERATION view: lists current parameters (name, type, default value); no changes made, paramName/paramType not required. For overloaded methods, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId for add/remove, parameter list for view.")]
+    public async Task<ToolResult<object>> MethodSignature(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
+        [Consumes(DataTag.MethodName, required: true)] string methodName,
+        [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
+        [Consumes(DataTag.DataType, required: false)] string? paramType = null,
+        [Description("Optional literal or expression for the new parameter's default value (e.g. \"null\", \"3\", \"\\\"foo\\\"\"). add only — omit for a required parameter.")][ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
+        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
+    {
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        try
+        {
+            if (operation == AddRemoveViewAction.view)
+            {
+                var (outcome, message, parameters) = await _refactoringEngine.GetMethodParametersAsync(filePath, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit or EditOutcome.TargetNotFound)
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"MethodSignature: {message}") };
+                return new ToolResult<object>() { Success = true, Data = new { Parameters = parameters } };
+            }
+
+            if (string.IsNullOrEmpty(paramName))
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: paramName is required for operation '{operation}'.") };
+            }
+
+            if (operation == AddRemoveViewAction.add && string.IsNullOrEmpty(paramType))
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "MethodSignature: paramType is required for operation 'add'.") };
+            }
+
+            DocumentEditResult updated;
+            Dictionary<FilePath, string> changes;
+            if (operation == AddRemoveViewAction.add)
+            {
+                updated = await _refactoringEngine.AddMethodParameterAsync(filePath, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                if (RequireUpdatedText(updated, "MethodSignature", filePath) is { } addGuardResult)
+                    return addGuardResult;
+                changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            }
+            else
+            {
+                updated = await _refactoringEngine.RemoveMethodParameterAsync(filePath, methodName, paramName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                if (updated.Outcome == EditOutcome.CannotRemove)
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: {updated.Message}") };
+                }
+
+                if (RequireUpdatedText(updated, "MethodSignature", filePath) is { } removeGuardResult)
+                    return removeGuardResult;
+                changes = updated.Changes;
+            }
+
+            if (!autoStage)
+            {
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+            }
+
+            var description = operation == AddRemoveViewAction.add
+                ? $"Added parameter '{paramType} {paramName}{(defaultValue != null ? $" = {defaultValue}" : "")}' to '{methodName}' in {Path.GetFileName(filePath)}."
+                : $"Removed parameter '{paramName}' from '{methodName}' in {Path.GetFileName(filePath)}, updating {changes.Count - 1} call site(s).";
+            var apply = await ValidateAndApplyAsync(changes, description, "MethodSignature", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+
+            var changedContent = operation == AddRemoveViewAction.add ? $"{paramType} {paramName}" : "";
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                new MemberChangedContentResult
+                {
+                    Summary = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff),
+                    ChangedContent = changedContent
+                },
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
+                workspaceVersion: _workspaceManager.WorkspaceVersion);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MethodSignature failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MethodSignature") };
+        }
+    }
+
     [McpServerTool(Name = "ExtractLocalVariable")]
     [Produces(DataTag.ChangeId)]
     [Description("Extracts an inline expression into a named local variable declaration. exactExpressionText is NOT a search fragment (unlike contextSnippet on other tools) — it must be the WHOLE expression to extract, copied verbatim.")]

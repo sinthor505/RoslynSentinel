@@ -482,6 +482,72 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
+    // --- MethodSignature ---
+
+    [Test]
+    public async Task MethodSignature_View_ListsExistingParameters()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _tools.MethodSignature("Order.cs", AddRemoveViewAction.view, "GetLabel");
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+    }
+
+    [Test]
+    public async Task MethodSignature_Add_AppendsRequiredParameter_NoExistingCallers()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _tools.MethodSignature("Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool");
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+    }
+
+    [Test]
+    public async Task MethodSignature_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
+    {
+        SetMultiFile(
+            ("Order.cs", SimpleSource),
+            ("Caller.cs", "namespace TestProj;\npublic class Caller { public string Use(Order o) => o.GetStatus(); }"));
+        var result = await _tools.MethodSignature("Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool", defaultValue: "false");
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+    }
+
+    [Test]
+    public async Task MethodSignature_Remove_LastParameter_UpdatesCallSite()
+    {
+        var orderSourceWithRename = SimpleSource.Replace(
+            "public string GetLabel()",
+            "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
+        SetMultiFile(
+            ("Order.cs", orderSourceWithRename),
+            ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
+        var result = await _tools.MethodSignature("Order.cs", AddRemoveViewAction.remove, "Rename", "last");
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+    }
+
+    [Test]
+    public async Task MethodSignature_Remove_NonLastParameter_Refused()
+    {
+        SetSource(RefactorSource, "Animal.cs");
+        var result = await _tools.MethodSignature("Animal.cs", AddRemoveViewAction.remove, "Process", "a");
+        Assert.That(result.Success, Is.False, "Removing a non-trailing parameter must be refused, not silently applied.");
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.Message, Does.Contain("last parameter"));
+    }
+
+    [Test]
+    public async Task MethodSignature_Remove_NamedArgumentCallSite_Refused()
+    {
+        var orderSourceWithRename = SimpleSource.Replace(
+            "public string GetLabel()",
+            "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
+        SetMultiFile(
+            ("Order.cs", orderSourceWithRename),
+            ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(first: \"a\", last: \"b\"); }"));
+        var result = await _tools.MethodSignature("Order.cs", AddRemoveViewAction.remove, "Rename", "last");
+        Assert.That(result.Success, Is.False, "A named-argument call site cannot be safely rewritten and must refuse the whole operation.");
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.Message, Does.Contain("named arguments"));
+    }
+
     // --- WrapInRegion ---
 
     [Test]

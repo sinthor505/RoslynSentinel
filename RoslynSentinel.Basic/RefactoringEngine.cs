@@ -3980,6 +3980,336 @@ public class RefactoringEngine
         return (EditOutcome.Modified, null, result);
     }
 
+    public record MethodParameterInfo(string ParamName, string ParamType, string? DefaultValue);
+
+    /// <summary>
+    /// Lists a method's parameters. methodName is resolved via ResolveMemberByNameOrSnippet, so
+    /// contextSnippet/lineBefore/lineAfter disambiguate overloads the same way every other
+    /// member-targeting tool does.
+    /// </summary>
+    public async Task<(EditOutcome Outcome, string? Message, List<MethodParameterInfo> Parameters)> GetMethodParametersAsync(FilePath filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return (EditOutcome.DocumentNotFound, "// Document not found.", []);
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", []);
+        }
+
+        MemberDeclarationSyntax? memberNode;
+        try
+        {
+            memberNode = ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (EditOutcome.CannotEdit, ex.Message, []);
+        }
+
+        if (memberNode is not MethodDeclarationSyntax methodDecl)
+        {
+            return (EditOutcome.TargetNotFound, $"// Method '{methodName}' not found.", []);
+        }
+
+        var result = methodDecl.ParameterList.Parameters.Select(p => new MethodParameterInfo(p.Identifier.Text, p.Type?.ToString() ?? "", p.Default?.Value.ToString())).ToList();
+        return (EditOutcome.Modified, null, result);
+    }
+
+    /// <summary>
+    /// Appends a parameter to a method's parameter list. The new parameter always goes last —
+    /// this keeps every existing positional call site valid without rewriting it, so unlike
+    /// RemoveMethodParameterAsync there is no call-site safety analysis to do: an added parameter
+    /// with no default is required at every call site (an intentional break the caller opted
+    /// into, same as ConstructorParameter's add), while an added parameter with a default is
+    /// backward-compatible with zero call-site changes.
+    /// </summary>
+    public async Task<DocumentEditResult> AddMethodParameterAsync(FilePath filePath, string methodName, string paramName, string paramType, string? defaultValue = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
+        }
+
+        MemberDeclarationSyntax? memberNode;
+        try
+        {
+            memberNode = ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
+        if (memberNode is not MethodDeclarationSyntax methodDecl)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Cannot edit: method '{methodName}' not found."
+            };
+        }
+
+        if (methodDecl.ParameterList.Parameters.Any(p => p.Identifier.Text == paramName))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Cannot edit: '{methodName}' already has a parameter named '{paramName}'."
+            };
+        }
+
+        var newParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName)).WithType(SyntaxFactory.ParseTypeName(paramType).WithTrailingTrivia(SyntaxFactory.Space));
+        if (defaultValue != null)
+        {
+            newParam = newParam.WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.ParseExpression(defaultValue)));
+        }
+
+        var newParams = methodDecl.ParameterList.Parameters.Count == 0 ? SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList([newParam])) : methodDecl.ParameterList.AddParameters(newParam);
+        var newMethodDecl = methodDecl.WithParameterList(newParams);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken),
+            Message = $"// paramName='{paramName}'"
+        };
+    }
+
+    /// <summary>
+    /// Removes a method's last parameter and drops the matching trailing argument from every
+    /// simple-positional call site so ValidateAndApplyAsync compiles the real post-removal state
+    /// (a declaration-only edit would let a still-passing caller slip past validation, since
+    /// validation only recompiles files present in the changeset). Restricted to the last
+    /// parameter deliberately: removing any other position would require reordering every
+    /// remaining positional argument at every call site, which reintroduces the same
+    /// named-argument/params-expansion ambiguity ChangeSignatureAsync already has to skip around —
+    /// here a skip can't be tolerated (see above), so those cases are refused outright instead of
+    /// silently left broken.
+    /// </summary>
+    public async Task<DocumentEditResult> RemoveMethodParameterAsync(FilePath filePath, string methodName, string paramName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (root == null || sourceText == null || semanticModel == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root or semantic model not found."
+            };
+        }
+
+        MemberDeclarationSyntax? memberNode;
+        try
+        {
+            memberNode = ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
+        if (memberNode is not MethodDeclarationSyntax methodDecl)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Cannot edit: method '{methodName}' not found."
+            };
+        }
+
+        var parameters = methodDecl.ParameterList.Parameters;
+        if (parameters.Count == 0)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Cannot edit: '{methodName}' has no parameters."
+            };
+        }
+
+        var lastParam = parameters[^1];
+        if (lastParam.Identifier.Text != paramName)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotRemove,
+                FilePath = filePath,
+                Message = $"// Cannot remove '{paramName}': MethodSignature(remove) only supports the last parameter (currently '{lastParam.Identifier.Text}') — removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely."
+            };
+        }
+
+        var targetParamCount = parameters.Count;
+        var newParams = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(parameters.Take(targetParamCount - 1)));
+        var newMethodDecl = methodDecl.WithParameterList(newParams);
+        var pendingChanges = new Dictionary<FilePath, string>
+        {
+            [filePath] = await ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken)
+        };
+
+        var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
+        if (symbol != null)
+        {
+            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+            foreach (var reference in references)
+            {
+                foreach (var location in reference.Locations)
+                {
+                    if (location.IsImplicit || location.Document?.FilePath == null)
+                    {
+                        continue;
+                    }
+
+                    var refDoc = location.Document;
+                    var refRoot = await refDoc.GetSyntaxRootAsync(cancellationToken);
+                    if (refRoot == null)
+                    {
+                        continue;
+                    }
+
+                    var span = location.Location.SourceSpan;
+                    var refLineNumber = refRoot.SyntaxTree.GetLineSpan(span).StartLinePosition.Line + 1;
+                    var token = refRoot.FindToken(span.Start);
+                    var invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
+                    if (invocation == null)
+                    {
+                        return new DocumentEditResult
+                        {
+                            Outcome = EditOutcome.CannotRemove,
+                            FilePath = filePath,
+                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} is not a simple invocation expression (e.g. method group or delegate conversion) — cannot safely update it."
+                        };
+                    }
+
+                    var args = invocation.ArgumentList.Arguments;
+                    if (args.Any(a => a.NameColon != null))
+                    {
+                        return new DocumentEditResult
+                        {
+                            Outcome = EditOutcome.CannotRemove,
+                            FilePath = filePath,
+                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} uses named arguments — cannot safely update it."
+                        };
+                    }
+
+                    if (args.Count != targetParamCount)
+                    {
+                        // Caller already omits this parameter (relying on its default) or the
+                        // invocation doesn't reach it (e.g. params expansion) — either way there's
+                        // no trailing argument here that corresponds to the removed parameter, so
+                        // this call site needs no edit and stays valid as-is.
+                        continue;
+                    }
+
+                    var docPath = refDoc.FilePath!;
+                    string currentContent = pendingChanges.TryGetValue(docPath, out var prev) ? prev : (await refDoc.GetTextAsync(cancellationToken)).ToString();
+                    var currentRoot = SyntaxFactory.ParseCompilationUnit(currentContent);
+                    var targetInv = currentRoot.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(inv => inv.Span == invocation.Span);
+                    if (targetInv == null)
+                    {
+                        return new DocumentEditResult
+                        {
+                            Outcome = EditOutcome.CannotRemove,
+                            FilePath = filePath,
+                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} could not be re-located after an earlier edit to the same file — cannot safely update it."
+                        };
+                    }
+
+                    var newArgList = targetInv.ArgumentList.WithArguments(SyntaxFactory.SeparatedList(targetInv.ArgumentList.Arguments.Take(targetParamCount - 1)));
+                    var updatedInv = targetInv.WithArgumentList(newArgList);
+                    pendingChanges[docPath] = currentRoot.ReplaceNode(targetInv, updatedInv).ToFullString();
+                }
+            }
+        }
+
+        // Format every touched file (the declaration was already formatted via
+        // ReplaceNodeFormattedAsync above; call-site files were edited via raw ReplaceNode/
+        // ToFullString and still need it).
+        var result = new Dictionary<FilePath, string>();
+        foreach (var kvp in pendingChanges)
+        {
+            if (kvp.Key == filePath)
+            {
+                result[kvp.Key] = kvp.Value;
+                continue;
+            }
+
+            var doc = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.FilePath == kvp.Key);
+            if (doc != null)
+            {
+                var formatted = await Formatter.FormatAsync(doc.WithSyntaxRoot(SyntaxFactory.ParseCompilationUnit(kvp.Value)), null, cancellationToken);
+                result[kvp.Key] = (await formatted.GetTextAsync(cancellationToken)).ToString();
+            }
+            else
+            {
+                result[kvp.Key] = kvp.Value;
+            }
+        }
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = result[filePath],
+            Changes = result,
+            Message = $"// paramName='{paramName}', callSitesUpdated='{result.Count - 1}'"
+        };
+    }
+
     public async Task<DocumentEditResult> WrapInRegionAsync(FilePath filePath, int startLine, int endLine, string regionName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
