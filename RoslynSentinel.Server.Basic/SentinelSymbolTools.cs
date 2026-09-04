@@ -256,7 +256,9 @@ public class SentinelSymbolTools
             var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePath, sortByFrequency, cancellationToken);
             if (results.Count > 0)
             {
-                return new ToolResult<object> { Success = true, Data = results };
+                return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                    results, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.SymbolRelationshipResultList,
+                    totalRecords: results.Count, cancellationToken: cancellationToken);
             }
 
             // Broaden-on-empty: the targeted kind genuinely ran and came back empty (and, for
@@ -295,10 +297,11 @@ public class SentinelSymbolTools
 
             var totalFound = broadened.Sum(kv => kv.Value.Count);
             var summary = string.Join("; ", broadened.Select(kv => $"{kv.Value.Count} under '{kv.Key}'"));
-            return new ToolResult<object>
+            var broadenedResult = await ToolResult<object>.ForPossiblyLargeDataAsync(
+                broadened, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.BroadenedSymbolRelationshipResults,
+                totalRecords: totalFound, cancellationToken: cancellationToken);
+            return broadenedResult with
             {
-                Success = true,
-                Data = broadened,
                 Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds — " +
                     $"found {totalFound} result(s): {summary}."
             };

@@ -2835,6 +2835,32 @@ public class SentinelWorkspaceTools
                         };
                         break;
                     }
+                case ResultWrapperType.SymbolRelationshipResultList:
+                    {
+                        // Element shape varies by searchKind (ImplementationInfo, AttributeUsageSite,
+                        // ObjectCreationSite, ExtensionMethodInfo, SearchResult) - pass through as raw
+                        // JSON nodes instead of a single concrete record type.
+                        var items = (all.Data as JsonArray) ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = items.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ResultWrapperType.BroadenedSymbolRelationshipResults:
+                    {
+                        // Dictionary<searchKind name, List<object>> - a map, not a flat list, so
+                        // limit/offset (list-shaped paging) don't apply; return the whole map.
+                        var broadenedMap = JsonSerializer.Deserialize<Dictionary<string, List<JsonNode?>>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = broadenedMap
+                        };
+                        break;
+                    }
                 default:
                     {
                         return new ToolResult<object>
@@ -2856,6 +2882,13 @@ public class SentinelWorkspaceTools
             if (all.Type is ResultWrapperType.MethodSource or ResultWrapperType.FileSource or ResultWrapperType.MigrationScanSummary or ResultWrapperType.MemberChangedContent or ResultWrapperType.SolutionItemsAllResult)
             {
                 totalRecords = 1;
+                hasMorePages = false;
+            }
+            else if (all.Type is ResultWrapperType.BroadenedSymbolRelationshipResults)
+            {
+                // Map-shaped, not a flat list - report the number of relationship kinds that had
+                // results (matching the in-band Warning summary), not a paged item count.
+                totalRecords = all.Data?.AsObject().Count ?? 0;
                 hasMorePages = false;
             }
             else
