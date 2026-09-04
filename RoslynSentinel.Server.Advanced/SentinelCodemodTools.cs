@@ -115,13 +115,13 @@ public class SentinelCodemodTools
         Applies a file-wide code transformation; most transforms return updated file content. transform: call describe_advanced_tool_options("apply_file_codemod") for valid values. libraryMode=true → .ConfigureAwait(false) on all awaits (for add_configure_await_false). preview=true → returns updated content without writing (for format_document_safe / sort_and_deduplicate_usings). Some transforms return type-specific results (SourceTransformResult, UsingsCleanupResult, etc.). Throws InvalidOperationException if file not found or no changes needed.
         """)]
     public async Task<ToolResult<object>> ApplyFileCodemod(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.DataType)] string transform,
         [ExternalInputRequired(DataTag.LibraryMode)] bool libraryMode = true,
         [ToolOption(ToolOptionTag.Preview)] bool preview = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -394,6 +394,7 @@ public class SentinelCodemodTools
         Applies a method-scoped code transformation; most transforms return updated file content. transform: call describe_advanced_tool_options("apply_method_codemod") for valid values. direction: required for convert_expression_body — "ToExpression" or "ToBlock". lockFieldName names the lock field for make_method_thread_safe (default "_lock"). contextSnippet/lineBefore/lineAfter disambiguate convert_expression_body. Some transforms return type-specific results (SourceTransformResult, OutParamConversionResult). Throws InvalidOperationException if file or method not found.
         """)]
     public async Task<ToolResult<object>> ApplyMethodCodemod(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string methodName,
         [ExternalInputRequired(DataTag.Transform)] string transform,
@@ -403,8 +404,7 @@ public class SentinelCodemodTools
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         [ExternalInputRequired(DataTag.SymbolName)] string lockFieldName = "_lock",
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -767,6 +767,7 @@ public class SentinelCodemodTools
         Applies a class-scoped code transformation; returns updated file content as a string. transform: call describe_advanced_tool_options("apply_class_codemod") for valid values. direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty". contextSnippet/lineBefore/lineAfter disambiguate convert_property_safe. Throws InvalidOperationException if file or class not found.
         """)]
     public async Task<ToolResult<object>> ApplyClassCodemod(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.ClassName)] string className,
         [ExternalInputRequired(DataTag.Transform)] string transform,
@@ -776,8 +777,7 @@ public class SentinelCodemodTools
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1120,6 +1120,7 @@ public class SentinelCodemodTools
         """)]
     public async Task<ToolResult<object>> Generate(
         string kind,
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Consumes(DataTag.ClassName)] string? className = null,
         [Consumes(DataTag.MethodName)] string? methodName = null,
@@ -1129,8 +1130,7 @@ public class SentinelCodemodTools
         [ExternalInputRequired(DataTag.Framework)] string framework = "NUnit",
         [ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         try
         {

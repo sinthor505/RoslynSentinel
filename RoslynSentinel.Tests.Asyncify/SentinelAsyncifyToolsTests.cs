@@ -132,7 +132,7 @@ public class SentinelAsyncifyToolsTests
     [Test, CancelAfter(5000)]
     public async Task T1_ScanAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.ScanAsyncMigrationCandidates();
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -148,7 +148,7 @@ public class SentinelAsyncifyToolsTests
     {
         SetSource(LoadListFlaggedSource);
 
-        var result = await _asyncifyTools.ScanAsyncMigrationCandidates();
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test");
 
         Assert.That(result.Success, Is.True);
         var findings = result.Data as List<MigrationCandidateFinding>;
@@ -170,7 +170,7 @@ public class SentinelAsyncifyToolsTests
     {
         SetSource(LoadListFlaggedSource);
 
-        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(summarize: true);
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test", summarize: true);
 
         Assert.That(result.Success, Is.True);
         var summary = result.Data as MigrationScanSummary;
@@ -194,7 +194,7 @@ public class SentinelAsyncifyToolsTests
     {
         SetSource(LoadListFlaggedSource);
 
-        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(minScore: 100);
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test", minScore: 100);
 
         Assert.That(result.Success, Is.True);
         var findings = result.Data as List<MigrationCandidateFinding>;
@@ -211,7 +211,7 @@ public class SentinelAsyncifyToolsTests
     [Test, CancelAfter(5000)]
     public async Task T5_GetAsyncMigrationProgress_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.GetAsyncMigrationProgress();
+        var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -233,7 +233,7 @@ public class Svc
     public async Task<int> GetValueAsync(System.Threading.CancellationToken ct) { return await Task.FromResult(1); }
 }", "Svc.cs");
 
-        var result = await _asyncifyTools.GetAsyncMigrationProgress();
+        var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test");
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Error, Is.Null);
@@ -266,7 +266,7 @@ public class Svc
     {
         SetSource("public class C { public void M() {} }", "C.cs");
 
-        var result = await _asyncifyTools.BridgeAsyncMethods(targets: []);
+        var result = await _asyncifyTools.BridgeAsyncMethods(reason: "test", targets: []);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -316,6 +316,7 @@ public class Svc
         SetSource(LoadListUnflaggedSource);
 
         var result = await _asyncifyTools.BridgeAsyncMethods(
+            reason: "test",
             targets: [new BatchTarget { FilePath = "RegionForm.cs", MethodNames = ["loadList"] }],
             dryRun: true);
 
@@ -340,6 +341,7 @@ public class Svc
 }", "Svc.cs");
 
         var result = await _asyncifyTools.AddCancellationToken(
+            reason: "test",
             targets: [new BatchTarget { FilePath = "Svc.cs" }],
             dryRun: true);
 
@@ -359,6 +361,7 @@ public class Svc
         SetSource("public class C { public void M() {} }", "C.cs");
 
         var result = await _asyncifyTools.PropagateCancellationToken(
+            reason: "test",
             targets: [],
             dryRun: true);
 
@@ -378,6 +381,7 @@ public class Svc
         SetSource(LoadListUnflaggedSource);
 
         var result = await _asyncifyTools.ExtractEventHandlers(
+            reason: "test",
             targets:
             [
                 new HandlerExtractTarget
@@ -406,7 +410,7 @@ public class Svc
     {
         SetSource("public class C { public void M() {} }", "C.cs");
 
-        var result = await _asyncifyTools.UpliftCallers(targets: []);
+        var result = await _asyncifyTools.UpliftCallers(reason: "test", targets: []);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -421,7 +425,7 @@ public class Svc
     [Test, CancelAfter(5000)]
     public async Task T15_EventHandlersToAsync_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.EventHandlersToAsync();
+        var result = await _asyncifyTools.EventHandlersToAsync(reason: "test");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -435,7 +439,7 @@ public class Svc
     [Test, CancelAfter(5000)]
     public async Task T16_Asyncify_WithLimitParams_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.Asyncify(maxRuntimeSeconds: 30, maxIterations: 10);
+        var result = await _asyncifyTools.Asyncify(reason: "test", maxRuntimeSeconds: 30, maxIterations: 10);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -499,6 +503,7 @@ public static class DataHelper
         SetSource(ChainedCallSource, "Chained.cs");
 
         var result = await _asyncifyTools.UpliftCallers(
+            reason: "test",
             targets: [new UpliftTarget { BridgedMethodName = "GetData" }],
             maxCallersPerMethod: 5,
             dryRun: false,
@@ -553,7 +558,7 @@ public static class DataHelper
         // loadList has Score=49, one below DefaultScoreThreshold=50 — must not be bridged.
         SetSource(LoadListLowScoreSource);
 
-        var result = await _asyncifyTools.Asyncify();
+        var result = await _asyncifyTools.Asyncify(reason: "test");
 
         Assert.That(result.Success, Is.True, result.Error?.ToString());
         Assert.That(result.Data, Is.Not.Null);
@@ -605,7 +610,7 @@ public static class DataHelper
     {
         SetSource(LoadListHighScoreWithCallerSource);
 
-        var result = await _asyncifyTools.Asyncify();
+        var result = await _asyncifyTools.Asyncify(reason: "test");
 
         Assert.That(result.Success, Is.True, result.Error?.ToString());
         Assert.That(result.Data, Is.Not.Null);
@@ -637,6 +642,7 @@ public static class DataHelper
         SetSource(QualifiedStaticCallSource, "QualifiedCall.cs");
 
         var result = await _asyncifyTools.UpliftCallers(
+            reason: "test",
             targets: [new UpliftTarget { BridgedMethodName = "SyncMethod" }],
             maxCallersPerMethod: 5,
             dryRun: false,

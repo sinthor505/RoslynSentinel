@@ -1,7 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
 
@@ -124,7 +122,7 @@ public class MassiveRefactoringTests
     public async Task MoveTypeToFile_ShouldSeparateTypes(int id)
     {
         SetSource($"public class C{id} {{}} public class D{id} {{}}", $"C{id}.cs");
-        var result = await _advancedRefactoringTools.MoveType($"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
+        var result = await _advancedRefactoringTools.MoveType(reason: "test", $"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
 
         // Dictionary keys are FilePath, not string, since the server split.
         Assert.That(result.Success, Is.True, result.Error?.Message);

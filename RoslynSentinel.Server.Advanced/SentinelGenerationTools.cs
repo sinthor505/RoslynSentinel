@@ -36,10 +36,10 @@ public class SentinelGenerationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Generates C# class declarations from a JSON string using rootClassName as the top-level type name under the specified namespace.")]
     public object GenerateClassesFromJson(
+        [Description(ToolParams.Reason)] string reason,
         [ExternalInputRequired(DataTag.Json)] string json,
         [ExternalInputRequired(DataTag.ClassName)] string rootClassName,
         [ExternalInputRequired(DataTag.Namespace)] string @namespace
-, [Description(ToolParams.Reason)] string? reason = null
         // RequestContext<CallToolRequestParams> requestParams = null,
         // CancellationToken cancellationToken = default
         )
@@ -59,11 +59,11 @@ public class SentinelGenerationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
     public async Task<string> GenerateHttpClient(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.ClassName)] string controllerName,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -94,10 +94,10 @@ public class SentinelGenerationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
     public async Task<string> GenerateDefaultConfigJson(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.ProjectName, required: true)] string projectName,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         var projectExists = _workspaceManager.CurrentSolution?.Projects
             .Any(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? false;
@@ -138,13 +138,13 @@ public class SentinelGenerationTools
         """)]
     // Unlike the built-in convert_to_interpolated_string, this resolves const string format arguments via the semantic model, so it works even when the format string is a named const rather than a literal. Handles {0:format} format specifiers correctly.
     public async Task<string> InterpolateStringSafe(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 

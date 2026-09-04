@@ -169,7 +169,7 @@ public class OrderService : IOrderService
     public async Task GetComprehensiveHealthReport_ValidSolution_ReturnsReport()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetComprehensiveHealthReport(timeoutSeconds: 5);
+        var result = await _tools.GetComprehensiveHealthReport(reason: "test", timeoutSeconds: 5);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -179,7 +179,7 @@ public class OrderService : IOrderService
     public async Task GetBlastRadius_ValidMethod_ReturnsReport()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.InspectSymbol("Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
+        var result = await _symbolTools.InspectSymbol(reason: "test", "Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -198,7 +198,7 @@ public class OrderService : IOrderService
     public async Task GetSolutionMetrics_LoadedSolution_ReturnsMetrics()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetSolutionMetrics();
+        var result = await _tools.GetSolutionMetrics(reason: "test");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -206,7 +206,7 @@ public class OrderService : IOrderService
     public async Task GetSolutionMetrics_WithProjectName_ReturnsMetrics()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetSolutionMetrics("TestProj");
+        var result = await _tools.GetSolutionMetrics(reason: "test", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -216,7 +216,7 @@ public class OrderService : IOrderService
     public async Task GetCodeInventory_ValidFile_ReturnsInventory()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCodeInventory("Test.cs");
+        var result = await _tools.GetCodeInventory(reason: "test", "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -286,7 +286,7 @@ public class OrderService : IOrderService
     public async Task GenerateCallTree_ValidMethod_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCallGraph("Test.cs", "ProcessAsync", "tree");
+        var result = await _tools.GetCallGraph(reason: "test", "Test.cs", "ProcessAsync", "tree");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -404,7 +404,7 @@ public class OrderService : IOrderService
     public async Task GetSymbolInfo_ValidSymbolSnippet_ReturnsInfo()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.InspectSymbol("Test.cs", "ProcessAsync", InspectSymbolAspect.info);
+        var result = await _symbolTools.InspectSymbol(reason: "test", "Test.cs", "ProcessAsync", InspectSymbolAspect.info);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -433,7 +433,7 @@ public class OrderService : IOrderService
     public async Task FindDiRegistrations_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetDiRegistrations();
+        var result = await _tools.GetDiRegistrations(reason: "test");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -443,7 +443,7 @@ public class OrderService : IOrderService
     public async Task GetTypeMembersDetail_ValidType_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.GetTypeInfo("Order", TypeInfoInclude.members);
+        var result = await _symbolTools.GetTypeInfo(reason: "test", "Order", include: TypeInfoInclude.members);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -482,7 +482,7 @@ public class OrderService : IOrderService
     public async Task GetCallGraph_ValidMethod_ReturnsCallGraph()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCallGraph("Test.cs", "ProcessAsync");
+        var result = await _tools.GetCallGraph(reason: "test", "Test.cs", "ProcessAsync");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -490,7 +490,7 @@ public class OrderService : IOrderService
     public async Task GetCallGraph_NonExistentMethod_ReturnsStructuredError()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCallGraph("Test.cs", "NoSuchMethod99");
+        var result = await _tools.GetCallGraph(reason: "test", "Test.cs", "NoSuchMethod99");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -502,7 +502,7 @@ public class OrderService : IOrderService
     public async Task GetReverseCallGraph_ValidMethod_ReturnsCallGraph()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCallGraph("Test.cs", "GetStatus", "reverse");
+        var result = await _tools.GetCallGraph(reason: "test", "Test.cs", "GetStatus", "reverse");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -510,7 +510,7 @@ public class OrderService : IOrderService
     public async Task GetReverseCallGraph_NonExistentMethod_ReturnsStructuredError()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCallGraph("Test.cs", "NoSuchMethod99", "reverse");
+        var result = await _tools.GetCallGraph(reason: "test", "Test.cs", "NoSuchMethod99", "reverse");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -522,7 +522,7 @@ public class OrderService : IOrderService
     public async Task MoveFileToNamespaceFolder_ValidFile_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.PreviewMoveFileToNamespaceFolder("Test.cs");
+        var result = await _tools.PreviewMoveFileToNamespaceFolder(reason: "test", "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -571,7 +571,7 @@ public class OrderService : IOrderService
     public async Task FindBestInsertionPoint_ValidClass_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.GetBestInsertionPoint("Test.cs", "Order", "method");
+        var result = await _symbolTools.GetBestInsertionPoint(reason: "test", "Test.cs", "Order", "method");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -591,7 +591,7 @@ public class OrderService : IOrderService
     public async Task PreviewRenameImpact_ValidSymbol_ReturnsPreview()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.PreviewRenameImpact("Test.cs", "ProcessAsync");
+        var result = await _symbolTools.PreviewRenameImpact(reason: "test", filepath: "Test.cs", symbolName: "ProcessAsync");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -601,7 +601,7 @@ public class OrderService : IOrderService
     public async Task FindCallersSafe_ValidSymbol_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.FindReferences("ProcessAsync", FindReferencesKind.callers, filepath: "Test.cs");
+        var result = await _symbolTools.FindReferences(reason: "test", "ProcessAsync", FindReferencesKind.callers, filepath: "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -611,7 +611,7 @@ public class OrderService : IOrderService
     public async Task FindImplementationsSafe_ValidInterface_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.FindReferences("IOrderService", FindReferencesKind.implementations, filepath: "Test.cs");
+        var result = await _symbolTools.FindReferences(reason: "test", "IOrderService", FindReferencesKind.implementations, filepath: "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -621,7 +621,7 @@ public class OrderService : IOrderService
     public async Task FindReferences_KindAll_ReturnsBothCallersAndImplementations()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.FindReferences("ProcessAsync", FindReferencesKind.all, filepath: "Test.cs");
+        var result = await _symbolTools.FindReferences(reason: "test", "ProcessAsync", FindReferencesKind.all, filepath: "Test.cs");
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -636,7 +636,7 @@ public class OrderService : IOrderService
     public async Task QuerySymbolRelationships_ObjectCreationsForRealType_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.QuerySymbolRelationships("Order", FindUsagesSearchKind.objectCreations);
+        var result = await _symbolTools.QuerySymbolRelationships(reason: "test", "Order", FindUsagesSearchKind.objectCreations);
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
     }
@@ -645,7 +645,7 @@ public class OrderService : IOrderService
     public async Task QuerySymbolRelationships_ObjectCreationsForMethodName_ReturnsSemanticGuardError()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.QuerySymbolRelationships("ProcessAsync", FindUsagesSearchKind.objectCreations);
+        var result = await _symbolTools.QuerySymbolRelationships(reason: "test", "ProcessAsync", FindUsagesSearchKind.objectCreations);
 
         Assert.That(result.Success, Is.False, "objectCreations against a method name must be rejected, not silently return [].");
         Assert.That(result.Error, Is.Not.Null);
@@ -659,7 +659,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         // "IOrderService" has zero attribute usages, but a real implementor exists (OrderService) —
         // broaden-on-empty should surface that under 'implementorsOf' instead of just returning [].
-        var result = await _symbolTools.QuerySymbolRelationships("IOrderService", FindUsagesSearchKind.attributeUsages);
+        var result = await _symbolTools.QuerySymbolRelationships(reason: "test", "IOrderService", FindUsagesSearchKind.attributeUsages);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Warning, Is.Not.Null.And.Contains("Broadened"));
@@ -670,7 +670,7 @@ public class OrderService : IOrderService
     public async Task QuerySymbolRelationships_EmptyUnderAllKinds_ReturnsPlainNotFoundSignal()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.QuerySymbolRelationships("ThisNameAppearsNowhereInTheSolution", FindUsagesSearchKind.attributeUsages);
+        var result = await _symbolTools.QuerySymbolRelationships(reason: "test", "ThisNameAppearsNowhereInTheSolution", FindUsagesSearchKind.attributeUsages);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Warning, Does.Contain("nothing found under any kind"));

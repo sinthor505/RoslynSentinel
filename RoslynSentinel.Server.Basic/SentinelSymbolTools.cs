@@ -75,6 +75,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.ProjectName)]
     [Description("Locates declaration sites for a symbol by name. Returns SymbolHandles containing projectName, docCommentId, and filePath. exactMatch=false enables prefix/contains search. Filter by containingType or containingNamespace to disambiguate common names. Once found, use GetTypeInfo for a type's hierarchy/members or InspectSymbol for accessibility/attributes/documentation/blast-radius. If you're searching for free text instead (a comment, string literal, or config key rather than a declared symbol), use SearchSolutionText instead — this tool only matches declared symbols, not arbitrary text.")]
     public async Task<ToolResult<object>> LocateSymbol(
+        [Description(ToolParams.Reason)] string reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
         [ExternalInputRequired(DataTag.SymbolKind)] SymbolKindFilter symbolKind = SymbolKindFilter.any,
         [ExternalInputRequired(DataTag.ContainingType)] string? containingType = null,
@@ -83,8 +84,7 @@ public class SentinelSymbolTools
         [ExternalInputRequired(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
@@ -125,14 +125,15 @@ public class SentinelSymbolTools
     [Produces(DataTag.SymbolId)]
     [Description("Inspects a symbol in depth. info → type, kind, accessibility, attributes, documentation. blastRadius → all call sites and affected projects (for a full caller/override breakdown instead of a summary, use FindReferences). Requires a file and a context snippet to resolve the symbol — if you only have a name, use LocateSymbol first to find the declaring file.")]
     public async Task<ToolResult<object>> InspectSymbol(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [ToolOption(ToolOptionTag.Aspect)] InspectSymbolAspect aspect,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default
+        )
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -222,14 +223,14 @@ public class SentinelSymbolTools
     [Produces(DataTag.Report)]
     [Description("Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites (new TypeName(...)), extension methods, types carrying an attribute, or methods by return type. projectName/filepath narrow scope. sortByFrequency=true ranks by count (objectCreations only). If the targeted searchKind returns zero results, automatically broadens to all 6 kinds and reports whatever is found, clearly labeled by kind. For call-site/override queries on a method or property (\"who calls this\", \"who overrides this\"), use FindReferences instead — objectCreations only matches 'new TypeName(...)' expressions and will structurally return [] for a method/property name.")]
     public async Task<ToolResult<object>> QuerySymbolRelationships(
+        [Description(ToolParams.Reason)] string reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string name,
         [ExternalInputRequired(DataTag.SymbolKind)] FindUsagesSearchKind searchKind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.Sort)] bool sortByFrequency = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -321,12 +322,12 @@ public class SentinelSymbolTools
     [Produces(DataTag.StartLine)]
     [Description("Returns the best 1-based line number for inserting a new member of memberKind in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
     public async Task<ToolResult<object>> GetBestInsertionPoint(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContainerName)] string containerName,
         [ExternalInputRequired(DataTag.MemberKind)] string memberKind,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -357,6 +358,7 @@ public class SentinelSymbolTools
         "Resolve the target either by docCommentId+projectName (as returned by LocateSymbol — preferred, unambiguous, no filepath needed) " +
         "or by filepath+symbolName, using contextSnippet/lineBefore/lineAfter to disambiguate if the name appears more than once in the file.")]
     public async Task<ToolResult<object>> PreviewRenameImpact(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Consumes(DataTag.SymbolName)] string? symbolName = null,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
@@ -366,8 +368,7 @@ public class SentinelSymbolTools
         [Description(ToolParams.ProjectName)] string? projectName = null,
         [Description(ToolParams.SessionId)] string sessionId = "",
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath ?? string.Empty, _workspaceManager.GetSolutionRoot());
 
@@ -396,6 +397,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.Report)]
     [Description("Finds call sites and/or implementations for a symbol. kind: callers (call sites only), implementations (overrides/interface implementations only), or all (both, clearly labeled). filepath optional — omit to search by name; supply to pin resolution when the name is ambiguous across files. This is a single-level, flat lookup — for a multi-level call tree (\"who calls the callers of this\", forward or reverse, with depth), use GetCallGraph instead. For a local variable's read/write/capture sites rather than a member's call sites, use TraceVariableLifetime — this tool resolves members, not locals. Before renaming a symbol, PreviewRenameImpact runs the same underlying reference search but summarizes it as affected-file/location counts (plus a test-file flag) instead of a per-location list. For type-relationship queries instead (implementors of an interface, attribute usage, object-creation sites, extension methods, types by attribute, methods by return type), use QuerySymbolRelationships.")]
     public async Task<ToolResult<object>> FindReferences(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
         [Consumes(DataTag.SymbolKind)] FindReferencesKind kind,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
@@ -403,8 +405,7 @@ public class SentinelSymbolTools
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -459,13 +460,13 @@ public class SentinelSymbolTools
     [Produces(DataTag.Report)]
     [Description("Returns type information for a type you already know the name of. If you're not sure the type exists or need to disambiguate a common name, use LocateSymbol first. hierarchy → TypeHierarchyReport (base class chain, interfaces, derived types); members → List<TypeMemberDetail> (all public/protected members); both → object with Hierarchy and Members (default). includeInherited=false excludes inherited members (members and both only). For enums, this is also the tool to view current values: each value appears as a Field member with its explicit/ordinal value inline in Signature (e.g. \"Status.Active = 1\"), and inherited System.Enum/ValueType noise (Parse, GetValues, ToString, ...) is excluded automatically regardless of includeInherited. To change an enum's values (add/remove/reorder), use ModifyEnum.")]
     public async Task<ToolResult<object>> GetTypeInfo(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.DataType)] string typeName,
         [ToolOptionAttribute(ToolOptionTag.Filter)] TypeInfoInclude include = TypeInfoInclude.both,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [ToolOptionAttribute(ToolOptionTag.Filter)] bool includeInherited = true,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         try
         {

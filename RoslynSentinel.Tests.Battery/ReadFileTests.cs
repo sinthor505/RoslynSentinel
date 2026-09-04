@@ -8,8 +8,6 @@ using System.Reflection;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-using RoslynSentinel.Tests;
 using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618
@@ -63,7 +61,7 @@ public class ReadFileTests
     [Test]
     public async Task ReadFile_WholeFile_ReturnsFullSourceAsync()
     {
-        var result = await _tools.ReadFile(_documentPath);
+        var result = await _tools.ReadFile(reason: "test", _documentPath);
 
         Assert.That(result.Success, Is.True);
         var data = result.Data!;
@@ -77,7 +75,7 @@ public class ReadFileTests
     {
         var missingPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "DoesNotExist.cs");
 
-        var result = await _tools.ReadFile(missingPath);
+        var result = await _tools.ReadFile(reason: "test", missingPath);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("FileNotFound"));
@@ -96,7 +94,7 @@ public class ReadFileTests
 
         try
         {
-            var result = await _tools.ReadFile(onDiskOnlyPath);
+            var result = await _tools.ReadFile(reason: "test", onDiskOnlyPath);
 
             Assert.That(result.Success, Is.True, result.Error?.Message);
             Assert.That((string)GetProp(result.Data!, "source")!, Is.EqualTo(content));
@@ -110,7 +108,7 @@ public class ReadFileTests
     [Test]
     public async Task ReadFile_WithLineRange_ReturnsRequestedSliceAsync()
     {
-        var result = await _tools.ReadFile(_documentPath, startLine: 2, endLine: 3);
+        var result = await _tools.ReadFile(reason: "test", _documentPath, startLine: 2, endLine: 3);
 
         Assert.That(result.Success, Is.True);
         var data = result.Data!;
@@ -124,7 +122,7 @@ public class ReadFileTests
     [Test]
     public async Task ReadFile_StartLineBeyondEndOfFile_ReturnsInvalidArgumentAsync()
     {
-        var result = await _tools.ReadFile(_documentPath, startLine: 100, endLine: 200);
+        var result = await _tools.ReadFile(reason: "test", _documentPath, startLine: 100, endLine: 200);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -144,7 +142,7 @@ public class ReadFileTests
         // SolutionPath since the AdhocWorkspace solution here has no FilePath of its own.
         _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
 
-        var result = await _tools.ReadFile(bigDocPath);
+        var result = await _tools.ReadFile(reason: "test", bigDocPath);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.LargeResult, Is.Not.Null);

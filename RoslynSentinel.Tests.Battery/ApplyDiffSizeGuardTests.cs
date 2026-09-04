@@ -64,7 +64,7 @@ public class ApplyDiffSizeGuardTests
 
         var fragment = "using System;\n";
         var result = await tools.ApplyDiff(
-            ChangesetFormat.files, ProposedChangeAction.apply,
+            reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePath, string> { [targetFile] = fragment });
 
         Assert.That(result.Success, Is.False);
@@ -89,7 +89,7 @@ public class ApplyDiffSizeGuardTests
         var commentedOut = string.Join('\n', originalContent.Split('\n').Select(line => "// " + line));
 
         var result = await tools.ApplyDiff(
-            ChangesetFormat.files, ProposedChangeAction.apply,
+            reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePath, string> { [targetFile] = commentedOut });
 
         Assert.That(result.Success, Is.False);
@@ -204,7 +204,7 @@ public class ApplyDiffSizeGuardTests
         var lightlyModified = originalContent + "\n// small trailing comment\n";
 
         var result = await tools.ApplyDiff(
-            ChangesetFormat.files, ProposedChangeAction.apply,
+            reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePath, string> { [targetFile] = lightlyModified });
 
         Assert.That(result.Success, Is.True);
@@ -224,7 +224,7 @@ public class ApplyDiffSizeGuardTests
         var content = "namespace ContosoOrders;\npublic class BrandNewFile { }\n";
 
         var result = await tools.ApplyDiff(
-            ChangesetFormat.files, ProposedChangeAction.apply,
+            reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePath, string> { [newFilePath] = content });
 
         Assert.That(result.Success, Is.True);

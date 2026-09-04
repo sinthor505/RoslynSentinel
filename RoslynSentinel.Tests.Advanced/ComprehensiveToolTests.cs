@@ -1,5 +1,4 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using SentinelModernizationTools = RoslynSentinel.Server.Advanced.SentinelModernizationTools;
@@ -199,7 +198,7 @@ public class ComprehensiveToolTests
     [Test]
     public async Task LoadSolution_NonExistentFile_ReturnsErrorResult()
     {
-        var result = await _workspaceTools.LoadSolution("fake.sln");
+        var result = await _workspaceTools.LoadSolution(reason: "test", "fake.sln");
         Assert.That(result.Success, Is.False, "fake.sln does not exist");
         Assert.That(result.Error?.Message, Is.Not.Null.And.Not.Empty);
     }
@@ -217,7 +216,7 @@ public class ComprehensiveToolTests
     public async Task GetComprehensiveHealthReport_ShouldReturnReport()
     {
         _workspaceManager.SetTestSolution(CreateSolution("public class C {}"));
-        var report = await _intelligenceTools.GetComprehensiveHealthReport();
+        var report = await _intelligenceTools.GetComprehensiveHealthReport(reason: "test");
         Assert.That(report, Is.Not.Null);
     }
 
@@ -256,7 +255,7 @@ public class ComprehensiveToolTests
         // was the root cause behind a live agent skipping OrderStatus.cs entirely while adding
         // summary comments to every other file in a solution.
         SetSource("namespace N;\npublic enum Status\n{\n    Pending,\n    Shipped\n}", "Status.cs");
-        var result = await _workspaceTools.GetFileOutline("Status.cs");
+        var result = await _workspaceTools.GetFileOutline(reason: "test", "Status.cs");
 
         Assert.That(result.Success, Is.True);
         var items = ((FileOutlineResult)result.Data!).Symbols;
@@ -279,7 +278,7 @@ public class ComprehensiveToolTests
             ("Status.cs", "namespace N;\npublic enum Status { Pending, Shipped }")
         ]));
 
-        var result = await _workspaceTools.ListAll();
+        var result = await _workspaceTools.ListAll(reason: "test");
 
         Assert.That(result.Success, Is.True);
         var entries = (List<SolutionSymbolEntry>)result.Data!;
@@ -300,7 +299,7 @@ public class ComprehensiveToolTests
             ("Status.cs", "namespace N;\npublic enum Status { Pending, Shipped }")
         ]));
 
-        var result = await _workspaceTools.ListAll(kind: ListAllKind.method);
+        var result = await _workspaceTools.ListAll(reason: "test", kind: ListAllKind.method);
 
         Assert.That(result.Success, Is.True);
         var entries = (List<SolutionSymbolEntry>)result.Data!;
@@ -313,7 +312,7 @@ public class ComprehensiveToolTests
     {
         SetSource("namespace N;\npublic enum Status { Pending, Shipped }", "Status.cs");
 
-        var result = await _workspaceTools.ListAll(kind: ListAllKind.enumMember);
+        var result = await _workspaceTools.ListAll(reason: "test", kind: ListAllKind.enumMember);
 
         Assert.That(result.Success, Is.True);
         var entries = (List<SolutionSymbolEntry>)result.Data!;

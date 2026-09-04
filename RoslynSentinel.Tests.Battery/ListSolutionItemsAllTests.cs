@@ -38,7 +38,7 @@ public class ListSolutionItemsAllTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var tools = BuildTools(workspaceManager);
 
-        var result = await tools.ListSolutionItems(SolutionItemsKind.all);
+        var result = await tools.ListSolutionItems(reason: "test", SolutionItemsKind.all);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
     }
@@ -51,7 +51,7 @@ public class ListSolutionItemsAllTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var tools = BuildTools(workspaceManager);
 
-        var result = await tools.ListSolutionItems(SolutionItemsKind.all);
+        var result = await tools.ListSolutionItems(reason: "test", SolutionItemsKind.all);
         Assert.That(result.Success, Is.True, result.Error?.Message);
 
         var combined = (SolutionItemsAllResult)result.Data!;
@@ -77,16 +77,16 @@ public class ListSolutionItemsAllTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var tools = BuildTools(workspaceManager);
 
-        var allResult = await tools.ListSolutionItems(SolutionItemsKind.all);
+        var allResult = await tools.ListSolutionItems(reason: "test", SolutionItemsKind.all);
         var combined = (SolutionItemsAllResult)allResult.Data!;
 
-        var projectsResult = await tools.ListSolutionItems(SolutionItemsKind.projects);
+        var projectsResult = await tools.ListSolutionItems(reason: "test", SolutionItemsKind.projects);
         var projectsOnly = (List<ProjectInfoEntry>)projectsResult.Data!;
         Assert.That(combined.Projects.Select(p => p.Name), Is.EquivalentTo(projectsOnly.Select(p => p.Name)));
 
         foreach (var project in projectsOnly)
         {
-            var filesResult = await tools.ListSolutionItems(SolutionItemsKind.files, projectName: project.Name);
+            var filesResult = await tools.ListSolutionItems(reason: "test", SolutionItemsKind.files, projectName: project.Name);
             var filesOnly = (List<string>)filesResult.Data!;
             var detail = combined.ProjectDetails.Single(d => d.ProjectName == project.Name);
             Assert.That(detail.Files, Is.EquivalentTo(filesOnly));

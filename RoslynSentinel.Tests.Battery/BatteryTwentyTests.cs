@@ -56,28 +56,28 @@ public class BatteryTwentyTests
     [Test]
     public async Task Features_List_ReturnsList()
     {
-        var result = await _tools.Features(FeaturesAction.list);
+        var result = await _tools.Features(reason: "test", FeaturesAction.list);
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task Features_UpdateEmpty_ReturnsResult()
     {
-        var result = await _tools.Features(FeaturesAction.update, enabled: new List<KeyValuePair<string, bool>>());
+        var result = await _tools.Features(reason: "test", FeaturesAction.update, enabled: new List<KeyValuePair<string, bool>>());
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task Features_GetEmptyList_ReturnsResult()
     {
-        var result = await _tools.Features(FeaturesAction.get, names: new List<string>());
+        var result = await _tools.Features(reason: "test", FeaturesAction.get, names: new List<string>());
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task Features_GetWithFeatureName_ReturnsResult()
     {
-        var result = await _tools.Features(FeaturesAction.list);
+        var result = await _tools.Features(reason: "test", FeaturesAction.list);
         var features = result.Data as System.Collections.IEnumerable;
         Assert.That(features, Is.Not.Null);
         Assert.Pass("Features list retrieved successfully.");
@@ -89,7 +89,7 @@ public class BatteryTwentyTests
     public async Task List_Projects_WithLoadedSolution_ReturnsList()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ListSolutionItems(SolutionItemsKind.projects);
+        var result = await _tools.ListSolutionItems(reason: "test", SolutionItemsKind.projects);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -97,7 +97,7 @@ public class BatteryTwentyTests
     public async Task List_Projects_NoSolution_ReturnsStructuredError()
     {
         // Tools no longer throw: they return ToolResult with Success=false and a ResultError.
-        var result = await _tools.ListSolutionItems(SolutionItemsKind.projects);
+        var result = await _tools.ListSolutionItems(reason: "test", SolutionItemsKind.projects);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -107,7 +107,7 @@ public class BatteryTwentyTests
     public async Task List_Files_KnownProject_ReturnsFileList()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ListSolutionItems(SolutionItemsKind.files, "TestProj");
+        var result = await _tools.ListSolutionItems(reason: "test", SolutionItemsKind.files, "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -115,7 +115,7 @@ public class BatteryTwentyTests
     public async Task List_Files_UnknownProject_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ListSolutionItems(SolutionItemsKind.files, "NoSuchProject");
+        var result = await _tools.ListSolutionItems(reason: "test", SolutionItemsKind.files, "NoSuchProject");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -126,14 +126,14 @@ public class BatteryTwentyTests
     public async Task List_Dependencies_KnownProject_ReturnsReport()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ListSolutionItems(SolutionItemsKind.dependencies, "TestProj");
+        var result = await _tools.ListSolutionItems(reason: "test", SolutionItemsKind.dependencies, "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task List_SolutionItems_NoSolutionLoaded_ReturnsStructuredError()
     {
-        var result = await _tools.ListSolutionItems(SolutionItemsKind.solutionItems);
+        var result = await _tools.ListSolutionItems(reason: "test", SolutionItemsKind.solutionItems);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -158,7 +158,7 @@ public class BatteryTwentyTests
         {
             _workspaceManager.SolutionPath = slnPath;
 
-            var result = await _tools.ListSolutionItems(SolutionItemsKind.solutionItems);
+            var result = await _tools.ListSolutionItems(reason: "test", SolutionItemsKind.solutionItems);
 
             Assert.That(result.Success, Is.True);
             var items = result.Data as List<SolutionItemFile>;
@@ -187,7 +187,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_LiteralPattern_ReturnsNoWarning()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SearchSolutionText("Order");
+        var result = await _tools.SearchSolutionText(reason: "test", "Order");
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Warning, Is.Null);
@@ -197,7 +197,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_RegexLikePatternWithoutIsRegex_ReturnsWarning()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SearchSolutionText(@"^\s*public enum OrderStatus", searchMode: TextSearchMode.literal);
+        var result = await _tools.SearchSolutionText(reason: "test", @"^\s*public enum OrderStatus", searchMode: TextSearchMode.literal);
 
         Assert.That(result.Success, Is.False, "explicit literal mode must actually search literally, not silently switch to regex, and zero matches is now a failure");
         Assert.That(result.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
@@ -209,7 +209,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_RegexLikePatternWithIsRegex_ReturnsNoWarning()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SearchSolutionText(@"^namespace TestProj", searchMode: TextSearchMode.regex);
+        var result = await _tools.SearchSolutionText(reason: "test", @"^namespace TestProj", searchMode: TextSearchMode.regex);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Warning, Is.Null);
@@ -219,7 +219,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_NoMatches_ReturnsNoMatchesError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SearchSolutionText("ThisPatternDoesNotAppearAnywhere");
+        var result = await _tools.SearchSolutionText(reason: "test", "ThisPatternDoesNotAppearAnywhere");
 
         Assert.That(result.Success, Is.False, "Zero matches should surface as a failure so the protocol-level IsError filter picks it up.");
         Assert.That(result.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
@@ -243,7 +243,7 @@ public class BatteryTwentyTests
         }
         """, "Test.cs");
 
-        var result = await _tools.SearchSolutionText("return a + b");
+        var result = await _tools.SearchSolutionText(reason: "test", "return a + b");
 
         Assert.That(result.Success, Is.True);
         var matches = (System.Collections.Generic.IEnumerable<TextSearchMatch>)result.Data!;
@@ -265,7 +265,7 @@ public class BatteryTwentyTests
         }
         """, "Test.cs");
 
-        var result = await _tools.SearchSolutionText("using System");
+        var result = await _tools.SearchSolutionText(reason: "test", "using System");
 
         Assert.That(result.Success, Is.True);
         var matches = (System.Collections.Generic.IEnumerable<TextSearchMatch>)result.Data!;
@@ -287,7 +287,7 @@ public class BatteryTwentyTests
                 "TestProj", projectCsproj, [("Foo.cs", initialContent, tempFile)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var before = await _tools.SearchSolutionText("Bar");
+            var before = await _tools.SearchSolutionText(reason: "test", "Bar");
             Assert.That(before.Success, Is.True);
             Assert.That(before.WorkspaceVersion, Is.Not.Null);
 
@@ -297,7 +297,7 @@ public class BatteryTwentyTests
                 new Dictionary<FilePath, string> { [tempFile] = updatedContent });
             Assert.That(applyResult.Success, Is.True);
 
-            var after = await _tools.SearchSolutionText("Baz");
+            var after = await _tools.SearchSolutionText(reason: "test", "Baz");
 
             Assert.That(after.Success, Is.True);
             Assert.That(after.WorkspaceVersion, Is.Not.Null);
@@ -315,7 +315,7 @@ public class BatteryTwentyTests
     [Test]
     public async Task LoadSolution_NonExistentPath_ReturnsErrorString()
     {
-        var result = await _tools.LoadSolution("fake_path.sln");
+        var result = await _tools.LoadSolution(reason: "test", "fake_path.sln");
         Assert.That(result.Success, Is.False, "nonexistent solution path should not succeed");
         Assert.That(result.Error?.Message, Is.Not.Null.And.Not.Empty, "should carry an error message");
     }
@@ -334,7 +334,7 @@ public class BatteryTwentyTests
         {
             var wrappedPath = $"  \"{tempDir}\"  ";
 
-            var result = _tools.ListWorkspaceSolutions(wrappedPath);
+            var result = _tools.ListWorkspaceSolutions(reason: "test", wrappedPath);
 
             Assert.That(result.Success, Is.True,
                 "A workspacePath wrapped in quotes/whitespace must still resolve to the real directory.");
@@ -348,7 +348,7 @@ public class BatteryTwentyTests
     [Test]
     public void ListWorkspaceSolutions_UnknownPath_ReturnsInvalidArgument()
     {
-        var result = _tools.ListWorkspaceSolutions(Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_DoesNotExist_" + Guid.NewGuid()));
+        var result = _tools.ListWorkspaceSolutions(reason: "test", Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_DoesNotExist_" + Guid.NewGuid()));
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
@@ -368,7 +368,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
-        var result = await _tools.ApplyDiff(ChangesetFormat.diff, ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
+        var result = await _tools.ApplyDiff(reason: "test", ChangesetFormat.diff, ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -380,7 +380,7 @@ public class BatteryTwentyTests
         {
             [new FilePath("Test.cs")] = SimpleSource + " // changed"
         };
-        var result = await _tools.ApplyDiff(ChangesetFormat.files, ProposedChangeAction.validate, changes: changes);
+        var result = await _tools.ApplyDiff(reason: "test", ChangesetFormat.files, ProposedChangeAction.validate, changes: changes);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -388,9 +388,7 @@ public class BatteryTwentyTests
     public async Task ApplyDiff_Diff_Apply_NonExistentFile_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ApplyDiff(
-            ChangesetFormat.diff, ProposedChangeAction.apply,
-            filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
+        var result = await _tools.ApplyDiff(reason: "test", ChangesetFormat.diff, ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -400,7 +398,7 @@ public class BatteryTwentyTests
     public async Task ApplyDiff_Files_Apply_EmptyChanges_ReturnsResult()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ApplyDiff(ChangesetFormat.files, ProposedChangeAction.apply, changes: new Dictionary<FilePath, string>());
+        var result = await _tools.ApplyDiff(reason: "test", ChangesetFormat.files, ProposedChangeAction.apply, changes: new Dictionary<FilePath, string>());
         Assert.That(result, Is.Not.Null);
     }
 
@@ -410,7 +408,7 @@ public class BatteryTwentyTests
     public async Task RetryFailedChanges_NoFailedChanges_ReturnsResult()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.RetryFailedChanges();
+        var result = await _tools.RetryFailedChanges(reason: "test");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -420,7 +418,7 @@ public class BatteryTwentyTests
     public async Task GetDiagnostics_File_ValidFile_ReturnsSummary()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.GetDiagnostics(ToolScope.file, "Test.cs");
+        var result = await _tools.GetDiagnostics(reason: "test", ToolScope.file, "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -430,7 +428,7 @@ public class BatteryTwentyTests
     public async Task SafeDelete_ValidPosition_ReturnsString()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", projectName: "", docCommentId: "", line: 1, column: 1);
+        var result = await _tools.SafeDeleteUnusedSymbol(reason: "test", "Test.cs", projectName: "", docCommentId: "", line: 1, column: 1);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -459,7 +457,7 @@ public class Order
     {
         SetSource(DeadMethodSource, "Test.cs");
 
-        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", symbolName: "BuildInternalDebugLabel");
+        var result = await _tools.SafeDeleteUnusedSymbol(reason: "test", "Test.cs", symbolName: "BuildInternalDebugLabel");
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
     }
@@ -469,7 +467,7 @@ public class Order
     {
         SetSource(DeadMethodSource, "Test.cs");
 
-        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", symbolName: "BuildInternalDebugLabel",
+        var result = await _tools.SafeDeleteUnusedSymbol(reason: "test", "Test.cs", symbolName: "BuildInternalDebugLabel",
             contextSnippet: "private string BuildInternalDebugLabel()");
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
@@ -480,7 +478,7 @@ public class Order
     {
         SetSource(DeadMethodSource, "Test.cs");
 
-        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", symbolName: "NoSuchMethod");
+        var result = await _tools.SafeDeleteUnusedSymbol(reason: "test", "Test.cs", symbolName: "NoSuchMethod");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.Message, Does.Contain("NoSuchMethod"));
@@ -495,7 +493,7 @@ public class Order
         SetSource(DeadMethodSource, "Test.cs");
 
         var docCommentId = "M:TestProj.Order.BuildInternalDebugLabel";
-        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", projectName: "TestProj", docCommentId: docCommentId);
+        var result = await _tools.SafeDeleteUnusedSymbol(reason: "test", "Test.cs", projectName: "TestProj", docCommentId: docCommentId);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
     }
@@ -506,7 +504,7 @@ public class Order
     public async Task CreateProject_NewProjectName_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.CreateProject("NewTestProject");
+        var result = await _tools.CreateProject(reason: "test", "NewTestProject");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -516,7 +514,7 @@ public class Order
     public async Task GetDiagnostics_Project_KnownProject_ReturnsSummary()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.GetDiagnostics(ToolScope.project, "TestProj");
+        var result = await _tools.GetDiagnostics(reason: "test", ToolScope.project, "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -524,7 +522,7 @@ public class Order
     public async Task GetDiagnostics_Solution_ReturnsSummary()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.GetDiagnostics(ToolScope.solution);
+        var result = await _tools.GetDiagnostics(reason: "test", ToolScope.solution);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -534,7 +532,7 @@ public class Order
     public async Task Build_QuickBuild_CleanSource_ReturnsSuccess()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.Build(BuildVerifyLevel.quickBuild);
+        var result = await _tools.Build(reason: "test", BuildVerifyLevel.quickBuild);
 
         Assert.That(result.Success, Is.True);
         var data = (BuildResult)result.Data!;
@@ -547,7 +545,7 @@ public class Order
     public async Task Build_QuickBuild_SourceWithCompileError_ReturnsBuildFailure()
     {
         SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
-        var result = await _tools.Build(BuildVerifyLevel.quickBuild);
+        var result = await _tools.Build(reason: "test", BuildVerifyLevel.quickBuild);
 
         Assert.That(result.Success, Is.True, "The tool call itself succeeds; the build outcome is carried in Data.BuildSucceeded.");
         var data = (BuildResult)result.Data!;
@@ -567,7 +565,7 @@ public class Order
         ]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _tools.Build(BuildVerifyLevel.quickBuild);
+        var result = await _tools.Build(reason: "test", BuildVerifyLevel.quickBuild);
 
         Assert.That(result.Success, Is.True);
         var data = (BuildResult)result.Data!;
@@ -584,7 +582,7 @@ public class Order
     public async Task GetDiagnostics_VerifyQuickBuild_AttachesBuildVerification()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.GetDiagnostics(ToolScope.solution, verify: BuildVerifyLevel.quickBuild);
+        var result = await _tools.GetDiagnostics(reason: "test", ToolScope.solution, verify: BuildVerifyLevel.quickBuild);
 
         Assert.That(result.Success, Is.True);
         var data = (DiagnosticSummary)result.Data!;
@@ -596,7 +594,7 @@ public class Order
     public async Task GetWorkspaceHealth_VerifyQuickBuild_AttachesBuildVerification()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.GetWorkspaceHealth(verify: BuildVerifyLevel.quickBuild);
+        var result = await _tools.GetWorkspaceHealth(reason: "test", verify: BuildVerifyLevel.quickBuild);
 
         Assert.That(result.Success, Is.True);
         var data = (WorkspaceHealthReport)result.Data!;
@@ -609,7 +607,7 @@ public class Order
     public async Task SplitProjectByFolder_NonExistentFolder_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SplitProjectByFolder("TestProj", "NonExistentFolder", "NewProject");
+        var result = await _tools.SplitProjectByFolder(reason: "test", "TestProj", "NonExistentFolder", "NewProject");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);

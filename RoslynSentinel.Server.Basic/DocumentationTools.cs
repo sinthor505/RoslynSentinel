@@ -159,13 +159,13 @@ public class DocumentationTools
     [Produces(DataTag.Documentation)]
     [Description("Unified accessor for project doc files under docs/. plan → docs/plans/; handoff → docs/handoffs/; completed_work → docs/completed/ (append only); documentation → docs/documentation/; state → docs/migration-state.yaml (name ignored). name required for all file-based operations. content required for write/append.")]
     public object ProjectDoc(
+        [Description(ToolParams.Reason)] string reason,
         DocAction action,
         DocType docType,
         string? name = null,
         string? content = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
         try

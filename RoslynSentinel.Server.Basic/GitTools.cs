@@ -327,6 +327,7 @@ public class GitTools
           noCommit: true → stage the revert without committing; call commit to finalise.
         """)]
     public async Task<object> Git(
+        [Description(ToolParams.Reason)] string reason,
         GitOperation operation,
         // log
         int count = 20,
@@ -342,8 +343,7 @@ public class GitTools
         string? commitHash = null,
         bool noCommit = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         var ct = cancellationToken;
         var gitRoot = TryGetGitRoot(out var rootError);

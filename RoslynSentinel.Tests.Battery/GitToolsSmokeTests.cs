@@ -83,7 +83,7 @@ public class GitToolsSmokeTests
     public async Task Git_Status_RespondsWithinBoundAsync()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var result = await _gitTools.Git(GitOperation.status);
+        var result = await _gitTools.Git(reason: "test", GitOperation.status);
         sw.Stop();
 
         Assert.That(result, Is.Not.Null);
@@ -94,7 +94,7 @@ public class GitToolsSmokeTests
     public async Task Git_Log_RespondsWithinBoundAsync()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var result = await _gitTools.Git(GitOperation.log, count: 5);
+        var result = await _gitTools.Git(reason: "test", GitOperation.log, count: 5);
         sw.Stop();
 
         Assert.That(result, Is.Not.Null);
@@ -107,7 +107,7 @@ public class GitToolsSmokeTests
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "hello again");
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var result = await _gitTools.Git(GitOperation.diff);
+        var result = await _gitTools.Git(reason: "test", GitOperation.diff);
         sw.Stop();
 
         Assert.That(result, Is.Not.Null);

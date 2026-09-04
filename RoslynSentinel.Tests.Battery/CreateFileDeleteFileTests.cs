@@ -42,7 +42,7 @@ public class CreateFileDeleteFileTests
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewFile.cs");
         var content = "public class NewFile { }";
 
-        var result = await tools.CreateFile(newFile, content);
+        var result = await tools.CreateFile(reason: "test", newFile, content);
 
         Assert.That(result.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.True);
@@ -60,7 +60,7 @@ public class CreateFileDeleteFileTests
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(existingFile);
 
-        var result = await tools.CreateFile(existingFile, "replacement content");
+        var result = await tools.CreateFile(reason: "test", existingFile, "replacement content");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -77,7 +77,7 @@ public class CreateFileDeleteFileTests
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewSubdir", "Nested.cs");
 
-        var result = await tools.CreateFile(newFile, "public class Nested { }");
+        var result = await tools.CreateFile(reason: "test", newFile, "public class Nested { }");
 
         Assert.That(result.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.True);
@@ -98,10 +98,10 @@ public class CreateFileDeleteFileTests
         var newFile = Path.Combine(fixture.SolutionDirectory, "Notes.txt");
         var content = "plain text notes, not a Roslyn document";
 
-        var createResult = await tools.CreateFile(newFile, content);
+        var createResult = await tools.CreateFile(reason: "test", newFile, content);
         Assert.That(createResult.Success, Is.True);
 
-        var readResult = await tools.ReadFile(newFile);
+        var readResult = await tools.ReadFile(reason: "test", newFile);
 
         Assert.That(readResult.Success, Is.True, readResult.Error?.Message);
         var data = readResult.Data!;
@@ -120,7 +120,7 @@ public class CreateFileDeleteFileTests
         var newFile = Path.Combine(fixture.SolutionDirectory, "ToDelete.cs");
         await fixture.AddFileToSolution(workspaceManager, "ToDelete.cs", "public class ToDelete { }");
 
-        var result = await tools.DeleteFile(newFile);
+        var result = await tools.DeleteFile(reason: "test", newFile);
 
         Assert.That(result.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.False);
@@ -136,7 +136,7 @@ public class CreateFileDeleteFileTests
 
         var missingFile = Path.Combine(fixture.SolutionDirectory, "DoesNotExist.cs");
 
-        var result = await tools.DeleteFile(missingFile);
+        var result = await tools.DeleteFile(reason: "test", missingFile);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -154,7 +154,7 @@ public class CreateFileDeleteFileTests
         var content = "public class Undoable { }";
         await fixture.AddFileToSolution(workspaceManager, "Undoable.cs", content);
 
-        var deleteResult = await tools.DeleteFile(newFile);
+        var deleteResult = await tools.DeleteFile(reason: "test", newFile);
         Assert.That(deleteResult.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.False);
 
@@ -164,7 +164,7 @@ public class CreateFileDeleteFileTests
         var blobFile = Directory.EnumerateFiles(blobDir, "delete_file_*").OrderByDescending(f => f).First();
         var changeId = Path.GetFileNameWithoutExtension(blobFile).Split('_').Last();
 
-        var undoResult = await tools.UndoLastApply(changeId);
+        var undoResult = await tools.UndoLastApply(reason: "test", changeId);
 
         Assert.That(undoResult.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.True);
@@ -184,7 +184,7 @@ public class CreateFileDeleteFileTests
         // reloading/clearing drift, so DeleteFile sees it as externally modified since last sync.
         await fixture.ModifyFileInSolution(workspaceManager, Path.GetRelativePath(fixture.SolutionDirectory, targetFile), await File.ReadAllTextAsync(targetFile) + "\n// drift\n", reloadSolution: false);
 
-        var result = await tools.DeleteFile(targetFile);
+        var result = await tools.DeleteFile(reason: "test", targetFile);
 
         Assert.That(result.Success, Is.False);
         Assert.That(File.Exists(targetFile), Is.True);

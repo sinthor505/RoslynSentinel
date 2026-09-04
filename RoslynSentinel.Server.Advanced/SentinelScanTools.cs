@@ -99,13 +99,13 @@ public class SentinelScanTools
     detectorId values and scope hints: call describe_scan_detectors(domain?) for the full list.
     """)]
     public async Task<ToolResult<object>> RunScanDetector(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.DetectorName)] DetectorId detector,
         [ExternalInputRequired(DataTag.Scope)] string scope,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Consumes(DataTag.ProjectName, required: false)] string? scopeName = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         //string? filePath = scope == "file" ? scopeName : null;
         string? projectName = scope == "project" ? scopeName : null;
@@ -457,11 +457,11 @@ public class SentinelScanTools
         Returns the catalogue of available scan detectors. domain filters by domain: async | concurrency | config | convention | correctness | dead-code | misc | performance | security | structure. detector returns info for a single detector by exact id. Both omitted → all 94 detectors. Each entry includes: Id, Domain, ScopeHint (file | project | solution | any combinations), Description.
         """)]
     public Task<ToolResult<object>> DescribeScanDetectors(
+        [Description(ToolParams.Reason)] string reason,
         [ToolOption(ToolOptionTag.Domain)] string? domain = null,
         [ToolOption(ToolOptionTag.Detector)] string? detector = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
 
@@ -499,12 +499,12 @@ public class SentinelScanTools
         Analyses a method from multiple angles. aspect values: controlFlow (return paths, throw sites, infinite loop detection → ControlFlowSummary), dataFlow (unassigned reads, written/read variables, closure captures → DataFlowSummary), pathCoverage (execution paths for test coverage → PathCoverageReport), unreachableCode (statements after unconditional return/throw → List<string>).
         """)]
     public async Task<ToolResult<object>> AnalyzeMethod(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [ToolOption(ToolOptionTag.Aspect)] string aspect,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -719,12 +719,12 @@ public class SentinelScanTools
     [Produces(DataTag.ApiBaseline)]
     [Description("Compares a previously captured API surface baseline against current code and reports breaking changes: removed types, removed/renamed members, signature changes. baseline: the list returned by get_public_api_surface. Scope with projectName/filePath to match the baseline's original scope.")]
     public async Task<ToolResult<object>> ScanBreakingChanges(
+        [Description(ToolParams.Reason)] string reason,
        [ExternalInputRequired(DataTag.ApiBaseline)] List<PublicApiMember> baseline,
        [Consumes(DataTag.ProjectName)] string? projectName = null,
        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
        // RequestContext<CallToolRequestParams> requestParams = null,
-       CancellationToken cancellationToken = default,
-       [Description(ToolParams.Reason)] string? reason = null)
+       CancellationToken cancellationToken = default)
     {
         try
         {
@@ -756,12 +756,12 @@ public class SentinelScanTools
         Finds duplicate statement sequences within the methods of a single class using structural hashing (SyntaxKind-based — matches regardless of variable names or literal values). Returns clone groups with: StatementCount, HasControlFlowExit (flag only, does not block finding), SnippetPreview, CapturedVariables (would become parameters if extracted), ProducedVariables (would need to be returned if extracted), and Occurrences (method, start line, end line, file). minStatements=3 for aggressive detection, 6+ for substantial clones only.
         """)]
     public async Task<ToolResult<object>> ScanDuplicateBlocksInClass(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ClassName)] string className,
         [ToolOption(ToolOptionTag.Filter)] int minStatements = 4,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -789,6 +789,7 @@ public class SentinelScanTools
     [Produces(DataTag.Report)]
     [Description("Returns the public API surface of a project. persistBaseline=false (default) → full List<ApiSurfaceEntry> with signatures, virtuality, and XML docs (for SDK documentation/API review). persistBaseline=true → compact List<PublicApiMember> baseline for passing to scan_breaking_changes. filePath scopes to a single file (persistBaseline=true only). includeMethods/includeProperties/includeTypes filter output (persistBaseline=false only). Returns a resultId and writes scan results to disk when output result payload exceeds the inline size threshold. Use get_large_result(resultId) to retrieve the results.")]
     public async Task<ToolResult<object>> GetPublicApiSurface(
+        [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.ProjectName, required: true)] string? projectName = null,
         [ToolOption(ToolOptionTag.PersistBaseline)] bool persistBaseline = false,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
@@ -796,8 +797,7 @@ public class SentinelScanTools
         [ToolOption(ToolOptionTag.IncludeProperties)] bool includeProperties = true,
         [ToolOption(ToolOptionTag.IncludeTypes)] bool includeTypes = true,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         try
         {

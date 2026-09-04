@@ -9,7 +9,6 @@ using System.Text.Json;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
 using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618
@@ -79,7 +78,7 @@ public class GetOperationDetailTests
     [Test]
     public async Task GetOperationDetail_NoBlobForChangeId_ReturnsInvalidArgumentAsync()
     {
-        var result = await _tools.GetOperationDetail("nonexistent-change-id");
+        var result = await _tools.GetOperationDetail(reason: "test", changeId: "nonexistent-change-id");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -95,7 +94,7 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "Bar.cs"), Outcome = ItemRecordOutcome.Failed, BeforeSource = (string?)null },
         });
 
-        var result = await _tools.GetOperationDetail(changeId);
+        var result = await _tools.GetOperationDetail(reason: "test", changeId: changeId);
 
         Assert.That(result.Success, Is.True);
         var data = (OperationDetailResult)result.Data!;
@@ -113,7 +112,7 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "Bar.cs"), Outcome = ItemRecordOutcome.Failed, BeforeSource = (string?)null },
         });
 
-        var result = await _tools.GetOperationDetail(changeId, filter: "fail");
+        var result = await _tools.GetOperationDetail(reason: "test", changeId, filter: "fail");
 
         Assert.That(result.Success, Is.True);
         var data = (OperationDetailResult)result.Data!;
@@ -131,7 +130,7 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "Bar.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
         });
 
-        var result = await _tools.GetOperationDetail(changeId, filter: "file:Foo.cs");
+        var result = await _tools.GetOperationDetail(reason: "test", changeId, filter: "file:Foo.cs");
 
         Assert.That(result.Success, Is.True);
         var data = (OperationDetailResult)result.Data!;
@@ -150,13 +149,13 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "C.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
         });
 
-        var firstPage = await _tools.GetOperationDetail(changeId, maxItems: 2);
+        var firstPage = await _tools.GetOperationDetail(reason: "test", changeId, maxItems: 2);
         var firstData = (OperationDetailResult)firstPage.Data!;
         Assert.That(firstData.Items, Has.Count.EqualTo(2));
         Assert.That(firstPage.HasMorePages, Is.True);
         Assert.That(firstData.NextOffset, Is.EqualTo(2));
 
-        var secondPage = await _tools.GetOperationDetail(changeId, maxItems: 2, offset: firstData.NextOffset!.Value);
+        var secondPage = await _tools.GetOperationDetail(reason: "test", changeId, maxItems: 2, offset: firstData.NextOffset!.Value);
         var secondData = (OperationDetailResult)secondPage.Data!;
 
         Assert.That(secondPage.Success, Is.True);
@@ -175,7 +174,7 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "A.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
         });
 
-        var result = await _tools.GetOperationDetail(changeId, offset: 10);
+        var result = await _tools.GetOperationDetail(reason: "test", changeId, offset: 10);
 
         Assert.That(result.Success, Is.True);
         var data = (OperationDetailResult)result.Data!;
@@ -192,7 +191,7 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "Foo.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
         });
 
-        var result = await _tools.GetOperationDetail(changeId, filter: "bogus");
+        var result = await _tools.GetOperationDetail(reason: "test", changeId, filter: "bogus");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));

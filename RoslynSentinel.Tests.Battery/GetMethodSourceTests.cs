@@ -6,8 +6,6 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-using RoslynSentinel.Tests;
 using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618
@@ -58,7 +56,7 @@ public class GetMethodSourceTests
     [Test]
     public async Task GetMethodSource_ExistingMethod_ReturnsSourceAndSignatureAsync()
     {
-        var result = await _tools.GetMethodSource(_documentPath, "Bar");
+        var result = await _tools.GetMethodSource(reason: "test", _documentPath, "Bar");
 
         Assert.That(result.Success, Is.True);
         var data = (MethodSourceResult)result.Data!;
@@ -83,7 +81,7 @@ public class GetMethodSourceTests
             });
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _tools.GetMethodSource(ctorDocPath, "WithCtor");
+        var result = await _tools.GetMethodSource(reason: "test", ctorDocPath, "WithCtor");
 
         Assert.That(result.Success, Is.True);
         var data = (MethodSourceResult)result.Data!;
@@ -95,7 +93,7 @@ public class GetMethodSourceTests
     {
         var missingPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "DoesNotExist.cs");
 
-        var result = await _tools.GetMethodSource(missingPath, "Bar");
+        var result = await _tools.GetMethodSource(reason: "test", missingPath, "Bar");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("FileNotFound"));
@@ -104,7 +102,7 @@ public class GetMethodSourceTests
     [Test]
     public async Task GetMethodSource_MethodNameNotInFile_ReturnsMethodNotFoundAsync()
     {
-        var result = await _tools.GetMethodSource(_documentPath, "NoSuchMethod");
+        var result = await _tools.GetMethodSource(reason: "test", _documentPath, "NoSuchMethod");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("MethodNotFound"));
@@ -113,7 +111,7 @@ public class GetMethodSourceTests
     [Test]
     public async Task GetMethodSource_MethodNameCaseMismatch_FallsBackToCaseInsensitiveMatchAsync()
     {
-        var result = await _tools.GetMethodSource(_documentPath, "bar");
+        var result = await _tools.GetMethodSource(reason: "test", _documentPath, "bar");
 
         Assert.That(result.Success, Is.True);
         var data = (MethodSourceResult)result.Data!;
@@ -135,7 +133,7 @@ public class GetMethodSourceTests
         // from SolutionPath since the AdhocWorkspace solution here has no FilePath of its own.
         _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
 
-        var result = await _tools.GetMethodSource(bigDocPath, "Huge");
+        var result = await _tools.GetMethodSource(reason: "test", bigDocPath, "Huge");
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.LargeResult, Is.Not.Null);

@@ -105,7 +105,7 @@ public class GetLargeResultTests
     [Test, CancelAfter(5000)]
     public async Task T1_GetLargeResult_NoResultIdNoFilePath_ReturnsError()
     {
-        var result = await _workspaceTools.GetLargeResult();
+        var result = await _workspaceTools.GetLargeResult(reason: "test");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -120,7 +120,7 @@ public class GetLargeResultTests
     [Test, CancelAfter(5000)]
     public async Task T2_GetLargeResult_UnknownResultId_ReturnsError()
     {
-        var result = await _workspaceTools.GetLargeResult(resultId: "00000000000000000000000000000000");
+        var result = await _workspaceTools.GetLargeResult(reason: "test", resultId: "00000000000000000000000000000000");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -137,7 +137,7 @@ public class GetLargeResultTests
         var findings = MakeMigrationFindings(5);
         WriteLargeResultFile(findings, ResultWrapperType.MigrationCandidateFindingList, resultId);
 
-        var result = await _workspaceTools.GetLargeResult(resultId: resultId, limit: 3, offset: 0);
+        var result = await _workspaceTools.GetLargeResult(reason: "test", resultId: resultId, limit: 3, offset: 0);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(5), "TotalRecords must match the item count in the file.");
@@ -163,7 +163,7 @@ public class GetLargeResultTests
         var entries = MakeApiSurfaceEntries(4);
         WriteLargeResultFile(entries, ResultWrapperType.ApiSurfaceEntryList, resultId);
 
-        var result = await _workspaceTools.GetLargeResult(resultId: resultId, limit: 10, offset: 0);
+        var result = await _workspaceTools.GetLargeResult(reason: "test", resultId: resultId, limit: 10, offset: 0);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(4));
@@ -185,7 +185,7 @@ public class GetLargeResultTests
         var findings = MakeMigrationFindings(2);
         var filePath = WriteLargeResultFile(findings, ResultWrapperType.MigrationCandidateFindingList, resultId);
 
-        var result = await _workspaceTools.GetLargeResult(filepath: filePath);
+        var result = await _workspaceTools.GetLargeResult(reason: "test", filepath: filePath);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(2));
@@ -203,7 +203,7 @@ public class GetLargeResultTests
         var outsidePath = Path.Combine(_tempDir, "result_20260101T000000Z_fakeid.json");
         await File.WriteAllTextAsync(outsidePath, "{}");
 
-        var result = await _workspaceTools.GetLargeResult(filepath: outsidePath);
+        var result = await _workspaceTools.GetLargeResult(reason: "test", filepath: outsidePath);
 
         Assert.That(result.Success, Is.False,
             "A result file outside .roslynsentinel/largeresults/ must be rejected.");

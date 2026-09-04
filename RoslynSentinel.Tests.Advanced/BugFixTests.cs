@@ -740,7 +740,7 @@ public class Calculator
     public int Add(int a, int b) => a + b;
     public int Multiply(int x, int y) => x * y;
 
-    public void Test()
+    public void TestMethod()
     {
         var r1 = Add(1, 2);
         var r2 = Multiply(r1, 3);
@@ -749,7 +749,7 @@ public class Calculator
 
         SetSource(code, "Calculator.cs");
 
-        var result = await _analysisEngine.GenerateCallTreeAsync("Calculator.cs", "Test", depth: 2);
+        var result = await _analysisEngine.GenerateCallTreeAsync("Calculator.cs", "TestMethod", depth: 2);
 
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return call tree");
     }
@@ -2826,10 +2826,10 @@ public class Processor
         public async Task BUG_55_GeneratedEqualsCompiles()
         {
             // BUG-55: Generated equals method has syntax errors
-            SetSource("public class Test { public string Name { get; set; } }");
+            SetSource("public class TestClass { public string Name { get; set; } }");
 
             // Use GenerateToStringAsync as a stand-in for generated output validation
-            var result = await _codeGenerationEngine.GenerateToStringAsync("Test.cs", "Test");
+            var result = await _codeGenerationEngine.GenerateToStringAsync("Test.cs", "TestClass");
 
             Assert.That(result, Is.Not.Null, "Should generate non-null toString override");
         }

@@ -66,7 +66,7 @@ public class ListProjectFrameworkTargetsTests
             new[] { ("Foo.cs", "public class Foo { }\n", docPath) });
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _tools.ListProjectFrameworkTargets();
+        var result = await _tools.ListProjectFrameworkTargets(reason: "test");
 
         Assert.That(result.Success, Is.True);
         var data = (List<ProjectFrameworkSummary>)result.Data!;
@@ -87,7 +87,7 @@ public class ListProjectFrameworkTargetsTests
             new[] { ("Foo.cs", "public class Foo { }\n", docPath) });
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _tools.ListProjectFrameworkTargets();
+        var result = await _tools.ListProjectFrameworkTargets(reason: "test");
 
         Assert.That(result.Success, Is.True);
         var data = (List<ProjectFrameworkSummary>)result.Data!;
@@ -108,7 +108,7 @@ public class ListProjectFrameworkTargetsTests
             new[] { ("Foo.cs", "public class Foo { }\n", docPath) });
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _tools.ListProjectFrameworkTargets();
+        var result = await _tools.ListProjectFrameworkTargets(reason: "test");
 
         Assert.That(result.Success, Is.True);
         var data = (List<ProjectFrameworkSummary>)result.Data!;

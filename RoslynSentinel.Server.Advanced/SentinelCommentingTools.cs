@@ -56,6 +56,7 @@ public class SentinelCommentingTools
         means call BulkComment again with the same scope to continue.
         """)]
     public async Task<ToolResult<CommentingResult>> BulkComment(
+        [Description(ToolParams.Reason)] string reason,
         ToolScope scope = ToolScope.solution,
         string? projectName = null,
         string? filePath = null,
@@ -63,8 +64,7 @@ public class SentinelCommentingTools
         int maxMembers = DefaultMaxMembers,
         int maxRuntimeSeconds = 0,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description(ToolParams.Reason)] string? reason = null)
+        CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
         {

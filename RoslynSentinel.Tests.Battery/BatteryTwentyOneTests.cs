@@ -490,7 +490,7 @@ public class Worker
     {
         const string src = "namespace TestProj; public class Flags { public bool IsActive; public void Toggle() { IsActive = !IsActive; } }";
         SetSource(src, "Flags.cs");
-        var result = await _tools.InvertBooleanLogic("Flags.cs", "IsActive");
+        var result = await _tools.InvertBooleanLogic(reason: "test", "Flags.cs", "IsActive");
         Assert.That(result, Is.Not.Null);
     }
 
