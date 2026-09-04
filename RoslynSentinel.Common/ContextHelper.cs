@@ -316,7 +316,7 @@ public static class ContextHelper
     /// </summary>
     public static T WithAddedByComment<T>(this T member, string toolName) where T : MemberDeclarationSyntax
     {
-        var comment = SyntaxFactory.Comment($"// Added by {toolName}");
+        var comment = SyntaxFactory.Comment($"// Added by {toolName} (expected - used for diagnostics)");
         var newLeadingTrivia = member.GetLeadingTrivia()
             .Insert(0, comment)
             .Insert(1, SyntaxFactory.CarriageReturnLineFeed);
