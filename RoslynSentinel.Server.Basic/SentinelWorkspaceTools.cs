@@ -344,20 +344,43 @@ public class SentinelWorkspaceTools
     // current directory, --base-repo-dir (if set), or the server's install directory.
     [McpServerTool(Name = "LoadSolution")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, omit baseRepoDir and let the server resolve it against its configured base directory — only pass baseRepoDir if you have independently confirmed that exact directory exists on this host; a fabricated/guessed baseRepoDir is rejected with an error rather than silently ignored.")]
-    public async Task<ToolResult<object>> LoadSolution([Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath, [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call. Must exist on this host — omit this entirely rather than guessing a value.")] string? baseRepoDir = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, omit baseRepoDir and let the server resolve it against its configured base directory — only pass baseRepoDir if you have independently confirmed that exact directory exists on this host; a fabricated/guessed baseRepoDir is rejected with an error rather than silently ignored. If this exact solution is already loaded, this is a no-op by default (no re-read from disk) — pass forceReload:true to discard in-memory state and re-open it from disk.")]
+    public async Task<ToolResult<object>> LoadSolution([Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath, [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call. Must exist on this host — omit this entirely rather than guessing a value.")] string? baseRepoDir = null, [Description("If the given solutionPath is already loaded, false (default) returns immediately without touching the workspace. true forces a full reload from disk, discarding any in-memory state (equivalent to today's unconditional LoadSolution behavior). Has no effect when a different or no solution is currently loaded — that always loads normally regardless of this flag.")] bool forceReload = false, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         try
         {
-            await _workspaceManager.LoadSolutionAsync(solutionPath, baseRepoDir, cancellationToken: cancellationToken);
-            var solutionRoot = _workspaceManager.GetSolutionRoot();
-            if (solutionRoot != null)
+            // Compared regardless of forceReload so the success message below can correctly say
+            // "reloaded" vs "loaded" — only the short-circuit-and-skip below is gated on
+            // forceReload being false. A relative path or a baseRepoDir override never matches here
+            // (IsAlreadyLoadedPath requires solutionPath to be rooted), always falling through to a
+            // real load: ResolveSolutionPath's multi-candidate disk search (private, deliberately
+            // not duplicated here) is the only reliable way to know what a relative path resolves to.
+            var wasAlreadyLoaded = IsAlreadyLoadedPath(solutionPath, out var currentPath);
+            if (!forceReload && wasAlreadyLoaded)
             {
                 return new ToolResult<object>()
                 {
                     Success = true,
-                    Data = $"Solution loaded: {solutionPath}{BuildPostLoadHint(solutionRoot)}"
+                    Data = $"Solution '{currentPath}' is already loaded — no changes made. Pass forceReload:true to discard in-memory state and re-open it from disk."
+                };
+            }
+
+            await _workspaceManager.LoadSolutionAsync(solutionPath, baseRepoDir, cancellationToken: cancellationToken);
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            if (solutionRoot != null)
+            {
+                // "reloaded" only when this was genuinely the same solution as before — forceReload
+                // on a first load or a switch to a different solution is just an ordinary load.
+                var isReload = forceReload && wasAlreadyLoaded;
+                var verb = isReload ? "reloaded" : "loaded";
+                var reloadNote = isReload
+                    ? " In-memory analysis state was discarded and rebuilt from what's on disk now — any edits made by tools since the last load are reflected; anything else is unaffected."
+                    : "";
+                return new ToolResult<object>()
+                {
+                    Success = true,
+                    Data = $"Solution {verb}: {solutionPath}.{reloadNote}{BuildPostLoadHint(solutionRoot)}"
                 };
             }
             else
@@ -385,6 +408,24 @@ public class SentinelWorkspaceTools
                 Error = new ResultError(codeAndMessage.Item1, $"LoadSolution '{solutionPath}' {codeAndMessage.Item2}")
             };
         }
+    }
+
+    // True only when solutionPath is rooted AND string-matches (case-insensitively, via FilePath's
+    // canonicalized separators) the currently tracked SolutionPath. A relative path never matches —
+    // ResolveSolutionPath's private multi-candidate disk search is the only reliable way to know
+    // what a relative path resolves to, and duplicating it here isn't worth it for a fast-path check.
+    private bool IsAlreadyLoadedPath(string solutionPath, out string? currentPath)
+    {
+        currentPath = _workspaceManager.SolutionPath;
+        if (currentPath is null || !Path.IsPathRooted(solutionPath))
+        {
+            return false;
+        }
+
+        var solutionRootForCompare = _workspaceManager.GetSolutionRoot();
+        var requested = new FilePath(solutionPath, solutionRootForCompare);
+        var current = new FilePath(currentPath, solutionRootForCompare);
+        return string.Equals(requested.Absolute, current.Absolute, StringComparison.OrdinalIgnoreCase);
     }
 
     // Subdirectories ProjectDoc reads/writes under docs/, paired with the docType value that
