@@ -33,6 +33,27 @@ namespace RoslynSentinel.Tests.ModelEval;
 [TestFixture]
 public class PlanImplementVerifyAgentTests
 {
+    // Standalone fragment (not a full sentence on its own — designed to be spliced into a prompt via
+    // {N} in string.Format) clarifying the one case "do not touch unrelated code" left ambiguous:
+    // the bug's OWN now-superseded remnants (e.g. a vestigial local variable or an old helper method
+    // that only the buggy code path called) are not "unrelated" just because they look unused after
+    // the fix. Observed 2026-09-04: 4/5 passing runs in a batch left a dead `var rewritten =
+    // fileText.Replace(...)` line (2/5 also left ReformatWholeFile itself unused) — AssertFixApplied
+    // never required its removal, and deliberately so, per that method's own comment: leaving
+    // ReformatWholeFile as dead code was previously judged a VALID fix (real-world precedent commit
+    // 8a8963d). This fragment is therefore advisory only — added to PlanImplementVerifyAgentTests'
+    // prompts as an exploratory wording change, NOT paired with any new mechanical assertion, and NOT
+    // added to WholeFileRewriteAgentTests' prompts/AssertFixApplied, which keep tolerating dead code
+    // by design. Kept as its own field, not folded into the templates directly, so either phase's
+    // prompt can include or omit it independently (pass it into that phase's string.Format call, or
+    // pass "" to omit) without duplicating the surrounding prompt text.
+    private const string DeadCodeCleanupGuidance =
+        "This is different from code that becomes unused BECAUSE of your fix — e.g. a local " +
+        "variable that no longer has any use once you change what a method returns, or a private " +
+        "helper method that only the old, buggy code path called. That code is part of the bug you " +
+        "are fixing, not unrelated to it: remove it as part of this same change rather than leaving " +
+        "dead code behind.";
+
     // Same task framing as PlanOnlyAgentTests.PlanOnlyUserPromptTemplate — kept as a separate copy
     // here (rather than a cross-file reference) since this phase's caller lives in a different test
     // class and the two prompts are free to diverge if either phase's test needs tuning without
@@ -67,7 +88,7 @@ public class PlanImplementVerifyAgentTests
         Respond with your plan: the root cause, exactly which method(s)/file(s) you would touch,
         and the specific content you would place in `BlockConverter.cs` (write out the actual code
         you'd use for the reused pattern, not just a description of it). Do not touch code unrelated
-        to the bug.
+        to the bug. {1}
         """;
 
     // Splices the PREVIOUS PHASE'S OWN plan text (produced by this same model, moments earlier, in
@@ -94,7 +115,7 @@ public class PlanImplementVerifyAgentTests
         ## Constraints
 
         Do not modify any method, field, or class that is not directly involved in this fix, even
-        ones that look unused or unrelated — leave everything else exactly as you found it.
+        ones that look unused or unrelated — leave everything else exactly as you found it. {2}
 
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
@@ -358,7 +379,7 @@ public class PlanImplementVerifyAgentTests
         var fixtureCorePath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core");
         var cancellationToken = TestContext.CurrentContext.CancellationToken;
 
-        var planPrompt = string.Format(PlanUserPromptTemplate, fixtureCorePath);
+        var planPrompt = string.Format(PlanUserPromptTemplate, fixtureCorePath, DeadCodeCleanupGuidance);
         var planResult = await RunPhaseAsync(
             "plan", AgentSystemPrompts.CodingAgent, planPrompt, blockMutatingTools: true, turnCap: 15, cancellationToken);
 
@@ -370,7 +391,7 @@ public class PlanImplementVerifyAgentTests
         Assert.That(planText, Is.Not.Empty,
             $"Plan phase converged but produced no readable plan text. Transcript: {planResult.TranscriptPath}");
 
-        var implementPrompt = string.Format(ImplementUserPromptTemplate, fixtureCorePath, planText);
+        var implementPrompt = string.Format(ImplementUserPromptTemplate, fixtureCorePath, planText, DeadCodeCleanupGuidance);
         // Turn cap raised 25 -> 35 alongside the 5->10 min wall-clock cap (2026-09-02, see
         // docs/current/project_planimplementverify_phase_transition_gap.md): 2 of the 5 known
         // wrong-workspace-stumble runs stopped on TurnCapExceeded specifically, not just
