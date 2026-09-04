@@ -9,6 +9,12 @@
       SizeThreshold    - Model_SizeThresholdSweep ([Explicit]). Sweeps unrelated-method
                           counts x repeats against SizeGraduatedReproducer fixture variants.
                           -Size sets ROSLYNSENTINEL_MODELEVAL_SIZES (single value, e.g. 60).
+      LiteralSteps     - Model_FixesWholeFileRewriteBug_UsingExistingHelperPattern (runs by
+                          default). Level-2 prompt: names the buggy method AND the sibling
+                          fix pattern to reuse, plus scripted steps - the least ambiguous
+                          prompt in the ladder. Use this (not MinimalGuidance) when the goal
+                          is isolating tool-use/execution behavior from planning/bug-location,
+                          since the model isn't asked to find or scope the fix itself.
       MinimalGuidance  - Model_FixesWholeFileRewriteBug_MinimalGuidance (runs by default).
                           Level-3 symptom-only prompt for the whole-file-rewrite bug fix.
       MinimalGuidanceDisambiguated - Same fixture/assertions as MinimalGuidance, but the
@@ -59,7 +65,8 @@
     a sanitized version of that URL.
 
 .PARAMETER Test
-    SizeThreshold | MinimalGuidance. Required.
+    SizeThreshold | LiteralSteps | MinimalGuidance | MinimalGuidanceDisambiguated | PlanOnly |
+    PlanThenExecute | ScriptedPlan | PlanImplementVerify. Required.
 
 .PARAMETER Size
     SizeThreshold only: single value for ROSLYNSENTINEL_MODELEVAL_SIZES (default: 60).
@@ -108,7 +115,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify')]
     [string]$Test,
 
     [Parameter(Position = 2)]
@@ -144,6 +151,7 @@ else {
 
 $testNames = @{
     'SizeThreshold'                 = 'Model_SizeThresholdSweep'
+    'LiteralSteps'                  = 'Model_FixesWholeFileRewriteBug_UsingExistingHelperPattern'
     'MinimalGuidance'               = 'Model_FixesWholeFileRewriteBug_MinimalGuidance'
     'MinimalGuidanceDisambiguated'  = 'Model_FixesWholeFileRewriteBug_MinimalGuidanceDisambiguated'
     'PlanOnly'                      = 'Model_PlansWholeFileRewriteFix_PrefersCallingHelper'
