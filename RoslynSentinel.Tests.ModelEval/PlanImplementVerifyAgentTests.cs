@@ -373,6 +373,27 @@ public class PlanImplementVerifyAgentTests
             : (string.IsNullOrWhiteSpace(finalTurn.ModelMessage.Content) ? finalTurn.ModelMessage.ReasoningContent : finalTurn.ModelMessage.Content) ?? string.Empty;
     }
 
+    // Observed 2026-09-04: a model that never reaches a real conclusion can keep "reasoning" until
+    // cut off, re-deriving and re-stating the same paragraph verbatim dozens of times before
+    // truncating mid-sentence — ExtractFinalMessage's ReasoningContent fallback has no way to tell
+    // that apart from a genuine (if verbose) plan, and happily spliced 43KB of one such loop into
+    // the next phase's prompt. Paragraph-level exact-duplicate detection catches this cheaply: a
+    // real plan or verdict doesn't repeat whole paragraphs, a stuck model reliably does.
+    private static bool LooksLikeRepetitionLoop(string text)
+    {
+        var paragraphs = text
+            .Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(p => p.Length >= 80) // skip short lines/headers, which legitimately repeat (e.g. "## Constraints")
+            .ToList();
+        if (paragraphs.Count < 4)
+        {
+            return false;
+        }
+
+        var duplicateCount = paragraphs.Count - paragraphs.Distinct(StringComparer.Ordinal).Count();
+        return duplicateCount >= 3;
+    }
+
     [Test]
     public async Task Model_FixesWholeFileRewriteBug_PlanImplementVerify()
     {
@@ -390,6 +411,10 @@ public class PlanImplementVerifyAgentTests
         var planText = ExtractFinalMessage(planResult);
         Assert.That(planText, Is.Not.Empty,
             $"Plan phase converged but produced no readable plan text. Transcript: {planResult.TranscriptPath}");
+        Assert.That(LooksLikeRepetitionLoop(planText), Is.False,
+            $"Plan phase produced a repetition loop, not a usable plan (the model re-stated the same " +
+            $"paragraph verbatim instead of concluding) — refusing to splice this into the implement " +
+            $"prompt. Transcript: {planResult.TranscriptPath}");
 
         var implementPrompt = string.Format(ImplementUserPromptTemplate, fixtureCorePath, planText, DeadCodeCleanupGuidance);
         // Turn cap raised 25 -> 35 alongside the 5->10 min wall-clock cap (2026-09-02, see
@@ -413,6 +438,10 @@ public class PlanImplementVerifyAgentTests
             $"Transcript: {verifyResult.TranscriptPath}");
 
         var verifyText = ExtractFinalMessage(verifyResult);
+        Assert.That(LooksLikeRepetitionLoop(verifyText), Is.False,
+            $"Verify phase produced a repetition loop, not a real verdict (the model re-stated the same " +
+            $"paragraph verbatim instead of concluding) — its text cannot be trusted to score for " +
+            $"VERIFIED: PASS/FAIL. Transcript: {verifyResult.TranscriptPath}");
 
         // Exact tag, not sentiment scoring — see AgentSystemPrompts.CodeReviewer's doc comment for
         // why: free-text scoring of words like "correct"/"looks good" is exactly the kind of
