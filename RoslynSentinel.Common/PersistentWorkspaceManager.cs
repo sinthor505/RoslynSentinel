@@ -622,6 +622,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         return;
                     }
 
+                    // Throws here are common if the watcher checks are fill in response to the server writing it, and does not indicate a problem. The exception will be caught and handled.
                     var onDiskContent = File.Exists(e.FullPath) ? File.ReadAllText(e.FullPath) : null;
                     var onDiskHash = onDiskContent is null ? null : ComputeContentHash(onDiskContent);
                     if (_logger.IsEnabled(LogLevel.Debug))

@@ -830,14 +830,14 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "MethodSignature")]
     [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view a method's parameters (general-purpose — not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). OPERATION add: appends a new parameter to the end of the parameter list (paramName, paramType required; defaultValue is an optional literal/expression, e.g. \"null\" or \"3\", making the parameter backward-compatible with existing call sites). OPERATION remove: only the LAST parameter can be removed (paramName must match it) — this is a deliberate restriction, since removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely; call sites passing the removed argument positionally are updated automatically, but a call site using named arguments or one that can't be safely re-parsed causes the whole operation to be refused with no changes made. OPERATION view: lists current parameters (name, type, default value); no changes made, paramName/paramType not required. For overloaded methods, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId for add/remove, parameter list for view.")]
+    [Description("Add, remove, or view a method's parameters (general-purpose — not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). OPERATION add: appends a new parameter to the end of the parameter list (paramName, paramType required; defaultValue is an optional literal/expression, e.g. \"3\", making the parameter backward-compatible with existing call sites — for a default of the null literal specifically, use nullDefault:true instead of defaultValue:\"null\", since some MCP clients corrupt the literal string \"null\" in transit; see nullDefault's own description). OPERATION remove: only the LAST parameter can be removed (paramName must match it) — this is a deliberate restriction, since removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely; call sites passing the removed argument positionally are updated automatically, but a call site using named arguments or one that can't be safely re-parsed causes the whole operation to be refused with no changes made. OPERATION view: lists current parameters (name, type, default value); no changes made, paramName/paramType not required. For overloaded methods, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId for add/remove, parameter list for view.")]
     public async Task<ToolResult<object>> MethodSignature(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
         [Consumes(DataTag.MethodName, required: true)] string methodName,
         [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
         [Consumes(DataTag.DataType, required: false)] string? paramType = null,
-        [Description("Optional literal or expression for the new parameter's default value (e.g. \"null\", \"3\", \"\\\"foo\\\"\"). add only — omit for a required parameter.")][ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
+        [Description("Optional literal or expression for the new parameter's default value (e.g. \"3\", \"\\\"foo\\\"\"). add only — omit for a required parameter. Do NOT pass the literal string \"null\" here to get a null default — use nullDefault:true instead (some MCP clients corrupt the string \"null\" in transit, silently producing a required parameter instead of one defaulted to null).")][ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
@@ -845,7 +845,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description("add only. Sets the new parameter's default to the null literal directly, bypassing defaultValue entirely. Use this instead of defaultValue:\"null\" — see defaultValue's description for why. Mutually exclusive with defaultValue.")] bool nullDefault = false)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -868,11 +869,21 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "MethodSignature: paramType is required for operation 'add'.") };
             }
 
+            if (nullDefault && defaultValue != null)
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "MethodSignature: nullDefault and defaultValue are mutually exclusive — pass only one.") };
+            }
+
+            if (nullDefault && operation != AddRemoveViewAction.add)
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: nullDefault is only valid for operation 'add', not '{operation}'.") };
+            }
+
             DocumentEditResult updated;
             Dictionary<FilePath, string> changes;
             if (operation == AddRemoveViewAction.add)
             {
-                updated = await _refactoringEngine.AddMethodParameterAsync(filePath, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                updated = await _refactoringEngine.AddMethodParameterAsync(filePath, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken, nullDefault);
                 if (RequireUpdatedText(updated, "MethodSignature", filePath) is { } addGuardResult)
                     return addGuardResult;
                 changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
@@ -896,7 +907,7 @@ public class SentinelRefactoringTools
             }
 
             var description = operation == AddRemoveViewAction.add
-                ? $"Added parameter '{paramType} {paramName}{(defaultValue != null ? $" = {defaultValue}" : "")}' to '{methodName}' in {Path.GetFileName(filePath)}."
+                ? $"Added parameter '{paramType} {paramName}{(nullDefault ? " = null" : defaultValue != null ? $" = {defaultValue}" : "")}' to '{methodName}' in {Path.GetFileName(filePath)}."
                 : $"Removed parameter '{paramName}' from '{methodName}' in {Path.GetFileName(filePath)}, updating {changes.Count - 1} call site(s).";
             var apply = await ValidateAndApplyAsync(changes, description, "MethodSignature", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)

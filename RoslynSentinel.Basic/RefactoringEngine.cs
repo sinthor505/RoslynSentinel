@@ -4029,9 +4029,26 @@ public class RefactoringEngine
     /// with no default is required at every call site (an intentional break the caller opted
     /// into, same as ConstructorParameter's add), while an added parameter with a default is
     /// backward-compatible with zero call-site changes.
+    ///
+    /// nullDefault bypasses defaultValue entirely and forces the default straight to a null
+    /// literal — see anthropics/claude-code#81911: some MCP clients serialize the literal string
+    /// "null" as an actual JSON null before it ever reaches this method, so defaultValue:"null"
+    /// can silently arrive here as a C# null (the same as "no default"), producing a required
+    /// parameter instead of one defaulted to null. nullDefault:true sidesteps that entirely since
+    /// it never depends on a string surviving the trip.
     /// </summary>
-    public async Task<DocumentEditResult> AddMethodParameterAsync(FilePath filePath, string methodName, string paramName, string paramType, string? defaultValue = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddMethodParameterAsync(FilePath filePath, string methodName, string paramName, string paramType, string? defaultValue = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, bool nullDefault = false)
     {
+        if (nullDefault && defaultValue != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: nullDefault and defaultValue are mutually exclusive — pass only one."
+            };
+        }
+
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -4092,7 +4109,11 @@ public class RefactoringEngine
         }
 
         var newParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName)).WithType(SyntaxFactory.ParseTypeName(paramType).WithTrailingTrivia(SyntaxFactory.Space));
-        if (defaultValue != null)
+        if (nullDefault)
+        {
+            newParam = newParam.WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)));
+        }
+        else if (defaultValue != null)
         {
             newParam = newParam.WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.ParseExpression(defaultValue)));
         }
