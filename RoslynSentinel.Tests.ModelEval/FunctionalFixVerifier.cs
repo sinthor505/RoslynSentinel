@@ -45,6 +45,28 @@ internal static class FunctionalFixVerifier
                 $"'{assemblyPath}'. Build output:\n{buildOutput}", assemblyPath);
         }
 
+        string result;
+        var loadContextRef = InvokeInCollectibleContext(assemblyPath, fileText, className, out result);
+
+        // AssemblyLoadContext.Unload() only requests collection — it does not synchronously
+        // release the mmap'd file handle on the .dll. The caller's TearDown deletes this same
+        // fixture directory moments later, and without waiting here that delete can lose the
+        // race and throw UnauthorizedAccessException on the still-locked file (observed
+        // masking the real pass/fail result in 4/5 runs of a batch, all AFTER a successful
+        // invoke). Polling GC + WaitForPendingFinalizers until the weak ref dies makes the
+        // unload actually complete before this method returns.
+        for (var i = 0; i < 10 && loadContextRef.IsAlive; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+
+        return result;
+    }
+
+    private static WeakReference InvokeInCollectibleContext(
+        string assemblyPath, string fileText, string className, out string result)
+    {
         var loadContext = new AssemblyLoadContext("FunctionalFixVerifier", isCollectible: true);
         try
         {
@@ -62,7 +84,7 @@ internal static class FunctionalFixVerifier
 
             try
             {
-                return (string)method.Invoke(instance, [fileText, className])!;
+                result = (string)method.Invoke(instance, [fileText, className])!;
             }
             catch (TargetInvocationException ex)
             {
@@ -75,6 +97,8 @@ internal static class FunctionalFixVerifier
         {
             loadContext.Unload();
         }
+
+        return new WeakReference(loadContext);
     }
 
     private static async Task<string> RunDotnetBuildAsync(string csprojPath, CancellationToken cancellationToken)
