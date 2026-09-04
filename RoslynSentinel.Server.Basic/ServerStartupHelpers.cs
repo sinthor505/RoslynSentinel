@@ -1,13 +1,9 @@
 // ServerStartupHelpers.cs v1
 using System.Diagnostics;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-
-using ModelContextProtocol.Server;
 
 using Serilog;
 using Serilog.Extensions.Logging;
@@ -233,52 +229,6 @@ public static class ServerStartupHelpers
         }
     }
 
-    // ── Enforce reason as required in the exposed schema ──────────────────────
-
-    /// <summary>
-    /// Marks the optional "reason" parameter as required in every registered tool's exposed
-    /// JSON schema, without changing its C# signature (still <c>string? reason = null</c> —
-    /// see docs/current/plan-reason-parameter-rollout-v1.md). Mutates each tool's
-    /// <see cref="ModelContextProtocol.Protocol.Tool.InputSchema"/> in place; must run after
-    /// the host is built (so all <see cref="McpServerTool"/> singletons are resolvable) and
-    /// before the server starts serving requests.
-    /// </summary>
-    public static void RequireReasonParameter(IServiceProvider services)
-    {
-        foreach (var tool in services.GetServices<McpServerTool>())
-        {
-            var schemaElement = tool.ProtocolTool.InputSchema;
-
-            JsonNode? schemaNode;
-            try
-            {
-                schemaNode = JsonNode.Parse(schemaElement.GetRawText());
-            }
-            catch (JsonException)
-            {
-                continue;
-            }
-
-            if (schemaNode is not JsonObject schemaObject ||
-                schemaObject["properties"] is not JsonObject properties ||
-                !properties.ContainsKey("reason"))
-            {
-                continue;
-            }
-
-            var required = schemaObject["required"] as JsonArray;
-            if (required is not null && required.Any(n => (string?)n == "reason"))
-            {
-                continue;
-            }
-
-            required ??= [];
-            required.Add("reason");
-            schemaObject["required"] = required;
-
-            tool.ProtocolTool.InputSchema = JsonSerializer.Deserialize<JsonElement>(schemaObject.ToJsonString());
-        }
-    }
     // ── Startup log line ─────────────────────────────────────────────────────
 
     /// <summary>

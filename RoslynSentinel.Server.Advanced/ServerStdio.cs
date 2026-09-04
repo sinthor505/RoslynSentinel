@@ -95,7 +95,6 @@ namespace RoslynSentinel.Server.Advanced
                 var logger = host.Services.GetRequiredService<ILogger<ServerStdio>>();
 
                 ServerStartupHelpers.SmokeResolveToolTypes(host.Services, ActiveToolTypes);
-                ServerStartupHelpers.RequireReasonParameter(host.Services);
 
                 host.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger, baseRepoDirectory);
                 SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
