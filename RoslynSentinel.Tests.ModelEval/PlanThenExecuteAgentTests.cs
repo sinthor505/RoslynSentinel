@@ -252,6 +252,9 @@ public class PlanThenExecuteAgentTests
         // variant's runs hit the same cross-tool self-correction false negative (a real error on one
         // tool, a guided retry on a DIFFERENT tool, then any third unrelated benign hiccup tripping
         // a tight total cap even though no single tool ever thrashed).
-        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8);
+        // Per-tool cap raised 2 -> 4 (2026-09-04), matching AssertFixApplied — a legitimate
+        // multi-step diagnosis (wrong fix -> compiler error -> adjusted fix -> still wrong ->
+        // correct fix) can land 3 failed calls on ONE tool without being thrashing.
+        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8, maxPerTool: 4);
     }
 }

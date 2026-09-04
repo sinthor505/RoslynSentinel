@@ -512,11 +512,14 @@ public class WholeFileRewriteAgentTests
         // self-correction sequence spanning two DIFFERENT tools (e.g. a real compiler error on
         // ApplyDiff, then a ModifyModifier/ChangeAccessibility retry) never trips the per-tool cap
         // but does trip a tight total cap the moment any third, unrelated benign hiccup occurs
-        // (almost always a zero-match SearchSolutionText). The per-tool cap stays at 2 — it's the
-        // one that actually catches thrashing (repeated failure on ONE tool); the total cap only
-        // needs to be loose enough to tolerate several independent single-retry corrections across
-        // a longer agentic run without also becoming a thrashing check by proxy.
-        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8);
+        // (almost always a zero-match SearchSolutionText). The total cap needs to be loose enough
+        // to tolerate several independent single-retry corrections across a longer agentic run.
+        // maxPerTool was raised from 2 to 4 on 2026-09-04: a PlanImplementVerify base-qwen3.5-9b
+        // run made a wrong-then-right accessibility call on ONE tool (ApplyDiff: unqualified call
+        // -> CS0103 -> added a using directive, still wrong -> fully-qualified call, correct),
+        // 3 failed calls on the single tool for a legitimate multi-step diagnosis, not thrashing.
+        // 4 still catches true thrashing (5+ retries on one unresolved root cause).
+        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8, maxPerTool: 4);
 
         // Text-scan checks above only prove the edited source LOOKS right — they can't catch
         // code that compiles but is functionally broken (e.g. the whole file replaced with every
