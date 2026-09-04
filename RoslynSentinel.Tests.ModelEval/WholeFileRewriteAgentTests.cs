@@ -152,10 +152,11 @@ public class WholeFileRewriteAgentTests
         even ones that look unused, unrelated, or like dead code to you.
 
         If the reusable pattern is a "find and replace a block, re-indenting only that block"
-        helper, call it exactly once on the original, unmodified text, passing it both the old and
-        new block content — do not call `string.Replace` (or similar) yourself first and then pass
-        the ALREADY-replaced text into the helper along with the old block content, since the old
-        block no longer exists in that text at that point and the helper will fail to find it.
+        helper: locate that helper and call it directly, exactly once, passing it the original,
+        unmodified text plus the old and new block content. Leave the input text itself unmodified
+        before calling the helper — the helper is the only thing that should ever change it. It
+        needs the old block content to still be present in the text you pass it, so it can find
+        and replace it.
 
         Before making any tool call that edits a file, first write out your complete plan as plain
         text: the root cause, exactly which method(s)/file(s) you will modify, and the specific
