@@ -87,6 +87,7 @@ public class ServerStdio
             var logger = host.Services.GetRequiredService<ILogger<ServerStdio>>();
 
             ServerStartupHelpers.SmokeResolveToolTypes(host.Services, ActiveToolTypes);
+            ServerStartupHelpers.RequireReasonParameter(host.Services);
 
             host.Services.WarmupAndAutoLoadBasic(solutionPath, logger, baseRepoDirectory);
             SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);

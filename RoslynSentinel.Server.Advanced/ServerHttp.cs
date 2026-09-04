@@ -55,6 +55,7 @@ public class ServerHttp
         mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes);
 
         var app = builder.Build();
+        ServerStartupHelpers.RequireReasonParameter(app.Services);
         app.MapMcp("/mcp");
 
         var logger = app.Services.GetRequiredService<ILoggerFactory>()
