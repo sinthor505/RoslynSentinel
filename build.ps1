@@ -309,7 +309,7 @@ function Invoke-VSCodeStdioRebuild {
 
     $previousEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    & dotnet build $vscodeProject -c Release -o $vscodeOutDir --nologo -v quiet 2>&1 | Out-Null
+    & dotnet build $vscodeProject -c Debug -o $vscodeOutDir --nologo -v quiet 2>&1 | Out-Null
     $buildExit = $LASTEXITCODE
     $ErrorActionPreference = $previousEap
 
