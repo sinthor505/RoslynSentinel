@@ -202,7 +202,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetCallGraph")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Builds a call graph for a method. direction: forward (what the method calls → CallGraphNode tree), reverse (who calls this method → ReverseCallGraphNode tree), tree (markdown call-tree string). maxDepth defaults to 3.")]
+    [Description("Builds a call graph for a method. direction: forward (what the method calls → CallGraphNode tree), reverse (who calls this method → ReverseCallGraphNode tree), tree (markdown call-tree string). maxDepth defaults to 3. For a single-level, flat list of callers instead of a multi-level tree, use FindReferences(kind: callers) — cheaper when you don't need depth beyond direct callers.")]
     public async Task<ToolResult<object>> GetCallGraph(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
@@ -226,7 +226,7 @@ public class SentinelIntelligenceTools
                         Success = false,
                         Error = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                             "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
-                            "Use get_document_outline to list available methods in the file.")
+                            "Use GetFileOutline to list available methods in the file.")
                     };
                 }
                 return new ToolResult<object>
@@ -245,7 +245,7 @@ public class SentinelIntelligenceTools
                         Success = false,
                         Error = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                         "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
-                        "Use get_document_outline to list available methods in the file.")
+                        "Use GetFileOutline to list available methods in the file.")
                     };
                 }
                 return new ToolResult<object>
@@ -314,7 +314,7 @@ public class SentinelIntelligenceTools
     [McpServerTool(Name = "TraceVariableLifetime")]
     [Produces(DataTag.Report)]
     [Description("""
-        Traces a variable's complete lifetime from declaration through every read, write, ref/out pass, return, and closure capture, across all code paths (loops, conditionals, try/catch) in the enclosing scope. lineNumber: 1-based line of the declaration (disambiguates same-name variables). Returns: TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned, IsCapturedInClosure, and Accesses list with Line, Column, AccessKind (Declaration/Read/Write/Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.
+        Traces a variable's complete lifetime from declaration through every read, write, ref/out pass, return, and closure capture, across all code paths (loops, conditionals, try/catch) in the enclosing scope. For a local variable or parameter only — for a method/property/field's usages instead, use FindReferences. lineNumber: 1-based line of the declaration (disambiguates same-name variables). Returns: TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned, IsCapturedInClosure, and Accesses list with Line, Column, AccessKind (Declaration/Read/Write/Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.
         """)]
     public async Task<ToolResult<object>> TraceVariableLifetime(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
