@@ -104,7 +104,8 @@ public class SentinelScanTools
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Consumes(DataTag.ProjectName, required: false)] string? scopeName = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         //string? filePath = scope == "file" ? scopeName : null;
         string? projectName = scope == "project" ? scopeName : null;
@@ -459,7 +460,8 @@ public class SentinelScanTools
         [ToolOption(ToolOptionTag.Domain)] string? domain = null,
         [ToolOption(ToolOptionTag.Detector)] string? detector = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         _ = cancellationToken;
 
@@ -501,7 +503,8 @@ public class SentinelScanTools
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [ToolOption(ToolOptionTag.Aspect)] string aspect,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -720,7 +723,8 @@ public class SentinelScanTools
        [Consumes(DataTag.ProjectName)] string? projectName = null,
        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
        // RequestContext<CallToolRequestParams> requestParams = null,
-       CancellationToken cancellationToken = default)
+       CancellationToken cancellationToken = default,
+       [Description(ToolParams.Reason)] string? reason = null)
     {
         try
         {
@@ -756,7 +760,8 @@ public class SentinelScanTools
         [Consumes(DataTag.ClassName)] string className,
         [ToolOption(ToolOptionTag.Filter)] int minStatements = 4,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -791,7 +796,8 @@ public class SentinelScanTools
         [ToolOption(ToolOptionTag.IncludeProperties)] bool includeProperties = true,
         [ToolOption(ToolOptionTag.IncludeTypes)] bool includeTypes = true,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         try
         {

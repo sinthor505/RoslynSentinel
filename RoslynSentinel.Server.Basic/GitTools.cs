@@ -342,7 +342,8 @@ public class GitTools
         string? commitHash = null,
         bool noCommit = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         var ct = cancellationToken;
         var gitRoot = TryGetGitRoot(out var rootError);

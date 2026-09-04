@@ -74,4 +74,9 @@ public static class ToolParams
 
     public const string DiagnosticScope =
         "\"file\" (scopeName = filePath) | \"project\" (scopeName = projectName) | \"solution\" (scopeName ignored)";
+
+    // Transcript review
+    public const string Reason =
+        "Optional. A brief note on why you're calling this tool right now — helps when reviewing " +
+        "agent transcripts later. Not validated or acted on.";
 }

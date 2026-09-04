@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
@@ -81,7 +81,7 @@ public class SentinelIntelligenceTools
         [ToolOption(ToolOptionTag.Timeout)] int timeoutSeconds = 25,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default
-        )
+, [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
@@ -111,7 +111,8 @@ public class SentinelIntelligenceTools
     public async Task<ToolResult<object>> GetSolutionMetrics(
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         try
         {
@@ -139,7 +140,8 @@ public class SentinelIntelligenceTools
     public async Task<ToolResult<object>> GetCodeInventory(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -174,7 +176,8 @@ public class SentinelIntelligenceTools
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.Filter)] string? lifetimeFilter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
         try
@@ -206,7 +209,8 @@ public class SentinelIntelligenceTools
         [ToolOption(ToolOptionTag.Direction)] string direction = "forward",
         [ToolOption(ToolOptionTag.MaxDepth)] int maxDepth = 3,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -282,7 +286,8 @@ public class SentinelIntelligenceTools
     public async Task<ToolResult<string>> PreviewMoveFileToNamespaceFolder(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -316,7 +321,8 @@ public class SentinelIntelligenceTools
         [Consumes(DataTag.SymbolName)] string variableName,
         [Consumes(DataTag.StartLine)] int lineNumber,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 

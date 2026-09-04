@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
@@ -83,7 +83,8 @@ public class SentinelSymbolTools
         [ExternalInputRequired(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
@@ -130,7 +131,8 @@ public class SentinelSymbolTools
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -226,7 +228,8 @@ public class SentinelSymbolTools
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.Sort)] bool sortByFrequency = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         try
         {
@@ -319,7 +322,8 @@ public class SentinelSymbolTools
         [Consumes(DataTag.ContainerName)] string containerName,
         [ExternalInputRequired(DataTag.MemberKind)] string memberKind,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         _ = cancellationToken;
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -359,7 +363,8 @@ public class SentinelSymbolTools
         [Description(ToolParams.ProjectName)] string? projectName = null,
         [Description(ToolParams.SessionId)] string sessionId = "",
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath ?? string.Empty, _workspaceManager.GetSolutionRoot());
 
@@ -395,7 +400,8 @@ public class SentinelSymbolTools
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         try
         {
@@ -455,7 +461,8 @@ public class SentinelSymbolTools
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [ToolOptionAttribute(ToolOptionTag.Filter)] bool includeInherited = true,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         try
         {

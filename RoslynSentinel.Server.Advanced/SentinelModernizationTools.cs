@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
@@ -66,7 +66,8 @@ public class SentinelModernizationTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string boolName,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 

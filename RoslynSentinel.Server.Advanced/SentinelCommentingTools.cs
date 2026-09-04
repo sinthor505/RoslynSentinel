@@ -63,7 +63,8 @@ public class SentinelCommentingTools
         int maxMembers = DefaultMaxMembers,
         int maxRuntimeSeconds = 0,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         if (_workspaceManager.CurrentSolution == null)
         {

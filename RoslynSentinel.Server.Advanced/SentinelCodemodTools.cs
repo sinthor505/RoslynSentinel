@@ -120,7 +120,8 @@ public class SentinelCodemodTools
         [ExternalInputRequired(DataTag.LibraryMode)] bool libraryMode = true,
         [ToolOption(ToolOptionTag.Preview)] bool preview = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         try
         {
@@ -402,7 +403,8 @@ public class SentinelCodemodTools
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         [ExternalInputRequired(DataTag.SymbolName)] string lockFieldName = "_lock",
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         try
         {
@@ -774,7 +776,8 @@ public class SentinelCodemodTools
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         try
         {
@@ -1126,7 +1129,8 @@ public class SentinelCodemodTools
         [ExternalInputRequired(DataTag.Framework)] string framework = "NUnit",
         [ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         try
         {

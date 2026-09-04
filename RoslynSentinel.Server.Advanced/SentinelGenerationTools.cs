@@ -39,6 +39,7 @@ public class SentinelGenerationTools
         [ExternalInputRequired(DataTag.Json)] string json,
         [ExternalInputRequired(DataTag.ClassName)] string rootClassName,
         [ExternalInputRequired(DataTag.Namespace)] string @namespace
+, [Description(ToolParams.Reason)] string? reason = null
         // RequestContext<CallToolRequestParams> requestParams = null,
         // CancellationToken cancellationToken = default
         )
@@ -61,7 +62,8 @@ public class SentinelGenerationTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.ClassName)] string controllerName,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -94,7 +96,8 @@ public class SentinelGenerationTools
     public async Task<string> GenerateDefaultConfigJson(
         [Consumes(DataTag.ProjectName, required: true)] string projectName,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         var projectExists = _workspaceManager.CurrentSolution?.Projects
             .Any(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? false;
@@ -140,7 +143,8 @@ public class SentinelGenerationTools
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 

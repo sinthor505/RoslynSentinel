@@ -62,7 +62,8 @@ public class SentinelQualityTools
     public ToolOptionsResult DescribeAdvancedToolOptions(
         [ToolOption(ToolOptionTag.ToolName, required: true)] string toolName,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         _ = cancellationToken;
         return toolName switch
@@ -97,7 +98,8 @@ public class SentinelQualityTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -127,7 +129,8 @@ public class SentinelQualityTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -165,7 +168,8 @@ public class SentinelQualityTools
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         if (_logger.IsEnabled(LogLevel.Information))
@@ -206,7 +210,8 @@ public class SentinelQualityTools
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 

@@ -164,7 +164,8 @@ public class DocumentationTools
         string? name = null,
         string? content = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         _ = cancellationToken;
         try

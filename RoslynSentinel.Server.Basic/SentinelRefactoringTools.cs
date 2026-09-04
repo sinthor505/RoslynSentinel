@@ -154,7 +154,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
@@ -241,7 +242,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -303,7 +305,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -330,7 +333,7 @@ public class SentinelRefactoringTools
                 var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (string.IsNullOrEmpty(result.UpdatedText))
                 {
-                    string reason = result.Outcome switch
+                    string errorReason = result.Outcome switch
                     {
                         EditOutcome.DocumentNotFound => $"Member: document '{filePath}' not found in the workspace.",
                         EditOutcome.SourceInvalid => $"Member: newMemberSource for '{memberName}' is not a valid member declaration. " +
@@ -338,7 +341,7 @@ public class SentinelRefactoringTools
                         EditOutcome.TargetNotFound => $"Member: member '{memberName}' not found in '{filePath}'.",
                         _ => $"Member: no changes produced for '{memberName}' in '{filePath}' ({result.Outcome}). {result.Message}"
                     };
-                    return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, reason) };
+                    return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, errorReason) };
                 }
 
                 var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
@@ -488,7 +491,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -571,7 +575,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -618,7 +623,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -670,7 +676,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -745,7 +752,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -846,7 +854,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default,
-        [Description("add only. Sets the new parameter's default to the null literal directly, bypassing defaultValue entirely. Use this instead of defaultValue:\"null\" — see defaultValue's description for why. Mutually exclusive with defaultValue.")] bool nullDefault = false)
+        [Description("add only. Sets the new parameter's default to the null literal directly, bypassing defaultValue entirely. Use this instead of defaultValue:\"null\" — see defaultValue's description for why. Mutually exclusive with defaultValue.")] bool nullDefault = false,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -943,7 +952,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -951,14 +961,14 @@ public class SentinelRefactoringTools
             var result = await _refactoringEngine.ExtractLocalVariableAsync(filePath, exactExpressionText, variableName, lineBefore, lineAfter);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
-                string reason = result.Outcome switch
+                string errorReason = result.Outcome switch
                 {
                     EditOutcome.DocumentNotFound => $"ExtractLocalVariable: document '{filePath}' not found in the workspace.",
                     EditOutcome.SourceInvalid => $"ExtractLocalVariable: exactExpressionText not found in '{filePath}'. {result.Message}",
                     EditOutcome.CannotConvert => $"ExtractLocalVariable: could not extract '{variableName}' in '{filePath}'. {result.Message}",
                     _ => $"ExtractLocalVariable: no change produced for '{variableName}' in '{filePath}' ({result.Outcome}). {result.Message}"
                 };
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, reason) };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, errorReason) };
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
@@ -994,7 +1004,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         if (_logger.IsEnabled(LogLevel.Information))
@@ -1071,7 +1082,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -1199,7 +1211,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        [Description(ToolParams.Reason)] string? reason = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try

@@ -110,7 +110,7 @@ public class SentinelAsyncifyTools
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
@@ -331,7 +331,7 @@ public class SentinelAsyncifyTools
     public async Task<ToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -457,7 +457,7 @@ public class SentinelAsyncifyTools
         string? pattern = null,
         bool dryRun = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -587,7 +587,7 @@ public class SentinelAsyncifyTools
         int maxItems = 100,
         bool propagateCancellationTokens = true,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
@@ -677,7 +677,7 @@ public class SentinelAsyncifyTools
         int maxCallersPerMethod = 10,
         bool propagateCancellationTokens = true,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
@@ -769,7 +769,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxItems = 100,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
@@ -836,7 +836,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxItems = 100,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
@@ -917,7 +917,7 @@ public class SentinelAsyncifyTools
         List<HandlerExtractTarget> targets,
         bool dryRun = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
@@ -983,7 +983,7 @@ public class SentinelAsyncifyTools
         int maxItems = 100,
         bool propagateCancellationTokens = true,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
@@ -1085,7 +1085,7 @@ public class SentinelAsyncifyTools
         int maxRuntimeSeconds = 0,
         int maxIterations = 0,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
@@ -1158,7 +1158,7 @@ public class SentinelAsyncifyTools
         int maxRuntimeSeconds = 0,
         int maxIterations = 0,
         int maxLoops = 5,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -1321,7 +1321,7 @@ public class SentinelAsyncifyTools
         """)]
     public ToolResult<LedgerSnapshot> GetMigrationLedger(
         string? phase = null,
-        bool repeatedOnly = false)
+        bool repeatedOnly = false, [Description(ToolParams.Reason)] string? reason = null)
     {
         return new ToolResult<LedgerSnapshot>
         {
@@ -1337,7 +1337,7 @@ public class SentinelAsyncifyTools
         The run counter is also reset to zero.
         """)]
     public async Task<ToolResult<LedgerSnapshot>> ResetMigrationLedger(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, [Description(ToolParams.Reason)] string? reason = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         await _ledger.ResetAsync();
@@ -3843,7 +3843,7 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "ResetMutationBreaker")]
     [Produces(DataTag.ResultOnly)]
     [Description("Resets the batch-mutation circuit breaker and all failure counters, re-enabling Asyncify/BulkComment-style batch mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker. Unrelated to the SearchSolutionText orientation breaker, which resets itself automatically.")]
-    public ToolResult<object> ResetMutationBreaker()
+    public ToolResult<object> ResetMutationBreaker([Description(ToolParams.Reason)] string? reason = null)
     {
         ((IManualCircuitBreaker)_workspaceManager).Reset();
         return new ToolResult<object>()
@@ -3856,7 +3856,7 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "GetMutationBreakerStatus")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns the current batch-mutation circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations. Unrelated to the SearchSolutionText orientation breaker, which resets itself automatically.")]
-    public ToolResult<object> GetMutationBreakerStatus()
+    public ToolResult<object> GetMutationBreakerStatus([Description(ToolParams.Reason)] string? reason = null)
     {
         return new ToolResult<object>()
         {
