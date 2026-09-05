@@ -106,18 +106,52 @@ public class BuildEngine
         process.StartInfo.ArgumentList.Add("-v");
         process.StartInfo.ArgumentList.Add("quiet");
 
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) { stdout.AppendLine(e.Data); } };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) { stderr.AppendLine(e.Data); } };
+        // MSBuildLocator.RegisterDefaults() (see PersistentWorkspaceManager) pins this process's
+        // environment to a specific MSBuild toolset. Strip the pin from the spawned "dotnet build"
+        // child so it resolves its own toolset independently, rather than inheriting ours.
+        process.StartInfo.EnvironmentVariables.Remove("MSBUILD_EXE_PATH");
+        process.StartInfo.EnvironmentVariables.Remove("MSBuildExtensionsPath");
+        process.StartInfo.EnvironmentVariables.Remove("MSBuildSDKsPath");
+        process.StartInfo.EnvironmentVariables.Remove("MSBuildLoadMicrosoftTargetsReadOnly");
+        process.StartInfo.EnvironmentVariables.Remove("DOTNET_HOST_PATH");
+        process.StartInfo.EnvironmentVariables.Remove("DOTNET_MSBUILD_SDK_RESOLVER_SDKS_DIR");
+        process.StartInfo.EnvironmentVariables.Remove("DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR");
 
         process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        await process.WaitForExitAsync(cancellationToken);
 
-        var stdoutText = stdout.ToString();
-        var stderrText = stderr.ToString();
+        // Process.WaitForExitAsync alongside BeginOutputReadLine/BeginErrorReadLine can hang
+        // indefinitely even after the child has exited: confirmed live via attached debugger that a
+        // "dotnet build" child had fully exited (no such process remained) while WaitForExitAsync was
+        // still stuck awaiting pipe EOF — a grandchild (e.g. an MSBuild worker node) can inherit and
+        // hold the redirected stdout/stderr handles open. Reading the streams directly with
+        // ReadToEndAsync — instead of the event-based BeginOutputReadLine/BeginErrorReadLine — and
+        // bounding the whole thing with a timeout that kills the process tree closes both the hang
+        // and its blast radius.
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(linkedCts.Token);
+        var stderrTask = process.StandardError.ReadToEndAsync(linkedCts.Token);
+        var exitTask = process.WaitForExitAsync(linkedCts.Token);
+
+        try
+        {
+            await Task.WhenAll(stdoutTask, stderrTask, exitTask);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            TryKillProcessTree(process);
+            return new EngineResultWrapper<BuildResult>(EngineOutcome.Failure,
+                error: new EngineError("The full build timed out after 5 minutes and the build process was terminated."));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            TryKillProcessTree(process);
+            throw;
+        }
+
+        var stdoutText = stdoutTask.Result;
+        var stderrText = stderrTask.Result;
 
         var errors = new List<DiagnosticInfo>();
         var warnings = new List<DiagnosticInfo>();
@@ -165,5 +199,19 @@ public class BuildEngine
             Duration: DateTime.UtcNow - start,
             Detail: detail
         ));
+    }
+
+    private static void TryKillProcessTree(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
     }
 }
