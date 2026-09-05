@@ -101,6 +101,88 @@ internal static class FunctionalFixVerifier
         return new WeakReference(loadContext);
     }
 
+    /// <summary>
+    /// Builds the fixture's ContosoOrders.Core project after a model's refactor and
+    /// reflection-invokes <c>OrderPricingCalculator.CalculateDiscountedTotal</c> (the renamed form
+    /// of <c>CalcDisc</c> — see <c>RoslynSentinel.Tests.ModelEval.Fixtures.OrderPricingRefactorReproducer</c>) once per branch
+    /// (preferred/standard customer), so a test can assert both real returned values instead of
+    /// only text-scanning the edited source. Looked up by name directly (rather than by declared
+    /// parameter types, which the model isn't asked to change) since the method's accessibility is
+    /// expected to have changed to internal as part of the task.
+    /// </summary>
+    public static async Task<(decimal Preferred, decimal Standard)> InvokeCalculateDiscountedTotalAsync(
+        string coreProjectDirectory, decimal amount, decimal rate, CancellationToken cancellationToken)
+    {
+        var csprojPath = Path.Combine(coreProjectDirectory, "ContosoOrders.Core.csproj");
+        if (!File.Exists(csprojPath))
+        {
+            throw new FileNotFoundException($"FunctionalFixVerifier: no project file at '{csprojPath}'.", csprojPath);
+        }
+
+        var buildOutput = await RunDotnetBuildAsync(csprojPath, cancellationToken);
+
+        var assemblyPath = Path.Combine(coreProjectDirectory, "bin", "Debug", "net10.0", "ContosoOrders.Core.dll");
+        if (!File.Exists(assemblyPath))
+        {
+            throw new FileNotFoundException(
+                $"FunctionalFixVerifier: dotnet build reported success but no assembly was produced at " +
+                $"'{assemblyPath}'. Build output:\n{buildOutput}", assemblyPath);
+        }
+
+        (decimal Preferred, decimal Standard) result;
+        var loadContextRef = InvokeCalculateDiscountedTotalInCollectibleContext(assemblyPath, amount, rate, out result);
+
+        for (var i = 0; i < 10 && loadContextRef.IsAlive; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+
+        return result;
+    }
+
+    private static WeakReference InvokeCalculateDiscountedTotalInCollectibleContext(
+        string assemblyPath, decimal amount, decimal rate, out (decimal Preferred, decimal Standard) result)
+    {
+        var loadContext = new AssemblyLoadContext("FunctionalFixVerifier", isCollectible: true);
+        try
+        {
+            var assembly = loadContext.LoadFromAssemblyPath(assemblyPath);
+            var calculatorType = assembly.GetType("ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator")
+                ?? throw new InvalidOperationException(
+                    "FunctionalFixVerifier: type 'ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator' " +
+                    "not found in the built assembly — the model's edit may have renamed or removed it.");
+            var method = calculatorType.GetMethod(
+                    "CalculateDiscountedTotal",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                    [typeof(decimal), typeof(decimal), typeof(bool)])
+                ?? throw new InvalidOperationException(
+                    "FunctionalFixVerifier: method 'CalculateDiscountedTotal(decimal, decimal, bool)' not " +
+                    "found on OrderPricingCalculator — the rename or signature may be wrong.");
+            var instance = Activator.CreateInstance(calculatorType)
+                ?? throw new InvalidOperationException("FunctionalFixVerifier: could not construct OrderPricingCalculator.");
+
+            try
+            {
+                var preferred = (decimal)method.Invoke(instance, [amount, rate, true])!;
+                var standard = (decimal)method.Invoke(instance, [amount, rate, false])!;
+                result = (preferred, standard);
+            }
+            catch (TargetInvocationException ex)
+            {
+                throw new InvalidOperationException(
+                    $"FunctionalFixVerifier: CalculateDiscountedTotal threw at runtime: " +
+                    $"{ex.InnerException?.Message ?? ex.Message}", ex.InnerException ?? ex);
+            }
+        }
+        finally
+        {
+            loadContext.Unload();
+        }
+
+        return new WeakReference(loadContext);
+    }
+
     private static async Task<string> RunDotnetBuildAsync(string csprojPath, CancellationToken cancellationToken)
     {
         var psi = new ProcessStartInfo("dotnet", $"build \"{csprojPath}\" -c Debug --nologo")

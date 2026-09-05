@@ -55,6 +55,15 @@
                           (see project_granite42_8b_tool_schema_size_isolated) - a diagnostic for
                           testing whether schema size itself is the latency driver on slow models
                           like granite-4.2-8b, not a change to what phases are allowed to do.
+      OrderPricingRefactor - Model_AppliesThreeChainedRefactors. Different fixture from every
+                          test above (OrderPricingRefactorReproducer, not
+                          WholeFileRewriteReproducer): three independent, ordinary refactoring
+                          steps chained on one small class (extract a duplicated expression,
+                          rename a method with a real cross-file call site, change the new
+                          method's accessibility) instead of one bug-fix scenario. Prompt gives
+                          MinimalGuidance/Disambiguated-style flexibility - the model chooses
+                          which tool(s) to use for each step (ExtractMethodSafe/RenameSymbol/
+                          ChangeAccessibility/ModifyModifier or plain ApplyDiff).
 
     Each host gets its own --artifacts-path (RoslynSentinel\_scratchbuild_<host-suffix>) so
     that two hosts can be launched concurrently without racing on shared project references'
@@ -70,7 +79,7 @@
 
 .PARAMETER Test
     SizeThreshold | LiteralSteps | MinimalGuidance | MinimalGuidanceDisambiguated | PlanOnly |
-    PlanThenExecute | ScriptedPlan | PlanImplementVerify. Required.
+    PlanThenExecute | ScriptedPlan | PlanImplementVerify | OrderPricingRefactor. Required.
 
 .PARAMETER Size
     SizeThreshold only: single value for ROSLYNSENTINEL_MODELEVAL_SIZES (default: 60).
@@ -147,7 +156,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor')]
     [string]$Test,
 
     [Parameter(Position = 2)]
@@ -202,6 +211,7 @@ $testNames = @{
     'PlanThenExecute'               = 'Model_FixesWholeFileRewriteBug_PlanThenExecute'
     'ScriptedPlan'                   = 'Model_FixesWholeFileRewriteBug_ScriptedPlan'
     'PlanImplementVerify'           = 'Model_FixesWholeFileRewriteBug_PlanImplementVerify'
+    'OrderPricingRefactor'          = 'Model_AppliesThreeChainedRefactors'
 }
 $testName = $testNames[$Test]
 
