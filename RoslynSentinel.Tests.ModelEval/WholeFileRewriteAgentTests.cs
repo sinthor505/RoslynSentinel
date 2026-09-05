@@ -132,8 +132,33 @@ public class WholeFileRewriteAgentTests
     // any edit tool call) and reaches 80% mechanical correctness on the same ambiguity. Porting
     // that instruction here directly, rather than trying yet another wording of the ambiguity
     // itself, since that's the variable the excavation found actually correlates with success.
+    //
+    // Updated 2026-09-05 to match PlanImplementVerifyAgentTests' wording/structure in two ways
+    // proven out there: (1) the "solution is already loaded" orientation line — PIV's own live
+    // transcripts showed the model calling ListWorkspaceSolutions("/")/LoadSolution on turn 1 of
+    // EVERY phase despite the harness's [SetUp]/RunPhaseAsync having already called
+    // LoadSolutionAsync before the model's first turn in each case; the pre-load was never visible
+    // to the model without being told, so the fix is about informing the model of harness state,
+    // not a difference in the underlying pre-load mechanism. This fixture's single [SetUp] does
+    // the identical pre-load before its one model call, so the same gap applies here — re-added
+    // after an initial revert based on a since-superseded assumption that the two fixtures'
+    // lifecycles genuinely differed (see [[feedback_verify_per_fixture_workspace_lifecycle_before_porting_prompt_lines]]
+    // for that mistaken revert and why "verify via live transcript" is the right bar, which this
+    // change now needs to actually clear rather than reasoning from code alone a second time);
+    // (2) consolidated the two separate "don't touch unrelated code" constraints (one mid-paragraph
+    // about the old method, one at the end about unrelated code generally) into
+    // PlanImplementVerifyAgentTests.ImplementUserPromptTemplate's single affirmative sentence
+    // ("Do not modify any method, field, or class that is not directly involved in this fix, even
+    // ones that look unused or unrelated — leave everything else exactly as you found it."),
+    // placed once, right before the build-verification step. Deliberately NOT porting PIV's
+    // separate DeadCodeCleanupGuidance fragment (the "{2}" splice in ImplementUserPromptTemplate)
+    // — that's tracked there as its own exploratory, not-yet-assertion-backed change and is
+    // intentionally kept isolated to that fixture.
     private const string DisambiguatedMinimalGuidanceUserPromptTemplate = """
         # Task: Fix a bug in FixtureHelpers/BlockConverter.cs
+
+        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        straight to ReadFile/SearchSolutionText/ListAll on the path below.
 
         Users report that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs` sometimes
         changes unrelated formatting elsewhere in the same file, even though they only asked for
@@ -147,9 +172,8 @@ public class WholeFileRewriteAgentTests
         than copying its body into your own fix — raise its accessibility (e.g. to `internal`) so
         it can be called cross-file, but don't duplicate its logic, and don't modify anything else
         in that file. Once you switch the buggy method's call site to the shared method, delete
-        only that one now-unused old method (the one the bug report is about) instead of leaving
-        it behind — do not delete, rename, or otherwise modify any other method, field, or class,
-        even ones that look unused, unrelated, or like dead code to you.
+        that one now-unused old method (the one the bug report is about) instead of leaving it
+        behind.
 
         If the reusable pattern is a "find and replace a block, re-indenting only that block"
         helper: locate that helper and call it directly, exactly once, passing it the original,
@@ -163,11 +187,13 @@ public class WholeFileRewriteAgentTests
         content you will place in `BlockConverter.cs`. Only after stating that plan in full should
         you begin making edit tool calls — do not interleave planning and editing.
 
+        Do not modify any method, field, or class that is not directly involved in this fix, even
+        ones that look unused or unrelated — leave everything else exactly as you found it.
+
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
 
-        Do not modify any code unrelated to this specific bug, including code that looks unused —
-        leave it exactly as you found it. Report what you changed and the verification result.
+        Report what you changed and the verification result.
         """;
 
     // Scripted-plan variant: same symptom-only framing as DisambiguatedMinimalGuidanceUserPromptTemplate,
