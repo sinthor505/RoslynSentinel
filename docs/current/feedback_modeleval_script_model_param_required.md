@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: baae58f2-ea41-48a8-b6da-6d65bc32d78d
-  modified: 2026-09-04T02:01:54.584Z
+  modified: 2026-09-05T02:06:14.969Z
 ---
 
 `roslynsentinel-modeleval.ps1` line ~178 unconditionally runs
@@ -26,3 +26,13 @@ invocation of this script. Confirm the exact key first via
 [[reference_lmstudio_loaded_models_endpoint]]'s `/api/v1/models` (its `loaded_instances[].id`,
 not a guessed string) before launching, since a mismatched model string fails fast with a
 misleading-looking error rather than a clear "wrong model name" message.
+
+**Recurred 2026-09-05**: launched `-HostAddress 112 -Test LiteralSteps` (intending granite)
+without `-Model`, right after a `.113` qwen batch — the default silently ran a full
+`qwen3.5-9b-coder` test against `.112` instead (qwen *was* loaded there too, so it didn't
+fail fast this time; it just quietly ran the wrong model to completion). Caught only by
+noticing the printed `model=` header didn't say granite. This is a second, more dangerous
+failure signature than the original memory's fast-crash case: when the wrong model happens to
+also be loaded on the target host, there's no error at all — the only tell is the `===
+ModelEval: ... (model=...)` header line, so always check it right after launch, not just when
+something looks broken.
