@@ -55,6 +55,12 @@ public enum ChangesetFormat
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
+public enum WriteFileOperation
+{
+    CreateFile, ReplaceFile
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TextSearchMode
 {
     regex, literal

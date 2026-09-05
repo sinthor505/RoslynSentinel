@@ -35,8 +35,11 @@ public class DependencyInjectionTests
         // 3. Register all tool classes the same way — every class carrying [McpServerToolType],
         // via the real mode-conditional registration path, all modes enabled, so
         // DynamicDiscovery_AllClassesWithToolAttribute_ShouldBeResolvable exercises the full set
-        // rather than whatever subset happened to be hand-copied here.
-        var allModes = new HashSet<string> { "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation", "Asyncify" };
+        // rather than whatever subset happened to be hand-copied here. Must include every mode
+        // string AddRoslynSentinelToolsAdvanced checks, including "Admin" (SentinelAdminTools) —
+        // omitting one here means DynamicDiscovery_AllClassesWithToolAttribute_ShouldBeResolvable
+        // fails for that mode's tool class even though nothing is actually broken.
+        var allModes = new HashSet<string> { "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation", "Asyncify", "Admin" };
         var mcpBuilder = services.AddMcpServer();
         mcpBuilder.AddRoslynSentinelToolsAdvanced(services, allModes);
 

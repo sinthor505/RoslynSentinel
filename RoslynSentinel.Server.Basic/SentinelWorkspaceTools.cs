@@ -862,6 +862,135 @@ public class SentinelWorkspaceTools
         }
     }
 
+    // Simplified, diff-only sibling of ApplyDiff — collapses ApplyDiff's two required-param-sets
+    // (files: 'changes' dict / diff: 'filepath'+'unifiedDiff', with 'filepath' silently ignored in
+    // files mode) into a single always-required (filepath, unifiedDiff) pair, closing the common
+    // agent footgun of supplying unifiedDiff without filepath. Whole-file rewrites now go through
+    // WriteFile(operation=ReplaceFile) instead of a 'files' mode here. ApplyDiff itself is kept
+    // unchanged (not deleted) so its multi-file 'files' mode can be reactivated later if needed.
+    [McpServerTool(Name = "ApplyUnifiedDiff")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Applies or validates a unified diff against a single file. 'filepath' and 'unifiedDiff' are BOTH REQUIRED (filepath names the single file the diff applies to). Hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. For a whole-file rewrite, use WriteFile(operation=ReplaceFile) instead.")]
+    public async Task<ToolResult<object>> ApplyUnifiedDiff(
+        [Description(ToolParams.Reason)] string reason,
+        [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [ToolOption(ToolOptionTag.UnifiedDiff, required: true)] string unifiedDiff,
+        [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            if (!filePath.Validated)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'filepath' is required (it names the single file the unifiedDiff applies to).")
+                };
+            }
+
+            if (string.IsNullOrEmpty(unifiedDiff))
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'unifiedDiff' is required.")
+                };
+            }
+
+            if (action == ProposedChangeAction.apply)
+            {
+                try
+                {
+                    var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+                    var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePath == filePath.Absolute);
+                    if (document == null)
+                    {
+                        return new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                        };
+                    }
+
+                    var oldText = await document.GetTextAsync();
+                    var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+                    var targetPath = document.FilePath ?? filePath;
+                    var diffChanges = new Dictionary<FilePath, string>
+                    {
+                        [targetPath] = newContent
+                    };
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
+                    if (!result.Success && result.ValidationResult != null)
+                        return new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = new ResultError(ToolErrorCode.Exception,
+                                "ApplyUnifiedDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
+                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                        };
+                    await WriteBlobForApplyAsync("apply_unified_diff", result);
+                    var strippedDiffResult = result with { PreImages = null };
+                    object diffResponseData = returnDiff
+                        ? new
+                        {
+                            result = strippedDiffResult,
+                            diff = SentinelRefactoringTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
+                        }
+                        : strippedDiffResult;
+                    return new ToolResult<object>()
+                    {
+                        Success = true,
+                        Data = diffResponseData
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "ApplyUnifiedDiff apply unexpected exception for '{FilePath}'", filePath);
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyUnifiedDiff apply for '{filePath}'")
+                    };
+                }
+            }
+
+            if (action == ProposedChangeAction.validate)
+            {
+                var validationResult = await _validationEngine.ValidateDiffAsync(filePath.Absolute, unifiedDiff);
+                return validationResult.Success ? new ToolResult<object>()
+                {
+                    Success = true,
+                    Data = validationResult
+                }
+
+                : new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception, $"ApplyUnifiedDiff validate failed: {validationResult.Diagnostics.ToInfo()}")
+                };
+            }
+
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.")
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ApplyUnifiedDiff ({Action}) failed", action);
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyUnifiedDiff")
+            };
+        }
+    }
+
     // The confirmationCode paramater was causing hallucinations and invalid tool calls. Reverted back to the original ApplyDiff tool but keeping this here (block-commented, since it depends
     // on ProposedChangeAction.confirmationCode, which is also commented out in ToolEnums.cs) in case we want to reintroduce ApplyDiff with a confirmationCode in the future.
     /*
@@ -1136,22 +1265,33 @@ public class SentinelWorkspaceTools
     }
     */
 
-    [McpServerTool(Name = "CreateFile")]
+    [McpServerTool(Name = "WriteFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Creates a new file with the given content. Fails if the file already exists — use ApplyDiff (changesetFormat=files, action=apply) to overwrite an existing file. Routes through the same write-path chokepoint as every other mutating tool (drift-checked, undo-tracked via UndoLastApply). Parent directories are created automatically if missing.")]
-    public async Task<ToolResult<object>> CreateFile(
+    [Description("Writes a whole file to disk. operation=CreateFile requires the file NOT to already exist (fails otherwise). operation=ReplaceFile requires the file to already exist (fails otherwise) and overwrites its full content — for a partial edit use ApplyUnifiedDiff instead. Routes through the same write-path chokepoint as every other mutating tool (drift-checked, undo-tracked via UndoLastApply). Parent directories are created automatically if missing.")]
+    public async Task<ToolResult<object>> WriteFile(
         [Description(ToolParams.Reason)] string reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Description("Full content of the new file.")] string content, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, CancellationToken cancellationToken = default)
+        [ExternalInputRequired(DataTag.Action)] WriteFileOperation operation,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Description("Full content of the file.")] string content, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            if (File.Exists(filePath))
+            bool exists = File.Exists(filePath);
+            if (operation == WriteFileOperation.CreateFile && exists)
             {
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePath}' already exists. Use ApplyDiff to overwrite an existing file.")
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"WriteFile: '{filePath}' already exists. Use operation=ReplaceFile to overwrite an existing file.")
+                };
+            }
+
+            if (operation == WriteFileOperation.ReplaceFile && !exists)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"WriteFile: '{filePath}' does not exist. Use operation=CreateFile to create a new file.")
                 };
             }
 
@@ -1168,7 +1308,7 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"CreateFile pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}")
+                    Error = new ResultError(ToolErrorCode.Exception, $"WriteFile pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}")
                 };
             }
 
@@ -1177,11 +1317,11 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"CreateFile failed to write '{filePath}': {result.Summary}")
+                    Error = new ResultError(ToolErrorCode.Exception, $"WriteFile failed to write '{filePath}': {result.Summary}")
                 };
             }
 
-            await WriteBlobForApplyAsync("create_file", result);
+            await WriteBlobForApplyAsync(operation == WriteFileOperation.CreateFile ? "create_file" : "replace_file", result);
             var strippedResult = result with { PreImages = null };
             return new ToolResult<object>()
             {
@@ -1191,11 +1331,11 @@ public class SentinelWorkspaceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "CreateFile failed for '{FilePath}'", filePath);
+            _logger.LogError(ex, "WriteFile failed for '{FilePath}'", filePath);
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"CreateFile for '{filePath}'")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"WriteFile for '{filePath}'")
             };
         }
     }
@@ -1802,11 +1942,11 @@ public class SentinelWorkspaceTools
             }
             else
             {
-                // CreateFile writes any file to disk regardless of extension or whether it belongs
+                // WriteFile writes any file to disk regardless of extension or whether it belongs
                 // to a loaded project — non-.cs files, and .cs files outside every project's globs,
                 // never become tracked Documents (PersistentWorkspaceManager only syncs .cs files
                 // belonging to a resolvable project into CurrentSolution). Fall back to a raw disk
-                // read so ReadFile can see everything CreateFile is able to write.
+                // read so ReadFile can see everything WriteFile is able to write.
                 var diskContent = await FileIoHelper.ReadAllTextIfExistsAsync(filePath, cancellationToken);
                 if (diskContent == null)
                 {

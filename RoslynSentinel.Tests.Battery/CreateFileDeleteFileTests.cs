@@ -42,7 +42,7 @@ public class CreateFileDeleteFileTests
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewFile.cs");
         var content = "public class NewFile { }";
 
-        var result = await tools.CreateFile(reason: "test", newFile, content);
+        var result = await tools.WriteFile(reason: "test", WriteFileOperation.CreateFile, newFile, content);
 
         Assert.That(result.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.True);
@@ -60,11 +60,48 @@ public class CreateFileDeleteFileTests
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(existingFile);
 
-        var result = await tools.CreateFile(reason: "test", existingFile, "replacement content");
+        var result = await tools.WriteFile(reason: "test", WriteFileOperation.CreateFile, existingFile, "replacement content");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(await File.ReadAllTextAsync(existingFile), Is.EqualTo(originalContent));
+    }
+
+    [Test]
+    public async Task ReplaceFile_ExistingFile_OverwritesContentAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var replacementContent = "public class Replaced { }";
+
+        // validateOnApply: false — the fixture's other files may reference the original type in
+        // existingFile, so a delta-compile of an unrelated replacement would fail; this test only
+        // exercises the ReplaceFile exists-check + overwrite plumbing, not compilation validity.
+        var result = await tools.WriteFile(reason: "test", WriteFileOperation.ReplaceFile, existingFile, replacementContent, validateOnApply: false);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(await File.ReadAllTextAsync(existingFile), Is.EqualTo(replacementContent));
+    }
+
+    [Test]
+    public async Task ReplaceFile_DoesNotExist_FailsAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var missingFile = Path.Combine(fixture.SolutionDirectory, "DoesNotExist.cs");
+
+        var result = await tools.WriteFile(reason: "test", WriteFileOperation.ReplaceFile, missingFile, "public class X { }");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(File.Exists(missingFile), Is.False);
     }
 
     [Test]
@@ -77,7 +114,7 @@ public class CreateFileDeleteFileTests
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewSubdir", "Nested.cs");
 
-        var result = await tools.CreateFile(reason: "test", newFile, "public class Nested { }");
+        var result = await tools.WriteFile(reason: "test", WriteFileOperation.CreateFile, newFile, "public class Nested { }");
 
         Assert.That(result.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.True);
@@ -98,7 +135,7 @@ public class CreateFileDeleteFileTests
         var newFile = Path.Combine(fixture.SolutionDirectory, "Notes.txt");
         var content = "plain text notes, not a Roslyn document";
 
-        var createResult = await tools.CreateFile(reason: "test", newFile, content);
+        var createResult = await tools.WriteFile(reason: "test", WriteFileOperation.CreateFile, newFile, content);
         Assert.That(createResult.Success, Is.True);
 
         var readResult = await tools.ReadFile(reason: "test", newFile);

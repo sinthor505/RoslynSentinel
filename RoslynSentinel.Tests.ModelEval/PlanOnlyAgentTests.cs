@@ -53,9 +53,10 @@ public class PlanOnlyAgentTests
         `internal`) so it can be called cross-file, but should not duplicate its logic, and should
         not modify anything else in that file.
 
-        You do NOT have access to any file-editing tool in this session (ApplyDiff, CreateFile,
-        DeleteFile, ChangeAccessibility, and ModifyModifier are all unavailable and will return an
-        error if called) — this is a planning exercise only. Do not attempt to make the change.
+        You do NOT have access to any file-editing tool in this session (ApplyDiff,
+        ApplyUnifiedDiff, WriteFile, DeleteFile, ChangeAccessibility, and ModifyModifier are all
+        unavailable and will return an error if called) — this is a planning exercise only. Do not
+        attempt to make the change.
 
         Respond with your plan: the root cause, exactly which method(s)/file(s) you would touch,
         and the specific content you would place in `BlockConverter.cs` (write out the actual code
@@ -76,12 +77,13 @@ public class PlanOnlyAgentTests
 
     // Tool names blocked for this fixture. Matches WholeFileRewriteAgentTests's fixture (BlockConverter/
     // BlockEditHelpers/Shape.cs) so the same investigation surface is available read-only; blocks every
-    // mutating tool exposed by ActiveModes above, not just ApplyDiff, so the model can't route around
-    // the restriction via ChangeAccessibility/ModifyModifier/CreateFile/DeleteFile either.
+    // mutating tool exposed by ActiveModes above, not just ApplyDiff/ApplyUnifiedDiff, so the model
+    // can't route around the restriction via ChangeAccessibility/ModifyModifier/WriteFile/DeleteFile
+    // either.
     private static readonly HashSet<string> BlockedToolNames = new(StringComparer.Ordinal)
     {
-        "ApplyDiff", "ApplyDiffWithConfirmationCode", "ChangeAccessibility", "ModifyModifier",
-        "CreateFile", "DeleteFile",
+        "ApplyDiff", "ApplyUnifiedDiff", "ApplyDiffWithConfirmationCode", "ChangeAccessibility", "ModifyModifier",
+        "WriteFile", "DeleteFile",
     };
 
     private IHost _host = null!;

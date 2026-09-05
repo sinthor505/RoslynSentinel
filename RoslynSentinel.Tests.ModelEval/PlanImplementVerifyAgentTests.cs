@@ -84,9 +84,10 @@ public class PlanImplementVerifyAgentTests
         needs the old block content to still be present in the text you pass it, so it can find
         and replace it.
 
-        You do NOT have access to any file-editing tool in this session (ApplyDiff, CreateFile,
-        DeleteFile, ChangeAccessibility, and ModifyModifier are all unavailable and will return an
-        error if called) — this is a planning exercise only. Do not attempt to make the change.
+        You do NOT have access to any file-editing tool in this session (ApplyDiff,
+        ApplyUnifiedDiff, WriteFile, DeleteFile, ChangeAccessibility, and ModifyModifier are all
+        unavailable and will return an error if called) — this is a planning exercise only. Do not
+        attempt to make the change.
 
         Respond with your plan: the root cause, exactly which method(s)/file(s) you would touch,
         and the specific content you would place in `BlockConverter.cs` (write out the actual code
@@ -178,8 +179,8 @@ public class PlanImplementVerifyAgentTests
     // cannot edit files, matching PlanOnlyAgentTests.BlockedToolNames.
     private static readonly HashSet<string> BlockedToolNames = new(StringComparer.Ordinal)
     {
-        "ApplyDiff", "ApplyDiffWithConfirmationCode", "ChangeAccessibility", "ModifyModifier",
-        "CreateFile", "DeleteFile",
+        "ApplyDiff", "ApplyUnifiedDiff", "ApplyDiffWithConfirmationCode", "ChangeAccessibility", "ModifyModifier",
+        "WriteFile", "DeleteFile",
     };
 
     // The exact set of tools actually called across 20 real PlanImplementVerify transcripts
