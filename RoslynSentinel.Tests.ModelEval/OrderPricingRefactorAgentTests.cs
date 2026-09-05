@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 
 using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
@@ -96,6 +97,11 @@ public class OrderPricingRefactorAgentTests
         "Refactor", "Workspace",
     };
 
+    // See OrderPricingRefactorChainAgentTests' identical toggle for the rationale — an isolation
+    // experiment comparing this rung with and without the WriteFile whole-file-rewrite escape
+    // hatch available, keeping ApplyDiff/ApplyUnifiedDiff/RenameSymbol/ChangeSignature exposed.
+    private static readonly bool BlockWriteFile = false;
+
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
@@ -127,6 +133,35 @@ public class OrderPricingRefactorAgentTests
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+
+        if (BlockWriteFile)
+        {
+            mcpBuilder.WithRequestFilters(filters =>
+            {
+                filters.AddCallToolFilter(next => new McpRequestHandler<CallToolRequestParams, CallToolResult>(
+                    async (context, cancellationToken) =>
+                    {
+                        if (context.Params?.Name == "WriteFile")
+                        {
+                            return new CallToolResult
+                            {
+                                Content =
+                                [
+                                    new TextContentBlock
+                                    {
+                                        Text = "WriteFile is unavailable in this session. Use " +
+                                            "ApplyDiff, ApplyUnifiedDiff, RenameSymbol, or " +
+                                            "ChangeSignature instead.",
+                                    },
+                                ],
+                                IsError = true,
+                            };
+                        }
+
+                        return await next(context, cancellationToken);
+                    }));
+            });
+        }
 
         _runDirectory = Path.Combine(
             TestContext.CurrentContext.WorkDirectory,

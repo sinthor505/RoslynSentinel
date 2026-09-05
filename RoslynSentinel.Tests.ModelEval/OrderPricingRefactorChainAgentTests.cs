@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 
 using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
@@ -53,6 +54,16 @@ public class OrderPricingRefactorChainAgentTests
         "Refactor", "Workspace",
     };
 
+    // Toggle for an isolation experiment: with WriteFile blocked, the model must use ApplyDiff/
+    // ApplyUnifiedDiff/RenameSymbol/ChangeSignature for every edit, so the rename-desync failure
+    // mode found in the 2026-09-05 ladder batch (see
+    // project_sequential_edit_habit_vs_compiler_checks_theory memory) can be compared with and
+    // without the whole-file-rewrite escape hatch available, isolating whether it's WriteFile
+    // specifically that invites the failure or whether the same pattern just resurfaces via
+    // ApplyDiff regardless. Flip to true, rebuild, and rerun the same rungs for the comparison
+    // batch; leave false for normal runs.
+    private static readonly bool BlockWriteFile = false;
+
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
@@ -84,6 +95,39 @@ public class OrderPricingRefactorChainAgentTests
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+
+        if (BlockWriteFile)
+        {
+            // Mirrors PlanOnlyAgentTests' filter shape, blocking just WriteFile instead of every
+            // mutating tool — the model still has ApplyDiff/ApplyUnifiedDiff/RenameSymbol/
+            // ChangeSignature/etc., so this isolates the one specific tool rather than reverting to
+            // a read-only exercise.
+            mcpBuilder.WithRequestFilters(filters =>
+            {
+                filters.AddCallToolFilter(next => new McpRequestHandler<CallToolRequestParams, CallToolResult>(
+                    async (context, cancellationToken) =>
+                    {
+                        if (context.Params?.Name == "WriteFile")
+                        {
+                            return new CallToolResult
+                            {
+                                Content =
+                                [
+                                    new TextContentBlock
+                                    {
+                                        Text = "WriteFile is unavailable in this session. Use " +
+                                            "ApplyDiff, ApplyUnifiedDiff, RenameSymbol, or " +
+                                            "ChangeSignature instead.",
+                                    },
+                                ],
+                                IsError = true,
+                            };
+                        }
+
+                        return await next(context, cancellationToken);
+                    }));
+            });
+        }
 
         _runDirectory = Path.Combine(
             TestContext.CurrentContext.WorkDirectory,
