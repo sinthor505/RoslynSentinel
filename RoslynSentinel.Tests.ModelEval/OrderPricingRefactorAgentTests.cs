@@ -62,9 +62,10 @@ public class OrderPricingRefactorAgentTests
 
         ## Constraints
 
-        - Do not modify `DescribeOrder` or `SummarizeShipping` in `OrderPricingCalculator.cs`, or
-          anything in `OrderCheckout.cs` other than the one call site that must follow the rename —
-          leave everything else exactly as you found it, including its exact formatting.
+        - Do not change the logic of `DescribeOrder` or `SummarizeShipping` in
+          `OrderPricingCalculator.cs`, or anything in `OrderCheckout.cs` other than the one call
+          site that must follow the rename — reformatting is fine, but their behavior must stay
+          identical.
         - Do not change the observable behavior of `CalculateDiscountedTotal` (formerly
           `CalcDisc`) — same inputs must still produce the same outputs.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
@@ -293,11 +294,18 @@ public class OrderPricingRefactorAgentTests
         Assert.That(calculatorText, Does.Not.Match(@"private\s+(?:static\s+)?decimal\s+(?!CalculateDiscountedTotal\b)\w+\s*\("),
             $"The extracted discount method should no longer be private. Transcript: {result.TranscriptPath}");
 
-        // Unrelated members must be byte-for-byte untouched.
-        Assert.That(calculatorText, Does.Contain("public string DescribeOrder( int    id , string label )"),
-            $"DescribeOrder's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");
-        Assert.That(calculatorText, Does.Contain("public string SummarizeShipping(  int   zone  )"),
-            $"SummarizeShipping's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");
+        // Unrelated members must be semantically untouched — same signature and body — but
+        // reformatting them (e.g. normalizing the fixture's deliberately odd spacing) is fine and
+        // not penalized: a model cleaning up whitespace in passing isn't a refactoring-logic defect,
+        // and any real formatter would do the same. Compare with all whitespace collapsed instead of
+        // requiring a byte-for-byte match.
+        static string CollapseWhitespace(string s) => System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ").Trim();
+        Assert.That(CollapseWhitespace(calculatorText), Does.Contain(CollapseWhitespace(
+            "public string DescribeOrder( int id , string label ) { return $\"Order {id}: {label}\"; }")),
+            $"DescribeOrder's logic should be unchanged. Transcript: {result.TranscriptPath}");
+        Assert.That(CollapseWhitespace(calculatorText), Does.Contain(CollapseWhitespace(
+            "public string SummarizeShipping( int zone ) { return zone switch { 1 => \"local\", 2 => \"regional\", _ => \"national\", }; }")),
+            $"SummarizeShipping's logic should be unchanged. Transcript: {result.TranscriptPath}");
 
         AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8, maxPerTool: 4);
 

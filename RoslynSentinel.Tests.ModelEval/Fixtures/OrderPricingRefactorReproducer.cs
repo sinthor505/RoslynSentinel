@@ -16,9 +16,10 @@ public static class OrderPricingRefactorReproducer
 {
     /// <summary>
     /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/OrderPricingCalculator.cs. Padded
-    /// with unrelated members before and after the target method, each with idiosyncratic spacing
-    /// (same "detect an accidental whole-file/whole-class touch" mechanism as
-    /// <see cref="WholeFileRewriteReproducer.BuggyFileContent"/>). <c>CalcDisc</c> computes the same
+    /// with unrelated members before and after the target method, used to detect an accidental
+    /// whole-file/whole-class logic touch (reformatting them is fine — only a change to their
+    /// signature or behavior counts as a violation; see <c>OrderPricingRefactorAgentTests</c>'s
+    /// semantic, whitespace-insensitive comparison). <c>CalcDisc</c> computes the same
     /// "amount * rate" discount expression twice (once per branch) — the duplication the model is
     /// asked to extract into a new method — and is itself the method the model is asked to rename.
     /// </summary>

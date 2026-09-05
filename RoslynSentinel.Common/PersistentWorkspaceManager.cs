@@ -1266,6 +1266,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
         await _solutionLock.WaitAsync(cancellationToken);
         var succeeded = new List<string>();
+        var noOp = new List<string>();
         var failed = new Dictionary<FilePath, string>();
         bool needsFullReload = false;
 
@@ -1348,6 +1349,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     _logger.LogWarning("Skipping no-op write for {FilePath}: proposed content is identical to existing content.", filePath);
                     Debug.WriteLine($"[Warning] Skipping no-op write for {filePath}: proposed content is identical to existing content.");
                     succeeded.Add(filePath);
+                    noOp.Add(filePath);
                     continue;
                 }
 
@@ -1366,6 +1368,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         {
                             _logger.LogInformation("Skipping whitespace-only write for {FilePath}: content is semantically identical after normalization.", filePath);
                             succeeded.Add(filePath);
+                            noOp.Add(filePath);
                             continue;
                         }
                     }
@@ -1523,9 +1526,15 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             var summary = rolledBack.Count > 0
                 ? $"Partial write failure — {rolledBack.Count} already-written/deleted file(s) rolled back to keep the change atomic. {failed.Count} file(s) failed: {string.Join(", ", failed.Keys.Select(f => Path.GetFileName(f)))}."
                 : $"Applied {succeeded.Count} changes successfully ({deletePaths.Count} delete(s)). {failed.Count} failures.";
+            if (noOp.Count > 0)
+            {
+                summary += $" The operation was successful. The old and new content of {noOp.Count} file(s) were semantically identical: {string.Join(", ", noOp.Select(Path.GetFileName))}.";
+            }
+
             return new ApplyChangesResult(failed.Count == 0, succeeded, failed, summary,
                 workspaceInSync, _workspaceVersion, preImages, validationReport,
-                rolledBack.Count > 0 ? rolledBack : null);
+                rolledBack.Count > 0 ? rolledBack : null,
+                noOp.Count > 0 ? noOp : null);
         }
         finally
         {
