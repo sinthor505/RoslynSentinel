@@ -49,8 +49,12 @@
                           THAT MODEL'S OWN plan text (not a hand-picked one, unlike ScriptedPlan),
                           and a read-only verify phase that independently judges the on-disk
                           result. Pass requires both AssertFixApplied AND the verify phase's own
-                          "VERIFIED: PASS" verdict. Each phase capped at 5 minutes wall-clock;
-                          not supported against .112 (too slow for a 3-call test).
+                          "VERIFIED: PASS" verdict. Each phase capped at 5 minutes wall-clock.
+                          Pass -MinimalTools to narrow every phase's advertised tool schema from
+                          the full 48 tools down to the 11 actually observed in real transcripts
+                          (see project_granite42_8b_tool_schema_size_isolated) - a diagnostic for
+                          testing whether schema size itself is the latency driver on slow models
+                          like granite-4.2-8b, not a change to what phases are allowed to do.
 
     Each host gets its own --artifacts-path (RoslynSentinel\_scratchbuild_<host-suffix>) so
     that two hosts can be launched concurrently without racing on shared project references'
@@ -95,6 +99,34 @@
     away - this happens unconditionally, independent of -Clean, so results are available in
     the common folder as soon as each run finishes rather than only on the next -Clean.
 
+.PARAMETER MinimalTools
+    PlanImplementVerify only: sets ROSLYNSENTINEL_LLM_MINIMAL_TOOLS=true, narrowing every
+    phase's advertised tools/list schema to the 11 tools actually used in real transcripts
+    instead of the full 48. Ignored (has no effect) for every other -Test value.
+
+.PARAMETER Temperature
+    Sampling temperature sent on every /v1/responses request (omitted entirely if not passed,
+    letting LM Studio apply its own default). Confirmed real 2026-09-05: LM Studio echoes back
+    whatever value it actually used, and LmStudioAgentClient logs a warning if that echoed value
+    doesn't match what was requested (e.g. a preset silently overriding it - see LM Studio
+    bug tracker #1389). IBM's own recommended llama.cpp params for Granite 4.x are
+    -Temperature 0.0 -TopP 1.0 (greedy decoding) - see
+    project_granite42_8b_tool_schema_size_isolated for why this is being tested as a second,
+    independent lever alongside -MinimalTools for granite's chronic slowness.
+
+.PARAMETER TopP
+    Nucleus sampling top-p, sent and verified the same way as -Temperature.
+
+.PARAMETER TopK
+.PARAMETER RepeatPenalty
+.PARAMETER MinP
+    UI-ONLY as far as this harness can tell - passing any of these prints a warning instead of
+    doing anything. Confirmed 2026-09-05: LM Studio's /v1/responses endpoint (what this harness
+    uses) silently drops top_k/repeat_penalty/min_p - a same-prompt A/B test at repeat_penalty
+    1.0 vs 1.8 produced byte-identical generations, even though top_k/repeat_penalty ARE real,
+    documented fields on /v1/chat/completions (a different endpoint this harness doesn't use).
+    Set these by hand in LM Studio's sampling panel for the loaded model instead.
+
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
     Sweep size=60 against the .112 GTX 1080 host.
@@ -125,7 +157,19 @@ param(
 
     [switch]$Clean,
 
-    [int]$Repeats = 1
+    [int]$Repeats = 1,
+
+    [switch]$MinimalTools,
+
+    [double]$Temperature,
+
+    [double]$TopP,
+
+    [double]$TopK,
+
+    [double]$RepeatPenalty,
+
+    [double]$MinP
 )
 
 $ErrorActionPreference = 'Stop'
@@ -179,11 +223,41 @@ Write-Host "=== ModelEval: $testName against $baseUrl (model=$Model) ===" -Foreg
 if ($Test -eq 'SizeThreshold') {
     Write-Host "    ROSLYNSENTINEL_MODELEVAL_SIZES=$Size" -ForegroundColor Cyan
 }
+if ($MinimalTools) {
+    Write-Host "    ROSLYNSENTINEL_LLM_MINIMAL_TOOLS=true (only applies to PlanImplementVerify)" -ForegroundColor Cyan
+}
+if ($PSBoundParameters.ContainsKey('Temperature')) {
+    Write-Host "    ROSLYNSENTINEL_LLM_TEMPERATURE=$Temperature (sent on every request; LM Studio's own echoed value is checked against this - see AgentLoop warnings)" -ForegroundColor Cyan
+}
+if ($PSBoundParameters.ContainsKey('TopP')) {
+    Write-Host "    ROSLYNSENTINEL_LLM_TOP_P=$TopP (sent on every request; verified the same way as Temperature)" -ForegroundColor Cyan
+}
+if ($PSBoundParameters.ContainsKey('TopK') -or $PSBoundParameters.ContainsKey('RepeatPenalty') -or $PSBoundParameters.ContainsKey('MinP')) {
+    Write-Warning "TopK/RepeatPenalty/MinP CANNOT be sent or verified via this harness's /v1/responses endpoint - confirmed 2026-09-05 that LM Studio silently drops these three there (a repeat_penalty A/B test at 1.0 vs 1.8 produced byte-identical output), even though they ARE real, documented params on /v1/chat/completions. Set them by hand in LM Studio's sampling panel for the loaded model; this script cannot do it for you or confirm the UI value matches."
+}
 Write-Host "    --artifacts-path $artifactsPath" -ForegroundColor Cyan
 Write-Host ""
 
 $env:ROSLYNSENTINEL_LLM_BASE_URL = $baseUrl
 $env:ROSLYNSENTINEL_LLM_MODEL = $Model
+if ($PSBoundParameters.ContainsKey('Temperature')) {
+    $env:ROSLYNSENTINEL_LLM_TEMPERATURE = $Temperature
+}
+else {
+    $env:ROSLYNSENTINEL_LLM_TEMPERATURE = $null
+}
+if ($PSBoundParameters.ContainsKey('TopP')) {
+    $env:ROSLYNSENTINEL_LLM_TOP_P = $TopP
+}
+else {
+    $env:ROSLYNSENTINEL_LLM_TOP_P = $null
+}
+if ($MinimalTools) {
+    $env:ROSLYNSENTINEL_LLM_MINIMAL_TOOLS = 'true'
+}
+else {
+    $env:ROSLYNSENTINEL_LLM_MINIMAL_TOOLS = $null
+}
 if ($Test -eq 'SizeThreshold') {
     $env:ROSLYNSENTINEL_MODELEVAL_SIZES = "$Size"
 }

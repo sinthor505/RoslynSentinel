@@ -55,6 +55,8 @@ public sealed class LmStudioAgentClient
             ToolChoice = tools.Count > 0 ? "auto" : null,
             MaxOutputTokens = maxTokens,
             Stream = true,
+            Temperature = LlmOptions.Temperature,
+            TopP = LlmOptions.TopP,
         };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "responses")
@@ -131,6 +133,30 @@ public sealed class LmStudioAgentClient
         if (completedResponse is null)
         {
             throw new InvalidOperationException("LM Studio stream ended without a response.completed event.");
+        }
+
+        // LM Studio always echoes back whatever value it actually used, including its own default
+        // when the request omitted the field — so a mismatch against a value we explicitly sent
+        // means LM Studio silently coerced or ignored it (seen for temperature/top_p with certain
+        // presets — see LM Studio bug tracker #1389), which is worth surfacing loudly rather than
+        // silently trusting the request body we sent.
+        if (LlmOptions.Temperature is { } requestedTemperature &&
+            completedResponse.Temperature is { } actualTemperature &&
+            Math.Abs(requestedTemperature - actualTemperature) > 0.0001)
+        {
+            _logger.LogWarning(
+                "Requested temperature {Requested} but LM Studio reports it used {Actual} — a preset or " +
+                "server-side override may be silently taking precedence over the request body.",
+                requestedTemperature, actualTemperature);
+        }
+        if (LlmOptions.TopP is { } requestedTopP &&
+            completedResponse.TopP is { } actualTopP &&
+            Math.Abs(requestedTopP - actualTopP) > 0.0001)
+        {
+            _logger.LogWarning(
+                "Requested top_p {Requested} but LM Studio reports it used {Actual} — a preset or " +
+                "server-side override may be silently taking precedence over the request body.",
+                requestedTopP, actualTopP);
         }
 
         var reasoningText = string.Concat(reasoningBuilders.Values.Select(sb => sb.ToString()));
@@ -227,6 +253,16 @@ public sealed class LmStudioAgentClient
         [JsonPropertyName("max_output_tokens")]
         public int MaxOutputTokens { get; set; }
         public bool Stream { get; set; }
+
+        // Both omitted (null) unless LlmOptions.Temperature/TopP is explicitly set — confirmed
+        // 2026-09-05 that LM Studio's /v1/responses echoes these back verbatim in
+        // ResponseObject.Temperature/TopP when sent, unlike top_k/repeat_penalty/min_p (documented
+        // for /v1/chat/completions but absent from /v1/responses' response body AND confirmed via
+        // an A/B behavioral test to have zero effect on generation there) — those three are
+        // deliberately NOT wired here; see LlmOptions.TopK's remarks.
+        public double? Temperature { get; set; }
+        [JsonPropertyName("top_p")]
+        public double? TopP { get; set; }
     }
 
     private sealed class InputMessageItem
@@ -287,6 +323,13 @@ public sealed class LmStudioAgentClient
     private sealed class ResponseObject
     {
         public List<OutputItem> Output { get; set; } = [];
+
+        // Only meaningful for verifying LlmOptions.Temperature/TopP were actually honored (see
+        // CompleteAsync's post-response check) — LM Studio always echoes SOME value here (its own
+        // default when the request omitted the field), not just when we sent one.
+        public double? Temperature { get; set; }
+        [JsonPropertyName("top_p")]
+        public double? TopP { get; set; }
     }
 
     private sealed class OutputItem
