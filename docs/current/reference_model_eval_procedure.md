@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: baae58f2-ea41-48a8-b6da-6d65bc32d78d
-  modified: 2026-09-01T02:28:03.262Z
+  modified: 2026-09-05T11:06:43.811Z
 ---
 
 Real-model integration tests live in `RoslynSentinel.Tests.ModelEval`. They drive an actual
@@ -177,6 +177,14 @@ terminals) — each gets its own `--artifacts-path` automatically, so they won't
 - `agent.log` is written+flushed independently of `dotnet test`'s stdout buffering (which
   block-buffers when redirected to a file), so it can be tailed live during a long run even
   though console output only appears after the process exits.
+
+## Analyzing results afterward: `Parse-AgentLog.ps1`
+
+Once a batch finishes (via the script above or otherwise), use `Parse-AgentLog.ps1` (repo root)
+to turn `agent.log` transcripts into structured per-turn objects — reasoning text, tool calls with
+parsed args/results, error counts — instead of manually grepping/reconstructing raw log text. See
+[[reference_parse_agent_log_script]] for usage and the directory-layout edge cases it handles
+(including `PlanImplementVerify`'s nested phase folders).
 
 See also [[project_applydiff_fixes_unblocked_model_eval]] for background on why this harness
 exists (replacing manual copy/paste-into-LM-Studio testing) and

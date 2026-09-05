@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: baae58f2-ea41-48a8-b6da-6d65bc32d78d
-  modified: 2026-09-05T06:30:28.987Z
+  modified: 2026-09-05T11:06:11.475Z
 ---
 
 Reviewed the `reason` argument on every tool call across the 13 `.113` runs (of a 20-run batch)
@@ -63,6 +63,11 @@ both are now greppable directly from `reason` strings across a whole batch in se
 reading full transcripts — it's a fast triage pass for (a) whether the model reached for the
 purpose-built tool vs. a generic fallback for known operations, and (b) whether a reason sequence
 shows a correction/retry pattern worth a closer look, even when the run's terminal result is a
-clean pass. Consider adding a lightweight batch-level report that tallies reason-implied
-tool-choice-for-known-operations across a whole `-Repeats N` run, since this was done by hand here
-and would generalize well to a script.
+clean pass.
+
+**Update 2026-09-05**: the batch-level script this memory called for now exists —
+[[reference_parse_agent_log_script]] (`Parse-AgentLog.ps1`) parses a whole test's results directory
+into per-run/per-turn objects with each `ToolCall.Args` already JSON-parsed, so `.reason` is
+directly queryable across every run in one pipeline (e.g. `$runs.Turns.ToolCalls | Where ToolName
+-eq 'ApplyDiff' | Select -Expand Args | Select -Expand reason`) instead of hand-grepping raw log
+text per run the way this finding's analysis was done.
