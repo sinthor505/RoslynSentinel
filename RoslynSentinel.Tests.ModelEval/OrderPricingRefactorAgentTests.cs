@@ -24,6 +24,18 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// parameters, matching the flexibility <c>MinimalGuidance</c>/<c>Disambiguated</c> give elsewhere —
 /// the model may use dedicated refactor tools (ExtractMethodSafe, RenameSymbol, ChangeAccessibility/
 /// ModifyModifier) or ApplyDiff for any step, its choice.
+///
+/// Updated 2026-09-05 after 2/2 runs in a batch independently produced the same wrong-but-plausible
+/// extraction: step 1's original wording ("extract that duplicated discount-amount calculation")
+/// was ambiguous between "factor out the shared `amount * rate` expression" (the intended, narrower
+/// reading — what AssertRefactorsApplied actually checks for) and "extract the whole per-branch
+/// discount-amount computation, including the 1.1x branching, into one new method" (a broader,
+/// equally reasonable reading of the same sentence). Both failing runs took the broader reading,
+/// moved the if/else into the new method, and wrote `amount * rate` separately in each of ITS two
+/// branches — so the literal duplication the fixture targets survived, just one level down, while
+/// still fully satisfying the step's own stated goal ("share one calculation" read as "share the
+/// discount logic"). Reworded step 1 to name the exact expression to factor out and explicitly say
+/// the branching/scaling logic must stay in `CalcDisc`, closing off the broader reading.
 /// </summary>
 [TestFixture]
 public class OrderPricingRefactorAgentTests
@@ -46,11 +58,12 @@ public class OrderPricingRefactorAgentTests
 
         ## Steps (apply all three)
 
-        1. **Extract**: `CalcDisc` computes the discount amount (`amount * rate`, scaled by 1.1 for
-           preferred customers) separately in each of its two branches instead of sharing one
-           calculation. Extract that duplicated discount-amount calculation into its own new
-           private method on the same class, and have both branches of `CalcDisc` call it instead
-           of repeating the expression inline. Preserve the existing behavior exactly (preferred
+        1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
+           factor only that expression out into its own new private method on the same class (it
+           should take `amount` and `rate` and return their product), and have both branches call
+           your new method instead of repeating `amount * rate` inline. Leave the branching and the
+           1.1x preferred-customer scaling exactly where they are in `CalcDisc` itself — do not move
+           that logic into the new method. Preserve the existing behavior exactly (preferred
            customers still get the 1.1x scaling, standard customers don't).
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
