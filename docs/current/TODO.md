@@ -1034,3 +1034,78 @@ started as of this pass.
 list; this entry exists so the backlog is discoverable from `TODO.md` without having to know the
 reference doc exists.
 
+## Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, costing 67.5% of all ApplyDiff failures — open, unactioned
+
+**Found:** 2026-09-05, via a full-dataset aggregation pass over `ModelTestingResults\113` (995
+archived model-eval runs) using the new `Parse-AgentLog.ps1` script (see
+`docs/current/reference_parse_agent_log_script.md`). Full writeup:
+`docs/current/model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md`.
+
+**What:** across every model-eval test variant that asks the model to reuse
+`BlockEditHelpers.ReplaceBlockFormatted` (all of `MinimalGuidance`, `MinimalGuidanceDisambiguated`,
+`PlanThenExecute`, `PlanImplementVerify`), the model overwhelmingly edits accessibility via a raw
+`ApplyDiff` hunk instead of calling the purpose-built `ChangeAccessibility` tool (already present
+in every affected run's tool allowlist — availability isn't the gap). When it sequences the
+accessibility change *after* adding the call site instead of before/atomically-with it, the
+pre-apply Roslyn diagnostic pass or the post-apply compile guard correctly rejects the edit
+(`CS0103`/`CS0122`), forcing a retry. This single sequencing pattern accounts for 382 of 566
+(67.5%) of every `ApplyDiff` failure across the entire 995-run historical dataset — the largest
+single failure/retry driver of anything currently measured, affecting 206/995 runs, worst in
+`PlanImplementVerify` (126/655 of its runs).
+
+**Why this matters:** both compile guards are working as designed (this is not a tool bug) — the
+cost is entirely wasted turns and tool-error-budget consumption
+(`RoslynSentinel.Tests.ModelEval`'s `AssertWithinBudget`), not unrecovered failures. It's also the
+quantified scale-up of an already-recorded qualitative finding
+(`project_reason_param_reveals_toolchoice_and_selfcorrection` memory: `ChangeAccessibility` used
+1/13 times vs. `ApplyDiff`'s ~8/13 for the identical operation in a hand-reviewed sample) — this is
+the first full-dataset confirmation that the pattern is both real and large, not sample noise.
+
+**Suggested approach (three candidates, none implemented/tested yet, roughly cheapest first):**
+1. Add an explicit sequencing hint to the affected fixture prompts ("check/change
+   `ReplaceBlockFormatted`'s accessibility before wiring the new call site") and re-run a batch to
+   see if it measurably shifts the tool-choice ratio or the CS0103/CS0122 counts down.
+2. Strengthen `ChangeAccessibility`'s `[Description]` to more assertively claim the "make X
+   internal/public" use case away from `ApplyDiff` — opposite direction from the
+   `ModifyModifier`-accessibility-enum fix (that one narrowed a tool's enum to steer *away* from
+   it; this would need to steer *toward* one), so the same mechanism may not transfer directly.
+3. Enrich the `CS0103`/`CS0122` compile-guard error text to name `ChangeAccessibility` explicitly
+   when the underlying cause is fixable by it, rather than leaving the model to infer the fix path
+   from a raw Roslyn diagnostic (matches the spirit of the agent-friendly-error-messages
+   principle already applied elsewhere in the tool layer).
+
+Not yet decided which lever to pull or A/B tested — this entry exists so the (large, confirmed)
+opportunity is discoverable from `TODO.md` rather than only living in the dated doc.
+
+## Feature idea: server-side telemetry/metrics for tool call counts and error rates — open, unactioned
+
+**Found:** 2026-09-05, raised by Andrew while reviewing the `ReplaceBlockFormatted` finding above,
+which required an offline post-hoc `Parse-AgentLog.ps1` aggregation pass over archived transcripts
+to get per-tool call/error-rate numbers.
+
+**What:** the MCP server itself has no live counters for how often each tool is called, or its
+success/error rate — this data currently only exists reconstructible after the fact from
+`agent.log`/`transcript.json` files (model-eval only) or not at all (real interactive/production
+sessions have no equivalent transcript to mine). A lightweight in-process metrics layer (e.g. a
+`ToolCallCount`/`ToolErrorCount` counter per tool name, exposed via a new read-only tool or a
+`/metrics`-style endpoint) would give live visibility into tool usage and failure rates across
+*any* session — model-eval or a real agent — not just ones that happen to have a saved transcript
+to parse afterward.
+
+**Why this matters:** the `ReplaceBlockFormatted` finding and
+`project_reason_param_reveals_toolchoice_and_selfcorrection` both needed a bespoke offline
+analysis pass (grep/parse a log, or hand-review transcripts) to surface tool-choice and
+error-rate patterns that live counters would expose immediately and continuously, for every
+session, not just archived model-eval batches with saved logs.
+
+**Suggested approach (not designed yet):** likely a simple in-memory `ConcurrentDictionary<string,
+ToolCallStats>` (call count, error count, maybe total duration) updated at the same chokepoint
+every tool call already passes through (wherever `IsError`/success is currently determined for
+logging, per the `"ToolName" completed. IsError = ...` log lines this session's `Parse-AgentLog.ps1`
+work already located), plus a new read-only tool (or extend `GetWorkspaceHealth`/
+`GetComprehensiveHealthReport`) to surface current counts. Whether counts should persist across
+server restarts, reset per-session, or both is an open design question — not decided here.
+See also `docs/current/reference_parse_agent_log_script.md` and
+`docs/current/model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md` for the concrete
+analysis gap that prompted this idea.
+
