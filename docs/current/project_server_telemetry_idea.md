@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: baae58f2-ea41-48a8-b6da-6d65bc32d78d
-  modified: 2026-09-05T11:16:21.424Z
+  modified: 2026-09-05T11:19:38.938Z
 ---
 
 Andrew proposed (2026-09-05, while reviewing [[project_replaceblockformatted_accessibility_cost_2026_09_05]])
@@ -21,9 +21,16 @@ didn't exist anywhere live — every cross-run tool-choice/error-rate finding so
 aggregation pass over saved logs that only exist for model-eval batches. Live server-side counters
 would surface the same signal continuously, for any session.
 
-**How to apply:** not yet designed or implemented — full entry with suggested approach lives in
+**Hook point confirmed 2026-09-05 (not yet implemented):** the MCP call-tool filter chain in
+`RoslynSentinel.Server.Basic/ServiceRegistrationExtensionsBasic.cs`'s `AddRoslynSentinelToolsBasic`
+(~line 167-406) is the single place every tool call already passes through regardless of server
+flavor, and already has 5 filters in exactly the shape a metrics filter needs
+(`filters.AddCallToolFilter(next => new McpRequestHandler<...>(async (context, ct) => { var
+result = await next(context, ct); ...; return result; }))`). Must be registered *after* the
+"domain-failure → protocol-error sync" filter so it counts the corrected `IsError` (including
+tools that return `Success=false` instead of throwing), and should count the orientation
+breaker's own pre-check short-circuit as a failed call too. Full detail and code-shape sketch in
 `docs/current/TODO.md` ("Feature idea: server-side telemetry/metrics for tool call counts and
-error rates"). Open design questions: where to hook the counter (likely the same chokepoint that
-already logs `"ToolName" completed. IsError = ...`), how to expose it (new read-only tool vs.
-extending `GetWorkspaceHealth`/`GetComprehensiveHealthReport`), and whether counts persist across
-server restarts or reset per-session. Revisit that TODO entry before starting any related work.
+error rates"). Still open: exposure mechanism (new read-only tool vs. extending
+`GetWorkspaceHealth`/`GetComprehensiveHealthReport`) and whether counts persist across restarts.
+Revisit that TODO entry before starting any related work.

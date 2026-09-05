@@ -1098,11 +1098,29 @@ analysis pass (grep/parse a log, or hand-review transcripts) to surface tool-cho
 error-rate patterns that live counters would expose immediately and continuously, for every
 session, not just archived model-eval batches with saved logs.
 
-**Suggested approach (not designed yet):** likely a simple in-memory `ConcurrentDictionary<string,
-ToolCallStats>` (call count, error count, maybe total duration) updated at the same chokepoint
-every tool call already passes through (wherever `IsError`/success is currently determined for
-logging, per the `"ToolName" completed. IsError = ...` log lines this session's `Parse-AgentLog.ps1`
-work already located), plus a new read-only tool (or extend `GetWorkspaceHealth`/
+**Hook point confirmed 2026-09-05 (not yet implemented):** the MCP call-tool filter chain in
+`RoslynSentinel.Server.Basic/ServiceRegistrationExtensionsBasic.cs`'s
+`AddRoslynSentinelToolsBasic` (`mcpBuilder.WithRequestFilters(...)`, ~line 167-406) is the single
+place every tool call already passes through regardless of server flavor (Advanced reuses Basic's
+registration — see `project_advanced_extends_basic`), and already has 5 filters following the
+exact shape a metrics filter would need: `filters.AddCallToolFilter(next => new
+McpRequestHandler<CallToolRequestParams, CallToolResult>(async (context, ct) => { var result =
+await next(context, ct); try { /* logic */ } catch (Exception ex) { Debug.WriteLine(...); }
+return result; }))`, with `context.Params?.Name` for the tool name and `context.Server.Services?
+.GetService<T>()` already the established way to resolve a shared singleton (used today for
+`PersistentWorkspaceManager`/`ILogger<T>`).
+
+**Placement matters**: a metrics filter should be registered *after* the "domain-failure →
+protocol-error sync" filter (ends ~line 245) — that's the one that sets `result.IsError = true`
+for tools that catch their own exceptions and return `Success=false` instead of throwing (see
+`feedback_agent_friendly_error_messages`), so counting before it would undercount real failures
+the same way raw exception-based `IsError` detection already does. It should also count the
+orientation breaker's own pre-check short-circuit (~line 342-350, which returns before ever
+calling `next()`) as a real failed invocation of whatever tool was blocked, not skip it.
+
+**Suggested approach:** a `ConcurrentDictionary<string, ToolCallStats>` (call count, error count,
+maybe total duration) singleton, registered in DI and updated inside the new filter exactly as
+described above, plus a new read-only tool (or extend `GetWorkspaceHealth`/
 `GetComprehensiveHealthReport`) to surface current counts. Whether counts should persist across
 server restarts, reset per-session, or both is an open design question — not decided here.
 See also `docs/current/reference_parse_agent_log_script.md` and
