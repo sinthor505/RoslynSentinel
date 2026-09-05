@@ -92,7 +92,13 @@
     SizeThreshold | LiteralSteps | MinimalGuidance | MinimalGuidanceDisambiguated | PlanOnly |
     PlanThenExecute | ScriptedPlan | PlanImplementVerify | OrderPricingRefactor |
     OrderPricingRefactorChain4 | OrderPricingRefactorChain5 | OrderPricingRefactorChain6 |
-    OrderPricingRefactorChain7. Required.
+    OrderPricingRefactorChain7. Required. Accepts multiple values (e.g.
+    -Test OrderPricingRefactor,OrderPricingRefactorChain4,OrderPricingRefactorChain5) to run
+    each one in turn, in the order given, all under the same -HostAddress/-Model/-Repeats -
+    this is the supported way to queue a multi-test overnight sequence: it reuses this script's
+    own env-var setup, --artifacts-path, and Wait-ForTesthostExit handling for every test
+    instead of a caller-side loop re-deriving any of that (see
+    feedback_check_for_existing_scripts_before_looping).
 
 .PARAMETER Size
     SizeThreshold only: single value for ROSLYNSENTINEL_MODELEVAL_SIZES (default: 60).
@@ -170,7 +176,7 @@ param(
 
     [Parameter(Position = 1, Mandatory)]
     [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7')]
-    [string]$Test,
+    [string[]]$Test,
 
     [Parameter(Position = 2)]
     [int]$Size = 60,
@@ -230,9 +236,17 @@ $testNames = @{
     'OrderPricingRefactorChain6'    = 'Model_AppliesSixChainedRefactors'
     'OrderPricingRefactorChain7'    = 'Model_AppliesSevenChainedRefactors'
 }
-$testName = $testNames[$Test]
 
 $artifactsPath = Join-Path $repoRoot "_scratchbuild_$suffix"
+
+if ($Test.Count -gt 1) {
+    Write-Host ""
+    Write-Host "=== Queuing $($Test.Count) tests in sequence against $baseUrl (model=$Model): $($Test -join ', ') ===" -ForegroundColor Magenta
+}
+
+$finalExitCode = 0
+foreach ($currentTest in $Test) {
+$testName = $testNames[$currentTest]
 
 if ($Clean) {
     $modelEvalDir = Join-Path $artifactsPath 'bin\RoslynSentinel.Tests.ModelEval\debug\model-eval'
@@ -247,7 +261,7 @@ if ($Clean) {
 
 Write-Host ""
 Write-Host "=== ModelEval: $testName against $baseUrl (model=$Model) ===" -ForegroundColor Cyan
-if ($Test -eq 'SizeThreshold') {
+if ($currentTest -eq 'SizeThreshold') {
     Write-Host "    ROSLYNSENTINEL_MODELEVAL_SIZES=$Size" -ForegroundColor Cyan
 }
 if ($MinimalTools) {
@@ -285,7 +299,7 @@ if ($MinimalTools) {
 else {
     $env:ROSLYNSENTINEL_LLM_MINIMAL_TOOLS = $null
 }
-if ($Test -eq 'SizeThreshold') {
+if ($currentTest -eq 'SizeThreshold') {
     $env:ROSLYNSENTINEL_MODELEVAL_SIZES = "$Size"
 }
 else {
@@ -371,4 +385,18 @@ for ($i = 1; $i -le $Repeats; $i++) {
     }
 }
 
-exit $exitCode
+if ($exitCode -ne 0) {
+    $finalExitCode = $exitCode
+}
+
+if ($Test.Count -gt 1 -and $currentTest -ne $Test[-1]) {
+    Wait-ForTesthostExit
+}
+}
+
+if ($Test.Count -gt 1) {
+    Write-Host ""
+    Write-Host "=== All $($Test.Count) queued tests finished (final exit code $finalExitCode) ===" -ForegroundColor Magenta
+}
+
+exit $finalExitCode
