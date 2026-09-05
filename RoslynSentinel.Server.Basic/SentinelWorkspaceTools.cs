@@ -310,14 +310,21 @@ public class SentinelWorkspaceTools
         }
     }
 
+    /// <summary>
+    /// Hard cap on how many files ListWorkspaceSolutions will walk before giving up — protects
+    /// against a caller passing an overly broad root (see the drive-root guard below) that isn't
+    /// caught by that check but still turns out to contain far more than any real workspace would
+    /// (e.g. a node_modules-style tree, or a root one level above the intended one).
+    /// </summary>
+    private const int ListWorkspaceSolutionsMaxFilesWalked = 200_000;
+
     [McpServerTool(Name = "ListWorkspaceSolutions")]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.SolutionList)]
-    [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution. Pass your workspace root as workspacePath.")]
+    [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution. Pass your workspace root as workspacePath — a real project/repo directory, not a drive root or '/'.")]
     public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions([Description(ToolParams.Reason)] string reason, string workspacePath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        _ = cancellationToken;
         workspacePath = FilePath.NormalizeWirePath(workspacePath);
         if (!Directory.Exists(workspacePath))
         {
@@ -328,15 +335,51 @@ public class SentinelWorkspaceTools
             };
         }
 
+        var fullWorkspacePath = Path.GetFullPath(workspacePath);
+        var pathRoot = Path.GetPathRoot(fullWorkspacePath);
+        if (!string.IsNullOrEmpty(pathRoot) && string.Equals(
+                fullWorkspacePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                pathRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return new ToolResult<List<SolutionFileInfo>>
+            {
+                Success = false,
+                Error = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' resolves to the drive root '{pathRoot}'. Pass a real project/repo directory instead — scanning an entire drive is not supported.")
+            };
+        }
+
         try
         {
-            var files = Directory.EnumerateFiles(workspacePath, "*.sln", SearchOption.AllDirectories).Concat(Directory.EnumerateFiles(workspacePath, "*.slnx", SearchOption.AllDirectories)).OrderBy(p => p).Select(p => new SolutionFileInfo(Path: p, Format: Path.GetExtension(p).TrimStart('.').ToLowerInvariant())).ToList();
+            var files = new List<SolutionFileInfo>();
+            foreach (var pattern in new[] { "*.sln", "*.slnx" })
+            {
+                foreach (var path in Directory.EnumerateFiles(fullWorkspacePath, pattern, SearchOption.AllDirectories))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    files.Add(new SolutionFileInfo(Path: path, Format: Path.GetExtension(path).TrimStart('.').ToLowerInvariant()));
+                    if (files.Count > ListWorkspaceSolutionsMaxFilesWalked)
+                    {
+                        return new ToolResult<List<SolutionFileInfo>>
+                        {
+                            Success = false,
+                            Error = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' contains more than {ListWorkspaceSolutionsMaxFilesWalked} matching files — this looks like too broad a root. Pass a narrower project/repo directory instead.")
+                        };
+                    }
+                }
+            }
+
+            files.Sort((a, b) => string.CompareOrdinal(a.Path, b.Path));
             return new ToolResult<List<SolutionFileInfo>>
             {
                 Success = true,
                 Data = files,
                 TotalRecords = files.Count
             };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

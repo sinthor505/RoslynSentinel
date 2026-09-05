@@ -354,6 +354,32 @@ public class BatteryTwentyTests
         Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
     }
 
+    [Test]
+    public void ListWorkspaceSolutions_DriveRoot_RejectedInsteadOfScanningWholeDrive()
+    {
+        // Regression: a model passed workspacePath:"/" (a plausible "search from root" guess),
+        // which Directory.Exists resolves to the current drive's root on Windows, sending an
+        // uncancellable Directory.EnumerateFiles(..., AllDirectories) across the entire C: drive —
+        // observed hanging 30+ minutes while climbing to 4.6GB RAM in a real model-eval run.
+        var driveRoot = Path.GetPathRoot(Path.GetTempPath())!;
+
+        var result = _tools.ListWorkspaceSolutions(reason: "test", driveRoot);
+
+        Assert.That(result.Success, Is.False, "scanning an entire drive root must be rejected, not attempted");
+        Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
+    }
+
+    [Test]
+    public void ListWorkspaceSolutions_BareSlash_RejectedInsteadOfScanningWholeDrive()
+    {
+        // "/" is the exact value observed triggering the hang above — NormalizeWirePath leaves it
+        // untouched, and Directory.Exists("/") is true on Windows (resolves to the current drive).
+        var result = _tools.ListWorkspaceSolutions(reason: "test", "/");
+
+        Assert.That(result.Success, Is.False, "'/' resolves to a drive root and must be rejected");
+        Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
+    }
+
     // --- Diagnose ---
 
     // GetExternalChanges/AcknowledgeSync tests moved to SentinelAdminToolsTests.cs —
