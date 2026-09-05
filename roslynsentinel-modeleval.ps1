@@ -64,6 +64,17 @@
                           MinimalGuidance/Disambiguated-style flexibility - the model chooses
                           which tool(s) to use for each step (ExtractMethodSafe/RenameSymbol/
                           ChangeAccessibility/ModifyModifier or plain ApplyDiff).
+      OrderPricingRefactorChain4/5/6/7 - escalating ladder built on top of OrderPricingRefactor's
+                          3 base steps, one added idiomatic refactor per rung: Chain4 adds
+                          inlining a single-use local; Chain5 adds renaming a parameter
+                          (rate -> discountRate); Chain6 adds a guard clause rejecting a negative
+                          discount rate (the one rung introducing new behavior, deliberately
+                          scoped to non-negative inputs to avoid repeating OrderPricingRefactor's
+                          step-1 wording-ambiguity failure); Chain7 adds extracting an
+                          IOrderPricingCalculator interface with OrderCheckout depending on the
+                          interface type. Each rung is its own fixture/prompt/test method in
+                          OrderPricingRefactorChainAgentTests.cs, not a parameterization of
+                          OrderPricingRefactor.
 
     Each host gets its own --artifacts-path (RoslynSentinel\_scratchbuild_<host-suffix>) so
     that two hosts can be launched concurrently without racing on shared project references'
@@ -79,7 +90,9 @@
 
 .PARAMETER Test
     SizeThreshold | LiteralSteps | MinimalGuidance | MinimalGuidanceDisambiguated | PlanOnly |
-    PlanThenExecute | ScriptedPlan | PlanImplementVerify | OrderPricingRefactor. Required.
+    PlanThenExecute | ScriptedPlan | PlanImplementVerify | OrderPricingRefactor |
+    OrderPricingRefactorChain4 | OrderPricingRefactorChain5 | OrderPricingRefactorChain6 |
+    OrderPricingRefactorChain7. Required.
 
 .PARAMETER Size
     SizeThreshold only: single value for ROSLYNSENTINEL_MODELEVAL_SIZES (default: 60).
@@ -156,7 +169,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7')]
     [string]$Test,
 
     [Parameter(Position = 2)]
@@ -212,6 +225,10 @@ $testNames = @{
     'ScriptedPlan'                   = 'Model_FixesWholeFileRewriteBug_ScriptedPlan'
     'PlanImplementVerify'           = 'Model_FixesWholeFileRewriteBug_PlanImplementVerify'
     'OrderPricingRefactor'          = 'Model_AppliesThreeChainedRefactors'
+    'OrderPricingRefactorChain4'    = 'Model_AppliesFourChainedRefactors'
+    'OrderPricingRefactorChain5'    = 'Model_AppliesFiveChainedRefactors'
+    'OrderPricingRefactorChain6'    = 'Model_AppliesSixChainedRefactors'
+    'OrderPricingRefactorChain7'    = 'Model_AppliesSevenChainedRefactors'
 }
 $testName = $testNames[$Test]
 

@@ -183,6 +183,105 @@ internal static class FunctionalFixVerifier
         return new WeakReference(loadContext);
     }
 
+    /// <summary>
+    /// Builds the fixture's ContosoOrders.Core project and reflection-invokes
+    /// <c>OrderPricingCalculator.CalculateDiscountedTotal</c> once, asserting it throws an
+    /// exception whose runtime type name matches <paramref name="expectedExceptionTypeName"/>
+    /// (e.g. for the guard-clause rung of <c>OrderPricingRefactorChainAgentTests</c>, so a negative
+    /// discount rate is proven to actually throw at runtime rather than merely containing the
+    /// exception type's name somewhere in the source text). Looked up by parameter TYPES rather
+    /// than names so a prior rung's parameter rename (<c>rate</c> to <c>discountRate</c>) doesn't
+    /// break this lookup.
+    /// </summary>
+    public static async Task<bool> InvokeCalculateDiscountedTotalThrowsAsync(
+        string coreProjectDirectory, decimal amount, decimal rate, bool isPreferredCustomer,
+        string expectedExceptionTypeName, CancellationToken cancellationToken)
+    {
+        var csprojPath = Path.Combine(coreProjectDirectory, "ContosoOrders.Core.csproj");
+        if (!File.Exists(csprojPath))
+        {
+            throw new FileNotFoundException($"FunctionalFixVerifier: no project file at '{csprojPath}'.", csprojPath);
+        }
+
+        var buildOutput = await RunDotnetBuildAsync(csprojPath, cancellationToken);
+
+        var assemblyPath = Path.Combine(coreProjectDirectory, "bin", "Debug", "net10.0", "ContosoOrders.Core.dll");
+        if (!File.Exists(assemblyPath))
+        {
+            throw new FileNotFoundException(
+                $"FunctionalFixVerifier: dotnet build reported success but no assembly was produced at " +
+                $"'{assemblyPath}'. Build output:\n{buildOutput}", assemblyPath);
+        }
+
+        bool threwExpectedType;
+        var loadContextRef = InvokeCalculateDiscountedTotalThrowsInCollectibleContext(
+            assemblyPath, amount, rate, isPreferredCustomer, expectedExceptionTypeName, out threwExpectedType);
+
+        for (var i = 0; i < 10 && loadContextRef.IsAlive; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+
+        return threwExpectedType;
+    }
+
+    private static WeakReference InvokeCalculateDiscountedTotalThrowsInCollectibleContext(
+        string assemblyPath, decimal amount, decimal rate, bool isPreferredCustomer,
+        string expectedExceptionTypeName, out bool threwExpectedType)
+    {
+        var loadContext = new AssemblyLoadContext("FunctionalFixVerifier", isCollectible: true);
+        try
+        {
+            var assembly = loadContext.LoadFromAssemblyPath(assemblyPath);
+            var calculatorType = assembly.GetType("ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator")
+                ?? throw new InvalidOperationException(
+                    "FunctionalFixVerifier: type 'ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator' " +
+                    "not found in the built assembly — the model's edit may have renamed or removed it.");
+            var method = calculatorType.GetMethod(
+                    "CalculateDiscountedTotal",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                    [typeof(decimal), typeof(decimal), typeof(bool)])
+                ?? throw new InvalidOperationException(
+                    "FunctionalFixVerifier: method 'CalculateDiscountedTotal(decimal, decimal, bool)' not " +
+                    "found on OrderPricingCalculator — the rename or signature may be wrong.");
+            var instance = Activator.CreateInstance(calculatorType)
+                ?? throw new InvalidOperationException("FunctionalFixVerifier: could not construct OrderPricingCalculator.");
+
+            try
+            {
+                method.Invoke(instance, [amount, rate, isPreferredCustomer]);
+                threwExpectedType = false;
+            }
+            catch (TargetInvocationException ex)
+            {
+                var actualType = ex.InnerException?.GetType();
+                threwExpectedType = actualType is not null &&
+                    (actualType.Name == expectedExceptionTypeName ||
+                     IsAssignableToByName(actualType, expectedExceptionTypeName));
+            }
+        }
+        finally
+        {
+            loadContext.Unload();
+        }
+
+        return new WeakReference(loadContext);
+    }
+
+    private static bool IsAssignableToByName(Type type, string expectedTypeName)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (current.Name == expectedTypeName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static async Task<string> RunDotnetBuildAsync(string csprojPath, CancellationToken cancellationToken)
     {
         var psi = new ProcessStartInfo("dotnet", $"build \"{csprojPath}\" -c Debug --nologo")
