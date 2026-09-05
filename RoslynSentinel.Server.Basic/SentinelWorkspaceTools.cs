@@ -1308,7 +1308,9 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"WriteFile pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}")
+                    Error = new ResultError(ToolErrorCode.Exception,
+                        "WriteFile: this content would introduce new compiler errors — not written to disk. Fix the issue(s) below and retry:\n" +
+                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                 };
             }
 
