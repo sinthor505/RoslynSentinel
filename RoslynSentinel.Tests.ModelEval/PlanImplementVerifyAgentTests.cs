@@ -61,6 +61,9 @@ public class PlanImplementVerifyAgentTests
     private const string PlanUserPromptTemplate = """
         # Task: Plan a fix for a bug in FixtureHelpers/BlockConverter.cs
 
+        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        straight to ReadFile/SearchSolutionText/ListAll on the path below.
+
         Users report that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs` sometimes
         changes unrelated formatting elsewhere in the same file, even though they only asked for
         one class to be converted.
@@ -98,6 +101,9 @@ public class PlanImplementVerifyAgentTests
     private const string ImplementUserPromptTemplate = """
         # Task: Fix a bug in FixtureHelpers/BlockConverter.cs
 
+        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        straight to ReadFile/SearchSolutionText/ListAll on the path below.
+
         Users report that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs` sometimes
         changes unrelated formatting elsewhere in the same file, even though they only asked for
         one class to be converted.
@@ -129,6 +135,9 @@ public class PlanImplementVerifyAgentTests
     // check, not a restatement of it.
     private const string VerifyUserPromptTemplate = """
         # Task: Review a fix for a bug in FixtureHelpers/BlockConverter.cs
+
+        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        straight to ReadFile/SearchSolutionText/ListAll on the path below.
 
         Users had reported that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs`
         sometimes changed unrelated formatting elsewhere in the same file, even though they only
@@ -171,6 +180,22 @@ public class PlanImplementVerifyAgentTests
     {
         "ApplyDiff", "ApplyDiffWithConfirmationCode", "ChangeAccessibility", "ModifyModifier",
         "CreateFile", "DeleteFile",
+    };
+
+    // The exact set of tools actually called across 20 real PlanImplementVerify transcripts
+    // against this fixture (58 ReadFile, 21 ApplyDiff, 18 SearchSolutionText, 15 Build, 4
+    // LoadSolution, 4 ListWorkspaceSolutions, 3 ListAll, 3 ChangeAccessibility, 1 UsingDirective,
+    // 1 ModifyModifier, 1 ListSolutionItems — 2026-09-05 analysis). Used only when
+    // LlmOptions.MinimalToolSchema is set, to narrow the advertised tools/list schema down from
+    // ActiveModes' full 48 tools to just these 11 — see project_granite42_8b_tool_schema_size_isolated
+    // for why schema size itself (not context growth or task difficulty) is the latency driver
+    // this is meant to test. Not a permanent restriction: this list reflects what qwen3.5-9b-coder
+    // happened to use on this one fixture, not a general-purpose minimal toolset.
+    private static readonly HashSet<string> MinimalToolNames = new(StringComparer.Ordinal)
+    {
+        "ReadFile", "ApplyDiff", "SearchSolutionText", "Build", "LoadSolution",
+        "ListWorkspaceSolutions", "ListAll", "ChangeAccessibility", "UsingDirective",
+        "ModifyModifier", "ListSolutionItems",
     };
 
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
@@ -272,35 +297,55 @@ public class PlanImplementVerifyAgentTests
             o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
 
-        if (blockMutatingTools)
+        if (blockMutatingTools || LlmOptions.MinimalToolSchema)
         {
-            // Same shape as PlanOnlyAgentTests's filter: intercepts a blocked tool call and returns
-            // a readable error instead of forwarding it, so the model can reason about why it
-            // failed rather than hitting an unhandled protocol exception.
             mcpBuilder.WithRequestFilters(filters =>
             {
-                filters.AddCallToolFilter(next => new McpRequestHandler<CallToolRequestParams, CallToolResult>(
-                    async (context, ct) =>
-                    {
-                        if (context.Params?.Name is { } toolName && BlockedToolNames.Contains(toolName))
+                if (blockMutatingTools)
+                {
+                    // Same shape as PlanOnlyAgentTests's filter: intercepts a blocked tool call and
+                    // returns a readable error instead of forwarding it, so the model can reason
+                    // about why it failed rather than hitting an unhandled protocol exception.
+                    filters.AddCallToolFilter(next => new McpRequestHandler<CallToolRequestParams, CallToolResult>(
+                        async (context, ct) =>
                         {
-                            return new CallToolResult
+                            if (context.Params?.Name is { } toolName && BlockedToolNames.Contains(toolName))
                             {
-                                Content =
-                                [
-                                    new TextContentBlock
-                                    {
-                                        Text = $"{toolName} is unavailable in this session — you have " +
-                                            "read-only tools only here. Describe what you would do " +
-                                            "instead of calling this tool.",
-                                    },
-                                ],
-                                IsError = true,
-                            };
-                        }
+                                return new CallToolResult
+                                {
+                                    Content =
+                                    [
+                                        new TextContentBlock
+                                        {
+                                            Text = $"{toolName} is unavailable in this session — you have " +
+                                                "read-only tools only here. Describe what you would do " +
+                                                "instead of calling this tool.",
+                                        },
+                                    ],
+                                    IsError = true,
+                                };
+                            }
 
-                        return await next(context, ct);
-                    }));
+                            return await next(context, ct);
+                        }));
+                }
+
+                if (LlmOptions.MinimalToolSchema)
+                {
+                    // Narrows the advertised tools/list schema to MinimalToolNames regardless of
+                    // phase (plan/implement/verify all get the same reduced schema) — this changes
+                    // what the model SEES, unlike the call-blocking filter above which changes what
+                    // it's ALLOWED to invoke. Both can be active together: a phase can advertise
+                    // only 11 tools and still have some of those 11 blocked from executing.
+                    filters.AddListToolsFilter(next => async (context, ct) =>
+                    {
+                        var result = await next(context, ct);
+                        return new ListToolsResult
+                        {
+                            Tools = result.Tools.Where(t => MinimalToolNames.Contains(t.Name)).ToList(),
+                        };
+                    });
+                }
             });
         }
 
