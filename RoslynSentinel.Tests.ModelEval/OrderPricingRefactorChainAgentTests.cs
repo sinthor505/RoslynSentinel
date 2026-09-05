@@ -647,8 +647,13 @@ public class OrderPricingRefactorChainAgentTests
 
     private async Task<AgentRunResult> RunOnceAsync(string userPromptTemplate, CancellationToken cancellationToken)
     {
+        // 45min/60 turns, not the base 3-step test's 30min: every added rung is strictly more work
+        // on top of the same 3 base steps, and the first Chain5 (5-step) batch run hit the old
+        // 30-minute cap after correctly completing 4 of 5 steps, stalling only on a tool-misuse
+        // retry for the last one — a step-scaled cap gives real headroom to recover from that kind
+        // of retry instead of cutting the run off right as it's converging.
         var runner = new ModelAgentRunner(
-            _agentClient, _mcpClient, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
+            _agentClient, _mcpClient, turnCap: 60, wallClockCap: TimeSpan.FromMinutes(45),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var userPrompt = string.Format(userPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
         return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);
@@ -694,7 +699,15 @@ public class OrderPricingRefactorChainAgentTests
         Assert.That(calculatorText, Does.Not.Match(@"private\s+(?:static\s+)?decimal\s+(?!CalculateDiscountedTotal\b)\w+\s*\("),
             $"The extracted discount method should no longer be private. Transcript: {result.TranscriptPath}");
 
-        static string CollapseWhitespace(string s) => System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ").Trim();
+        // Collapse whitespace runs AND strip whitespace adjacent to punctuation, since a model
+        // reformatting "DescribeOrder( int id , ..." down to normal C# style
+        // ("DescribeOrder(int id, ...") removes spaces around parens/commas entirely rather than
+        // just collapsing a run of them — see OrderPricingRefactorAgentTests.cs's identical helper.
+        static string CollapseWhitespace(string s)
+        {
+            var collapsed = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ").Trim();
+            return System.Text.RegularExpressions.Regex.Replace(collapsed, @"\s*([(){};,])\s*", "$1");
+        }
         Assert.That(CollapseWhitespace(calculatorText), Does.Contain(CollapseWhitespace(
             "public string DescribeOrder( int id , string label ) { return $\"Order {id}: {label}\"; }")),
             $"DescribeOrder's logic should be unchanged. Transcript: {result.TranscriptPath}");

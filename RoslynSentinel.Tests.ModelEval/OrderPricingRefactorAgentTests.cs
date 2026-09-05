@@ -310,9 +310,16 @@ public class OrderPricingRefactorAgentTests
         // Unrelated members must be semantically untouched — same signature and body — but
         // reformatting them (e.g. normalizing the fixture's deliberately odd spacing) is fine and
         // not penalized: a model cleaning up whitespace in passing isn't a refactoring-logic defect,
-        // and any real formatter would do the same. Compare with all whitespace collapsed instead of
-        // requiring a byte-for-byte match.
-        static string CollapseWhitespace(string s) => System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ").Trim();
+        // and any real formatter would do the same. Compare with all whitespace collapsed AND
+        // stripped from around punctuation, since a model reformatting "DescribeOrder( int id , ..."
+        // down to normal C# style ("DescribeOrder(int id, ...") removes spaces adjacent to
+        // parens/commas entirely rather than just collapsing a run of them — collapsing runs alone
+        // isn't enough to make the two forms compare equal.
+        static string CollapseWhitespace(string s)
+        {
+            var collapsed = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ").Trim();
+            return System.Text.RegularExpressions.Regex.Replace(collapsed, @"\s*([(){};,])\s*", "$1");
+        }
         Assert.That(CollapseWhitespace(calculatorText), Does.Contain(CollapseWhitespace(
             "public string DescribeOrder( int id , string label ) { return $\"Order {id}: {label}\"; }")),
             $"DescribeOrder's logic should be unchanged. Transcript: {result.TranscriptPath}");
