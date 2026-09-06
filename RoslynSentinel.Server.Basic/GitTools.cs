@@ -302,7 +302,7 @@ public class GitTools
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
     [Description("""
-        Unified git tool.
+        Unified git tool. REQUIRED PARAMS BY OPERATION — status: none. log: none. diff: none. stage: none. commit: message. revert: commitHash.
 
         OPERATION: status — branch name, staged, unstaged, and untracked files. No params.
           When total changed files >50: IsTruncated=true; lists capped at 10 each (sample); TotalStagedCount/TotalUnstagedCount/TotalUntrackedCount and ByStatus breakdowns populated.

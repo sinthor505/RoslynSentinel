@@ -678,7 +678,8 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "SyncInterface")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Manages interface/class synchronization. action values: implement (generate stub implementations for all unimplemented interface members on className → returns updated file content), sync (add to interface any public members in className missing from interfaceName → returns updated interface file), verify (report coverage of all implementing classes → requires only interfaceName; use projectName to scope). filePath is the class file for implement/sync.")]
+    [Description("Manages interface/class synchronization. REQUIRED PARAMS BY ACTION — implement: className. sync: className. verify: none (interfaceName alone; projectName optional to scope). " +
+        "action values: implement (generate stub implementations for all unimplemented interface members on className → returns updated file content), sync (add to interface any public members in className missing from interfaceName → returns updated interface file), verify (report coverage of all implementing classes → requires only interfaceName; use projectName to scope). filePath is the class file for implement/sync.")]
     public async Task<ToolResult<object>> SyncInterface(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
@@ -758,7 +759,8 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "Inline")]
     [Produces(DataTag.ChangeId)]
-    [Description("Inlines a symbol by replacing all usages with its definition. kind: method (inline body at all call sites solution-wide — expression-body or single-return methods only), variable (inline local variable into usages), field (inline field value into usages), parameter (inline a constant parameter into method body — also supply methodName). targetName is the symbol name (parameterName when kind=parameter). Validates and writes to disk immediately; dryRun=true to preview without writing.")]
+    [Description("Inlines a symbol by replacing all usages with its definition. REQUIRED PARAMS BY KIND — method: none (targetName alone). variable: none. field: none. parameter: methodName. " +
+        "kind: method (inline body at all call sites solution-wide — expression-body or single-return methods only), variable (inline local variable into usages), field (inline field value into usages), parameter (inline a constant parameter into method body — methodName required). targetName is the symbol name (parameterName when kind=parameter). Validates and writes to disk immediately; dryRun=true to preview without writing.")]
     public async Task<ToolResult<object>> Inline(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
@@ -839,7 +841,8 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "WrapRange")]
     [Produces(DataTag.ChangeId)]
-    [Description("Wraps a line range (1-based) or snippet. Wrapper actions: tryCatch (wrap in try/catch; name=exceptionType, default Exception; catchVariableName optional, default ex; catchBody optional), using (wrap in using; name=disposal var name, required), region (wrap in #region; name=region label, required). Provide either startLine+endLine (1-based, both required) or contextSnippet alone; if contextSnippet given, lineBefore/lineAfter optional for disambiguation. Returns changeId.")]
+    [Description("Wraps a line range (1-based) or snippet. REQUIRED PARAMS BY WRAPPER — tryCatch: none (name optional, defaults to exceptionType Exception). using: name (disposal var name). region: name (region label). " +
+        "Wrapper actions: tryCatch (wrap in try/catch; name=exceptionType, default Exception; catchVariableName optional, default ex; catchBody optional), using (wrap in using; name=disposal var name, required), region (wrap in #region; name=region label, required). Provide either startLine+endLine (1-based, both required) or contextSnippet alone; if contextSnippet given, lineBefore/lineAfter optional for disambiguation. Returns changeId.")]
     public async Task<ToolResult<object>> WrapRange(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,

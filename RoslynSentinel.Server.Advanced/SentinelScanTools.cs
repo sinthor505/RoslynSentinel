@@ -787,7 +787,8 @@ public class SentinelScanTools
 
     [McpServerTool(Name = "GetPublicApiSurface")]
     [Produces(DataTag.Report)]
-    [Description("Returns the public API surface of a project. persistBaseline=false (default) → full List<ApiSurfaceEntry> with signatures, virtuality, and XML docs (for SDK documentation/API review). persistBaseline=true → compact List<PublicApiMember> baseline for passing to scan_breaking_changes. filePath scopes to a single file (persistBaseline=true only). includeMethods/includeProperties/includeTypes filter output (persistBaseline=false only). Returns a resultId and writes scan results to disk when output result payload exceeds the inline size threshold. Use get_large_result(resultId) to retrieve the results.")]
+    [Description("Returns the public API surface of a project. REQUIRED PARAMS BY MODE — persistBaseline=false (default): projectName required. persistBaseline=true: projectName optional (omit to scan the whole solution; filePath further narrows to one file). " +
+        "persistBaseline=false (default) → full List<ApiSurfaceEntry> with signatures, virtuality, and XML docs (for SDK documentation/API review). persistBaseline=true → compact List<PublicApiMember> baseline for passing to scan_breaking_changes. filePath scopes to a single file (persistBaseline=true only). includeMethods/includeProperties/includeTypes filter output (persistBaseline=false only). Returns a resultId and writes scan results to disk when output result payload exceeds the inline size threshold. Use get_large_result(resultId) to retrieve the results.")]
     public async Task<ToolResult<object>> GetPublicApiSurface(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.ProjectName, required: true)] string? projectName = null,

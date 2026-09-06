@@ -137,7 +137,8 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
-    [Description("Lists projects, files, dependencies, or solution-folder items. files and dependencies require projectName. solutionItems (no projectName needed) returns files attached via the .sln's Solution Folders — e.g. plan/handoff docs referenced there for discoverability in an IDE. These are never part of any project's compiled Documents, so SearchSolutionText and kind=files will never find them; read their content with ProjectDoc. all (no projectName needed/used) returns everything in one call: every project, every solution-folder item, and every project's files and dependencies — use this when you want a complete, guaranteed-non-empty view of the solution instead of guessing which project or kind to ask for.")]
+    [Description("Lists projects, files, dependencies, or solution-folder items. REQUIRED PARAMS BY KIND — files: projectName. dependencies: projectName. projects: none. solutionItems: none. all: none. " +
+        "solutionItems (no projectName needed) returns files attached via the .sln's Solution Folders — e.g. plan/handoff docs referenced there for discoverability in an IDE. These are never part of any project's compiled Documents, so SearchSolutionText and kind=files will never find them; read their content with ProjectDoc. all (no projectName needed/used) returns everything in one call: every project, every solution-folder item, and every project's files and dependencies — use this when you want a complete, guaranteed-non-empty view of the solution instead of guessing which project or kind to ask for.")]
     public async Task<ToolResult<object>> ListSolutionItems(
         [Description(ToolParams.Reason)] string reason,
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
@@ -1462,7 +1463,8 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetDiagnostics")]
     [Produces(DataTag.Report)]
-    [Description("Gets compiler diagnostics. file → scopeName=filePath; project → scopeName=projectName; solution → scopeName ignored. summarize=true groups by diagnostic ID and returns counts. maxDetails caps raw list (default 50). topN caps groups (default 20). verify=quickBuild/fullBuild additionally runs a build check (see Build tool) and attaches it as BuildVerification.")]
+    [Description("Gets compiler diagnostics. REQUIRED PARAMS BY SCOPE — file: scopeName (as filePath). project: scopeName (as projectName). solution: none (scopeName ignored). " +
+        "summarize=true groups by diagnostic ID and returns counts. maxDetails caps raw list (default 50). topN caps groups (default 20). verify=quickBuild/fullBuild additionally runs a build check (see Build tool) and attaches it as BuildVerification.")]
     public async Task<ToolResult<object>> GetDiagnostics(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] ToolScope scope = ToolScope.solution, string? scopeName = null, bool summarize = false, [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50, [ToolOptionAttribute(ToolOptionTag.TopN)] int topN = 20, BuildVerifyLevel verify = BuildVerifyLevel.noBuild, // RequestContext<CallToolRequestParams> requestParams = null,
