@@ -50,15 +50,27 @@ public static class ServerStartupHelpers
         out string? solutionPath,
         out string? baseRepoDirectory)
     {
-        modeArg = GetArgValue(args, "--mode") ?? "all";
+        modeArg = GetArgValue(args, "--mode") ?? GetArgValue(args, "--modes") ?? "all";
         solutionPath = GetArgValue(args, "--solution");
         baseRepoDirectory = GetArgValue(args, "--base-repo-dir");
 
         var resolvedModeArg = ToolsetAliases.TryGetValue(modeArg, out var alias) ? alias : modeArg;
 
-        activeModes = resolvedModeArg.Equals("all", StringComparison.OrdinalIgnoreCase)
-            ? allModes
-            : resolvedModeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var requestedModes = resolvedModeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // "all" expands to the full allModes set; when combined with other entries (e.g.
+        // "all,admin") those extras are unioned in rather than being treated as literal mode
+        // names alongside a no-op "all" — otherwise "all" could only ever be used alone.
+        activeModes = requestedModes.Contains("all")
+            ? new HashSet<string>(allModes, StringComparer.OrdinalIgnoreCase)
+            : requestedModes;
+        if (requestedModes.Contains("all"))
+        {
+            foreach (var extra in requestedModes.Where(m => !m.Equals("all", StringComparison.OrdinalIgnoreCase)))
+            {
+                activeModes.Add(extra);
+            }
+        }
     }
 
     /// <summary>
