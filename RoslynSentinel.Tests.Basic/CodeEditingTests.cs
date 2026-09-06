@@ -865,7 +865,7 @@ public class Widget
             "Initializes a new instance of the Widget class.");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        Assert.That(result.UpdatedText, Does.Contain(
+        Assert.That(result.UpdatedText?.Replace("\r\n", "\n"), Does.Contain(
             "    private readonly int _value;\n\n    /// <summary>"),
             "the blank line separating the constructor from the previous field must survive, and the doc comment must be indented to match the member, not land at column 0");
     }

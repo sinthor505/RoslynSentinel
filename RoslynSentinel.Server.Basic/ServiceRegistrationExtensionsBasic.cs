@@ -187,12 +187,19 @@ public static class RoslynSentinelServiceExtensionsBasic
                     }
                     catch (Exception ex)
                     {
+                        // Every tool in this codebase catches its own exceptions and returns a
+                        // ToolResult with Success=false instead of throwing (see
+                        // docs/current/feedback_agent_friendly_error_messages.md), so reaching here
+                        // means an exception escaped that path entirely — e.g. the MCP SDK's own
+                        // argument-binding failure (a required parameter missing from the call), or
+                        // a genuine bug. Either way it's a real failure, so it must surface as
+                        // IsError=true rather than silently reporting success.
                         Debug.WriteLine($"Unexpected error in CallTool filter: {ex}");
 
                         return new ModelContextProtocol.Protocol.CallToolResult
                         {
-                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
-                            IsError = false,
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = $"Tool call failed unexpectedly ({ex.GetType().Name}): {ex.Message}" }],
+                            IsError = true,
                         };
                     }
                 }));

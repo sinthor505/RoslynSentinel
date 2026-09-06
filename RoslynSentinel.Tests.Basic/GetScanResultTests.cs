@@ -98,6 +98,17 @@ public class GetLargeResultTests
                 XmlDocSummary: null))
             .ToList();
 
+    private static List<SolutionSymbolEntry> MakeSolutionSymbolEntries(int count = 5) =>
+        Enumerable.Range(0, count)
+            .Select(i => new SolutionSymbolEntry(
+                FilePath: new FilePath($"File_{i}.cs", null),
+                Kind: "method",
+                Name: $"Method_{i}",
+                Container: "MyClass",
+                StartLine: 10 + i,
+                EndLine: 12 + i))
+            .ToList();
+
     // ══════════════════════════════════════════════════════════════════════════
     // T1 – No resultId and no filePath → error
     // ══════════════════════════════════════════════════════════════════════════
@@ -172,6 +183,47 @@ public class GetLargeResultTests
         var returnedEntries = result.Data as List<ApiSurfaceEntry>;
         Assert.That(returnedEntries, Is.Not.Null, "Data should be List<ApiSurfaceEntry>.");
         Assert.That(returnedEntries!.Count, Is.EqualTo(4));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T7 – Valid resultId, SolutionSymbolEntryList (ListAll's offload type) → entries returned,
+    //      and a non-zero offset actually skips records rather than always returning page 1.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(10000)]
+    public async Task T7_GetLargeResult_ValidScanId_SolutionSymbolEntryList_ReturnsEntries()
+    {
+        var resultId = Guid.NewGuid().ToString("N");
+        var entries = MakeSolutionSymbolEntries(5);
+        WriteLargeResultFile(entries, ResultWrapperType.SolutionSymbolEntryList, resultId);
+
+        var result = await _workspaceTools.GetLargeResult(reason: "test", resultId: resultId, limit: 3, offset: 0);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TotalRecords, Is.EqualTo(5));
+        Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total → HasMorePages should be true.");
+
+        var returnedEntries = result.Data as List<SolutionSymbolEntry>;
+        Assert.That(returnedEntries, Is.Not.Null, "Data should be List<SolutionSymbolEntry> — ListAll's offloaded results must be pageable, not fall through to \"Unknown scan result type\".");
+        Assert.That(returnedEntries!.Select(e => e.Name), Is.EqualTo(new[] { "Method_0", "Method_1", "Method_2" }));
+    }
+
+    [Test, CancelAfter(10000)]
+    public async Task T8_GetLargeResult_NonZeroOffset_SkipsAlreadySeenRecords()
+    {
+        var resultId = Guid.NewGuid().ToString("N");
+        var entries = MakeSolutionSymbolEntries(5);
+        WriteLargeResultFile(entries, ResultWrapperType.SolutionSymbolEntryList, resultId);
+
+        var page1 = await _workspaceTools.GetLargeResult(reason: "test", resultId: resultId, limit: 2, offset: 0);
+        var page2 = await _workspaceTools.GetLargeResult(reason: "test", resultId: resultId, limit: 2, offset: 2);
+
+        var names1 = ((List<SolutionSymbolEntry>)page1.Data!).Select(e => e.Name).ToList();
+        var names2 = ((List<SolutionSymbolEntry>)page2.Data!).Select(e => e.Name).ToList();
+
+        Assert.That(names1, Is.EqualTo(new[] { "Method_0", "Method_1" }));
+        Assert.That(names2, Is.EqualTo(new[] { "Method_2", "Method_3" }),
+            "offset=2 must skip the first 2 records already seen at offset=0, not repeat the same page.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

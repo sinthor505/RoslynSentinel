@@ -79,7 +79,7 @@ public class McpTasksHarnessTests
     {
         var result = await _client.CallToolAsync(
             "Features",
-            new Dictionary<string, object?> { ["action"] = "list" }!,
+            new Dictionary<string, object?> { ["reason"] = "test", ["action"] = "list" }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         Assert.That(result.IsError, Is.Not.True);
@@ -94,7 +94,7 @@ public class McpTasksHarnessTests
         var requestParams = new CallToolRequestParams
         {
             Name = "Features",
-            Arguments = ToArguments(new Dictionary<string, object?> { ["action"] = "list", ["delaySeconds"] = 5 }),
+            Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test", ["action"] = "list", ["delaySeconds"] = 5 }),
         };
 
         var augmented = await _client.CallToolAsTaskAsync(requestParams, TestContext.CurrentContext.CancellationToken);
@@ -108,14 +108,14 @@ public class McpTasksHarnessTests
     {
         var syncResult = await _client.CallToolAsync(
             "Features",
-            new Dictionary<string, object?> { ["action"] = "list" }!,
+            new Dictionary<string, object?> { ["reason"] = "test", ["action"] = "list" }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         var polledResult = await _client.CallToolWithPollingAsync(
             new CallToolRequestParams
             {
                 Name = "Features",
-                Arguments = ToArguments(new Dictionary<string, object?> { ["action"] = "list", ["delaySeconds"] = 3 }),
+                Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test", ["action"] = "list", ["delaySeconds"] = 3 }),
             },
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
@@ -132,7 +132,7 @@ public class McpTasksHarnessTests
         var requestParams = new CallToolRequestParams
         {
             Name = "Features",
-            Arguments = ToArguments(new Dictionary<string, object?> { ["action"] = "list", ["delaySeconds"] = 15 }),
+            Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test", ["action"] = "list", ["delaySeconds"] = 15 }),
         };
 
         var augmented = await _client.CallToolAsTaskAsync(requestParams, TestContext.CurrentContext.CancellationToken);

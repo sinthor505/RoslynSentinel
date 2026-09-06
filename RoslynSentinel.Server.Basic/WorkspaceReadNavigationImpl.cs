@@ -788,7 +788,7 @@ public class WorkspaceReadNavigationImpl
                     System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "largeresults"));
                 var candidate = System.IO.Path.GetFullPath(filePath);
                 if (candidate.StartsWith(resultsDir, StringComparison.OrdinalIgnoreCase)
-                    && fileName.StartsWith("scan_", StringComparison.OrdinalIgnoreCase)
+                    && fileName.StartsWith("largeresult_", StringComparison.OrdinalIgnoreCase)
                     && fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
                     && File.Exists(candidate))
                 {
@@ -803,7 +803,7 @@ public class WorkspaceReadNavigationImpl
             {
                 Success = false,
                 Error = new ResultError("Exception",
-                                           "Result file not found. Supply a valid resultId or filePath pointing to a scan_*.json file in the scans directory.")
+                                           "Result file not found. Supply a valid resultId or filePath pointing to a largeresult_*.json file in the largeresults directory.")
             };
         }
 
@@ -846,6 +846,17 @@ public class WorkspaceReadNavigationImpl
                 case ResultWrapperType.ApiSurfaceEntryList:
                     {
                         var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = entries.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ResultWrapperType.SolutionSymbolEntryList:
+                    {
+                        var entries = JsonSerializer.Deserialize<List<SolutionSymbolEntry>>(all.Data.ToString(), _jsonOptions)
                             ?? [];
                         result = new ToolResult<object>
                         {

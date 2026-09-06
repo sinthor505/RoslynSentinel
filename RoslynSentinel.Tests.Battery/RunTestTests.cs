@@ -97,6 +97,9 @@ public class RunTestTests
         Assert.That(result.Error!.Message, Does.Contain("scope=file"));
     }
 
+    // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun) —
+    // same TestSolutionFixture.Dispose()/RunTest-subprocess file-handle race as the comment on
+    // RunTest_FilterMatchesZeroTests_DetailReportsZeroMatchAsync below; not specific to this test.
     [Test]
     public async Task RunTest_FilterNarrowsToOneTest_TotalCountOneAsync()
     {
@@ -137,6 +140,9 @@ public class RunTestTests
         Assert.That(data.Detail, Does.Contain("matched filter"));
     }
 
+    // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun) —
+    // same TestSolutionFixture.Dispose()/RunTest-subprocess file-handle race as the comment on
+    // RunTest_FilterMatchesZeroTests_DetailReportsZeroMatchAsync below; not specific to this test.
     [Test]
     public async Task RunTest_FailureSummary_GroupsBySignatureDescendingByCountAsync()
     {

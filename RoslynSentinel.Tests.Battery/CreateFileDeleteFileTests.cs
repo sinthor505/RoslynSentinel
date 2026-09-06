@@ -222,6 +222,19 @@ public class CreateFileDeleteFileTests
         // reloading/clearing drift, so DeleteFile sees it as externally modified since last sync.
         await fixture.ModifyFileInSolution(workspaceManager, Path.GetRelativePath(fixture.SolutionDirectory, targetFile), await File.ReadAllTextAsync(targetFile) + "\n// drift\n", reloadSolution: false);
 
+        // ApplyProposedChangesAsync's drift check (GetExternalFileChanges()) reads a set populated
+        // asynchronously by a FileSystemWatcher callback (OnFileSystemChanged), not synchronously by
+        // the write above — under heavy concurrent disk I/O from other test assemblies in a full
+        // parallel run, the watcher event can lag past the point where DeleteFile below checks it,
+        // making the delete wrongly succeed (root-caused 2026-09-06, was previously a documented
+        // flake here). Poll for the watcher to actually report the drift before proceeding, instead
+        // of assuming it already has.
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!workspaceManager.GetExternalFileChanges().Contains(targetFile, StringComparer.OrdinalIgnoreCase) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+        }
+
         var result = await tools.DeleteFile(reason: "test", targetFile);
 
         Assert.That(result.Success, Is.False);

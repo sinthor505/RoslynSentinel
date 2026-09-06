@@ -1909,22 +1909,17 @@ public class SentinelWorkspaceTools
                 var fullResult = new FileSourceResult { FilePath = (string)filePath, StartLine = 1, EndLine = totalLines, TotalLines = totalLines, Source = fullText };
                 var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.FileSource, cancellationToken);
 
+                // GetFileOutline never offloads its own result (it has no size threshold of its
+                // own), so fileOutline.LargeResult is always null here — the outline's Data is what
+                // we want to surface either way. LargeResultInfo itself must stay on the top-level
+                // LargeResult property (per ToolResult<T>'s "exactly one of Data/Error/LargeResult"
+                // contract), not nested inside Data, or callers checking result.LargeResult (as
+                // GetLargeResult-following clients and tests do) will see null and miss the offload.
+                object? outlineData = null;
                 try
                 {
                     var fileOutline = await _readNav.GetFileOutline(reason: "test", filepath, cancellationToken);
-                    if (fileOutline.LargeResult is null)
-                    {
-                        return new ToolResult<object>
-                        {
-                            Success = true,
-                            Data = new
-                            {
-                                largeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"The file content exceeds the threshold, only the file outline is shown here. The full result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use get_large_result(resultId: \"{stored.resultId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need."),
-                                fileOutline.Data
-                            },
-                            WorkspaceVersion = _workspaceManager.WorkspaceVersion,
-                        };
-                    }
+                    outlineData = fileOutline.Data;
                 }
                 catch (Exception ex)
                 {
@@ -1937,7 +1932,8 @@ public class SentinelWorkspaceTools
                     LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use get_large_result(resultId: \"{stored.resultId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need, or use GetFileOutline to get the constructors, methods, helpers, members, enums, fields, properties, etc of a file without reading the entire file."),
                     Data = new
                     {
-                        totalLines
+                        totalLines,
+                        fileOutline = outlineData
                     },
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
