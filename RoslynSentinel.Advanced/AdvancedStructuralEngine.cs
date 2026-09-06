@@ -257,7 +257,7 @@ public class AdvancedStructuralEngine
         }
 
         // Look for an existing (non-base) class named targetClassName, optionally narrowed by targetFilePath.
-        var candidateDocs = targetFilePath != null
+        var candidateDocs = targetFilePath.HasValue
             ? solution.GetDocumentIdsWithFilePath(targetFilePath.Value).Select(solution.GetDocument).Where(d => d != null)
             : solution.Projects.SelectMany(p => p.Documents);
 

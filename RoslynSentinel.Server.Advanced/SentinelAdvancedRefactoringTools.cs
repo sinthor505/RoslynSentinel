@@ -432,7 +432,7 @@ public class SentinelAdvancedRefactoringTools
             }
 
             FilePath? targetFilePath = string.IsNullOrEmpty(targetFilepath)
-                ? null
+                ? (FilePath?)null
                 : FilePath.FromWire(targetFilepath, _workspaceManager.GetSolutionRoot());
 
             var result = await _advancedStructuralEngine.MoveMemberAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken);
