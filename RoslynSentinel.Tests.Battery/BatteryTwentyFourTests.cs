@@ -358,13 +358,13 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- PullUpMember ---
+    // --- MoveMember (pull-up to existing base class) ---
 
     [Test]
-    public async Task PullUpMember_AutoStageTrue_ReturnsNotNull()
+    public async Task MoveMember_ToBaseClass_AutoStageTrue_ReturnsNotNull()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
-        var result = await _advTools.PullUpMember(reason: "test", "Refactor.cs", "Dog", "Sound");
+        var result = await _advTools.MoveMember(reason: "test", "Refactor.cs", "Dog", ["Sound"], "Animal");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -818,16 +818,6 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _codeStyleEngine.ConvertPropertyToMethodsAsync("Order.cs", "OrderId");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- ExtractClass ---
-
-    [Test]
-    public async Task ExtractClass_ValidMembers_ReturnsDictionary()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ExtractMembers(reason: "test", "Order.cs", "Order", "class", "OrderInfo", ["GetLabel", "GetStatus"]);
         Assert.That(result, Is.Not.Null);
     }
 

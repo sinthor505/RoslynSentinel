@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace RoslynSentinel.Advanced;
 
+public record MoveMemberResult(Dictionary<FilePath, string> Changes, List<SkippedCallSite> SkippedCallSites);
+
 public class AdvancedStructuralEngine
 {
     private readonly ISolutionProvider _workspaceManager;
@@ -144,21 +146,43 @@ public class AdvancedStructuralEngine
         return changes;
     }
 
-    public async Task<Dictionary<FilePath, string>> ExtractClassAsync(FilePath filePath, string className, string newClassName, string[] memberNames, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Moves named members from a class into a target class atomically — one combined change set,
+    /// so it validates and writes as a single unit instead of the remove-then-add sequence that
+    /// otherwise fails the write-path chokepoint's per-write compiler check (source ends up with
+    /// dangling references before the add lands).
+    ///
+    /// Three destination modes, chosen automatically from targetClassName:
+    ///  - Existing base type of the source class: reuses PullUpMember's modifier adjustment
+    ///    (removes override, adds virtual) and skips call-site rewriting — virtual dispatch means
+    ///    existing call sites keep working unchanged. Instance OR static members are both fine here.
+    ///  - Existing unrelated class: moves the declaration as-is and rewrites call sites solution-wide
+    ///    (ClassA.Foo() → ClassB.Foo()). STATIC MEMBERS ONLY — an instance member has no such
+    ///    unambiguous rewrite (a call site may use the same source-class variable for other members
+    ///    that stay behind, so there's no single correct receiver substitution); those are rejected
+    ///    up front with a ToolNotFoundException rather than attempting a partial/guessed rewrite.
+    ///  - No existing class named targetClassName: synthesizes a new class (same behavior as the
+    ///    former ExtractMembers as=class). STATIC MEMBERS ONLY, same reasoning as above.
+    /// </summary>
+    public async Task<MoveMemberResult> MoveMemberAsync(FilePath filePath, string className, string[] memberNames, string targetClassName, FilePath? targetFilePath = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new Dictionary<FilePath, string>();
+            throw new ToolNotFoundException($"File '{filePath}' not found.");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        if (root == null)
+        {
+            throw new ToolNotFoundException($"Failed to get syntax root for '{filePath}'.");
+        }
 
+        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new Dictionary<FilePath, string>();
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.");
         }
 
         var membersToMove = classNode.Members.Where(m =>
@@ -183,29 +207,332 @@ public class AdvancedStructuralEngine
 
         if (membersToMove.Count == 0)
         {
-            return new Dictionary<FilePath, string>();
+            throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}'.");
         }
 
-        // Capture member symbols BEFORE modifying the syntax tree so SymbolFinder can locate references
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        var memberSymbols = membersToMove
-            .Select(m => semanticModel?.GetDeclaredSymbol(m))
-            .Where(s => s is IMethodSymbol or IPropertySymbol)
+        var classSymbol = semanticModel?.GetDeclaredSymbol(classNode, cancellationToken) as INamedTypeSymbol;
+        var baseType = classSymbol?.BaseType;
+        bool targetIsBaseType = baseType != null && baseType.SpecialType != SpecialType.System_Object && baseType.Name == targetClassName;
+
+        if (targetIsBaseType)
+        {
+            return await MoveMembersToBaseTypeAsync(solution, filePath, root, classNode, membersToMove, baseType!, cancellationToken);
+        }
+
+        // Moving an INSTANCE member to anywhere other than an existing base class requires rewriting
+        // every call site's receiver expression — and that's not always a safe mechanical substitution.
+        // A local like `var x = new ClassA(); x.Foo(); x.Bar();` where only Foo moves to ClassB has no
+        // single correct fix: retyping x to ClassB breaks Bar(), leaving it ClassA breaks Foo(). The real
+        // fix (splitting into two variables, or adding a second reference) reshapes the caller's method
+        // body — a design decision, not something this tool can infer from the move alone. STATIC members
+        // have no such ambiguity (ClassA.Foo() → ClassB.Foo() is unambiguous everywhere), so only those
+        // are supported for the existing-unrelated-class and new-class destinations.
+        var nonStaticMembers = membersToMove.Where(m =>
+        {
+            var modifiers = m switch
+            {
+                MethodDeclarationSyntax meth => meth.Modifiers,
+                PropertyDeclarationSyntax prop => prop.Modifiers,
+                FieldDeclarationSyntax field => field.Modifiers,
+                _ => default
+            };
+            return !modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword));
+        }).ToList();
+
+        if (nonStaticMembers.Count > 0)
+        {
+            var names = string.Join(", ", nonStaticMembers.Select(m => m switch
+            {
+                MethodDeclarationSyntax meth => meth.Identifier.Text,
+                PropertyDeclarationSyntax prop => prop.Identifier.Text,
+                FieldDeclarationSyntax field => string.Join(", ", field.Declaration.Variables.Select(v => v.Identifier.Text)),
+                _ => "?"
+            }));
+            throw new ToolNotFoundException(
+                $"Cannot move instance member(s) [{names}] to '{targetClassName}': it is not an existing base class of '{className}'. " +
+                "Moving an instance member elsewhere requires rewriting every call site's receiver expression, which isn't always a safe " +
+                "mechanical substitution (a caller may use the same variable for other members that stay behind). Either make the member(s) " +
+                "static first, or move to an existing base class of the source type.");
+        }
+
+        // Look for an existing (non-base) class named targetClassName, optionally narrowed by targetFilePath.
+        var candidateDocs = targetFilePath != null
+            ? solution.GetDocumentIdsWithFilePath(targetFilePath.Value).Select(solution.GetDocument).Where(d => d != null)
+            : solution.Projects.SelectMany(p => p.Documents);
+
+        Document? targetDoc = null;
+        ClassDeclarationSyntax? targetClassNode = null;
+        foreach (var doc in candidateDocs)
+        {
+            if (doc?.FilePath == null)
+            {
+                continue;
+            }
+
+            var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
+            var candidate = docRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
+            if (candidate != null)
+            {
+                targetDoc = doc;
+                targetClassNode = candidate;
+                break;
+            }
+        }
+
+        if (targetDoc?.FilePath != null && targetClassNode != null)
+        {
+            var existingClassMemberSymbols = membersToMove
+                .Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m))
+                .Where(s => s != null)
+                .Cast<ISymbol>()
+                .ToList();
+
+            return await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, existingClassMemberSymbols, cancellationToken);
+        }
+
+        var newClassMemberSymbols = membersToMove
+            .Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m))
+            .Where(s => s != null)
+            .Cast<ISymbol>()
             .ToList();
 
-        // Build extracted class with same namespace + usings as source
+        return await MoveMembersToNewClassAsync(solution, filePath, root, classNode, membersToMove, targetClassName, newClassMemberSymbols, cancellationToken);
+    }
+
+    private static async Task<MoveMemberResult> MoveMembersToBaseTypeAsync(
+        Solution solution,
+        FilePath filePath,
+        CompilationUnitSyntax root,
+        ClassDeclarationSyntax classNode,
+        List<MemberDeclarationSyntax> membersToMove,
+        INamedTypeSymbol baseType,
+        CancellationToken cancellationToken)
+    {
+        if (baseType.DeclaringSyntaxReferences.Length == 0)
+        {
+            throw new ToolNotFoundException("Base class is in an external assembly and cannot be modified.");
+        }
+
+        var baseFile = baseType.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree.FilePath;
+        if (baseFile == null)
+        {
+            throw new ToolNotFoundException("Base class source file not found.");
+        }
+
+        var baseDoc = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.FilePath == baseFile);
+        if (baseDoc == null)
+        {
+            throw new ToolNotFoundException($"Base class source document not found at '{baseFile}'.");
+        }
+
+        var baseRoot = await baseDoc.GetSyntaxRootAsync(cancellationToken);
+        if (baseRoot == null)
+        {
+            throw new ToolNotFoundException($"Failed to get syntax root for base class file '{baseFile}'.");
+        }
+
+        static SyntaxTokenList AdjustModifiers(SyntaxTokenList modifiers)
+        {
+            var overrideToken = modifiers.FirstOrDefault(m => m.IsKind(SyntaxKind.OverrideKeyword));
+            if (overrideToken != default)
+            {
+                modifiers = modifiers.Remove(overrideToken);
+            }
+
+            if (!modifiers.Any(m => m.IsKind(SyntaxKind.VirtualKeyword) || m.IsKind(SyntaxKind.AbstractKeyword)))
+            {
+                modifiers = modifiers.Add(SyntaxFactory.Token(SyntaxKind.VirtualKeyword).WithLeadingTrivia(SyntaxFactory.Space));
+            }
+
+            return modifiers;
+        }
+
+        var membersForBase = membersToMove.Select(member => member switch
+        {
+            MethodDeclarationSyntax m => (MemberDeclarationSyntax)m.WithModifiers(AdjustModifiers(m.Modifiers)),
+            PropertyDeclarationSyntax p => p.WithModifiers(AdjustModifiers(p.Modifiers)),
+            _ => member
+        }).ToArray();
+
+        // Base and derived class routinely live in the same file (a small hierarchy kept together
+        // rather than split one-type-per-file). When they do, root and baseRoot are the same tree,
+        // so removing the members and adding them to the base class must happen against a single
+        // root passed through both edits.
+        if (filePath == baseFile)
+        {
+            var combinedRoot = root.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+            if (combinedRoot == null)
+            {
+                throw new ToolNotFoundException("Failed to remove member(s) from derived class.");
+            }
+
+            var baseClassAfterRemoval = combinedRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
+                .FirstOrDefault(c => c.Identifier.Text == baseType.Name);
+            if (baseClassAfterRemoval == null)
+            {
+                throw new ToolNotFoundException($"Base class '{baseType.Name}' not found in '{baseFile}' after removing member(s).");
+            }
+
+            var combinedBaseClassNode = baseClassAfterRemoval.AddMembers(membersForBase);
+            var finalRoot = combinedRoot.ReplaceNode(baseClassAfterRemoval, combinedBaseClassNode);
+
+            return new MoveMemberResult(new Dictionary<FilePath, string>
+            {
+                { filePath, finalRoot.NormalizeWhitespace().ToFullString() }
+            }, new List<SkippedCallSite>());
+        }
+
+        var newDerivedRoot = root.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        if (newDerivedRoot == null)
+        {
+            throw new ToolNotFoundException("Failed to remove member(s) from derived class.");
+        }
+
+        var baseClassNode = baseRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == baseType.Name);
+        if (baseClassNode == null)
+        {
+            throw new ToolNotFoundException($"Base class '{baseType.Name}' not found in '{baseFile}'.");
+        }
+
+        var newBaseClassNode = baseClassNode.AddMembers(membersForBase);
+        var newBaseRoot = baseRoot.ReplaceNode(baseClassNode, newBaseClassNode);
+
+        return new MoveMemberResult(new Dictionary<FilePath, string>
+        {
+            { filePath, newDerivedRoot.NormalizeWhitespace().ToFullString() },
+            { baseFile, newBaseRoot.NormalizeWhitespace().ToFullString() }
+        }, new List<SkippedCallSite>());
+    }
+
+    /// <summary>
+    /// Moves STATIC members into an existing, unrelated class. Static-only because the call-site
+    /// rewrite is then unambiguous everywhere (ClassA.Foo() → TargetClassName.Foo(), no receiver
+    /// instance involved) — MoveMemberAsync's caller already guarantees every member here is static.
+    /// </summary>
+    private static async Task<MoveMemberResult> MoveMembersToExistingClassAsync(
+        Solution solution,
+        FilePath filePath,
+        CompilationUnitSyntax root,
+        ClassDeclarationSyntax classNode,
+        List<MemberDeclarationSyntax> membersToMove,
+        FilePath targetFilePath,
+        ClassDeclarationSyntax targetClassNode,
+        string targetClassName,
+        List<ISymbol> memberSymbols,
+        CancellationToken cancellationToken)
+    {
+        bool sameFile = string.Equals(Path.GetFullPath(filePath), Path.GetFullPath(targetFilePath), StringComparison.OrdinalIgnoreCase);
+
+        var movedNames = new HashSet<string>(membersToMove.SelectMany(m => m switch
+        {
+            MethodDeclarationSyntax meth => new[] { meth.Identifier.Text },
+            PropertyDeclarationSyntax prop => new[] { prop.Identifier.Text },
+            FieldDeclarationSyntax field => field.Declaration.Variables.Select(v => v.Identifier.Text).ToArray(),
+            _ => Array.Empty<string>()
+        }), StringComparer.Ordinal);
+
+        var newTargetClassNode = targetClassNode.AddMembers(membersToMove.ToArray());
+        var updatedSourceClass = classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!;
+
+        // Rewrite bare Member()/ClassName.Member() within the remaining source class to TargetClassName.Member().
+        // (No `this.Member()` case: static members can't be accessed via `this`.)
+        var bareIdentifiers = updatedSourceClass.DescendantNodes()
+            .OfType<IdentifierNameSyntax>()
+            .Where(id => movedNames.Contains(id.Identifier.Text) && id.Parent is not MemberAccessExpressionSyntax && id.Parent is not QualifiedNameSyntax)
+            .ToList();
+        if (bareIdentifiers.Count > 0)
+        {
+            updatedSourceClass = updatedSourceClass.ReplaceNodes(bareIdentifiers, (original, _) =>
+                SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(targetClassName), (SimpleNameSyntax)original));
+        }
+
+        var result = new Dictionary<FilePath, string>();
+
+        if (sameFile)
+        {
+            var afterSourceEdit = root.ReplaceNode(classNode, updatedSourceClass);
+            var targetAfterSourceEdit = afterSourceEdit.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
+            var finalRoot = targetAfterSourceEdit != null
+                ? afterSourceEdit.ReplaceNode(targetAfterSourceEdit, targetAfterSourceEdit.AddMembers(membersToMove.ToArray()))
+                : afterSourceEdit;
+            result[filePath] = finalRoot.NormalizeWhitespace().ToFullString();
+        }
+        else
+        {
+            var targetDocument = solution.GetDocumentIdsWithFilePath(targetFilePath).Select(solution.GetDocument).First()!;
+            var targetRoot = await targetDocument.GetSyntaxRootAsync(cancellationToken);
+            var newTargetRoot = targetRoot!.ReplaceNode(targetClassNode, newTargetClassNode);
+
+            result[filePath] = root.ReplaceNode(classNode, updatedSourceClass).NormalizeWhitespace().ToFullString();
+            result[targetFilePath] = newTargetRoot.NormalizeWhitespace().ToFullString();
+        }
+
+        // Cross-file call sites: ClassA.Foo() → TargetClassName.Foo() — unambiguous since Foo is static.
+        var skipPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { filePath, targetFilePath };
+        foreach (var symbol in memberSymbols)
+        {
+            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+            var byDocument = references.SelectMany(r => r.Locations)
+                .Where(l => l.Document.FilePath != null && !skipPaths.Contains(l.Document.FilePath))
+                .GroupBy(l => l.Document.Id)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var (docId, locs) in byDocument)
+            {
+                var doc = solution.GetDocument(docId);
+                if (doc?.FilePath == null)
+                {
+                    continue;
+                }
+
+                SyntaxNode? docRoot = result.TryGetValue(doc.FilePath, out var already)
+                    ? CSharpSyntaxTree.ParseText(already, cancellationToken: cancellationToken).GetRoot(cancellationToken)
+                    : await doc.GetSyntaxRootAsync(cancellationToken);
+                if (docRoot == null)
+                {
+                    continue;
+                }
+
+                var spans = locs.Select(l => l.Location.SourceSpan).ToHashSet();
+                var identifiers = docRoot.DescendantNodes().OfType<SimpleNameSyntax>().Where(n => spans.Contains(n.Span)).ToList();
+                var memberAccesses = identifiers.Select(id => id.Parent as MemberAccessExpressionSyntax).Where(ma => ma != null).Cast<MemberAccessExpressionSyntax>().Distinct().ToList();
+                if (memberAccesses.Count == 0)
+                {
+                    continue;
+                }
+
+                var updatedDocRoot = docRoot.ReplaceNodes(memberAccesses, (original, _) =>
+                    original.WithExpression(SyntaxFactory.IdentifierName(targetClassName)));
+                result[doc.FilePath] = updatedDocRoot.NormalizeWhitespace().ToFullString();
+            }
+        }
+
+        return new MoveMemberResult(result, new List<SkippedCallSite>());
+    }
+
+    private static async Task<MoveMemberResult> MoveMembersToNewClassAsync(
+        Solution solution,
+        FilePath filePath,
+        CompilationUnitSyntax root,
+        ClassDeclarationSyntax classNode,
+        List<MemberDeclarationSyntax> membersToMove,
+        string newClassName,
+        List<ISymbol> memberSymbols,
+        CancellationToken cancellationToken)
+    {
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         var newClassNode = SyntaxFactory.ClassDeclaration(newClassName)
             .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
             .WithMembers(SyntaxFactory.List(membersToMove));
-        var cleanUsings = SyntaxFactory.List(root!.Usings.Select(u =>
+        var cleanUsings = SyntaxFactory.List(root.Usings.Select(u =>
             u.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
         CompilationUnitSyntax newFileRoot;
         if (ns != null)
         {
             BaseNamespaceDeclarationSyntax newNs = ns is FileScopedNamespaceDeclarationSyntax
-                ? (BaseNamespaceDeclarationSyntax)SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name).AddMembers(newClassNode)
-                : SyntaxFactory.NamespaceDeclaration(ns.Name).AddMembers(newClassNode);
+                ? SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name).AddMembers(newClassNode)
+                : (BaseNamespaceDeclarationSyntax)SyntaxFactory.NamespaceDeclaration(ns.Name).AddMembers(newClassNode);
             newFileRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newNs);
         }
         else
@@ -213,74 +540,42 @@ public class AdvancedStructuralEngine
             newFileRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newClassNode);
         }
 
-        // Update source class: remove extracted members and expose the new class via a public property
-        // (public so external callers can update call sites from sourceObj.Method() to sourceObj.NewClass.Method())
-        var propDecl = SyntaxFactory.PropertyDeclaration(
-            SyntaxFactory.ParseTypeName(newClassName),
-            SyntaxFactory.Identifier(newClassName))
-            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
-            .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(new[] {
-                SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
-                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-            })))
-            .WithInitializer(SyntaxFactory.EqualsValueClause(
-                SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(newClassName))
-                    .WithArgumentList(SyntaxFactory.ArgumentList())))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+        var memberNameSet = new HashSet<string>(
+            membersToMove.SelectMany(m => m switch
+            {
+                MethodDeclarationSyntax meth => new[] { meth.Identifier.Text },
+                PropertyDeclarationSyntax prop => new[] { prop.Identifier.Text },
+                FieldDeclarationSyntax field => field.Declaration.Variables.Select(v => v.Identifier.Text).ToArray(),
+                _ => Array.Empty<string>()
+            }), StringComparer.Ordinal);
 
-        var updatedSourceClass = classNode
-            .RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!
-            .AddMembers(propDecl);
-
-        // Fix internal callers within the remaining class body so they route through the new property:
-        //   this.Method()  →  NewClass.Method()
-        //   Method()       →  NewClass.Method()
-        var memberNameSet = new HashSet<string>(memberNames, StringComparer.Ordinal);
-
-        var thisAccesses = updatedSourceClass.DescendantNodes()
-            .OfType<MemberAccessExpressionSyntax>()
-            .Where(ma => ma.Expression is ThisExpressionSyntax && memberNameSet.Contains(ma.Name.Identifier.Text))
-            .ToList();
-        if (thisAccesses.Count > 0)
-        {
-            updatedSourceClass = updatedSourceClass.ReplaceNodes(thisAccesses, (original, _) =>
-                original.WithExpression(SyntaxFactory.IdentifierName(newClassName)));
-        }
+        // Static members only (guaranteed by MoveMemberAsync's caller) — no `this.Member()` case to
+        // rewrite, and no accessor property needed; bare Member() becomes NewClassName.Member() directly.
+        var updatedSourceClass = classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!;
 
         var bareIdentifiers = updatedSourceClass.DescendantNodes()
             .OfType<IdentifierNameSyntax>()
-            .Where(id =>
-                memberNameSet.Contains(id.Identifier.Text) &&
-                id.Parent is not MemberAccessExpressionSyntax &&
-                id.Parent is not QualifiedNameSyntax)
+            .Where(id => memberNameSet.Contains(id.Identifier.Text) && id.Parent is not MemberAccessExpressionSyntax && id.Parent is not QualifiedNameSyntax)
             .ToList();
         if (bareIdentifiers.Count > 0)
         {
             updatedSourceClass = updatedSourceClass.ReplaceNodes(bareIdentifiers, (original, _) =>
-                SyntaxFactory.MemberAccessExpression(
-                    SyntaxKind.SimpleMemberAccessExpression,
-                    SyntaxFactory.IdentifierName(newClassName),
-                    (SimpleNameSyntax)original));
+                SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(newClassName), (SimpleNameSyntax)original));
         }
 
-        var updatedRoot = root!.ReplaceNode(classNode, updatedSourceClass);
-
+        var updatedRoot = root.ReplaceNode(classNode, updatedSourceClass);
         var newFilePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs");
+
         var result = new Dictionary<FilePath, string>
         {
             { newFilePath, newFileRoot.NormalizeWhitespace().ToFullString() },
             { filePath, updatedRoot.NormalizeWhitespace().ToFullString() }
         };
 
-        // Update cross-file call sites: expr.Method() → expr.NewClassName.Method()
+        // Cross-file call sites: ClassA.Foo() → NewClassName.Foo() — unambiguous since Foo is static.
         var skipPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { filePath, newFilePath };
         foreach (var symbol in memberSymbols)
         {
-            if (symbol == null)
-            {
-                continue;
-            }
-
             var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
             var byDocument = references.SelectMany(r => r.Locations)
                 .Where(l => l.Document.FilePath != null && !skipPaths.Contains(l.Document.FilePath))
@@ -295,56 +590,29 @@ public class AdvancedStructuralEngine
                     continue;
                 }
 
-                // Use already-updated root if this file has been modified in a previous symbol's iteration
-                SyntaxNode? docRoot;
-                if (result.TryGetValue(doc.FilePath, out var alreadyModified))
-                {
-                    docRoot = CSharpSyntaxTree.ParseText(alreadyModified, cancellationToken: cancellationToken).GetRoot(cancellationToken);
-                }
-                else
-                {
-                    docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
-                }
-
+                SyntaxNode? docRoot = result.TryGetValue(doc.FilePath, out var alreadyModified)
+                    ? CSharpSyntaxTree.ParseText(alreadyModified, cancellationToken: cancellationToken).GetRoot(cancellationToken)
+                    : await doc.GetSyntaxRootAsync(cancellationToken);
                 if (docRoot == null)
                 {
                     continue;
                 }
 
                 var spans = locations.Select(l => l.Location.SourceSpan).ToHashSet();
-
-                // Find the identifier nodes at the reference spans; their parent MemberAccessExpression
-                // is what we need to insert the new property name into.
-                var identifiers = docRoot.DescendantNodes()
-                    .OfType<SimpleNameSyntax>()
-                    .Where(n => spans.Contains(n.Span))
-                    .ToList();
-                var memberAccesses = identifiers
-                    .Select(id => id.Parent as MemberAccessExpressionSyntax)
-                    .Where(ma => ma != null)
-                    .Cast<MemberAccessExpressionSyntax>()
-                    .Distinct()
-                    .ToList();
-
+                var identifiers = docRoot.DescendantNodes().OfType<SimpleNameSyntax>().Where(n => spans.Contains(n.Span)).ToList();
+                var memberAccesses = identifiers.Select(id => id.Parent as MemberAccessExpressionSyntax).Where(ma => ma != null).Cast<MemberAccessExpressionSyntax>().Distinct().ToList();
                 if (memberAccesses.Count == 0)
                 {
                     continue;
                 }
 
                 var updatedDocRoot = docRoot.ReplaceNodes(memberAccesses, (original, _) =>
-                {
-                    var intermedReceiver = SyntaxFactory.MemberAccessExpression(
-                        SyntaxKind.SimpleMemberAccessExpression,
-                        original.Expression,
-                        SyntaxFactory.IdentifierName(newClassName));
-                    return original.WithExpression(intermedReceiver);
-                });
-
+                    original.WithExpression(SyntaxFactory.IdentifierName(newClassName)));
                 result[doc.FilePath] = updatedDocRoot.NormalizeWhitespace().ToFullString();
             }
         }
 
-        return result;
+        return new MoveMemberResult(result, new List<SkippedCallSite>());
     }
 
     /// <summary>

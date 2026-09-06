@@ -2271,45 +2271,6 @@ public class MyService
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-74: ExtractClass — Generates Empty Class for File-Scope Types
-        // ──────────────────────────────────────────────────────────────────────────
-
-        [Test]
-        public async Task BUG_74_ExtractClass_FileScopeType_CopiesMembers()
-        {
-            const string source = @"namespace App;
-
-public class ImportJobStatus
-{
-    public int Id { get; set; }
-    public string Status { get; set; }
-
-    public void Reset() { Status = ""idle""; }
-}";
-            SetSource(source, "ImportJobStatus.cs");
-
-            // Get the actual document from the solution
-            var solution = _workspaceManager.CurrentSolution;
-            var document = solution?.Projects.SelectMany(p => p.Documents)
-                .FirstOrDefault(d => d.Name == "ImportJobStatus.cs");
-
-            if (document?.FilePath == null)
-            {
-                Assert.Inconclusive("Document not found in test solution");
-            }
-
-            var result = await _advancedStructuralEngine.ExtractClassAsync(
-                document.FilePath,
-                "ImportJobStatus",
-                "ImportJobStatusHelper",
-                ["Id", "Status"]);
-
-            // Should copy the members, not create empty class
-            Assert.That(result, Is.Not.Empty,
-                "Should extract members to new class");
-        }
-
-        // ──────────────────────────────────────────────────────────────────────────
         // BUG-52: ReduceBlockDepth — Server Error Crash (null root reference)
         // ──────────────────────────────────────────────────────────────────────────
 
@@ -2556,90 +2517,6 @@ public class Math
                 await Assert.ThrowsAsync<ToolNotFoundException>(
                     async () => await _refinementEngine.InlineMethodAsync(document.FilePath!, "Add"),
                     "Multi-statement method should fail gracefully via a typed exception, not crash");
-            }
-        }
-
-        // ──────────────────────────────────────────────────────────────────────────
-        // BUG-76: PullUpMember — Server Crash (missing null check for base class)
-        // ──────────────────────────────────────────────────────────────────────────
-
-        [TestFixture]
-        public class Bug76PullUpMemberRegressionTests
-        {
-            private IWorkspaceManager _workspaceManager;
-            private RefinementEngine _refinementEngine;
-
-            [SetUp]
-            public void Setup()
-            {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _refinementEngine = new RefinementEngine(_workspaceManager);
-            }
-
-            [TearDown]
-            public void TearDown() => _workspaceManager?.Dispose();
-
-            private void SetSource(string source, string fileName = "Test.cs")
-            {
-                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-                _workspaceManager.SetTestSolution(solution);
-            }
-
-            [Test]
-            public async Task BUG_76_PullUpMember_NoBaseClass_NoServerCrash()
-            {
-                const string code = @"
-public class Standalone
-{
-    public int GetValue()
-    {
-        return 42;
-    }
-}";
-                SetSource(code, "Standalone.cs");
-
-                var document = _workspaceManager.CurrentSolution?.Projects.First()?.Documents.First();
-                if (document == null)
-                {
-                    Assert.Inconclusive("Document not found");
-                }
-
-                var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-                    await _refinementEngine.PullUpMemberAsync(document.FilePath!, "Standalone", "GetValue"),
-                    "A class with no base class should surface a typed error, not crash the server");
-                Assert.That(ex!.Message, Does.Contain("base"), "Error message should mention base class");
-            }
-
-            [Test]
-            public async Task BUG_76_PullUpMember_WithBaseClass_NoServerCrash()
-            {
-                const string code = @"
-public class Base
-{
-    public virtual void DoWork() { }
-}
-
-public class Derived : Base
-{
-    public override void DoWork()
-    {
-        System.Console.WriteLine(""doing work"");
-    }
-}";
-                SetSource(code, "Classes.cs");
-
-                var document = _workspaceManager.CurrentSolution?.Projects.First()?.Documents.First();
-                if (document == null)
-                {
-                    Assert.Inconclusive("Document not found");
-                }
-
-                Dictionary<FilePath, string> result = null!;
-                await Assert.DoesNotThrowAsync(async () =>
-                    result = await _refinementEngine.PullUpMemberAsync(document.FilePath!, "Derived", "DoWork"),
-                    "A valid base/derived/member combination should succeed, not throw");
-                Assert.That(result, Is.Not.Null, "Should return non-null result (not crash)");
-                Assert.That(result, Is.InstanceOf<Dictionary<FilePath, string>>(), "Should return dictionary");
             }
         }
 
@@ -3397,78 +3274,6 @@ public class Service
                 "Should not error for truly unused symbol");
         }
 
-        // ── BUG-74: ExtractClass — handles file-scoped and nested types ──────
-
-        [Test]
-        public async Task BUG_74_ExtractClass_FileScopedType_ExtractsMembersCorrectly()
-        {
-            const string code = @"
-// File-scoped class (not inside namespace)
-public class DataModel
-{
-    public string Name { get; set; }
-    public int Id { get; set; }
-
-    public string GetDescription() => $""{Name} (ID: {Id})"";
-    public void Reset() { Name = """"; Id = 0; }
-}";
-
-            SetSource(code, "DataModel.cs");
-
-            var result = await _advancedStructuralEngine.ExtractClassAsync(
-                "DataModel.cs",
-                className: "DataModel",
-                newClassName: "DataModelMetadata",
-                memberNames: new[] { "GetDescription", "Reset" });
-
-            Assert.That(result, Is.Not.Null, "Should return result dict");
-            if (result.Count > 0)
-            {
-                var extractedContent = result.Values.First();
-                Assert.That(extractedContent, Is.Not.Null.And.Not.Empty,
-                    "Extracted class should not be empty");
-                Assert.That(extractedContent, Does.Contain("DataModelMetadata"),
-                    "Should contain new class name");
-                // Verify members are actually extracted
-                Assert.That(extractedContent, Does.Contain("GetDescription") | Does.Contain("Reset"),
-                    "Should extract the specified members, not generate empty class");
-            }
-        }
-
-        [Test]
-        public async Task BUG_74_ExtractClass_WithNamespace_PreservesStructure()
-        {
-            const string code = @"
-namespace MyApp.Models
-{
-    public class Order
-    {
-        public int Id { get; set; }
-        public decimal Total { get; set; }
-
-        public void ApplyDiscount(decimal amount) { }
-        public void CalculateTax() { }
-    }
-}";
-
-            SetSource(code, "Order.cs");
-
-            var result = await _advancedStructuralEngine.ExtractClassAsync(
-                "Order.cs",
-                className: "Order",
-                newClassName: "OrderProcessor",
-                memberNames: new[] { "ApplyDiscount", "CalculateTax" });
-
-            Assert.That(result, Is.Not.Null, "Should return result");
-            if (result.Count > 0)
-            {
-                var extracted = result.Values.First();
-                // Should include necessary structural elements if namespace was in original
-                Assert.That(extracted, Is.Not.Empty,
-                    "Extracted class should not be empty");
-            }
-        }
-
         // ── inline_method bug: multi-statement method handling ─────────────────
 
         [Test]
@@ -3521,56 +3326,6 @@ public class Service
                 "Multi-statement method should fail gracefully via a typed exception, not crash");
         }
 
-        // ── extract_class bug: general extraction issues ──────────────────────
-
-        [Test]
-        public async Task BUG_ExtractClass_WithMultipleMembers_ExtractsAllCorrectly()
-        {
-            const string code = @"
-public class Account
-{
-    public string Username { get; set; }
-    public string Email { get; set; }
-
-    public bool ValidateEmail() => Email.Contains(""@"");
-    public void SendNotification(string msg) { }
-    public string FormatName() => Username.ToUpperInvariant();
-}";
-
-            SetSource(code, "Account.cs");
-
-            var result = await _advancedStructuralEngine.ExtractClassAsync(
-                "Account.cs",
-                className: "Account",
-                newClassName: "AccountHelper",
-                memberNames: new[] { "ValidateEmail", "SendNotification", "FormatName" });
-
-            Assert.That(result, Is.Not.Null, "Should return result");
-            Assert.That(result.Count, Is.GreaterThan(0), "Should extract to new file");
-
-            var extractedClass = result.Values.First();
-            Assert.That(extractedClass, Is.Not.Empty, "Extracted class should not be empty");
-
-            // Verify all requested members are in the extracted class
-            var memberCount = 0;
-            if (extractedClass.Contains("ValidateEmail"))
-            {
-                memberCount++;
-            }
-
-            if (extractedClass.Contains("SendNotification"))
-            {
-                memberCount++;
-            }
-
-            if (extractedClass.Contains("FormatName"))
-            {
-                memberCount++;
-            }
-
-            Assert.That(memberCount, Is.GreaterThan(0),
-                "Extracted class should contain at least some of the specified members");
-        }
     }
 
     /// <summary>

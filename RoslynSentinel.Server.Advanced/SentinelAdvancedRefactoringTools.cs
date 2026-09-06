@@ -405,43 +405,60 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool(Name = "PullUpMember")]
+    [McpServerTool(Name = "MoveMember")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
-        Pulls a method or property from a derived class into its base class. Removes override, adds virtual (if not already abstract/virtual), and moves the declaration. Returns a two-file change dict (derived + base class). Requires the base class to have accessible source in the solution. autoStage=true → ChangeId.
+        Moves one or more methods/properties/fields from a class into a target class as a single atomic change — one combined validate-and-write, so it can't fail halfway the way a manual remove-then-add would against the write-path's per-write compiler check. Destination is resolved automatically from targetClassName: (1) an existing BASE type of the source class → pull-up semantics (removes override, adds virtual; no call-site rewriting needed since virtual dispatch keeps existing calls working) — instance or static members both work here; (2) an existing UNRELATED class (optionally narrowed by targetFilepath when the name is ambiguous) → moves the declaration as-is and rewrites call sites solution-wide (ClassA.Foo() → TargetClass.Foo()); (3) no existing class named targetClassName → synthesizes a new class in its own file (equivalent to the former ExtractMembers as=class) and rewrites call sites the same way. Destinations (2) and (3) are STATIC MEMBERS ONLY — moving an instance member to anywhere but an existing base class is rejected with an error, because a caller may use the same source-class variable for other members that stay behind, so there's no single correct call-site rewrite (retyping the variable fixes one call and breaks another). Make the member static first, or target an existing base class, to move an instance member. autoStage=true → ChangeId.
         """)]
-    public async Task<ToolResult<object>> PullUpMember(
+    public async Task<ToolResult<object>> MoveMember(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string className,
-        [Consumes(DataTag.SymbolName, required: true)] string memberName,
+        [Consumes(DataTag.ClassName, required: true)] string className,
+        [Consumes(DataTag.SymbolName, required: true)] string[] memberNames,
+        [ExternalInputRequired(DataTag.ClassName, required: true)] string targetClassName,
+        [ExternalInputRequired(DataTag.SourceFilepath)] string? targetFilepath = null,
         [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-            var changes = await _refinementEngine.PullUpMemberAsync(filePath, className, memberName);
-            if (!autoStage)
+            if (memberNames == null || memberNames.Length == 0)
             {
-                return new ToolResult<object>() { Success = true, Data = changes };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "memberNames is required and must be non-empty.") };
             }
 
-            var apply = await ValidateAndApplyAsync(changes, $"Pull up '{memberName}' from '{className}' to base class.", "PullUpMember", dryRun, returnDiff, cancellationToken);
+            FilePath? targetFilePath = string.IsNullOrEmpty(targetFilepath)
+                ? null
+                : FilePath.FromWire(targetFilepath, _workspaceManager.GetSolutionRoot());
+
+            var result = await _advancedStructuralEngine.MoveMemberAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken);
+            if (!autoStage)
+            {
+                return new ToolResult<object>() { Success = true, Data = new { result.Changes, result.SkippedCallSites } };
+            }
+
+            var apply = await ValidateAndApplyAsync(result.Changes, $"Move [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.", "MoveMember", dryRun, returnDiff, cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            // Not wired into MemberChangedContentResult: this touches two files (derived + base)
-            // with no single "the new text" the way Member's single-file operations do — the
-            // member text moved is already visible in the diff, and memberName is caller-supplied.
-            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Pulled '{memberName}' from '{className}' up to its base class.", apply.DryRun, apply.Diff) };
+
+            var summaryNote = $"Moved [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.";
+            if (result.SkippedCallSites.Count > 0)
+                summaryNote += $" WARNING: {result.SkippedCallSites.Count} call site(s) could not be automatically rewritten and must be fixed manually: " +
+                    string.Join("; ", result.SkippedCallSites.Select(s => $"{Path.GetFileName(s.FilePath)}:{s.LineNumber} ({s.Reason})"));
+
+            // Not wired into MemberChangedContentResult: this can touch 2-3 files (source, target,
+            // and any rewritten call-site files) with no single "the new text" the way Member's
+            // single-file operations do — the moved member's text is already visible in the diff.
+            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, result.Changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "PullUpMember failed for '{MemberName}' in '{ClassName}'", memberName, className);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PullUpMember") };
+            _logger.LogError(ex, "MoveMember failed for [{MemberNames}] in '{ClassName}'", string.Join(", ", memberNames ?? []), className);
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MoveMember") };
         }
     }
 
@@ -559,14 +576,16 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    // Not wired into MemberChangedContentResult for any of its four branches (interface/class/partial/
-    // superclass): each engine call (ExtractInterfaceAsync/ExtractClassAsync/ExtractMembersToPartialAsync/
+    // Not wired into MemberChangedContentResult for any of its three branches (interface/partial/
+    // superclass): each engine call (ExtractInterfaceAsync/ExtractMembersToPartialAsync/
     // ExtractSuperclassAsync) only returns whole-file Changes dicts, with no separately-exposed "just the
     // new type's text" fragment. Wiring this needs an engine-API-extension pass, not tool-layer wiring —
     // revisit only if those engine methods start returning the extracted type's text alongside Changes.
+    // as=class was removed in favor of MoveMember, which supersedes it (targetClassName omitted from the
+    // solution → same new-class behavior) and additionally supports moving into an EXISTING class.
     [McpServerTool(Name = "ExtractMembers")]
     [Produces(DataTag.ChangeId)]
-    [Description("Extracts members from a class into a new type. as values: interface (public API → new interface file, requires newTypeName), class (named members → new class, requires memberNames + newTypeName), partial (named members → new partial file, requires memberNames), superclass (common members → new base class, requires newTypeName; for multiple classes supply filePaths[] + classNames[]). autoStage=true → ChangeId where applicable.")]
+    [Description("Extracts members from a class into a new type. as values: interface (public API → new interface file, requires newTypeName), partial (named members → new partial file, requires memberNames), superclass (common members → new base class, requires newTypeName; for multiple classes supply filePaths[] + classNames[]). For moving named members into a class (new OR existing), use MoveMember instead. autoStage=true → ChangeId where applicable.")]
     public async Task<ToolResult<object>> ExtractMembers(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
@@ -608,25 +627,6 @@ public class SentinelAdvancedRefactoringTools
                     return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers as=interface for '{newTypeName}'") };
                 }
             }
-            if (@as == "class")
-            {
-                if (memberNames == null || memberNames.Length == 0)
-                {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "memberNames is required when as=class.") };
-                }
-                if (string.IsNullOrEmpty(newTypeName))
-                {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "newTypeName (new class name) is required when as=class.") };
-                }
-                var classChanges = await _advancedStructuralEngine.ExtractClassAsync(filePath, className, newTypeName, memberNames);
-                if (!autoStage)
-                    return new ToolResult<object>() { Success = true, Data = classChanges };
-
-                var classApply = await ValidateAndApplyAsync(classChanges, $"Extract class '{newTypeName}' from '{className}'.", "ExtractMembers/class", dryRun, returnDiff, cancellationToken);
-                if (classApply.Error is not null)
-                    return new ToolResult<object> { Success = false, Error = classApply.Error };
-                return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(classApply.ChangeId, classChanges.Keys.ToList(), $"Extracted '{newTypeName}' class from '{className}'.", classApply.DryRun, classApply.Diff) };
-            }
             if (@as == "partial")
             {
                 if (memberNames == null || memberNames.Length == 0)
@@ -667,7 +667,7 @@ public class SentinelAdvancedRefactoringTools
                     return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers as=superclass for '{newTypeName}'") };
                 }
             }
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown as '{@as}'. Valid values: interface, class, partial, superclass.") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown as '{@as}'. Valid values: interface, partial, superclass. For as=class, use MoveMember instead.") };
         }
         catch (Exception ex)
         {
