@@ -49,7 +49,8 @@ public class ReadFileTests
             projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
             new BuildEngine(_workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(_workspaceManager));
+            new TestRunEngine(_workspaceManager),
+            new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)));
     }
 
     [TearDown]

@@ -102,6 +102,8 @@ public static class RoslynSentinelServiceExtensionsBasic
     {
         if (activeModes.Contains("Workspace"))
         {
+            services.AddSingleton<WorkspaceReadNavigationImpl>();
+            services.AddSingleton<WorkspaceReadNavigationTools>();
             services.AddSingleton<SentinelWorkspaceTools>();
             mcpBuilder.WithTools<SentinelWorkspaceTools>();
             services.AddSingleton<DocumentationTools>();

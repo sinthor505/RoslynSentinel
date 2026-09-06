@@ -28,7 +28,8 @@ public class CreateFileDeleteFileTests
             projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
             new BuildEngine(workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            new TestRunEngine(workspaceManager));
+            new TestRunEngine(workspaceManager),
+            new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)));
     }
 
     [Test]

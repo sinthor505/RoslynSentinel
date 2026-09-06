@@ -250,6 +250,31 @@ downside — the two files don't shrink to zero, just to pure-delegation shims �
 worth it; a future opportunistic migration off the facade is out of scope here. Add a "LEGACY
 FACADE — add new tools to the split classes, not here" doc comment at the top of both files.
 
+**Rejected alternative — drop the facade, update call sites directly.** Confirmed via grep: 17 real
+test files (`RoslynSentinel.Tests.Battery`/`.Advanced`/`.Asyncify`/`.Basic`) construct
+`SentinelWorkspaceTools`/`SentinelRefactoringTools` via full positional constructors, plus 4
+`typeof(SentinelWorkspaceTools)`/`typeof(SentinelRefactoringTools)` reflection sites
+(`RoslynSentinel.Server.Basic/ServerStdio.cs`, `RoslynSentinel.Server.Advanced/ServerStdio.cs`,
+`SentinelConsoleMode.cs`, `RoslynSentinel.Tests.Advanced/DependencyInjectionTests.cs`). Going facade-
+free would require:
+1. Rewriting each of the 17 test files individually — not mechanical, since a test exercising
+   methods from more than one new split class needs to construct multiple new instances and dispatch
+   calls to the right one; each file needs to be read to determine which new class(es) it actually
+   needs.
+2. Updating all 4 `typeof()`/assembly-reflection sites to enumerate 8 new types (or switch to
+   scanning for `[McpServerToolType]` across the assembly) instead of naming 2 fixed types.
+3. Losing the incremental build-checkpoint structure in Decision 7 — splitting the class and
+   updating its call sites become one atomic, all-or-nothing unit of work, since the old type
+   disappears the moment the split happens (no green build in between).
+4. Decision 8's "Advanced needs zero changes" claim would no longer hold — item 2 touches
+   `RoslynSentinel.Server.Advanced/ServerStdio.cs` directly, turning it into "small, real, but still
+   low-risk changes" instead of no changes.
+
+Rejected: this cost (17 non-mechanical file rewrites, loss of incremental commit safety, a real
+Advanced-side change) is much larger than the facade's cost (two permanently-thin delegation files
+plus a cosmetic logger-category quirk). Revisit as an optional later cleanup once the split classes
+have proven stable in production use — not as part of this plan.
+
 ```csharp
 [McpServerToolType]
 public class SentinelWorkspaceTools
