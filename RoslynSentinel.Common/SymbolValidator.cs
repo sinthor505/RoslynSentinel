@@ -68,7 +68,7 @@ internal class SymbolValidator
             // - malformed/unparseable id
             // - well-formed id that resolves to nothing in this solution
             return SymbolValidationResult.Error($"symbolId '{symbolId}' did not resolve to any symbol. " +
-                                                "Re-run locate_symbol; the workspace may have changed since the id was issued.");
+                                                "Re-run LocateSymbol; the workspace may have changed since the id was issued.");
         }
 
         ISymbol symbol = symbols[0]; // see ambiguity note below

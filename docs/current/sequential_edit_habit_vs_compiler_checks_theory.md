@@ -142,3 +142,25 @@ separate tool-count-dilution theory — not yet enough samples to say whether tr
 toolset (see the DI-tool-split plan doc,
 `docs/current/plan_split_workspace_refactoring_tools_for_di.md`) measurably raises this ~25-33%
 unprompted-usage rate.
+
+**New batch (2026-09-06, `Model_AppliesThreeChainedRefactors`, 3 runs, current master): 3/3 PASS,
+zero CS1061 desyncs, `RenameSymbol` used unprompted in all 3 — but a new, milder failure signature
+displaces it.** All three runs reached for `RenameSymbol` on their own (a jump from the ~25-33%
+unprompted-usage baseline above) and every successful `RenameSymbol` call updated both
+`OrderPricingCalculator.cs` and `OrderCheckout.cs` atomically (`filesChanged:2`) with zero cross-file
+desync. Run 1 (`20260906-063615-590`) succeeded first-try, 10 turns/11 tool calls/0 errors. Runs 2-3
+(`064727-809`, `065533-010`) each hit 5 tool errors, but all 5 in each run trace to the **same single
+root cause**: the model called `RenameSymbol` with a **fabricated placeholder `docCommentId`**
+(literally `"docCommentId_for_CalcDisc"` / `"docCommentId for CalcDisc"`) instead of first calling
+`LocateSymbol` to get the real one. The tool's rejection message ("no longer resolves ... re-run
+locate_symbol") was specific enough that both runs self-corrected in 1-2 turns (call `LocateSymbol`,
+retry `RenameSymbol`, succeed) — no `validateOnApply:false` escape hatch needed, no ping-ponging.
+**Interpretation:** this looks like the CS1061 sequential-edit-habit failure mode being successfully
+routed around — the model is choosing the atomic tool now — but trading it for a smaller, faster-
+recovering failure at the parameter level (guessing an opaque ID param instead of looking it up
+first). Worth watching whether `RenameSymbol`'s `docCommentId` param description/error message can be
+tightened the same way `WriteFile`'s rejection path was (commit 3a4c521) — this is a much cheaper fix
+than the desync itself was, since recovery is already near-immediate. Not yet clear whether this
+batch's much higher `RenameSymbol`-unprompted rate (3/3 vs ~25-33% historical) is a real shift or
+small-n noise; worth confirming on a larger batch before treating the tool-choice-bias problem as
+meaningfully improved.

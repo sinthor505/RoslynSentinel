@@ -709,7 +709,7 @@ public class SentinelAdvancedRefactoringTools
                         Success = false,
                         Error = new ResultError(ToolErrorCode.Exception,
                         $"SyncInterface implement: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(filePath)}'. " +
-                        "Verify both names are spelled correctly (case-sensitive). Use locate_symbol to confirm the interface exists in the solution.")
+                        "Verify both names are spelled correctly (case-sensitive). Use LocateSymbol to confirm the interface exists in the solution.")
                     };
 
                 var implChanges = new Dictionary<FilePath, string> { [filePath] = implResult.UpdatedText };
@@ -733,7 +733,7 @@ public class SentinelAdvancedRefactoringTools
                         Success = false,
                         Error = new ResultError(ToolErrorCode.Exception,
                         $"SyncInterface sync: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(filePath)}'. " +
-                        "Verify both names are spelled correctly (case-sensitive). Use locate_symbol to confirm the interface exists in the solution.")
+                        "Verify both names are spelled correctly (case-sensitive). Use LocateSymbol to confirm the interface exists in the solution.")
                     };
 
                 var syncChanges = new Dictionary<FilePath, string> { [filePath] = syncResult.UpdatedText };

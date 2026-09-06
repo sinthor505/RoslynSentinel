@@ -22,7 +22,7 @@ public record RenameSymbolResult(string OldName, string NewName, Dictionary<File
 {
     public string ToToolResponse()
     {
-        return System.Text.Json.JsonSerializer.Serialize(new { success = Error is null, oldName = OldName, newName = NewName, filesChanged = PendingChanges.Count, updatedHandle = UpdatedHandle is SymbolHandle h ? new { h.SessionId, h.ProjectName, h.DocCommentId } : null, note = UpdatedHandle is null ? "updatedHandle is null — re-run locate_symbol before further operations on this symbol." : null });
+        return System.Text.Json.JsonSerializer.Serialize(new { success = Error is null, oldName = OldName, newName = NewName, filesChanged = PendingChanges.Count, updatedHandle = UpdatedHandle is SymbolHandle h ? new { h.SessionId, h.ProjectName, h.DocCommentId } : null, note = UpdatedHandle is null ? "updatedHandle is null — re-run LocateSymbol before further operations on this symbol." : null });
     }
 }
 

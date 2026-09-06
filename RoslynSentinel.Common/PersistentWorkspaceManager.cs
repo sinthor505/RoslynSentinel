@@ -2124,7 +2124,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             {
                 Error = new EngineError(
                     EngineErrorCode.StaleSession,
-                    "Symbol handle is from a prior workspace session. Re-run locate_symbol.",
+                    "Symbol handle is from a prior workspace session. Re-run LocateSymbol.",
                     DataTag.SymbolHandle)
             };
         }
@@ -2139,7 +2139,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 Handle = handle,
                 Error = new EngineError(
                     EngineErrorCode.SymbolNotResolved,
-                    $"Symbol '{docCommentId}' no longer resolves — may have been renamed, moved, or removed. Re-run locate_symbol.",
+                    $"Symbol '{docCommentId}' no longer resolves — may have been renamed, moved, or removed. Re-run LocateSymbol.",
                     DataTag.SymbolHandle)
             };
         }

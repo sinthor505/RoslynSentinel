@@ -8,13 +8,13 @@ public static class ToolParams
         "and projectName without requiring a session round-trip.";
 
     public const string ProjectName =
-        "Project name returned by locate_symbol in the projectName field. " +
+        "Project name returned by LocateSymbol in the projectName field. " +
         "Must match exactly — case-sensitive.";
 
     public const string DocCommentId =
-        "Documentation comment ID returned by locate_symbol in the docCommentId field. " +
-        "Uniquely identifies the symbol across tool calls. " +
-        "Do not construct this value — pass it exactly as returned by locate_symbol.";
+        "Uniquely identifies the symbol across the codebase. " +
+        "Use the LocateSymbol tool to obtain this value. " +
+        "Do not construct this value — pass it exactly as returned by LocateSymbol.";
 
     // Validate-and-apply workflow
     public const string AutoStage =
