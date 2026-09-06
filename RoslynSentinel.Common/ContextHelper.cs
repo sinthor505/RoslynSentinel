@@ -361,9 +361,20 @@ public static class ContextHelper
     }
 
     /// <summary>
-    /// Gets the ISymbol at the contextSnippet's position.
-    /// Walks up ancestors to find the nearest declaration, falling back to reference resolution.
+    /// Gets the ISymbol at the contextSnippet's position: the node's own declared symbol if the
+    /// snippet points at a declaration, otherwise the symbol the node references.
     /// </summary>
+    /// <remarks>
+    /// Deliberately does NOT walk up <c>AncestorsAndSelf()</c> looking for the first ancestor with a
+    /// declared symbol — for a snippet that lands on a plain reference (e.g. a field-assignment line
+    /// like <c>_x = x;</c>, which is neither a declaration nor annotated with symbol info itself, just
+    /// its child IdentifierName is), that walk climbs past the reference entirely and returns the
+    /// *enclosing member's* declared symbol (e.g. the constructor), silently resolving to the wrong
+    /// symbol instead of the one the snippet actually names. Only <paramref name="node"/> itself is
+    /// checked for a declared symbol; a <see cref="FieldDeclarationSyntax"/>/<see cref="EventFieldDeclarationSyntax"/>
+    /// snippet (which can declare multiple variables and so has no declared symbol of its own) is
+    /// handled by descending to its first <see cref="VariableDeclaratorSyntax"/> instead.
+    /// </remarks>
     public static async Task<ISymbol?> FindSymbolAtSnippetAsync(
         Document document, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null,
@@ -380,10 +391,11 @@ public static class ContextHelper
         var pos = FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
         var node = root.FindNode(new TextSpan(pos, 0));
 
-        return node.AncestorsAndSelf()
-                   .Select(n => model.GetDeclaredSymbol(n, cancellationToken))
-                   .FirstOrDefault(s => s != null)
-               ?? model.GetSymbolInfo(node, cancellationToken).Symbol;
+        return model.GetDeclaredSymbol(node, cancellationToken)
+               ?? model.GetSymbolInfo(node, cancellationToken).Symbol
+               ?? node.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+                      .Select(v => model.GetDeclaredSymbol(v, cancellationToken))
+                      .FirstOrDefault(s => s != null);
     }
 
     /// <summary>

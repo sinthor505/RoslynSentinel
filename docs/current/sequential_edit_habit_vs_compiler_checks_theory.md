@@ -101,3 +101,44 @@ does not yet test the "scale-judgment" half (this fixture is still 1-call-site) 
 old unhelpful raw-JSON text, and the model still recovered anyway purely from the upfront
 description guidance. `CompilerErrorLookupHelper` routing for `WriteFile` (3a4c521) has not been
 smoke-tested on its own yet.
+
+**Raw-JSON rejection message as a distinct, now-confirmed-fixed thrashing amplifier
+(2026-09-06):** `WriteFile` shipped for a while returning the raw
+`ValidationResult.Diagnostics.ToJson()` blob (`{"Id":"CS1061","Severity":...}`) on a rejected
+write, instead of the same human-readable, symbol-lookup-backed guidance `ApplyDiff`/
+`ApplyUnifiedDiff` already got via `CompilerErrorLookupHelper` (fixed 2026-09-05, commit 3a4c521 —
+see the write-path-chokepoint-unified doc for the shared `ApplyProposedChangesAsync` chokepoint all
+three tools route through). The hypothesis: this raw-JSON gap was a second, compounding mechanism
+on top of the sequential-edit habit itself — when the model's manual cross-file rename hit the
+compiler check, a raw diagnostics dump gives it nothing to reason from (no named missing overload,
+no pointer to the declaring file/line), so it can only guess at fixes and thrash, whereas the
+lookup-helper-routed message hands it the exact fix directly. Confirmed directly: a 3-run
+post-both-fixes batch (2026-09-06, `ModelTestingResults\113\Model_AppliesFiveChainedRefactors\
+20260906-*`, current master, WriteFile enabled) hit the same cross-file CS1061 rename-desync in
+**all 3** runs, and every single one self-corrected within 1-2 turns with no ping-ponging — a
+qualitative match to the lookup-helper smoke test's earlier finding (2/3 pass, same rate, but
+genuine guidance text confirmed live) and a clean confirmation that fixing the raw-JSON leak
+removes it as a thrashing amplifier specifically, independent of whether the underlying
+sequential-edit habit itself is fixed (it isn't — the model still attempts the manual rename first
+in 2 of 3 runs; see the `RenameSymbol`-unprompted-usage note below). Both of this batch's 2
+failures were unrelated to tool-choice/thrashing: one converged to wrong-but-valid code (inline
+discount expression left duplicated, extraction requirement missed), the other left an
+accessibility change unapplied and separately reproduced the string-interpolation brace-corruption
+bug from the description-fix smoke test in an untouched method. This run was truncated at n=3 of a
+planned 20 (the process piping console output died mid-run-4, cause not yet diagnosed) — treat the
+specific rate (1/3 this batch, 8/14 pooled with the two prior 3-run smoke tests and the 5-run
+BlockWriteFile test = 57%) as a wide-uncertainty data point, not a settled number; the qualitative
+"no more raw-JSON-driven thrashing" finding is the load-bearing result here, not the numeric pass
+rate.
+
+**`RenameSymbol` unprompted-usage pattern across all samples so far, consolidated:** across the
+lookuphelper smoke test (1 genuine instance, described above) and this 3-run batch (1 of 3 runs,
+used cleanly, `filesChanged:2` in one atomic call, zero desync), `RenameSymbol` is used unprompted
+roughly 1 time in 3-4 runs when the rename step comes up, always successfully when it is used, vs.
+the model defaulting to a manual `WriteFile`/`ApplyDiff`/`Member` sequence the rest of the time
+(which is where the transient CS1061 pre-flight rejections keep appearing, now harmlessly since the
+lookup-helper fix). This is consistent with the combined theory's tool-choice-bias claim and with a
+separate tool-count-dilution theory — not yet enough samples to say whether trimming the exposed
+toolset (see the DI-tool-split plan doc,
+`docs/current/plan_split_workspace_refactoring_tools_for_di.md`) measurably raises this ~25-33%
+unprompted-usage rate.

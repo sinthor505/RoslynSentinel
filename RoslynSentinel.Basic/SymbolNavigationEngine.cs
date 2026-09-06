@@ -1453,7 +1453,15 @@ public class SymbolNavigationEngine
                     ?? decls.FirstOrDefault();
                 if (decl != null)
                 {
-                    symbol = model.GetDeclaredSymbol(decl, cancellationToken);
+                    // GetDeclaredSymbol returns null directly on a FieldDeclarationSyntax (it can
+                    // declare multiple variables, so the declared symbol lives on the matching
+                    // VariableDeclaratorSyntax child instead) — fall back to that child so a field
+                    // match in `decls` doesn't spuriously read as "not found declared" below.
+                    symbol = model.GetDeclaredSymbol(decl, cancellationToken)
+                        ?? (decl as FieldDeclarationSyntax)?.Declaration.Variables
+                            .Where(v => v.Identifier.Text == symbolName)
+                            .Select(v => model.GetDeclaredSymbol(v, cancellationToken))
+                            .FirstOrDefault(s => s != null);
                 }
 
                 if (symbol == null)

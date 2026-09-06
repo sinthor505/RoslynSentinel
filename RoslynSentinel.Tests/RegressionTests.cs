@@ -442,6 +442,70 @@ public class RegressionTests
         Assert.That(callers.Any(c => c.CallerMethod == "Go"), Is.True, "Go should be listed as a caller");
     }
 
+    [Test]
+    public async Task FindCallersSafe_FieldNameShadowedByCtorParam_ContextSnippetOnAssignmentLineResolvesToField()
+    {
+        // Regression for docs/current/blockers/blocking_error_findreferences_field_contextsnippet_resolves_to_ctorparam.md:
+        // a contextSnippet taken from the field's own ctor-assignment line (`_engine = engine;`)
+        // used to resolve to the ctor parameter/constructor instead of the field, because
+        // ContextHelper.FindSymbolAtSnippetAsync walked AncestorsAndSelf looking for the first
+        // declared symbol and climbed straight past the reference to the enclosing constructor.
+        SetMultipleFiles(
+            ("Worker.cs", """
+                public class Worker
+                {
+                    private readonly Engine _engine;
+
+                    public Worker(Engine engine)
+                    {
+                        _engine = engine;
+                    }
+
+                    public void Run() => _engine.Go();
+                }
+                """),
+            ("Engine.cs", """
+                public class Engine
+                {
+                    public void Go() { }
+                }
+                """));
+
+        var callers = await _symbolNavigationEngine.FindCallersAsync(
+            "Worker.cs", "_engine", contextSnippet: "_engine = engine;");
+
+        Assert.That(callers.Any(c => c.CallerMethod == "Run"),
+            Is.True, "Should find the field usage in Run, not just the ctor-parameter binding");
+    }
+
+    [Test]
+    public async Task FindCallersSafe_FieldNameOnly_NoContextSnippet_ResolvesDeclaredField()
+    {
+        // Regression for the same blocker doc: pinning filePath with symbolName alone (no
+        // contextSnippet) used to throw "was not found declared" for a field that genuinely is
+        // declared there, because GetDeclaredSymbol was called directly on the
+        // FieldDeclarationSyntax (which always returns null — the declared symbol lives on its
+        // VariableDeclaratorSyntax child) instead of falling back to that child.
+        SetSource("""
+            public class Worker
+            {
+                private readonly int _count;
+
+                public Worker(int count)
+                {
+                    _count = count;
+                }
+
+                public int Read() => _count;
+            }
+            """, "Worker.cs");
+
+        var callers = await _symbolNavigationEngine.FindCallersAsync("Worker.cs", "_count");
+
+        Assert.That(callers.Any(c => c.CallerMethod == "Read"),
+            Is.True, "Should resolve the field declaration and find its usage in Read");
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // 7. ImplementInterfaceSafe — partial implementation, property-only, no override
     // ══════════════════════════════════════════════════════════════════════════
