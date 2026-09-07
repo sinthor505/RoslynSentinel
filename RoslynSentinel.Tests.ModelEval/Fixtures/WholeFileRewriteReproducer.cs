@@ -116,4 +116,58 @@ public static class WholeFileRewriteReproducer
             public abstract double GetPerimeter();
         }
         """;
+
+    /// <summary>
+    /// Goes in the fixture at ContosoOrders.Tests/ModelEvalGenerated/BlockConverterTests.cs — real
+    /// xunit tests replacing the byte-for-byte substring checks that previously verified "unrelated
+    /// code unchanged" (see docs/current/modeleval_fixture_test_suite_redesign.md). References
+    /// <c>BlockConverter</c> directly rather than through a front door: none of its member names
+    /// (<c>ConvertAbstractClassToInterface</c>, <c>UnrelatedMethodBefore</c>,
+    /// <c>UnrelatedMethodAfter</c>) are renamed by the fix this fixture asks for, so a test written
+    /// against the pre-fix shape still compiles and is meaningful after a correct fix.
+    /// <c>ModifiedMemberTests</c> proves the fixed method still converts correctly;
+    /// <c>UnrelatedMemberTests</c> proves the two padding methods' BEHAVIOR survived — irrespective
+    /// of whether their formatting did, which is the whole point of no longer scoring formatting.
+    /// </summary>
+    public const string ModifiedAndUnrelatedMemberTestsFileContent = """
+        using ContosoOrders.Core.FixtureHelpers;
+
+        using Xunit;
+
+        namespace ContosoOrders.Tests;
+
+        public class ModifiedMemberTests
+        {
+            [Fact]
+            public void ConvertAbstractClassToInterface_ConvertsHeaderAndStripsBodies()
+            {
+                var converter = new BlockConverter();
+
+                var result = converter.ConvertAbstractClassToInterface(
+                    "public abstract class Widget\n{\n}", "Widget");
+
+                Assert.Contains("public interface IWidget", result);
+                Assert.DoesNotContain("public abstract class Widget", result);
+            }
+        }
+
+        public class UnrelatedMemberTests
+        {
+            [Fact]
+            public void UnrelatedMethodBefore_SumsArguments()
+            {
+                var converter = new BlockConverter();
+
+                Assert.Equal("7", converter.UnrelatedMethodBefore(3, 4));
+            }
+
+            [Fact]
+            public void UnrelatedMethodAfter_TrimsInput()
+            {
+                var converter = new BlockConverter();
+
+                Assert.Equal("hello", converter.UnrelatedMethodAfter("  hello  "));
+            }
+        }
+        """;
 }

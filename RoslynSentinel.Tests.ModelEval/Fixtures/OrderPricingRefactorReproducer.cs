@@ -88,4 +88,47 @@ public static class OrderPricingRefactorReproducer
             }
         }
         """;
+
+    /// <summary>
+    /// Goes in the fixture at ContosoOrders.Tests/ModelEvalGenerated/OrderCheckoutTests.cs — a real
+    /// xunit test against <c>OrderCheckout.GetFinalPrice</c>, the "front door" per
+    /// docs/current/modeleval_fixture_test_suite_redesign.md: <c>GetFinalPrice</c>'s own name/shape
+    /// is never touched by this fixture's refactor steps, only its callee
+    /// (<c>CalcDisc</c> -> <c>CalculateDiscountedTotal</c>) is, so a test written against it pre-fix
+    /// still compiles and is meaningful after a correct rename/extraction — unlike a test that named
+    /// <c>CalcDisc</c> directly, which would fail to COMPILE post-rename. Replaces the old
+    /// CollapseWhitespace substring checks: proving GetFinalPrice's behavior survived proves the
+    /// renamed/extracted logic underneath it still works, without caring what it's now called or how
+    /// many methods it's split across.
+    /// </summary>
+    public const string CheckoutFrontDoorTestsFileContent = """
+        using ContosoOrders.Core.FixtureHelpers;
+
+        using Xunit;
+
+        namespace ContosoOrders.Tests;
+
+        public class OrderCheckoutTests
+        {
+            [Fact]
+            public void GetFinalPrice_PreferredCustomer_AppliesScaledDiscount()
+            {
+                var checkout = new OrderCheckout();
+
+                var result = checkout.GetFinalPrice(100m, 0.1m, isPreferredCustomer: true);
+
+                Assert.Equal(89.0m, result);
+            }
+
+            [Fact]
+            public void GetFinalPrice_StandardCustomer_AppliesUnscaledDiscount()
+            {
+                var checkout = new OrderCheckout();
+
+                var result = checkout.GetFinalPrice(100m, 0.1m, isPreferredCustomer: false);
+
+                Assert.Equal(90m, result);
+            }
+        }
+        """;
 }

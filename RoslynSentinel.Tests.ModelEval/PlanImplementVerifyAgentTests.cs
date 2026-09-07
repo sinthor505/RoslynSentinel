@@ -25,7 +25,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// PHASE'S OWN plan text verbatim (not a hand-picked one, unlike
 /// <see cref="WholeFileRewriteAgentTests"/>'s ScriptedPlan test), and a read-only verify phase that
 /// independently judges the on-disk result. Pass/fail requires both the mechanical
-/// <see cref="WholeFileRewriteAgentTests.AssertFixApplied(RoslynSentinel.Tests.TestSolutionFixture, AgentRunResult)"/>
+/// <see cref="WholeFileRewriteAgentTests.AssertFixApplied(RoslynSentinel.Tests.TestSolutionFixture, DotnetTestResult, AgentRunResult, CancellationToken)"/>
 /// check AND the verify phase's own "VERIFIED: PASS" verdict — see that method's shared static form
 /// and <see cref="AgentSystemPrompts.CodeReviewer"/> for why an independent model judgment is
 /// required in addition to, not instead of, the mechanical check.
@@ -201,6 +201,7 @@ public class PlanImplementVerifyAgentTests
 
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
     private string _runDirectory = null!;
+    private DotnetTestResult _testBaseline = null!;
 
     [SetUp]
     public async Task SetUp()
@@ -254,8 +255,17 @@ public class PlanImplementVerifyAgentTests
             writerWorkspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "Shape.cs"),
             WholeFileRewriteReproducer.TargetAbstractClassFileContent,
+            reloadSolution: false,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+        await _fixture.AddFileToSolution(
+            writerWorkspaceManager,
+            Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "BlockConverterTests.cs"),
+            WholeFileRewriteReproducer.ModifiedAndUnrelatedMemberTestsFileContent,
             reloadSolution: true,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var testProjectPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
+        _testBaseline = await DotnetTestRunner.RunAsync(testProjectPath, TestContext.CurrentContext.CancellationToken);
     }
 
     [TearDown]
@@ -497,7 +507,7 @@ public class PlanImplementVerifyAgentTests
         // Combined gate the user specifically asked for: mechanical correctness (the hard floor,
         // catches broken/wrong-but-approved code) AND the verify phase's own independent judgment
         // (an additional required signal, not a replacement for the mechanical check).
-        await WholeFileRewriteAgentTests.AssertFixApplied(_fixture, implementResult, TestContext.CurrentContext.CancellationToken);
+        await WholeFileRewriteAgentTests.AssertFixApplied(_fixture, _testBaseline, implementResult, TestContext.CurrentContext.CancellationToken);
         Assert.That(modelApproved, Is.True,
             $"Model's own verify pass did not report VERIFIED: PASS. Verify transcript: {verifyResult.TranscriptPath}");
     }

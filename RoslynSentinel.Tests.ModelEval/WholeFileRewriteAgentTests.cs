@@ -246,6 +246,7 @@ public class WholeFileRewriteAgentTests
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
     private LmStudioAgentClient _agentClient = null!;
     private string _runDirectory = null!;
+    private DotnetTestResult _testBaseline = null!;
 
     [SetUp]
     public async Task SetUp()
@@ -321,8 +322,17 @@ public class WholeFileRewriteAgentTests
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "Shape.cs"),
             WholeFileRewriteReproducer.TargetAbstractClassFileContent,
+            reloadSolution: false,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+        await _fixture.AddFileToSolution(
+            workspaceManager,
+            Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "BlockConverterTests.cs"),
+            WholeFileRewriteReproducer.ModifiedAndUnrelatedMemberTestsFileContent,
             reloadSolution: true,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var testProjectPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
+        _testBaseline = await DotnetTestRunner.RunAsync(testProjectPath, TestContext.CurrentContext.CancellationToken);
 
         var clientTransport = new StreamClientTransport(
             serverInput: clientToServer.Writer.AsStream(),
@@ -481,15 +491,18 @@ public class WholeFileRewriteAgentTests
         return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);
     }
 
-    private Task AssertFixApplied(AgentRunResult result) => AssertFixApplied(_fixture, result, TestContext.CurrentContext.CancellationToken);
+    private Task AssertFixApplied(AgentRunResult result) => AssertFixApplied(_fixture, _testBaseline, result, TestContext.CurrentContext.CancellationToken);
 
     /// <summary>
     /// Shared with <see cref="PlanImplementVerifyAgentTests"/>, which runs this same fixture/bug
     /// through its own separate <see cref="RoslynSentinel.Tests.TestSolutionFixture"/> instance —
     /// static + explicit fixture parameter instead of an instance method so both test classes can
-    /// call it without one depending on the other's private state.
+    /// call it without one depending on the other's private state. <paramref name="testBaseline"/>
+    /// is the caller's pre-agent-run <c>dotnet test</c> result for ContosoOrders.Tests, captured in
+    /// each caller's own [SetUp] right after materializing fixture files.
     /// </summary>
-    internal static async Task AssertFixApplied(RoslynSentinel.Tests.TestSolutionFixture fixture, AgentRunResult result, CancellationToken cancellationToken)
+    internal static async Task AssertFixApplied(
+        RoslynSentinel.Tests.TestSolutionFixture fixture, DotnetTestResult testBaseline, AgentRunResult result, CancellationToken cancellationToken)
     {
         var fixedPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "BlockConverter.cs");
         Assert.That(File.Exists(fixedPath), Is.True, "BlockConverter.cs should still exist after the model's edits.");
@@ -525,12 +538,22 @@ public class WholeFileRewriteAgentTests
             $"BlockConverter.cs should call the shared ReplaceBlockFormatted, not define its own " +
             $"copy of it. Transcript: {result.TranscriptPath}");
 
-        // Unrelated methods must be byte-for-byte untouched — this is the actual bug signature
-        // (whole-file reformat silently reindents code the model never meant to touch).
-        Assert.That(fixedText, Does.Contain("public string UnrelatedMethodBefore( int    x , int y )"),
-            $"UnrelatedMethodBefore's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");
-        Assert.That(fixedText, Does.Contain("public string UnrelatedMethodAfter(  string   s  )"),
-            $"UnrelatedMethodAfter's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");
+        // Unrelated code must still BEHAVE correctly — checked by running the fixture's own real
+        // test project (ContosoOrders.Tests) rather than scanning for byte-for-byte-unchanged
+        // formatting, which previously false-failed legitimate fixes that happened to reformat
+        // whitespace (see docs/current/modeleval_fixture_test_suite_redesign.md). Asserting the
+        // total count is unchanged (not just Failed == 0) closes the loophole where a model "fixes"
+        // a failing test by deleting or [Fact(Skip=...)]-ing it instead of fixing the code.
+        var testProjectPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
+        var postRunTestResult = await DotnetTestRunner.RunAsync(testProjectPath, cancellationToken);
+        Assert.That(postRunTestResult.Failed, Is.EqualTo(0),
+            $"ContosoOrders.Tests should have zero failures after the model's fix (baseline: " +
+            $"{testBaseline.Passed}/{testBaseline.Total} passed; after: {postRunTestResult.Passed}/{postRunTestResult.Total} passed). " +
+            $"Transcript: {result.TranscriptPath}\n{postRunTestResult.RawOutput}");
+        Assert.That(postRunTestResult.Total, Is.EqualTo(testBaseline.Total),
+            $"ContosoOrders.Tests' total test count should be unchanged (baseline: {testBaseline.Total}, " +
+            $"after: {postRunTestResult.Total}) — a dropped count means a test was deleted or disabled " +
+            $"instead of the underlying code being fixed. Transcript: {result.TranscriptPath}");
 
         // Total cap raised 2 -> 8 (2026-09-02, see docs/current/project_modifymodifier_accessibility_footgun.md):
         // the 2026-09-02 165-run excavation found ~27 runs (mostly MinimalGuidance) produced a

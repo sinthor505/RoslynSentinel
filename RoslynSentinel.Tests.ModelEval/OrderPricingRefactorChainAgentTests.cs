@@ -69,6 +69,7 @@ public class OrderPricingRefactorChainAgentTests
     private RoslynSentinel.Tests.TestSolutionFixture _fixture = null!;
     private LmStudioAgentClient _agentClient = null!;
     private string _runDirectory = null!;
+    private DotnetTestResult _testBaseline = null!;
 
     [SetUp]
     public async Task SetUp()
@@ -164,8 +165,17 @@ public class OrderPricingRefactorChainAgentTests
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "FixtureHelpers", "OrderCheckout.cs"),
             OrderPricingRefactorReproducer.CheckoutCallerFileContent,
+            reloadSolution: false,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+        await _fixture.AddFileToSolution(
+            workspaceManager,
+            Path.Combine("ContosoOrders.Tests", "ModelEvalGenerated", "OrderCheckoutTests.cs"),
+            OrderPricingRefactorReproducer.CheckoutFrontDoorTestsFileContent,
             reloadSolution: true,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var testProjectPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
+        _testBaseline = await DotnetTestRunner.RunAsync(testProjectPath, TestContext.CurrentContext.CancellationToken);
 
         var clientTransport = new StreamClientTransport(
             serverInput: clientToServer.Writer.AsStream(),
@@ -223,10 +233,11 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline. Leave the branching and the
-           1.1x preferred-customer scaling exactly where they are in `CalcDisc` itself — do not move
-           that logic into the new method. Preserve the existing behavior exactly (preferred
-           customers still get the 1.1x scaling, standard customers don't).
+           your new method instead of repeating `amount * rate` inline — this includes the
+           preferred-customer branch, which still applies its 1.1x scaling on top of the
+           extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
+           in `CalcDisc` and does not move into the new method. Preserve the existing behavior
+           exactly (preferred customers still get the 1.1x scaling, standard customers don't).
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
            `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
@@ -299,10 +310,11 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline. Leave the branching and the
-           1.1x preferred-customer scaling exactly where they are in `CalcDisc` itself — do not move
-           that logic into the new method. Preserve the existing behavior exactly (preferred
-           customers still get the 1.1x scaling, standard customers don't).
+           your new method instead of repeating `amount * rate` inline — this includes the
+           preferred-customer branch, which still applies its 1.1x scaling on top of the
+           extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
+           in `CalcDisc` and does not move into the new method. Preserve the existing behavior
+           exactly (preferred customers still get the 1.1x scaling, standard customers don't).
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
            `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
@@ -404,9 +416,10 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline. Leave the branching and the
-           1.1x preferred-customer scaling exactly where they are in `CalcDisc` itself — do not move
-           that logic into the new method.
+           your new method instead of repeating `amount * rate` inline — this includes the
+           preferred-customer branch, which still applies its 1.1x scaling on top of the
+           extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
+           in `CalcDisc` and does not move into the new method.
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
            `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
@@ -553,9 +566,10 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline. Leave the branching and the
-           1.1x preferred-customer scaling exactly where they are in `CalcDisc` itself — do not move
-           that logic into the new method.
+           your new method instead of repeating `amount * rate` inline — this includes the
+           preferred-customer branch, which still applies its 1.1x scaling on top of the
+           extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
+           in `CalcDisc` and does not move into the new method.
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
            `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
@@ -743,25 +757,35 @@ public class OrderPricingRefactorChainAgentTests
         Assert.That(calculatorText, Does.Not.Match(@"private\s+(?:static\s+)?decimal\s+(?!CalculateDiscountedTotal\b)\w+\s*\("),
             $"The extracted discount method should no longer be private. Transcript: {result.TranscriptPath}");
 
-        // Collapse whitespace runs AND strip whitespace adjacent to punctuation, since a model
-        // reformatting "DescribeOrder( int id , ..." down to normal C# style
-        // ("DescribeOrder(int id, ...") removes spaces around parens/commas entirely rather than
-        // just collapsing a run of them — see OrderPricingRefactorAgentTests.cs's identical helper.
-        static string CollapseWhitespace(string s)
-        {
-            var collapsed = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ").Trim();
-            return System.Text.RegularExpressions.Regex.Replace(collapsed, @"\s*([(){};,])\s*", "$1");
-        }
-        Assert.That(CollapseWhitespace(calculatorText), Does.Contain(CollapseWhitespace(
-            "public string DescribeOrder( int id , string label ) { return $\"Order {id}: {label}\"; }")),
-            $"DescribeOrder's logic should be unchanged. Transcript: {result.TranscriptPath}");
-        Assert.That(CollapseWhitespace(calculatorText), Does.Contain(CollapseWhitespace(
-            "public string SummarizeShipping( int zone ) { return zone switch { 1 => \"local\", 2 => \"regional\", _ => \"national\", }; }")),
-            $"SummarizeShipping's logic should be unchanged. Transcript: {result.TranscriptPath}");
+        // Unrelated code must still BEHAVE correctly — run the fixture's own real test project
+        // (ContosoOrders.Tests), whose OrderCheckoutTests front door exercises GetFinalPrice -> the
+        // renamed/extracted/interface-wrapped calculator logic underneath it across every rung
+        // (OrderCheckout's own constructor/public shape is never touched by any rung's prompt — see
+        // docs/current/modeleval_fixture_test_suite_redesign.md), rather than scanning for
+        // byte-for-byte/whitespace-collapsed-unchanged text. Asserting the total count is unchanged
+        // (not just Failed == 0) closes the loophole where a model "fixes" a failing test by
+        // deleting or [Fact(Skip=...)]-ing it instead of fixing the code.
+        var postRunTestResult = await DotnetTestRunner.RunAsync(
+            Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj"),
+            TestContext.CurrentContext.CancellationToken);
+        Assert.That(postRunTestResult.Failed, Is.EqualTo(0),
+            $"ContosoOrders.Tests should have zero failures after the model's refactor (baseline: " +
+            $"{_testBaseline.Passed}/{_testBaseline.Total} passed; after: {postRunTestResult.Passed}/{postRunTestResult.Total} passed). " +
+            $"Transcript: {result.TranscriptPath}\n{postRunTestResult.RawOutput}");
+        Assert.That(postRunTestResult.Total, Is.EqualTo(_testBaseline.Total),
+            $"ContosoOrders.Tests' total test count should be unchanged (baseline: {_testBaseline.Total}, " +
+            $"after: {postRunTestResult.Total}) — a dropped count means a test was deleted or disabled " +
+            $"instead of the underlying code being fixed. Transcript: {result.TranscriptPath}");
+
+        // DescribeOrder/SummarizeShipping have no front door (nothing calls them), so they fall back
+        // to trivia-insensitive structural equivalence — legitimate reformatting is fine, only a
+        // change to signature/behavior counts.
+        UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(
+            CalculatorPath, "DescribeOrder", OrderPricingRefactorReproducer.StartingCalculatorFileContent);
+        UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(
+            CalculatorPath, "SummarizeShipping", OrderPricingRefactorReproducer.StartingCalculatorFileContent);
 
         AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8, maxPerTool: 4);
-
-        await Task.CompletedTask;
     }
 
     private async Task AssertFunctionalBehaviorPreserved(AgentRunResult result)
