@@ -9,11 +9,21 @@ metadata:
 ---
 
 To push the RoslynSentinel MCP server to production-ready, dog-fooding it (and fixing what it
-exposes) now outranks completing the task at hand. Use RoslynSentinel MCP tools for **all** future
-work in this repo — reads, writes, search, everything — even when a plain Read/Edit/Bash call
-would be faster or more obviously correct. See [[feedback_use_roslyn_sentinel_tools_first]] for the
-prior (softer) version of this preference; this entry supersedes it with a hard stop-and-report
-rule for failures instead of a silent fallback.
+exposes) now outranks completing the task at hand. RoslynSentinel MCP tools **MUST always be used**
+for **all** future work in this repo — reads, writes, search, everything — even when a plain
+Read/Edit/Bash call would be faster or more obviously correct, and even when the work is on the
+RoslynSentinel codebase itself. This is not a preference to weigh against convenience; it is a hard
+requirement. See [[feedback_use_roslyn_sentinel_tools_first]] for the prior (softer) version of this
+preference; this entry supersedes it with a hard stop-and-report rule for failures instead of a
+silent fallback.
+
+**Editing specifically:** `ApplyUnifiedDiff`/`ApplyDiff`/`WriteFile` must cover nearly every editing
+scenario — there should be no need to reach for a plain Edit/Write/Bash call to modify a file in
+this repo. The **only** exception is when those specific tools are themselves non-functional (the
+call fails, is unreachable, or the tool doesn't support the needed operation) — in which case this
+is a blocking failure per the classification below, not a silent license to fall back to non-MCP
+edits. "Non-functional" means the tool itself is broken, not "this edit would be more convenient
+another way."
 
 **Why:** chokepointing every read/write through the MCP tools is the only way to surface the
 intermittent bugs that don't show up in a single isolated call — in-memory-vs-on-disk solution
@@ -60,10 +70,18 @@ a genuine tool logic error. To troubleshoot a suspected instance: check whether
 file under `C:\Users\Administrator\source\repos\RoslynSentinel\bin-vscode\Advanced\logs\` (a fresh
 one is created each server startup).
 
-**Bypass clause:** MCP tools may only be bypassed when they are the *only* way to fix a bug or
-implement a feature (e.g., editing the RoslynSentinel source itself to patch the tool that's
-failing). This is narrow — prefer documenting-and-stopping over bypassing whenever the task can
-simply wait for a fix.
+**Bypass clause — narrower than it sounds, read carefully:** "editing RoslynSentinel's own source"
+is NOT itself a bypass trigger. Every task in this repo touches RoslynSentinel source, so treating
+that fact alone as license to skip MCP tools swallows the entire policy — this has already happened
+twice (two separate sessions used "I'm working on the RoslynSentinel codebase, and that IS fixing
+the server" to justify defaulting to shell tools). The bypass applies **only** to the specific file(s)
+directly implementing a tool that is *currently* blocked per an open `docs/current/blockers/
+blocking_error_*.md` written under this policy — i.e., you already stopped, documented a genuine
+tool failure, and the user told you to continue and fix it. Outside that narrow situation (no open
+blocker file naming this exact tool as broken) MCP tools are used normally, including when the file
+you're editing happens to be part of the MCP server's own implementation. When in doubt, there is no
+bypass — write the blocker doc and stop per "How to apply" above instead of reasoning your way to an
+exception.
 
 **Tradeoff acknowledged:** this makes even trivial lookups go through MCP tools instead of instant
 Read/Grep calls. That's accepted as the cost of exposing drift/edge-case bugs; do not "optimize" by
