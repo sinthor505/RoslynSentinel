@@ -265,6 +265,27 @@ public class OrderPricingRefactorChainAgentTests
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
 
+        ## Before you report done
+
+        Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`) —
+        do not rely on your memory of the edit you intended to make. For each item below, check the
+        real code and answer yourself honestly before writing your summary:
+
+        1. Does the standard-customer branch call your new extracted method? Does the
+           preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
+           did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
+           Both branches must call the new method — re-read both branches, not just one.
+        2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
+           `OrderCheckout.cs` updated to the new name — not just one of the two?
+        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
+           not still `private`?
+        4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
+           with the extracted method's call result subtracted directly in the `return` statement? Is
+           the preferred-customer branch's `discount` local still present, untouched?
+
+        If re-reading the code reveals any of the above isn't true, fix it now before reporting —
+        do not report success based on what you intended to do.
+
         Report what you changed and the verification result.
         """;
 
@@ -349,6 +370,32 @@ public class OrderPricingRefactorChainAgentTests
           `CalcDisc`) — same inputs must still produce the same outputs.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+
+        ## Before you report done
+
+        Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`) —
+        do not rely on your memory of the edit you intended to make. For each item below, check the
+        real code and answer yourself honestly before writing your summary:
+
+        1. Does the standard-customer branch call your new extracted method? Does the
+           preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
+           did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
+           Both branches must call the new method — re-read both branches, not just one.
+        2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
+           `OrderCheckout.cs` updated to the new name — not just one of the two?
+        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
+           not still `private`?
+        4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
+           with the extracted method's call result subtracted directly in the `return` statement? Is
+           the preferred-customer branch's `discount` local still present, untouched?
+        5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now (not
+           `rate`), at its declaration AND at every use inside the method, including inside the call
+           to your extracted method from step 1? Did the extracted method's OWN parameter name(s)
+           stay exactly as you chose them in step 1 — this rename only touches
+           `CalculateDiscountedTotal`'s parameter, not the extracted method's.
+
+        If re-reading the code reveals any of the above isn't true, fix it now before reporting —
+        do not report success based on what you intended to do.
 
         Report what you changed and the verification result.
         """;
@@ -461,6 +508,34 @@ public class OrderPricingRefactorChainAgentTests
           `discountRate`, introduced solely by step 6.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+
+        ## Before you report done
+
+        Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`) —
+        do not rely on your memory of the edit you intended to make. For each item below, check the
+        real code and answer yourself honestly before writing your summary:
+
+        1. Does the standard-customer branch call your new extracted method? Does the
+           preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
+           did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
+           Both branches must call the new method — re-read both branches, not just one.
+        2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
+           `OrderCheckout.cs` updated to the new name — not just one of the two?
+        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
+           not still `private`?
+        4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
+           with the extracted method's call result subtracted directly in the `return` statement? Is
+           the preferred-customer branch's `discount` local still present, untouched?
+        5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now (not
+           `rate`), at its declaration AND at every use inside the method, including inside the call
+           to your extracted method from step 1? Did the extracted method's OWN parameter name(s)
+           stay exactly as you chose them in step 1 — this rename only touches
+           `CalculateDiscountedTotal`'s parameter, not the extracted method's.
+        6. Is the negative-`discountRate` guard clause actually the FIRST thing in the method body,
+           before any of the other logic — not appended after, and not skipped entirely?
+
+        If re-reading the code reveals any of the above isn't true, fix it now before reporting —
+        do not report success based on what you intended to do.
 
         Report what you changed and the verification result.
         """;
@@ -618,6 +693,40 @@ public class OrderPricingRefactorChainAgentTests
           non-negative inputs — only the declared type of the private field backing it changes.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
+
+        ## Before you report done
+
+        Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`),
+        `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` — do not rely on your memory of the
+        edit you intended to make. For each item below, check the real code and answer yourself
+        honestly before writing your summary:
+
+        1. Does the standard-customer branch call your new extracted method? Does the
+           preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
+           did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
+           Both branches must call the new method — re-read both branches, not just one.
+        2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
+           `OrderCheckout.cs` updated to the new name — not just one of the two?
+        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
+           not still `private`?
+        4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
+           with the extracted method's call result subtracted directly in the `return` statement? Is
+           the preferred-customer branch's `discount` local still present, untouched?
+        5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now (not
+           `rate`), at its declaration AND at every use inside the method, including inside the call
+           to your extracted method from step 1? Did the extracted method's OWN parameter name(s)
+           stay exactly as you chose them in step 1 — this rename only touches
+           `CalculateDiscountedTotal`'s parameter, not the extracted method's.
+        6. Is the negative-`discountRate` guard clause actually the FIRST thing in the method body,
+           before any of the other logic — not appended after, and not skipped entirely?
+        7. Does `IOrderPricingCalculator.cs` exist with exactly the one member described? Does
+           `OrderPricingCalculator` actually implement that interface? Is `OrderCheckout`'s
+           `_calculator` field's DECLARED type actually `IOrderPricingCalculator` now, not still the
+           concrete `OrderPricingCalculator` type (construction can still use `new
+           OrderPricingCalculator()` — only the declared/static type changes)?
+
+        If re-reading the code reveals any of the above isn't true, fix it now before reporting —
+        do not report success based on what you intended to do.
 
         Report what you changed and the verification result.
         """;

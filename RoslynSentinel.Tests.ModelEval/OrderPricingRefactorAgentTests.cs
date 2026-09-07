@@ -86,6 +86,24 @@ public class OrderPricingRefactorAgentTests
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
 
+        ## Before you report done
+
+        Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`) —
+        do not rely on your memory of the edit you intended to make. For each item below, check the
+        real code and answer yourself honestly before writing your summary:
+
+        1. Does the standard-customer branch call your new extracted method? Does the
+           preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
+           did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
+           Both branches must call the new method — re-read both branches, not just one.
+        2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
+           `OrderCheckout.cs` updated to the new name — not just one of the two?
+        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
+           not still `private`?
+
+        If re-reading the code reveals any of the above isn't true, fix it now before reporting —
+        do not report success based on what you intended to do.
+
         Report what you changed and the verification result.
         """;
 

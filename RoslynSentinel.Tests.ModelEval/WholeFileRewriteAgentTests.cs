@@ -107,8 +107,26 @@ public class WholeFileRewriteAgentTests
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
 
-        Do not modify any code unrelated to this specific bug. Report what you changed and the
-        verification result.
+        Do not modify any code unrelated to this specific bug.
+
+        ## Before you report done
+
+        Re-read the current, actual contents of every file you touched — do not rely on your memory
+        of the edit you intended to make. Check each of these against the real code on disk and
+        answer yourself honestly before writing your summary:
+
+        1. Is the whole-file-rewrite call actually gone from the method you fixed, with the shared
+           helper being called in its place — not still present alongside the new call, and not
+           replaced by a second, newly-written copy of the helper's logic?
+        2. If you raised a helper's accessibility to call it cross-file, is that the ONLY change you
+           made to the file that helper lives in — no unrelated reformatting or edits there?
+        3. Is every other method in the file you fixed — including any that look unused — still
+           present with its original logic, unchanged?
+
+        If re-reading the code reveals any of the above isn't true, fix it now before reporting —
+        do not report success based on what you intended to do.
+
+        Report what you changed and the verification result.
         """;
 
     // Level 3.5: same symptom-only framing as MinimalGuidanceUserPromptTemplate above (no method/
@@ -192,6 +210,25 @@ public class WholeFileRewriteAgentTests
 
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
+
+        ## Before you report done
+
+        Re-read the current, actual contents of every file you touched — do not rely on your memory
+        of the edit you intended to make. Check each of these against the real code on disk and
+        answer yourself honestly before writing your summary:
+
+        1. Is the whole-file-rewrite call actually gone from the method you fixed, with the shared
+           helper being called in its place — not still present alongside the new call, and not
+           replaced by a second, newly-written copy of the helper's logic?
+        2. If you raised a helper's accessibility to call it cross-file, is that the ONLY change you
+           made to the file that helper lives in — no unrelated reformatting or edits there?
+        3. If the old, now-unused buggy method was supposed to be deleted, is it actually gone from
+           the file, not just unused?
+        4. Is every other method in the file you fixed — including any that look unused — still
+           present with its original logic, unchanged?
+
+        If re-reading the code reveals any of the above isn't true, fix it now before reporting —
+        do not report success based on what you intended to do.
 
         Report what you changed and the verification result.
         """;
