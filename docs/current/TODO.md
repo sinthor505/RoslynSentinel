@@ -4,6 +4,24 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
+## `docCommentId` parameter audit across all tools — not started
+
+**Found:** 2026-09-06, see [[project_docCommentId_description_gap]]. `RenameSymbol`'s description
+doesn't say how to obtain `docCommentId` (via `LocateSymbol`); confirmed as the direct cause of a
+model fabricating a placeholder ID and getting rejected before self-correcting.
+
+**Scope (two parts):**
+1. Audit every tool parameter named `docCommentId` (`grep -rn docCommentId` across `[Description]`
+   attributes/tool method signatures) and add "obtain this via `LocateSymbol`" (or equivalent) to
+   each description that's missing it.
+2. While auditing, identify every tool that takes `docCommentId` *and* also has other mandatory
+   parameters (e.g. `filePath`) — flag these separately, since requiring both a resolved symbol ID
+   and a hand-supplied file path is a second place a model can supply mismatched/fabricated values
+   (the file path could point somewhere the docCommentId doesn't actually live), and the
+   description should make clear which one is authoritative for locating the target.
+
+**Not started** — deferred to its own session per the original memory's plan.
+
 ## `ApplyMethodCodemod`/`ApplyClassCodemod`'s `contextSnippet` declared `required: true` but defaults to `null` and is actually optional — closed (2026-08-27)
 
 **Found:** 2026-08-27, while auditing `contextSnippet` wording (`SentinelCodemodTools.cs:400,773`).
