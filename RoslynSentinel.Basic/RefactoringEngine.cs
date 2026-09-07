@@ -52,37 +52,66 @@ public class RefactoringEngine
     /// Replaces <paramref name = "oldNode"/> with <paramref name = "newNode"/> and formats only the
     /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
     /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
+    /// <paramref name = "oldNode"/>'s leading and trailing trivia (blank lines, doc comments, etc.
+    /// anchored to its position in the file) is transplanted onto <paramref name = "newNode"/> first,
+    /// since a freshly parsed replacement (e.g. via SyntaxFactory.ParseMemberDeclaration) has no
+    /// knowledge of the blank lines that separated the original node from its neighboring siblings.
     /// </summary>
     private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
     {
         var annotation = new SyntaxAnnotation();
-        var annotatedNewNode = newNode.WithAdditionalAnnotations(annotation);
+        var annotatedNewNode = newNode.WithLeadingTrivia(oldNode.GetLeadingTrivia()).WithTrailingTrivia(oldNode.GetTrailingTrivia()).WithAdditionalAnnotations(annotation);
         var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
         var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     /// <summary>
-    /// Removes <paramref name = "nodeToRemove"/> and formats only its former container (the nearest
-    /// ancestor whose node identity survives the removal), instead of the whole file.
+    /// Removes <paramref name = "nodeToRemove"/> without reformatting any sibling's interior.
+    /// KeepExteriorTrivia splices the removed node's leading trivia onto the token immediately
+    /// before it (as trailing trivia) and its trailing trivia onto the token immediately after (as
+    /// leading trivia) — which may belong to a sibling member (e.g. the next method) or to the
+    /// container itself (e.g. its closing brace, when removing the first/last member). Both boundary
+    /// tokens are restored to their exact pre-removal trivia afterwards, since the gap's own
+    /// separation from whatever now precedes/follows it should be unchanged by the removal. This
+    /// avoids the whole-container/whole-sibling formatting this helper used previously, which
+    /// normalized untouched members' internal spacing as a side effect.
     /// </summary>
-    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken = default)
+    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, CancellationToken cancellationToken = default)
     {
-        var container = nodeToRemove.Parent;
-        if (container == null)
+        var tokenBefore = nodeToRemove.GetFirstToken().GetPreviousToken();
+        var tokenAfter = nodeToRemove.GetLastToken().GetNextToken();
+        var hasTokenBefore = tokenBefore != default;
+        var hasTokenAfter = tokenAfter != default;
+        var originalTrailingTrivia = hasTokenBefore ? tokenBefore.TrailingTrivia : default;
+        var originalLeadingTrivia = hasTokenAfter ? tokenAfter.LeadingTrivia : default;
+
+        var beforeAnnotation = hasTokenBefore ? new SyntaxAnnotation() : null;
+        var afterAnnotation = hasTokenAfter ? new SyntaxAnnotation() : null;
+        var annotatedRoot = root;
+        if (beforeAnnotation != null)
+            annotatedRoot = annotatedRoot.ReplaceToken(tokenBefore, tokenBefore.WithAdditionalAnnotations(beforeAnnotation));
+        if (afterAnnotation != null)
         {
-            var bareNewRoot = root.RemoveNode(nodeToRemove, removeOptions)!;
-            var bareFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(bareNewRoot), cancellationToken: cancellationToken);
-            return (await bareFormattedDoc.GetTextAsync(cancellationToken)).ToString();
+            var currentTokenAfter = annotatedRoot.DescendantTokens().Single(t => t.IsEquivalentTo(tokenAfter) && t.Span == tokenAfter.Span);
+            annotatedRoot = annotatedRoot.ReplaceToken(currentTokenAfter, currentTokenAfter.WithAdditionalAnnotations(afterAnnotation));
         }
 
-        var annotation = new SyntaxAnnotation();
-        var annotatedRoot = root.ReplaceNode(container, container.WithAdditionalAnnotations(annotation));
-        var annotatedContainer = annotatedRoot.GetAnnotatedNodes(annotation).Single();
-        var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
-        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
-        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+        var trackedNodeToRemove = annotatedRoot.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
+        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, SyntaxRemoveOptions.KeepExteriorTrivia)!;
+
+        if (beforeAnnotation != null)
+        {
+            var trackedTokenBefore = newRoot.GetAnnotatedTokens(beforeAnnotation).Single();
+            newRoot = newRoot.ReplaceToken(trackedTokenBefore, trackedTokenBefore.WithTrailingTrivia(originalTrailingTrivia).WithoutAnnotations(beforeAnnotation));
+        }
+        if (afterAnnotation != null)
+        {
+            var trackedTokenAfter = newRoot.GetAnnotatedTokens(afterAnnotation).Single();
+            newRoot = newRoot.ReplaceToken(trackedTokenAfter, trackedTokenAfter.WithLeadingTrivia(originalLeadingTrivia).WithoutAnnotations(afterAnnotation));
+        }
+
+        return (await document.WithSyntaxRoot(newRoot).GetTextAsync(cancellationToken)).ToString();
     }
 
     /// <summary>
@@ -1257,7 +1286,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member removed.",
-            UpdatedText = await RemoveNodeFormattedAsync(document, root, member, SyntaxRemoveOptions.KeepNoTrivia, cancellationToken)
+            UpdatedText = await RemoveNodeFormattedAsync(document, root, member, cancellationToken)
         };
     }
 
@@ -2019,7 +2048,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RemoveNodeFormattedAsync(document, root, existing, SyntaxRemoveOptions.KeepExteriorTrivia, cancellationToken)
+            UpdatedText = await RemoveNodeFormattedAsync(document, root, existing, cancellationToken)
         };
     }
 
