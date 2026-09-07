@@ -27,6 +27,8 @@ internal static class ModelTestingResultsArchiver
                 return;
             }
 
+            WriteTestResult(runDirectory);
+
             var repoRoot = FindRepoRoot();
             var suffix = DeriveHostSuffix(RoslynSentinel.Common.LlmOptions.BaseUrl);
 
@@ -53,6 +55,38 @@ internal static class ModelTestingResultsArchiver
         {
             TestContext.Out.WriteLine($"ModelTestingResultsArchiver: failed to archive '{runDirectory}': {ex.Message}");
         }
+    }
+
+    // TestContext.CurrentContext.Result is already populated by the time TearDown runs (NUnit
+    // fills in Outcome/Message/StackTrace before TearDown, even on failure) but nothing was ever
+    // capturing it — the archived run directory had the agent's own transcript/log but not the
+    // test framework's verdict on it, so a failing run couldn't be told apart from a passing one,
+    // and the actual failed-assertion text/stack trace was only ever visible in the live test
+    // runner's own output, never preserved alongside the transcript that explains it.
+    private static void WriteTestResult(string runDirectory)
+    {
+        var result = TestContext.CurrentContext.Result;
+        var lines = new List<string>
+        {
+            $"Outcome: {result.Outcome}",
+            $"Test: {TestContext.CurrentContext.Test.FullName}",
+        };
+
+        if (!string.IsNullOrEmpty(result.Message))
+        {
+            lines.Add("");
+            lines.Add("Message:");
+            lines.Add(result.Message);
+        }
+
+        if (!string.IsNullOrEmpty(result.StackTrace))
+        {
+            lines.Add("");
+            lines.Add("StackTrace:");
+            lines.Add(result.StackTrace);
+        }
+
+        File.WriteAllLines(Path.Combine(runDirectory, "test-result.txt"), lines);
     }
 
     // Mirrors roslynsentinel-modeleval.ps1's $knownHosts alias table + its fallback
