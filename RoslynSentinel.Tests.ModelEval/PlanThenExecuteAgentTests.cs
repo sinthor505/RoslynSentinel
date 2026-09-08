@@ -233,10 +233,13 @@ public class PlanThenExecuteAgentTests
             $"BlockConverter.cs should call the shared ReplaceBlockFormatted, not define its own " +
             $"copy of it. Transcript: {result.TranscriptPath}");
 
-        Assert.That(fixedText, Does.Contain("public string UnrelatedMethodBefore( int    x , int y )"),
-            $"UnrelatedMethodBefore's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");
-        Assert.That(fixedText, Does.Contain("public string UnrelatedMethodAfter(  string   s  )"),
-            $"UnrelatedMethodAfter's original (oddly-spaced) formatting should be untouched. Transcript: {result.TranscriptPath}");
+        // Trivia-insensitive: the tool pipeline may legitimately normalize incidental whitespace
+        // (see AgentSystemPrompts.CodingAgent's note on this) — what matters is that the model
+        // didn't change either method's LOGIC.
+        UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(fixedPath, "UnrelatedMethodBefore",
+            "public string UnrelatedMethodBefore( int    x , int y )\n{\n        return (x+y).ToString();\n}");
+        UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(fixedPath, "UnrelatedMethodAfter",
+            "public string UnrelatedMethodAfter(  string   s  )\n{\n        return s?.Trim() ?? \"\";\n}");
 
         // Threshold is 2, not 1: CompilerErrorLookupHelper's guidance (see RoslynSentinel.Basic
         // CompilerErrorLookupHelper.cs) is designed to be *read after* a failed ApplyDiff, so a
