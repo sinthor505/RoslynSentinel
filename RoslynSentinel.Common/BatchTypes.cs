@@ -161,8 +161,12 @@ public static class FailureSummary
 /// <summary>One target in a <c>handler_extract</c> call.</summary>
 public class HandlerExtractTarget
 {
+    // Wire type is string, not FilePath: a FilePath-typed property on a class used as a
+    // List<T> tool parameter makes JsonSchemaExporter emit an unrepresentable `true` schema
+    // node for this property (same root cause as ApplyDiff's Dictionary<FilePath,...> fix),
+    // which LM Studio's grammar converter rejects with "Unrecognized schema: true".
     /// <summary>Absolute path of the .cs file containing the code to extract.</summary>
-    public FilePath FilePath { get; set; } = "";
+    public string FilePath { get; set; } = "";
     /// <summary>Valid C# identifier for the new extracted method.</summary>
     public string NewMethodName { get; set; } = "";
     /// <summary>A short unique code snippet that identifies the block of statements to extract.</summary>
@@ -206,7 +210,8 @@ public class RunUpliftInput
 /// <summary>One target in a <c>flag_migration_candidates</c> call (scope="targets").</summary>
 public class FlagCandidateTarget
 {
-    public FilePath FilePath { get; set; } = "";
+    // Wire type is string, not FilePath — see comment on HandlerExtractTarget.FilePath above.
+    public string FilePath { get; set; } = "";
     public string MethodName { get; set; } = "";
     public string Pattern { get; set; } = "AsyncBridgeCandidate";
     public int Score { get; set; } = 0;

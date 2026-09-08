@@ -2226,7 +2226,7 @@ public class SentinelAsyncifyTools
                 // scope="targets" — explicit list
                 var targets = input.Targets ?? new List<FlagCandidateTarget>();
                 var tuples = targets.Select(t =>
-                    (FilePath: t.FilePath, MethodName: t.MethodName,
+                    (FilePath: (FilePath)t.FilePath, MethodName: t.MethodName,
                      Pattern: t.Pattern, Score: t.Score, Reason: t.Reason))
                     .ToList();
 
@@ -2693,7 +2693,7 @@ public class SentinelAsyncifyTools
         {
             var tuples = input.MethodTargets
                 .Where(t => input.Exclusions?.Contains(t.MethodName) != true)
-                .Select(t => (FilePath: t.FilePath, MethodName: t.MethodName,
+                .Select(t => (FilePath: (FilePath)t.FilePath, MethodName: t.MethodName,
                               Pattern: t.Pattern, Score: t.Score, Reason: t.Reason))
                 .ToList();
 
