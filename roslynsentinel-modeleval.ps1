@@ -64,17 +64,26 @@
                           MinimalGuidance/Disambiguated-style flexibility - the model chooses
                           which tool(s) to use for each step (ExtractMethodSafe/RenameSymbol/
                           ChangeAccessibility/ModifyModifier or plain ApplyDiff).
-      OrderPricingRefactorChain4/5/6/7 - escalating ladder built on top of OrderPricingRefactor's
-                          3 base steps, one added idiomatic refactor per rung: Chain4 adds
-                          inlining a single-use local; Chain5 adds renaming a parameter
-                          (rate -> discountRate); Chain6 adds a guard clause rejecting a negative
-                          discount rate (the one rung introducing new behavior, deliberately
-                          scoped to non-negative inputs to avoid repeating OrderPricingRefactor's
-                          step-1 wording-ambiguity failure); Chain7 adds extracting an
-                          IOrderPricingCalculator interface with OrderCheckout depending on the
-                          interface type. Each rung is its own fixture/prompt/test method in
+      OrderPricingRefactorChain4/5/6/7/8/9/10 - escalating ladder built on top of
+                          OrderPricingRefactor's 3 base steps, one added idiomatic refactor per
+                          rung: Chain4 adds inlining a single-use local; Chain5 adds renaming a
+                          parameter (rate -> discountRate); Chain6 adds a guard clause rejecting a
+                          negative discount rate (the one rung introducing new behavior,
+                          deliberately scoped to non-negative inputs to avoid repeating
+                          OrderPricingRefactor's step-1 wording-ambiguity failure); Chain7 adds
+                          extracting an IOrderPricingCalculator interface with OrderCheckout
+                          depending on the interface type (requires Advanced-tier tools - see
+                          below); Chain8 adds renaming the OrderPricingCalculator class itself to
+                          StandardOrderPricingCalculator; Chain9 adds widening
+                          IOrderPricingCalculator to also declare DescribeOrder; Chain10 adds
+                          replacing SummarizeShipping's magic zone numbers with named constants.
+                          Each rung is its own fixture/prompt/test method in
                           OrderPricingRefactorChainAgentTests.cs, not a parameterization of
-                          OrderPricingRefactor.
+                          OrderPricingRefactor. NOTE: as of 2026-09-08 this test class registers
+                          the full Advanced tool catalog (not just Basic's Refactor/Workspace
+                          modes) for every rung, since Chain7's interface-extraction step needs
+                          ExtractInterface/CreateFile, which only exist in Advanced - see the
+                          class doc comment in OrderPricingRefactorChainAgentTests.cs.
 
     Each host gets its own --artifacts-path (RoslynSentinel\_scratchbuild_<host-suffix>) so
     that two hosts can be launched concurrently without racing on shared project references'
@@ -92,7 +101,8 @@
     SizeThreshold | LiteralSteps | MinimalGuidance | MinimalGuidanceDisambiguated | PlanOnly |
     PlanThenExecute | ScriptedPlan | PlanImplementVerify | OrderPricingRefactor |
     OrderPricingRefactorChain4 | OrderPricingRefactorChain5 | OrderPricingRefactorChain6 |
-    OrderPricingRefactorChain7. Required. Accepts multiple values (e.g.
+    OrderPricingRefactorChain7 | OrderPricingRefactorChain8 | OrderPricingRefactorChain9 |
+    OrderPricingRefactorChain10. Required. Accepts multiple values (e.g.
     -Test OrderPricingRefactor,OrderPricingRefactorChain4,OrderPricingRefactorChain5) to run
     each one in turn, in the order given, all under the same -HostAddress/-Model/-Repeats -
     this is the supported way to queue a multi-test overnight sequence: it reuses this script's
@@ -175,7 +185,7 @@ param(
     [string]$HostAddress,
 
     [Parameter(Position = 1, Mandatory)]
-    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7')]
+    [ValidateSet('SizeThreshold', 'LiteralSteps', 'MinimalGuidance', 'MinimalGuidanceDisambiguated', 'PlanOnly', 'PlanThenExecute', 'ScriptedPlan', 'PlanImplementVerify', 'OrderPricingRefactor', 'OrderPricingRefactorChain4', 'OrderPricingRefactorChain5', 'OrderPricingRefactorChain6', 'OrderPricingRefactorChain7', 'OrderPricingRefactorChain8', 'OrderPricingRefactorChain9', 'OrderPricingRefactorChain10')]
     [string[]]$Test,
 
     [Parameter(Position = 2)]
@@ -235,6 +245,9 @@ $testNames = @{
     'OrderPricingRefactorChain5'    = 'Model_AppliesFiveChainedRefactors'
     'OrderPricingRefactorChain6'    = 'Model_AppliesSixChainedRefactors'
     'OrderPricingRefactorChain7'    = 'Model_AppliesSevenChainedRefactors'
+    'OrderPricingRefactorChain8'    = 'Model_AppliesEightChainedRefactors'
+    'OrderPricingRefactorChain9'    = 'Model_AppliesNineChainedRefactors'
+    'OrderPricingRefactorChain10'   = 'Model_AppliesTenChainedRefactors'
 }
 
 $artifactsPath = Join-Path $repoRoot "_scratchbuild_$suffix"

@@ -36,6 +36,23 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// - Rung 4 (7 steps, <see cref="Model_AppliesSevenChainedRefactors"/>): + extract an interface
 ///   (`IOrderPricingCalculator`) and have `OrderCheckout` depend on the interface type instead of
 ///   the concrete class.
+/// - Rung 5 (8 steps, <see cref="Model_AppliesEightChainedRefactors"/>): + rename the
+///   `OrderPricingCalculator` class itself to `StandardOrderPricingCalculator` — an ordinary type
+///   rename that ripples into both its own file's class declaration and `OrderCheckout`'s
+///   construction call, without touching the interface name, member shape, or `OrderCheckout`'s
+///   public constructor (which the shared front-door test in
+///   <see cref="Fixtures.OrderPricingRefactorReproducer.CheckoutFrontDoorTestsFileContent"/>
+///   depends on staying parameterless across every rung — DI-style constructor injection was
+///   deliberately ruled out here for that reason).
+/// - Rung 6 (9 steps, <see cref="Model_AppliesNineChainedRefactors"/>): + widen
+///   `IOrderPricingCalculator` to also declare `DescribeOrder(int, string): string`, so the
+///   (renamed) calculator class must satisfy a second interface member it already has a
+///   compatible method for — an ordinary "grow the interface" step, distinct from rung 4's
+///   original extraction.
+/// - Rung 7 (10 steps, <see cref="Model_AppliesTenChainedRefactors"/>): + replace
+///   `SummarizeShipping`'s magic zone numbers (`1`, `2`) with named `const int` fields and use
+///   them in the switch — a self-contained "introduce named constant" step with no cross-file
+///   ripple, unlike every other step in the chain.
 ///
 /// Each rung is its own prompt/fixture/assertion method rather than one parameterized test, since
 /// the starting and expected-ending source text genuinely differs at each rung and a shared
@@ -51,7 +68,7 @@ public class OrderPricingRefactorChainAgentTests
     // tool catalog.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Refactor", "Workspace",
+        "Refactor", "Workspace"
     };
 
     // Toggle for an isolation experiment: with WriteFile blocked, the model must use ApplyDiff/
@@ -96,7 +113,8 @@ public class OrderPricingRefactorChainAgentTests
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
+        //mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes); // Temporarily commented out to give the model access to the full Advanced tool catalog as ExtractInterface is not in the Basic catalog and is required for rung 7.
+        mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
 
         if (BlockWriteFile)
         {
@@ -804,6 +822,656 @@ public class OrderPricingRefactorChainAgentTests
     }
 
     // ============================================================================================
+    // Rung 5 (8 steps): rung 4's 7 steps + rename the OrderPricingCalculator class itself to
+    // StandardOrderPricingCalculator.
+    // ============================================================================================
+
+    private const string EightStepUserPromptTemplate = """
+        # Task: Eight small refactors in FixtureHelpers/OrderPricingCalculator.cs
+
+        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        straight to ReadFile/SearchSolutionText/ListAll on the paths below.
+
+        You have flexibility in exactly how you implement each step below — use whichever MCP
+        tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
+        the end result matches what's described.
+
+        ## Background
+
+        `{0}/FixtureHelpers/OrderPricingCalculator.cs` has a method `CalcDisc` that computes an
+        order's discounted total. It is called from one other file,
+        `{0}/FixtureHelpers/OrderCheckout.cs`.
+
+        ## Steps (apply all eight)
+
+        1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
+           factor only that expression out into its own new private method on the same class (it
+           should take `amount` and `rate` and return their product), and have both branches call
+           your new method instead of repeating `amount * rate` inline — this includes the
+           preferred-customer branch, which still applies its 1.1x scaling on top of the
+           extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
+           in `CalcDisc` and does not move into the new method.
+
+        2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
+           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           only changes the method's declaration and misses its caller is not complete.
+
+        3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
+           to `internal`, so other classes in the same project could call it directly if needed.
+
+        4. **Inline**: in the standard-customer branch of `CalculateDiscountedTotal` (formerly
+           `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
+           after it's declared, purely to hold the result of your extracted method before
+           subtracting it. Remove that local variable and subtract the extracted method's call
+           result directly in the `return` statement instead — the preferred-customer branch's
+           `discount` local should be left exactly as it is; only the standard-customer branch's
+           local is being inlined.
+
+        5. **Rename a parameter**: rename the `rate` parameter of `CalculateDiscountedTotal` to
+           `discountRate`. Update every use of it inside `CalculateDiscountedTotal` (including in
+           the call to your extracted method from step 1) to the new name. Leave the extracted
+           method's own parameter name(s) exactly as you already chose them in step 1.
+
+        6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
+           existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
+           `discountRate` is negative (i.e. `discountRate < 0`). This is a deliberate, intentional
+           behavior change for negative rates only — do not try to preserve the old behavior for
+           negative input, there was no meaningful old behavior for negative input to preserve.
+
+        7. **Extract an interface**: create a new interface `IOrderPricingCalculator` (in its own
+           new file, `{0}/FixtureHelpers/IOrderPricingCalculator.cs`) containing exactly one member:
+           `CalculateDiscountedTotal(decimal amount, decimal discountRate, bool isPreferredCustomer)`
+           returning `decimal`. Make `OrderPricingCalculator` implement this interface (only the
+           `CalculateDiscountedTotal` method needs to satisfy it — do not add `DescribeOrder` or
+           `SummarizeShipping` to the interface). Then change `OrderCheckout`'s `_calculator` field
+           in `OrderCheckout.cs` to be declared as `IOrderPricingCalculator` instead of the concrete
+           `OrderPricingCalculator` type (the field can still be *constructed* with
+           `new OrderPricingCalculator()` — only its declared/static type changes to the interface).
+
+        8. **Rename the class**: rename the `OrderPricingCalculator` class itself to
+           `StandardOrderPricingCalculator`. Update its declaration (including the `: IOrderPricingCalculator`
+           base-list entry, which keeps its own name unchanged — only the class being renamed
+           implements it), the file's own name is NOT required to change, and the construction
+           call in `OrderCheckout.cs` (`new OrderPricingCalculator()` becomes
+           `new StandardOrderPricingCalculator()`). `IOrderPricingCalculator` itself is a different
+           symbol and must NOT be renamed — only the concrete class name changes.
+
+        ## Constraints
+
+        - Do not change the logic of `DescribeOrder` or `SummarizeShipping` in
+          `OrderPricingCalculator.cs` — reformatting is fine, but their behavior must stay identical.
+        - For every NON-negative `discountRate`, `CalculateDiscountedTotal` must keep producing
+          exactly the same output it did before your changes. The only observable behavior change
+          anywhere in this task is the new exception for negative `discountRate` from step 6.
+        - `OrderCheckout.GetFinalPrice` must still return the same value it did before, for the same
+          non-negative inputs — only the declared type of the private field backing it changes (step
+          7), and the concrete type it's constructed with (step 8).
+        - `OrderCheckout`'s own public constructor must remain parameterless — nothing in this task
+          asks you to change how `OrderCheckout` itself is constructed, only what it constructs
+          internally.
+        - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
+          build to just the `ContosoOrders.Core` project rather than the whole solution.
+
+        ## Before you report done
+
+        Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`),
+        `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` — do not rely on your memory of the
+        edit you intended to make. For each item below, check the real code and answer yourself
+        honestly before writing your summary:
+
+        1. Does the standard-customer branch call your new extracted method? Does the
+           preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
+           did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
+           Both branches must call the new method — re-read both branches, not just one.
+        2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
+           `OrderCheckout.cs` updated to the new name — not just one of the two?
+        3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
+           not still `private`?
+        4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
+           with the extracted method's call result subtracted directly in the `return` statement? Is
+           the preferred-customer branch's `discount` local still present, untouched?
+        5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now (not
+           `rate`), at its declaration AND at every use inside the method, including inside the call
+           to your extracted method from step 1? Did the extracted method's OWN parameter name(s)
+           stay exactly as you chose them in step 1 — this rename only touches
+           `CalculateDiscountedTotal`'s parameter, not the extracted method's.
+        6. Is the negative-`discountRate` guard clause actually the FIRST thing in the method body,
+           before any of the other logic — not appended after, and not skipped entirely?
+        7. Does `IOrderPricingCalculator.cs` exist with exactly the one member described? Does the
+           calculator class actually implement that interface? Is `OrderCheckout`'s `_calculator`
+           field's DECLARED type actually `IOrderPricingCalculator` now, not still the concrete
+           class type (construction can still use `new`)?
+        8. Is the calculator class's name actually `StandardOrderPricingCalculator` on disk right
+           now, at BOTH its declaration and every place it's constructed — not still
+           `OrderPricingCalculator`? Is `IOrderPricingCalculator` itself still named
+           `IOrderPricingCalculator`, unchanged?
+
+        If re-reading the code reveals any of the above isn't true, fix it now before reporting —
+        do not report success based on what you intended to do.
+
+        Report what you changed and the verification result.
+        """;
+
+    [Test]
+    public async Task Model_AppliesEightChainedRefactors()
+    {
+        var result = await RunOnceAsync(EightStepUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.Converged, Is.True,
+            $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
+
+        await AssertThreeBaseStepsApplied(result, expectedCalculatorClassName: "StandardOrderPricingCalculator");
+
+        var calculatorText = File.ReadAllText(CalculatorPath);
+        var checkoutText = File.ReadAllText(CheckoutPath);
+
+        Assert.That(calculatorText, Does.Not.Match(@"\bstandardDiscount\b"),
+            $"Step 4: the single-use 'standardDiscount' local should be inlined. Transcript: {result.TranscriptPath}");
+
+        var calculateDiscountedTotalMatch = System.Text.RegularExpressions.Regex.Match(
+            calculatorText, @"decimal\s+CalculateDiscountedTotal\s*\(([^)]*)\)\s*\{");
+        Assert.That(calculateDiscountedTotalMatch.Success, Is.True,
+            $"Could not find CalculateDiscountedTotal's declaration. Transcript: {result.TranscriptPath}");
+        var parameterList = calculateDiscountedTotalMatch.Groups[1].Value;
+        Assert.That(parameterList, Does.Match(@"\bdiscountRate\b"),
+            $"Step 5: CalculateDiscountedTotal's 'rate' parameter should be renamed to 'discountRate'. Transcript: {result.TranscriptPath}");
+
+        var bodyStart = calculateDiscountedTotalMatch.Index + calculateDiscountedTotalMatch.Length;
+        var bodyEnd = FindMatchingBrace(calculatorText, bodyStart - 1);
+        var methodBody = calculatorText.Substring(bodyStart, bodyEnd - bodyStart);
+        Assert.That(methodBody, Does.Match(@"discountRate\s*<\s*0"),
+            $"Step 6: expected a guard checking 'discountRate < 0'. Transcript: {result.TranscriptPath}");
+        Assert.That(methodBody, Does.Match(@"ArgumentOutOfRangeException"),
+            $"Step 6: expected the guard to throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
+
+        // Step 7: interface file, class implements it, and OrderCheckout's field is declared as
+        // the interface type rather than the concrete class.
+        var interfacePath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "IOrderPricingCalculator.cs");
+        Assert.That(File.Exists(interfacePath), Is.True,
+            $"Step 7: expected a new IOrderPricingCalculator.cs file. Transcript: {result.TranscriptPath}");
+        var interfaceText = File.ReadAllText(interfacePath);
+        Assert.That(interfaceText, Does.Match(@"interface\s+IOrderPricingCalculator"),
+            $"Step 7: expected an IOrderPricingCalculator interface declaration. Transcript: {result.TranscriptPath}");
+        Assert.That(interfaceText, Does.Match(@"decimal\s+CalculateDiscountedTotal\s*\("),
+            $"Step 7: IOrderPricingCalculator should declare CalculateDiscountedTotal. Transcript: {result.TranscriptPath}");
+
+        var fieldMatch = System.Text.RegularExpressions.Regex.Match(
+            checkoutText, @"(?:private|internal|protected|public)\s+(?:readonly\s+)?(\w+)\s+_calculator\b");
+        Assert.That(fieldMatch.Success, Is.True,
+            $"Could not find OrderCheckout's _calculator field declaration. Transcript: {result.TranscriptPath}");
+        Assert.That(fieldMatch.Groups[1].Value, Is.EqualTo("IOrderPricingCalculator"),
+            $"Step 7: OrderCheckout's _calculator field should be declared as IOrderPricingCalculator, not the concrete class. Transcript: {result.TranscriptPath}");
+
+        // Step 8: the concrete class is renamed at both its declaration and every construction
+        // site, while the interface name itself is untouched — checked separately from
+        // AssertThreeBaseStepsApplied's class-declaration check since the construction call site
+        // lives in a different file (OrderCheckout.cs).
+        Assert.That(checkoutText, Does.Match(@"new\s+StandardOrderPricingCalculator\s*\("),
+            $"Step 8: OrderCheckout.cs should construct 'new StandardOrderPricingCalculator()', not the old class name. Transcript: {result.TranscriptPath}");
+        Assert.That(checkoutText, Does.Not.Match(@"new\s+OrderPricingCalculator\s*\("),
+            $"Step 8: OrderCheckout.cs should no longer construct the old 'OrderPricingCalculator' name. Transcript: {result.TranscriptPath}");
+
+        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 10, maxPerTool: 4);
+
+        var coreProjectDirectory = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core");
+        var (preferredResult, standardResult) = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalAsync(
+            coreProjectDirectory, amount: 200m, rate: 0.1m, TestContext.CurrentContext.CancellationToken);
+        Assert.That(preferredResult, Is.EqualTo(200m - (200m * 0.1m * 1.1m)).Within(0.001m),
+            $"CalculateDiscountedTotal should still apply the 1.1x scaling for a valid rate. Transcript: {result.TranscriptPath}");
+        Assert.That(standardResult, Is.EqualTo(200m - (200m * 0.1m)).Within(0.001m),
+            $"CalculateDiscountedTotal should still compute the standard discount for a valid rate. Transcript: {result.TranscriptPath}");
+
+        var threwForNegativeRate = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalThrowsAsync(
+            coreProjectDirectory, amount: 200m, rate: -0.1m, isPreferredCustomer: false,
+            expectedExceptionTypeName: "ArgumentOutOfRangeException",
+            TestContext.CurrentContext.CancellationToken);
+        Assert.That(threwForNegativeRate, Is.True,
+            $"Step 6: negative rate should still throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
+    }
+
+    // ============================================================================================
+    // Rung 6 (9 steps): rung 5's 8 steps + widen IOrderPricingCalculator to also declare
+    // DescribeOrder(int, string): string.
+    // ============================================================================================
+
+    private const string NineStepUserPromptTemplate = """
+        # Task: Nine small refactors in FixtureHelpers/OrderPricingCalculator.cs
+
+        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        straight to ReadFile/SearchSolutionText/ListAll on the paths below.
+
+        You have flexibility in exactly how you implement each step below — use whichever MCP
+        tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
+        the end result matches what's described.
+
+        ## Background
+
+        `{0}/FixtureHelpers/OrderPricingCalculator.cs` has a method `CalcDisc` that computes an
+        order's discounted total. It is called from one other file,
+        `{0}/FixtureHelpers/OrderCheckout.cs`.
+
+        ## Steps (apply all nine)
+
+        1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
+           factor only that expression out into its own new private method on the same class (it
+           should take `amount` and `rate` and return their product), and have both branches call
+           your new method instead of repeating `amount * rate` inline — this includes the
+           preferred-customer branch, which still applies its 1.1x scaling on top of the
+           extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
+           in `CalcDisc` and does not move into the new method.
+
+        2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
+           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           only changes the method's declaration and misses its caller is not complete.
+
+        3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
+           to `internal`, so other classes in the same project could call it directly if needed.
+
+        4. **Inline**: in the standard-customer branch of `CalculateDiscountedTotal` (formerly
+           `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
+           after it's declared, purely to hold the result of your extracted method before
+           subtracting it. Remove that local variable and subtract the extracted method's call
+           result directly in the `return` statement instead — the preferred-customer branch's
+           `discount` local should be left exactly as it is; only the standard-customer branch's
+           local is being inlined.
+
+        5. **Rename a parameter**: rename the `rate` parameter of `CalculateDiscountedTotal` to
+           `discountRate`. Update every use of it inside `CalculateDiscountedTotal` (including in
+           the call to your extracted method from step 1) to the new name. Leave the extracted
+           method's own parameter name(s) exactly as you already chose them in step 1.
+
+        6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
+           existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
+           `discountRate` is negative (i.e. `discountRate < 0`). This is a deliberate, intentional
+           behavior change for negative rates only — do not try to preserve the old behavior for
+           negative input, there was no meaningful old behavior for negative input to preserve.
+
+        7. **Extract an interface**: create a new interface `IOrderPricingCalculator` (in its own
+           new file, `{0}/FixtureHelpers/IOrderPricingCalculator.cs`) containing exactly one member:
+           `CalculateDiscountedTotal(decimal amount, decimal discountRate, bool isPreferredCustomer)`
+           returning `decimal`. Make `OrderPricingCalculator` implement this interface. Then change
+           `OrderCheckout`'s `_calculator` field in `OrderCheckout.cs` to be declared as
+           `IOrderPricingCalculator` instead of the concrete `OrderPricingCalculator` type (the
+           field can still be *constructed* with `new OrderPricingCalculator()` — only its
+           declared/static type changes to the interface).
+
+        8. **Rename the class**: rename the `OrderPricingCalculator` class itself to
+           `StandardOrderPricingCalculator`. Update its declaration (including the
+           `: IOrderPricingCalculator` base-list entry, which keeps its own name unchanged) and the
+           construction call in `OrderCheckout.cs`. `IOrderPricingCalculator` itself must NOT be
+           renamed — only the concrete class name changes.
+
+        9. **Widen the interface**: add a second member to `IOrderPricingCalculator`:
+           `DescribeOrder(int id, string label)` returning `string`. The calculator class already
+           has a compatible `DescribeOrder(int id, string label)` method (unrelated padding, not
+           previously part of the interface) — do not change that method's body or parameter names,
+           only add the new member to the interface declaration and, if your tool requires it,
+           confirm the class's existing method satisfies it (an implicit interface implementation
+           needs no code change on the class side beyond the interface itself gaining the member).
+           `SummarizeShipping` is NOT added to the interface — only `DescribeOrder` and the
+           already-present `CalculateDiscountedTotal`.
+
+        ## Constraints
+
+        - Do not change the logic of `DescribeOrder` or `SummarizeShipping` in
+          `OrderPricingCalculator.cs` — reformatting is fine, but their behavior must stay identical.
+          Step 9 changes DescribeOrder's membership in the interface, not its implementation.
+        - For every NON-negative `discountRate`, `CalculateDiscountedTotal` must keep producing
+          exactly the same output it did before your changes. The only observable behavior change
+          anywhere in this task is the new exception for negative `discountRate` from step 6.
+        - `OrderCheckout.GetFinalPrice` must still return the same value it did before, for the same
+          non-negative inputs.
+        - `OrderCheckout`'s own public constructor must remain parameterless.
+        - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
+          build to just the `ContosoOrders.Core` project rather than the whole solution.
+
+        ## Before you report done
+
+        Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`),
+        `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` — do not rely on your memory of the
+        edit you intended to make. For each item below, check the real code and answer yourself
+        honestly before writing your summary:
+
+        1. Does the standard-customer branch call your new extracted method? Does the
+           preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result)?
+        2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
+           `OrderCheckout.cs` updated to the new name?
+        3. Is the extracted method's accessibility actually `internal` in the file on disk right now?
+        4. Is the `standardDiscount` local variable actually gone, with the extracted method's call
+           result subtracted directly in the `return` statement?
+        5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now, at its
+           declaration AND every use inside the method?
+        6. Is the negative-`discountRate` guard clause actually the FIRST thing in the method body?
+        7. Does `IOrderPricingCalculator.cs` exist? Does the calculator class implement it? Is
+           `OrderCheckout`'s `_calculator` field's DECLARED type actually `IOrderPricingCalculator`?
+        8. Is the calculator class's name actually `StandardOrderPricingCalculator` at BOTH its
+           declaration and every construction site? Is `IOrderPricingCalculator` still named
+           `IOrderPricingCalculator`, unchanged?
+        9. Does `IOrderPricingCalculator` now declare BOTH `CalculateDiscountedTotal` AND
+           `DescribeOrder(int, string): string`? Does the calculator class still compile as
+           implementing the interface (i.e. does its `DescribeOrder` method's signature actually
+           match what you declared on the interface)? Is `SummarizeShipping` still absent from the
+           interface?
+
+        If re-reading the code reveals any of the above isn't true, fix it now before reporting —
+        do not report success based on what you intended to do.
+
+        Report what you changed and the verification result.
+        """;
+
+    [Test]
+    public async Task Model_AppliesNineChainedRefactors()
+    {
+        var result = await RunOnceAsync(NineStepUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.Converged, Is.True,
+            $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
+
+        await AssertThreeBaseStepsApplied(result, expectedCalculatorClassName: "StandardOrderPricingCalculator");
+
+        var calculatorText = File.ReadAllText(CalculatorPath);
+        var checkoutText = File.ReadAllText(CheckoutPath);
+
+        Assert.That(calculatorText, Does.Not.Match(@"\bstandardDiscount\b"),
+            $"Step 4: the single-use 'standardDiscount' local should be inlined. Transcript: {result.TranscriptPath}");
+
+        var calculateDiscountedTotalMatch = System.Text.RegularExpressions.Regex.Match(
+            calculatorText, @"decimal\s+CalculateDiscountedTotal\s*\(([^)]*)\)\s*\{");
+        Assert.That(calculateDiscountedTotalMatch.Success, Is.True,
+            $"Could not find CalculateDiscountedTotal's declaration. Transcript: {result.TranscriptPath}");
+        var parameterList = calculateDiscountedTotalMatch.Groups[1].Value;
+        Assert.That(parameterList, Does.Match(@"\bdiscountRate\b"),
+            $"Step 5: CalculateDiscountedTotal's 'rate' parameter should be renamed to 'discountRate'. Transcript: {result.TranscriptPath}");
+
+        var bodyStart = calculateDiscountedTotalMatch.Index + calculateDiscountedTotalMatch.Length;
+        var bodyEnd = FindMatchingBrace(calculatorText, bodyStart - 1);
+        var methodBody = calculatorText.Substring(bodyStart, bodyEnd - bodyStart);
+        Assert.That(methodBody, Does.Match(@"discountRate\s*<\s*0"),
+            $"Step 6: expected a guard checking 'discountRate < 0'. Transcript: {result.TranscriptPath}");
+        Assert.That(methodBody, Does.Match(@"ArgumentOutOfRangeException"),
+            $"Step 6: expected the guard to throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
+
+        var interfacePath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "IOrderPricingCalculator.cs");
+        Assert.That(File.Exists(interfacePath), Is.True,
+            $"Step 7: expected a new IOrderPricingCalculator.cs file. Transcript: {result.TranscriptPath}");
+        var interfaceText = File.ReadAllText(interfacePath);
+        Assert.That(interfaceText, Does.Match(@"interface\s+IOrderPricingCalculator"),
+            $"Step 7: expected an IOrderPricingCalculator interface declaration. Transcript: {result.TranscriptPath}");
+        Assert.That(interfaceText, Does.Match(@"decimal\s+CalculateDiscountedTotal\s*\("),
+            $"Step 7: IOrderPricingCalculator should declare CalculateDiscountedTotal. Transcript: {result.TranscriptPath}");
+
+        var fieldMatch = System.Text.RegularExpressions.Regex.Match(
+            checkoutText, @"(?:private|internal|protected|public)\s+(?:readonly\s+)?(\w+)\s+_calculator\b");
+        Assert.That(fieldMatch.Success, Is.True,
+            $"Could not find OrderCheckout's _calculator field declaration. Transcript: {result.TranscriptPath}");
+        Assert.That(fieldMatch.Groups[1].Value, Is.EqualTo("IOrderPricingCalculator"),
+            $"Step 7: OrderCheckout's _calculator field should be declared as IOrderPricingCalculator. Transcript: {result.TranscriptPath}");
+
+        Assert.That(checkoutText, Does.Match(@"new\s+StandardOrderPricingCalculator\s*\("),
+            $"Step 8: OrderCheckout.cs should construct 'new StandardOrderPricingCalculator()'. Transcript: {result.TranscriptPath}");
+        Assert.That(checkoutText, Does.Not.Match(@"new\s+OrderPricingCalculator\s*\("),
+            $"Step 8: OrderCheckout.cs should no longer construct the old 'OrderPricingCalculator' name. Transcript: {result.TranscriptPath}");
+
+        // Step 9: the interface must now declare DescribeOrder(int, string): string too, and
+        // SummarizeShipping must still be absent — checked against the interface file's own text
+        // rather than the calculator class (which never needed to change its DescribeOrder body).
+        Assert.That(interfaceText, Does.Match(@"string\s+DescribeOrder\s*\(\s*int\s+\w+\s*,\s*string\s+\w+\s*\)"),
+            $"Step 9: IOrderPricingCalculator should declare 'string DescribeOrder(int, string)'. Transcript: {result.TranscriptPath}");
+        Assert.That(interfaceText, Does.Not.Match(@"SummarizeShipping"),
+            $"Step 9: SummarizeShipping should NOT be added to IOrderPricingCalculator. Transcript: {result.TranscriptPath}");
+
+        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 12, maxPerTool: 5);
+
+        var coreProjectDirectory = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core");
+        var (preferredResult, standardResult) = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalAsync(
+            coreProjectDirectory, amount: 200m, rate: 0.1m, TestContext.CurrentContext.CancellationToken);
+        Assert.That(preferredResult, Is.EqualTo(200m - (200m * 0.1m * 1.1m)).Within(0.001m),
+            $"CalculateDiscountedTotal should still apply the 1.1x scaling for a valid rate. Transcript: {result.TranscriptPath}");
+        Assert.That(standardResult, Is.EqualTo(200m - (200m * 0.1m)).Within(0.001m),
+            $"CalculateDiscountedTotal should still compute the standard discount for a valid rate. Transcript: {result.TranscriptPath}");
+
+        var threwForNegativeRate = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalThrowsAsync(
+            coreProjectDirectory, amount: 200m, rate: -0.1m, isPreferredCustomer: false,
+            expectedExceptionTypeName: "ArgumentOutOfRangeException",
+            TestContext.CurrentContext.CancellationToken);
+        Assert.That(threwForNegativeRate, Is.True,
+            $"Step 6: negative rate should still throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
+    }
+
+    // ============================================================================================
+    // Rung 7 (10 steps): rung 6's 9 steps + replace SummarizeShipping's magic zone numbers with
+    // named const int fields.
+    // ============================================================================================
+
+    private const string TenStepUserPromptTemplate = """
+        # Task: Ten small refactors in FixtureHelpers/OrderPricingCalculator.cs
+
+        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        straight to ReadFile/SearchSolutionText/ListAll on the paths below.
+
+        You have flexibility in exactly how you implement each step below — use whichever MCP
+        tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
+        the end result matches what's described.
+
+        ## Background
+
+        `{0}/FixtureHelpers/OrderPricingCalculator.cs` has a method `CalcDisc` that computes an
+        order's discounted total. It is called from one other file,
+        `{0}/FixtureHelpers/OrderCheckout.cs`.
+
+        ## Steps (apply all ten)
+
+        1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
+           factor only that expression out into its own new private method on the same class (it
+           should take `amount` and `rate` and return their product), and have both branches call
+           your new method instead of repeating `amount * rate` inline — this includes the
+           preferred-customer branch, which still applies its 1.1x scaling on top of the
+           extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
+           in `CalcDisc` and does not move into the new method.
+
+        2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
+           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           only changes the method's declaration and misses its caller is not complete.
+
+        3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
+           to `internal`, so other classes in the same project could call it directly if needed.
+
+        4. **Inline**: in the standard-customer branch of `CalculateDiscountedTotal` (formerly
+           `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
+           after it's declared, purely to hold the result of your extracted method before
+           subtracting it. Remove that local variable and subtract the extracted method's call
+           result directly in the `return` statement instead — the preferred-customer branch's
+           `discount` local should be left exactly as it is; only the standard-customer branch's
+           local is being inlined.
+
+        5. **Rename a parameter**: rename the `rate` parameter of `CalculateDiscountedTotal` to
+           `discountRate`. Update every use of it inside `CalculateDiscountedTotal` (including in
+           the call to your extracted method from step 1) to the new name. Leave the extracted
+           method's own parameter name(s) exactly as you already chose them in step 1.
+
+        6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
+           existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
+           `discountRate` is negative (i.e. `discountRate < 0`). This is a deliberate, intentional
+           behavior change for negative rates only — do not try to preserve the old behavior for
+           negative input, there was no meaningful old behavior for negative input to preserve.
+
+        7. **Extract an interface**: create a new interface `IOrderPricingCalculator` (in its own
+           new file, `{0}/FixtureHelpers/IOrderPricingCalculator.cs`) containing exactly one member:
+           `CalculateDiscountedTotal(decimal amount, decimal discountRate, bool isPreferredCustomer)`
+           returning `decimal`. Make `OrderPricingCalculator` implement this interface. Then change
+           `OrderCheckout`'s `_calculator` field in `OrderCheckout.cs` to be declared as
+           `IOrderPricingCalculator` instead of the concrete `OrderPricingCalculator` type (the
+           field can still be *constructed* with `new OrderPricingCalculator()` — only its
+           declared/static type changes to the interface).
+
+        8. **Rename the class**: rename the `OrderPricingCalculator` class itself to
+           `StandardOrderPricingCalculator`. Update its declaration (including the
+           `: IOrderPricingCalculator` base-list entry, which keeps its own name unchanged) and the
+           construction call in `OrderCheckout.cs`. `IOrderPricingCalculator` itself must NOT be
+           renamed — only the concrete class name changes.
+
+        9. **Widen the interface**: add a second member to `IOrderPricingCalculator`:
+           `DescribeOrder(int id, string label)` returning `string`. The calculator class already
+           has a compatible `DescribeOrder(int id, string label)` method — do not change that
+           method's body or parameter names, only add the new member to the interface declaration.
+           `SummarizeShipping` is NOT added to the interface.
+
+        10. **Introduce named constants**: in `SummarizeShipping`, the `switch` expression matches
+            the raw integer literals `1` and `2` (for the "local" and "regional" cases). Add two
+            `private const int` fields to the calculator class — `LocalZone = 1` and
+            `RegionalZone = 2` — and replace the literal `1` and `2` in the switch's case patterns
+            with `LocalZone` and `RegionalZone` respectively. The `_ => "national"` default case is
+            unaffected (there is no named constant for it). `SummarizeShipping`'s parameter, body
+            structure, and returned strings must otherwise stay exactly as they are — only the two
+            case-pattern literals are replaced with the new constants.
+
+        ## Constraints
+
+        - Do not change the logic of `DescribeOrder` or `SummarizeShipping` beyond what step 10
+          explicitly asks for — reformatting is fine, but behavior (including the returned strings
+          for each zone) must stay identical.
+        - For every NON-negative `discountRate`, `CalculateDiscountedTotal` must keep producing
+          exactly the same output it did before your changes. The only observable behavior change
+          anywhere in this task is the new exception for negative `discountRate` from step 6.
+        - `OrderCheckout.GetFinalPrice` must still return the same value it did before, for the same
+          non-negative inputs.
+        - `OrderCheckout`'s own public constructor must remain parameterless.
+        - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
+          build to just the `ContosoOrders.Core` project rather than the whole solution.
+
+        ## Before you report done
+
+        Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`),
+        `SummarizeShipping`, `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` — do not rely on
+        your memory of the edit you intended to make. For each item below, check the real code and
+        answer yourself honestly before writing your summary:
+
+        1. Does the standard-customer branch call your new extracted method? Does the
+           preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result)?
+        2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
+           `OrderCheckout.cs` updated to the new name?
+        3. Is the extracted method's accessibility actually `internal` in the file on disk right now?
+        4. Is the `standardDiscount` local variable actually gone, with the extracted method's call
+           result subtracted directly in the `return` statement?
+        5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now, at its
+           declaration AND every use inside the method?
+        6. Is the negative-`discountRate` guard clause actually the FIRST thing in the method body?
+        7. Does `IOrderPricingCalculator.cs` exist? Does the calculator class implement it? Is
+           `OrderCheckout`'s `_calculator` field's DECLARED type actually `IOrderPricingCalculator`?
+        8. Is the calculator class's name actually `StandardOrderPricingCalculator` at BOTH its
+           declaration and every construction site? Is `IOrderPricingCalculator` still unchanged?
+        9. Does `IOrderPricingCalculator` now declare BOTH `CalculateDiscountedTotal` AND
+           `DescribeOrder(int, string): string`? Is `SummarizeShipping` still absent from it?
+        10. Do `LocalZone` and `RegionalZone` constants actually exist on the calculator class with
+            values `1` and `2`? Does `SummarizeShipping`'s switch actually use `LocalZone` and
+            `RegionalZone` in its case patterns instead of the literals `1` and `2`? Does calling
+            `SummarizeShipping(1)` still return `"local"` and `SummarizeShipping(2)` still return
+            `"regional"` — i.e. did the constant values actually match the original literals?
+
+        If re-reading the code reveals any of the above isn't true, fix it now before reporting —
+        do not report success based on what you intended to do.
+
+        Report what you changed and the verification result.
+        """;
+
+    [Test]
+    public async Task Model_AppliesTenChainedRefactors()
+    {
+        var result = await RunOnceAsync(TenStepUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.Converged, Is.True,
+            $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
+
+        await AssertThreeBaseStepsApplied(result, expectedCalculatorClassName: "StandardOrderPricingCalculator");
+
+        var calculatorText = File.ReadAllText(CalculatorPath);
+        var checkoutText = File.ReadAllText(CheckoutPath);
+
+        Assert.That(calculatorText, Does.Not.Match(@"\bstandardDiscount\b"),
+            $"Step 4: the single-use 'standardDiscount' local should be inlined. Transcript: {result.TranscriptPath}");
+
+        var calculateDiscountedTotalMatch = System.Text.RegularExpressions.Regex.Match(
+            calculatorText, @"decimal\s+CalculateDiscountedTotal\s*\(([^)]*)\)\s*\{");
+        Assert.That(calculateDiscountedTotalMatch.Success, Is.True,
+            $"Could not find CalculateDiscountedTotal's declaration. Transcript: {result.TranscriptPath}");
+        var parameterList = calculateDiscountedTotalMatch.Groups[1].Value;
+        Assert.That(parameterList, Does.Match(@"\bdiscountRate\b"),
+            $"Step 5: CalculateDiscountedTotal's 'rate' parameter should be renamed to 'discountRate'. Transcript: {result.TranscriptPath}");
+
+        var bodyStart = calculateDiscountedTotalMatch.Index + calculateDiscountedTotalMatch.Length;
+        var bodyEnd = FindMatchingBrace(calculatorText, bodyStart - 1);
+        var methodBody = calculatorText.Substring(bodyStart, bodyEnd - bodyStart);
+        Assert.That(methodBody, Does.Match(@"discountRate\s*<\s*0"),
+            $"Step 6: expected a guard checking 'discountRate < 0'. Transcript: {result.TranscriptPath}");
+        Assert.That(methodBody, Does.Match(@"ArgumentOutOfRangeException"),
+            $"Step 6: expected the guard to throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
+
+        var interfacePath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "IOrderPricingCalculator.cs");
+        Assert.That(File.Exists(interfacePath), Is.True,
+            $"Step 7: expected a new IOrderPricingCalculator.cs file. Transcript: {result.TranscriptPath}");
+        var interfaceText = File.ReadAllText(interfacePath);
+        Assert.That(interfaceText, Does.Match(@"interface\s+IOrderPricingCalculator"),
+            $"Step 7: expected an IOrderPricingCalculator interface declaration. Transcript: {result.TranscriptPath}");
+        Assert.That(interfaceText, Does.Match(@"decimal\s+CalculateDiscountedTotal\s*\("),
+            $"Step 7: IOrderPricingCalculator should declare CalculateDiscountedTotal. Transcript: {result.TranscriptPath}");
+
+        var fieldMatch = System.Text.RegularExpressions.Regex.Match(
+            checkoutText, @"(?:private|internal|protected|public)\s+(?:readonly\s+)?(\w+)\s+_calculator\b");
+        Assert.That(fieldMatch.Success, Is.True,
+            $"Could not find OrderCheckout's _calculator field declaration. Transcript: {result.TranscriptPath}");
+        Assert.That(fieldMatch.Groups[1].Value, Is.EqualTo("IOrderPricingCalculator"),
+            $"Step 7: OrderCheckout's _calculator field should be declared as IOrderPricingCalculator. Transcript: {result.TranscriptPath}");
+
+        Assert.That(checkoutText, Does.Match(@"new\s+StandardOrderPricingCalculator\s*\("),
+            $"Step 8: OrderCheckout.cs should construct 'new StandardOrderPricingCalculator()'. Transcript: {result.TranscriptPath}");
+        Assert.That(checkoutText, Does.Not.Match(@"new\s+OrderPricingCalculator\s*\("),
+            $"Step 8: OrderCheckout.cs should no longer construct the old 'OrderPricingCalculator' name. Transcript: {result.TranscriptPath}");
+
+        Assert.That(interfaceText, Does.Match(@"string\s+DescribeOrder\s*\(\s*int\s+\w+\s*,\s*string\s+\w+\s*\)"),
+            $"Step 9: IOrderPricingCalculator should declare 'string DescribeOrder(int, string)'. Transcript: {result.TranscriptPath}");
+        Assert.That(interfaceText, Does.Not.Match(@"SummarizeShipping"),
+            $"Step 9: SummarizeShipping should NOT be added to IOrderPricingCalculator. Transcript: {result.TranscriptPath}");
+
+        // Step 10: named constants must exist and actually be used in the switch's case patterns —
+        // checked structurally (constant declarations + case-pattern identifiers) rather than just
+        // "the literals 1/2 are gone somewhere", since the same literals legitimately still appear
+        // in the constants' own initializers.
+        Assert.That(calculatorText, Does.Match(@"const\s+int\s+LocalZone\s*=\s*1\s*;"),
+            $"Step 10: expected 'private const int LocalZone = 1;'. Transcript: {result.TranscriptPath}");
+        Assert.That(calculatorText, Does.Match(@"const\s+int\s+RegionalZone\s*=\s*2\s*;"),
+            $"Step 10: expected 'private const int RegionalZone = 2;'. Transcript: {result.TranscriptPath}");
+
+        var summarizeShippingMatch = System.Text.RegularExpressions.Regex.Match(
+            calculatorText, @"string\s+SummarizeShipping\s*\([^)]*\)\s*\{");
+        Assert.That(summarizeShippingMatch.Success, Is.True,
+            $"Could not find SummarizeShipping's declaration. Transcript: {result.TranscriptPath}");
+        var shippingBodyStart = summarizeShippingMatch.Index + summarizeShippingMatch.Length;
+        var shippingBodyEnd = FindMatchingBrace(calculatorText, shippingBodyStart - 1);
+        var shippingBody = calculatorText.Substring(shippingBodyStart, shippingBodyEnd - shippingBodyStart);
+        Assert.That(shippingBody, Does.Match(@"\bLocalZone\s*=>"),
+            $"Step 10: SummarizeShipping's switch should match on 'LocalZone', not the literal 1. Transcript: {result.TranscriptPath}");
+        Assert.That(shippingBody, Does.Match(@"\bRegionalZone\s*=>"),
+            $"Step 10: SummarizeShipping's switch should match on 'RegionalZone', not the literal 2. Transcript: {result.TranscriptPath}");
+
+        AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 12, maxPerTool: 5);
+
+        var coreProjectDirectory = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core");
+        var (preferredResult, standardResult) = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalAsync(
+            coreProjectDirectory, amount: 200m, rate: 0.1m, TestContext.CurrentContext.CancellationToken);
+        Assert.That(preferredResult, Is.EqualTo(200m - (200m * 0.1m * 1.1m)).Within(0.001m),
+            $"CalculateDiscountedTotal should still apply the 1.1x scaling for a valid rate. Transcript: {result.TranscriptPath}");
+        Assert.That(standardResult, Is.EqualTo(200m - (200m * 0.1m)).Within(0.001m),
+            $"CalculateDiscountedTotal should still compute the standard discount for a valid rate. Transcript: {result.TranscriptPath}");
+
+        var threwForNegativeRate = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalThrowsAsync(
+            coreProjectDirectory, amount: 200m, rate: -0.1m, isPreferredCustomer: false,
+            expectedExceptionTypeName: "ArgumentOutOfRangeException",
+            TestContext.CurrentContext.CancellationToken);
+        Assert.That(threwForNegativeRate, Is.True,
+            $"Step 6: negative rate should still throw ArgumentOutOfRangeException. Transcript: {result.TranscriptPath}");
+    }
+
+    // ============================================================================================
     // Shared helpers
     // ============================================================================================
 
@@ -834,7 +1502,15 @@ public class OrderPricingRefactorChainAgentTests
     /// check its own additional step(s) inline against the same file reads, and the two test
     /// classes are allowed to diverge independently as each rung's wording gets tuned.
     /// </summary>
-    private async Task AssertThreeBaseStepsApplied(AgentRunResult result)
+    /// <param name="expectedCalculatorClassName">
+    /// The calculator class's expected name at its own declaration (not just at call sites) — pass
+    /// null for rungs 1-4, where the class stays named <c>OrderPricingCalculator</c>, or
+    /// <c>"StandardOrderPricingCalculator"</c> for rungs 5+, where step 8 renames it. Checked
+    /// against the declaration specifically so a model that updates every construction call site
+    /// but leaves the class's own `class X` line unrenamed (or vice versa) doesn't pass on a
+    /// text-search coincidence.
+    /// </param>
+    private async Task AssertThreeBaseStepsApplied(AgentRunResult result, string? expectedCalculatorClassName = null)
     {
         Assert.That(File.Exists(CalculatorPath), Is.True, "OrderPricingCalculator.cs should still exist after the model's edits.");
         Assert.That(File.Exists(CheckoutPath), Is.True, "OrderCheckout.cs should still exist after the model's edits.");
@@ -850,6 +1526,12 @@ public class OrderPricingRefactorChainAgentTests
             $"OrderCheckout.cs's call site should be updated to the new name, not left calling CalcDisc. Transcript: {result.TranscriptPath}");
         Assert.That(checkoutText, Does.Match(@"\bCalculateDiscountedTotal\b"),
             $"OrderCheckout.cs should call CalculateDiscountedTotal after the rename. Transcript: {result.TranscriptPath}");
+
+        if (expectedCalculatorClassName is not null)
+        {
+            Assert.That(calculatorText, Does.Match($@"class\s+{expectedCalculatorClassName}\b"),
+                $"Step 8: the calculator class's own declaration should be named '{expectedCalculatorClassName}'. Transcript: {result.TranscriptPath}");
+        }
 
         var calculatorCodeOnly = string.Join(
             "\n",
