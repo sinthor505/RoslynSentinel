@@ -166,7 +166,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ExtractSuperclass_AutoStageTrue_ReturnsAppliedChangeSummary()
     {
         SetMultiFile(("Dog.cs", RefactorSource));
-        var result = await _advTools.ExtractMembers("Dog.cs", "Dog", "superclass", "AnimalBase");
+        var result = await _advTools.ExtractMembers(reason: "test", "Dog.cs", "Dog", ExtractAsType.superclass, "AnimalBase");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -196,7 +196,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ExtractInterface_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ExtractMembers(reason: "test", "Order.cs", "Order", "interface", "IOrder");
+        var result = await _advTools.ExtractMembers(reason: "test", "Order.cs", "Order", ExtractAsType.@interface, "IOrder");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -677,7 +677,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task IntroduceField_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Introduce(reason: "test", "Order.cs", "string.Format", "labelFormatter", "field");
+        var result = await _advTools.Introduce(reason: "test", "Order.cs", "string.Format", "labelFormatter", IntroduceAsType.field);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -687,7 +687,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task IntroduceParameter_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Introduce(reason: "test", "Order.cs", "GetLabel", "GetLabel", "parameter");
+        var result = await _advTools.Introduce(reason: "test", "Order.cs", "GetLabel", "GetLabel", IntroduceAsType.parameter);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -797,7 +797,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task IntroduceVariable_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Introduce(reason: "test", "Order.cs", "string.Format", "formatted", "localVariable");
+        var result = await _advTools.Introduce(reason: "test", "Order.cs", "string.Format", "formatted", IntroduceAsType.localVariable);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -827,7 +827,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ExtractMembersToPartial_ValidMembers_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ExtractMembers(reason: "test", "Order.cs", "Order", "partial", memberNames: ["GetLabel"]);
+        var result = await _advTools.ExtractMembers(reason: "test", "Order.cs", "Order", ExtractAsType.partialClass, memberNames: ["GetLabel"]);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1098,7 +1098,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     {
         const string src = @"namespace TestProj; public class C { public string GetLabel() { return ""hello""; } }";
         SetSource(src, "C.cs");
-        var result = await _advTools.Introduce(reason: "test", "C.cs", @"""hello""", "HelloLabel", "constant");
+        var result = await _advTools.Introduce(reason: "test", "C.cs", @"""hello""", "HelloLabel", IntroduceAsType.@constant);
     }
 
     // --- AnalyzeControlFlow ---

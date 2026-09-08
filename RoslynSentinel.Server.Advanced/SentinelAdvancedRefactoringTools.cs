@@ -512,13 +512,13 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "Introduce")]
     [Produces(DataTag.ChangeId)]
-    [Description("Introduces a named symbol from an expression. as values: localVariable, field (private readonly), parameter (single-file), constant (→ MsAugmentResult). contextSnippet: verbatim substring identifying the expression. lineBefore/lineAfter disambiguate. Validates and writes localVariable/field/parameter to disk immediately; dryRun=true to preview without writing.")]
+    [Description("Introduces a named symbol from an expression. newType values: localVariable, field (private readonly), parameter (single-file), constant (private). lineBefore/lineAfter disambiguate. Validates and writes localVariable/field/parameter/constant to disk immediately; dryRun=true to preview without writing.")]
     public async Task<ToolResult<object>> Introduce(
         [Description(ToolParams.Reason)] string reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
-        [ExternalInputRequired(DataTag.SymbolName)] string newName,
-        [ExternalInputRequired(DataTag.SymbolKind)] string @as,
+        [Consumes(DataTag.SourceFilepath, required: true)][Description("The path to the source file.")] string filepath,
+        [Consumes(DataTag.ContextSnippet, required: true)][Description("A verbatim substring identifying the expression to introduce a symbol from.")] string contextSnippet,
+        [ExternalInputRequired(DataTag.SymbolName)][Description("The name of the new symbol to introduce.")] string newName,
+        [ExternalInputRequired(DataTag.SymbolKind)][Description("The kind of symbol to introduce.")] IntroduceAsType newType,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
@@ -531,32 +531,40 @@ public class SentinelAdvancedRefactoringTools
         {
             DocumentEditResult result;
             string stageDesc;
-            if (@as == "localVariable")
+            if (newType == IntroduceAsType.localVariable)
             {
                 result = await _granularRefactoringEngine.IntroduceVariableAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
                 stageDesc = $"Introduce local variable '{newName}'.";
             }
-            else if (@as == "field")
+            else if (newType == IntroduceAsType.field)
             {
                 result = await _granularRefactoringEngine.IntroduceFieldAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
                 stageDesc = $"Introduce field '{newName}'.";
             }
-            else if (@as == "parameter")
+            else if (newType == IntroduceAsType.parameter)
             {
                 result = await _granularRefactoringEngine.IntroduceParameterAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
                 stageDesc = $"Introduce parameter '{newName}'.";
             }
-            else if (@as == "constant")
+            else if (newType == IntroduceAsType.constant)
             {
-                return new ToolResult<object>() { Success = true, Data = await _augmentEngine.ExtractConstantSafeAsync(filePath, contextSnippet, newName, lineBefore, lineAfter) };
+                var constResult = await _augmentEngine.ExtractConstantSafeAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
+                if (!constResult.Success || string.IsNullOrEmpty(constResult.UpdatedContent))
+                    return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, constResult.Error ?? "ExtractConstantSafe failed.") };
+
+                var constChanges = new Dictionary<FilePath, string> { [filePath] = constResult.UpdatedContent };
+                var constApply = await ValidateAndApplyAsync(constChanges, $"Introduce constant '{newName}'.", "Introduce(constant)", dryRun, returnDiff, cancellationToken);
+                if (constApply.Error is not null)
+                    return new ToolResult<object> { Success = false, Error = constApply.Error };
+                return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(constApply.ChangeId, [filePath], $"Introduced '{newName}' as a constant in {Path.GetFileName(filePath)}.", constApply.DryRun, constApply.Diff) };
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown as '{@as}'. Valid values: localVariable, field, parameter, constant.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown newType '{newType}'. Valid values: localVariable, field, parameter, constant.") };
             }
 
             if (string.IsNullOrEmpty(result.UpdatedText))
-                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Introduce({@as}): context snippet '{contextSnippet}' not matched in '{filePath}'.") };
+                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Introduce({newType}): context snippet '{contextSnippet}' not matched in '{filePath}'.") };
 
             // Not wired into MemberChangedContentResult: the new declaration's text isn't caller-
             // supplied or separately exposed — IntroduceVariable/Field/ParameterAsync only return
@@ -564,14 +572,14 @@ public class SentinelAdvancedRefactoringTools
             // duplicating their formatting logic. Revisit only if those engine methods start
             // returning the introduced declaration's text alongside UpdatedText.
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
-            var apply = await ValidateAndApplyAsync(changes, stageDesc, $"Introduce({@as})", dryRun, returnDiff, cancellationToken);
+            var apply = await ValidateAndApplyAsync(changes, stageDesc, $"Introduce({newType})", dryRun, returnDiff, cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Introduced '{newName}' as {(@as == "localVariable" ? "a local variable" : @as)} in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
+            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Introduced '{newName}' as {(newType == IntroduceAsType.localVariable ? "a local variable" : newType)} in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Introduce ({As}) failed for '{NewName}' in '{FilePath}'", @as, newName, filePath);
+            _logger.LogError(ex, "Introduce ({As}) failed for '{NewName}' in '{FilePath}'", newType, newName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Introduce") };
         }
     }
@@ -581,21 +589,21 @@ public class SentinelAdvancedRefactoringTools
     // ExtractSuperclassAsync) only returns whole-file Changes dicts, with no separately-exposed "just the
     // new type's text" fragment. Wiring this needs an engine-API-extension pass, not tool-layer wiring —
     // revisit only if those engine methods start returning the extracted type's text alongside Changes.
-    // as=class was removed in favor of MoveMember, which supersedes it (targetClassName omitted from the
+    // newType=class was removed in favor of MoveMember, which supersedes it (targetClassName omitted from the
     // solution → same new-class behavior) and additionally supports moving into an EXISTING class.
     [McpServerTool(Name = "ExtractMembers")]
     [Produces(DataTag.ChangeId)]
-    [Description("Extracts members from a class into a new type. as values: interface (public API → new interface file, requires newTypeName), partial (named members → new partial file, requires memberNames), superclass (common members → new base class, requires newTypeName; for multiple classes supply filePaths[] + classNames[]). For moving named members into a class (new OR existing), use MoveMember instead. autoStage=true → ChangeId where applicable.")]
+    [Description("Extracts members from a class into an new interface, partial class, or superclass. newType values: interface (public API → new interface file, requires newTypeName. Automatically creates a new file for the interface.), partial (named members → new partial file, requires memberNames), superclass (common members → new base class, requires newTypeName; for multiple classes supply memberFilePaths[] + classNames[]). For moving named members into a class (new OR existing), use MoveMember instead. autoStage=true → ChangeId where applicable.")]
     public async Task<ToolResult<object>> ExtractMembers(
         [Description(ToolParams.Reason)] string reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string className,
-        [ExternalInputRequired(DataTag.SymbolKind)] string @as,
-        [ExternalInputRequired(DataTag.SymbolName)] string? newTypeName = null,
-        [ExternalInputRequired(DataTag.SymbolName)] string[]? memberNames = null,
-        [ExternalInputRequired(DataTag.SourceFilepath)] FilePath[]? filePaths = null,
-        [ExternalInputRequired(DataTag.ClassName)] string[]? classNames = null,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        [Consumes(DataTag.SourceFilepath, required: true)][Description("The file path of the destination file.")] string filepath,
+        [Consumes(DataTag.SymbolName, required: true)][Description("The name of the class from which to extract members.")] string className,
+        [ExternalInputRequired(DataTag.SymbolKind)][Description("The type of extraction to perform (interface, partial class, or superclass).")] ExtractAsType newType,
+        [ExternalInputRequired(DataTag.SymbolName)][Description("The name of the new type to create when extracting members. Required for interface and superclass.")] string? newTypeName = null,
+        [ExternalInputRequired(DataTag.SymbolName)][Description("The names of the members to extract when extracting to a partial class. Required for partial class.")] string[]? memberNames = null,
+        [ExternalInputRequired(DataTag.SourceFilepath)][Description("The file paths of the classes to extract common members from when extracting to a superclass. Required for superclass.")] FilePath[]? memberFilePaths = null,
+        [ExternalInputRequired(DataTag.ClassName)][Description("The names of the classes to extract common members from when extracting to a superclass. Required for superclass.")] string[]? classNames = null,
+        [ToolOption(ToolOptionTag.AutoStage, required: false)][Description("Whether to automatically stage the changes.")] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -604,11 +612,11 @@ public class SentinelAdvancedRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            if (@as == "interface")
+            if (newType == ExtractAsType.@interface)
             {
                 if (string.IsNullOrEmpty(newTypeName))
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "newTypeName (interface name) is required when as=interface.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "newTypeName (interface name) is required when newType=interface.") };
                 }
                 try
                 {
@@ -624,14 +632,14 @@ public class SentinelAdvancedRefactoringTools
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "ExtractMembers/interface unexpected exception for '{NewTypeName}'", newTypeName);
-                    return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers as=interface for '{newTypeName}'") };
+                    return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers newType=interface for '{newTypeName}'") };
                 }
             }
-            if (@as == "partial")
+            if (newType == ExtractAsType.partialClass)
             {
                 if (memberNames == null || memberNames.Length == 0)
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "memberNames is required when as=partial.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "memberNames is required when newType=partial.") };
                 }
                 var partialChanges = await _granularRefactoringEngine.ExtractMembersToPartialAsync(filePath, className, memberNames);
                 if (!autoStage)
@@ -642,13 +650,13 @@ public class SentinelAdvancedRefactoringTools
                     return new ToolResult<object> { Success = false, Error = partialApply.Error };
                 return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(partialApply.ChangeId, partialChanges.Keys.ToList(), $"Extracted members of '{className}' to a new partial file.", partialApply.DryRun, partialApply.Diff) };
             }
-            if (@as == "superclass")
+            if (newType == ExtractAsType.superclass)
             {
                 if (string.IsNullOrEmpty(newTypeName))
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "newTypeName (new base class name) is required when as=superclass.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "newTypeName (new base class name) is required when newType=superclass.") };
                 }
-                var actualFilePaths = filePaths ?? new[] { filePath };
+                var actualFilePaths = memberFilePaths ?? new[] { filePath };
                 var actualClassNames = classNames ?? new[] { className };
                 try
                 {
@@ -664,14 +672,14 @@ public class SentinelAdvancedRefactoringTools
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "ExtractMembers/superclass unexpected exception for '{NewTypeName}'", newTypeName);
-                    return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers as=superclass for '{newTypeName}'") };
+                    return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers newType=superclass for '{newTypeName}'") };
                 }
             }
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown as '{@as}'. Valid values: interface, partial, superclass. For as=class, use MoveMember instead.") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown newType '{newType}'. Valid values: interface, partial, superclass. For newType=class, use MoveMember instead.") };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ExtractMembers ({As}) failed for '{ClassName}' in '{FilePath}'", @as, className, filePath);
+            _logger.LogError(ex, "ExtractMembers ({As}) failed for '{ClassName}' in '{FilePath}'", newType, className, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractMembers") };
         }
     }

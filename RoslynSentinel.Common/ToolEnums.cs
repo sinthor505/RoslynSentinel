@@ -156,6 +156,20 @@ public enum MemberAction
     add, remove, replace, view
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ExtractAsType
+{
+    @interface,
+    @partialClass,
+    @superclass
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum IntroduceAsType
+{
+    @localVariable, @field, parameter, @constant
+}
+
 // ── Documentation ─────────────────────────────────────────────────────────────
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

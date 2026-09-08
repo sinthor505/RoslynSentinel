@@ -88,7 +88,8 @@ public class OrderPricingRefactorChainAgentTests
         var serverToClient = new Pipe();
 
         var services = new ServiceCollection();
-        services.AddRoslynSentinelEnginesBasic();
+        //services.AddRoslynSentinelEnginesBasic(); // Temporarily commented out to give the model access to the full Advanced tool catalog as ExtractInterface is not in the Basic catalog and is required for rung 7.
+        services.AddRoslynSentinelEnginesAdvanced();
 
         var mcpBuilder = services.AddMcpServer();
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());

@@ -82,7 +82,7 @@ public class MassiveRefactoringTests
     public async Task ExtractInterface_ShouldCreateInterface(int id)
     {
         SetSource($"public class C{id} {{ public void M{id}() {{}} }}", $"C{id}.cs");
-        var result = await _advancedRefactoringTools.ExtractMembers(reason: "test", $"C{id}.cs", $"C{id}", "interface", $"IC{id}", autoStage: false);
+        var result = await _advancedRefactoringTools.ExtractMembers(reason: "test", $"C{id}.cs", $"C{id}", ExtractAsType.@interface, $"IC{id}", autoStage: false);
 
         // With autoStage:false the tool returns Data = new { Changes = Dictionary<FilePath, string> }.
         Assert.That(result.Success, Is.True, result.Error?.Message);
