@@ -71,7 +71,7 @@ public class ApplyDiffSizeGuardTests
         var fragment = "using System;\n";
         var result = await wholeFileWriteTools.ApplyDiff(
             reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
-            changes: new Dictionary<FilePath, string> { [targetFile] = fragment });
+            changes: new Dictionary<string, string> { [targetFile] = fragment });
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
@@ -101,7 +101,7 @@ public class ApplyDiffSizeGuardTests
 
         var result = await wholeFileWriteTools.ApplyDiff(
             reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
-            changes: new Dictionary<FilePath, string> { [targetFile] = commentedOut });
+            changes: new Dictionary<string, string> { [targetFile] = commentedOut });
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
@@ -219,7 +219,7 @@ public class ApplyDiffSizeGuardTests
 
         var result = await wholeFileWriteTools.ApplyDiff(
             reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
-            changes: new Dictionary<FilePath, string> { [targetFile] = lightlyModified });
+            changes: new Dictionary<string, string> { [targetFile] = lightlyModified });
 
         Assert.That(result.Success, Is.True);
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(lightlyModified));
@@ -242,7 +242,7 @@ public class ApplyDiffSizeGuardTests
 
         var result = await wholeFileWriteTools.ApplyDiff(
             reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
-            changes: new Dictionary<FilePath, string> { [newFilePath] = content });
+            changes: new Dictionary<string, string> { [newFilePath] = content });
 
         Assert.That(result.Success, Is.True);
         Assert.That(await File.ReadAllTextAsync(newFilePath), Is.EqualTo(content));

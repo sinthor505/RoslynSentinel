@@ -406,9 +406,9 @@ public class BatteryTwentyTests
     public async Task ApplyDiff_Files_Validate_ReturnsDiagnosticReport()
     {
         SetSource(SimpleSource, "Test.cs");
-        var changes = new Dictionary<FilePath, string>
+        var changes = new Dictionary<string, string>
         {
-            [new FilePath("Test.cs")] = SimpleSource + " // changed"
+            ["Test.cs"] = SimpleSource + " // changed"
         };
         var result = await _wholeFileWriteTools.ApplyDiff(reason: "test", ChangesetFormat.files, ProposedChangeAction.validate, changes: changes);
         Assert.That(result, Is.Not.Null);
@@ -469,7 +469,7 @@ public class BatteryTwentyTests
     public async Task ApplyDiff_Files_Apply_EmptyChanges_ReturnsResult()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test", ChangesetFormat.files, ProposedChangeAction.apply, changes: new Dictionary<FilePath, string>());
+        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test", ChangesetFormat.files, ProposedChangeAction.apply, changes: new Dictionary<string, string>());
         Assert.That(result, Is.Not.Null);
     }
 

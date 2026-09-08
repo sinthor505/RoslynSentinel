@@ -110,9 +110,9 @@ public class MutatingToolRejectionMessageTests
         SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
-        var changes = new Dictionary<FilePath, string>
+        var changes = new Dictionary<string, string>
         {
-            [new FilePath(helperPath)] = HelperFileContentRenamed
+            [helperPath] = HelperFileContentRenamed
         };
         var result = await wholeFileWriteTools.ApplyDiff(reason: "test", ChangesetFormat.files, ProposedChangeAction.apply, changes: changes);
 

@@ -259,7 +259,7 @@ public class SentinelWholeFileWriteTools
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
     [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. IMPORTANT: for changesetFormat=files with action=apply, any file whose content would shrink by more than 50% (by line count, OR by active/non-comment C# code lines — so commenting out the whole file instead of shortening it is caught too) is rejected with errorCode=ConfirmationRequired — this is a strong signal you submitted only a changed fragment as if it were the whole file, or commented out code instead of actually editing/removing it, rather than a genuine whole-file rewrite. If that happens, re-submit the complete, unabridged file content in a fresh ApplyDiff call (or switch to changesetFormat=diff for a partial edit) — do not retry with a different action. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error — so renaming or changing the signature of a member will fail unless every call site (possibly in a different file) is updated to match in the SAME changeset. For a rename or signature change, prefer RenameSymbol/ChangeSignature, which update all call sites atomically in one operation; if you must do it manually across multiple ApplyDiff calls, either include every affected file's changes in one changesetFormat=files call, or pass validateOnApply=false on the intermediate calls and validate once at the end — do not repeatedly retry one file's edit expecting a different, not-yet-edited file to already match.")]
-    public async Task<ToolResult<object>> ApplyDiff([Description(ToolParams.Reason)] string reason, [ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<ToolResult<object>> ApplyDiff([Description(ToolParams.Reason)] string reason, [ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<string, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -276,12 +276,21 @@ public class SentinelWholeFileWriteTools
                     };
                 }
 
+                // MCP wire type is Dictionary<string,string>: a Dictionary<FilePath,...> tool
+                // parameter makes System.Text.Json.Schema.JsonSchemaExporter fall back to an
+                // unrepresentable `true` schema node for the key type, which LM Studio's grammar
+                // converter rejects outright ("Unrecognized schema: true"). Resolve keys to
+                // FilePath here instead, after the schema boundary.
+                Dictionary<FilePath, string> resolvedChanges = changes.ToDictionary(
+                    kvp => _workspaceManager.SetFilePath(kvp.Key),
+                    kvp => kvp.Value);
+
                 if (action == ProposedChangeAction.apply)
                 {
                     string? oversizedFile = null;
                     double oversizedPercent = 0;
                     bool oversizedIsCommentCollapse = false;
-                    foreach (var (changedPath, newContent) in changes)
+                    foreach (var (changedPath, newContent) in resolvedChanges)
                     {
                         var oldContent = await FileIoHelper.ReadAllTextIfExistsAsync(changedPath, cancellationToken);
                         var percentRemoved = PercentLinesRemoved(oldContent, newContent);
@@ -309,7 +318,7 @@ public class SentinelWholeFileWriteTools
                         };
                     }
 
-                    var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount, validateChanges: validateOnApply);
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(resolvedChanges, retryCount, validateChanges: validateOnApply);
                     if (!result.Success && result.ValidationResult != null)
                         return new ToolResult<object>()
                         {
@@ -328,7 +337,7 @@ public class SentinelWholeFileWriteTools
                         ? new
                         {
                             result = strippedResult,
-                            diff = SentinelRefactoringTools.BuildDiffFromPreImages(changes, result.PreImages)
+                            diff = SentinelRefactoringTools.BuildDiffFromPreImages(resolvedChanges, result.PreImages)
                         }
                         : strippedResult;
                     return new ToolResult<object>()
@@ -342,7 +351,7 @@ public class SentinelWholeFileWriteTools
                 {
                     try
                     {
-                        var validationResult = await _validationEngine.ValidateChangesAsync(changes);
+                        var validationResult = await _validationEngine.ValidateChangesAsync(resolvedChanges);
                         return validationResult.Success ? new ToolResult<object>()
                         {
                             Success = true,
