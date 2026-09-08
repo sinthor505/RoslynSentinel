@@ -22,7 +22,8 @@ public class CreateFileDeleteFileTests
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
-        return new SentinelWorkspaceTools(
+
+        var workspaceTools = new SentinelWorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
@@ -30,6 +31,10 @@ public class CreateFileDeleteFileTests
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
             new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)));
+
+        var wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        return workspaceTools;
     }
 
     [Test]
@@ -38,12 +43,15 @@ public class CreateFileDeleteFileTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewFile.cs");
         var content = "public class NewFile { }";
 
-        var result = await tools.WriteFile(reason: "test", WriteFileOperation.CreateFile, newFile, content);
+        var result = await wholeFileWriteTools.WriteFile(reason: "test", WriteFileOperation.CreateFile, newFile, content);
 
         Assert.That(result.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.True);
@@ -56,12 +64,15 @@ public class CreateFileDeleteFileTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(existingFile);
 
-        var result = await tools.WriteFile(reason: "test", WriteFileOperation.CreateFile, existingFile, "replacement content");
+        var result = await wholeFileWriteTools.WriteFile(reason: "test", WriteFileOperation.CreateFile, existingFile, "replacement content");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -74,7 +85,10 @@ public class CreateFileDeleteFileTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var replacementContent = "public class Replaced { }";
@@ -82,7 +96,7 @@ public class CreateFileDeleteFileTests
         // validateOnApply: false — the fixture's other files may reference the original type in
         // existingFile, so a delta-compile of an unrelated replacement would fail; this test only
         // exercises the ReplaceFile exists-check + overwrite plumbing, not compilation validity.
-        var result = await tools.WriteFile(reason: "test", WriteFileOperation.ReplaceFile, existingFile, replacementContent, validateOnApply: false);
+        var result = await wholeFileWriteTools.WriteFile(reason: "test", WriteFileOperation.ReplaceFile, existingFile, replacementContent, validateOnApply: false);
 
         Assert.That(result.Success, Is.True);
         Assert.That(await File.ReadAllTextAsync(existingFile), Is.EqualTo(replacementContent));
@@ -94,11 +108,14 @@ public class CreateFileDeleteFileTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var missingFile = Path.Combine(fixture.SolutionDirectory, "DoesNotExist.cs");
 
-        var result = await tools.WriteFile(reason: "test", WriteFileOperation.ReplaceFile, missingFile, "public class X { }");
+        var result = await wholeFileWriteTools.WriteFile(reason: "test", WriteFileOperation.ReplaceFile, missingFile, "public class X { }");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -111,11 +128,14 @@ public class CreateFileDeleteFileTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewSubdir", "Nested.cs");
 
-        var result = await tools.WriteFile(reason: "test", WriteFileOperation.CreateFile, newFile, "public class Nested { }");
+        var result = await wholeFileWriteTools.WriteFile(reason: "test", WriteFileOperation.CreateFile, newFile, "public class Nested { }");
 
         Assert.That(result.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.True);
@@ -131,15 +151,18 @@ public class CreateFileDeleteFileTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "Notes.txt");
         var content = "plain text notes, not a Roslyn document";
 
-        var createResult = await tools.WriteFile(reason: "test", WriteFileOperation.CreateFile, newFile, content);
+        var createResult = await wholeFileWriteTools.WriteFile(reason: "test", WriteFileOperation.CreateFile, newFile, content);
         Assert.That(createResult.Success, Is.True);
 
-        var readResult = await tools.ReadFile(reason: "test", newFile);
+        var readResult = await workspaceTools.ReadFile(reason: "test", newFile);
 
         Assert.That(readResult.Success, Is.True, readResult.Error?.Message);
         var data = readResult.Data!;
@@ -153,12 +176,15 @@ public class CreateFileDeleteFileTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "ToDelete.cs");
         await fixture.AddFileToSolution(workspaceManager, "ToDelete.cs", "public class ToDelete { }");
 
-        var result = await tools.DeleteFile(reason: "test", newFile);
+        var result = await wholeFileWriteTools.DeleteFile(reason: "test", newFile);
 
         Assert.That(result.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.False);
@@ -170,11 +196,14 @@ public class CreateFileDeleteFileTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var missingFile = Path.Combine(fixture.SolutionDirectory, "DoesNotExist.cs");
 
-        var result = await tools.DeleteFile(reason: "test", missingFile);
+        var result = await wholeFileWriteTools.DeleteFile(reason: "test", missingFile);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -186,13 +215,16 @@ public class CreateFileDeleteFileTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "Undoable.cs");
         var content = "public class Undoable { }";
         await fixture.AddFileToSolution(workspaceManager, "Undoable.cs", content);
 
-        var deleteResult = await tools.DeleteFile(reason: "test", newFile);
+        var deleteResult = await wholeFileWriteTools.DeleteFile(reason: "test", newFile);
         Assert.That(deleteResult.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.False);
 
@@ -202,7 +234,7 @@ public class CreateFileDeleteFileTests
         var blobFile = Directory.EnumerateFiles(blobDir, "delete_file_*").OrderByDescending(f => f).First();
         var changeId = Path.GetFileNameWithoutExtension(blobFile).Split('_').Last();
 
-        var undoResult = await tools.UndoLastApply(reason: "test", changeId);
+        var undoResult = await workspaceTools.UndoLastApply(reason: "test", changeId);
 
         Assert.That(undoResult.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.True);
@@ -215,7 +247,10 @@ public class CreateFileDeleteFileTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         // Modify the file directly on disk (bypassing ApplyProposedChangesAsync) without
@@ -235,7 +270,7 @@ public class CreateFileDeleteFileTests
             await Task.Delay(25);
         }
 
-        var result = await tools.DeleteFile(reason: "test", targetFile);
+        var result = await wholeFileWriteTools.DeleteFile(reason: "test", targetFile);
 
         Assert.That(result.Success, Is.False);
         Assert.That(File.Exists(targetFile), Is.True);

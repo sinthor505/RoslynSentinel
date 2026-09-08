@@ -119,6 +119,15 @@ public static class RoslynSentinelServiceExtensionsBasic
             // ServerStdio.cs/ServerHttp.cs), so this only activates via an explicit --mode=Admin.
             services.AddSingleton<SentinelAdminTools>();
             mcpBuilder.WithTools<SentinelAdminTools>();
+            services.AddSingleton<SentinelWholeFileWriteTools>();
+            mcpBuilder.WithTools<SentinelWholeFileWriteTools>();
+        }
+        if (activeModes.Contains("WholeFileWrite"))
+        {
+            // Restricted/operator-only tools — deliberately NOT included in AllModes (see
+            // ServerStdio.cs/ServerHttp.cs), so this only activates via an explicit --mode=WholeFileWrite.
+            services.AddSingleton<SentinelWholeFileWriteTools>();
+            mcpBuilder.WithTools<SentinelWholeFileWriteTools>();
         }
         if (activeModes.Contains("Intelligence"))
         {

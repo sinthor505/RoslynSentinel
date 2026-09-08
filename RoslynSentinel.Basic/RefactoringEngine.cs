@@ -56,11 +56,25 @@ public class RefactoringEngine
     /// anchored to its position in the file) is transplanted onto <paramref name = "newNode"/> first,
     /// since a freshly parsed replacement (e.g. via SyntaxFactory.ParseMemberDeclaration) has no
     /// knowledge of the blank lines that separated the original node from its neighboring siblings.
+    /// However, if <paramref name = "newNode"/> already has custom trivia explicitly set (e.g., to
+    /// remove doc comments), that trivia is preserved and not overwritten with <paramref name = "oldNode"/>'s trivia.
     /// </summary>
     private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
     {
         var annotation = new SyntaxAnnotation();
-        var annotatedNewNode = newNode.WithLeadingTrivia(oldNode.GetLeadingTrivia()).WithTrailingTrivia(oldNode.GetTrailingTrivia()).WithAdditionalAnnotations(annotation);
+
+        // Only apply oldNode's trivia to newNode if newNode doesn't already have custom trivia.
+        // This preserves intentional trivia modifications (e.g., stripping doc comments in RemoveSummaryCommentAsync).
+        // We detect "custom trivia" by checking if newNode's trivia list is non-empty AND different from oldNode's.
+        var newNodeLeadingTrivia = newNode.GetLeadingTrivia();
+        var newNodeTrailingTrivia = newNode.GetTrailingTrivia();
+        var oldNodeLeadingTrivia = oldNode.GetLeadingTrivia();
+        var oldNodeTrailingTrivia = oldNode.GetTrailingTrivia();
+
+        var leadingTrivia = newNodeLeadingTrivia.Count > 0 ? newNodeLeadingTrivia : oldNodeLeadingTrivia;
+        var trailingTrivia = newNodeTrailingTrivia.Count > 0 ? newNodeTrailingTrivia : oldNodeTrailingTrivia;
+
+        var annotatedNewNode = newNode.WithLeadingTrivia(leadingTrivia).WithTrailingTrivia(trailingTrivia).WithAdditionalAnnotations(annotation);
         var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
         var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();

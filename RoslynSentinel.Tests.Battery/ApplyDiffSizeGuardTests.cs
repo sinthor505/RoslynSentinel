@@ -41,7 +41,7 @@ public class ApplyDiffSizeGuardTests
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
-        return new SentinelWorkspaceTools(
+        var workspaceTools = new SentinelWorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
             projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
@@ -49,6 +49,8 @@ public class ApplyDiffSizeGuardTests
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
             new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)));
+
+        return workspaceTools;
     }
 
     [Test]
@@ -57,14 +59,17 @@ public class ApplyDiffSizeGuardTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
         Assert.That(originalContent.Split('\n').Length, Is.GreaterThan(4), "fixture file must have enough lines for a >50% shrink to be meaningful");
 
         var fragment = "using System;\n";
-        var result = await tools.ApplyDiff(
+        var result = await wholeFileWriteTools.ApplyDiff(
             reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePath, string> { [targetFile] = fragment });
 
@@ -80,7 +85,8 @@ public class ApplyDiffSizeGuardTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
@@ -89,7 +95,11 @@ public class ApplyDiffSizeGuardTests
         // raw line-count guard sees 0% shrink — only the active-code-line guard should catch this.
         var commentedOut = string.Join('\n', originalContent.Split('\n').Select(line => "// " + line));
 
-        var result = await tools.ApplyDiff(
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        var result = await wholeFileWriteTools.ApplyDiff(
             reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePath, string> { [targetFile] = commentedOut });
 
@@ -112,7 +122,7 @@ public class ApplyDiffSizeGuardTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var fragment = "using System;\n";
@@ -144,7 +154,7 @@ public class ApplyDiffSizeGuardTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
 
         var result = await tools.ApplyDiffWithConfirmationCode(
             ChangesetFormat.files, ProposedChangeAction.confirmationCode,
@@ -160,7 +170,7 @@ public class ApplyDiffSizeGuardTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
 
         var result = await tools.ApplyDiffWithConfirmationCode(ChangesetFormat.files, ProposedChangeAction.confirmationCode);
 
@@ -174,7 +184,7 @@ public class ApplyDiffSizeGuardTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var rejected = await tools.ApplyDiffWithConfirmationCode(
@@ -198,13 +208,16 @@ public class ApplyDiffSizeGuardTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
         var lightlyModified = originalContent + "\n// small trailing comment\n";
 
-        var result = await tools.ApplyDiff(
+        var result = await wholeFileWriteTools.ApplyDiff(
             reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePath, string> { [targetFile] = lightlyModified });
 
@@ -218,13 +231,16 @@ public class ApplyDiffSizeGuardTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFilePath = Path.Combine(fixture.SolutionDirectory, Path.GetDirectoryName(
             Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First())!, "BrandNewFile.cs");
         var content = "namespace ContosoOrders;\npublic class BrandNewFile { }\n";
 
-        var result = await tools.ApplyDiff(
+        var result = await wholeFileWriteTools.ApplyDiff(
             reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePath, string> { [newFilePath] = content });
 

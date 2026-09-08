@@ -85,10 +85,13 @@ public class MutatingToolRejectionMessageTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Helper.cs", HelperFileContent);
         await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Caller.cs", CallerFileContent);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
-        var result = await tools.WriteFile(reason: "test", WriteFileOperation.ReplaceFile, helperPath, HelperFileContentRenamed);
+        var result = await wholeFileWriteTools.WriteFile(reason: "test", WriteFileOperation.ReplaceFile, helperPath, HelperFileContentRenamed);
 
         AssertRoutedThroughLookupHelper(result);
     }
@@ -101,14 +104,17 @@ public class MutatingToolRejectionMessageTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Helper.cs", HelperFileContent);
         await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Caller.cs", CallerFileContent);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
         var changes = new Dictionary<FilePath, string>
         {
             [new FilePath(helperPath)] = HelperFileContentRenamed
         };
-        var result = await tools.ApplyDiff(reason: "test", ChangesetFormat.files, ProposedChangeAction.apply, changes: changes);
+        var result = await wholeFileWriteTools.ApplyDiff(reason: "test", ChangesetFormat.files, ProposedChangeAction.apply, changes: changes);
 
         AssertRoutedThroughLookupHelper(result);
     }
@@ -121,7 +127,7 @@ public class MutatingToolRejectionMessageTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Helper.cs", HelperFileContent);
         await fixture.AddFileToSolution(workspaceManager, "ContosoOrders.Core/Caller.cs", CallerFileContent);
-        var tools = BuildTools(workspaceManager);
+        var workspaceTools = BuildTools(workspaceManager);
 
         var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
         var unifiedDiff =
@@ -136,7 +142,7 @@ public class MutatingToolRejectionMessageTests
             "+    public static string FormatValue(string value) => value;\n" +
             " }\n";
 
-        var result = await tools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: helperPath, unifiedDiff: unifiedDiff);
+        var result = await workspaceTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: helperPath, unifiedDiff: unifiedDiff);
 
         AssertRoutedThroughLookupHelper(result);
     }
