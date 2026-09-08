@@ -15,6 +15,19 @@ public static class LlmOptions
     public static int Parallelism { get; private set; } = 2;
 
     /// <summary>
+    /// Longest gap allowed between consecutive SSE events on a streaming <c>/v1/responses</c> call
+    /// before <see cref="LmStudioAgentClient"/> treats the connection as dead and aborts it (see
+    /// <c>project_lmstudio_streaming_json_truncation_investigation</c> and the two observed cases
+    /// of LM Studio going silent mid-stream without closing the connection or logging an error).
+    /// This measures idle time between bytes, not total call duration, so a model that is genuinely
+    /// still emitting slowly (e.g. a long reasoning burst) is not penalized — only a stream that
+    /// stops producing anything at all trips it. Deliberately separate from
+    /// <see cref="TimeoutSeconds"/>/<c>HttpClient.Timeout</c>, which — once headers are read for a
+    /// streamed response — no longer bounds the time spent reading the body.
+    /// </summary>
+    public static int StreamIdleTimeoutSeconds { get; private set; } = 120;
+
+    /// <summary>
     /// When true, model-eval test hosts that support it narrow the MCP <c>tools/list</c> schema
     /// down to a small hand-picked allow-list instead of exposing every tool the active modes
     /// would otherwise register — see <c>project_granite42_8b_tool_schema_size_isolated</c>: a
@@ -78,6 +91,12 @@ public static class LlmOptions
         var parallelismRaw = GetArgValue(args, "--llm-parallelism")
             ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_PARALLELISM");
         Parallelism = int.TryParse(parallelismRaw, out var parsedParallelism) && parsedParallelism > 0 ? parsedParallelism : 2;
+
+        var streamIdleTimeoutRaw = GetArgValue(args, "--llm-stream-idle-timeout-seconds")
+            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS");
+        StreamIdleTimeoutSeconds = int.TryParse(streamIdleTimeoutRaw, out var parsedStreamIdleTimeout) && parsedStreamIdleTimeout > 0
+            ? parsedStreamIdleTimeout
+            : 120;
 
         var minimalToolsRaw = GetArgValue(args, "--llm-minimal-tools")
             ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_MINIMAL_TOOLS");

@@ -47,6 +47,31 @@ public sealed class LmStudioAgentClient
         int maxTokens,
         CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return await CompleteOnceAsync(messages, tools, maxTokens, cancellationToken);
+        }
+        catch (Exception ex) when (ex is StreamIdleTimeoutException or InvalidOperationException or IOException)
+        {
+            // One retry for transient LM Studio flakiness observed live: the SSE connection going
+            // silent forever with no server-side error logged, the connection being forcibly reset
+            // by the remote host mid-stream (SocketException wrapped in IOException — confirmed live
+            // 2026-09-08, LM Studio's own log showed the request received but never entering the
+            // inference pipeline before the reset), and streaming error events (response.failed/
+            // error) that don't reliably repeat on a fresh request. Not retried again — a second
+            // consecutive failure is treated as a real, non-transient problem.
+            _logger.LogWarning(
+                ex, "LM Studio call failed ({Reason}); retrying once before giving up.", ex.Message);
+            return await CompleteOnceAsync(messages, tools, maxTokens, cancellationToken);
+        }
+    }
+
+    private async Task<AgentChatMessage> CompleteOnceAsync(
+        IReadOnlyList<AgentChatMessage> messages,
+        IReadOnlyList<AgentToolDefinition> tools,
+        int maxTokens,
+        CancellationToken cancellationToken)
+    {
         var requestBody = new ResponsesRequest
         {
             Model = _model,
@@ -186,14 +211,42 @@ public sealed class LmStudioAgentClient
         };
     }
 
-    /// <summary>Parses a raw SSE byte stream into (event, data) pairs. LM Studio sends one "event: &lt;type&gt;" line followed by one "data: &lt;json&gt;" line per message, separated by a blank line.</summary>
+    /// <summary>
+    /// Parses a raw SSE byte stream into (event, data) pairs. LM Studio sends one "event: &lt;type&gt;"
+    /// line followed by one "data: &lt;json&gt;" line per message, separated by a blank line.
+    /// Enforces <see cref="LlmOptions.StreamIdleTimeoutSeconds"/> between successive lines — once
+    /// headers are read for a streamed response, <c>HttpClient.Timeout</c> no longer bounds how long
+    /// reading the body can take, so without this a connection that goes silent forever (observed
+    /// live against LM Studio, with no error logged on either side) hangs the caller indefinitely.
+    /// </summary>
     private static async IAsyncEnumerable<(string EventType, string Data)> ReadServerSentEventsAsync(
         StreamReader reader,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        var idleTimeout = TimeSpan.FromSeconds(LlmOptions.StreamIdleTimeoutSeconds);
         string? eventType = null;
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        while (true)
         {
+            string? line;
+            using (var idleCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                idleCts.CancelAfter(idleTimeout);
+                try
+                {
+                    line = await reader.ReadLineAsync(idleCts.Token);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    throw new StreamIdleTimeoutException(
+                        $"LM Studio SSE stream produced no data for {idleTimeout.TotalSeconds}s; treating the connection as dead.");
+                }
+            }
+
+            if (line is null)
+            {
+                yield break;
+            }
+
             if (line.StartsWith("event: ", StringComparison.Ordinal))
             {
                 eventType = line["event: ".Length..];
@@ -348,6 +401,9 @@ public sealed class LmStudioAgentClient
         public string Text { get; set; } = "";
     }
 }
+
+/// <summary>Thrown when an LM Studio SSE stream stops producing any data for longer than <see cref="LlmOptions.StreamIdleTimeoutSeconds"/>, distinguishing a dead connection from real user/test cancellation.</summary>
+public sealed class StreamIdleTimeoutException(string message) : Exception(message);
 
 /// <summary>One message in the running conversation the harness maintains itself (not tied to the wire format).</summary>
 public sealed class AgentChatMessage
