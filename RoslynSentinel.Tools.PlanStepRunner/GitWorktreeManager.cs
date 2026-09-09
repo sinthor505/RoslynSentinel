@@ -6,11 +6,14 @@ namespace RoslynSentinel.Tools.PlanStepRunner;
 /// Runs each plan step in its own git worktree branched off a dedicated, runner-owned branch
 /// (default "eval-defect-remediation-v2-auto") — never the user's own in-progress branch/worktree.
 /// A successful step commits onto that branch and the worktree is removed; a failed/halted step
-/// leaves its worktree in place so the run is inspectable and independently re-runnable via
-/// --start-step/--end-step without disturbing anything upstream.
+/// leaves its worktree in place under &lt;runDir&gt;\Worktree\&lt;step-name&gt; so the run is
+/// inspectable and independently re-runnable via --start-step/--end-step (or --clean, to discard
+/// that leftover worktree first) without disturbing anything upstream.
 /// </summary>
-public sealed class GitWorktreeManager(string sourceRepo, string branch, string worktreeRoot)
+public sealed class GitWorktreeManager(string sourceRepo, string branch, string runDir)
 {
+    private string WorktreeRoot => Path.Combine(runDir, "Worktree");
+
     public void EnsureBranchExists()
     {
         if (RunGit(sourceRepo, "rev-parse", "--verify", "--quiet", branch).ExitCode != 0)
@@ -22,19 +25,37 @@ public sealed class GitWorktreeManager(string sourceRepo, string branch, string 
 
     public string CreateWorktree(string stepFileName)
     {
-        Directory.CreateDirectory(worktreeRoot);
+        Directory.CreateDirectory(WorktreeRoot);
         var name = Path.GetFileNameWithoutExtension(stepFileName);
-        var path = Path.Combine(worktreeRoot, name);
+        var path = Path.Combine(WorktreeRoot, name);
 
         if (Directory.Exists(path))
         {
             throw new InvalidOperationException(
                 $"Worktree path already exists: {path}. If this is a leftover from a halted/failed " +
-                "run, inspect it, then remove it (git worktree remove) before re-running this step.");
+                "run, inspect it, then remove it (git worktree remove) before re-running this step, " +
+                "or pass --clean to have this run remove it automatically.");
         }
 
         RunGitOrThrow(sourceRepo, "worktree", "add", path, branch);
         return path;
+    }
+
+    /// <summary>Used by --clean to discard a leftover worktree (possibly with uncommitted model
+    /// edits) for a step about to (re-)run, before CreateWorktree is called for it. No-op if the
+    /// step has no existing worktree.</summary>
+    public void RemoveWorktreeIfExists(string stepFileName)
+    {
+        var name = Path.GetFileNameWithoutExtension(stepFileName);
+        var path = Path.Combine(WorktreeRoot, name);
+
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        Console.WriteLine($"--clean: removing existing worktree at {path}");
+        RunGitOrThrow(sourceRepo, "worktree", "remove", "--force", path);
     }
 
     public void CommitWorktree(string worktreePath, string message)

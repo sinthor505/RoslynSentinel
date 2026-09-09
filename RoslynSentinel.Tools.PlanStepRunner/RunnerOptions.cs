@@ -6,12 +6,13 @@ public sealed class RunnerOptions
     public required string PlanDir { get; init; }
     public required string SourceRepo { get; init; }
     public required string Branch { get; init; }
-    public required string WorktreeRoot { get; init; }
-    public required string OutDir { get; init; }
+    public required string RunDir { get; init; }
     public required int StartStep { get; init; }
     public required int EndStep { get; init; }
     public required int TurnCap { get; init; }
     public required int WallClockCapMinutes { get; init; }
+    public required string IncludeTools { get; init; }
+    public required bool Clean { get; init; }
 
     public static RunnerOptions Parse(string[] args)
     {
@@ -22,13 +23,16 @@ public sealed class RunnerOptions
             ?? throw new ArgumentException("--repo is required (the git repo to branch/worktree from, e.g. the RoslynSentinel checkout).");
 
         var branch = GetArg(args, "--branch") ?? "eval-defect-remediation-v2-auto";
-        var worktreeRoot = GetArg(args, "--worktree-root") ?? Path.Combine(Path.GetTempPath(), "RoslynSentinel-plan-step-worktrees");
-        var outDir = GetArg(args, "--out-dir") ?? Path.Combine(sourceRepo, "PlanStepRunnerResults");
+        var runDir = GetArg(args, "--run-dir")
+            ?? Path.Combine(sourceRepo, "PlanStepRunner", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
         var startStep = int.TryParse(GetArg(args, "--start-step"), out var s) ? s : 0;
         var endStep = int.TryParse(GetArg(args, "--end-step"), out var e) ? e : int.MaxValue;
         var turnCap = int.TryParse(GetArg(args, "--turn-cap"), out var tc) ? tc : 40;
         var wallClockCapMinutes = int.TryParse(GetArg(args, "--wall-clock-cap-minutes"), out var wc) ? wc : 30;
+        var includeTools = GetArg(args, "--include-tools")
+            ?? "SentinelWorkspaceTools,SentinelSymbolTools,SentinelRefactoringTools,SentinelDocumentationTools,SentinelCommentingTools,SentinelAdvancedRefactoringTools";
+        var clean = HasFlag(args, "--clean");
 
         if (startStep > endStep)
         {
@@ -40,12 +44,13 @@ public sealed class RunnerOptions
             PlanDir = planDir,
             SourceRepo = sourceRepo,
             Branch = branch,
-            WorktreeRoot = worktreeRoot,
-            OutDir = outDir,
+            RunDir = runDir,
             StartStep = startStep,
             EndStep = endStep,
             TurnCap = turnCap,
             WallClockCapMinutes = wallClockCapMinutes,
+            IncludeTools = includeTools,
+            Clean = clean,
         };
     }
 
@@ -61,4 +66,7 @@ public sealed class RunnerOptions
         var index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.Ordinal));
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
+
+    private static bool HasFlag(string[] args, string flag) =>
+        args.Any(a => a.Equals(flag, StringComparison.Ordinal) || a.Equals(flag + "=true", StringComparison.OrdinalIgnoreCase));
 }

@@ -45,9 +45,10 @@ public static class Program
         var stepFiles = PlanStepFile.LoadRange(options.PlanDir, options.StartStep, options.EndStep);
         Console.WriteLine($"Running {stepFiles.Count} step(s): {string.Join(", ", stepFiles.Select(s => s.FileName))}");
 
-        var batchDir = Path.Combine(options.OutDir, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
-        Directory.CreateDirectory(batchDir);
-        Console.WriteLine($"Batch output: {batchDir}");
+        Directory.CreateDirectory(options.RunDir);
+        var logsDir = Path.Combine(options.RunDir, "Logs");
+        Directory.CreateDirectory(logsDir);
+        Console.WriteLine($"Run directory: {options.RunDir}");
 
         using var httpClient = new HttpClient
         {
@@ -55,7 +56,7 @@ public static class Program
             Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600)),
         };
 
-        var git = new GitWorktreeManager(options.SourceRepo, options.Branch, options.WorktreeRoot);
+        var git = new GitWorktreeManager(options.SourceRepo, options.Branch, options.RunDir);
         git.EnsureBranchExists();
 
         foreach (var step in stepFiles)
@@ -63,10 +64,15 @@ public static class Program
             Console.WriteLine();
             Console.WriteLine($"=== Step {step.FileName} ===");
 
+            if (options.Clean)
+            {
+                git.RemoveWorktreeIfExists(step.FileName);
+            }
+
             var worktreePath = git.CreateWorktree(step.FileName);
             Console.WriteLine($"Worktree: {worktreePath}");
 
-            var stepDir = Path.Combine(batchDir, Path.GetFileNameWithoutExtension(step.FileName));
+            var stepDir = Path.Combine(logsDir, Path.GetFileNameWithoutExtension(step.FileName));
             Directory.CreateDirectory(stepDir);
 
             using var loggerFactory = LoggerFactory.Create(b =>
@@ -127,15 +133,19 @@ public static class Program
         var serverExe = Path.Combine(serverBinDir, "RoslynSentinel.Server.Advanced.exe");
         var solutionPath = Path.Combine(worktreePath, "RoslynSentinel.slnx");
 
-        // --transport is omitted deliberately (defaults to stdio) and --solution is likewise
-        // omitted — Server.Advanced's own auto-load on --solution is fire-and-forget/unawaited
-        // (see WarmupAndAutoLoadAdvanced), so it can't be trusted to have finished before the
-        // first tool call arrives. LoadSolution is called explicitly below instead, which blocks
-        // until the real load completes.
+        // --transport is omitted deliberately (defaults to stdio) — PlanStepRunner is the one
+        // calling the MCP tools itself (via ModelAgentRunner), never the model's own LM Studio
+        // host directly, so stdio's built-in per-worktree child-process ownership is exactly
+        // what's wanted here; no port to coordinate or collide with the user's own separately
+        // running server. --solution is likewise omitted — Server.Advanced's own auto-load on
+        // --solution is fire-and-forget/unawaited (see WarmupAndAutoLoadAdvanced), so it can't
+        // be trusted to have finished before the first tool call arrives. LoadSolution is called
+        // explicitly below instead, which blocks until the real load completes.
         var transport = new StdioClientTransport(new StdioClientTransportOptions
         {
             Name = "RoslynSentinel.Server.Advanced",
             Command = serverExe,
+            Arguments = ["--base-repo-dir=" + worktreePath, "--include-tools=" + options.IncludeTools],
             WorkingDirectory = worktreePath,
         });
 

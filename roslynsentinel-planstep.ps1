@@ -17,9 +17,15 @@
     instruction, since PlanStepRunner already loads the worktree's solution itself before the
     model gets a turn.
 
-    A halted/failed step leaves its worktree in place under -WorktreeRoot for inspection - re-run
-    with -StartStep/-EndStep set to just that step number after fixing/removing it, rather than
-    restarting the whole range from scratch.
+    Everything for one run lives under one folder: RoslynSentinel\PlanStepRunner\<timestamp>\,
+    containing Worktree\<step-name>\ (only for a step currently in progress or halted - a
+    successful step's worktree is removed once committed) and Logs\<step-name>\ (transcript +
+    agent.log, kept regardless of outcome) - so a run is easy to find and review as a single
+    tree. A halted/failed step leaves its worktree in place under that run's Worktree\ for
+    inspection - re-run with -ExistingRun <timestamp> (and -StartStep/-EndStep or -Step set to
+    just that step number) to continue the same run rather than starting a new timestamp folder;
+    add -Clean to have the runner discard that step's leftover worktree automatically instead of
+    requiring a manual `git worktree remove` first.
 
 .PARAMETER HostAddress
     LM Studio host to target. Known aliases: 112 (http://192.168.1.112:1234/v1, GTX 1080) and 113
@@ -59,19 +65,32 @@
     Git branch PlanStepRunner commits each successful step onto, created off -ImplRepo's current
     HEAD if it doesn't already exist. Default: eval-defect-remediation-v2-auto.
 
-.PARAMETER WorktreeRoot
-    Directory each step's fresh worktree is created under. Default: PlanStepRunner's own default
-    (%TEMP%\RoslynSentinel-plan-step-worktrees).
+.PARAMETER ExistingRun
+    Timestamp (e.g. 20260909-171952-844) of an existing RoslynSentinel\PlanStepRunner\<timestamp>
+    run folder to continue, instead of starting a new one. New steps in this invocation get their
+    own fresh worktree/logs under that same folder, same as any run - this only controls which
+    run folder they land in, so a halted step from an earlier invocation can be retried (typically
+    with -Step) without scattering its output across two timestamps. Combine with -Clean to also
+    discard that step's leftover halted worktree first.
 
-.PARAMETER OutDir
-    Directory transcripts/logs are written under. Default: PlanStepRunner's own default
-    (PlanStepRunnerResults under -ImplRepo).
+.PARAMETER Clean
+    Before creating each requested step's worktree, remove that step's existing worktree under
+    the run folder if one is already there (git worktree remove --force) - lets a halted step be
+    retried without first running `git worktree remove` by hand. Only touches worktrees for steps
+    in this invocation's -StartStep/-EndStep/-Step range; other steps' worktrees/logs already in
+    the run folder are left alone.
 
 .PARAMETER TurnCap
     Max model turns per step before giving up without converging. Default: 40.
 
 .PARAMETER WallClockCapMinutes
     Max wall-clock minutes per step before giving up without converging. Default: 30.
+
+.PARAMETER IncludeTools
+    CSV of tool class names to enable on each step's server instance (passed through as
+    --include-tools). Default: SentinelWorkspaceTools,SentinelSymbolTools,
+    SentinelRefactoringTools,SentinelDocumentationTools,SentinelCommentingTools,
+    SentinelAdvancedRefactoringTools.
 
 .PARAMETER Temperature
     Sampling temperature sent on every request (omitted entirely if not passed, letting LM Studio
@@ -121,13 +140,15 @@ param(
 
     [string]$Branch = 'eval-defect-remediation-v2-auto',
 
-    [string]$WorktreeRoot,
+    [string]$ExistingRun,
 
-    [string]$OutDir,
+    [switch]$Clean,
 
     [int]$TurnCap = 40,
 
     [int]$WallClockCapMinutes = 30,
+
+    [string]$IncludeTools = 'SentinelWorkspaceTools,SentinelSymbolTools,SentinelRefactoringTools,SentinelDocumentationTools,SentinelCommentingTools,SentinelAdvancedRefactoringTools',
 
     [double]$Temperature,
 
@@ -164,11 +185,25 @@ if (-not (Test-Path $PlanDir)) {
 
 $runnerProject = Join-Path $repoRoot 'RoslynSentinel.Tools.PlanStepRunner\RoslynSentinel.Tools.PlanStepRunner.csproj'
 
+$runDir = $null
+if ($ExistingRun) {
+    $runDir = Join-Path $ImplRepo "PlanStepRunner\$ExistingRun"
+    if (-not (Test-Path $runDir)) {
+        throw "-ExistingRun '$ExistingRun' not found under $ImplRepo\PlanStepRunner\. Check the timestamp folder name (e.g. 20260909-171952-844)."
+    }
+}
+
 Write-Host ""
 Write-Host "=== PlanStepRunner: steps $StartStep-$EndStep against $baseUrl (model=$Model) ===" -ForegroundColor Cyan
 Write-Host "    --plan-dir $PlanDir" -ForegroundColor Cyan
 Write-Host "    --repo $ImplRepo" -ForegroundColor Cyan
 Write-Host "    --branch $Branch" -ForegroundColor Cyan
+if ($runDir) {
+    Write-Host "    --run-dir $runDir" -ForegroundColor Cyan
+}
+if ($Clean) {
+    Write-Host "    --clean" -ForegroundColor Cyan
+}
 if ($PSBoundParameters.ContainsKey('Temperature')) {
     Write-Host "    --llm-temperature $Temperature" -ForegroundColor Cyan
 }
@@ -186,15 +221,16 @@ $runnerArgs = @(
     '--end-step', $EndStep
     '--turn-cap', $TurnCap
     '--wall-clock-cap-minutes', $WallClockCapMinutes
+    '--include-tools', $IncludeTools
     '--llm-base-url', $baseUrl
     '--llm-model', $Model
 )
 
-if ($WorktreeRoot) {
-    $runnerArgs += @('--worktree-root', $WorktreeRoot)
+if ($runDir) {
+    $runnerArgs += @('--run-dir', $runDir)
 }
-if ($OutDir) {
-    $runnerArgs += @('--out-dir', $OutDir)
+if ($Clean) {
+    $runnerArgs += @('--clean')
 }
 if ($PSBoundParameters.ContainsKey('Temperature')) {
     $runnerArgs += @('--llm-temperature', $Temperature)
