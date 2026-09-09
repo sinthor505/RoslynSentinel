@@ -43,7 +43,7 @@ public static class ServerStartupHelpers
     /// against the current directory, --base-repo-dir (if set), or the server's install directory.</param>
     /// <param name="baseRepoDirectory">Value of --base-repo-dir=, or null. Used to resolve relative --solution/LoadSolution paths.</param>
     /// <param name="includeTools">Parsed --include-tools value: individual tool-class names to
-    /// activate in addition to whatever --mode resolves, e.g. "SentinelAugmentTools,GitTools".</param>
+    /// activate in addition to whatever --mode resolves, e.g. "SentinelAugmentTools,SentinelGitTools".</param>
     /// <param name="excludeTools">Parsed --exclude-tools value: individual tool-class names to
     /// deactivate even if --mode or --include-tools would otherwise activate them. Always wins.</param>
     public static void ParseArgs(
@@ -83,14 +83,31 @@ public static class ServerStartupHelpers
             }
         }
 
-        includeTools = ParseNameList(GetArgValue(args, "--include-tools"));
-        excludeTools = ParseNameList(GetArgValue(args, "--exclude-tools"));
+        includeTools = NormalizeToolClassNames(ParseNameList(GetArgValue(args, "--include-tools")));
+        excludeTools = NormalizeToolClassNames(ParseNameList(GetArgValue(args, "--exclude-tools")));
     }
 
     private static HashSet<string> ParseNameList(string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             : value.Split(',').Select(n => n.Trim()).Where(n => n.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Every tool class carries a "Sentinel" prefix (e.g. SentinelWorkspaceTools,
+    /// SentinelGitTools), so a shortened --include-tools/--exclude-tools name like "GitTools"
+    /// can be resolved by prepending it unconditionally when it's not already present.
+    /// </summary>
+    private static HashSet<string> NormalizeToolClassNames(HashSet<string> names)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var name in names)
+        {
+            result.Add(name.StartsWith("Sentinel", StringComparison.OrdinalIgnoreCase) ? name : "Sentinel" + name);
+        }
+
+        return result;
+    }
 
     /// <summary>
     /// Expands <paramref name="activeModes"/> into individual tool-class names via

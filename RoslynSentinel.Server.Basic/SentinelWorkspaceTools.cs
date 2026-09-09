@@ -480,7 +480,7 @@ public class SentinelWorkspaceTools
     }
 
     // Subdirectories ProjectDoc reads/writes under docs/, paired with the docType value that
-    // maps to each — see DocumentationTools.ProjectDoc.
+    // maps to each — see SentinelDocumentationTools.ProjectDoc.
     private static readonly (string Dir, string DocType)[] ProjectDocSubdirs = [("plans", "plan"), ("handoffs", "handoff"), ("completed", "completed_work"), ("documentation", "documentation"),];
     // Surfaces docs/ and Solution-Folder content right after a solution loads, so an agent
     // doesn't have to burn a round of (fruitless) SearchSolutionText calls to discover a plan,

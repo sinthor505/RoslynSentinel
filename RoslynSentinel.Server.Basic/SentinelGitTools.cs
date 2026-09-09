@@ -134,7 +134,7 @@ public class GitRevertResult
 // ─── Tool class ──────────────────────────────────────────────────────────────
 
 [McpServerToolType]
-public class GitTools
+public class SentinelGitTools
 {
     /// <summary>
     /// Bound on how long a single git subprocess invocation may run. Applied whenever no caller-
@@ -152,11 +152,11 @@ public class GitTools
     private static readonly string GitExecutablePath = ResolveGitExecutablePath();
 
     private readonly ISolutionProvider _workspaceManager;
-    private readonly ILogger<GitTools> _logger;
+    private readonly ILogger<SentinelGitTools> _logger;
 
-    public GitTools(
+    public SentinelGitTools(
         ISolutionProvider workspaceManager,
-        ILogger<GitTools> logger)
+        ILogger<SentinelGitTools> logger)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;

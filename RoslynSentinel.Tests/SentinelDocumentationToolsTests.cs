@@ -7,22 +7,22 @@ using RoslynSentinel.Tests.Fakes;
 namespace RoslynSentinel.Tests;
 
 [TestFixture]
-public class DocumentationToolsTests
+public class SentinelDocumentationToolsTests
 {
     private string _solutionRoot = "";
-    private DocumentationTools _tools = null!;
+    private SentinelDocumentationTools _tools = null!;
 
     [SetUp]
     public void Setup()
     {
-        _solutionRoot = Path.Combine(Path.GetTempPath(), "DocumentationToolsTests", Path.GetRandomFileName());
+        _solutionRoot = Path.Combine(Path.GetTempPath(), "SentinelDocumentationToolsTests", Path.GetRandomFileName());
         Directory.CreateDirectory(_solutionRoot);
 
         var workspaceManager = new FakeWorkspaceManager
         {
             SolutionPath = Path.Combine(_solutionRoot, "Fake.slnx")
         };
-        _tools = new DocumentationTools(workspaceManager, NullLogger<DocumentationTools>.Instance);
+        _tools = new SentinelDocumentationTools(workspaceManager, NullLogger<SentinelDocumentationTools>.Instance);
     }
 
     [TearDown]

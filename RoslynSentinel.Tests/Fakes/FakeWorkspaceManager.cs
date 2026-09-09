@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.Fakes;
 
 // Minimal IWorkspaceManager fake for tests that only need CurrentSolution / GetCurrentSolutionAsync,
 // or a GetSolutionRoot()-backed directory without a real Roslyn solution loaded at all (set
-// SolutionPath directly - see GitToolsSmokeTests.cs for an example). Every other member throws
+// SolutionPath directly - see SentinelGitToolsSmokeTests.cs for an example). Every other member throws
 // NotImplementedException - extend as a test actually needs a member. If a test needs a real
 // on-disk solution instead (actual file I/O, MSBuild load, watcher behavior), use
 // RoslynSentinel.Tests.TestSolutionFixture (backed by PersistentWorkspaceManager) instead of this class.

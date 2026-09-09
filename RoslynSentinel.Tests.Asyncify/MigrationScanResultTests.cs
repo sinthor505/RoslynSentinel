@@ -625,9 +625,9 @@ public class Svc
         Directory.CreateDirectory(docsDir);
         File.WriteAllText(Path.Combine(docsDir, "migration-state.yaml"), "state: ready\nphase: 1");
 
-        var docTools = new DocumentationTools(
+        var docTools = new SentinelDocumentationTools(
             _workspaceManager,
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentationTools>.Instance);
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<SentinelDocumentationTools>.Instance);
 
         var result = docTools.ProjectDoc(reason: "Test", action: DocAction.read, docType: DocType.state) as DocReadResult;
 

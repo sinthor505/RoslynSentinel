@@ -13,14 +13,14 @@ using RoslynSentinel.Tests.Fakes;
 namespace RoslynSentinel.Tests.Battery;
 
 [TestFixture]
-public class GitToolsSmokeTests
+public class SentinelGitToolsSmokeTests
 {
     // Generous relative to GitProcessTimeout's 30s — this isn't testing the timeout boundary
     // itself, just that a normal call on a tiny repo comes back promptly, not near the ceiling.
     private static readonly TimeSpan ResponseBound = TimeSpan.FromSeconds(10);
 
     private string _repoDir = null!;
-    private GitTools _gitTools = null!;
+    private SentinelGitTools _gitTools = null!;
 
     [SetUp]
     public void SetUp()
@@ -34,11 +34,11 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "add", "-A");
         RunGit(_repoDir, "commit", "-m", "initial commit");
 
-        // GitTools only ever calls GetSolutionRoot() to find the git root - it doesn't need a real
+        // SentinelGitTools only ever calls GetSolutionRoot() to find the git root - it doesn't need a real
         // Roslyn solution loaded, so FakeWorkspaceManager.SolutionPath alone is enough (see its own
         // "Mirrors PersistentWorkspaceManager.GetSolutionRoot()" comment).
         var workspaceManager = new FakeWorkspaceManager { SolutionPath = Path.Combine(_repoDir, "Fake.sln") };
-        _gitTools = new GitTools(workspaceManager, NullLogger<GitTools>.Instance);
+        _gitTools = new SentinelGitTools(workspaceManager, NullLogger<SentinelGitTools>.Instance);
     }
 
     [TearDown]

@@ -12,7 +12,7 @@ public static class ToolClassRegistry
     public static readonly IReadOnlyDictionary<string, string[]> BasicModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Workspace"] = ["SentinelWorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "GitTools"],
+            ["Workspace"] = ["SentinelWorkspaceTools", "SentinelDocumentationTools", "SentinelSymbolTools", "SentinelGitTools"],
             ["Admin"] = ["SentinelAdminTools"],
             ["WholeFileWrite"] = ["SentinelWholeFileWriteTools"],
             ["Refactor"] = ["SentinelRefactoringTools", "SentinelAugmentTools"],
@@ -30,7 +30,7 @@ public static class ToolClassRegistry
     public static readonly IReadOnlyDictionary<string, string[]> AdvancedModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Workspace"] = ["SentinelWorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "GitTools"],
+            ["Workspace"] = ["SentinelWorkspaceTools", "SentinelDocumentationTools", "SentinelSymbolTools", "SentinelGitTools"],
             ["Admin"] = ["SentinelAdminTools"],
             ["WholeFileWrite"] = ["SentinelWholeFileWriteTools"],
             ["Refactor"] = ["SentinelRefactoringTools", "SentinelAugmentTools", "SentinelAdvancedRefactoringTools"],

@@ -119,20 +119,20 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<SentinelWorkspaceTools>();
             mcpBuilder.WithTools<SentinelWorkspaceTools>();
         }
-        if (activeToolClasses.Contains("DocumentationTools"))
+        if (activeToolClasses.Contains("SentinelDocumentationTools"))
         {
-            services.AddSingleton<DocumentationTools>();
-            mcpBuilder.WithTools<DocumentationTools>();
+            services.AddSingleton<SentinelDocumentationTools>();
+            mcpBuilder.WithTools<SentinelDocumentationTools>();
         }
         if (activeToolClasses.Contains("SentinelSymbolTools"))
         {
             services.AddSingleton<SentinelSymbolTools>();
             mcpBuilder.WithTools<SentinelSymbolTools>();
         }
-        if (activeToolClasses.Contains("GitTools"))
+        if (activeToolClasses.Contains("SentinelGitTools"))
         {
-            services.AddSingleton<GitTools>();
-            mcpBuilder.WithTools<GitTools>();
+            services.AddSingleton<SentinelGitTools>();
+            mcpBuilder.WithTools<SentinelGitTools>();
         }
         if (activeToolClasses.Contains("SentinelAdminTools"))
         {

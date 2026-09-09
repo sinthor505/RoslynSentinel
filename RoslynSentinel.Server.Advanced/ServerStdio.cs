@@ -23,7 +23,7 @@ namespace RoslynSentinel.Server.Advanced
         private static readonly Type[] ActiveToolTypes =
         [
             typeof(SentinelWorkspaceTools),
-        typeof(DocumentationTools),
+        typeof(SentinelDocumentationTools),
         typeof(SentinelSymbolTools),
         typeof(SentinelRefactoringTools),
         typeof(SentinelAugmentTools),
