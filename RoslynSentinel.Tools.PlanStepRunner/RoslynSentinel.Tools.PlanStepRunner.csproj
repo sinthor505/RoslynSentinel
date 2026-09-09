@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- RoslynSentinel.Tests.ModelEval transitively project-references Server.Advanced/Server.Basic,
+         both OutputType=Exe with their own Main — StartupObject pins which one is this exe's entry
+         point instead of failing the build with CS0017 (multiple entry points). -->
+    <StartupObject>RoslynSentinel.Tools.PlanStepRunner.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RoslynSentinel.Tests.ModelEval\RoslynSentinel.Tests.ModelEval.csproj" />
+  </ItemGroup>
+
+</Project>
