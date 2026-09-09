@@ -42,21 +42,18 @@ public static class Program
             return 1;
         }
 
-        using var loggerFactory = LoggerFactory.Create(b => b.AddSimpleConsole(o =>
-        {
-            o.SingleLine = true;
-            o.TimestampFormat = "HH:mm:ss ";
-        }));
-
         var stepFiles = PlanStepFile.LoadRange(options.PlanDir, options.StartStep, options.EndStep);
         Console.WriteLine($"Running {stepFiles.Count} step(s): {string.Join(", ", stepFiles.Select(s => s.FileName))}");
+
+        var batchDir = Path.Combine(options.OutDir, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+        Directory.CreateDirectory(batchDir);
+        Console.WriteLine($"Batch output: {batchDir}");
 
         using var httpClient = new HttpClient
         {
             BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/"),
             Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600)),
         };
-        var agentClient = new LmStudioAgentClient(httpClient, loggerFactory.CreateLogger<LmStudioAgentClient>());
 
         var git = new GitWorktreeManager(options.SourceRepo, options.Branch, options.WorktreeRoot);
         git.EnsureBranchExists();
@@ -69,9 +66,23 @@ public static class Program
             var worktreePath = git.CreateWorktree(step.FileName);
             Console.WriteLine($"Worktree: {worktreePath}");
 
+            var stepDir = Path.Combine(batchDir, Path.GetFileNameWithoutExtension(step.FileName));
+            Directory.CreateDirectory(stepDir);
+
+            using var loggerFactory = LoggerFactory.Create(b =>
+            {
+                b.AddSimpleConsole(o =>
+                {
+                    o.SingleLine = true;
+                    o.TimestampFormat = "HH:mm:ss ";
+                });
+                b.AddProvider(new FlushingFileLoggerProvider(Path.Combine(stepDir, "agent.log")));
+            });
+            var agentClient = new LmStudioAgentClient(httpClient, loggerFactory.CreateLogger<LmStudioAgentClient>());
+
             try
             {
-                var outcome = await RunStepAsync(step, worktreePath, agentClient, options, loggerFactory);
+                var outcome = await RunStepAsync(step, worktreePath, agentClient, options, loggerFactory, stepDir);
                 LogSummary(step, outcome);
 
                 var buildOptional = KnownBuildOptionalSteps.Contains(step.FileName);
@@ -105,7 +116,8 @@ public static class Program
         string worktreePath,
         LmStudioAgentClient agentClient,
         RunnerOptions options,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        string stepDir)
     {
         var serverBinDir = Path.Combine(worktreePath, "bin-runner", "Advanced");
         await DotnetProcess.BuildAsync(
@@ -150,8 +162,7 @@ public static class Program
             $"Review the planning doc `{step.FilePath}`.\n" +
             "Implement the plan.";
 
-        var transcriptDir = Path.Combine(options.OutDir, step.FileName, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
-        var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, transcriptDir, CancellationToken.None);
+        var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, stepDir, CancellationToken.None);
 
         var lastContent = result.Transcript.Turns.Count > 0
             ? result.Transcript.Turns[^1].ModelMessage.Content ?? ""
@@ -180,7 +191,7 @@ public static class Program
 
         return new StepOutcome(
             result.Converged, result.StopReason.ToString(), result.TurnCount, looksBlocked,
-            buildErrorCount, testText, transcriptDir);
+            buildErrorCount, testText, stepDir);
     }
 
     private static readonly string[] BlockedPhrases =
