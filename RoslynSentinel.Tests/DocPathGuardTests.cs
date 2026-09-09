@@ -38,7 +38,7 @@ public class DocPathGuardTests
         var (ok, _, error) = DocPathGuard.ResolveSafe(root, @"../../Main/Avaal.Forms/SomeForm.cs");
 
         Assert.That(ok, Is.False);
-        Assert.That(error, Does.Contain("path components"));
+        Assert.That(error, Does.Contain("traversal"));
     }
 
     // ── Test 3: absolute path rejected ───────────────────────────────────────
@@ -50,7 +50,7 @@ public class DocPathGuardTests
         var (ok, _, error) = DocPathGuard.ResolveSafe(root, @"C:\Windows\System32\drivers\etc\hosts");
 
         Assert.That(ok, Is.False);
-        Assert.That(error, Does.Contain("path components").Or.Contain("Invalid character"));
+        Assert.That(error, Does.Contain("Rooted").Or.Contain("Invalid character"));
     }
 
     // ── Test 4: source extension rejected ────────────────────────────────────
@@ -146,20 +146,32 @@ public class DocPathGuardTests
         var (ok, _, error) = DocPathGuard.ResolveSafe(root, filename);
 
         Assert.That(ok, Is.False);
-        Assert.That(error, Does.Contain("Empty").Or.Contain("path components"));
+        Assert.That(error, Does.Contain("Empty"));
     }
 
-    // ── Test 11: containment backstop — forward-slash traversal ──────────────
+    // ── Test 11: one bounded subdirectory level resolves inside root ─────────
 
     [Test]
-    public void ForwardSlashTraversal_Rejected()
+    public void SingleSubdirectory_ResolvesInsideRoot()
     {
         var root = TempDocsRoot();
-        // A crafted path using forward slashes that Path.GetFileName should catch
-        var (ok, _, error) = DocPathGuard.ResolveSafe(root, "subdir/notes.md");
+        var (ok, fullPath, error) = DocPathGuard.ResolveSafe(root, "subdir/notes.md");
 
-        Assert.That(ok, Is.False);
-        Assert.That(error, Does.Contain("path components"));
+        Assert.That(ok, Is.True, error);
+        Assert.That(fullPath, Does.StartWith(root));
+        Assert.That(fullPath, Does.EndWith(Path.Combine("subdir", "notes.md")));
+    }
+
+    // ── Test 11b: backslash subdirectory separator also resolves ─────────────
+
+    [Test]
+    public void BackslashSubdirectory_ResolvesInsideRoot()
+    {
+        var root = TempDocsRoot();
+        var (ok, fullPath, error) = DocPathGuard.ResolveSafe(root, @"subdir\notes.md");
+
+        Assert.That(ok, Is.True, error);
+        Assert.That(fullPath, Does.StartWith(root));
     }
 
     // ── Test 12: case-insensitive extension matching ──────────────────────────

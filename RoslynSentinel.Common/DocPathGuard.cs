@@ -27,8 +27,9 @@ public static class DocPathGuard
     /// Absolute path to the docs subdirectory (e.g. <c>&lt;solutionRoot&gt;/docs/plans/</c>).
     /// </param>
     /// <param name="filename">
-    /// Caller-supplied filename. Must be a bare filename — any path component (slash, backslash,
-    /// drive letter) causes immediate rejection.
+    /// Caller-supplied relative path. May include forward-slash subdirectory segments (matching
+    /// what <c>ProjectDoc(action: list)</c> returns), but a drive letter, rooted path, or ".."
+    /// traversal segment causes immediate rejection.
     /// </param>
     /// <returns>
     /// <c>(true, absolutePath, "")</c> on success.
@@ -38,27 +39,36 @@ public static class DocPathGuard
         string docsSubdirRoot,
         string filename)
     {
-        // 1. Strip to bare filename — discard all directory components.
-        //    If the result differs from the input, path components were present.
-        string bareName = Path.GetFileName(filename);
-        if (bareName != filename)
-        {
-            return (false, "", "Filename only — path components are not allowed.");
-        }
-
-        if (string.IsNullOrWhiteSpace(bareName))
+        if (string.IsNullOrWhiteSpace(filename))
         {
             return (false, "", "Empty filename.");
         }
 
-        // 2. Reject alternate data streams and invalid characters (Windows-specific).
+        // 1. Reject rooted paths (drive letters, UNC, leading slash) up front —
+        //    Path.IsPathRooted also catches "\subdir\notes.md" and "/subdir/notes.md".
+        if (Path.IsPathRooted(filename))
+        {
+            return (false, "", "Rooted or absolute paths are not allowed.");
+        }
+
+        // 2. Normalize separators and reject ".." traversal segments.
+        string[] segments = filename.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0 || segments.Any(s => s == ".."))
+        {
+            return (false, "", "Path traversal ('..') is not allowed.");
+        }
+
+        string bareName = segments[^1];
+        string relativePath = string.Join(Path.DirectorySeparatorChar, segments);
+
+        // 3. Reject alternate data streams and invalid characters (Windows-specific).
         //    "notes.md:hidden.cs" is a valid NTFS ADS name but Path.GetFileName keeps the colon.
         if (bareName.Contains(':'))
         {
             return (false, "", "Invalid character ':' in filename (alternate data stream).");
         }
 
-        if (bareName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        if (segments.Any(s => s.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
         {
             return (false, "", "Invalid characters in filename.");
         }
@@ -82,7 +92,7 @@ public static class DocPathGuard
         // 5. Resolve and confirm containment (defense-in-depth backstop).
         //    GetFullPath resolves any remaining traversal sequences so the StartsWith check
         //    operates on the canonical absolute path.
-        string fullPath = Path.GetFullPath(Path.Combine(docsSubdirRoot, bareName));
+        string fullPath = Path.GetFullPath(Path.Combine(docsSubdirRoot, relativePath));
         string rootFull = Path.GetFullPath(docsSubdirRoot);
         if (!rootFull.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal))
         {

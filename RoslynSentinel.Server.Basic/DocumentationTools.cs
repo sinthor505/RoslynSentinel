@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Linq;
 using System.Text;
 
 using Microsoft.Extensions.Logging;
@@ -96,22 +97,70 @@ public class DocumentationTools
     private static DocReadResult ReadFile(string subdir, string filename)
     {
         var (ok, fullPath, guardError) = DocPathGuard.ResolveSafe(subdir, filename);
-        if (!ok)
+        if (ok && File.Exists(fullPath))
         {
-            return new DocReadResult { Found = false, Filename = filename, Error = guardError };
+            return new DocReadResult
+            {
+                Found = true,
+                Filename = filename,
+                Content = File.ReadAllText(fullPath)
+            };
         }
 
-        if (!File.Exists(fullPath))
+        // Fallback: match by basename (extension-insensitive) anywhere under subdir.
+        // Handles a bare name, a wrong/missing extension, or an un-guessed subfolder —
+        // all observed model behaviors when the exact relative path isn't already known.
+        var matches = FindByBasename(subdir, filename);
+        if (matches.Count == 1)
         {
-            return new DocReadResult { Found = false, Filename = filename, Error = $"File '{filename}' does not exist in the docs directory. Use ProjectDoc(action: list) to see available files." };
+            return new DocReadResult
+            {
+                Found = true,
+                Filename = matches[0],
+                Content = File.ReadAllText(Path.Combine(subdir, matches[0]))
+            };
         }
 
-        return new DocReadResult
+        if (matches.Count > 1)
         {
-            Found = true,
-            Filename = filename,
-            Content = File.ReadAllText(fullPath)
-        };
+            return new DocReadResult
+            {
+                Found = false,
+                Filename = filename,
+                Error = $"'{filename}' is ambiguous. Did you mean: {string.Join(", ", matches)}"
+            };
+        }
+
+        string stem = Path.GetFileNameWithoutExtension(Path.GetFileName(filename));
+        var notFoundError = ok
+            ? $"No file matching '{stem}' (with or without extension) was found under docs/{Path.GetFileName(subdir)}/. This directory was already searched — retrying with a different extension or spelling will not help. Call ProjectDoc(action: list) to see all available files."
+            : guardError;
+        return new DocReadResult { Found = false, Filename = filename, Error = notFoundError };
+    }
+
+    /// <summary>
+    /// Finds files under <paramref name="subdir"/> whose filename matches <paramref name="name"/>
+    /// on basename, ignoring extension and (if present in <paramref name="name"/>) subdirectory.
+    /// Returns paths relative to <paramref name="subdir"/> with '/' separators.
+    /// </summary>
+    private static List<string> FindByBasename(string subdir, string name)
+    {
+        if (!Directory.Exists(subdir))
+        {
+            return [];
+        }
+
+        string wantStem = Path.GetFileNameWithoutExtension(Path.GetFileName(name));
+        if (string.IsNullOrEmpty(wantStem))
+        {
+            return [];
+        }
+
+        return Directory.GetFiles(subdir, "*", SearchOption.AllDirectories)
+            .Where(f => string.Equals(Path.GetFileNameWithoutExtension(f), wantStem, StringComparison.OrdinalIgnoreCase))
+            .Select(f => Path.GetRelativePath(subdir, f).Replace('\\', '/'))
+            .OrderBy(f => f)
+            .ToList();
     }
 
     private static DocWriteResult WriteFile(string subdir, string filename, string content, bool append = false)
@@ -157,7 +206,7 @@ public class DocumentationTools
 
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
-    [Description("Unified accessor for project doc files under docs/. plan → docs/plans/; handoff → docs/handoffs/; completed_work → docs/completed/ (append only); documentation → docs/documentation/; state → docs/migration-state.yaml (name ignored). name required for all file-based operations. content required for write/append.")]
+    [Description("Unified accessor for project doc files under docs/. plan → docs/plans/; handoff → docs/handoffs/; completed_work → docs/completed/ (append only); documentation → docs/documentation/; state → docs/migration-state.yaml (name ignored). name required for all file-based operations, accepts a nested relative path (e.g. 'plan-x-steps/01-baseline.md') as shown by action:list; on read, a bare/wrong-extension name also falls back to a basename search and auto-resolves if exactly one file matches. content required for write/append.")]
     public object ProjectDoc(
         [Description(ToolParams.Reason)] string reason,
         DocAction action,
