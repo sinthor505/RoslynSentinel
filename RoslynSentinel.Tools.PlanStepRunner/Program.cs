@@ -145,7 +145,8 @@ public static class Program
             logger: loggerFactory.CreateLogger<ModelAgentRunner>());
 
         var userPrompt =
-            $"Load the solution `{solutionPath}`.\n" +
+            "The solution is already loaded — do not call LoadSolution or ListWorkspaceSolutions, " +
+            "go straight to reading/editing.\n" +
             $"Review the planning doc `{step.FilePath}`.\n" +
             "Implement the plan.";
 

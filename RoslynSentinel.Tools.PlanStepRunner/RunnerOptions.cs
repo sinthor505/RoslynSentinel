@@ -16,7 +16,8 @@ public sealed class RunnerOptions
     public static RunnerOptions Parse(string[] args)
     {
         var planDir = GetArg(args, "--plan-dir")
-            ?? throw new ArgumentException("--plan-dir is required (path to plan-eval-defect-remediation-v2-steps).");
+            ?? throw new ArgumentException("--plan-dir is required (path to plan-eval-defect-remediation-v2-steps-runner — " +
+                "the runner-specific copy whose prompts omit the load-solution step the runner already does itself).");
         var sourceRepo = GetArg(args, "--repo")
             ?? throw new ArgumentException("--repo is required (the git repo to branch/worktree from, e.g. the RoslynSentinel checkout).");
 
