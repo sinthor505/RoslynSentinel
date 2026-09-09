@@ -1223,6 +1223,108 @@ public class RefactoringEngine
         };
     }
 
+    /// <summary>
+    /// Adds a brand-new top-level type declaration (enum/class/record/struct/interface) to a file,
+    /// for the case AddMemberAsync can't handle: there is no existing BaseTypeDeclarationSyntax to
+    /// target because the type being added doesn't exist yet. Resolves to the file's namespace
+    /// (NamespaceDeclarationSyntax or FileScopedNamespaceDeclarationSyntax) when namespaceName is
+    /// null and exactly one namespace is present, or to the CompilationUnitSyntax itself for a file
+    /// with no namespace (global namespace). If the file has multiple namespaces and namespaceName
+    /// wasn't given, that's ambiguous and reported as such rather than guessed.
+    /// </summary>
+    public async Task<DocumentEditResult> AddTopLevelTypeAsync(FilePath filePath, string newTypeSource, string? namespaceName = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        if (root == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Cannot parse file."
+            };
+        }
+
+        var newType = SyntaxFactory.ParseMemberDeclaration(newTypeSource);
+        if (newType is not BaseTypeDeclarationSyntax)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = newType == null ? "// Failed to parse new type." : "// newTypeSource did not parse as a type declaration (enum/class/record/struct/interface)."
+            };
+        }
+
+        newType = newType.WithAddedByComment("AddTopLevelType");
+
+        var namespaces = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().ToList();
+        BaseNamespaceDeclarationSyntax? targetNamespace;
+        if (namespaceName != null)
+        {
+            targetNamespace = namespaces.FirstOrDefault(n => n.Name.ToString() == namespaceName);
+            if (targetNamespace == null)
+            {
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// Namespace '{namespaceName}' not found. Available: {string.Join(", ", namespaces.Select(n => n.Name.ToString()))}."
+                };
+            }
+        }
+        else if (namespaces.Count <= 1)
+        {
+            targetNamespace = namespaces.FirstOrDefault();
+        }
+        else
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// File has {namespaces.Count} namespaces ({string.Join(", ", namespaces.Select(n => n.Name.ToString()))}); pass namespaceName to disambiguate."
+            };
+        }
+
+        if (targetNamespace != null)
+        {
+            var newNamespace = targetNamespace.AddMembers(newType);
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                Message = "// Top-level type added.",
+                UpdatedText = await ReplaceNodeFormattedAsync(document, root, targetNamespace, newNamespace, cancellationToken)
+            };
+        }
+
+        // No namespace in the file at all — append directly to the compilation unit.
+        // ReplaceNodeFormattedAsync needs oldNode to be a strict descendant of the tracked root,
+        // which the root itself never is, so format the freshly-built root directly instead.
+        var newRoot = root.AddMembers(newType);
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), cancellationToken: cancellationToken);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = "// Top-level type added.",
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
+        };
+    }
+
     public async Task<DocumentEditResult> RemoveMemberAsync(FilePath filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);

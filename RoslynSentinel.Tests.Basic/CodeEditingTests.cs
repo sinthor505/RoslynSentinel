@@ -88,6 +88,115 @@ public class Animal
     }
 
     // ══════════════════════════════════════════════════════════════
+    // AddTopLevelTypeAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task AddTopLevelType_Enum_AddsToSingleNamespace()
+    {
+        SetSource(@"
+namespace MyApp;
+
+public class Widget { }
+", "Widget.cs");
+
+        var result = await _engine.AddTopLevelTypeAsync("Widget.cs", "public enum BuildOutcome { Success, Failure }");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public enum BuildOutcome"));
+        Assert.That(result.UpdatedText, Does.Contain("public class Widget"), "Existing type should still be present.");
+    }
+
+    [Test]
+    public async Task AddTopLevelType_Class_AddsToBlockScopedNamespace()
+    {
+        SetSource(@"
+namespace MyApp
+{
+    public class Widget { }
+}
+", "Widget.cs");
+
+        var result = await _engine.AddTopLevelTypeAsync("Widget.cs", "public class Gadget { }");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public class Gadget"));
+        Assert.That(result.UpdatedText, Does.Contain("public class Widget"));
+    }
+
+    [Test]
+    public async Task AddTopLevelType_NoNamespace_AddsToCompilationUnit()
+    {
+        SetSource(@"
+public class Widget { }
+", "Widget.cs");
+
+        var result = await _engine.AddTopLevelTypeAsync("Widget.cs", "public class Gadget { }");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public class Gadget"));
+        Assert.That(result.UpdatedText, Does.Contain("public class Widget"));
+    }
+
+    [Test]
+    public async Task AddTopLevelType_MultipleNamespaces_RequiresNamespaceNameDisambiguation()
+    {
+        SetSource(@"
+namespace MyApp.First
+{
+    public class Widget { }
+}
+
+namespace MyApp.Second
+{
+    public class Gizmo { }
+}
+", "Widget.cs");
+
+        var result = await _engine.AddTopLevelTypeAsync("Widget.cs", "public class Gadget { }");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(result.Message, Does.Contain("MyApp.First"));
+        Assert.That(result.Message, Does.Contain("MyApp.Second"));
+    }
+
+    [Test]
+    public async Task AddTopLevelType_MultipleNamespaces_NamespaceNameDisambiguates()
+    {
+        SetSource(@"
+namespace MyApp.First
+{
+    public class Widget { }
+}
+
+namespace MyApp.Second
+{
+    public class Gizmo { }
+}
+", "Widget.cs");
+
+        var result = await _engine.AddTopLevelTypeAsync("Widget.cs", "public class Gadget { }", namespaceName: "MyApp.Second");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public class Gadget"));
+    }
+
+    [Test]
+    public async Task AddTopLevelType_NotATypeDeclaration_ReturnsTargetNotFound()
+    {
+        SetSource(@"
+namespace MyApp;
+
+public class Widget { }
+", "Widget.cs");
+
+        var result = await _engine.AddTopLevelTypeAsync("Widget.cs", "public string Foo() => \"bar\";");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(result.Message, Does.Contain("did not parse as a type declaration"));
+    }
+
+    // ══════════════════════════════════════════════════════════════
     // AddUsingDirectiveAsync
     // ══════════════════════════════════════════════════════════════
 

@@ -275,6 +275,9 @@ public class SentinelRefactoringTools
         "OPERATION add: containerName required. Two modes — pass newMemberSource (raw source, e.g. 'private decimal Foo() { ... }') with " +
         "optional position (null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\"); OR pass typedKind (\"property\"/\"field\") " +
         "with typedName+typedType to generate a typed member (property: hasSetter/isInit/accessibility default public; field: isReadonly/isStatic/initializer/accessibility default private). " +
+        "OPERATION add, NEW TOP-LEVEL TYPE: to add a brand-new enum/class/record/struct/interface that doesn't exist yet, omit containerName and pass the full type declaration as newMemberSource " +
+        "(e.g. 'public enum BuildOutcome { Success, Failure }'). Adds it to the file's namespace (or namespaceName, if the file has more than one). This is the only way to introduce a new top-level type — " +
+        "ModifyEnum/ChangeAccessibility/etc. all require the type to already exist. " +
         "OPERATION remove: memberName required. By default checks for callers and implementations (via FindReferences(kind: all)) and refuses if found; pass skipPrecheck: true to remove unconditionally. For zero-usages-only contract, use SafeDeleteUnusedSymbol instead. " +
         "OPERATION replace: memberName + newMemberSource required. This is the right choice even for a one-line change inside a member — don't avoid it just because the edit is small. " +
         "Prefer this over a unified diff/patch (e.g. via ApplyDiff) to edit part of a member: even though ApplyDiff tolerates modest line-number drift, a whole-member replacement can't drift out of sync the way a hand-built diff hunk can. " +
@@ -286,6 +289,7 @@ public class SentinelRefactoringTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
         [Consumes(DataTag.SymbolName, required: false)] string? containerName = null,
+        [Description("Only used for operation 'add' when newMemberSource is a top-level type declaration (enum/class/record/struct/interface) and containerName is omitted. Disambiguates which namespace to add it to, when the file has more than one. Ignored otherwise.")][ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
         [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
         [ExternalInputRequired(DataTag.Position)] string? position = null,
@@ -397,7 +401,31 @@ public class SentinelRefactoringTools
 
             // operation == MemberAction.add
             if (string.IsNullOrEmpty(containerName))
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Member: containerName is required for operation 'add'.") };
+            {
+                if (string.IsNullOrEmpty(newMemberSource) || typedKind != null)
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Member: containerName is required for operation 'add', unless newMemberSource is a brand-new top-level type declaration (enum/class/record/struct/interface) with no typedKind set.") };
+
+                var topLevelResult = await _refactoringEngine.AddTopLevelTypeAsync(filePath, newMemberSource, namespaceName, cancellationToken);
+                if (!autoStage)
+                    return new ToolResult<object>() { Success = true, Data = topLevelResult.ToJsonSummary() };
+                if (RequireUpdatedText(topLevelResult, "Member", filePath) is { } topLevelGuardResult)
+                    return topLevelGuardResult;
+
+                var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePath)}.";
+
+                var topLevelChanges = new Dictionary<FilePath, string> { [filePath] = topLevelResult.UpdatedText! };
+                var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
+                if (topLevelApply.Error is not null)
+                    return new ToolResult<object> { Success = false, Error = topLevelApply.Error };
+                return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                    new MemberChangedContentResult
+                    {
+                        Summary = new AppliedChangeSummary(topLevelApply.ChangeId, [filePath], topLevelDescription, topLevelApply.DryRun, topLevelApply.Diff),
+                        ChangedContent = newMemberSource
+                    },
+                    _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
+                    workspaceVersion: _workspaceManager.WorkspaceVersion);
+            }
 
             var hasRawSource = !string.IsNullOrEmpty(newMemberSource);
             var hasTypedSpec = typedKind != null;
