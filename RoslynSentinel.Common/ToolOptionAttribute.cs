@@ -51,5 +51,7 @@ public enum ToolOptionTag
     DryRun,
     ReturnDiff,
     SearchMode,
-    ConfirmationCode
+    ConfirmationCode,
+    OldContent,
+    NewContent
 }

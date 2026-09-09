@@ -51,20 +51,34 @@ public class DiffEngine
     /// original bug this analyzer exists to catch automatically (see docs/current/blockers).
     /// </remarks>
     public SourceText ApplyDiff(SourceText sourceText, string unifiedDiff)
+        => ApplyDiff(sourceText, unifiedDiff, out _);
+
+    /// <summary>
+    /// Same as <see cref="ApplyDiff(SourceText, string)"/>, but also returns the
+    /// <see cref="DiffHunkAnalyzer"/> report so a caller can surface header/body mismatches (and
+    /// other findings) to the caller even on a successful apply — previously these were only
+    /// logged server-side (see <see cref="DiffHunkAnalyzer.DiffReport.HasFindings"/>), which meant
+    /// a model whose hunk header understated its own body size (the root cause of the
+    /// phantom-insertion bug documented in
+    /// docs/current/design_applyunifieddiff_replace_snippet_v1.md) had no way to learn that from
+    /// the tool response, only from the file coming out wrong. <paramref name="diffReport"/> is set
+    /// even when this throws, so a catch block can still describe what was wrong with the hunk.
+    /// </summary>
+    public SourceText ApplyDiff(SourceText sourceText, string unifiedDiff, out DiffHunkAnalyzer.DiffReport diffReport)
     {
+        diffReport = DiffHunkAnalyzer.Analyze(unifiedDiff);
         try
         {
             var result = ApplyDiffCore(sourceText, unifiedDiff);
-            var report = DiffHunkAnalyzer.Analyze(unifiedDiff);
-            if (report.HasFindings)
+            if (diffReport.HasFindings)
             {
-                _logger.LogWarning("ApplyDiff succeeded but its diff has findings: {Report}", report.Describe());
+                _logger.LogWarning("ApplyDiff succeeded but its diff has findings: {Report}", diffReport.Describe());
             }
             return result;
         }
         catch (DiffApplyException ex)
         {
-            _logger.LogWarning(ex, "ApplyDiff failed: {Report}", DiffHunkAnalyzer.Analyze(unifiedDiff).Describe());
+            _logger.LogWarning(ex, "ApplyDiff failed: {Report}", diffReport.Describe());
             throw;
         }
     }

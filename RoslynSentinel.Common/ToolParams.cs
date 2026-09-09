@@ -53,6 +53,18 @@ public static class ToolParams
     public const string LineAfter =
         "Line immediately after contextSnippet. Used to disambiguate when the snippet appears multiple times.";
 
+    public const string OldContent =
+        "REQUIRED. Verbatim text to find and replace — copied exactly from a prior tool result " +
+        "(ReadFile/GetMethodSource/etc.), not retyped from memory. Matched as a literal substring " +
+        "first, falling back to whitespace-normalized matching. Must be short: max 20 lines / 200 " +
+        "characters — this tool is for small, localized edits only. If oldContent matches more than " +
+        "once in the file, use lineBefore/lineAfter to disambiguate.";
+
+    public const string NewContent =
+        "REQUIRED. Verbatim replacement text for oldContent. May be empty (pure deletion) or longer " +
+        "than oldContent (net insertion), as long as it stays within the size limit (max 200 " +
+        "characters).";
+
     public const string ContainingTypeName =
         "Optional. Only needed when the target's name AND contextSnippet are still ambiguous — e.g. " +
         "two sibling types in the same file declare a same-named member with identical text (identical " +

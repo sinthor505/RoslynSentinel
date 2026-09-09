@@ -8,6 +8,7 @@ using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
 
+[McpServerToolType]
 public class SentinelWholeFileWriteTools
 {
     private readonly SymbolNavigationEngine _symbolNavigationEngine;    // Added by AddConstructorParameter
@@ -243,6 +244,34 @@ public class SentinelWholeFileWriteTools
     }
 
     /// <summary>
+    /// Builds the success-response payload for a diff-hunk apply (ApplyDiff's changesetFormat=diff
+    /// branch, and ApplyUnifiedDiff), including <paramref name="diffReport"/>'s findings when it has
+    /// any. Previously a hunk whose header line counts didn't match its own body (e.g. declaring 2
+    /// removed/10 added lines when the body actually had 2 removed/159 added) was only logged
+    /// server-side on success — the caller had no way to learn its hunk was malformed until the file
+    /// came out wrong. Surfacing it here lets the calling model catch its own mistake immediately.
+    /// </summary>
+    private static object BuildDiffApplyResponseData(
+        ApplyChangesResult strippedResult,
+        DiffHunkAnalyzer.DiffReport diffReport,
+        bool returnDiff,
+        Dictionary<FilePath, string> diffChanges,
+        IReadOnlyDictionary<string, string?>? preImages)
+    {
+        if (!returnDiff && !diffReport.HasFindings)
+        {
+            return strippedResult;
+        }
+
+        return new
+        {
+            result = strippedResult,
+            diff = returnDiff ? SentinelRefactoringTools.BuildDiffFromPreImages(diffChanges, preImages) : null,
+            diffHunkFindings = diffReport.HasFindings ? diffReport.Describe() : null
+        };
+    }
+
+    /// <summary>
     /// A files-format apply where any file would lose more than this fraction of its line count
     /// (see <see cref="PercentLinesRemoved"/>), or of its active C# code lines (see
     /// <see cref="PercentActiveCodeLinesRemoved"/>), is rejected (see
@@ -420,7 +449,7 @@ public class SentinelWholeFileWriteTools
                         }
 
                         var oldText = await document.GetTextAsync();
-                        var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+                        var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff, out var diffReport).ToString();
                         var targetPath = document.FilePath ?? filePath;
                         var diffChanges = new Dictionary<FilePath, string>
                         {
@@ -437,13 +466,7 @@ public class SentinelWholeFileWriteTools
                             };
                         await _workspaceTools.WriteBlobForApplyAsync("apply_diff", result);
                         var strippedDiffResult = result with { PreImages = null };
-                        object diffResponseData = returnDiff
-                            ? new
-                            {
-                                result = strippedDiffResult,
-                                diff = SentinelRefactoringTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
-                            }
-                            : strippedDiffResult;
+                        object diffResponseData = BuildDiffApplyResponseData(strippedDiffResult, diffReport, returnDiff, diffChanges, result.PreImages);
                         return new ToolResult<object>()
                         {
                             Success = true,
@@ -491,6 +514,134 @@ public class SentinelWholeFileWriteTools
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff")
+            };
+        }
+    }
+
+    // Simplified, diff-only sibling of ApplyDiff — collapses ApplyDiff's two required-param-sets
+    // (files: 'changes' dict / diff: 'filepath'+'unifiedDiff', with 'filepath' silently ignored in
+    // files mode) into a single always-required (filepath, unifiedDiff) pair, closing the common
+    // agent footgun of supplying unifiedDiff without filepath. Whole-file rewrites now go through
+    // WriteFile(operation=ReplaceFile) instead of a 'files' mode here. ApplyDiff itself is kept
+    // unchanged (not deleted) so its multi-file 'files' mode can be reactivated later if needed.
+    // Moved here (off the default MCP surface, this class carries no [McpServerToolType]) from
+    // SentinelWorkspaceTools.cs — ReplaceSnippet there now covers small exact-text edits on the
+    // default surface without diff-hunk syntax; this tool is kept for reactivation if a genuine
+    // need for multi-line diff-hunk edits resurfaces. See
+    // docs/current/design_applyunifieddiff_replace_snippet_v1.md.
+    [McpServerTool(Name = "ApplyUnifiedDiff")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Applies or validates a unified diff against a single file. 'filepath' and 'unifiedDiff' are BOTH REQUIRED (filepath names the single file the diff applies to). Hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. For a whole-file rewrite, use WriteFile(operation=ReplaceFile) instead. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error — since this tool only touches one file per call, renaming or changing the signature of a member used elsewhere will fail here until the OTHER file's call site is fixed too. Prefer RenameSymbol/ChangeSignature for those cases (updates every call site atomically in one operation); otherwise pass validateOnApply=false here and on the other file's edit, then validate once after both are applied — do not repeatedly retry this file's edit expecting the other, not-yet-edited file to already match.")]
+    public async Task<ToolResult<object>> ApplyUnifiedDiff(
+        [Description(ToolParams.Reason)] string reason,
+        [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [ToolOption(ToolOptionTag.UnifiedDiff, required: true)] string unifiedDiff,
+        [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            if (!filePath.Validated)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'filepath' is required (it names the single file the unifiedDiff applies to).")
+                };
+            }
+
+            if (string.IsNullOrEmpty(unifiedDiff))
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'unifiedDiff' is required.")
+                };
+            }
+
+            if (action == ProposedChangeAction.apply)
+            {
+                try
+                {
+                    var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+                    var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePath == filePath.Absolute);
+                    if (document == null)
+                    {
+                        return new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                        };
+                    }
+
+                    var oldText = await document.GetTextAsync();
+                    var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff, out var diffReport).ToString();
+                    var targetPath = document.FilePath ?? filePath;
+                    var diffChanges = new Dictionary<FilePath, string>
+                    {
+                        [targetPath] = newContent
+                    };
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
+                    if (!result.Success && result.ValidationResult != null)
+                        return new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = new ResultError(ToolErrorCode.Exception,
+                                "ApplyUnifiedDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
+                                await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                        };
+                    await _workspaceTools.WriteBlobForApplyAsync("apply_unified_diff", result);
+                    var strippedDiffResult = result with { PreImages = null };
+                    object diffResponseData = BuildDiffApplyResponseData(strippedDiffResult, diffReport, returnDiff, diffChanges, result.PreImages);
+                    return new ToolResult<object>()
+                    {
+                        Success = true,
+                        Data = diffResponseData
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "ApplyUnifiedDiff apply unexpected exception for '{FilePath}'", filePath);
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyUnifiedDiff apply for '{filePath}'")
+                    };
+                }
+            }
+
+            if (action == ProposedChangeAction.validate)
+            {
+                var validationResult = await _validationEngine.ValidateDiffAsync(filePath.Absolute, unifiedDiff);
+                return validationResult.Success ? new ToolResult<object>()
+                {
+                    Success = true,
+                    Data = validationResult
+                }
+
+                : new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception, $"ApplyUnifiedDiff validate failed: {validationResult.Diagnostics.ToInfo()}")
+                };
+            }
+
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.")
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ApplyUnifiedDiff ({Action}) failed", action);
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyUnifiedDiff")
             };
         }
     }

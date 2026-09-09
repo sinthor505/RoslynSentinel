@@ -431,7 +431,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
-        var result = await _workspaceTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -439,7 +439,7 @@ public class BatteryTwentyTests
     public async Task ApplyUnifiedDiff_MissingFilepath_ReturnsInvalidArgument()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: "", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: "", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -449,7 +449,7 @@ public class BatteryTwentyTests
     public async Task ApplyUnifiedDiff_MissingUnifiedDiff_ReturnsInvalidArgument()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: "Test.cs", unifiedDiff: "");
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: "Test.cs", unifiedDiff: "");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -459,7 +459,7 @@ public class BatteryTwentyTests
     public async Task ApplyUnifiedDiff_Apply_NonExistentFile_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);

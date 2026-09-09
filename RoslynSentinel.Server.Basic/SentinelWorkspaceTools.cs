@@ -530,20 +530,24 @@ public class SentinelWorkspaceTools
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
     }
 
-    // Simplified, diff-only sibling of ApplyDiff — collapses ApplyDiff's two required-param-sets
-    // (files: 'changes' dict / diff: 'filepath'+'unifiedDiff', with 'filepath' silently ignored in
-    // files mode) into a single always-required (filepath, unifiedDiff) pair, closing the common
-    // agent footgun of supplying unifiedDiff without filepath. Whole-file rewrites now go through
-    // WriteFile(operation=ReplaceFile) instead of a 'files' mode here. ApplyDiff itself is kept
-    // unchanged (not deleted) so its multi-file 'files' mode can be reactivated later if needed.
-    [McpServerTool(Name = "ApplyUnifiedDiff")]
+    // ApplyUnifiedDiff moved to SentinelWholeFileWriteTools.cs (gated off the default MCP surface,
+    // alongside ApplyDiff) — see docs/current/design_applyunifieddiff_replace_snippet_v1.md.
+    // ReplaceSnippet (below, on this default surface) replaces it for small, exact-text edits.
+
+    private const int MaxOldContentLines = 20;
+    private const int MaxContentChars = 200;
+
+    [McpServerTool(Name = "ReplaceSnippet")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a unified diff against a single file. 'filepath' and 'unifiedDiff' are BOTH REQUIRED (filepath names the single file the diff applies to). Hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. For a whole-file rewrite, use WriteFile(operation=ReplaceFile) instead. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error — since this tool only touches one file per call, renaming or changing the signature of a member used elsewhere will fail here until the OTHER file's call site is fixed too. Prefer RenameSymbol/ChangeSignature for those cases (updates every call site atomically in one operation); otherwise pass validateOnApply=false here and on the other file's edit, then validate once after both are applied — do not repeatedly retry this file's edit expecting the other, not-yet-edited file to already match.")]
-    public async Task<ToolResult<object>> ApplyUnifiedDiff(
+    [Description("Replaces one exact block of text with another in a single file — for small, localized edits only (max 20 lines / 200 characters each for oldContent and newContent). 'filepath', 'oldContent' and 'newContent' are all REQUIRED. oldContent is matched verbatim (literal substring first, falling back to whitespace-normalized matching) against the current file content — copy it exactly from a prior ReadFile/GetMethodSource result, do not retype it from memory. If oldContent matches more than once in the file, the call fails with an Ambiguous error naming the match count — retry with lineBefore/lineAfter (verbatim text from the line immediately above/below the intended match) to disambiguate. newContent may be empty (pure deletion) or longer than oldContent (net insertion). Returns ApplyChangesResult with UndoChangeId on successful apply. For an edit larger than the size limit, use WriteFile(operation=ReplaceFile) for a whole-file rewrite, or the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) for a structural change. For multiple small edits in the same file, call ReplaceSnippet once per edit. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
+    public async Task<ToolResult<object>> ReplaceSnippet(
         [Description(ToolParams.Reason)] string reason,
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [ToolOption(ToolOptionTag.UnifiedDiff, required: true)] string unifiedDiff,
+        [ToolOption(ToolOptionTag.OldContent, required: true)][Description(ToolParams.OldContent)] string oldContent,
+        [ToolOption(ToolOptionTag.NewContent, required: true)][Description(ToolParams.NewContent)] string newContent,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default)
@@ -556,20 +560,42 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'filepath' is required (it names the single file the unifiedDiff applies to).")
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'filepath' is required (it names the single file oldContent/newContent applies to).")
                 };
             }
 
-            if (string.IsNullOrEmpty(unifiedDiff))
+            if (string.IsNullOrEmpty(oldContent))
             {
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'unifiedDiff' is required.")
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'oldContent' is required.")
                 };
             }
 
-            if (action == ProposedChangeAction.apply)
+            if (newContent == null)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'newContent' is required (pass an empty string for a pure deletion).")
+                };
+            }
+
+            var oldContentLineCount = oldContent.Split('\n').Length;
+            if (oldContentLineCount > MaxOldContentLines || oldContent.Length > MaxContentChars || newContent.Length > MaxContentChars)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument,
+                        $"ReplaceSnippet: oldContent/newContent exceeds the size limit for a small localized edit (max {MaxOldContentLines} lines / {MaxContentChars} chars each). " +
+                        "For a whole-file rewrite, use WriteFile(operation=ReplaceFile). For a structural change (rename, signature, extract), use the matching Roslyn tool " +
+                        "(RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.). For multiple small edits in the same file, call ReplaceSnippet once per edit.")
+                };
+            }
+
+            if (action == ProposedChangeAction.apply || action == ProposedChangeAction.validate)
             {
                 try
                 {
@@ -585,61 +611,62 @@ public class SentinelWorkspaceTools
                     }
 
                     var oldText = await document.GetTextAsync();
-                    var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+                    var pos = ContextHelper.FindSnippetPosition(oldText, oldContent, lineBefore, lineAfter);
+                    var newFileContent = oldText.ToString().Remove(pos, oldContent.Length).Insert(pos, newContent);
                     var targetPath = document.FilePath ?? filePath;
-                    var diffChanges = new Dictionary<FilePath, string>
+                    var snippetChanges = new Dictionary<FilePath, string>
                     {
-                        [targetPath] = newContent
+                        [targetPath] = newFileContent
                     };
-                    var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
+
+                    if (action == ProposedChangeAction.validate)
+                    {
+                        var validationResult = await _validationEngine.ValidateChangesAsync(snippetChanges);
+                        return validationResult.Success ? new ToolResult<object>()
+                        {
+                            Success = true,
+                            Data = validationResult
+                        }
+                        : new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet validate failed: {validationResult.Diagnostics.ToInfo()}")
+                        };
+                    }
+
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(snippetChanges, validateChanges: validateOnApply);
                     if (!result.Success && result.ValidationResult != null)
                         return new ToolResult<object>()
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.Exception,
-                                "ApplyUnifiedDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
+                                "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
-                    await WriteBlobForApplyAsync("apply_unified_diff", result);
-                    var strippedDiffResult = result with { PreImages = null };
-                    object diffResponseData = returnDiff
+                    await WriteBlobForApplyAsync("replace_snippet", result);
+                    var strippedResult = result with { PreImages = null };
+                    object responseData = returnDiff
                         ? new
                         {
-                            result = strippedDiffResult,
-                            diff = SentinelRefactoringTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
+                            result = strippedResult,
+                            diff = SentinelRefactoringTools.BuildDiffFromPreImages(snippetChanges, result.PreImages)
                         }
-                        : strippedDiffResult;
+                        : strippedResult;
                     return new ToolResult<object>()
                     {
                         Success = true,
-                        Data = diffResponseData
+                        Data = responseData
                     };
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "ApplyUnifiedDiff apply unexpected exception for '{FilePath}'", filePath);
+                    _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePath}'", action, filePath);
                     return new ToolResult<object>()
                     {
                         Success = false,
-                        Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyUnifiedDiff apply for '{filePath}'")
+                        Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet {action} for '{filePath}'")
                     };
                 }
-            }
-
-            if (action == ProposedChangeAction.validate)
-            {
-                var validationResult = await _validationEngine.ValidateDiffAsync(filePath.Absolute, unifiedDiff);
-                return validationResult.Success ? new ToolResult<object>()
-                {
-                    Success = true,
-                    Data = validationResult
-                }
-
-                : new ToolResult<object>()
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"ApplyUnifiedDiff validate failed: {validationResult.Diagnostics.ToInfo()}")
-                };
             }
 
             return new ToolResult<object>()
@@ -650,11 +677,11 @@ public class SentinelWorkspaceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ApplyUnifiedDiff ({Action}) failed", action);
+            _logger.LogError(ex, "ReplaceSnippet ({Action}) failed", action);
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyUnifiedDiff")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReplaceSnippet")
             };
         }
     }
