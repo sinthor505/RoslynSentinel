@@ -78,6 +78,13 @@ belongs to a later phase (step 3.2) and is out of scope for this step.
 ## Gate
 
 No test/build gate for this step in isolation — the solution is expected to have compile errors
-after this step, since `BuildEngine.cs` and its callers haven't been updated yet. Proceed directly
-to [03-phase1-engine-fix.md](03-phase1-engine-fix.md), which fixes those call sites and restores
-a clean build.
+after this step, since `BuildEngine.cs` and its callers haven't been updated yet.
+
+Run a build anyway (quickBuild scope is fine) and record the errors it reports. This isn't a
+pass/fail gate — it's a checkpoint. Confirm the errors are only in the files named above
+(`BuildEngine.cs`, `SentinelWorkspaceTools.cs`'s `Build` tool, `BatteryTwentyTests.cs`) and are
+about `BuildResult`'s changed shape (missing/renamed members, constructor mismatch). If the build
+is clean, or reports errors in other files, or errors unrelated to `BuildResult`, stop and
+re-examine this step's edits before proceeding — something other than the expected breakage
+occurred. Otherwise, proceed to [03-phase1-engine-fix.md](03-phase1-engine-fix.md), which fixes
+those call sites and restores a clean build.

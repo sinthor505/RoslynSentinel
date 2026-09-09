@@ -34,11 +34,17 @@ The method's internals are otherwise unchanged — it already computes
 `DiffHunkAnalyzer.Analyze(unifiedDiff)` and logs when `HasFindings`; now it also returns the
 report instead of discarding it.
 
+Changing this return type breaks every existing caller that used the old `SourceText` return
+value directly — that's expected. Before searching for callers, run a build (quickBuild scope)
+and use its errors as the authoritative list of what needs fixing in Part B, rather than relying
+solely on a text search — a caller a search missed will show up here.
+
 ### B. Update callers
 
 Search for all callers of `ApplyDiff` and update them to unwrap `.Text` where they currently use
 the return value directly. `ApplyUnifiedDiff` (`SentinelWorkspaceTools.cs:588`) is the
-Phase-3-relevant one, but fix every caller the search finds, not just that one.
+Phase-3-relevant one, but fix every caller the search finds, not just that one. Cross-check
+against the build errors from Part A: every caller listed there must be fixed here.
 
 ### C. Wire the report into `ApplyUnifiedDiff`'s result
 

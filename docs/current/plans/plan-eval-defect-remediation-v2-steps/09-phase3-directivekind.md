@@ -59,6 +59,13 @@ and call it done — read each one.
 Add `DirectiveKind` as a new record parameter (not optional/derived — this type's construction
 sites are expected to be few). Update its construction sites positionally.
 
+This is a positional (non-optional) parameter, so every existing construction site will fail to
+compile until updated — that's expected, not a sign something went wrong. Run a build
+(quickBuild scope) right after making this change, before moving on to the Gate below. Confirm
+every reported error is a `BreakerStatusReport` construction site (missing/misordered argument),
+find and fix each one, then rebuild to confirm those errors are cleared before proceeding — don't
+rely on a single search to have found every site; let the build be the source of truth.
+
 ## Gate
 
 Build the solution clean (`Build` MCP tool). No test changes are expected to be needed yet for
