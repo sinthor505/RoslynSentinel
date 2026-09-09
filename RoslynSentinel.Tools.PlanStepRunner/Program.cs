@@ -46,8 +46,6 @@ public static class Program
         Console.WriteLine($"Running {stepFiles.Count} step(s): {string.Join(", ", stepFiles.Select(s => s.FileName))}");
 
         Directory.CreateDirectory(options.RunDir);
-        var logsDir = Path.Combine(options.RunDir, "Logs");
-        Directory.CreateDirectory(logsDir);
         Console.WriteLine($"Run directory: {options.RunDir}");
 
         using var httpClient = new HttpClient
@@ -72,7 +70,7 @@ public static class Program
             var worktreePath = git.CreateWorktree(step.FileName);
             Console.WriteLine($"Worktree: {worktreePath}");
 
-            var stepDir = Path.Combine(logsDir, Path.GetFileNameWithoutExtension(step.FileName));
+            var stepDir = Path.Combine(options.RunDir, Path.GetFileNameWithoutExtension(step.FileName), "Logs");
             Directory.CreateDirectory(stepDir);
 
             using var loggerFactory = LoggerFactory.Create(b =>

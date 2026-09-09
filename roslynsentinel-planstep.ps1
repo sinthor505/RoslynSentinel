@@ -18,14 +18,14 @@
     model gets a turn.
 
     Everything for one run lives under one folder: RoslynSentinel\PlanStepRunner\<timestamp>\,
-    containing Worktree\<step-name>\ (only for a step currently in progress or halted - a
-    successful step's worktree is removed once committed) and Logs\<step-name>\ (transcript +
-    agent.log, kept regardless of outcome) - so a run is easy to find and review as a single
-    tree. A halted/failed step leaves its worktree in place under that run's Worktree\ for
-    inspection - re-run with -ExistingRun <timestamp> (and -StartStep/-EndStep or -Step set to
-    just that step number) to continue the same run rather than starting a new timestamp folder;
-    add -Clean to have the runner discard that step's leftover worktree automatically instead of
-    requiring a manual `git worktree remove` first.
+    with each step getting its own <step-name>\ subfolder containing Worktree\ (only for a step
+    currently in progress or halted - a successful step's worktree is removed once committed) and
+    Logs\ (transcript + agent.log, kept regardless of outcome) - so a run, and each step within
+    it, is easy to find and review as a single tree. A halted/failed step leaves its worktree in
+    place under that step's Worktree\ for inspection - re-run with -ExistingRun <timestamp> (and
+    -StartStep/-EndStep or -Step set to just that step number) to continue the same run rather
+    than starting a new timestamp folder; add -Clean to have the runner discard that step's
+    leftover worktree automatically instead of requiring a manual `git worktree remove` first.
 
 .PARAMETER HostAddress
     LM Studio host to target. Known aliases: 112 (http://192.168.1.112:1234/v1, GTX 1080) and 113

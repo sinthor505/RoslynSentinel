@@ -6,13 +6,14 @@ namespace RoslynSentinel.Tools.PlanStepRunner;
 /// Runs each plan step in its own git worktree branched off a dedicated, runner-owned branch
 /// (default "eval-defect-remediation-v2-auto") — never the user's own in-progress branch/worktree.
 /// A successful step commits onto that branch and the worktree is removed; a failed/halted step
-/// leaves its worktree in place under &lt;runDir&gt;\Worktree\&lt;step-name&gt; so the run is
+/// leaves its worktree in place under &lt;runDir&gt;\&lt;step-name&gt;\Worktree so the run is
 /// inspectable and independently re-runnable via --start-step/--end-step (or --clean, to discard
 /// that leftover worktree first) without disturbing anything upstream.
 /// </summary>
 public sealed class GitWorktreeManager(string sourceRepo, string branch, string runDir)
 {
-    private string WorktreeRoot => Path.Combine(runDir, "Worktree");
+    private string WorktreePath(string stepFileName) =>
+        Path.Combine(runDir, Path.GetFileNameWithoutExtension(stepFileName), "Worktree");
 
     public void EnsureBranchExists()
     {
@@ -25,9 +26,7 @@ public sealed class GitWorktreeManager(string sourceRepo, string branch, string 
 
     public string CreateWorktree(string stepFileName)
     {
-        Directory.CreateDirectory(WorktreeRoot);
-        var name = Path.GetFileNameWithoutExtension(stepFileName);
-        var path = Path.Combine(WorktreeRoot, name);
+        var path = WorktreePath(stepFileName);
 
         if (Directory.Exists(path))
         {
@@ -37,6 +36,7 @@ public sealed class GitWorktreeManager(string sourceRepo, string branch, string 
                 "or pass --clean to have this run remove it automatically.");
         }
 
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         RunGitOrThrow(sourceRepo, "worktree", "add", path, branch);
         return path;
     }
@@ -46,8 +46,7 @@ public sealed class GitWorktreeManager(string sourceRepo, string branch, string 
     /// step has no existing worktree.</summary>
     public void RemoveWorktreeIfExists(string stepFileName)
     {
-        var name = Path.GetFileNameWithoutExtension(stepFileName);
-        var path = Path.Combine(WorktreeRoot, name);
+        var path = WorktreePath(stepFileName);
 
         if (!Directory.Exists(path))
         {
