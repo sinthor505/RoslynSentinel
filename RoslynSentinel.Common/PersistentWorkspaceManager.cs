@@ -164,17 +164,25 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private bool _orientationBreakerOpen;
     private int _consecutiveZeroMatchSearches;
 
+    // Guards MSBuildLocator.RegisterInstance, which is process-global and not safe to call
+    // from more than one thread at a time (e.g. multiple test fixtures constructing this type
+    // concurrently under NUnit's ParallelScope.Fixtures).
+    private static readonly Lock MsBuildRegistrationLock = new();
+
     public PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger)
     {
         _logger = logger;
         _debounceTimer = new Timer(OnDebounceTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
-        if (!MSBuildLocator.IsRegistered)
+        lock (MsBuildRegistrationLock)
         {
-            _logger.LogInformation("Registering MSBuild defaults...");
-            var instance = MSBuildLocator.RegisterDefaults();
-            Debug.WriteLine($"MSBuild: {instance.MSBuildPath}");
-            Debug.WriteLine($"Version: {instance.Version}");
+            if (!MSBuildLocator.IsRegistered)
+            {
+                _logger.LogInformation("Registering MSBuild defaults...");
+                var instance = MSBuildLocator.RegisterDefaults();
+                Debug.WriteLine($"MSBuild: {instance.MSBuildPath}");
+                Debug.WriteLine($"Version: {instance.Version}");
+            }
         }
     }
 

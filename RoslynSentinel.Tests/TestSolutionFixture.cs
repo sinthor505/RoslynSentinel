@@ -42,9 +42,29 @@ public sealed class TestSolutionFixture : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(SolutionDirectory))
+        // A dotnet/MSBuild worker node spawned by RunTest's real subprocess (TestRunEngine) can
+        // briefly hold a file handle open inside SolutionDirectory after its parent process exits,
+        // racing this delete under concurrent fixtures. Retry with backoff rather than serializing.
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            Directory.Delete(SolutionDirectory, recursive: true);
+            try
+            {
+                if (Directory.Exists(SolutionDirectory))
+                {
+                    Directory.Delete(SolutionDirectory, recursive: true);
+                }
+
+                return;
+            }
+            catch (IOException) when (attempt < maxAttempts)
+            {
+                Thread.Sleep(100 * attempt);
+            }
+            catch (UnauthorizedAccessException) when (attempt < maxAttempts)
+            {
+                Thread.Sleep(100 * attempt);
+            }
         }
     }
 

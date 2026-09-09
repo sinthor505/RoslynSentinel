@@ -246,12 +246,16 @@ public class RunTestTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var before = Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx").ToList();
+        // Diffs against a "before" snapshot (rather than asserting the directory is empty) so this
+        // test tolerates other RunTest calls racing concurrently elsewhere in the suite — each uses
+        // its own GUID-suffixed filename, so only a leftover from *this* call would show up as new.
+        var before = new HashSet<string>(Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx"));
 
         var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution, timeoutSeconds: 120);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
-        var after = Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx").ToList();
-        Assert.That(after, Is.EquivalentTo(before), "no roslynsentinel_runtest_*.trx file should remain after RunTest completes.");
+        var after = Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx");
+        var newLeftovers = after.Where(f => !before.Contains(f)).ToList();
+        Assert.That(newLeftovers, Is.Empty, "no new roslynsentinel_runtest_*.trx file should remain after RunTest completes.");
     }
 }
