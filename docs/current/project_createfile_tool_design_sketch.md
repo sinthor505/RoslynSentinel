@@ -1,27 +1,43 @@
 ---
 name: createfile-tool-design-sketch
-description: Design sketch (now IMPLEMENTED) for the CreateFile MCP tool (skeleton file creation only) to replace WriteFile for eval sessions where WriteFile/ApplyDiff/ApplyUnifiedDiff are intentionally disabled
-metadata:
+description: CreateFile MCP tool (skeleton file creation) — IMPLEMENTED 2026-09-09 in SentinelWorkspaceTools.cs; typeKind/typeName mandatory for .cs files, not optional as originally sketched; staticClass added to NewTypeKind 2026-09-09
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: a9b0dcf0-2cb6-4892-944c-3686e6aafdc6
+  modified: 2026-09-09T16:39:33.070Z
 ---
 
 ## STATUS: Implemented 2026-09-09
 
 Implemented in `SentinelWorkspaceTools.cs` per the sketch below, with one deliberate deviation:
-`typeKind`/`typeName` ended up **mandatory** for `.cs` files, not optional as originally sketched.
-Decided live during implementation — the user's rationale: an optional typeKind just relocates the
-failure mode this tool exists to close (a model omits it, gets a bare-namespace file, then needs a
-second `Member(add)` round-trip to reach a populatable type — the same friction as the original
-`WriteFile`-unavailable bug, just one tool later). Mandatory for `.cs` files closes that path
-entirely; a file needing a 2nd+ top-level type still uses `Member(add, containerName: null, ...)`
-for those additional types, same as before. A `NewTypeKind` enum
-(`class`/`record`/`interface`/`enum`/`struct`) was added to `RoslynSentinel.Common/ToolEnums.cs` for
-this. Tests added/passing (22/22) in `RoslynSentinel.Tests.Battery/CreateFileDeleteFileTests.cs`,
-including the full CreateFile → Member(add, populate member) → Member(add, 2nd top-level type)
-integration scenario.
+`typeKind`/`typeName` ended up **mandatory** for `.cs` files, not optional. User's rationale: an
+optional typeKind just relocates the failure mode this tool exists to close (model omits it → bare
+namespace file → needs a 2nd `Member(add)` round-trip to reach a populatable type — same friction
+as the original bug, one tool later). A `NewTypeKind` enum (class/record/interface/enum/struct) was
+added to `RoslynSentinel.Common/ToolEnums.cs`. A file needing a 2nd+ top-level type still uses
+`Member(add, containerName: null, ...)` for those. Tests added/passing (22/22) in
+`RoslynSentinel.Tests.Battery/CreateFileDeleteFileTests.cs`, including the full CreateFile →
+Member(add, populate) → Member(add, 2nd top-level type) integration scenario. Also mirrored into
+docs/current/.
 
-The original sketch below (kept for history) proposed content-building rules that are now partially
-superseded by the above — namespaceName alone is no longer a valid `.cs`-file call.
+### Follow-up: staticClass added (same day)
+
+User asked about an optional `staticClass` boolean for static utility/helper classes; agreed
+instead to extend the `NewTypeKind` enum directly (`class, record, interface, enum, struct,
+staticClass`) rather than add a separate param. Considered `staticStruct` too, but `static` is
+only valid on classes in C# (CS0106) — a `static struct` would never compile — so only
+`staticClass` was added. Keyword-mapping in `CreateFile` special-cases `staticClass` →
+`"static class"` instead of the generic `TrimStart('@')` transform used for the other values.
+Tool description and `typeKind` param description updated to mention it. Test suite extended to
+23/23 passing (`[TestCase(NewTypeKind.staticClass, "public static class Foo\n{\n}\n")]`). Commit
+`e9cf707`.
+
+Environment note during implementation: a stray untracked `RoslynSentinel.Server.Advanced` process
+(PID 17420, not tracked by roslynsentinel-vscode-control.ps1's status check) was holding build
+output DLLs locked, causing MSB3027 copy failures even after a normal `restart` via that script.
+Killing it directly resolved the build. Worth a quick tasklist check if a build hits copy-lock
+errors the control script's restart doesn't clear.
 
 ## Why
 
@@ -37,10 +53,11 @@ required creating `RoslynSentinel.Tests.Battery/BuildEngineTests.cs` (a new file
 verbatim in an unrelated `ReplaceSnippet` size-limit error message, twice), reasoned "but I don't
 see it" (i.e. it's not in its tool list), and then degenerated into a ~29-iteration verbatim
 repetition loop retrying the same failing `Member` call, never resolving, never reaching the
-phase's Build/RunTest gate.
+phase's Build/RunTest gate. See [[project_planimplementverify_0of20_root_causes_2026_09_02]] for
+the general pattern of stuck-loop failures when a model's only correct next move is unavailable.
 
 This is a real, load-bearing tool gap for any plan step that requires new files — not just this
-one eval.
+one eval. [[project_di_tool_split_plan_2026_09_05]] and future multi-file plans will hit this too.
 
 ## Proposed fix
 
@@ -74,14 +91,14 @@ public async Task<ToolResult<object>> CreateFile(
    server-side:
    - `.cs` file + `namespaceName` given → `$"namespace {namespaceName};\n"` (file-scoped namespace,
      matching this codebase's own convention — grep confirms `FileScopedNamespaceDeclarationSyntax`
-     is the common case here).
+     is the common case here, see [[project_roslyn_sentinel_purpose]]).
    - `.cs` file + no `namespaceName` → just an empty string, or reject and require namespaceName
      for `.cs` files specifically (decide based on whether "no namespace" files are ever wanted —
      probably reject, since every real file in this repo has one).
    - non-`.cs` file → empty string unconditionally; `namespaceName` ignored.
 4. Route through the SAME chokepoint as WriteFile: `_workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: ...)`
-   — every .cs write must go through this, no exceptions, so this preserves
-   drift-detection/undo-tracking automatically.
+   — per [[project_write_path_chokepoint_unified]], every .cs write must go through this, no
+   exceptions, so this preserves drift-detection/undo-tracking automatically.
    - Since content is just `namespace X;`, `validateChanges` can likely default to `true` with no
      practical downside (a bare namespace declaration can't introduce a compiler error).
 5. Call `_workspaceTools.WriteBlobForApplyAsync("create_file", result)` same as WriteFile does,
@@ -134,13 +151,15 @@ Verified directly in `ServiceRegistrationExtensionsBasic.cs:123-131`: `SentinelW
 (WriteFile/ApplyDiff/ApplyUnifiedDiff/DeleteFile) is registered in DI only when
 `activeModes.Contains("Admin") || activeModes.Contains("WholeFileWrite")` — i.e. gated by the
 server's `--mode`/`--modes` startup arg (parsed in `ServerStartupHelpers.ParseArgs`), specifically
-the `WholeFileWrite` toolset name. A code comment there confirms it's deliberately excluded from
-the `AllModes`/`"all"` expansion, so it only activates via an explicit `--mode=WholeFileWrite` (or
-`=Admin`).
+the `WholeFileWrite` toolset name (NOT literally `"WholeFileTools"` — that was my imprecise
+paraphrase of the user's shorthand; the real mode string is `WholeFileWrite`). A code comment there
+confirms it's deliberately excluded from the `AllModes`/`"all"` expansion, so it only activates via
+an explicit `--mode=WholeFileWrite` (or `=Admin`).
 
 `SentinelWorkspaceTools` registers under a separate, near-certainly-always-on mode name
 (`"Workspace"`, same file ~line 103) — confirming `CreateFile`'s placement there means it will be
 visible in eval sessions regardless of whether `WholeFileWrite` is active. Still worth a quick
 sanity check at implementation time (start the eval server with `--mode` excluding `WholeFileWrite`
-and confirm `CreateFile` still appears in the live tools/list dump) rather than assuming class
-placement alone guarantees it.
+and confirm `CreateFile` still appears in the live tools/list dump — see
+[[project_filepath_schema_true_bug_and_detection_method]] for that detection method) rather than
+assuming class placement alone guarantees it.
