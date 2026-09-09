@@ -28,11 +28,16 @@
     convention.
 
 .PARAMETER StartStep
-    First plan step number to run (inclusive). Default: 1 (step 0/01-baseline.md).
+    First plan step number to run (inclusive), 0-11 (tab-completable). Default: 1
+    (step 0/01-baseline.md). Mutually exclusive with -Step.
 
 .PARAMETER EndStep
-    Last plan step number to run (inclusive). Default: 13 (the final-verification step). Pass the
-    same value as -StartStep to run (or retry) exactly one step.
+    Last plan step number to run (inclusive), 0-11 (tab-completable). Default: 11 (the
+    final-verification step). Mutually exclusive with -Step.
+
+.PARAMETER Step
+    Run (or retry) exactly this one step number, 0-11 (tab-completable) — shorthand for passing
+    the same value to both -StartStep and -EndStep. Mutually exclusive with -StartStep/-EndStep.
 
 .PARAMETER Model
     ROSLYNSENTINEL_LLM_MODEL. Default: qwen/qwen3.6-35b-a3b (the model used for the manual
@@ -46,8 +51,9 @@
     this script's own repo root (the RoslynSentinel checkout this script lives in).
 
 .PARAMETER PlanDir
-    Path to plan-eval-defect-remediation-v2-steps-runner. Default: the sibling
-    RoslynSentinel-eval-defect-remediation-v2-impl checkout's copy of that directory.
+    Path to plan-eval-defect-remediation-v2-steps-runner. Default:
+    docs\tests\plan-eval-defect-remediation-v2-steps-runner under this script's own repo root —
+    the canonical copy, kept independent of the sibling -impl checkout's own in-progress work.
 
 .PARAMETER Branch
     Git branch PlanStepRunner commits each successful step onto, created off -ImplRepo's current
@@ -76,26 +82,36 @@
 
 .EXAMPLE
     .\roslynsentinel-planstep.ps1 -HostAddress 113
-    Run every step (1 through 13) against the .113 RTX 4060 host using the default model.
+    Run every step (1 through 11) against the .113 RTX 4060 host using the default model.
 
 .EXAMPLE
     .\roslynsentinel-planstep.ps1 113 5 5
-    Run (or retry) just step 5 against .113, positional args.
+    Run (or retry) just step 5 against .113, positional -StartStep/-EndStep args.
 
 .EXAMPLE
-    .\roslynsentinel-planstep.ps1 -HostAddress 112 -StartStep 9 -EndStep 13 -Model qwen/qwen3.6-35b-a3b
+    .\roslynsentinel-planstep.ps1 -HostAddress 113 -Step 5
+    Equivalent shorthand for the previous example, using the -Step parameter set.
+
+.EXAMPLE
+    .\roslynsentinel-planstep.ps1 -HostAddress 112 -StartStep 7 -EndStep 11 -Model qwen/qwen3.6-35b-a3b
     Run the Phase 3 steps through final verification against .112 with an explicit model.
 #>
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Range')]
 param(
     [Parameter(Position = 0, Mandatory)]
     [string]$HostAddress,
 
-    [Parameter(Position = 1)]
+    [Parameter(ParameterSetName = 'Range', Position = 1)]
+    [ValidateSet(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)]
     [int]$StartStep = 1,
 
-    [Parameter(Position = 2)]
-    [int]$EndStep = 13,
+    [Parameter(ParameterSetName = 'Range', Position = 2)]
+    [ValidateSet(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)]
+    [int]$EndStep = 11,
+
+    [Parameter(ParameterSetName = 'Single', Mandatory)]
+    [ValidateSet(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)]
+    [int]$Step,
 
     [string]$Model = 'qwen/qwen3.6-35b-a3b',
 
@@ -121,6 +137,11 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 
+if ($PSCmdlet.ParameterSetName -eq 'Single') {
+    $StartStep = $Step
+    $EndStep = $Step
+}
+
 $knownHosts = @{
     '112' = 'http://192.168.1.112:1234/v1'
     '113' = 'http://192.168.1.113:1234/v1'
@@ -135,10 +156,10 @@ else {
 }
 
 if (-not $PlanDir) {
-    $PlanDir = Join-Path (Split-Path $repoRoot -Parent) 'RoslynSentinel-eval-defect-remediation-v2-impl\docs\current\plans\plan-eval-defect-remediation-v2-steps-runner'
+    $PlanDir = Join-Path $repoRoot 'docs\tests\plan-eval-defect-remediation-v2-steps-runner'
 }
 if (-not (Test-Path $PlanDir)) {
-    throw "Plan directory not found: $PlanDir. Pass -PlanDir explicitly if plan-eval-defect-remediation-v2-steps-runner lives somewhere other than the default sibling -impl checkout."
+    throw "Plan directory not found: $PlanDir. Pass -PlanDir explicitly if plan-eval-defect-remediation-v2-steps-runner lives somewhere other than the default docs\tests location in this repo."
 }
 
 $runnerProject = Join-Path $repoRoot 'RoslynSentinel.Tools.PlanStepRunner\RoslynSentinel.Tools.PlanStepRunner.csproj'

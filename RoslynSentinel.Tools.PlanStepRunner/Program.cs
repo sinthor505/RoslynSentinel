@@ -200,17 +200,18 @@ public static class Program
         "cannot find", "could not find", "unable to proceed", "cannot proceed",
     ];
 
-    private static readonly HashSet<string> KnownBuildOptionalSteps = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // These step files' own Gate sections explicitly leave the solution non-compiling on
-        // purpose (a type reshape / positional record param / return-type change whose fallout is
-        // fixed by the NEXT step file, not this one) — see commit 5dfbbf8 "Add build-checkpoint
-        // instructions at known-broken plan steps". Every other step requires a clean build to
-        // advance, since the next step's worktree is built from this one's committed tip.
-        "02-phase1-types.md",
-        "09-phase3-directivekind.md",
-        "12-phase3-diffhunkanalyzer.md",
-    };
+    // Originally seeded from commit 5dfbbf8 "Add build-checkpoint instructions at known-broken
+    // plan steps" (02-phase1-types.md, 09-phase3-directivekind.md, 12-phase3-diffhunkanalyzer.md
+    // under the old, unmerged step numbering). Of those three, only 02-phase1-types.md's own Gate
+    // section ever actually left the solution non-compiling on purpose — the other two always
+    // required a clean build to advance despite being on this list. 02-phase1-types.md was since
+    // merged into 02-phase1-types-and-engine-fix.md, whose own Gate now restores a clean build by
+    // the end of the same step (the merge that folded step 1.2's engine fix into step 1.1) — so no
+    // current step is build-optional. Every step requires a clean build to advance, since the
+    // next step's worktree is built from this one's committed tip. Re-populate this if a future
+    // plan revision reintroduces a step whose own Gate section explicitly documents leaving the
+    // solution non-compiling on purpose.
+    private static readonly HashSet<string> KnownBuildOptionalSteps = new(StringComparer.OrdinalIgnoreCase);
 
     private static void LogSummary(PlanStepFile step, StepOutcome outcome)
     {
