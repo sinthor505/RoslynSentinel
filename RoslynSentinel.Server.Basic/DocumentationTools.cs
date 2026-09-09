@@ -94,7 +94,19 @@ public class DocumentationTools
         return Path.Combine(solutionRoot, "docs");
     }
 
-    private static DocReadResult ReadFile(string subdir, string filename)
+    /// <summary>
+    /// Resolves the root that per-docType subdirectories (plans/handoffs/completed/documentation)
+    /// live under. Some repos archive active docs under docs/current/ (with a matching docs/obsolete/
+    /// for retired ones) instead of directly under docs/ — if docs/current/ exists, root subdirs
+    /// there so ProjectDoc(read/write) can reach what ProjectDoc(list) already reports.
+    /// </summary>
+    private static string GetDocTypeSubdirRoot(string docsRoot)
+    {
+        var currentDir = Path.Combine(docsRoot, "current");
+        return Directory.Exists(currentDir) ? currentDir : docsRoot;
+    }
+
+    private static DocReadResult ReadFile(string subdir, string filename, DocType docType)
     {
         var (ok, fullPath, guardError) = DocPathGuard.ResolveSafe(subdir, filename);
         if (ok && File.Exists(fullPath))
@@ -133,7 +145,7 @@ public class DocumentationTools
 
         string stem = Path.GetFileNameWithoutExtension(Path.GetFileName(filename));
         var notFoundError = ok
-            ? $"No file matching '{stem}' (with or without extension) was found under docs/{Path.GetFileName(subdir)}/. This directory was already searched — retrying with a different extension or spelling will not help. Call ProjectDoc(action: list) to see all available files."
+            ? $"No file matching '{stem}' (with or without extension) was found under docType='{docType}'. This location was already searched — retrying with a different extension or spelling will not help. Call ProjectDoc(action: list) to see all available files."
             : guardError;
         return new DocReadResult { Found = false, Filename = filename, Error = notFoundError };
     }
@@ -206,7 +218,7 @@ public class DocumentationTools
 
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
-    [Description("Unified accessor for project doc files under docs/. plan → docs/plans/; handoff → docs/handoffs/; completed_work → docs/completed/ (append only); documentation → docs/documentation/; state → docs/migration-state.yaml (name ignored). name required for all file-based operations, accepts a nested relative path (e.g. 'plan-x-steps/01-baseline.md') as shown by action:list; on read, a bare/wrong-extension name also falls back to a basename search and auto-resolves if exactly one file matches. content required for write/append.")]
+    [Description("Unified accessor for project doc files under docs/ (or docs/current/ if that subdirectory exists). plan → .../plans/; handoff → .../handoffs/; completed_work → .../completed/ (append only); documentation → .../documentation/; state → docs/migration-state.yaml (name ignored, always directly under docs/). name required for all file-based operations, accepts a nested relative path (e.g. 'plan-x-steps/01-baseline.md') as shown by action:list; on read, a bare/wrong-extension name also falls back to a basename search and auto-resolves if exactly one file matches. content required for write/append.")]
     public object ProjectDoc(
         [Description(ToolParams.Reason)] string reason,
         DocAction action,
@@ -293,12 +305,13 @@ public class DocumentationTools
                     : new DocWriteResult { Success = false, Filename = "", Error = "name is required for file-based operations." };
             }
 
+            var docTypeSubdirRoot = GetDocTypeSubdirRoot(docsRoot);
             var subdir = docType switch
             {
-                DocType.plan => Path.Combine(docsRoot, "plans"),
-                DocType.handoff => Path.Combine(docsRoot, "handoffs"),
-                DocType.completed_work => Path.Combine(docsRoot, "completed"),
-                DocType.documentation => Path.Combine(docsRoot, "documentation"),
+                DocType.plan => Path.Combine(docTypeSubdirRoot, "plans"),
+                DocType.handoff => Path.Combine(docTypeSubdirRoot, "handoffs"),
+                DocType.completed_work => Path.Combine(docTypeSubdirRoot, "completed"),
+                DocType.documentation => Path.Combine(docTypeSubdirRoot, "documentation"),
                 _ => null
             };
 
@@ -321,7 +334,7 @@ public class DocumentationTools
 
             return action switch
             {
-                DocAction.read => (object)ReadFile(subdir, name),
+                DocAction.read => (object)ReadFile(subdir, name, docType),
                 DocAction.write => WriteFile(subdir, name, content!),
                 DocAction.append => docType == DocType.completed_work
                     ? WriteFile(subdir, name, content!, append: true)
