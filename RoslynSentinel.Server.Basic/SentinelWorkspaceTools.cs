@@ -688,12 +688,12 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Creates a new file. Fails if the file already exists — this tool never overwrites or writes free-form whole-file content. For a .cs file, namespaceName, typeKind and typeName are all REQUIRED — this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. If the file needs a second top-level type, add it afterward with Member(add, containerName: null, newMemberSource: \"...\"). Parent directories are created automatically if missing.")]
+    [Description("Creates a new file. Fails if the file already exists — this tool never overwrites or writes free-form whole-file content. For a .cs file, namespaceName, typeKind and typeName are all REQUIRED — this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. Use typeKind=staticClass for a static utility/helper class (e.g. static test helpers, extension-method containers) — static is only valid on classes, not the other kinds. If the file needs a second top-level type, add it afterward with Member(add, containerName: null, newMemberSource: \"...\"). Parent directories are created automatically if missing.")]
     public async Task<ToolResult<object>> CreateFile(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery'). Required for .cs files; ignored otherwise.")] string? namespaceName = null,
-        [Description("Kind of top-level type to seed the file with (class/record/interface/enum/struct). Required for .cs files; ignored otherwise.")] NewTypeKind? typeKind = null,
+        [Description("Kind of top-level type to seed the file with (class/record/interface/enum/struct/staticClass). Required for .cs files; ignored otherwise.")] NewTypeKind? typeKind = null,
         [Description("Name of the top-level type to seed the file with (e.g. 'Foo'). Required for .cs files; ignored otherwise.")] string? typeName = null,
         CancellationToken cancellationToken = default)
     {
@@ -740,7 +740,7 @@ public class SentinelWorkspaceTools
             string content;
             if (isCSharpFile)
             {
-                string keyword = typeKind!.Value.ToString().TrimStart('@');
+                string keyword = typeKind!.Value == NewTypeKind.staticClass ? "static class" : typeKind.Value.ToString().TrimStart('@');
                 content = $"namespace {namespaceName};\n\npublic {keyword} {typeName}\n{{\n}}\n";
             }
             else

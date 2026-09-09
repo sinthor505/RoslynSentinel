@@ -69,7 +69,7 @@ public enum TextSearchMode
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum NewTypeKind
 {
-    @class, record, @interface, @enum, @struct
+    @class, record, @interface, @enum, @struct, staticClass
 }
 
 // ── Symbols ───────────────────────────────────────────────────────────────────

@@ -375,6 +375,7 @@ public class CreateFileDeleteFileTests
     [TestCase(NewTypeKind.@interface, "public interface Foo\n{\n}\n")]
     [TestCase(NewTypeKind.@enum, "public enum Foo\n{\n}\n")]
     [TestCase(NewTypeKind.@struct, "public struct Foo\n{\n}\n")]
+    [TestCase(NewTypeKind.staticClass, "public static class Foo\n{\n}\n")]
     public async Task CreateFileTool_WithTypeKindAndName_SeedsTypeSkeletonAsync(NewTypeKind typeKind, string expectedTypeSource)
     {
         using var fixture = new TestSolutionFixture();
