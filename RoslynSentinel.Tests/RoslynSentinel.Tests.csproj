@@ -50,6 +50,10 @@
 		<RunCodeAnalysis>false</RunCodeAnalysis>
 		<!-- If using specific .NET code analysis metrics tools -->
 		<IsCodeAnalysisAnalyzersExecuted>false</IsCodeAnalysisAnalyzersExecuted>
+		<!-- RunCodeAnalysis only disables the legacy FxCop-style pass — the in-box
+		     Microsoft.CodeAnalysis.NetAnalyzers (CA18xx etc.) still run on every build/test
+		     invocation unless disabled here too. -->
+		<EnableNETAnalyzers>false</EnableNETAnalyzers>
 	</PropertyGroup>
 
 	<ItemGroup>

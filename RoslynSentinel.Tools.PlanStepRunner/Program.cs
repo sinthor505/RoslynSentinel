@@ -164,10 +164,16 @@ public static class Program
             wallClockCap: TimeSpan.FromMinutes(options.WallClockCapMinutes),
             logger: loggerFactory.CreateLogger<ModelAgentRunner>());
 
+        // step.FilePath points at the plan doc under options.SourceRepo (the root checkout) — rebase
+        // it onto worktreePath so the model reads the copy inside its own worktree, not the root
+        // repo's, since the MCP tools it calls are scoped to worktreePath.
+        var relativeStepPath = Path.GetRelativePath(options.SourceRepo, step.FilePath);
+        var worktreeStepPath = Path.Combine(worktreePath, relativeStepPath);
+
         var userPrompt =
             "The solution is already loaded — do not call LoadSolution or ListWorkspaceSolutions, " +
             "go straight to reading/editing.\n" +
-            $"Review the planning doc `{step.FilePath}`.\n" +
+            $"Review the planning doc `{worktreeStepPath}`.\n" +
             "Implement the plan.";
 
         var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, stepDir, CancellationToken.None);
