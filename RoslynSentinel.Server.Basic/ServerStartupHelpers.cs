@@ -42,13 +42,19 @@ public static class ServerStartupHelpers
     /// relative paths are resolved via <see cref="PersistentWorkspaceManager"/>
     /// against the current directory, --base-repo-dir (if set), or the server's install directory.</param>
     /// <param name="baseRepoDirectory">Value of --base-repo-dir=, or null. Used to resolve relative --solution/LoadSolution paths.</param>
+    /// <param name="includeTools">Parsed --include-tools value: individual tool-class names to
+    /// activate in addition to whatever --mode resolves, e.g. "SentinelAugmentTools,GitTools".</param>
+    /// <param name="excludeTools">Parsed --exclude-tools value: individual tool-class names to
+    /// deactivate even if --mode or --include-tools would otherwise activate them. Always wins.</param>
     public static void ParseArgs(
         string[] args,
         HashSet<string> allModes,
         out string modeArg,
         out HashSet<string> activeModes,
         out string? solutionPath,
-        out string? baseRepoDirectory)
+        out string? baseRepoDirectory,
+        out HashSet<string> includeTools,
+        out HashSet<string> excludeTools)
     {
         modeArg = GetArgValue(args, "--mode") ?? GetArgValue(args, "--modes") ?? "all";
         solutionPath = GetArgValue(args, "--solution");
@@ -71,6 +77,51 @@ public static class ServerStartupHelpers
                 activeModes.Add(extra);
             }
         }
+
+        includeTools = ParseNameList(GetArgValue(args, "--include-tools"));
+        excludeTools = ParseNameList(GetArgValue(args, "--exclude-tools"));
+    }
+
+    private static HashSet<string> ParseNameList(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : value.Split(',').Select(n => n.Trim()).Where(n => n.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Expands <paramref name="activeModes"/> into individual tool-class names via
+    /// <paramref name="modeToToolClasses"/>, unions in <paramref name="includeTools"/>, then
+    /// removes anything in <paramref name="excludeTools"/> (exclude always wins, applied last).
+    /// </summary>
+    public static HashSet<string> ResolveActiveToolClasses(
+        HashSet<string> activeModes,
+        IReadOnlyDictionary<string, string[]> modeToToolClasses,
+        HashSet<string> includeTools,
+        HashSet<string> excludeTools)
+    {
+        var activeToolClasses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var mode in activeModes)
+        {
+            if (modeToToolClasses.TryGetValue(mode, out var classes))
+            {
+                foreach (var className in classes)
+                {
+                    activeToolClasses.Add(className);
+                }
+            }
+        }
+
+        foreach (var className in includeTools)
+        {
+            activeToolClasses.Add(className);
+        }
+
+        foreach (var className in excludeTools)
+        {
+            activeToolClasses.Remove(className);
+        }
+
+        return activeToolClasses;
     }
 
     /// <summary>
@@ -106,7 +157,11 @@ public static class ServerStartupHelpers
     /// If --list-tools is present, writes the tool list and returns true.
     /// The caller should return immediately when this returns true.
     /// </summary>
-    public static bool HandleListTools(string[] args, HashSet<string> activeModes)
+    public static bool HandleListTools(
+        string[] args,
+        HashSet<string> activeModes,
+        HashSet<string>? includeTools = null,
+        HashSet<string>? excludeTools = null)
     {
         if (!args.Contains("--list-tools"))
         {
@@ -114,7 +169,7 @@ public static class ServerStartupHelpers
         }
 
         var outputPath = GetArgValue(args, "--output");
-        SentinelConsoleMode.ListTools(activeModes, outputPath);
+        SentinelConsoleMode.ListTools(activeModes, outputPath, includeTools, excludeTools);
         return true;
     }
 
@@ -250,12 +305,17 @@ public static class ServerStartupHelpers
         ILogger<TProgram> logger,
         string logPath,
         HashSet<string> activeModes,
-        string modeArg)
+        string modeArg,
+        HashSet<string>? includeTools = null,
+        HashSet<string>? excludeTools = null)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
-            logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg})",
-                string.Join(", ", activeModes), modeArg);
+            logger.LogInformation(
+                "Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg}) | IncludeTools: {IncludeTools} | ExcludeTools: {ExcludeTools}",
+                string.Join(", ", activeModes), modeArg,
+                includeTools is { Count: > 0 } ? string.Join(", ", includeTools) : "(none)",
+                excludeTools is { Count: > 0 } ? string.Join(", ", excludeTools) : "(none)");
         }
 
         Debug.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");

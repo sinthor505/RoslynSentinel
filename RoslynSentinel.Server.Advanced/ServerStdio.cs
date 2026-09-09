@@ -32,10 +32,10 @@ namespace RoslynSentinel.Server.Advanced
         public static async Task Startup(string[] args)
         {
             // ── Arg parsing ──────────────────────────────────────────────────────
-            ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory);
+            ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools);
             LlmOptions.Configure(args);
 
-            if (ServerStartupHelpers.HandleListTools(args, activeModes))
+            if (ServerStartupHelpers.HandleListTools(args, activeModes, includeTools, excludeTools))
             {
                 return;
             }
@@ -89,7 +89,7 @@ namespace RoslynSentinel.Server.Advanced
                     new InMemoryMcpTaskStore(),
                     o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
 
-                mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes);
+                mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes, includeTools, excludeTools);
 
                 using var host = builder.Build();
                 var logger = host.Services.GetRequiredService<ILogger<ServerStdio>>();
@@ -99,7 +99,7 @@ namespace RoslynSentinel.Server.Advanced
                 host.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger, baseRepoDirectory);
                 SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
                 SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
-                ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg);
+                ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg, includeTools, excludeTools);
 
                 try
                 {
@@ -108,7 +108,7 @@ namespace RoslynSentinel.Server.Advanced
                         using var lifetimeCts = new CancellationTokenSource();
                         var hostTask = host.RunAsync(lifetimeCts.Token);
                         await SentinelConsoleMode.RunReplAsync(
-                            replWriteStream!, replReadStream!, activeModes, lifetimeCts).ConfigureAwait(false);
+                            replWriteStream!, replReadStream!, activeModes, lifetimeCts, includeTools, excludeTools).ConfigureAwait(false);
                         await hostTask.ConfigureAwait(false);
                     }
                     else

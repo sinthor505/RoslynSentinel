@@ -21,11 +21,11 @@ public class ServerHttp
     public static async Task Startup(string[] args)
     {
         // ── Arg parsing ──────────────────────────────────────────────────────
-        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory);
+        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools);
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
         LlmOptions.Configure(args);
 
-        if (ServerStartupHelpers.HandleListTools(args, activeModes))
+        if (ServerStartupHelpers.HandleListTools(args, activeModes, includeTools, excludeTools))
         {
             return;
         }
@@ -52,7 +52,7 @@ public class ServerHttp
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
-        mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes);
+        mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes, includeTools, excludeTools);
 
         var app = builder.Build();
         app.MapMcp("/mcp");
@@ -67,8 +67,11 @@ public class ServerHttp
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
-                "RoslynSentinel Advanced HTTP Host starting. Port={Port} | Modes={Modes} | Log={Log}",
-                port, string.Join(", ", activeModes), logPath);
+                "RoslynSentinel Advanced HTTP Host starting. Port={Port} | Modes={Modes} | IncludeTools={IncludeTools} | ExcludeTools={ExcludeTools} | Log={Log}",
+                port, string.Join(", ", activeModes),
+                includeTools.Count > 0 ? string.Join(", ", includeTools) : "(none)",
+                excludeTools.Count > 0 ? string.Join(", ", excludeTools) : "(none)",
+                logPath);
         }
 
         Console.WriteLine($"[RoslynSentinel.Advanced.HttpHost] Listening on http://0.0.0.0:{port}/mcp | PID={Environment.ProcessId}");

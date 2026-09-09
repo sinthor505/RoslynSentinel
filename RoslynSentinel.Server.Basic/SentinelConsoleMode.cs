@@ -20,17 +20,6 @@ public static partial class SentinelConsoleMode
     private static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
     private static readonly JsonSerializerOptions CompactJson = new() { WriteIndented = false };
 
-    private static readonly Dictionary<string, string> ToolTypeToMode = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["SentinelWorkspaceTools"] = "Workspace",
-        ["SentinelIntelligenceTools"] = "Intelligence",
-        ["SentinelRefactoringTools"] = "Refactor",
-        ["SentinelAugmentTools"] = "Refactor",
-        ["SentinelModernizationTools"] = "Modernize",
-        ["SentinelQualityTools"] = "Quality",
-        ["SentinelGenerationTools"] = "Generation",
-    };
-
     // ─── Snake-case helpers ──────────────────────────────────────────────────
 
     [GeneratedRegex(@"([a-z0-9])([A-Z])")]
@@ -62,8 +51,17 @@ public static partial class SentinelConsoleMode
 
     private sealed record ToolEntry(string Name, string? Description, string Module, MethodInfo Method, Type ToolType);
 
-    private static IReadOnlyList<ToolEntry> DiscoverTools(HashSet<string> activeModes)
+    private static IReadOnlyList<ToolEntry> DiscoverTools(
+        HashSet<string> activeModes,
+        HashSet<string>? includeTools = null,
+        HashSet<string>? excludeTools = null)
     {
+        var activeToolClasses = ServerStartupHelpers.ResolveActiveToolClasses(
+            activeModes,
+            ToolClassRegistry.AdvancedModeToToolClasses,
+            includeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            excludeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
         return typeof(SentinelWorkspaceTools).Assembly
             .GetTypes()
             .Where(t =>
@@ -73,7 +71,7 @@ public static partial class SentinelConsoleMode
                     return false;
                 }
 
-                return !ToolTypeToMode.TryGetValue(t.Name, out var mode) || activeModes.Contains(mode);
+                return activeToolClasses.Contains(t.Name);
             })
             .OrderBy(t => t.Name)
             .SelectMany(type =>
@@ -92,9 +90,13 @@ public static partial class SentinelConsoleMode
 
     // ─── --list-tools ────────────────────────────────────────────────────────
 
-    public static void ListTools(HashSet<string> activeModes, string? outputPath)
+    public static void ListTools(
+        HashSet<string> activeModes,
+        string? outputPath,
+        HashSet<string>? includeTools = null,
+        HashSet<string>? excludeTools = null)
     {
-        var tools = DiscoverTools(activeModes);
+        var tools = DiscoverTools(activeModes, includeTools, excludeTools);
 
         var data = tools.Select(t => (object)new
         {
@@ -211,7 +213,9 @@ public static partial class SentinelConsoleMode
         Stream clientWriteStream,
         Stream clientReadStream,
         HashSet<string> activeModes,
-        CancellationTokenSource lifetimeCts)
+        CancellationTokenSource lifetimeCts,
+        HashSet<string>? includeTools = null,
+        HashSet<string>? excludeTools = null)
     {
         using var writer = new StreamWriter(clientWriteStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true)
         {
@@ -277,7 +281,7 @@ public static partial class SentinelConsoleMode
         Console.Error.WriteLine("  exit                        — quit");
 
         // Pre-build local tool dictionary (for describe / validation)
-        var localTools = DiscoverTools(activeModes).ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
+        var localTools = DiscoverTools(activeModes, includeTools, excludeTools).ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
 
         // ── REPL loop ────────────────────────────────────────────────────────
         while (!cts.IsCancellationRequested)

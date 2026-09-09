@@ -93,80 +93,118 @@ public static class RoslynSentinelServiceExtensionsBasic
     }
 
     /// <summary>
-    /// Registers all MCP tool classes (mode-conditional) and the centralized error filter.
+    /// Registers all MCP tool classes (mode-conditional, with optional per-class
+    /// <paramref name="includeTools"/>/<paramref name="excludeTools"/> overrides — see
+    /// <see cref="ServerStartupHelpers.ResolveActiveToolClasses"/>) and the centralized error filter.
     /// </summary>
     public static IMcpServerBuilder AddRoslynSentinelToolsBasic(
         this IMcpServerBuilder mcpBuilder,
         IServiceCollection services,
-        HashSet<string> activeModes)
+        HashSet<string> activeModes,
+        HashSet<string>? includeTools = null,
+        HashSet<string>? excludeTools = null)
     {
-        if (activeModes.Contains("Workspace"))
+        var resolvedIncludeTools = includeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var resolvedExcludeTools = excludeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var activeToolClasses = ServerStartupHelpers.ResolveActiveToolClasses(
+            activeModes,
+            ToolClassRegistry.BasicModeToToolClasses,
+            resolvedIncludeTools,
+            resolvedExcludeTools);
+
+        if (activeToolClasses.Contains("SentinelWorkspaceTools"))
         {
             services.AddSingleton<WorkspaceReadNavigationImpl>();
             services.AddSingleton<WorkspaceReadNavigationTools>();
             services.AddSingleton<SentinelWorkspaceTools>();
             mcpBuilder.WithTools<SentinelWorkspaceTools>();
+        }
+        if (activeToolClasses.Contains("DocumentationTools"))
+        {
             services.AddSingleton<DocumentationTools>();
             mcpBuilder.WithTools<DocumentationTools>();
+        }
+        if (activeToolClasses.Contains("SentinelSymbolTools"))
+        {
             services.AddSingleton<SentinelSymbolTools>();
             mcpBuilder.WithTools<SentinelSymbolTools>();
+        }
+        if (activeToolClasses.Contains("GitTools"))
+        {
             services.AddSingleton<GitTools>();
             mcpBuilder.WithTools<GitTools>();
         }
-        if (activeModes.Contains("Admin"))
+        if (activeToolClasses.Contains("SentinelAdminTools"))
         {
-            // Restricted/operator-only tools — deliberately NOT included in AllModes (see
-            // ServerStdio.cs/ServerHttp.cs), so this only activates via an explicit --mode=Admin.
+            // Restricted/operator-only tool — deliberately NOT included in AllModes (see
+            // ServerStdio.cs/ServerHttp.cs), so --mode alone can't reach it; only an explicit
+            // --mode=Admin or --include-tools=SentinelAdminTools activates it.
             services.AddSingleton<SentinelAdminTools>();
             mcpBuilder.WithTools<SentinelAdminTools>();
         }
-        if (activeModes.Contains("Admin") || activeModes.Contains("WholeFileWrite"))
+        if (activeToolClasses.Contains("SentinelWholeFileWriteTools"))
         {
-            // Restricted/operator-only tools — deliberately NOT included in AllModes (see
-            // ServerStdio.cs/ServerHttp.cs), so this only activates via an explicit --mode=Admin or
-            // --mode=WholeFileWrite. Guarded against both modes being active together, which would
-            // otherwise register this type (and call WithTools for it) twice.
+            // Restricted/operator-only tool — deliberately NOT included in AllModes (see
+            // ServerStdio.cs/ServerHttp.cs), so --mode alone can't reach it; only an explicit
+            // --mode=Admin/--mode=WholeFileWrite or --include-tools=SentinelWholeFileWriteTools
+            // activates it.
             services.AddSingleton<SentinelWholeFileWriteTools>();
             mcpBuilder.WithTools<SentinelWholeFileWriteTools>();
         }
-        if (activeModes.Contains("Intelligence"))
+        if (activeToolClasses.Contains("SentinelIntelligenceTools"))
         {
             // services.AddSingleton<SentinelIntelligenceTools>();
             // mcpBuilder.WithTools<SentinelIntelligenceTools>();
+        }
+        if (activeToolClasses.Contains("SentinelScanTools"))
+        {
             // services.AddSingleton<SentinelScanTools>();
             // mcpBuilder.WithTools<SentinelScanTools>();
         }
-        if (activeModes.Contains("Refactor"))
+        if (activeToolClasses.Contains("SentinelRefactoringTools"))
         {
             services.AddSingleton<SentinelRefactoringTools>();
             mcpBuilder.WithTools<SentinelRefactoringTools>();
+        }
+        if (activeToolClasses.Contains("SentinelAdvancedRefactoringTools"))
+        {
             // services.AddSingleton<SentinelAdvancedRefactoringTools>();
             // mcpBuilder.WithTools<SentinelAdvancedRefactoringTools>();
+        }
+        if (activeToolClasses.Contains("SentinelAugmentTools"))
+        {
             services.AddSingleton<SentinelAugmentTools>();
             mcpBuilder.WithTools<SentinelAugmentTools>();
         }
-        if (activeModes.Contains("Modernize"))
+        if (activeToolClasses.Contains("SentinelModernizationTools"))
         {
             // services.AddSingleton<SentinelModernizationTools>();
             // mcpBuilder.WithTools<SentinelModernizationTools>();
         }
-        if (activeModes.Contains("Quality"))
+        if (activeToolClasses.Contains("SentinelQualityTools"))
         {
             // services.AddSingleton<SentinelQualityTools>();
             // mcpBuilder.WithTools<SentinelQualityTools>();
         }
-        if (activeModes.Contains("Generation"))
+        if (activeToolClasses.Contains("SentinelGenerationTools"))
         {
             // services.AddSingleton<SentinelGenerationTools>();
             // mcpBuilder.WithTools<SentinelGenerationTools>();
         }
-        if (activeModes.Contains("Refactor") || activeModes.Contains("Modernize") ||
-            activeModes.Contains("Quality") || activeModes.Contains("Generation"))
+        if (activeToolClasses.Contains("SentinelCommentingTools"))
+        {
+            // services.AddSingleton<SentinelCommentingTools>();
+            // mcpBuilder.WithTools<SentinelCommentingTools>();
+        }
+        var codemodActive = (ToolClassRegistry.CodemodTriggerModes.Any(activeModes.Contains) ||
+                              resolvedIncludeTools.Contains(ToolClassRegistry.CodemodToolClass)) &&
+                             !resolvedExcludeTools.Contains(ToolClassRegistry.CodemodToolClass);
+        if (codemodActive)
         {
             // services.AddSingleton<SentinelCodemodTools>();
             // mcpBuilder.WithTools<SentinelCodemodTools>();
         }
-        if (activeModes.Contains("Asyncify"))
+        if (activeToolClasses.Contains("SentinelAsyncifyTools"))
         {
             // services.AddSingleton<SentinelAsyncifyTools>();
             // mcpBuilder.WithTools<SentinelAsyncifyTools>();

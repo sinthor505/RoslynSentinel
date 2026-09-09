@@ -138,7 +138,9 @@ public static class RoslynSentinelServiceExtensionsAdvanced
     }
 
     /// <summary>
-    /// Registers all MCP tool classes (mode-conditional) and the centralized error filter.
+    /// Registers all MCP tool classes (mode-conditional, with optional per-class
+    /// <paramref name="includeTools"/>/<paramref name="excludeTools"/> overrides — see
+    /// <see cref="ServerStartupHelpers.ResolveActiveToolClasses"/>) and the centralized error filter.
     /// Delegates the modes/tools/filters Advanced shares with Basic to
     /// <see cref="RoslynSentinelServiceExtensionsBasic.AddRoslynSentinelToolsBasic"/> (the shared
     /// base — this used to be a fully separate hand-duplicated list, which is how it drifted out
@@ -149,49 +151,71 @@ public static class RoslynSentinelServiceExtensionsAdvanced
     public static IMcpServerBuilder AddRoslynSentinelToolsAdvanced(
         this IMcpServerBuilder mcpBuilder,
         IServiceCollection services,
-        HashSet<string> activeModes)
+        HashSet<string> activeModes,
+        HashSet<string>? includeTools = null,
+        HashSet<string>? excludeTools = null)
     {
+        var resolvedIncludeTools = includeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var resolvedExcludeTools = excludeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         // Registers Workspace-mode tools, Refactor-mode's SentinelRefactoringTools/
         // SentinelAugmentTools, and both request filters (including the drift-check filter).
-        mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes);
+        // Basic's own resolution only sees classes in BasicModeToToolClasses, so an
+        // Advanced-only --include-tools name (e.g. SentinelAsyncifyTools) is inert there — it's
+        // handled below against AdvancedModeToToolClasses instead.
+        mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes, resolvedIncludeTools, resolvedExcludeTools);
 
-        if (activeModes.Contains("Intelligence"))
+        var activeToolClasses = ServerStartupHelpers.ResolveActiveToolClasses(
+            activeModes,
+            ToolClassRegistry.AdvancedModeToToolClasses,
+            resolvedIncludeTools,
+            resolvedExcludeTools);
+
+        if (activeToolClasses.Contains("SentinelIntelligenceTools"))
         {
             services.AddSingleton<SentinelIntelligenceTools>();
             mcpBuilder.WithTools<SentinelIntelligenceTools>();
+        }
+        if (activeToolClasses.Contains("SentinelScanTools"))
+        {
             services.AddSingleton<SentinelScanTools>();
             mcpBuilder.WithTools<SentinelScanTools>();
         }
-        if (activeModes.Contains("Refactor"))
+        if (activeToolClasses.Contains("SentinelAdvancedRefactoringTools"))
         {
             // SentinelRefactoringTools/SentinelAugmentTools already registered above via Basic.
             services.AddSingleton<SentinelAdvancedRefactoringTools>();
             mcpBuilder.WithTools<SentinelAdvancedRefactoringTools>();
         }
-        if (activeModes.Contains("Modernize"))
+        if (activeToolClasses.Contains("SentinelModernizationTools"))
         {
             services.AddSingleton<SentinelModernizationTools>();
             mcpBuilder.WithTools<SentinelModernizationTools>();
         }
-        if (activeModes.Contains("Quality"))
+        if (activeToolClasses.Contains("SentinelQualityTools"))
         {
             services.AddSingleton<SentinelQualityTools>();
             mcpBuilder.WithTools<SentinelQualityTools>();
         }
-        if (activeModes.Contains("Generation"))
+        if (activeToolClasses.Contains("SentinelGenerationTools"))
         {
             services.AddSingleton<SentinelGenerationTools>();
             mcpBuilder.WithTools<SentinelGenerationTools>();
+        }
+        if (activeToolClasses.Contains("SentinelCommentingTools"))
+        {
             services.AddSingleton<SentinelCommentingTools>();
             mcpBuilder.WithTools<SentinelCommentingTools>();
         }
-        if (activeModes.Contains("Refactor") || activeModes.Contains("Modernize") ||
-            activeModes.Contains("Quality") || activeModes.Contains("Generation"))
+        var codemodActive = (ToolClassRegistry.CodemodTriggerModes.Any(activeModes.Contains) ||
+                              resolvedIncludeTools.Contains(ToolClassRegistry.CodemodToolClass)) &&
+                             !resolvedExcludeTools.Contains(ToolClassRegistry.CodemodToolClass);
+        if (codemodActive)
         {
             services.AddSingleton<SentinelCodemodTools>();
             mcpBuilder.WithTools<SentinelCodemodTools>();
         }
-        if (activeModes.Contains("Asyncify"))
+        if (activeToolClasses.Contains("SentinelAsyncifyTools"))
         {
             services.AddSingleton<SentinelAsyncifyTools>();
             mcpBuilder.WithTools<SentinelAsyncifyTools>();

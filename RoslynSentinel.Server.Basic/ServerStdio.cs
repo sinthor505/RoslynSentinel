@@ -29,9 +29,9 @@ public class ServerStdio
     public static async Task Startup(string[] args)
     {
         // ── Arg parsing ──────────────────────────────────────────────────────
-        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory);
+        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools);
 
-        if (ServerStartupHelpers.HandleListTools(args, activeModes))
+        if (ServerStartupHelpers.HandleListTools(args, activeModes, includeTools, excludeTools))
         {
             return;
         }
@@ -81,7 +81,7 @@ public class ServerStdio
                 mcpBuilder.WithStdioServerTransport();
             }
 
-            mcpBuilder.AddRoslynSentinelToolsBasic(builder.Services, activeModes);
+            mcpBuilder.AddRoslynSentinelToolsBasic(builder.Services, activeModes, includeTools, excludeTools);
 
             using var host = builder.Build();
             var logger = host.Services.GetRequiredService<ILogger<ServerStdio>>();
@@ -91,7 +91,7 @@ public class ServerStdio
             host.Services.WarmupAndAutoLoadBasic(solutionPath, logger, baseRepoDirectory);
             SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
             SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
-            ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg);
+            ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg, includeTools, excludeTools);
 
             try
             {
@@ -100,7 +100,7 @@ public class ServerStdio
                     using var lifetimeCts = new CancellationTokenSource();
                     var hostTask = host.RunAsync(lifetimeCts.Token);
                     await SentinelConsoleMode.RunReplAsync(
-                        replWriteStream!, replReadStream!, activeModes, lifetimeCts).ConfigureAwait(false);
+                        replWriteStream!, replReadStream!, activeModes, lifetimeCts, includeTools, excludeTools).ConfigureAwait(false);
                     await hostTask.ConfigureAwait(false);
                 }
                 else
