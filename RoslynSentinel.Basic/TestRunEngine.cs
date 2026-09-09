@@ -24,7 +24,8 @@ public record TestRunResult(
     string? StdoutTail,
     string? StderrTail,
     TimeSpan Duration,
-    string? Detail = null
+    string? Detail = null,
+    bool RunCompleted = true
 );
 
 public class TestRunEngine
@@ -168,7 +169,8 @@ public class TestRunEngine
                     StdoutTail: Tail(stdoutText),
                     StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
                     Duration: DateTime.UtcNow - start,
-                    Detail: timeoutDetail
+                    Detail: timeoutDetail,
+                    RunCompleted: false
                 ));
             }
 
@@ -187,7 +189,8 @@ public class TestRunEngine
                     StdoutTail: Tail(stdoutText),
                     StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
                     Duration: DateTime.UtcNow - start,
-                    Detail: noTrxDetail
+                    Detail: noTrxDetail,
+                    RunCompleted: false
                 ));
             }
 

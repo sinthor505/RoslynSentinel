@@ -1273,7 +1273,7 @@ public class SentinelWorkspaceTools
         string? filter = null,
         TestResultsFilter resultsType = TestResultsFilter.all,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
-        int timeoutSeconds = 300,
+        int timeoutSeconds = 600,
         CancellationToken cancellationToken = default)
     {
         try
@@ -1289,6 +1289,11 @@ public class SentinelWorkspaceTools
             if (!result.TryGetData(out var testRunResult))
             {
                 return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? "Test run failed unexpectedly.") };
+            }
+
+            if (!testRunResult.RunCompleted)
+            {
+                return new ToolResult<object>() { Success = false, Data = testRunResult, Error = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), WorkspaceVersion = _workspaceManager.WorkspaceVersion };
             }
 
             return new ToolResult<object>() { Success = true, Data = testRunResult, WorkspaceVersion = _workspaceManager.WorkspaceVersion };
