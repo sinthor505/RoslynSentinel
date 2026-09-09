@@ -27,8 +27,10 @@
     Both Basic and Advanced cover both transports (stdio and HTTP are the same
     RoslynSentinel.Server.Basic / RoslynSentinel.Server.Advanced binary, chosen at runtime via
     --transport) - there is no separate Basic.Http or Advanced.Http flavor to build/test.
-    "Solution" builds/tests RoslynSentinel.slnx as a whole and is not associated with any one
-    running server process (no lock-check, since nothing runs directly from the .slnx).
+    "Solution" builds RoslynSentinel.slnx as a whole and is not associated with any one running
+    server process (no lock-check, since nothing runs directly from the .slnx). Its test mode
+    runs all RoslynSentinel.Tests* projects concurrently via scripts\Test-Parallel.ps1 rather
+    than a single sequential `dotnet test` on the .slnx.
 
 .PARAMETER Config
     Debug | Release. Default: Debug.
@@ -230,20 +232,35 @@ function Invoke-BuildMode {
 function Invoke-TestMode {
     Write-Host ""
     Write-Host "=== Test: $Flavor ($Config) ===" -ForegroundColor Cyan
-    $testProjectMap = @{
-        'Basic'         = 'RoslynSentinel.Tests.Battery\RoslynSentinel.Tests.Battery.csproj'
-        'Advanced'      = 'RoslynSentinel.Tests.Advanced\RoslynSentinel.Tests.Advanced.csproj'
-        'Solution'      = 'RoslynSentinel.slnx'
-    }
-    $testProject = Join-Path $repoRoot $testProjectMap[$Flavor]
 
     # dotnet test writes "Test Run Failed." to stderr on any failing test and PowerShell's default
     # ErrorActionPreference='Stop' treats that stderr line as a terminating error, aborting the
     # script before it can parse the (otherwise complete) captured output. Relax it locally.
     $previousEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $rawOutput = & dotnet test $testProject -c $Config --nologo -v normal 2>&1
-    $exitCode = $LASTEXITCODE
+    if ($Flavor -eq 'Solution') {
+        # Solution spans all 6 RoslynSentinel.Tests* projects; dotnet test on the .slnx runs them
+        # sequentially (~118s summed as of 2026-09-09). Test-Parallel.ps1 runs each as its own
+        # process concurrently instead (~59s) and re-emits each project's "Failed <name> [...]"
+        # lines so the parsing below still works unchanged. Invoke-BuildMode (if it ran this call)
+        # already built the solution, so skip the redundant rebuild here.
+        $skipBuild = $Mode -in @('Build', 'Both')
+        $parallelScript = Join-Path $repoRoot 'scripts\Test-Parallel.ps1'
+        if ($skipBuild) {
+            $rawOutput = & $parallelScript -Configuration $Config -SkipBuild 2>&1
+        } else {
+            $rawOutput = & $parallelScript -Configuration $Config 2>&1
+        }
+        $exitCode = $LASTEXITCODE
+    } else {
+        $testProjectMap = @{
+            'Basic'    = 'RoslynSentinel.Tests.Battery\RoslynSentinel.Tests.Battery.csproj'
+            'Advanced' = 'RoslynSentinel.Tests.Advanced\RoslynSentinel.Tests.Advanced.csproj'
+        }
+        $testProject = Join-Path $repoRoot $testProjectMap[$Flavor]
+        $rawOutput = & dotnet test $testProject -c $Config --nologo -v normal 2>&1
+        $exitCode = $LASTEXITCODE
+    }
     $ErrorActionPreference = $previousEap
 
     $current = New-Object System.Collections.Generic.List[string]

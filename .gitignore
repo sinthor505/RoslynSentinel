@@ -23,6 +23,8 @@ ClaudeFiles/
 
 *.trx
 
+TestResults/
+
 _scratchbuild/
 _scratchbuild_*/
 lmstudio_logs/
