@@ -686,6 +686,115 @@ public class SentinelWorkspaceTools
         }
     }
 
+    [McpServerTool(Name = "CreateFile")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Creates a new file. Fails if the file already exists — this tool never overwrites or writes free-form whole-file content. For a .cs file, namespaceName, typeKind and typeName are all REQUIRED — this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. If the file needs a second top-level type, add it afterward with Member(add, containerName: null, newMemberSource: \"...\"). Parent directories are created automatically if missing.")]
+    public async Task<ToolResult<object>> CreateFile(
+        [Description(ToolParams.Reason)] string reason,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery'). Required for .cs files; ignored otherwise.")] string? namespaceName = null,
+        [Description("Kind of top-level type to seed the file with (class/record/interface/enum/struct). Required for .cs files; ignored otherwise.")] NewTypeKind? typeKind = null,
+        [Description("Name of the top-level type to seed the file with (e.g. 'Foo'). Required for .cs files; ignored otherwise.")] string? typeName = null,
+        CancellationToken cancellationToken = default)
+    {
+        FilePath filePath = _workspaceManager.SetFilePath(filepath);
+        try
+        {
+            if (!filePath.Validated)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'filepath' is required.")
+                };
+            }
+
+            if (File.Exists(filePath))
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePath}' already exists. CreateFile never overwrites — use Member/ReplaceSnippet to edit an existing file.")
+                };
+            }
+
+            bool isCSharpFile = filePath.Absolute.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
+            if (isCSharpFile && string.IsNullOrWhiteSpace(namespaceName))
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'namespaceName' is required for a .cs file, so the new file starts as a valid compilation unit that Member(add) can populate.")
+                };
+            }
+
+            if (isCSharpFile && (typeKind == null || string.IsNullOrWhiteSpace(typeName)))
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'typeKind' and 'typeName' are both required for a .cs file, so the new file starts with an empty top-level type that Member(add) can populate members into.")
+                };
+            }
+
+            string content;
+            if (isCSharpFile)
+            {
+                string keyword = typeKind!.Value.ToString().TrimStart('@');
+                content = $"namespace {namespaceName};\n\npublic {keyword} {typeName}\n{{\n}}\n";
+            }
+            else
+            {
+                content = "";
+            }
+
+            var directory = Path.GetDirectoryName((string)filePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = content };
+            var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: true, cancellationToken: cancellationToken);
+            if (!result.Success && result.ValidationResult != null)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception,
+                        "CreateFile: this content would introduce new compiler errors — not written to disk. Fix the issue(s) below and retry:\n" +
+                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                };
+            }
+
+            if (!result.Success)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception, $"CreateFile failed to write '{filePath}': {result.Summary}")
+                };
+            }
+
+            await WriteBlobForApplyAsync("create_file", result);
+            var strippedResult = result with { PreImages = null };
+            return new ToolResult<object>()
+            {
+                Success = true,
+                Data = strippedResult
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CreateFile failed for '{FilePath}'", filePath);
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"CreateFile for '{filePath}'")
+            };
+        }
+    }
+
     // The confirmationCode paramater was causing hallucinations and invalid tool calls. Reverted back to the original ApplyDiff tool but keeping this here (block-commented, since it depends
     // on ProposedChangeAction.confirmationCode, which is also commented out in ToolEnums.cs) in case we want to reintroduce ApplyDiff with a confirmationCode in the future.
     /*

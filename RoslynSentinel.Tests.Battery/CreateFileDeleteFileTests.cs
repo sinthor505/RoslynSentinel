@@ -275,4 +275,189 @@ public class CreateFileDeleteFileTests
         Assert.That(result.Success, Is.False);
         Assert.That(File.Exists(targetFile), Is.True);
     }
+
+    // CreateFile (the MCP tool, SentinelWorkspaceTools.CreateFile) — distinct from
+    // WriteFile(operation=CreateFile) exercised above; the two share a name coincidentally (tool
+    // name vs WriteFileOperation enum member). This tool never accepts free-form content: for .cs
+    // files, namespaceName + typeKind + typeName are all mandatory, seeding a namespace plus one
+    // empty top-level type skeleton in a single call — deliberately not optional, so a model can't
+    // forget typeKind/typeName and have to make a second Member(add) round-trip just to reach a
+    // populatable type.
+
+    [Test]
+    public async Task CreateFileTool_MissingNamespaceForCsFile_FailsAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "NoNamespace.cs");
+
+        var result = await workspaceTools.CreateFile(reason: "test", newFile, typeKind: NewTypeKind.@class, typeName: "Foo");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(File.Exists(newFile), Is.False);
+    }
+
+    [TestCase(null, "Foo", TestName = "CreateFileTool_MissingTypeKindForCsFile_FailsAsync")]
+    [TestCase(NewTypeKind.@class, null, TestName = "CreateFileTool_MissingTypeNameForCsFile_FailsAsync")]
+    public async Task CreateFileTool_MissingTypeKindOrTypeNameForCsFile_FailsAsync(NewTypeKind? typeKind, string? typeName)
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "Bad.cs");
+
+        var result = await workspaceTools.CreateFile(reason: "test", newFile, namespaceName: "MyApp.Bad", typeKind: typeKind, typeName: typeName);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(File.Exists(newFile), Is.False);
+    }
+
+    [Test]
+    public async Task CreateFileTool_AlreadyExists_FailsWithoutOverwritingAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var originalContent = await File.ReadAllTextAsync(existingFile);
+
+        var result = await workspaceTools.CreateFile(reason: "test", existingFile, namespaceName: "MyApp.Whatever", typeKind: NewTypeKind.@class, typeName: "Whatever");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(await File.ReadAllTextAsync(existingFile), Is.EqualTo(originalContent));
+    }
+
+    [Test]
+    public async Task CreateFileTool_ParentDirectoryMissing_CreatesDirectoryAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "NewSubdir", "Nested.cs");
+
+        var result = await workspaceTools.CreateFile(reason: "test", newFile, namespaceName: "MyApp.Nested", typeKind: NewTypeKind.@class, typeName: "Nested");
+
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(File.Exists(newFile), Is.True);
+    }
+
+    [Test]
+    public async Task CreateFileTool_NonCsFile_SeedsEmptyContentIgnoringNamespaceAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "Notes.txt");
+
+        var result = await workspaceTools.CreateFile(reason: "test", newFile);
+
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(File.Exists(newFile), Is.True);
+        Assert.That(await File.ReadAllTextAsync(newFile), Is.EqualTo(""));
+    }
+
+    [TestCase(NewTypeKind.@class, "public class Foo\n{\n}\n")]
+    [TestCase(NewTypeKind.record, "public record Foo\n{\n}\n")]
+    [TestCase(NewTypeKind.@interface, "public interface Foo\n{\n}\n")]
+    [TestCase(NewTypeKind.@enum, "public enum Foo\n{\n}\n")]
+    [TestCase(NewTypeKind.@struct, "public struct Foo\n{\n}\n")]
+    public async Task CreateFileTool_WithTypeKindAndName_SeedsTypeSkeletonAsync(NewTypeKind typeKind, string expectedTypeSource)
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, $"Foo_{typeKind}.cs");
+
+        var result = await workspaceTools.CreateFile(reason: "test", newFile, namespaceName: "MyApp.Typed", typeKind: typeKind, typeName: "Foo");
+
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+        var content = await File.ReadAllTextAsync(newFile);
+        Assert.That(content, Is.EqualTo("namespace MyApp.Typed;\n\n" + expectedTypeSource));
+
+        var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(content);
+        Assert.That(tree.GetDiagnostics().Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error), Is.Empty);
+    }
+
+    [Test]
+    public async Task CreateFileTool_ThenMemberAdd_PopulatesMembersAndAddsSecondTypeAsync()
+    {
+        // The actual end-to-end scenario the tool exists for: Member/ModifyEnum/etc. all require
+        // an already-existing Document, so a brand-new file could never be populated before
+        // CreateFile existed. Confirms CreateFile's seeded type is a valid target for Member(add)
+        // to populate members into, AND that a second top-level type can be added afterward via
+        // Member(add, containerName: null, ...) — the mandatory-typeKind design only seeds the
+        // FIRST type; anything beyond that is deliberately a follow-up Member(add) call.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var config = new SentinelConfiguration();
+        var refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, workspaceManager, config);
+        var standardRefactoringEngine = new StandardRefactoringEngine(workspaceManager);
+        var mappingEngine = new MappingEngine(workspaceManager);
+        var semanticRefactoringLibrary = new SemanticRefactoringLibrary(workspaceManager);
+        var granularRefactoringEngine = new GranularRefactoringEngine(workspaceManager);
+        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var codeStyleEngine = new CodeStyleEngine(workspaceManager, config);
+        var codeFlowEngine = new CodeFlowEngine(workspaceManager);
+        var msToolAugmentEngine = new MsToolAugmentEngine(workspaceManager);
+        var codeGenerationEngine = new CodeGenerationEngine(workspaceManager);
+        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var refactoringTools = new SentinelRefactoringTools(
+            refactoringEngine, standardRefactoringEngine, mappingEngine, semanticRefactoringLibrary,
+            granularRefactoringEngine, structuralRefinementEngine, codeStyleEngine, codeFlowEngine,
+            msToolAugmentEngine, codeGenerationEngine, symbolNavigationEngine, workspaceManager,
+            validationEngine, config, NullLogger<SentinelRefactoringTools>.Instance);
+
+        var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
+        var newFile = Path.Combine(existingProjectDir, "Populated.cs");
+        var createResult = await workspaceTools.CreateFile(reason: "test", newFile, namespaceName: "MyApp.Populated", typeKind: NewTypeKind.@class, typeName: "Foo");
+        Assert.That(createResult.Success, Is.True, createResult.Error?.Message);
+
+        // The new file isn't part of the loaded Roslyn solution until reloaded from disk — CreateFile
+        // (like WriteFile) writes through disk, it doesn't add a Document to the in-memory workspace itself.
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        // Populate a member inside the type CreateFile seeded.
+        var populateResult = await refactoringTools.Member(
+            reason: "test",
+            operation: MemberAction.add,
+            filepath: newFile,
+            containerName: "Foo",
+            newMemberSource: "public int Value { get; set; }");
+        Assert.That(populateResult.Success, Is.True, populateResult.Error?.Message);
+
+        // Add a second top-level type — CreateFile only seeds the first.
+        var secondTypeResult = await refactoringTools.Member(
+            reason: "test",
+            operation: MemberAction.add,
+            filepath: newFile,
+            containerName: null,
+            newMemberSource: "public class Bar { }");
+        Assert.That(secondTypeResult.Success, Is.True, secondTypeResult.Error?.Message);
+
+        var content = await File.ReadAllTextAsync(newFile);
+        Assert.That(content, Does.Contain("namespace MyApp.Populated"));
+        Assert.That(content, Does.Contain("public class Foo"));
+        Assert.That(content, Does.Contain("public int Value"));
+        Assert.That(content, Does.Contain("public class Bar"));
+    }
 }

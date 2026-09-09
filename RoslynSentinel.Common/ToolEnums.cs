@@ -66,6 +66,12 @@ public enum TextSearchMode
     regex, literal
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum NewTypeKind
+{
+    @class, record, @interface, @enum, @struct
+}
+
 // ── Symbols ───────────────────────────────────────────────────────────────────
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
