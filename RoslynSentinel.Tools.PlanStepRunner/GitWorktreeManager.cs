@@ -1,10 +1,13 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace RoslynSentinel.Tools.PlanStepRunner;
 
 /// <summary>
 /// Runs each plan step in its own git worktree branched off a dedicated, runner-owned branch
-/// (default "eval-defect-remediation-v2-auto") — never the user's own in-progress branch/worktree.
+/// (default "eval-defect-remediation-v2-auto-&lt;run-timestamp&gt;", unique per run so two runs
+/// never contend over the same branch's single allowed worktree checkout) — never the user's own
+/// in-progress branch/worktree.
 /// A successful step commits onto that branch and the worktree is removed; a failed/halted step
 /// leaves its worktree in place under &lt;runDir&gt;\&lt;step-name&gt;\Worktree so the run is
 /// inspectable and independently re-runnable via --start-step/--end-step (or --clean, to discard
@@ -37,7 +40,25 @@ public sealed class GitWorktreeManager(string sourceRepo, string branch, string 
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        RunGitOrThrow(sourceRepo, "worktree", "add", path, branch);
+
+        var (exitCode, stdOut, stdErr) = RunGit(sourceRepo, "worktree", "add", path, branch);
+        if (exitCode != 0)
+        {
+            var blockingPathMatch = Regex.Match(stdErr, @"already used by worktree at '([^']+)'");
+            if (blockingPathMatch.Success)
+            {
+                throw new InvalidOperationException(
+                    $"Branch '{branch}' is already checked out in another worktree, left over from " +
+                    $"a different (possibly halted) run: {blockingPathMatch.Groups[1].Value}. Resume " +
+                    "that run instead (roslynsentinel-planstep.ps1 -ExistingRun <its timestamp>), or " +
+                    "remove it (git worktree remove --force <path>) if it's no longer needed, before " +
+                    "retrying this run.");
+            }
+
+            throw new InvalidOperationException(
+                $"git worktree add {path} {branch} failed in {sourceRepo} (exit {exitCode}):\n{stdOut}\n{stdErr}");
+        }
+
         return path;
     }
 

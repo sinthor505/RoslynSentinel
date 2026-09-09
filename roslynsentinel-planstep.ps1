@@ -63,7 +63,10 @@
 
 .PARAMETER Branch
     Git branch PlanStepRunner commits each successful step onto, created off -ImplRepo's current
-    HEAD if it doesn't already exist. Default: eval-defect-remediation-v2-auto.
+    HEAD if it doesn't already exist. Default: eval-defect-remediation-v2-auto-<run timestamp> -
+    unique per run (not one fixed shared name) so two runs, or an old halted run left over from a
+    previous invocation, never contend over git's one-worktree-per-branch limit. -ExistingRun
+    resumes onto the same default automatically; pass -Branch explicitly to override either way.
 
 .PARAMETER ExistingRun
     Timestamp (e.g. 20260909-171952-844) of an existing RoslynSentinel\PlanStepRunner\<timestamp>
@@ -138,7 +141,7 @@ param(
 
     [string]$PlanDir,
 
-    [string]$Branch = 'eval-defect-remediation-v2-auto',
+    [string]$Branch,
 
     [string]$ExistingRun,
 
@@ -185,12 +188,23 @@ if (-not (Test-Path $PlanDir)) {
 
 $runnerProject = Join-Path $repoRoot 'RoslynSentinel.Tools.PlanStepRunner\RoslynSentinel.Tools.PlanStepRunner.csproj'
 
-$runDir = $null
 if ($ExistingRun) {
+    $runTimestamp = $ExistingRun
     $runDir = Join-Path $ImplRepo "PlanStepRunner\$ExistingRun"
     if (-not (Test-Path $runDir)) {
         throw "-ExistingRun '$ExistingRun' not found under $ImplRepo\PlanStepRunner\. Check the timestamp folder name (e.g. 20260909-171952-844)."
     }
+}
+else {
+    $runTimestamp = Get-Date -AsUTC -Format 'yyyyMMdd-HHmmss-fff'
+    $runDir = Join-Path $ImplRepo "PlanStepRunner\$runTimestamp"
+}
+
+# Computed here (not left to PlanStepRunner's own --run-dir/--branch defaults) so -ExistingRun can
+# reconstruct the exact same default branch name a prior invocation would have picked, without
+# needing to separately record or look it up - both are derived from the one run timestamp.
+if (-not $Branch) {
+    $Branch = "eval-defect-remediation-v2-auto-$runTimestamp"
 }
 
 Write-Host ""
@@ -198,9 +212,7 @@ Write-Host "=== PlanStepRunner: steps $StartStep-$EndStep against $baseUrl (mode
 Write-Host "    --plan-dir $PlanDir" -ForegroundColor Cyan
 Write-Host "    --repo $ImplRepo" -ForegroundColor Cyan
 Write-Host "    --branch $Branch" -ForegroundColor Cyan
-if ($runDir) {
-    Write-Host "    --run-dir $runDir" -ForegroundColor Cyan
-}
+Write-Host "    --run-dir $runDir" -ForegroundColor Cyan
 if ($Clean) {
     Write-Host "    --clean" -ForegroundColor Cyan
 }
@@ -221,14 +233,12 @@ $runnerArgs = @(
     '--end-step', $EndStep
     '--turn-cap', $TurnCap
     '--wall-clock-cap-minutes', $WallClockCapMinutes
+    '--run-dir', $runDir
     '--include-tools', $IncludeTools
     '--llm-base-url', $baseUrl
     '--llm-model', $Model
 )
 
-if ($runDir) {
-    $runnerArgs += @('--run-dir', $runDir)
-}
 if ($Clean) {
     $runnerArgs += @('--clean')
 }
