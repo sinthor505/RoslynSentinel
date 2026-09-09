@@ -37,8 +37,19 @@ step, but keep it in mind so you don't misattribute behavior while reading this 
 - `NormalizeEol(string content, string dominantEol)` — normalizes all line endings in `content`
   to `dominantEol`.
 
-Update `DiffEngine.cs` to call the extracted version instead of its inline block — do not leave
-the logic duplicated in two places.
+**Build this new file via `CreateFile` + follow-up tools, not in one call:**
+1. `CreateFile(filepath: ".../EolUtilities.cs", namespaceName: "RoslynSentinel.Common", typeKind: staticClass, typeName: "EolUtilities")`.
+   `typeKind: staticClass` produces `public static class EolUtilities` directly — no separate
+   modifier fix-up needed.
+2. `Member(add, containerName: "EolUtilities")` once for `DetectDominantEol`, once for
+   `NormalizeEol` — each call's `newMemberSource` is the complete method (signature + body), marked
+   `public static`.
+3. `UsingDirective(add)` for whatever the extracted logic needs (e.g. `Microsoft.CodeAnalysis.Text`
+   for the `SourceText` parameter) — the `CreateFile` stub carries no usings.
+
+Update `DiffEngine.cs` (an existing file — use `Member`/`ApplyUnifiedDiff` on it, not `CreateFile`)
+to call the extracted version instead of its inline block — do not leave the logic duplicated in
+two places.
 
 ### B. Wire it into the member-rewrite path
 

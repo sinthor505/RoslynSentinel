@@ -11,11 +11,34 @@ the next step until the current one's gate passes. Phase-level gates (bigger reg
 are called out at the phase boundaries below.
 
 Per `feedback_dogfood_mcp_blocking_errors.md`: every read/write goes through the RoslynSentinel
-MCP tools (`ReadFile`, `ApplyDiff`/`ApplyUnifiedDiff`/`WriteFile`, `Member`, `ModifyModifier`,
+MCP tools (`ReadFile`, `ApplyDiff`/`ApplyUnifiedDiff`, `Member`, `ModifyModifier`, `CreateFile`,
 etc.) — never plain filesystem edits. Any MCP tool failure or gap encountered while executing a
 step is itself a blocking finding: stop immediately, write
 `docs/current/blockers/blocking_error_<slug>.md` describing it, and end the turn rather than
 routing around it.
+
+**There is no single tool that creates a `.cs` file with its full content in one call.** Creating
+a brand-new `.cs` file always means a two-step sequence:
+
+1. `CreateFile` — stubs the file. For a `.cs` file this requires `namespaceName`, `typeKind`
+   (class/record/interface/enum/struct/**staticClass**), and `typeName`, and produces exactly
+   `namespace {namespaceName};\n\npublic {modifiers} {kind} {typeName}\n{\n}\n` (`typeKind:
+   staticClass` gives `public static class`; the others give a plain `public {kind}`). It cannot
+   take free-form content — there is no content parameter. It fails if the file already exists.
+2. `Member(add)` — populate the stub, one call per method/property/field/nested-type. Each call
+   takes a full `newMemberSource` (including its own XML doc comment) and a `position`
+   (`"end"`/`"after:X"`/`"before:X"`). To add a **second top-level type** to the same file (e.g.
+   a file needing both a record and an enum), call `Member(add)` with `containerName: null` and
+   the full type declaration as `newMemberSource` — this is the only way to add a second top-level
+   type; `CreateFile` only ever stubs one.
+
+Additional small tools for the same workflow: `UsingDirective(add)` for imports the stub doesn't
+carry; `ModifyModifier` for any other modifier `CreateFile`'s `typeKind` options don't cover
+directly (only `static class` has its own `typeKind` value today — `staticClass`).
+
+Any step below written as if a new file's full content lands in one call is describing the
+*intent*, not a literal tool call — decompose it into `CreateFile` + `Member(add)` (+
+`UsingDirective`/`ModifyModifier` as needed) when executing.
 
 ## Steps
 

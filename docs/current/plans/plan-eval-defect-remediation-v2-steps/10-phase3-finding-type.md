@@ -34,6 +34,18 @@ Name it `Finding`/`Findings`, not `OperationFinding` — the orientation breaker
 Asyncify-specific outcome machinery, so borrowing that name would imply a relationship that
 doesn't exist.
 
+**This file needs two top-level types, which takes one `CreateFile` call plus one `Member(add)`
+call, not a single write:**
+1. `CreateFile(filepath: ".../Finding.cs", namespaceName: "RoslynSentinel.Common", typeKind: record, typeName: "Finding")`.
+   `CreateFile` stubs an empty record — `public record Finding\n{\n}\n` — not the positional
+   constructor form shown above. Follow with `Member(add, containerName: "Finding")` to give it
+   the positional parameter list and the `Severity` default, or replace the stub's declaration
+   line directly via `Member(replace)` once the file exists — either way, don't leave it as the
+   empty stub.
+2. `Member(add, containerName: null, newMemberSource: "public enum FindingSeverity { Info, Caution, Warning }")`
+   — this is `CreateFile`'s documented path for a file's **second** top-level type; `CreateFile`
+   itself only ever stubs one type per call.
+
 ### B. Add `Findings` to both wrapper types
 
 Add `IReadOnlyList<Finding> Findings { get; init; } = []` to both `EngineResultWrapper<T>` and

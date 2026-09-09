@@ -56,6 +56,19 @@ file below):
    `RunQuickBuildAsync` directly (below the MCP bridge) with a manufactured zero-project scope,
    asserting `EngineOutcome.InvalidInput` and `EngineErrorCode.BuildNotRun` at the engine layer.
 
+   **Build this new test file via `CreateFile` + `Member(add)`, not in one call:**
+   1. `CreateFile(filepath: ".../BuildEngineTests.cs", namespaceName: "RoslynSentinel.Tests.Battery", typeKind: class, typeName: "BuildEngineTests")`
+      stubs an empty class. Add whatever test-class attribute the file needs (e.g. `[TestFixture]`)
+      via `ModifyAttribute` — `CreateFile`'s stub carries none.
+   2. `Member(add, containerName: "BuildEngineTests")` once per test method (setup/teardown, if
+      any, plus the actual zero-project-scope test) — each call's `newMemberSource` is the
+      complete method including its own `[Test]`/`[SetUp]` attribute and body.
+   3. `UsingDirective(add)` for whatever the test needs (e.g. `NUnit.Framework`,
+      `RoslynSentinel.Basic`, `RoslynSentinel.Common`) — the stub carries no usings.
+
+   Do not attempt to hand a fully-formed class body to `CreateFile` — it has no content parameter
+   and will only ever produce the empty stub shape.
+
 ## Gate — Phase 1 gate
 
 Run `RoslynSentinel.Tests.Battery` and `RoslynSentinel.Tests.Basic` via the `RunTest` MCP tool.

@@ -26,6 +26,10 @@ signatures in this pass.
 
 ### A. Change `DiffEngine.ApplyDiff`'s return type
 
+Add this record inside the existing `RoslynSentinel.Common/DiffEngine.cs` (via `Member(add,
+containerName: null, ...)` — it's a small wrapper sitting next to the method it wraps, not a
+reason to create a new file):
+
 ```csharp
 public sealed record DiffApplyResult(SourceText Text, DiffReport Report);
 ```
@@ -61,6 +65,13 @@ plumbing that surfaces its output. Two tests:
 1. Clean diff → `Findings` empty, `DirectiveKind == Proceed`.
 2. Malformed-header diff (reuse the existing analyzer test fixture) run through the full
    `ApplyUnifiedDiff` path → `Findings` non-empty, `Success == true`, `DirectiveKind == ReviewRequired`.
+
+**Build `DiffEngineTests.cs` via `CreateFile` + `Member(add)`, not in one call:**
+`CreateFile(filepath: ".../DiffEngineTests.cs", namespaceName: "RoslynSentinel.Tests.Basic", typeKind: class, typeName: "DiffEngineTests")`
+stubs the empty class (add a `[TestFixture]` attribute via `ModifyAttribute` if the project's
+convention requires one); then `Member(add, containerName: "DiffEngineTests")` once per test
+method for the two cases above; then `UsingDirective(add)` for `NUnit.Framework`,
+`RoslynSentinel.Common`, etc.
 
 ## Gate — Phase 3 gate
 
