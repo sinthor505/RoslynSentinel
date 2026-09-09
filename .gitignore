@@ -27,3 +27,4 @@ _scratchbuild/
 _scratchbuild_*/
 lmstudio_logs/
 ModelTestingResults/
+PlanStepRunnerResults/
