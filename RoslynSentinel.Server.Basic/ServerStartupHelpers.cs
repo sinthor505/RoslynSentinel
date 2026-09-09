@@ -56,13 +56,18 @@ public static class ServerStartupHelpers
         out HashSet<string> includeTools,
         out HashSet<string> excludeTools)
     {
-        modeArg = GetArgValue(args, "--mode") ?? GetArgValue(args, "--modes") ?? "all";
+        // No --mode/--modes means no mode set is loaded (activeModes ends up empty) — a caller
+        // must opt in via --mode=all, an explicit mode list, or --include-tools.
+        modeArg = GetArgValue(args, "--mode") ?? GetArgValue(args, "--modes") ?? "";
         solutionPath = GetArgValue(args, "--solution");
         baseRepoDirectory = GetArgValue(args, "--base-repo-dir");
 
         var resolvedModeArg = ToolsetAliases.TryGetValue(modeArg, out var alias) ? alias : modeArg;
 
-        var requestedModes = resolvedModeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var requestedModes = resolvedModeArg.Split(',')
+            .Select(m => m.Trim())
+            .Where(m => m.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // "all" expands to the full allModes set; when combined with other entries (e.g.
         // "all,admin") those extras are unioned in rather than being treated as literal mode
