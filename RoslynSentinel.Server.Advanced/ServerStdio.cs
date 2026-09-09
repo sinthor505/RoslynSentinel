@@ -20,13 +20,17 @@ namespace RoslynSentinel.Server.Advanced
 
         // Advanced active tool types for the DEBUG smoke-resolve check.
         // Extend this list as new tool classes are activated in AddRoslynSentinelToolsAdvanced.
+        // SentinelAugmentTools is deliberately excluded — it declares zero [McpServerTool] methods
+        // and is only conditionally registered when --include-tools/--mode selects it, but this
+        // check always tries to resolve every type listed here regardless of what was requested,
+        // so listing a conditionally-registered type here would make any --include-tools selection
+        // that omits it crash at startup.
         private static readonly Type[] ActiveToolTypes =
         [
             typeof(SentinelWorkspaceTools),
         typeof(SentinelDocumentationTools),
         typeof(SentinelSymbolTools),
         typeof(SentinelRefactoringTools),
-        typeof(SentinelAugmentTools),
     ];
 
         public static async Task Startup(string[] args)

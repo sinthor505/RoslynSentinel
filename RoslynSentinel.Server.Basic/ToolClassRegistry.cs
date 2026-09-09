@@ -15,7 +15,7 @@ public static class ToolClassRegistry
             ["Workspace"] = ["SentinelWorkspaceTools", "SentinelDocumentationTools", "SentinelSymbolTools", "SentinelGitTools"],
             ["Admin"] = ["SentinelAdminTools"],
             ["WholeFileWrite"] = ["SentinelWholeFileWriteTools"],
-            ["Refactor"] = ["SentinelRefactoringTools", "SentinelAugmentTools"],
+            ["Refactor"] = ["SentinelRefactoringTools"],
             // Modernize/Quality/Generation/Asyncify register no classes in Basic today (commented
             // out pending Advanced-only tool classes) — omitted here since an empty array would
             // be indistinguishable from "mode not recognized" for expansion purposes.
@@ -33,7 +33,7 @@ public static class ToolClassRegistry
             ["Workspace"] = ["SentinelWorkspaceTools", "SentinelDocumentationTools", "SentinelSymbolTools", "SentinelGitTools"],
             ["Admin"] = ["SentinelAdminTools"],
             ["WholeFileWrite"] = ["SentinelWholeFileWriteTools"],
-            ["Refactor"] = ["SentinelRefactoringTools", "SentinelAugmentTools", "SentinelAdvancedRefactoringTools"],
+            ["Refactor"] = ["SentinelRefactoringTools", "SentinelAdvancedRefactoringTools"],
             ["Intelligence"] = ["SentinelIntelligenceTools", "SentinelScanTools"],
             ["Modernize"] = ["SentinelModernizationTools"],
             ["Quality"] = ["SentinelQualityTools"],

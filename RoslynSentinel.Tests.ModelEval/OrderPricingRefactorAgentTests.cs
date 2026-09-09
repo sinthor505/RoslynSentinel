@@ -109,8 +109,8 @@ public class OrderPricingRefactorAgentTests
 
     // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks —
     // together they register ApplyDiff/Build/ReadFile/SearchSolutionText/ListSolutionItems plus
-    // SentinelRefactoringTools/SentinelAugmentTools (ExtractMethodSafe, RenameSymbol,
-    // ChangeAccessibility, ModifyModifier), without pulling in Advanced's larger tool catalog.
+    // SentinelRefactoringTools (ExtractMethodSafe, RenameSymbol, ChangeAccessibility,
+    // ModifyModifier), without pulling in Advanced's larger tool catalog.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
         "Refactor", "Workspace",

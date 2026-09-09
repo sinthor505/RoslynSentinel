@@ -270,7 +270,7 @@ public class WholeFileRewriteAgentTests
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
     // AddRoslynSentinelToolsBasic checks — these two together register everything the prompts in
     // this file need (ApplyDiff, Build, ReadFile, SearchSolutionText, ListSolutionItems via
-    // SentinelWorkspaceTools; SentinelRefactoringTools/SentinelAugmentTools for edits) without
+    // SentinelWorkspaceTools; SentinelRefactoringTools for edits) without
     // pulling in Advanced's much larger scanner/analyzer/asyncify tool catalog, which only adds
     // context bloat and slows the model down for tasks that never call those tools.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)

@@ -43,7 +43,7 @@ public static class ServerStartupHelpers
     /// against the current directory, --base-repo-dir (if set), or the server's install directory.</param>
     /// <param name="baseRepoDirectory">Value of --base-repo-dir=, or null. Used to resolve relative --solution/LoadSolution paths.</param>
     /// <param name="includeTools">Parsed --include-tools value: individual tool-class names to
-    /// activate in addition to whatever --mode resolves, e.g. "SentinelAugmentTools,SentinelGitTools".</param>
+    /// activate in addition to whatever --mode resolves, e.g. "SentinelGitTools,SentinelScanTools".</param>
     /// <param name="excludeTools">Parsed --exclude-tools value: individual tool-class names to
     /// deactivate even if --mode or --include-tools would otherwise activate them. Always wins.</param>
     public static void ParseArgs(

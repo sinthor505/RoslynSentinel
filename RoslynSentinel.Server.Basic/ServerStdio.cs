@@ -16,14 +16,18 @@ public class ServerStdio
             "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation",
         };
 
-    // Basic active tool types for the DEBUG smoke-resolve check.
+    // Basic active tool types for the DEBUG smoke-resolve check. SentinelAugmentTools is
+    // deliberately excluded — it declares zero [McpServerTool] methods (see its own doc comment),
+    // so it's not always registered, and this check isn't gated by --include-tools/--mode the way
+    // real tool registration is: it always tries to resolve every type listed here regardless of
+    // what was actually requested, so listing a conditionally-registered type here would make any
+    // --include-tools selection that omits it crash at startup.
     private static readonly Type[] ActiveToolTypes =
     [
         typeof(SentinelWorkspaceTools),
         typeof(SentinelDocumentationTools),
         typeof(SentinelSymbolTools),
         typeof(SentinelRefactoringTools),
-        typeof(SentinelAugmentTools),
     ];
 
     public static async Task Startup(string[] args)

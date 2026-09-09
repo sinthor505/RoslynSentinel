@@ -158,8 +158,8 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         var resolvedIncludeTools = includeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var resolvedExcludeTools = excludeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Registers Workspace-mode tools, Refactor-mode's SentinelRefactoringTools/
-        // SentinelAugmentTools, and both request filters (including the drift-check filter).
+        // Registers Workspace-mode tools, Refactor-mode's SentinelRefactoringTools, and both
+        // request filters (including the drift-check filter).
         // Basic's own resolution only sees classes in BasicModeToToolClasses, so an
         // Advanced-only --include-tools name (e.g. SentinelAsyncifyTools) is inert there — it's
         // handled below against AdvancedModeToToolClasses instead.
@@ -183,7 +183,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         }
         if (activeToolClasses.Contains("SentinelAdvancedRefactoringTools"))
         {
-            // SentinelRefactoringTools/SentinelAugmentTools already registered above via Basic.
+            // SentinelRefactoringTools already registered above via Basic.
             services.AddSingleton<SentinelAdvancedRefactoringTools>();
             mcpBuilder.WithTools<SentinelAdvancedRefactoringTools>();
         }

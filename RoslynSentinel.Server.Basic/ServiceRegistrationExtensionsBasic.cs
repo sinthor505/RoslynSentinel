@@ -171,11 +171,6 @@ public static class RoslynSentinelServiceExtensionsBasic
             // services.AddSingleton<SentinelAdvancedRefactoringTools>();
             // mcpBuilder.WithTools<SentinelAdvancedRefactoringTools>();
         }
-        if (activeToolClasses.Contains("SentinelAugmentTools"))
-        {
-            services.AddSingleton<SentinelAugmentTools>();
-            mcpBuilder.WithTools<SentinelAugmentTools>();
-        }
         if (activeToolClasses.Contains("SentinelModernizationTools"))
         {
             // services.AddSingleton<SentinelModernizationTools>();
