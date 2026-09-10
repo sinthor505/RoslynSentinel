@@ -37,13 +37,14 @@ All ~20 grep-flagged sites were triaged. Verdicts:
     "project — ...; projectName required" / "file — ...; filePath required"
 
 No further action needed; this doc can be treated as resolved. See
-[[issue_member_containername_conditional_required_gap]] for the originating fix and
-[[project_conditional_required_param_audit_2026_09_06]] for the session memory.
+[issue_member_containername_conditional_required_gap.md](./issue_member_containername_conditional_required_gap.md)
+for the originating fix.
 
 ## Original context
 
-[[issue_member_containername_conditional_required_gap]] fixed `Member`'s `containerName` gap
-(2026-09-06) by adding an upfront `REQUIRED PARAMS BY OPERATION — ...` line to its `[Description]`.
+[issue_member_containername_conditional_required_gap.md](./issue_member_containername_conditional_required_gap.md)
+fixed `Member`'s `containerName` gap (2026-09-06) by adding an upfront
+`REQUIRED PARAMS BY OPERATION — ...` line to its `[Description]`.
 The same session then audited every other tool in `SentinelRefactoringTools.cs` sharing the shape
 "multi-operation tool, one parameter schema-optional but runtime-required for a subset of operation
 values" and applied the identical fix to four more tools, all now closed:
@@ -107,6 +108,6 @@ Where the gap is confirmed, apply the identical fix style: prepend a
 has neither (as was needed for `SummaryComment.summaryText`).
 
 `SentinelWorkspaceTools.cs`'s `ApplyDiff` and the `changesetFormat`/`scope`-dispatch entries are
-likely worth doing first — `ApplyDiff` is one of the most heavily-used tools in the suite per
-[[project_applydiff_capable_agent_feedback]], so a discoverability papercut there has higher
-frequency impact than a rarely-called Advanced-tier tool.
+likely worth doing first — `ApplyDiff` is one of the most heavily-used tools in the suite per prior
+dog-fooding feedback, so a discoverability papercut there has higher frequency impact than a
+rarely-called Advanced-tier tool.

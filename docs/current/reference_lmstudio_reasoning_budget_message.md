@@ -25,9 +25,10 @@ via `ApplyUnifiedDiff`, which only patches existing files), and the injected mes
 mid-sentence and forces a `Content:` continuation. E.g. line 363: `"That... okay, now I have
 enough information to answer. Content: I'll work through all seven steps systematically."`
 
-**Relevance to [[project_oldblock_not_found_double_replace_bug]] and the wider repetition-loop
-investigation**: this is the LM Studio-native version of the mitigation floated as option #4 in
-that discussion — "force an off-ramp after N tokens of unresolved reasoning." It doesn't fix the
+**Relevance to the wider repetition-loop investigation** (a known `PlanImplementVerify` failure
+mode where the model repeats the same wrong fix rather than converging): this is the LM
+Studio-native version of the mitigation floated as "force an off-ramp after N tokens of unresolved
+reasoning." It doesn't fix the
 underlying reasoning-depth ceiling (the model in this log still never solves "create a new
 file," per line 4043's "the task explicitly says... in its own new file... let me just report
 the current state and note this limitation") but it reliably converts an open-ended stall into a
@@ -42,12 +43,11 @@ this setting would not. When a model-eval run on `.113` shows the classic in-gen
 repetition-collapse signature (long unresolved reasoning oscillating between near-duplicate
 paragraphs) it may still self-resolve via this mechanism rather than needing a harness-level
 repetition detector — don't assume every such run will run to the wall-clock cap on this host.
-If a *different* LM Studio host (e.g. `.112`) shows an uninterrupted repetition loop like the one
-in [[project_oldblock_not_found_double_replace_bug]], that's the signal to check whether this
-setting is configured there too, since it clearly isn't universal across hosts by default. This
-is a per-model LM Studio load setting, not a RoslynSentinel/harness setting — it won't appear in
-this repo's code; inspect/set it in LM Studio itself per
-[[reference_lmstudio_loaded_models_endpoint]]-style host inspection.
+If a *different* LM Studio host (e.g. `.112`) shows an uninterrupted repetition loop, that's the
+signal to check whether this setting is configured there too, since it clearly isn't universal
+across hosts by default. This is a per-model LM Studio load setting, not a RoslynSentinel/harness
+setting — it won't appear in this repo's code; inspect/set it in LM Studio itself per
+[reference_lmstudio_loaded_models_endpoint.md](./reference_lmstudio_loaded_models_endpoint.md)-style host inspection.
 
 **Cap size tuned down 2026-09-08**: the run above used a 2048-token reasoning budget on
 `.113`. The user judged that too generous (it still lets a lot of dead-end reasoning accumulate

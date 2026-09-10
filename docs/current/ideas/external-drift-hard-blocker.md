@@ -78,7 +78,7 @@ never be something the in-task model is asked to adjudicate; it should stop the 
    the two tools must move to a **new `SentinelAdminTools` class**, registered only under a new
    `"Admin"` mode:
    - Add `SentinelAdminTools` (Server.Basic; Server.Advanced references Basic so it inherits this
-     for free — see [[project_advanced_extends_basic]]) containing exactly these two
+     for free) containing exactly these two
      `[McpServerTool]` methods, moved out of `SentinelWorkspaceTools`.
    - Register it in `AddRoslynSentinelToolsBasic` behind `if (activeModes.Contains("Admin"))`,
      mirroring the existing per-mode blocks.

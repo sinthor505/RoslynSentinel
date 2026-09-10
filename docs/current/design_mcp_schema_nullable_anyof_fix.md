@@ -9,8 +9,8 @@ metadata:
 
 ## Background
 
-While investigating [[project_methodsignature_null_default_bug]] (closed as an upstream Claude
-Code client bug, [anthropics/claude-code#81911](https://github.com/anthropics/claude-code/issues/81911)),
+While investigating the `MethodSignature(add)` CS1737 bug (closed as an upstream Claude
+Code client bug, [anthropics/claude-code#81911](https://github.com/anthropics/claude-code/issues/81911) — see `CLOSED.md`'s closed-history entry),
 MCP Inspector's schema-portability linter flagged 6 parameters on `MethodSignature` alone
 (`paramName`, `paramType`, `defaultValue`, `contextSnippet`, `lineBefore`, `lineAfter` — and by
 extension, every nullable-string parameter on every RoslynSentinel MCP tool) for this warning:
@@ -154,8 +154,9 @@ existing registration code untouched) and easier to revert if it causes issues, 
 being a slightly hackier fix. Do this as its own scoped task, not bundled with anything else — it
 touches server startup/registration code shared by every tool, so a mistake here has a large blast
 radius (could break tool discovery entirely, as nearly happened once already this investigation
-with an unrelated theory about `RequestContext<CallToolRequestParams>` breaking registration — see
-[[feedback_verify_before_theorizing_on_tool_errors]]).
+with an unrelated theory about `RequestContext<CallToolRequestParams>` breaking registration —
+always verify a suspected root cause against the actual error before acting on a plausible-sounding
+theory).
 
 ## Key files / versions for whoever picks this up
 - `RoslynSentinel.Server.Basic\ServiceRegistrationExtensionsBasic.cs` and

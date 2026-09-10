@@ -1,11 +1,11 @@
 
-Grew out of investigating [[project_member_replace_drops_leading_blank_line_and_verify_gap]]:
+Grew out of investigating [member_replace_drops_leading_blank_line_and_verify_gap.md](./member_replace_drops_leading_blank_line_and_verify_gap.md):
 `WholeFileRewriteAgentTests.cs:528-533` failed a run over a lost blank line even though the
 model's actual fix was correct — a false-failure signature the user wants closed across all
 ModelEval fixtures, not just this one. Confirmed via subagent research
 (`WholeFileRewriteAgentTests.cs`, `OrderPricingRefactorAgentTests.cs`,
 `OrderPricingRefactorChainAgentTests.cs`, `PlanImplementVerifyAgentTests.cs`) that:
-- `FunctionalFixVerifier` ([[project_functional_fix_verifier_added]], commit a335324) already
+- `FunctionalFixVerifier` (added commit a335324) already
   builds + reflection-invokes the **modified** method and checks real output — this part is
   correct today and should NOT change.
 - The brittle part is the **"unrelated code unchanged"** checks: `WholeFileRewriteAgentTests.cs`
@@ -47,9 +47,9 @@ and sidesteps brittleness entirely for anything with test coverage.
   can't mask a real fixture failure — the agent already exercised `RunTest`/`Build` live during
   its own run, no need to re-prove that tool works via the assertion layer too); assert zero
   failures AND that total test count is unchanged (closes the loophole where a model "fixes" a
-  failing test by deleting/`[Ignore]`-ing it instead of fixing the code — same failure class as
-  [[project_directive_error_messages_wiggle_room_theory]]/[[project_reason_param_enforcement_result]]'s
-  wiggle-room lessons); (3) `SyntaxFactory.AreEquivalent(node1, node2, topLevel: false)`
+  failing test by deleting/`[Ignore]`-ing it instead of fixing the code — same failure class as the
+  directive-error-message and reason-param-enforcement wiggle-room lessons from `TODO.md`'s
+  closed-history); (3) `SyntaxFactory.AreEquivalent(node1, node2, topLevel: false)`
   (trivia-ignoring) as a **fallback only**, for any member that ends up with no dedicated test —
   defense in depth, not the primary signal once a test exists.
 - `AgentToolErrorAssertions.AssertWithinBudget` (tool-error-count check) is orthogonal, stays
@@ -62,13 +62,13 @@ and sidesteps brittleness entirely for anything with test coverage.
   front-door behavior test exists, since that's strictly better evidence.
 
 **Also decided, separate from the test-suite redesign**: the tool-inserted attribution comment
-(mentioned by the user, marks tool-vs-model-generated code — check
-[[project_tool_attribution_idea]] for whether this actually shipped or is still just proposed,
-that memory currently says "unimplemented" and may be stale) should be worded into the ModelEval
-system prompt as expected/correct and not something to remove during cleanup. And the
-"byte-for-byte unchanged" formatting-strictness in general should relax: user's reasoning is that
-over-constraining prompts causes models to omit/overcorrect (consistent with
-[[project_directive_error_messages_wiggle_room_theory]]), formatting differences don't affect
+(mentioned by the user, marks tool-vs-model-generated code — see
+[ideas/tool_attribution_idea.md](./ideas/tool_attribution_idea.md), still unimplemented as of that
+doc) should be worded into the ModelEval system prompt as expected/correct and not something to
+remove during cleanup. And the "byte-for-byte unchanged" formatting-strictness in general should
+relax: user's reasoning is that over-constraining prompts causes models to omit/overcorrect
+(consistent with the directive-error-message wiggle-room lesson from `TODO.md`), formatting
+differences don't affect
 correctness and are addressable by any formatter, and scoring formatting nits as failures
 produces the wrong conclusions about what these models are actually capable of. The per-fixture
 test-suite redesign above is the concrete mechanism for this relaxation — once "unrelated code"

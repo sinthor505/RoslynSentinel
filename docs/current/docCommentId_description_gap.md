@@ -9,8 +9,8 @@ metadata:
 ---
 
 `RenameSymbol`'s tool description doesn't say how to obtain its `docCommentId` parameter (via
-`LocateSymbol` or equivalent). Confirmed as the direct cause of a new failure signature in
-[[project_sequential_edit_habit_vs_compiler_checks_theory]]'s 2026-09-06 batch: 2 of 3 runs called
+`LocateSymbol` or equivalent). Confirmed as the direct cause of a new failure signature in a
+2026-09-06 model-eval batch investigating sequential-edit habits vs. compiler-check reliance: 2 of 3 runs called
 `RenameSymbol` with a fabricated placeholder (`"docCommentId_for_CalcDisc"`), got rejected, then
 self-corrected via `LocateSymbol` — recovery was fast (1-2 turns) but the failure is fully
 avoidable at the description level.

@@ -3,9 +3,9 @@
 ## Context
 
 Model-eval research this session found that tool-schema size itself measurably degrades a local
-LLM's tool selection and latency ([[project_granite42_8b_tool_schema_size_isolated]]: 2 tools ~6s
+LLM's tool selection and latency (isolated with granite-4.2-8b: 2 tools ~6s
 vs 48 tools ~88s on an identical trivial prompt), and a working theory
-([[project_sequential_edit_habit_vs_compiler_checks_theory]]) that too many competing tool
+(from a sequential-edit-habit-vs-compiler-checks investigation) that too many competing tool
 names/descriptions dilutes attention toward training-familiar shell-verb tools
 (ReadFile/WriteFile/ApplyDiff/Build) away from more precise domain tools
 (RenameSymbol/ChangeSignature) even when the model would otherwise reach for them.
@@ -455,7 +455,7 @@ assembled from three `activeModes.Contains` checks already wired into
 ## Decision 7 — Ordered execution steps with build checkpoints
 
 Each step is its own commit boundary; build to 0 errors before proceeding
-(per [[feedback_build_before_commit]]):
+(build clean, then commit immediately):
 
 1. **Extract shared static helpers first** (no behavior change, unblocks both splits):
    - New `RoslynSentinel.Server.Basic/OperationBlobHelper.cs` — static
@@ -508,6 +508,21 @@ singleton registration under "Workspace"/"Refactor", and constructor signatures,
 **no source changes** — a normal solution-wide build after step 2 is sufficient confirmation, no
 separate Advanced-specific verification needed.
 
+## Decision 1-Amendment — `*Tools`/`*Impl` file pairs
+
+Every new class from the split is a pair: `*Tools` (MCP surface — holds all
+`[McpServerTool]`/`[Description]`/`[Consumes]`/`[Produces]` attributes, 1-line delegating methods)
+and `*Impl` (plain DI-constructed class holding today's method bodies moved verbatim, still
+returning `ToolResult<object>`/`ResultError` — not yet MCP-agnostic in return type).
+
+**Why:** separating the MCP surface from implementation piggybacks on this plan's already-planned
+single touch of all 39 method bodies, instead of a second pass later that re-touches everything
+again for the same layering goal.
+
+**Scope decision (explicit):** mechanical shim only for this pass — `*Impl` keeps `ToolResult`
+return types verbatim. A full domain-type boundary (impl returns plain types/throws, wrapper builds
+`ToolResult`) is deferred to be done per-tool opportunistically later, NOT as part of this plan.
+
 ## Files to create
 
 - `RoslynSentinel.Server.Basic/OperationBlobHelper.cs`, `RefactoringToolHelpers.cs`
@@ -540,5 +555,4 @@ separate Advanced-specific verification needed.
 - `dotnet build RoslynSentinel.slnx -c Debug` → 0 errors after every step above.
 - `dotnet test` on `RoslynSentinel.Tests.Battery`/`.Advanced`/`.Basic`/`.Asyncify` after step 4 to
   confirm facade delegation is behaviorally correct, not just compiling.
-- Build to 0 errors, then commit per [[feedback_build_before_commit]] — one commit per numbered
-  step above, not batched.
+- Build to 0 errors, then commit immediately — one commit per numbered step above, not batched.

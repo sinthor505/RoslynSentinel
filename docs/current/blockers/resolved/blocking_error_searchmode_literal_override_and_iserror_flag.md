@@ -62,8 +62,8 @@ transcript misdiagnoses this several times):
    returned `success:true`. **This truncated the 552-line file to 6 lines, correctly, per the
    model's own (mistaken) instruction.** Same `files`-format misunderstanding already documented
    from the earlier 08:42 run (see the `ApplyDiff` partial-file confusion noted in
-   [[blocking_error_searchsolutiontext_regex_warning_salience]]) — this model made the identical
-   mistake again, independently.
+   [blocking_error_searchsolutiontext_regex_warning_salience.md](./blocking_error_searchsolutiontext_regex_warning_salience.md)) —
+   this model made the identical mistake again, independently.
 2. `16:02:57–16:03:00` — model's second `ApplyDiff` call submits just the helper-method snippet as
    the "file content," again under `files` format. Pre-apply validation correctly rejects it
    (CS0106 "private not valid here", CS8805 "top-level statements", CS0246 unresolved types —
@@ -153,7 +153,8 @@ solution-wide safety from a project-local check.
 ## Real issue 1: `SearchSolutionText`'s new `searchMode: literal` can't actually force literal search
 
 This codebase has evidently already been updated since the earlier
-[[blocking_error_searchsolutiontext_regex_warning_salience]] write-up: `isRegex: bool` has become
+[blocking_error_searchsolutiontext_regex_warning_salience.md](./blocking_error_searchsolutiontext_regex_warning_salience.md)
+write-up: `isRegex: bool` has become
 `searchMode: TextSearchMode` (`literal` | `regex`) — exactly the "mandatory enum instead of
 optional bool" fix direction that was suggested there. Confirmed at
 [SentinelWorkspaceTools.cs:1418](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1418).
@@ -237,8 +238,8 @@ importantly, the MCP `CallToolResult.IsError` field sent to the client — says 
 `[McpServerTool]`-attributed methods in this codebase return a plain `ToolResult<object>` /
 `ToolResult<T>` C# object with a `Success` bool field. The MCP SDK sets the protocol-level
 `isError` flag based on whether the .NET method **threw an exception**, not on any field inside
-the object it returned. Since every tool in this codebase (by design — see
-[[feedback_agent_friendly_error_messages]]) catches its own exceptions and returns
+the object it returned. Since every tool in this codebase (by design — errors are meant to be
+agent-friendly domain results, not raw exceptions) catches its own exceptions and returns
 `Success: false` instead of throwing, **no domain-level failure from any tool in this codebase
 ever sets `isError: true`** at the protocol level. This isn't specific to `ApplyDiff` — it's true
 of every `ToolResult`-returning method in `SentinelWorkspaceTools.cs` and elsewhere.

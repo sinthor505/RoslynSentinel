@@ -15,7 +15,8 @@
 
 | File | Purpose |
 |------|---------|
-| **[TODO.md](./TODO.md)** | Living task list — open items and closed/fixed history |
+| **[TODO.md](./TODO.md)** | Living task list — open items only |
+| **[CLOSED.md](./CLOSED.md)** | Permanent record of fixed/resolved issues, split out of TODO.md |
 | **[UNFINISHED.md](./UNFINISHED.md)** | Backlog: planned features and known limitations |
 | **[UNFINISHED_FEATURES.md](./UNFINISHED_FEATURES.md)** | Deferred bugs with regression tests and edge-case limitations |
 | **[reference-code-file-write-paths-v1.md](./reference-code-file-write-paths-v1.md)** | Living reference: the single write-to-disk chokepoint and its guarantees |
@@ -44,7 +45,7 @@ each one covered; not re-indexed in detail here since they are no longer live re
 3. If listed under "Deferred Bugs" → Has regression test marked `[Ignore]`, awaiting fix
 
 ### For Developers: "What still needs to be done?"
-1. Read **TODO.md** → Current open/closed task log (primary source of truth)
+1. Read **TODO.md** → Current open task log (primary source of truth); see **CLOSED.md** for fixed/resolved history
 2. Read **UNFINISHED.md** → Lists planned enhancements by difficulty
 3. Check **UNFINISHED_FEATURES.md** → Lists deferred bugs and limitations
 

@@ -12,7 +12,7 @@ metadata:
 `/v1/models`) lists every downloaded model with a `loaded_instances` array per entry —
 empty if not loaded, populated with `id`/`config`/`remaining_ttl_seconds` if it is. This is
 the way to confirm which model(s) a host is actually serving before launching a
-[[reference_model_eval_procedure]] batch, instead of guessing from the OpenAI-compat
+[model-eval batch](./reference_model_eval_procedure.md), instead of guessing from the OpenAI-compat
 `/v1/models` list (which only shows what's downloaded, not what's loaded — see that doc's
 existing warning about this).
 

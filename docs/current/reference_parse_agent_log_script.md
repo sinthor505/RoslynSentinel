@@ -10,16 +10,15 @@ metadata:
 
 `Parse-AgentLog.ps1` (repo root, committed `861cd10`) parses one or many `agent.log` files (the
 `FlushingFileLoggerProvider` transcript every model-eval run produces — see
-[[reference_model_eval_procedure]]) into structured objects: per-run `ToolsExposedCount`,
+[reference_model_eval_procedure.md](./reference_model_eval_procedure.md)) into structured objects: per-run `ToolsExposedCount`,
 `UserPrompt`, and `Turns[]`, each turn carrying `ReasoningText`, `ContentText`, `ToolCallCount`,
 and `ToolCalls[]` with `ToolName`/`Args` (already JSON-parsed, so `.reason` is directly queryable)
 /`Success`/`DurationTime`/`ResultOrError` (also JSON-parsed). Also rolls up `TotalToolErrors` and
 `ToolErrorCountsByName` per run.
 
-**Use this instead of hand-grepping/reconstructing agent.log text** — that manual approach is
-exactly what [[project_reason_param_reveals_toolchoice_and_selfcorrection]]'s 13-run review did
-before this script existed, and is the generalization that finding's own "how to apply" section
-called for.
+**Use this instead of hand-grepping/reconstructing agent.log text** — a prior 13-run manual
+transcript review (surfacing tool-choice fidelity gaps) is exactly the kind of work this script now
+automates.
 
 ## What it does NOT do
 
@@ -64,7 +63,7 @@ tree, 993 runs, before committing)
   detected by pattern-matching two consecutive timestamp-shaped folder names and collapsing to the
   real `RunTimestamp`.
 
-## Two PowerShell gotchas hit while building it (see [[feedback_verify_before_theorizing_on_tool_errors]]-style diagnosis)
+## Two PowerShell gotchas hit while building it
 
 - **`[ordered]@{}` + integer keys**: assigning `$orderedDict[$intKey] = ...` when `$intKey` is an
   `[int]` not yet present is interpreted by `OrderedDictionary`'s indexer as a **positional insert
@@ -77,7 +76,6 @@ tree, 993 runs, before committing)
   text is legitimately multi-line — e.g. this log format's reasoning text, `\n`-escaped JSON
   source content, and pasted user prompts are all frequently multi-line within one logical record.
 
-See also [[reference_model_eval_procedure]] for the front-door `roslynsentinel-modeleval.ps1`
-script this pairs with (that one *runs* the batches; this one *analyzes* the resulting logs), and
-[[feedback_check_for_existing_scripts_before_looping]] for the general principle both scripts
-exist to satisfy.
+See also [reference_model_eval_procedure.md](./reference_model_eval_procedure.md) for the
+front-door `roslynsentinel-modeleval.ps1` script this pairs with (that one *runs* the batches; this
+one *analyzes* the resulting logs).

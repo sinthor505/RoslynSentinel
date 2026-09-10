@@ -17,10 +17,10 @@ Confirmed pre-existing failure (verified via `git stash` back to `master` HEAD `
 isolation, failed identically with changes present and absent):
 `RoslynSentinel.Tests.Battery.ReadFileTests.ReadFile_LargerThanThreshold_OffloadsAndReturnsLargeResultInfoAsync`
 — `Assert.That(result.LargeResult, Is.Not.Null)` fails, `LargeResult` is null. Likely related to
-[[project_offload_helper_partial_wiring]] (offload threshold/wiring gaps in `ReadFile`'s path
-specifically). Not caused by the `ChangeAccessibility`/`ListAll` work in
-[[project_changeaccessibility_enum_and_listall]] — full-suite run showed exactly this 1 failure
-both before and after that commit.
+known offload threshold/wiring gaps in `ReadFile`'s path specifically (the large-result offload
+helper is only fully wired for a few tools). Not caused by the `ChangeAccessibility`/`ListAll` work
+(commit `de39a8d`, see `CLOSED.md`'s closed-history entry) — full-suite run showed exactly this 1
+failure both before and after that commit.
 
 **How to apply:** until `docs/known-failing-tests.txt` is recreated (or this memory is superseded),
 treat this specific test as a known pre-existing failure, not a regression, when it shows up in a

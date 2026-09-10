@@ -183,9 +183,8 @@ terminals) — each gets its own `--artifacts-path` automatically, so they won't
 Once a batch finishes (via the script above or otherwise), use `Parse-AgentLog.ps1` (repo root)
 to turn `agent.log` transcripts into structured per-turn objects — reasoning text, tool calls with
 parsed args/results, error counts — instead of manually grepping/reconstructing raw log text. See
-[[reference_parse_agent_log_script]] for usage and the directory-layout edge cases it handles
-(including `PlanImplementVerify`'s nested phase folders).
+[reference_parse_agent_log_script.md](./reference_parse_agent_log_script.md) for usage and the
+directory-layout edge cases it handles (including `PlanImplementVerify`'s nested phase folders).
 
-See also [[project_applydiff_fixes_unblocked_model_eval]] for background on why this harness
-exists (replacing manual copy/paste-into-LM-Studio testing) and
-[[reference_known_failing_tests]] for the harness's own known pre-existing test failure.
+See also [reference_known_failing_tests.md](./reference_known_failing_tests.md) for the harness's
+own known pre-existing test failure.

@@ -214,4 +214,4 @@ by construction.
   harness if applicable) against `.112`/`.113` and confirm the model gets redirected to
   `ListAll`/`GetFileOutline` after 3 zero-match searches instead of continuing to guess
   patterns indefinitely.
-- Build to 0 errors, then commit per [[feedback_build_before_commit]].
+- Build to 0 errors, then commit immediately (don't batch further changes into the same commit).

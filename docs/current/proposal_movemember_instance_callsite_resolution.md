@@ -53,7 +53,7 @@ candidate exists and none is clearly preferred.
 shadowing rules (a closer-scope local/parameter of the destination type shadowing an outer field of
 the same type, etc.) — this exact class of bug (field vs. constructor-parameter disambiguation) was
 previously found and fixed in `FindReferences` (see
-[[project_findreferences_ambiguous_field_vs_ctorparam]]). Reuse that fixed resolution path rather
+`CLOSED.md`'s closed `FindReferences`/`FindCallers` ctor-parameter-vs-field entry). Reuse that fixed resolution path rather
 than writing a second, independent scope-walk for this feature — the bug class is proven to be easy
 to get subtly wrong.
 

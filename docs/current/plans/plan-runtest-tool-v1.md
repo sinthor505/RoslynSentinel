@@ -35,12 +35,11 @@ pattern as `GitTools.RunGitAsync` (`RoslynSentinel.Server.Basic\GitTools.cs:191-
   (test name, outcome, duration, error message per `UnitTestResult` element).
 - Line numbers cited below are current as of this plan's writing and will drift — re-locate with
   Grep before editing.
-- Build (0 errors) and test after each task; commit each task separately, per
-  [[feedback_build_before_commit]].
+- Build (0 errors) and test after each task; commit each task separately, building clean before
+  each commit.
 - `SentinelWorkspaceTools` is registered identically for both server flavors via
-  `ServiceRegistrationExtensionsBasic.cs` — Advanced project-references Basic
-  ([[project_advanced_extends_basic]]), so wiring the new tool/engine once in Basic covers both
-  flavors for free, exactly as `BuildEngine` already does
+  `ServiceRegistrationExtensionsBasic.cs` — Advanced project-references Basic, so wiring the new
+  tool/engine once in Basic covers both flavors for free, exactly as `BuildEngine` already does
   (`RoslynSentinel.Server.Basic\ServiceRegistrationExtensionsBasic.cs:64`).
 - Scope is a *new tool*, not a change to `Build`. Tests are conceptually distinct from compilation
   (pass/fail per test case, not per diagnostic), so a separate `RunTest` tool with its own result

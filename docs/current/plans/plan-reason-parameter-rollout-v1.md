@@ -195,11 +195,10 @@ two-step MethodSignature+ApplyDiff pattern cheaply before committing to it acros
 
 ### Task 5 — Rebuild VS Code server binaries + commit
 - `.\build.ps1 -Flavor Advanced -Config Debug -Mode Build -Force` (Advanced project-references
-  Basic, so this covers both — see `project_advanced_extends_basic` in memory).
-- Commit. Per [[feedback_build_before_commit]], build clean → commit immediately; per repo
-  convention, one commit for the whole rollout is reasonable here (108 mechanically-identical
-  edits, not 108 independent decisions) unless the fresh session's own judgment says otherwise
-  partway through.
+  Basic, so this covers both).
+- Commit: build clean → commit immediately; per repo convention, one commit for the whole rollout
+  is reasonable here (108 mechanically-identical edits, not 108 independent decisions) unless the
+  fresh session's own judgment says otherwise partway through.
 
 ## Assumptions
 - `MethodSignature` (commit `836a223`) is present in `master` and the VS Code Advanced binaries

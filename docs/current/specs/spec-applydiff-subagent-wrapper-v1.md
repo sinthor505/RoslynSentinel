@@ -71,8 +71,8 @@ Reused as-is:
 - **`ApplyProposedChangesAsync`** (`PersistentWorkspaceManager`) — the actual write/validate/
   rollback path is completely unchanged. The sub-agent only ever produces candidate file text; every
   attempt is validated and applied through the exact same chokepoint every other mutating tool uses
-  (per `[[project_write_path_chokepoint_unified]]`), so drift-detection, undo-tracking, and the
-  circuit breaker all keep working exactly as they do today.
+  (all `.cs` writes route through `ApplyProposedChangesAsync`, unified in commit `cb70952`), so
+  drift-detection, undo-tracking, and the circuit breaker all keep working exactly as they do today.
 - **`ICircuitBreaker`** (`CheckBreaker()` / `RecordBatchOutcome`) — checked once per `ApplyDiff`
   call, same as every other batch-mutating tool.
 - **`ToolResult<T>` / `ResultError`** — same envelope shape as every other tool.

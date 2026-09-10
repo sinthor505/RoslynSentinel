@@ -8,9 +8,9 @@ metadata:
   modified: 2026-09-07T21:52:04.788Z
 ---
 
-Part of [[project_qwen36_35b_ladder_preferred_branch_extract_bug]]'s secondary finding: 3/17
-overnight .113 ladder failures were a hard LM Studio streaming abort mid-response — the stream cuts
-off mid-JSON and `LmStudioAgentClient` shuts the whole run down immediately with no recovery attempt.
+Secondary finding from a separate qwen3.6-35b ladder investigation: 3/17 overnight .113 ladder
+failures were a hard LM Studio streaming abort mid-response — the stream cuts off mid-JSON and
+`LmStudioAgentClient` shuts the whole run down immediately with no recovery attempt.
 
 ## Root cause (RESOLVED 2026-09-07): known upstream LM Studio bug, not RoslynSentinel-side
 
@@ -49,8 +49,8 @@ This session initially chased two dead ends before finding the actual explanatio
 recording so a future investigation doesn't repeat them:
 1. An early subagent pass wrongly concluded the LM Studio server log trail was silent/crashed
    before all 3 failures — it only checked one late log rotation. Directly grepping the whole log
-   directory for the literal error string found it immediately in-place. See
-   [[feedback_verify_before_theorizing_on_tool_errors]].
+   directory for the literal error string found it immediately in-place — a reminder to verify a
+   suspected root cause against the raw evidence before theorizing further.
 2. Two further subagent passes exhaustively reverse-engineered LM Studio's shipped JS bundles
    (`index.js`, all preload scripts, all ~127 renderer chunks — every `JSON.parse` call site
    checked) hunting for the exact throw site, on the theory that a Unicode U+2028/U+2029 line

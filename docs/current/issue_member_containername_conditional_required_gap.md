@@ -11,7 +11,7 @@ fixed — the identical gap in `UsingDirective`, `SummaryComment`, `ConstructorP
 `MethodSignature`. A broader grep found ~20 more instances of the same shape in `GitTools.cs`,
 `SentinelWorkspaceTools.cs` (including `ApplyDiff`), `SentinelAdvancedRefactoringTools.cs`,
 `SentinelCommentingTools.cs`, and `SentinelScanTools.cs` — tracked as a follow-up, not yet fixed:
-see [[issue_conditional_required_param_audit_followup]].
+see [issue_conditional_required_param_audit_followup.md](./issue_conditional_required_param_audit_followup.md).
 
 ## Symptom
 
@@ -24,8 +24,8 @@ currently blocking anything — but the same schema-usage mistake appearing iden
 independent runs of a strong model, rather than as an isolated fluke, suggests a discoverability
 gap worth closing at the schema/description layer rather than dismissing as model error.
 
-See [[project_qwen36_35b_smoketest_and_member_containername_gap]] (session memory) for the smoke
-test context this was found in.
+Found during a smoke test of `qwen/qwen3.6-35b-a3b`, run independently on two different LM Studio
+hosts against the same fixture, described above.
 
 ## Root cause (confirmed by reading source)
 
@@ -60,16 +60,14 @@ test context this was found in.
 
 ## Why this is worth fixing
 
-This is the same shape of gap as the `WriteFile` raw-JSON rejection fix (commit 3a4c521,
-[[project_write_path_chokepoint_unified]]) and the currently-open
-[[project_docCommentId_description_gap]]: a real requirement exists, the tool enforces it
+This is the same shape of gap as the `WriteFile` raw-JSON rejection fix (commit 3a4c521) and the
+`docCommentId` description gap tracked in `TODO.md`: a real requirement exists, the tool enforces it
 correctly and recovers gracefully when violated, but the requirement isn't surfaced where a model
 is most likely to look (the schema's `required` flag) — only in prose it has to read carefully.
 Both observed occurrences recovered in exactly one extra turn with no thrashing, so this is a
-low-severity, high-frequency papercut, not a correctness bug — but per
-[[project_sequential_edit_habit_vs_compiler_checks_theory]]'s broader pattern, these cheap
-discoverability fixes have historically had an outsized effect on reducing wasted turns/tool
-errors relative to their implementation cost.
+low-severity, high-frequency papercut, not a correctness bug — but per a broader pattern seen across
+model-eval batches, these cheap discoverability fixes have historically had an outsized effect on
+reducing wasted turns/tool errors relative to their implementation cost.
 
 ## Options to investigate (not yet decided — for the follow-up session)
 

@@ -3,10 +3,10 @@ Found while investigating a .113 `Model_FixesWholeFileRewriteBug_PlanImplementVe
 (run 8/10 of the second overnight PIV batch, archived at
 `ModelTestingResults/113/Model_FixesWholeFileRewriteBug_PlanImplementVerify/20260907-053919-255`).
 The plan/implement/verify phases each have their own `transcript.json` — used the same
-reconstruct-and-interrogate technique from [[project_qwen36_35b_ladder_preferred_branch_extract_bug]]
-(rebuild OpenAI-format messages from `transcript.json`, append a follow-up user turn, replay via
-raw `/v1/chat/completions` against `.112`) to get the model's own explanation once, on the same
-day's investigation, this time targeting a PlanImplementVerify (not ladder) failure.
+reconstruct-and-interrogate technique from a same-day qwen3.6-35b ladder investigation (rebuild
+OpenAI-format messages from `transcript.json`, append a follow-up user turn, replay via raw
+`/v1/chat/completions` against `.112`) to get the model's own explanation once, this time targeting
+a PlanImplementVerify (not ladder) failure.
 
 **The bug**: the model correctly followed the given fix plan — changed `ReplaceBlockFormatted`
 from `private` to `internal` (via `ChangeAccessibility`), rewrote `ConvertAbstractClassToInterface`
@@ -38,8 +38,8 @@ the model correctly self-diagnosed on the first try: *"Neither a visual scan nor
 catches subtle whitespace or blank-line inconsistencies... I should have compared the raw newline
 sequences between every method definition to ensure the fix didn't strip or add blank lines."* It
 then reversed its own verdict to `VERIFIED: FAIL` unprompted. This confirms a hypothesis floated in
-[[project_qwen36_35b_ladder_preferred_branch_extract_bug]]'s Phase-12 update: the verify step
-pattern-matches on "does the logic/structure look right" (signatures, control flow, build status)
+a Phase-12 update of the same qwen3.6-35b ladder investigation: the verify step pattern-matches on
+"does the logic/structure look right" (signatures, control flow, build status)
 rather than doing an actual line-by-line/whitespace diff against a known-good baseline — and this
 is a general property of how the model verifies, not specific to the ladder bug's branch-extraction
 scenario. The model *can* catch this class of bug when explicitly told to look for it; it does not
@@ -81,12 +81,12 @@ correctly identified the corruption in its own reasoning and attempted a legitim
 prompt tightening fixes a bug that reproduces even when the model does everything right and
 actively tries to route around it.
 
-**Combined with [[project_qwen36_35b_ladder_preferred_branch_extract_bug]]'s 12/17 ladder
-failures (a real model instruction-misreading bug) and the 3/17 ladder LM Studio streaming
-aborts**, the overall picture for tonight's .113 overnight testing: the model's actual reasoning
-failure rate is lower than raw pass/fail tallies suggest — a meaningful chunk of "failures" across
-both batches are tool-side formatting bugs or LM Studio infra flakiness, not model incapability.
-This is direct supporting evidence for [[project_modeleval_fixture_test_suite_redesign]]'s
+**Combined with the same qwen3.6-35b ladder investigation's 12/17 ladder failures (a real model
+instruction-misreading bug) and the 3/17 ladder LM Studio streaming aborts**, the overall picture
+for tonight's .113 overnight testing: the model's actual reasoning failure rate is lower than raw
+pass/fail tallies suggest — a meaningful chunk of "failures" across both batches are tool-side
+formatting bugs or LM Studio infra flakiness, not model incapability. This is direct supporting
+evidence for [modeleval_fixture_test_suite_redesign.md](./modeleval_fixture_test_suite_redesign.md)'s
 premise: today's brittle text-matching assertions are actively producing wrong conclusions about
 model capability, and both the `Member` formatting bug (user fixing separately) and the fixture
 redesign (design written, not yet implemented) are the correct fixes — not further prompt

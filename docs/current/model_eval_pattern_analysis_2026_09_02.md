@@ -40,9 +40,8 @@ infra item (§6).
 
 ## 1. Pass-rate re-derivation — the previously recorded numbers are stale
 
-Prior memory entries ([[project_disambiguated_prompt_n20_result]],
-[[project_overnight_50run_sweep_2026_08_31]],
-[[project_minimalguidance_reasoning_pattern_analysis]]) recorded MinimalGuidance
+Prior session results (the Disambiguated-prompt n=20 run, the overnight 50-run sweep from
+2026-08-31, and the MinimalGuidance reasoning-pattern analysis) recorded MinimalGuidance
 around 34% and Disambiguated around 40%. Those numbers were computed against
 an **older version of `AssertFixApplied`** that scored "call the helper
 directly, raising its accessibility" as a **failure**. The assertion was later

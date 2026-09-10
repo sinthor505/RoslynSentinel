@@ -1,8 +1,8 @@
 # ReplaceBlockFormatted accessibility gap costs 67.5% of all ApplyDiff failures (2026-09-05)
 
-Quantified follow-up to [[project_reason_param_reveals_toolchoice_and_selfcorrection]]'s Finding
-2 (models default to `ApplyDiff`/raw edits over the purpose-built `ChangeAccessibility` tool
-~8:1 for a fixed operation), using the newly-built [[reference_parse_agent_log_script]] to
+Quantified follow-up to an earlier finding (Finding 2 of a hand-reviewed tool-choice sample: models
+default to `ApplyDiff`/raw edits over the purpose-built `ChangeAccessibility` tool ~8:1 for a fixed
+operation), using the newly-built [reference_parse_agent_log_script.md](./reference_parse_agent_log_script.md) to
 aggregate `ToolErrorCountsByName` and per-call `ResultOrError` text across every archived run
 under `ModelTestingResults\113` (995 runs total, all test variants).
 
@@ -40,26 +40,26 @@ A model has two ways to sequence this:
    that scope) or the post-apply compile guard (`CS0122`, if it resolves but access is denied),
    read the error, then go back and fix accessibility, then retry the call-site edit.
 
-Both guards are working exactly as designed — [[project_wholefile_commentout_guard_added]] and
-the general validate-before-apply pipeline exist precisely to catch a broken edit before it lands
-— so this isn't a tool bug. It's a **model tool-choice/sequencing gap that the guardrails convert
-into a visible, retryable error** instead of a silent wrong-state file. The cost is measured in
-wasted turns and tool-error-budget consumption
-([[project_per_tool_error_budget_added]]), not correctness.
+Both guards are working exactly as designed — the whole-file comment-out guard (see `CLOSED.md`'s
+closed-history entry) and the general validate-before-apply pipeline exist precisely to catch a
+broken edit before it lands — so this isn't a tool bug. It's a **model tool-choice/sequencing gap
+that the guardrails convert into a visible, retryable error** instead of a silent wrong-state file.
+The cost is measured in wasted turns and tool-error-budget consumption (the per-tool error budget
+mechanism), not correctness.
 
 ## Why `PlanImplementVerify` is hit hardest (126/655 runs, the largest share of any test type)
 
 The three-phase split's "implement" phase re-derives its own execution plan from the "plan"
 phase's prose output rather than continuing the same tool-call context a single-call test would
 have. If the plan phase's own prose doesn't explicitly sequence "change accessibility, *then* add
-the call" (plausible — [[project_reason_param_reveals_toolchoice_and_selfcorrection]] shows even
-single-context runs get this wrong most of the time), the implement phase has no built-in reason
+the call" (plausible — the same hand-reviewed tool-choice sample shows even single-context runs get
+this wrong most of the time), the implement phase has no built-in reason
 to self-correct the ordering before its first attempt, whereas a single continuous run at least
 has the *option* of noticing and pre-empting it mid-reasoning.
 
 ## Relationship to the existing tool-choice finding
 
-[[project_reason_param_reveals_toolchoice_and_selfcorrection]] found the *symptom* — models pick
+The earlier hand-reviewed tool-choice sample found the *symptom* — models pick
 `ApplyDiff` over `ChangeAccessibility` ~8:1 for the identical "make `ReplaceBlockFormatted`
 internal" operation, across 13 hand-reviewed runs. This finding quantifies the *cost* of that
 pattern at full-dataset scale: it isn't a stylistic quirk, it's the single largest concrete
@@ -81,26 +81,25 @@ Candidate interventions, roughly cheapest-to-most-invasive:
    reusing `ReplaceBlockFormatted` — e.g. "check/change its accessibility before wiring the new
    call site" — and re-run a batch to see if it measurably shifts the `ApplyDiff`-vs-
    `ChangeAccessibility` ratio or the CS0103/CS0122 counts down. Cheapest, but risks being a
-   fixture-specific patch rather than a general tool-design fix (same class of caveat as
-   [[project_directive_error_messages_wiggle_room_theory]] — unconfirmed until tested).
+   fixture-specific patch rather than a general tool-design fix (same class of caveat as the
+   directive-error-message wiggle-room lesson from `TODO.md` — unconfirmed until tested).
 2. **Schema/description nudge on `ChangeAccessibility`**: the tool is already in every relevant
    run's tool allowlist (confirmed in the earlier finding — availability isn't the gap), so this
    would mean strengthening its `[Description]` to more assertively claim the "make X internal"
-   use case away from `ApplyDiff`, mirroring the fix already applied to
-   [[project_modifymodifier_accessibility_footgun]] (closed by narrowing `ModifyModifier`'s enum
-   so it couldn't be reached for accessibility changes at all) — except here the direction is the
-   opposite (steer *toward* a tool, not away from one), so the same mechanism may not transfer
-   directly.
+   use case away from `ApplyDiff`, mirroring the fix already applied for the `ModifyModifier`
+   accessibility footgun (closed by narrowing `ModifyModifier`'s enum so it couldn't be reached for
+   accessibility changes at all) — except here the direction is the opposite (steer *toward* a
+   tool, not away from one), so the same mechanism may not transfer directly.
 3. **Compile-guard error message enrichment**: when a `CS0103`/`CS0122` rejection's message
    mentions a symbol whose only accessibility problem is fixable via `ChangeAccessibility`,
    consider whether the tool-layer error text could suggest that specific tool by name (matching
-   the spirit of [[feedback_agent_friendly_error_messages]]) rather than leaving the model to
-   infer the fix path from a raw Roslyn diagnostic — untested whether this measurably improves
-   self-correction speed vs. just being redundant with what the model already infers correctly
-   most of the time (it does eventually recover in most cases; the cost is wasted turns/budget,
-   not unrecovered failures).
+   the existing convention of agent-friendly, non-leaky error messages) rather than leaving the
+   model to infer the fix path from a raw Roslyn diagnostic — untested whether this measurably
+   improves self-correction speed vs. just being redundant with what the model already infers
+   correctly most of the time (it does eventually recover in most cases; the cost is wasted
+   turns/budget, not unrecovered failures).
 
 None of these have been implemented or A/B tested yet — this doc records the quantified problem
-so a future session can pick one lever and measure it, the same way
-[[project_modifymodifier_accessibility_footgun]] and
-[[project_directive_error_messages_wiggle_room_theory]] did for their respective findings.
+so a future session can pick one lever and measure it, the same way the `ModifyModifier`
+accessibility footgun fix and the directive-error-message rewrite did for their respective
+findings.

@@ -55,9 +55,8 @@ environment-specific. `AdvancedStructuralEngine.cs` is ~24-25KB, squarely in the
 
 ## Why this wasn't caught by existing tests/prior sweeps
 
-[[project_offload_helper_partial_wiring]] (memory) already flagged that `LargeResultInfo`/offload
-wiring is inconsistent across tools — this is a concrete instance of that inconsistency, not a new
-category of problem. `ReadFile`'s own doc comment
+The `LargeResultInfo`/offload wiring is already known to be inconsistent across tools — this is a
+concrete instance of that inconsistency, not a new category of problem. `ReadFile`'s own doc comment
 ([SentinelWorkspaceTools.cs:1146](../../../../RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs#L1146))
 says "Whole-file reads past the size threshold are written to .roslynsentinel/scans and returned as
 a scanId" — implying one threshold, when there are actually two disagreeing ones.
