@@ -13,6 +13,17 @@ namespace RoslynSentinel.Common;
 public static class ContextHelper
 {
     /// <summary>
+    /// A snippet match's location AND real length in the source text. The length is not always
+    /// <c>contextSnippet.Length</c> — the whitespace-collapsing fallback paths in
+    /// <see cref="FindAllSnippetMatchesWithLength"/> match content that is equivalent once
+    /// whitespace is normalized, but whose raw span in the source can be a different length
+    /// (different indentation, extra spaces, etc.). Any caller that removes/replaces a span of the
+    /// real source text (as opposed to merely using <c>Start</c> as an entry point into a
+    /// Roslyn node/token lookup) MUST use <c>Length</c>, not <c>contextSnippet.Length</c>.
+    /// </summary>
+    public readonly record struct SnippetMatch(int Start, int Length);
+
+    /// <summary>
     /// Non-throwing variant that returns every candidate match instead of resolving to one.
     /// Empty list = not found. Single-item list = unambiguous (equivalent to FindSnippetPosition's
     /// success case). Multi-item list = ambiguous; caller decides what to do, including building
@@ -21,18 +32,31 @@ public static class ContextHelper
     public static List<int> FindAllSnippetMatches(
         SourceText sourceText, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
+        => FindAllSnippetMatchesWithLength(sourceText, contextSnippet, lineBefore, lineAfter)
+            .Select(m => m.Start).ToList();
+
+    /// <summary>
+    /// Same matching behavior as <see cref="FindAllSnippetMatches"/> (literal match, then
+    /// CRLF-normalized, then whitespace-collapsed single-line, then whitespace-collapsed
+    /// multi-line window), but returns each match's real length in the source alongside its
+    /// start offset. Use this instead of <see cref="FindAllSnippetMatches"/> whenever the caller
+    /// needs to remove/replace the matched span of text — see <see cref="SnippetMatch"/>.
+    /// </summary>
+    public static List<SnippetMatch> FindAllSnippetMatchesWithLength(
+        SourceText sourceText, string contextSnippet,
+        string? lineBefore = null, string? lineAfter = null)
     {
         if (string.IsNullOrWhiteSpace(contextSnippet))
         {
-            return new List<int>();
+            return new List<SnippetMatch>();
         }
 
         var source = sourceText.ToString();
-        var allMatches = new List<int>();
+        var allMatches = new List<SnippetMatch>();
         int idx = 0;
         while ((idx = source.IndexOf(contextSnippet, idx, StringComparison.Ordinal)) >= 0)
         {
-            allMatches.Add(idx);
+            allMatches.Add(new SnippetMatch(idx, contextSnippet.Length));
             idx++;
         }
 
@@ -51,7 +75,7 @@ public static class ContextHelper
             foreach (System.Text.RegularExpressions.Match m in
                      System.Text.RegularExpressions.Regex.Matches(source, pattern))
             {
-                allMatches.Add(m.Index);
+                allMatches.Add(new SnippetMatch(m.Index, m.Length));
             }
         }
 
@@ -77,8 +101,16 @@ public static class ContextHelper
                     // in the right line" — the line-start position was fine for member/type
                     // resolution (FindNode/AncestorsAndSelf walk up to the enclosing declaration
                     // regardless of exact column) but wrong for expression-level lookups.
-                    var realOffset = MapNormalizedOffsetToRaw(lineText, normIndex);
-                    allMatches.Add(lines[i].Start + realOffset);
+                    //
+                    // realEnd is mapped independently of realStart (not realStart + snippetNorm.Length)
+                    // because the raw line can have a different amount of whitespace than the
+                    // collapsed snippet (e.g. source "a  +  b" vs snippet "a + b") — the real span's
+                    // length is realEnd - realStart, which is NOT contextSnippet.Length. A caller that
+                    // assumed contextSnippet.Length here is what corrupted BuildResult.cs via
+                    // ReplaceSnippet (see project_replacesnippet_silent_splice_corruption_adjacent_lines).
+                    var realStart = MapNormalizedOffsetToRaw(lineText, normIndex);
+                    var realEnd = MapNormalizedOffsetToRaw(lineText, normIndex + snippetNorm.Length);
+                    allMatches.Add(new SnippetMatch(lines[i].Start + realStart, realEnd - realStart));
                 }
             }
         }
@@ -116,19 +148,28 @@ public static class ContextHelper
 
             for (int i = 0; i + windowSize <= lines.Count; i++)
             {
+                var windowStart = lines[i].Start;
                 var windowText = string.Join(
                     "\n", Enumerable.Range(i, windowSize).Select(j => lines[j].ToString().Trim()));
                 var windowNorm = System.Text.RegularExpressions.Regex.Replace(windowText, @"\s+", " ");
                 if (windowNorm.Equals(snippetWindowNorm, StringComparison.OrdinalIgnoreCase))
                 {
-                    allMatches.Add(lines[i].Start);
+                    // The window's real length runs to the end of its last line's own text
+                    // (excluding that line's trailing line break), not EndIncludingLineBreak —
+                    // matching FindSnippetPosition's historical start-of-line-only precision
+                    // while still giving an accurate removable span. Like the single-line fallback
+                    // above, this length is derived from the actual source lines, NOT
+                    // contextSnippet.Length — the two diverge whenever indentation/spacing differs
+                    // between the caller's snippet and the real file content.
+                    var realEnd = lines[i + windowSize - 1].End;
+                    allMatches.Add(new SnippetMatch(windowStart, realEnd - windowStart));
                 }
             }
         }
 
         if (allMatches.Count == 0)
         {
-            return new List<int>();
+            return new List<SnippetMatch>();
         }
 
         // If lineBefore/lineAfter are supplied, filter all matches (including single matches) against them
@@ -137,9 +178,9 @@ public static class ContextHelper
             var lbTrimmed = lineBefore?.Trim();
             var laTrimmed = lineAfter?.Trim();
 
-            var filtered = allMatches.Where(offset =>
+            var filtered = allMatches.Where(match =>
             {
-                var linePos = sourceText.Lines.GetLinePosition(offset);
+                var linePos = sourceText.Lines.GetLinePosition(match.Start);
                 var lineIndex = linePos.Line;
 
                 if (lbTrimmed != null)
@@ -185,13 +226,30 @@ public static class ContextHelper
     public static int FindSnippetPosition(
         SourceText sourceText, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
+        => FindSnippetPositionWithLength(sourceText, contextSnippet, lineBefore, lineAfter).Start;
+
+    /// <summary>String overload — delegates to SourceText for consistent line handling.</summary>
+    public static int FindSnippetPosition(
+        string fullSource, string contextSnippet,
+        string? lineBefore = null, string? lineAfter = null)
+        => FindSnippetPosition(SourceText.From(fullSource), contextSnippet, lineBefore, lineAfter);
+
+    /// <summary>
+    /// Same resolution/ambiguity behavior as <see cref="FindSnippetPosition(SourceText, string, string?, string?)"/>,
+    /// but returns the match's real length alongside its start offset (see <see cref="SnippetMatch"/>).
+    /// Use this instead of <see cref="FindSnippetPosition(SourceText, string, string?, string?)"/> whenever the
+    /// caller needs to remove/replace the matched span of text rather than just locate a node/token.
+    /// </summary>
+    public static SnippetMatch FindSnippetPositionWithLength(
+        SourceText sourceText, string contextSnippet,
+        string? lineBefore = null, string? lineAfter = null)
     {
         if (string.IsNullOrWhiteSpace(contextSnippet))
         {
             throw new ToolNotFoundException("contextSnippet must not be empty.");
         }
 
-        var matches = FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+        var matches = FindAllSnippetMatchesWithLength(sourceText, contextSnippet, lineBefore, lineAfter);
 
         if (matches.Count == 0)
         {
@@ -218,10 +276,147 @@ public static class ContextHelper
     }
 
     /// <summary>String overload — delegates to SourceText for consistent line handling.</summary>
-    public static int FindSnippetPosition(
+    public static SnippetMatch FindSnippetPositionWithLength(
         string fullSource, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
-        => FindSnippetPosition(SourceText.From(fullSource), contextSnippet, lineBefore, lineAfter);
+        => FindSnippetPositionWithLength(SourceText.From(fullSource), contextSnippet, lineBefore, lineAfter);
+
+    /// <summary>
+    /// Strict variant of <see cref="FindAllSnippetMatchesWithLength"/> for callers that remove/replace
+    /// the matched span of raw text (as opposed to merely locating a Roslyn node/token). Only the
+    /// literal-ordinal and CRLF-normalized match paths run — never the whitespace-collapsing
+    /// fallbacks — so every returned <see cref="SnippetMatch.Length"/> is guaranteed to equal
+    /// <c>contextSnippet.Length</c> (mod line-ending substitution) and the removed span is always
+    /// exactly the text the caller supplied. Used by <c>ReplaceSnippet</c>, whose contract is a
+    /// verbatim oldContent/newContent swap with no tolerance for the caller retyping content from
+    /// memory — unlike <see cref="FindAllSnippetMatchesWithLength"/>'s callers (diff/patch-style
+    /// tools), which need the whitespace tolerance to recover from stale or approximately-quoted
+    /// context.
+    /// </summary>
+    public static List<SnippetMatch> FindAllExactSnippetMatches(
+        SourceText sourceText, string contextSnippet,
+        string? lineBefore = null, string? lineAfter = null)
+    {
+        if (string.IsNullOrWhiteSpace(contextSnippet))
+        {
+            return new List<SnippetMatch>();
+        }
+
+        var source = sourceText.ToString();
+        var allMatches = new List<SnippetMatch>();
+        int idx = 0;
+        while ((idx = source.IndexOf(contextSnippet, idx, StringComparison.Ordinal)) >= 0)
+        {
+            allMatches.Add(new SnippetMatch(idx, contextSnippet.Length));
+            idx++;
+        }
+
+        if (allMatches.Count == 0 && contextSnippet.Contains('\n'))
+        {
+            var pattern = string.Join(@"\r?\n",
+                contextSnippet.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n')
+                    .Select(System.Text.RegularExpressions.Regex.Escape));
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(source, pattern))
+            {
+                allMatches.Add(new SnippetMatch(m.Index, m.Length));
+            }
+        }
+
+        if (allMatches.Count == 0)
+        {
+            return new List<SnippetMatch>();
+        }
+
+        if (lineBefore != null || lineAfter != null)
+        {
+            var lbTrimmed = lineBefore?.Trim();
+            var laTrimmed = lineAfter?.Trim();
+
+            return allMatches.Where(match =>
+            {
+                var linePos = sourceText.Lines.GetLinePosition(match.Start);
+                var lineIndex = linePos.Line;
+
+                if (lbTrimmed != null)
+                {
+                    if (lineIndex == 0)
+                    {
+                        return false;
+                    }
+
+                    var prevLine = sourceText.Lines[lineIndex - 1].ToString().Trim();
+                    if (!MatchLine(prevLine, lbTrimmed))
+                    {
+                        return false;
+                    }
+                }
+                if (laTrimmed != null)
+                {
+                    if (lineIndex >= sourceText.Lines.Count - 1)
+                    {
+                        return false;
+                    }
+
+                    var nextLine = sourceText.Lines[lineIndex + 1].ToString().Trim();
+                    if (!MatchLine(nextLine, laTrimmed))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }).ToList();
+        }
+
+        return allMatches;
+    }
+
+    /// <summary>
+    /// Throwing variant of <see cref="FindAllExactSnippetMatches"/> — resolves to the unique exact
+    /// match, or throws <see cref="ToolNotFoundException"/>/<see cref="ToolAmbiguousMatchException"/>
+    /// with the same messages as <see cref="FindSnippetPositionWithLength"/>. Unlike that method,
+    /// never falls back to whitespace-collapsed matching: a snippet that isn't present verbatim
+    /// (allowing only for CRLF/LF differences) is reported as not found, prompting the caller to
+    /// re-read the file and copy the exact current text rather than silently matching approximate
+    /// content and risking a length mismatch on removal.
+    /// </summary>
+    public static SnippetMatch FindExactSnippetPosition(
+        SourceText sourceText, string contextSnippet,
+        string? lineBefore = null, string? lineAfter = null)
+    {
+        if (string.IsNullOrWhiteSpace(contextSnippet))
+        {
+            throw new ToolNotFoundException("contextSnippet must not be empty.");
+        }
+
+        var matches = FindAllExactSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+
+        if (matches.Count == 0)
+        {
+            throw new ToolNotFoundException(
+                $"contextSnippet not found verbatim: \"{contextSnippet.Trim()}\". " +
+                "Re-read the file and copy oldContent exactly (including whitespace) from the current content — " +
+                "approximate/retyped text is not accepted here.");
+        }
+
+        if (matches.Count == 1)
+        {
+            return matches[0];
+        }
+
+        var lbTrimmed = lineBefore?.Trim();
+        var laTrimmed = lineAfter?.Trim();
+
+        return (lbTrimmed, laTrimmed) switch
+        {
+            (null, null) => throw new ToolAmbiguousMatchException(
+                $"contextSnippet is ambiguous ({matches.Count} matches): \"{contextSnippet.Trim()}\". " +
+                "Provide lineBefore and/or lineAfter (verbatim text from the lines immediately above/below) to disambiguate."),
+            _ => throw new ToolAmbiguousMatchException(
+                $"contextSnippet is still ambiguous ({matches.Count} matches remain): \"{contextSnippet.Trim()}\". " +
+                "Provide more specific lineBefore and/or lineAfter content.")
+        };
+    }
 
     /// <summary>
     /// Non-throwing variant of <see cref="FindSnippetPosition(SourceText, string, string?, string?)"/>.

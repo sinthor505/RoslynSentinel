@@ -213,6 +213,144 @@ public class ContextHelperTests
         Assert.That(matches[0], Is.EqualTo(expectedOffset));
     }
 
+    // ── Bug: ReplaceSnippet silent splice corruption (PlanStepRunner 20260910-002952-695) ──
+    // FindSnippetPosition/FindAllSnippetMatches only ever returned a start offset; every caller
+    // that removes/replaces a span of raw text (ReplaceSnippet) assumed the matched span was
+    // exactly contextSnippet.Length characters long. That assumption is false whenever a
+    // whitespace-collapsing fallback path fires (the raw source text can be longer or shorter
+    // than the literal snippet) — a real eval run hit this and ReplaceSnippet spliced garbage
+    // into BuildResult.cs (`int ErrorCount,nt,`, `int WarningCount,,`). These tests pin down the
+    // real match length so a length-aware caller can compute a correct removal span, and confirm
+    // the new strict (non-whitespace-tolerant) API used by ReplaceSnippet never has this problem.
+
+    [Test]
+    public void FindAllSnippetMatchesWithLength_SubLineSnippetWithExtraSourceSpacing_LengthIsRealSourceSpan()
+    {
+        var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
+        var sourceText = SourceText.From(source);
+
+        var matches = ContextHelper.FindAllSnippetMatchesWithLength(sourceText, "a + b");
+
+        Assert.That(matches, Has.Count.EqualTo(1));
+        var expectedOffset = source.IndexOf("a  +  b", StringComparison.Ordinal);
+        Assert.That(matches[0].Start, Is.EqualTo(expectedOffset));
+        Assert.That(matches[0].Length, Is.EqualTo("a  +  b".Length),
+            "The real source span ('a  +  b', double-spaced) is longer than the 5-char snippet " +
+            "('a + b') that matched it — Length must reflect the source, not the snippet.");
+    }
+
+    [Test]
+    public void FindAllSnippetMatchesWithLength_MultiSpaceRunInSnippet_LengthIsRealSourceSpan()
+    {
+        var source = "public class C {\n    int M() {\n        return a + b;\n    }\n}";
+        var sourceText = SourceText.From(source);
+
+        var matches = ContextHelper.FindAllSnippetMatchesWithLength(sourceText, "a  +  b");
+
+        Assert.That(matches, Has.Count.EqualTo(1));
+        var expectedOffset = source.IndexOf("a + b", StringComparison.Ordinal);
+        Assert.That(matches[0].Start, Is.EqualTo(expectedOffset));
+        Assert.That(matches[0].Length, Is.EqualTo("a + b".Length),
+            "The real source span ('a + b', single-spaced) is shorter than the 7-char snippet " +
+            "('a  +  b') that matched it — Length must reflect the source, not the snippet.");
+    }
+
+    [Test]
+    public void FindSnippetPositionWithLength_ReplacingMatchedSpan_ProducesCleanResult()
+    {
+        // Simulates exactly what ReplaceSnippet does: Remove(match.Start, match.Length) then
+        // Insert newContent. Before the fix, this used contextSnippet.Length instead of the real
+        // match length and corrupted the surrounding text when a whitespace fallback fired.
+        var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
+        var match = ContextHelper.FindSnippetPositionWithLength(source, "a + b");
+
+        var result = source.Remove(match.Start, match.Length).Insert(match.Start, "a + b + c");
+
+        Assert.That(result, Is.EqualTo(
+            "public class C {\n    int M() {\n        return a + b + c;\n    }\n}"));
+    }
+
+    [Test]
+    public void FindAllExactSnippetMatches_LiteralMatch_LengthAlwaysEqualsSnippetLength()
+    {
+        var source = "int ErrorCount,\nint WarningCount,";
+        var matches = ContextHelper.FindAllExactSnippetMatches(SourceText.From(source), "int ErrorCount,");
+
+        Assert.That(matches, Has.Count.EqualTo(1));
+        Assert.That(matches[0].Length, Is.EqualTo("int ErrorCount,".Length));
+    }
+
+    [Test]
+    public void FindAllExactSnippetMatches_ApproximateIndentation_DoesNotFallBackAndFindsNothing()
+    {
+        // The whitespace-collapsing fallback that FindAllSnippetMatches uses is exactly what let
+        // ReplaceSnippet silently mismatch. The strict/exact variant must never take that path —
+        // an approximate (differently-spaced) snippet should report zero matches, not a fuzzy one.
+        var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
+        var matches = ContextHelper.FindAllExactSnippetMatches(SourceText.From(source), "a + b");
+
+        Assert.That(matches, Is.Empty,
+            "The strict/exact variant must not fall back to whitespace-collapsed matching.");
+    }
+
+    [Test]
+    public void FindExactSnippetPosition_ApproximateIndentation_ThrowsNotFound()
+    {
+        var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
+
+        var ex = Assert.Throws<ToolNotFoundException>(
+            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), "a + b"));
+        Assert.That(ex!.Message, Does.Contain("not found verbatim"));
+    }
+
+    [Test]
+    public void FindExactSnippetPosition_LiteralMatch_ReturnsCorrectStartAndLength()
+    {
+        var source = "namespace Foo;\npublic class Bar { public int X => 42; }";
+        var match = ContextHelper.FindExactSnippetPosition(SourceText.From(source), "public int X");
+
+        Assert.That(match.Start, Is.EqualTo(source.IndexOf("public int X", StringComparison.Ordinal)));
+        Assert.That(match.Length, Is.EqualTo("public int X".Length));
+    }
+
+    [Test]
+    public void FindExactSnippetPosition_Ambiguous_ThrowsWithCount()
+    {
+        var source = "int x = 1; int y = 1;";
+        var ex = Assert.Throws<ToolAmbiguousMatchException>(
+            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), "int"));
+        Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase);
+        Assert.That(ex.Message, Does.Contain("2"));
+    }
+
+    [Test]
+    [Description("Repro of the PlanStepRunner 20260910-002952-695 corruption: a ReplaceSnippet-style "
+                 + "caller replaces a block ending in 'int ErrorCount,' with a longer block also "
+                 + "ending in 'int ErrorCount,'. The strict exact match must land on the real, "
+                 + "unambiguous 'int ErrorCount,' text with Length equal to the literal snippet, so "
+                 + "a Remove/Insert splice never leaves a stray fragment behind.")]
+    public void FindExactSnippetPosition_AdjacentSimilarLines_NoSpliceFragmentOnReplace()
+    {
+        var source =
+            "public record BuildResult(\n" +
+            "    BuildOutcome Outcome,\n" +
+            "    int? ExitCode = null,\n" +
+            "    int ErrorCount,\n" +
+            "    int WarningCount,\n" +
+            "    string? Detail = null);\n";
+
+        var oldContent = "    BuildOutcome Outcome,\n    int? ExitCode = null,\n    int ErrorCount,";
+        var newContent = "    BuildOutcome Outcome,\n    List<string> ProjectsCompiled,\n    bool DiagnosticsComplete,\n    int ErrorCount,";
+
+        var match = ContextHelper.FindExactSnippetPosition(SourceText.From(source), oldContent);
+        var result = source.Remove(match.Start, match.Length).Insert(match.Start, newContent);
+
+        Assert.That(result, Does.Contain("int ErrorCount,\n    int WarningCount,"),
+            "ErrorCount and WarningCount lines must remain clean — no 'nt,' fragment, no doubled comma.");
+        Assert.That(result, Does.Not.Contain("ErrorCount,nt,"));
+        Assert.That(result, Does.Not.Contain("WarningCount,,"));
+    }
+
     [Test]
     [Description("Regression (ContosoOrders live agent run, attempt 7): a caller-supplied "
                  + "contextSnippet ending in a trailing newline (e.g. copying a statement plus its "

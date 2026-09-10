@@ -539,7 +539,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "ReplaceSnippet")]
     [Produces(DataTag.ChangeId)]
-    [Description("Replaces one exact block of text with another in a single file — for small, localized edits only (max 20 lines / 200 characters each for oldContent and newContent). 'filepath', 'oldContent' and 'newContent' are all REQUIRED. oldContent is matched verbatim (literal substring first, falling back to whitespace-normalized matching) against the current file content — copy it exactly from a prior ReadFile/GetMethodSource result, do not retype it from memory. If oldContent matches more than once in the file, the call fails with an Ambiguous error naming the match count — retry with lineBefore/lineAfter (verbatim text from the line immediately above/below the intended match) to disambiguate. newContent may be empty (pure deletion) or longer than oldContent (net insertion). Returns ApplyChangesResult with UndoChangeId on successful apply. For an edit larger than the size limit, use WriteFile(operation=ReplaceFile) for a whole-file rewrite, or the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) for a structural change. For multiple small edits in the same file, call ReplaceSnippet once per edit. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
+    [Description("Replaces one exact block of text with another in a single file — for small, localized edits only (max 20 lines / 200 characters each for oldContent and newContent). 'filepath', 'oldContent' and 'newContent' are all REQUIRED. oldContent is matched verbatim (literal substring, or the same text with different line endings) against the current file content — copy it exactly, character-for-character including whitespace, from a prior ReadFile/GetMethodSource result; do not retype it from memory or approximate indentation, or the call fails with a 'not found' error rather than guessing. If oldContent matches more than once in the file, the call fails with an Ambiguous error naming the match count — retry with lineBefore/lineAfter (verbatim text from the line immediately above/below the intended match) to disambiguate. newContent may be empty (pure deletion) or longer than oldContent (net insertion). Returns ApplyChangesResult with UndoChangeId on successful apply. For an edit larger than the size limit, use WriteFile(operation=ReplaceFile) for a whole-file rewrite, or the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) for a structural change. For multiple small edits in the same file, call ReplaceSnippet once per edit. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
     public async Task<ToolResult<object>> ReplaceSnippet(
         [Description(ToolParams.Reason)] string reason,
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
@@ -611,8 +611,13 @@ public class SentinelWorkspaceTools
                     }
 
                     var oldText = await document.GetTextAsync();
-                    var pos = ContextHelper.FindSnippetPosition(oldText, oldContent, lineBefore, lineAfter);
-                    var newFileContent = oldText.ToString().Remove(pos, oldContent.Length).Insert(pos, newContent);
+                    // FindExactSnippetPosition (not FindSnippetPosition) is required here: it never
+                    // uses ContextHelper's whitespace-collapsing fallback, so match.Length is always
+                    // the real removable span. Using oldContent.Length instead of match.Length used
+                    // to corrupt adjacent lines when a fallback match fired (see
+                    // project_replacesnippet_silent_splice_corruption_adjacent_lines memory).
+                    var match = ContextHelper.FindExactSnippetPosition(oldText, oldContent, lineBefore, lineAfter);
+                    var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
                     var targetPath = document.FilePath ?? filePath;
                     var snippetChanges = new Dictionary<FilePath, string>
                     {
@@ -1265,13 +1270,13 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]
-    [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). filter is passed through to `dotnet test --filter` — an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests.")]
+    [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). resultsType defaults to \"failed\" so a clean run stays a short summary with no per-test list; pass \"all\" to see every test's outcome. filter is passed through to `dotnet test --filter` — an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests.")]
     public async Task<ToolResult<object>> RunTest(
         [Description(ToolParams.Reason)] string reason,
         ToolScope scope = ToolScope.solution,
         string? scopeName = null,
         string? filter = null,
-        TestResultsFilter resultsType = TestResultsFilter.all,
+        TestResultsFilter resultsType = TestResultsFilter.failed,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         int timeoutSeconds = 600,
         CancellationToken cancellationToken = default)
