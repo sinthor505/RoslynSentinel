@@ -405,11 +405,9 @@ public class WorkspaceReadNavigationImpl
         }
     }
 
-    private static readonly Regex LikelyRegexPattern = new(@"[\^\$\.\*\+\?\(\)\[\]\{\}\|\\]", RegexOptions.Compiled);
-
     public async Task<ToolResult<object>> SearchSolutionText(
         string reason,
-        string pattern, TextSearchMode searchMode = TextSearchMode.literal, string? fileGlob = null, int maxResults = 200,
+        string pattern, string? fileGlob = null, int maxResults = 200,
         CancellationToken cancellationToken = default)
     {
         try
@@ -418,14 +416,16 @@ public class WorkspaceReadNavigationImpl
             var results = new List<TextSearchMatch>();
             var warnings = new List<string>();
             Regex? regex = null;
+            bool regexPatternValid = true;
 
-            if (searchMode == TextSearchMode.regex)
+            try
             {
                 regex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase, matchTimeout: TimeSpan.FromSeconds(5));
             }
-            else if (searchMode == TextSearchMode.literal && LikelyRegexPattern.IsMatch(pattern))
+            catch (ArgumentException)
             {
-                warnings.Add($"Pattern '{pattern}' contains regex metacharacters ({LikelyRegexPattern}) but searchMode is literal - searched for the literal substring as requested. Pass searchMode: regex if you meant to search as a regex.");
+                regexPatternValid = false;
+                warnings.Add($"Pattern '{pattern}' is not a valid regex — only literal substring matches are returned.");
             }
 
             var options1 = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount };
@@ -454,72 +454,76 @@ public class WorkspaceReadNavigationImpl
                     for (int i = 0; i < lines.Length && results.Count < maxResults; i++)
                     {
                         var line = lines[i];
-                        int col = -1;
-                        if (searchMode == TextSearchMode.regex && regex != null)
+
+                        string BuildPreview()
+                        {
+                            var preview = line.Trim();
+                            return preview.Length > 120 ? preview[..120] + "…" : preview;
+                        }
+
+                        string? EnclosingMemberAt(int col)
+                        {
+                            if (root == null || i >= text.Lines.Count)
+                            {
+                                return null;
+                            }
+                            var lineStart = text.Lines[i].Start;
+                            var lineLength = text.Lines[i].End - lineStart;
+                            var position = lineStart + Math.Clamp(col, 0, Math.Max(0, lineLength));
+                            return GetEnclosingMemberName(root, position);
+                        }
+
+                        var literalCol = line.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
+                        if (literalCol >= 0)
+                        {
+                            results.Add(new TextSearchMatch(docPath.Absolute, i + 1, literalCol + 1, BuildPreview(), MatchKind.Literal, EnclosingMemberAt(literalCol)));
+                        }
+
+                        if (regex != null)
                         {
                             try
                             {
                                 var m = regex.Match(line);
                                 if (m.Success)
                                 {
-                                    col = m.Index;
+                                    results.Add(new TextSearchMatch(docPath.Absolute, i + 1, m.Index + 1, BuildPreview(), MatchKind.Regex, EnclosingMemberAt(m.Index)));
                                 }
                             }
                             catch (RegexMatchTimeoutException)
                             {
-                                continue;
                             }
-                        }
-                        else
-                        {
-                            col = line.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
-                        }
-
-                        if (col >= 0)
-                        {
-                            var preview = line.Trim();
-                            if (preview.Length > 120)
-                            {
-                                preview = preview[..120] + "…";
-                            }
-
-                            string? enclosingMember = null;
-                            if (root != null && i < text.Lines.Count)
-                            {
-                                var lineStart = text.Lines[i].Start;
-                                var lineLength = text.Lines[i].End - lineStart;
-                                var position = lineStart + Math.Clamp(col, 0, Math.Max(0, lineLength));
-                                enclosingMember = GetEnclosingMemberName(root, position);
-                            }
-
-                            results.Add(new TextSearchMatch(docPath.Absolute, i + 1, col + 1, preview, enclosingMember));
                         }
                     }
                 });
             });
 
-            if (results.Count == 0)
+            var literalResults = results.Where(r => r.MatchedAs == MatchKind.Literal).ToList();
+            var literalKeys = literalResults.Select(r => (r.filePath, r.Line, r.Column)).ToHashSet();
+            var rawRegexResults = results.Where(r => r.MatchedAs == MatchKind.Regex).ToList();
+            var regexResults = rawRegexResults.Where(r => !literalKeys.Contains((r.filePath, r.Line, r.Column))).ToList();
+            int regexOverlapCount = rawRegexResults.Count - regexResults.Count;
+
+            if (literalResults.Count == 0 && regexResults.Count == 0)
             {
-                string modeLabel = searchMode == TextSearchMode.literal ? "literal substring" : "regex pattern";
-                string switchModeHint = searchMode == TextSearchMode.literal ? "using the regex search mode" : "using the literal search mode";
                 warnings.Add(
-                    $"No matches were found for the {modeLabel} '{pattern}'. Try adjusting the search pattern or {switchModeHint}. " +
+                    $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. " +
                     "If you were searching for a known symbol by name, use LocateSymbol instead (semantic lookup, not text matching). " +
                     "Use ProjectDoc to read plan/handoff/documentation files directly or use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
                 throw new NoSearchMatchesException(string.Join(" ", warnings));
             }
             else if (results.Count >= maxResults)
             {
-                warnings.Add($"{results.Count} matches found — returning first ({maxResults}) matches — Narrow fileGlob/pattern or increase maxResults to see more.");
+                warnings.Add($"{results.Count} matches found — returning first ({maxResults}) matches scanned — Narrow fileGlob/pattern or increase maxResults to see more.");
             }
 
             string? warning = warnings.Count > 0 ? string.Join(" ", warnings) : null;
+            var payload = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid);
             var searchResult = await ToolResult<object>.ForPossiblyLargeDataAsync(
-                results,
+                payload,
                 _workspaceManager.GetSolutionRoot(),
                 typeof(TextSearchMatch).Name,
                 ResultWrapperType.TextSearchMatchList,
-                totalRecords: results.Count,
+                totalRecords: literalResults.Count + regexResults.Count,
                 workspaceVersion: _workspaceManager.WorkspaceVersion,
                 cancellationToken: cancellationToken);
             return searchResult with { Warning = warning };
@@ -936,12 +940,15 @@ public class WorkspaceReadNavigationImpl
                     }
                 case ResultWrapperType.TextSearchMatchList:
                     {
-                        var matches = JsonSerializer.Deserialize<List<TextSearchMatch>>(all.Data.ToString(), _jsonOptions)
-                            ?? [];
+                        var searchResult = JsonSerializer.Deserialize<TextSearchResult>(all.Data.ToString(), _jsonOptions);
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = matches.Skip(offset).Take(limit).ToList()
+                            Data = searchResult is null ? null : searchResult with
+                            {
+                                LiteralResults = searchResult.LiteralResults.Skip(offset).Take(limit).ToList(),
+                                RegexResults = searchResult.RegexResults.Skip(offset).Take(limit).ToList()
+                            }
                         };
                         break;
                     }

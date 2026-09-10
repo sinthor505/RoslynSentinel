@@ -22,7 +22,17 @@ public record FileOutlineResult
     public List<OutlineItem> Symbols { get; init; } = new();
 }
 /// <summary>Single text-search hit returned by search_solution_text.</summary>
-public record TextSearchMatch(FilePath filePath, int Line, int Column, string Preview, string? EnclosingMember = null);
+public record TextSearchMatch(FilePath filePath, int Line, int Column, string Preview, MatchKind MatchedAs, string? EnclosingMember = null);
+/// <summary>
+/// Return payload for <c>SearchSolutionText</c>: the literal substring matches (always the
+/// complete set) and the regex matches not already present in <see cref="LiteralResults"/> (empty
+/// when the pattern has no regex metacharacters, since every regex match is then also a literal
+/// match). <see cref="RegexOverlapCount"/> is how many regex matches were suppressed as duplicates
+/// of a literal match — lets a caller tell "regex found nothing extra" apart from "regex found
+/// nothing at all." <see cref="RegexPatternValid"/> is false when <c>pattern</c> doesn't compile
+/// as a regex; <see cref="RegexResults"/> is empty and literal search is unaffected in that case.
+/// </summary>
+public record TextSearchResult(List<TextSearchMatch> LiteralResults, List<TextSearchMatch> RegexResults, int RegexOverlapCount, bool RegexPatternValid);
 /// <summary>
 /// A file attached to the solution via a .sln Solution Folder (ProjectSection(SolutionItems)),
 /// returned by ListSolutionItems(kind: solutionItems). SolutionFolder is the enclosing folder's
@@ -1722,16 +1732,16 @@ public class SentinelWorkspaceTools
         CancellationToken cancellationToken = default)
         => _readNav.ListAll(reason, kind, projectName, cancellationToken);
 
-    /// <summary>Regex metacharacters that suggest the caller meant to pass isRegex=true.</summary>
+    /// <summary>Regex metacharacters that suggest a pattern was meant as a regex.</summary>
     [McpServerTool(Name = "SearchSolutionText")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
-    [Description("Searches all source files in the loaded solution for a text pattern or regex. Only searches documents that are part of a loaded project's source code (e.g. .cs files). For a known symbol (class/method/field/etc. by name), use LocateSymbol instead — it's semantic, not text-based, so it won't false-positive on comments/strings or miss partial-line matches. If you don't know the exact name you're looking for, call ListAll first — it's cheaper and more reliable than guessing plausible-sounding names and searching for each one individually here. Use ListSolutionItems(kind: solutionItems) to see files attached via the .sln's Solution Folders and other non-project files, use ProjectDoc to read plan/handoff/documentation files directly, and use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file. Returns file path, 1-based line and column, a preview, and enclosingMember (the name of the method/property/constructor/field/etc. containing the match, or null if the match isn't inside any member) per match. searchMode is required and never inferred: pass literal for an exact substring, regex for a pattern. A pattern containing regex metacharacters is still searched literally under searchMode: literal, so an unstated mode used to guarantee zero results. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
+    [Description("Searches all source files in the loaded solution for pattern, evaluated BOTH as a literal substring and (if it compiles) as a regex in a single pass — there is no search-mode to choose. Only searches documents that are part of a loaded project's source code (e.g. .cs files). For a known symbol (class/method/field/etc. by name), use LocateSymbol instead — it's semantic, not text-based, so it won't false-positive on comments/strings or miss partial-line matches. If you don't know the exact name you're looking for, call ListAll first — it's cheaper and more reliable than guessing plausible-sounding names and searching for each one individually here. Use ListSolutionItems(kind: solutionItems) to see files attached via the .sln's Solution Folders and other non-project files, use ProjectDoc to read plan/handoff/documentation files directly, and use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file. Returns literalResults (always the complete literal-substring match set) and regexResults (regex matches not already in literalResults — empty when pattern has no regex metacharacters, since every regex match is then also a literal match), plus regexOverlapCount (matches found both ways) and regexPatternValid (false if pattern doesn't compile as a regex — literal search is unaffected). Each match has file path, 1-based line and column, a preview, and enclosingMember (the name of the method/property/constructor/field/etc. containing the match, or null if the match isn't inside any member). fileGlob restricts to matching file paths. maxResults caps total matches scanned (default 200).")]
     public Task<ToolResult<object>> SearchSolutionText(
         [Description(ToolParams.Reason)] string reason,
-        [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern, [ToolOption(ToolOptionTag.SearchMode, required: true)] TextSearchMode searchMode, [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null, [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200, // RequestContext<CallToolRequestParams> requestParams = null,
+        [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern, [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null, [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
-        => _readNav.SearchSolutionText(reason, pattern, searchMode, fileGlob, maxResults, cancellationToken);
+        => _readNav.SearchSolutionText(reason, pattern, fileGlob, maxResults, cancellationToken);
 
     // ── Phase 2 — Blob persistence query + undo tools ───────────────────────
     [McpServerTool(Name = "GetOperationDetail")]

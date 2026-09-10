@@ -61,9 +61,9 @@ public enum WriteFileOperation
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum TextSearchMode
+public enum MatchKind
 {
-    regex, literal
+    Literal, Regex
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

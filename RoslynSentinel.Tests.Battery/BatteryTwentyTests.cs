@@ -191,43 +191,64 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_LiteralPattern_ReturnsNoWarning()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "Order", searchMode: TextSearchMode.literal);
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", "Order");
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Warning, Is.Null);
     }
 
     [Test]
-    public async Task SearchSolutionText_RegexLikePatternWithoutIsRegex_ReturnsWarning()
+    public async Task SearchSolutionText_RegexLikePattern_ReturnsBothLiteralAndRegexResults()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", @"^\s*public enum OrderStatus", searchMode: TextSearchMode.literal);
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", @"^namespace TestProj");
 
-        Assert.That(result.Success, Is.False, "explicit literal mode must actually search literally, not silently switch to regex, and zero matches is now a failure");
-        Assert.That(result.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
-        Assert.That(result.Error?.Message, Does.Contain("contains regex metacharacters"));
-        Assert.That(result.Error?.Message, Does.Contain("searched for the literal substring as requested"));
+        Assert.That(result.Success, Is.True, "a pattern with regex metacharacters must still be searched literally, not just as regex");
+        var payload = (TextSearchResult)result.Data!;
+        Assert.That(payload.LiteralResults, Is.Empty, "no literal substring '^namespace TestProj' (with a literal '^') exists in the source");
+        Assert.That(payload.RegexResults, Is.Not.Empty, "the same text, interpreted as a regex, should match the namespace declaration line");
     }
 
     [Test]
-    public async Task SearchSolutionText_RegexLikePatternWithIsRegex_ReturnsNoWarning()
+    public async Task SearchSolutionText_PatternMatchingBothModes_DedupesOverlapOutOfRegexResults()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", @"^namespace TestProj", searchMode: TextSearchMode.regex);
+        // "Order" contains no regex metacharacters, so every regex match is also a literal match
+        // at the same file/line/col — regexResults should be empty and the overlap reported.
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", "Order");
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Warning, Is.Null);
+        var payload = (TextSearchResult)result.Data!;
+        Assert.That(payload.LiteralResults, Is.Not.Empty);
+        Assert.That(payload.RegexResults, Is.Empty, "a regex match at the same file/line/col as a literal match must be deduped out of regexResults");
+        Assert.That(payload.RegexOverlapCount, Is.EqualTo(payload.LiteralResults.Count), "every literal match here is also a regex match, so the overlap count should equal the literal match count");
     }
 
     [Test]
     public async Task SearchSolutionText_NoMatches_ReturnsNoMatchesError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "ThisPatternDoesNotAppearAnywhere", searchMode: TextSearchMode.literal);
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", "ThisPatternDoesNotAppearAnywhere");
 
-        Assert.That(result.Success, Is.False, "Zero matches should surface as a failure so the protocol-level IsError filter picks it up.");
+        Assert.That(result.Success, Is.False, "Zero matches in both modes should surface as a failure so the protocol-level IsError filter picks it up.");
         Assert.That(result.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
         Assert.That(result.Error?.Message, Does.Contain("ProjectDoc"));
+    }
+
+    [Test]
+    public async Task SearchSolutionText_InvalidRegexPattern_StillReturnsLiteralResults()
+    {
+        // Comment text containing an unclosed '[' — unambiguously invalid regex in .NET — but a
+        // perfectly normal literal substring to search for. Must not throw a parse error, and
+        // literal search must still work.
+        SetSource("namespace TestProj; // array like foo[bar\npublic class Order { }", "Test.cs");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", "foo[bar");
+
+        Assert.That(result.Success, Is.True, "an unclosed '[' is not valid regex, but the literal substring search must still work");
+        var payload = (TextSearchResult)result.Data!;
+        Assert.That(payload.RegexPatternValid, Is.False);
+        Assert.That(payload.RegexResults, Is.Empty);
+        Assert.That(payload.LiteralResults, Is.Not.Empty);
     }
 
     [Test]
@@ -247,11 +268,11 @@ public class BatteryTwentyTests
         }
         """, "Test.cs");
 
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "return a + b", searchMode: TextSearchMode.literal);
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", "return a + b");
 
         Assert.That(result.Success, Is.True);
-        var matches = (System.Collections.Generic.IEnumerable<TextSearchMatch>)result.Data!;
-        var match = matches.Single();
+        var payload = (TextSearchResult)result.Data!;
+        var match = payload.LiteralResults.Single();
         Assert.That(match.EnclosingMember, Is.EqualTo("Add"));
     }
 
@@ -269,11 +290,11 @@ public class BatteryTwentyTests
         }
         """, "Test.cs");
 
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "using System", searchMode: TextSearchMode.literal);
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", "using System");
 
         Assert.That(result.Success, Is.True);
-        var matches = (System.Collections.Generic.IEnumerable<TextSearchMatch>)result.Data!;
-        var match = matches.Single();
+        var payload = (TextSearchResult)result.Data!;
+        var match = payload.LiteralResults.Single();
         Assert.That(match.EnclosingMember, Is.Null);
     }
 
@@ -291,7 +312,7 @@ public class BatteryTwentyTests
                 "TestProj", projectCsproj, [("Foo.cs", initialContent, tempFile)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var before = await _workspaceTools.SearchSolutionText(reason: "test", "Bar", searchMode: TextSearchMode.literal);
+            var before = await _workspaceTools.SearchSolutionText(reason: "test", "Bar");
             Assert.That(before.Success, Is.True);
             Assert.That(before.WorkspaceVersion, Is.Not.Null);
 
@@ -301,7 +322,7 @@ public class BatteryTwentyTests
                 new Dictionary<FilePath, string> { [tempFile] = updatedContent });
             Assert.That(applyResult.Success, Is.True);
 
-            var after = await _workspaceTools.SearchSolutionText(reason: "test", "Baz", searchMode: TextSearchMode.literal);
+            var after = await _workspaceTools.SearchSolutionText(reason: "test", "Baz");
 
             Assert.That(after.Success, Is.True);
             Assert.That(after.WorkspaceVersion, Is.Not.Null);
