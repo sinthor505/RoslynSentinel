@@ -1,6 +1,6 @@
 ---
 name: createfile-tool-design-sketch
-description: CreateFile MCP tool (skeleton file creation) — IMPLEMENTED 2026-09-09 in SentinelWorkspaceTools.cs; typeKind/typeName mandatory for .cs files, not optional as originally sketched; staticClass added to NewTypeKind 2026-09-09
+description: "HISTORICAL design sketch + implementation record for the CreateFile MCP tool (shipped 2026-09-09). For current usage policy see [[project_createfile_tool_added_for_gated_writefile]]."
 metadata: 
   node_type: memory
   type: project
@@ -8,7 +8,11 @@ metadata:
   modified: 2026-09-09T16:39:33.070Z
 ---
 
-## STATUS: Implemented 2026-09-09
+## STATUS: Implemented 2026-09-09 — historical record
+
+This file is the design sketch and as-built deviations. **For how to actually use `CreateFile`
+(and why `WriteFile` is gated off), read [[project_createfile_tool_added_for_gated_writefile]]
+instead** — that is the live policy entry; this one is kept for design rationale only.
 
 Implemented in `SentinelWorkspaceTools.cs` per the sketch below, with one deliberate deviation:
 `typeKind`/`typeName` ended up **mandatory** for `.cs` files, not optional. User's rationale: an

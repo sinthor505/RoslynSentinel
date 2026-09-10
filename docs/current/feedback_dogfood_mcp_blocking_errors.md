@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 8cc40adc-02cd-47df-a2c3-a5257d5998e5
-  modified: 2026-08-28T04:04:46.623Z
+  modified: 2026-09-10T06:42:53.813Z
 ---
 
 To push the RoslynSentinel MCP server to production-ready, dog-fooding it (and fixing what it
@@ -13,9 +13,16 @@ exposes) now outranks completing the task at hand. RoslynSentinel MCP tools **MU
 for **all** future work in this repo — reads, writes, search, everything — even when a plain
 Read/Edit/Bash call would be faster or more obviously correct, and even when the work is on the
 RoslynSentinel codebase itself. This is not a preference to weigh against convenience; it is a hard
-requirement. See [[feedback_use_roslyn_sentinel_tools_first]] for the prior (softer) version of this
-preference; this entry supersedes it with a hard stop-and-report rule for failures instead of a
-silent fallback.
+requirement. This supersedes an earlier, softer version of the preference (a try-first/fall-back
+protocol agreed 2026-08-19, memory since deleted) — that one permitted a silent fallback to
+Read/Edit/Bash whenever a tool was the wrong fit; this one replaces that with a hard
+stop-and-report rule.
+
+**Scope — C# only.** Non-C# files (docs, `.ps1`, `.md`) are outside the Roslyn workspace's tracked
+documents and have no MCP tool coverage; use the normal file tools for those directly, with no need
+to try `ApplyDiff` against them first (confirmed 2026-08-19: it returns "File not found" for
+anything outside the loaded solution's project files). This is not a bypass — it is the boundary of
+where the tools apply at all.
 
 **Editing specifically:** `ApplyUnifiedDiff`/`ApplyDiff`/`WriteFile` must cover nearly every editing
 scenario — there should be no need to reach for a plain Edit/Write/Bash call to modify a file in
@@ -49,16 +56,6 @@ exactly the failures this effort exists to find.
    continue. Don't proactively re-poll or re-check server/tool health in the meantime.
 5. Once resolved, move the file from `docs/current/blockers/` to `docs/obsolete/blockers/` (mirrors
    the existing current/obsolete docs-tier convention already used elsewhere in this repo).
-
-**VS Code's server is a separate build, not affected by editing this repo:** the MCP server VS Code
-connects to runs from `bin-vscode\Advanced` (stdio) — see [[project_vscode_control_script]] for the
-HTTP sibling copy at `bin-vscode\Advanced.Http`, port 5150. `build.ps1` only refreshes these two
-copies after a successful build of whatever flavor it was invoked for (see its VS Code server
-restart region); editing source files or running tests in this repo does **not** touch them. So a
-tool call made mid-edit is exercising the last `build.ps1`-refreshed binary, not the working tree —
-don't assume an in-progress code change is already live in the tool you're dog-fooding, and don't
-treat a build/test failure elsewhere in the repo as evidence the VS Code server is unhealthy (or
-vice versa) without checking timestamps per [[feedback_stale_server_before_rebuild]].
 
 **Known reachability flake (already diagnosed, not a fresh bug to re-investigate each time):**
 MCP server access can fail / appear offline / show no tools loaded, typically on the *first* tool
