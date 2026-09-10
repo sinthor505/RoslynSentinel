@@ -106,7 +106,7 @@ public class SentinelDocumentationTools
         return Directory.Exists(currentDir) ? currentDir : docsRoot;
     }
 
-    private static DocReadResult ReadFile(string subdir, string filename, DocType docType)
+    private static DocReadResult ReadFile(string subdir, string filename, DocType docType, string docsRoot)
     {
         var (ok, fullPath, guardError) = DocPathGuard.ResolveSafe(subdir, filename);
         if (ok && File.Exists(fullPath))
@@ -119,7 +119,7 @@ public class SentinelDocumentationTools
             };
         }
 
-        // Fallback: match by basename (extension-insensitive) anywhere under subdir.
+        // Fallback 1: match by basename (extension-insensitive) anywhere under subdir.
         // Handles a bare name, a wrong/missing extension, or an un-guessed subfolder —
         // all observed model behaviors when the exact relative path isn't already known.
         var matches = FindByBasename(subdir, filename);
@@ -143,9 +143,44 @@ public class SentinelDocumentationTools
             };
         }
 
+        // Fallback 2: the requested docType's subdirectory doesn't hold it, but action:list
+        // walks all of docs/ — so search that same full tree before giving up. Covers docs
+        // laid out outside the five known docType subdirs (e.g. docs/tests/...).
+        var (rootOk, rootFullPath, _) = DocPathGuard.ResolveSafe(docsRoot, filename);
+        if (rootOk && File.Exists(rootFullPath))
+        {
+            return new DocReadResult
+            {
+                Found = true,
+                Filename = filename,
+                Content = File.ReadAllText(rootFullPath)
+            };
+        }
+
+        var rootMatches = FindByBasename(docsRoot, filename);
+        if (rootMatches.Count == 1)
+        {
+            return new DocReadResult
+            {
+                Found = true,
+                Filename = rootMatches[0],
+                Content = File.ReadAllText(Path.Combine(docsRoot, rootMatches[0]))
+            };
+        }
+
+        if (rootMatches.Count > 1)
+        {
+            return new DocReadResult
+            {
+                Found = false,
+                Filename = filename,
+                Error = $"'{filename}' is ambiguous. Did you mean: {string.Join(", ", rootMatches)}"
+            };
+        }
+
         string stem = Path.GetFileNameWithoutExtension(Path.GetFileName(filename));
         var notFoundError = ok
-            ? $"No file matching '{stem}' (with or without extension) was found under docType='{docType}'. This location was already searched — retrying with a different extension or spelling will not help. Call ProjectDoc(action: list) to see all available files."
+            ? $"No file matching '{stem}' (with or without extension) was found under docType='{docType}', or anywhere else under docs/. Call ProjectDoc(action: list) to see all available files."
             : guardError;
         return new DocReadResult { Found = false, Filename = filename, Error = notFoundError };
     }
@@ -218,7 +253,7 @@ public class SentinelDocumentationTools
 
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
-    [Description("Unified accessor for project doc files under docs/ (or docs/current/ if that subdirectory exists). plan → .../plans/; handoff → .../handoffs/; completed_work → .../completed/ (append only); documentation → .../documentation/; state → docs/migration-state.yaml (name ignored, always directly under docs/). name required for all file-based operations, accepts a nested relative path (e.g. 'plan-x-steps/01-baseline.md') as shown by action:list; on read, a bare/wrong-extension name also falls back to a basename search and auto-resolves if exactly one file matches. content required for write/append.")]
+    [Description("Unified accessor for project doc files under docs/ (or docs/current/ if that subdirectory exists). plan → .../plans/; handoff → .../handoffs/; completed_work → .../completed/ (append only); documentation → .../documentation/; state → docs/migration-state.yaml (name ignored, always directly under docs/). name required for all file-based operations, accepts a nested relative path (e.g. 'plan-x-steps/01-baseline.md') as shown by action:list; on read, a bare/wrong-extension name also falls back to a basename search, and if the docType's own subdirectory has no match, falls back further to searching all of docs/ (the same tree action:list walks) — so any file action:list can show, read can load regardless of docType. Auto-resolves if exactly one file matches. content required for write/append.")]
     public object ProjectDoc(
         [Description(ToolParams.Reason)] string reason,
         DocAction action,
@@ -334,7 +369,7 @@ public class SentinelDocumentationTools
 
             return action switch
             {
-                DocAction.read => (object)ReadFile(subdir, name, docType),
+                DocAction.read => (object)ReadFile(subdir, name, docType, docsRoot),
                 DocAction.write => WriteFile(subdir, name, content!),
                 DocAction.append => docType == DocType.completed_work
                     ? WriteFile(subdir, name, content!, append: true)

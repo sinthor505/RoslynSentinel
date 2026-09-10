@@ -109,7 +109,7 @@ public class SentinelDocumentationToolsTests
     }
 
     [Test]
-    public void Read_NoMatchAnywhere_ReportsScopeAlreadySearched()
+    public void Read_NoMatchAnywhere_ReportsDocTypeAndFullTreeSearched()
     {
         Directory.CreateDirectory(Path.Combine(_solutionRoot, "docs", "current", "plans"));
 
@@ -117,7 +117,36 @@ public class SentinelDocumentationToolsTests
             name: "does-not-exist.md");
 
         Assert.That(result.Found, Is.False);
-        Assert.That(result.Error, Does.Contain("already searched"));
         Assert.That(result.Error, Does.Contain("docType='plan'"));
+        Assert.That(result.Error, Does.Contain("docs/"));
+    }
+
+    // ── docs/-wide fallback (file lives outside the requested docType's subdir) ──
+
+    [Test]
+    public void Read_ExactPathOutsideDocTypeSubdir_FallsBackToFullDocsTree()
+    {
+        // Mirrors a real layout: a plan file that lives under docs/current/tests/... instead
+        // of docs/current/plans/... — action:list would still surface it, so read must reach it.
+        WriteDoc(Path.Combine("current", "tests", "plan-x-steps-runner", "02-step.md"), "runner step content");
+
+        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+            name: "tests/plan-x-steps-runner/02-step.md");
+
+        Assert.That(result.Found, Is.True, result.Error);
+        Assert.That(result.Content, Is.EqualTo("runner step content"));
+    }
+
+    [Test]
+    public void Read_BareNameOutsideDocTypeSubdir_FallsBackToFullTreeBasenameSearch()
+    {
+        WriteDoc(Path.Combine("current", "tests", "plan-x-steps-runner", "02-step.md"), "runner step content");
+
+        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+            name: "02-step");
+
+        Assert.That(result.Found, Is.True, result.Error);
+        Assert.That(result.Content, Is.EqualTo("runner step content"));
+        Assert.That(result.Filename, Is.EqualTo("current/tests/plan-x-steps-runner/02-step.md"));
     }
 }
