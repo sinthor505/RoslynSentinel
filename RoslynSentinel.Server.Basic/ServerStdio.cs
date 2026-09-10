@@ -16,12 +16,11 @@ public class ServerStdio
             "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation",
         };
 
-    // Basic active tool types for the DEBUG smoke-resolve check. SentinelAugmentTools is
-    // deliberately excluded — it declares zero [McpServerTool] methods (see its own doc comment),
-    // so it's not always registered, and this check isn't gated by --include-tools/--mode the way
-    // real tool registration is: it always tries to resolve every type listed here regardless of
-    // what was actually requested, so listing a conditionally-registered type here would make any
-    // --include-tools selection that omits it crash at startup.
+    // Basic tool types eligible for the DEBUG smoke-resolve check. SentinelAugmentTools is
+    // deliberately excluded — it declares zero [McpServerTool] methods (see its own doc comment).
+    // Types here are only resolved when the run's --mode/--include-tools actually activated them,
+    // so a narrower selection no longer crashes at startup on a type it never asked for; adding a
+    // conditionally-registered class to this list is now safe.
     private static readonly Type[] ActiveToolTypes =
     [
         typeof(SentinelWorkspaceTools),
@@ -36,6 +35,14 @@ public class ServerStdio
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
 
         if (ServerStartupHelpers.HandleListTools(args, activeModes, includeTools, excludeTools))
+        {
+            return;
+        }
+
+        // Before any host is built: a server with no tools can't serve anything, and saying so
+        // here names the missing flag instead of failing later inside DI.
+        if (ServerStartupHelpers.HandleNoActiveTools(
+                modeArg, ToolClassRegistry.BasicModeToToolClasses, activeModes, includeTools, excludeTools))
         {
             return;
         }
@@ -91,7 +98,11 @@ public class ServerStdio
             using var host = builder.Build();
             var logger = host.Services.GetRequiredService<ILogger<ServerStdio>>();
 
-            ServerStartupHelpers.SmokeResolveToolTypes(host.Services, ActiveToolTypes);
+            ServerStartupHelpers.SmokeResolveToolTypes(
+                host.Services,
+                ActiveToolTypes,
+                ServerStartupHelpers.ResolveActiveToolClasses(
+                    activeModes, ToolClassRegistry.BasicModeToToolClasses, includeTools, excludeTools));
 
             host.Services.WarmupAndAutoLoadBasic(solutionPath, logger, baseRepoDirectory);
             SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);

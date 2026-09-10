@@ -27,6 +27,14 @@ public static class ServerHttp
             return;
         }
 
+        // Before binding a port: a server with no tools can't serve anything, and saying so here
+        // names the missing flag instead of accepting connections that expose nothing.
+        if (ServerStartupHelpers.HandleNoActiveTools(
+                modeArg, ToolClassRegistry.BasicModeToToolClasses, activeModes, includeTools, excludeTools))
+        {
+            return;
+        }
+
         // ── Logging (file + console — stdout is safe for HTTP transport) ─────
         var logPath = ServerStartupHelpers.ConfigureHttpLogging();
         ServerStartupHelpers.AttachCrashHandlers();

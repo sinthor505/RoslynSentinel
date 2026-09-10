@@ -18,13 +18,12 @@ namespace RoslynSentinel.Server.Advanced
             "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation", "Asyncify",
             };
 
-        // Advanced active tool types for the DEBUG smoke-resolve check.
+        // Advanced tool types eligible for the DEBUG smoke-resolve check.
         // Extend this list as new tool classes are activated in AddRoslynSentinelToolsAdvanced.
-        // SentinelAugmentTools is deliberately excluded — it declares zero [McpServerTool] methods
-        // and is only conditionally registered when --include-tools/--mode selects it, but this
-        // check always tries to resolve every type listed here regardless of what was requested,
-        // so listing a conditionally-registered type here would make any --include-tools selection
-        // that omits it crash at startup.
+        // SentinelAugmentTools is deliberately excluded — it declares zero [McpServerTool] methods.
+        // Types here are only resolved when the run's --mode/--include-tools actually activated
+        // them, so a narrower selection no longer crashes at startup on a type it never asked for;
+        // adding a conditionally-registered class to this list is now safe.
         private static readonly Type[] ActiveToolTypes =
         [
             typeof(SentinelWorkspaceTools),
@@ -40,6 +39,14 @@ namespace RoslynSentinel.Server.Advanced
             LlmOptions.Configure(args);
 
             if (ServerStartupHelpers.HandleListTools(args, activeModes, includeTools, excludeTools))
+            {
+                return;
+            }
+
+            // Before any host is built: a server with no tools can't serve anything, and saying so
+            // here names the missing flag instead of failing later inside DI.
+            if (ServerStartupHelpers.HandleNoActiveTools(
+                    modeArg, ToolClassRegistry.AdvancedModeToToolClasses, activeModes, includeTools, excludeTools))
             {
                 return;
             }
@@ -99,7 +106,11 @@ namespace RoslynSentinel.Server.Advanced
                 using var host = builder.Build();
                 var logger = host.Services.GetRequiredService<ILogger<ServerStdio>>();
 
-                ServerStartupHelpers.SmokeResolveToolTypes(host.Services, ActiveToolTypes);
+                ServerStartupHelpers.SmokeResolveToolTypes(
+                    host.Services,
+                    ActiveToolTypes,
+                    ServerStartupHelpers.ResolveActiveToolClasses(
+                        activeModes, ToolClassRegistry.AdvancedModeToToolClasses, includeTools, excludeTools));
 
                 host.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger, baseRepoDirectory);
                 SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);

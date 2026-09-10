@@ -201,6 +201,98 @@ public static class ServerStartupHelpers
         return true;
     }
 
+    // ── No-tools guard ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns an operator-facing explanation when the resolved arguments would activate no tool
+    /// classes at all, or null when at least one would be active. Call after
+    /// <see cref="HandleListTools"/> and before building the host.
+    /// </summary>
+    /// <remarks>
+    /// A server with no tools cannot do anything, but the failure used to surface from deep inside
+    /// DI: launching with no <c>--mode</c> registered zero tool classes, then the DEBUG smoke
+    /// check demanded <c>SentinelWorkspaceTools</c> unconditionally and threw
+    /// "Tool type not resolvable: SentinelWorkspaceTools". That names a type the operator never
+    /// mentioned and says nothing about the missing flag. Checked here instead, where the actual
+    /// cause — no <c>--mode</c> and no <c>--include-tools</c> — is still known.
+    ///
+    /// Deliberately not defaulting to <c>--mode=all</c>: which tools are exposed changes agent
+    /// behaviour measurably (see docs/current/project_wholefilewrite_gating_overnight_result_2026_09_08.md,
+    /// where gating whole-file writes off scored 26/26 against a 47% baseline), so silently
+    /// picking a tool surface for the caller would be the wrong kind of helpful. Fail, and say how
+    /// to choose.
+    /// </remarks>
+    public static string? DescribeNoActiveToolsFailure(
+        string modeArg,
+        IReadOnlyDictionary<string, string[]> modeToToolClasses,
+        HashSet<string> activeModes,
+        HashSet<string> includeTools,
+        HashSet<string> excludeTools)
+    {
+        if (ResolveActiveToolClasses(activeModes, modeToToolClasses, includeTools, excludeTools).Count > 0)
+        {
+            return null;
+        }
+
+        var availableModes = string.Join(", ", modeToToolClasses.Keys.OrderBy(m => m, StringComparer.OrdinalIgnoreCase));
+
+        // The three ways to reach zero are distinguished, because the fix differs for each and
+        // the operator can't tell them apart from the outside.
+        if (activeModes.Count == 0 && includeTools.Count == 0)
+        {
+            return "No tools would be active, so the server has nothing to serve: neither --mode nor " +
+                   "--include-tools was supplied (both are absent or empty). Pass --mode=all for every " +
+                   $"tool, --mode=<name>[,<name>] for a subset ({availableModes}), or " +
+                   "--include-tools=<ToolClassName>[,<ToolClassName>] to activate individual classes. " +
+                   "Use --list-tools to print the tool surface a given combination would expose.";
+        }
+
+        if (excludeTools.Count > 0)
+        {
+            return "No tools would be active: --exclude-tools removed every class that --mode/" +
+                   $"--include-tools selected. --mode='{modeArg}', " +
+                   $"--exclude-tools={string.Join(",", excludeTools.OrderBy(t => t, StringComparer.OrdinalIgnoreCase))}. " +
+                   "Exclude always wins and is applied last, so narrow it or widen --mode. " +
+                   "Use --list-tools to check a combination before launching.";
+        }
+
+        return "No tools would be active: nothing supplied to --mode/--include-tools matched a known " +
+               $"mode or tool class. --mode='{modeArg}' (known modes: {availableModes}). Tool-class " +
+               "names are matched with an implied \"Sentinel\" prefix, so both 'GitTools' and " +
+               "'SentinelGitTools' are accepted. Use --list-tools to see valid combinations.";
+    }
+
+    /// <summary>
+    /// Checks the no-active-tools condition and, when it applies, reports it and returns true so
+    /// the caller can return without building a host. Shared by all four entry points so the
+    /// message and exit behaviour can't drift between transports.
+    /// </summary>
+    /// <remarks>
+    /// Written to stderr, never stdout: under the stdio transport stdout carries the MCP protocol
+    /// stream, and a plain-text diagnostic there would corrupt the first frame the client reads —
+    /// turning a clear configuration error into a protocol parse failure. Stderr is safe on both
+    /// transports, and this runs before Serilog is configured on some paths, so Console is used
+    /// rather than a logger.
+    /// </remarks>
+    public static bool HandleNoActiveTools(
+        string modeArg,
+        IReadOnlyDictionary<string, string[]> modeToToolClasses,
+        HashSet<string> activeModes,
+        HashSet<string> includeTools,
+        HashSet<string> excludeTools)
+    {
+        var failure = DescribeNoActiveToolsFailure(modeArg, modeToToolClasses, activeModes, includeTools, excludeTools);
+        if (failure is null)
+        {
+            return false;
+        }
+
+        Console.Error.WriteLine(failure);
+        Debug.WriteLine(failure);
+        Environment.ExitCode = 2;
+        return true;
+    }
+
     // ── Logging ───────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -308,18 +400,47 @@ public static class ServerStartupHelpers
     // ── Debug smoke-resolve ───────────────────────────────────────────────────
 
     /// <summary>
-    /// DEBUG only: force-constructs every tool type in <paramref name="toolTypes"/>
-    /// so constructor-body throws surface here, not on first tool call.
-    /// No-op in Release builds.
+    /// DEBUG only: force-constructs each tool type in <paramref name="toolTypes"/> that
+    /// <paramref name="activeToolClasses"/> says was registered, so constructor-body throws
+    /// surface here rather than on first tool call. No-op in Release builds.
     /// </summary>
+    /// <remarks>
+    /// Skipping types that were never registered is the point of taking
+    /// <paramref name="activeToolClasses"/>. This check previously resolved its whole list
+    /// unconditionally, which meant any narrower <c>--include-tools</c>/<c>--mode</c> selection
+    /// crashed at startup complaining about a type the operator had deliberately not asked for —
+    /// the caller's own comment above each ActiveToolTypes list predicted exactly this. Callers
+    /// that reach zero active classes are caught earlier by
+    /// <see cref="DescribeNoActiveToolsFailure"/>, so an empty set here is not treated as an error.
+    ///
+    /// The failure is reported via <see cref="ServiceProviderServiceExtensions.GetRequiredService"/>
+    /// rather than a null check on GetService: the original discarded the real reason (the
+    /// unresolvable *dependency*) and reported only the outer tool type, which sent diagnosis to
+    /// the wrong place.
+    /// </remarks>
     [System.Diagnostics.Conditional("DEBUG")]
-    public static void SmokeResolveToolTypes(IServiceProvider services, IEnumerable<Type> toolTypes)
+    public static void SmokeResolveToolTypes(
+        IServiceProvider services,
+        IEnumerable<Type> toolTypes,
+        HashSet<string> activeToolClasses)
     {
         foreach (var toolType in toolTypes)
         {
-            if (services.GetService(toolType) is null)
+            if (!activeToolClasses.Contains(toolType.Name))
             {
-                throw new InvalidOperationException($"Tool type not resolvable: {toolType.Name}");
+                continue;
+            }
+
+            try
+            {
+                services.GetRequiredService(toolType);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Tool class '{toolType.Name}' is active but could not be constructed. One of its " +
+                    $"dependencies is not registered — see the inner exception for which. {ex.Message}",
+                    ex);
             }
         }
     }
