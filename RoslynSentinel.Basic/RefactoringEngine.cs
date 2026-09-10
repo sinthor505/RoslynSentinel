@@ -1190,7 +1190,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Container not found."
+                Message = BuildContainerNotFoundMessage(root, containerName)
             };
         }
 
@@ -2428,7 +2428,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Container not found."
+                Message = BuildContainerNotFoundMessage(root, containerName)
             };
         }
 
@@ -2518,7 +2518,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Container not found."
+                Message = BuildContainerNotFoundMessage(root, containerName)
             };
         }
 
@@ -4798,14 +4798,49 @@ public class RefactoringEngine
     }
 
     /// <summary>
+    /// Reduces a type name to the bare identifier Roslyn's <c>Identifier.Text</c> exposes, by
+    /// stripping a trailing type-argument list (<c>Foo&lt;T&gt;</c>, <c>Foo&lt;TKey, TValue&gt;</c>)
+    /// or backtick arity (<c>Foo`1</c>).
+    /// </summary>
+    /// <remarks>
+    /// Needed because <c>Identifier.Text</c> is already arity-stripped, so comparing it against a
+    /// caller's raw string rejected the type's own declared spelling: run 20260910-013550-398 had
+    /// <c>containerName: "EngineResultWrapper&lt;T&gt;"</c> fail and the bare
+    /// <c>"EngineResultWrapper"</c> succeed on the next turn. Third recorded instance
+    /// (cf. project_qwen36_35b_smoketest_and_member_containername_gap). Applied to both sides of
+    /// the comparison so all three spellings resolve identically.
+    /// </remarks>
+    public static string NormalizeTypeName(string typeName)
+    {
+        var name = typeName.Trim();
+
+        var backtick = name.IndexOf('`');
+        if (backtick > 0)
+        {
+            return name[..backtick];
+        }
+
+        // Only a trailing argument list is stripped — an angle bracket anywhere else isn't arity
+        // (a caller passing a whole declaration line, say), and truncating there would silently
+        // resolve to the wrong type rather than reporting a miss.
+        var open = name.IndexOf('<');
+        return open > 0 && name.EndsWith('>') ? name[..open].TrimEnd() : name;
+    }
+
+    /// <summary>
     /// Resolves a type by name, optionally disambiguating with a contextSnippet when the name
     /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
     /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
     /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildTypeHint).
     /// </summary>
+    /// <remarks>
+    /// The single chokepoint for 13 call sites across Member, ModifyEnum, ModifyBaseType and
+    /// others, so the generic-name normalization here covers all of them.
+    /// </remarks>
     private BaseTypeDeclarationSyntax? ResolveTypeByNameOrSnippet(SyntaxNode root, SourceText sourceText, string typeName, string? contextSnippet, string? lineBefore, string? lineAfter, Func<BaseTypeDeclarationSyntax, bool>? extraFilter = null)
     {
-        var candidates = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => t.Identifier.Text == typeName).Where(t => extraFilter == null || extraFilter(t)).ToList();
+        var normalizedRequest = NormalizeTypeName(typeName);
+        var candidates = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => NormalizeTypeName(t.Identifier.Text) == normalizedRequest).Where(t => extraFilter == null || extraFilter(t)).ToList();
         if (contextSnippet == null || candidates.Count <= 1)
         {
             // typeName alone already resolves unambiguously — see the identical guard and
@@ -4855,6 +4890,39 @@ public class RefactoringEngine
         var count = candidates.Count;
         var suffix = count > 3 ? $" (+{count - 3} more)" : "";
         return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
+    }
+
+    /// <summary>
+    /// Builds the message for a container that could not be found, listing the type names the file
+    /// actually declares.
+    /// </summary>
+    /// <remarks>
+    /// Replaces three identical <c>"// Container not found."</c> literals, which said nothing
+    /// actionable and — being prefixed with <c>//</c> — read as commented-out code rather than an
+    /// error. Listing the available names is the single most useful thing to return here: the
+    /// caller's next move is always to pick one, and it also reveals a wrong-file mistake
+    /// immediately. Generic spellings resolve, so a listed name can be given back verbatim; see
+    /// <see cref="NormalizeTypeName"/>.
+    /// </remarks>
+    private static string BuildContainerNotFoundMessage(SyntaxNode root, string requestedName)
+    {
+        var declared = root.DescendantNodes()
+            .OfType<BaseTypeDeclarationSyntax>()
+            .Select(t => t.Identifier.Text)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (declared.Count == 0)
+        {
+            return $"No type named '{requestedName}' was found — this file declares no types at all. " +
+                   "Check the filePath.";
+        }
+
+        var shown = declared.Take(10).ToList();
+        var suffix = declared.Count > shown.Count ? $" (+{declared.Count - shown.Count} more)" : "";
+        return $"No type named '{requestedName}' was found in this file. Types declared here: " +
+               $"{string.Join(", ", shown)}{suffix}. Pass one of those as containerName — a type " +
+               "argument list is optional, so both 'Foo' and 'Foo<T>' resolve.";
     }
 
     private string BuildTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)

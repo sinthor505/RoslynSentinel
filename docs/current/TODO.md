@@ -1145,3 +1145,40 @@ See also `docs/current/reference_parse_agent_log_script.md` and
 `docs/current/model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md` for the concrete
 analysis gap that prompted this idea.
 
+
+---
+
+## `SearchSolutionText`: run both modes, use `searchMode` to *rank* rather than to *select*
+
+**Status:** proposal only. Deferred out of the run-398 defect sweep (A4) on 2026-09-10.
+
+Today `searchMode` selects which single search runs. A pattern with regex metacharacters passed
+under `searchMode: literal` is searched literally as requested — correct per the parameter, but
+in practice it returns zero results, and run `20260910-013550-398` burned three turns (17, 18, 25)
+on exactly that: the model rewrote the pattern each time rather than changing the mode.
+
+A4 fixed the immediate footgun by making `searchMode` **required**, so an unstated mode can no
+longer silently produce the wrong search (see
+`feedback_prefer_mandatory_params_to_close_footgun_roundtrips`). That is a strictly smaller change
+than the idea below, and does not preclude it.
+
+**The proposal:** run *both* the literal and the regex search, return the union, and use
+`searchMode` only to order the results — matches from the requested mode first. A caller who names
+the wrong mode then gets the right answer ranked second instead of an empty result set.
+
+**Why this was not bundled into the defect sweep:**
+
+- It changes result *semantics*, not just a parameter's default — every caller's result shape and
+  ordering contract shifts.
+- Auto-promotion of literal→regex was already tried and deliberately reverted. `BatteryTwentyTests`
+  still asserts the no-fallback behaviour explicitly ("explicit literal mode must actually search
+  literally, not silently switch to regex"). This proposal is *not* that reverted design — it adds
+  results rather than substituting a mode — but the history says this tool warrants its own
+  evaluation run rather than a change riding along with unrelated fixes.
+- Cost is unmeasured: two passes over every document instead of one, on a tool that already scans
+  the whole solution in parallel.
+
+**Open questions:** whether a regex that fails to compile should degrade to literal-only or error;
+whether the union should be de-duplicated per (file, line) or per (file, line, column); whether
+`maxResults` applies before or after ranking; and whether the response should label each match with
+the mode that found it.

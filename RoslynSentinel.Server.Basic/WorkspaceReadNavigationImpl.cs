@@ -418,7 +418,6 @@ public class WorkspaceReadNavigationImpl
             var results = new List<TextSearchMatch>();
             var warnings = new List<string>();
             Regex? regex = null;
-            TextSearchMode actualSearchMode = searchMode;
 
             if (searchMode == TextSearchMode.regex)
             {
@@ -456,7 +455,7 @@ public class WorkspaceReadNavigationImpl
                     {
                         var line = lines[i];
                         int col = -1;
-                        if (actualSearchMode == TextSearchMode.regex && regex != null)
+                        if (searchMode == TextSearchMode.regex && regex != null)
                         {
                             try
                             {
@@ -501,8 +500,8 @@ public class WorkspaceReadNavigationImpl
 
             if (results.Count == 0)
             {
-                string modeLabel = actualSearchMode == TextSearchMode.literal ? "literal substring" : "regex pattern";
-                string switchModeHint = actualSearchMode == TextSearchMode.literal ? "using the regex search mode" : "using the literal search mode";
+                string modeLabel = searchMode == TextSearchMode.literal ? "literal substring" : "regex pattern";
+                string switchModeHint = searchMode == TextSearchMode.literal ? "using the regex search mode" : "using the literal search mode";
                 warnings.Add(
                     $"No matches were found for the {modeLabel} '{pattern}'. Try adjusting the search pattern or {switchModeHint}. " +
                     "If you were searching for a known symbol by name, use LocateSymbol instead (semantic lookup, not text matching). " +

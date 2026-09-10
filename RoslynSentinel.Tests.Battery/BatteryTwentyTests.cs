@@ -191,7 +191,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_LiteralPattern_ReturnsNoWarning()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "Order");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", "Order", searchMode: TextSearchMode.literal);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Warning, Is.Null);
@@ -223,7 +223,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_NoMatches_ReturnsNoMatchesError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "ThisPatternDoesNotAppearAnywhere");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", "ThisPatternDoesNotAppearAnywhere", searchMode: TextSearchMode.literal);
 
         Assert.That(result.Success, Is.False, "Zero matches should surface as a failure so the protocol-level IsError filter picks it up.");
         Assert.That(result.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
@@ -247,7 +247,7 @@ public class BatteryTwentyTests
         }
         """, "Test.cs");
 
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "return a + b");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", "return a + b", searchMode: TextSearchMode.literal);
 
         Assert.That(result.Success, Is.True);
         var matches = (System.Collections.Generic.IEnumerable<TextSearchMatch>)result.Data!;
@@ -269,7 +269,7 @@ public class BatteryTwentyTests
         }
         """, "Test.cs");
 
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "using System");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test", "using System", searchMode: TextSearchMode.literal);
 
         Assert.That(result.Success, Is.True);
         var matches = (System.Collections.Generic.IEnumerable<TextSearchMatch>)result.Data!;
@@ -291,7 +291,7 @@ public class BatteryTwentyTests
                 "TestProj", projectCsproj, [("Foo.cs", initialContent, tempFile)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var before = await _workspaceTools.SearchSolutionText(reason: "test", "Bar");
+            var before = await _workspaceTools.SearchSolutionText(reason: "test", "Bar", searchMode: TextSearchMode.literal);
             Assert.That(before.Success, Is.True);
             Assert.That(before.WorkspaceVersion, Is.Not.Null);
 
@@ -301,7 +301,7 @@ public class BatteryTwentyTests
                 new Dictionary<FilePath, string> { [tempFile] = updatedContent });
             Assert.That(applyResult.Success, Is.True);
 
-            var after = await _workspaceTools.SearchSolutionText(reason: "test", "Baz");
+            var after = await _workspaceTools.SearchSolutionText(reason: "test", "Baz", searchMode: TextSearchMode.literal);
 
             Assert.That(after.Success, Is.True);
             Assert.That(after.WorkspaceVersion, Is.Not.Null);

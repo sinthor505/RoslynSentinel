@@ -100,6 +100,13 @@ public class SentinelRefactoringTools
     /// so skipping this check would silently propose replacing the whole file with nothing.
     /// Returns null when updated.UpdatedText is safe to use as the new file content.
     /// </summary>
+    /// <remarks>
+    /// The error code is derived from the outcome rather than always being
+    /// <see cref="ToolErrorCode.Exception"/>: a target the engine simply couldn't find is an
+    /// ordinary, caller-correctable condition, and reporting it as an exception told the agent
+    /// the server had faulted. Run 20260910-013550-398 hit this via a generic containerName —
+    /// see docs/current/feedback_agent_friendly_error_messages.md.
+    /// </remarks>
     private static ToolResult<object>? RequireUpdatedText(DocumentEditResult updated, string operationName, FilePath filePath)
     {
         if (!string.IsNullOrEmpty(updated.UpdatedText))
@@ -110,10 +117,22 @@ public class SentinelRefactoringTools
         return new ToolResult<object>
         {
             Success = false,
-            Error = new ResultError(ToolErrorCode.Exception,
+            Error = new ResultError(ErrorCodeFor(updated.Outcome),
                 $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {updated.Message}")
         };
     }
+
+    /// <summary>
+    /// Maps a document-edit outcome to the error code the agent sees. Shared so the
+    /// <c>Member(replace)</c> path, which builds its own message, cannot drift from
+    /// <see cref="RequireUpdatedText"/> on the code.
+    /// </summary>
+    private static string ErrorCodeFor(EditOutcome outcome) => outcome switch
+    {
+        EditOutcome.TargetNotFound or EditOutcome.DocumentNotFound => ToolErrorCode.NotFound,
+        EditOutcome.SourceInvalid => ToolErrorCode.InvalidArgument,
+        _ => ToolErrorCode.Exception
+    };
 
     /// <summary>
     /// Validates proposed changes against the current in-memory solution and, unless
@@ -345,7 +364,7 @@ public class SentinelRefactoringTools
                         EditOutcome.TargetNotFound => $"Member: member '{memberName}' not found in '{filePath}'.",
                         _ => $"Member: no changes produced for '{memberName}' in '{filePath}' ({result.Outcome}). {result.Message}"
                     };
-                    return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, errorReason) };
+                    return new ToolResult<object> { Success = false, Error = new ResultError(ErrorCodeFor(result.Outcome), errorReason) };
                 }
 
                 var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
