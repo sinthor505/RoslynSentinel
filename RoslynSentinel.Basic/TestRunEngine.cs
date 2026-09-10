@@ -44,6 +44,7 @@ public class TestRunEngine
         TestResultsFilter resultsType,
         int maxDetails,
         int timeoutSeconds,
+        bool summary = false,
         CancellationToken cancellationToken = default)
     {
         var start = DateTime.UtcNow;
@@ -223,10 +224,12 @@ public class TestRunEngine
                 _ => allResults,
             };
 
-            var ordered = filtered
-                .OrderBy(r => r.Outcome switch { TestOutcome.Failed => 0, TestOutcome.Skipped or TestOutcome.NotExecuted => 1, _ => 2 })
-                .Take(maxDetails)
-                .ToList();
+            var ordered = summary
+                ? []
+                : filtered
+                    .OrderBy(r => r.Outcome switch { TestOutcome.Failed => 0, TestOutcome.Skipped or TestOutcome.NotExecuted => 1, _ => 2 })
+                    .Take(maxDetails)
+                    .ToList();
 
             return new EngineResultWrapper<TestRunResult>(EngineOutcome.Success, new TestRunResult(
                 RunSucceeded: process.ExitCode == 0 && failedCount == 0,

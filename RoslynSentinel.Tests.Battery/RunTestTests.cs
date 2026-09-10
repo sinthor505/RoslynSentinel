@@ -205,6 +205,24 @@ public class RunTestTests
     }
 
     [Test]
+    public async Task RunTest_SummaryTrue_OmitsResultsRegardlessOfResultsTypeAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution, resultsType: TestResultsFilter.all, summary: true, timeoutSeconds: 120);
+
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+        var data = (TestRunResult)result.Data!;
+        Assert.That(data.Results, Is.Empty);
+        Assert.That(data.FailedCount, Is.EqualTo(1));
+        Assert.That(data.FailureSummary, Is.Not.Empty);
+    }
+
+    [Test]
     public async Task RunTest_NoSolutionLoaded_ReturnsInvalidArgumentNotExceptionAsync()
     {
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);

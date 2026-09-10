@@ -1270,7 +1270,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]
-    [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). resultsType defaults to \"failed\" so a clean run stays a short summary with no per-test list; pass \"all\" to see every test's outcome. filter is passed through to `dotnet test --filter` — an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests.")]
+    [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). resultsType defaults to \"failed\" so a clean run stays a short summary with no per-test list; pass \"all\" to see every test's outcome. Set summary=true to omit the Results list entirely (just counts + FailureSummary), regardless of resultsType. filter is passed through to `dotnet test --filter` — an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests.")]
     public async Task<ToolResult<object>> RunTest(
         [Description(ToolParams.Reason)] string reason,
         ToolScope scope = ToolScope.solution,
@@ -1279,6 +1279,7 @@ public class SentinelWorkspaceTools
         TestResultsFilter resultsType = TestResultsFilter.failed,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         int timeoutSeconds = 600,
+        [Description("If true, omit the per-test Results list from the response entirely — only counts and FailureSummary are returned, independent of resultsType.")] bool summary = false,
         CancellationToken cancellationToken = default)
     {
         try
@@ -1289,7 +1290,7 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.TestRunFailed, rateLimitError) };
             }
 
-            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, cancellationToken);
+            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, cancellationToken);
 
             if (!result.TryGetData(out var testRunResult))
             {
