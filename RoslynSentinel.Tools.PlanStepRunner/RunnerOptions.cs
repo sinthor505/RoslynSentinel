@@ -36,8 +36,10 @@ public sealed class RunnerOptions
         var sourceRepo = GetArg(args, "--repo")
             ?? throw new ArgumentException("--repo is required (the git repo to branch/worktree from, e.g. the RoslynSentinel checkout).");
 
+        // Defaults to a sibling of sourceRepo rather than nesting under it — a worktree left under
+        // the repo shows up in `git status`/diffs/searches as a spurious branched copy of the repo.
         var runDir = GetArg(args, "--run-dir")
-            ?? Path.Combine(sourceRepo, "PlanStepRunner", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
+            ?? Path.Combine(sourceRepo, "..", "RoslynSentinel-TestRuns", "PlanStepRunner", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
         // Defaults to a per-run branch (named after the run folder's own timestamp) rather than
         // one fixed shared name — git only allows one worktree to have a given branch checked out
