@@ -1,5 +1,15 @@
 # PlanStepRunner run 20260910-013550-398 — Category C: Plan content
 
+**Status: RESOLVED 2026-09-10.** C1/C2's live-run risk was actually closed by `50ce5b6`
+(doc B, B1) in a separate session, independent of this doc's own remediation: the runner now
+inlines each step's body by value into the model's prompt and never calls `ProjectDoc` for
+step content at all, so a duplicate/misnumbered file can no longer be substituted in. The
+tree consolidation below (retiring the old 13-step split to `docs/obsolete/`, replaced by a
+stub at `docs/current/plans/plan-eval-defect-remediation-v2-steps.md`) was completed as
+cleanup on top of that, not as an urgent fix. The "confirm before deleting" open question
+below is answered: the old tree was confirmed superseded and moved. The `docs/tests/` paths
+below are stale — the runner tree lives at `docs/testing/plan-eval-defect-remediation-v2-steps-runner/`.
+
 **Source run:** `PlanStepRunner/20260910-013550-398/01-baseline/`
 **Scope:** two plan-authoring defects (C1–C2). Tool defects are in
 `finding_planstep_run_398_A_tool_defects.md`; harness in

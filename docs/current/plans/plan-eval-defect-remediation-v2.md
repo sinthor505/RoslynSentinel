@@ -1,5 +1,9 @@
 # Eval Defect Remediation v2 — Implementation Plan
 
+**Executable steps:** this design doc was split into runnable step files. See
+[`plan-eval-defect-remediation-v2-steps.md`](plan-eval-defect-remediation-v2-steps.md) for the
+pointer to the live step tree.
+
 ## Context
 
 The 2026-09-08 eval corpus (`docs/current/spec-eval-defect-remediation-v2.md`) surfaced three substrate-side defects, all in the same family: the server hands the model a verdict it cannot verify, and twice actively contradicted evidence the model had already noticed.

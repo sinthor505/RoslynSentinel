@@ -1,5 +1,10 @@
 # PlanStepRunner run 20260910-013550-398 — Category A: Tool defects
 
+**Status: RESOLVED 2026-09-10.** A1–A5 fixed in `e3d32b8` (ProjectDoc substitution,
+`--testing` scoping, path-qualified hard-fail) and `28b18f8` (`searchMode` required,
+`Member` containerName normalized). A6 was mooted by A2's fix. See memory
+`project_run398_defect_remediation_a1_a5` for detail.
+
 **Source run:** `PlanStepRunner/20260910-013550-398/01-baseline/`
 (`Logs/agent.log`, `Logs/transcript.json`, `Worktree/`)
 

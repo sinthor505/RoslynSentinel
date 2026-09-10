@@ -47,8 +47,12 @@ the work, but don't be surprised if a sweep turns up 28.
 
 Reproduce the bug live, using the RoslynSentinel MCP tools against a scratch file:
 
-1. Create (via `WriteFile` or an equivalent MCP tool) a small scratch C# file containing a method
-   or property with an XML doc comment (`/// <summary>...`) and an accessibility modifier, e.g.:
+1. Create a small scratch C# file containing a method with an XML doc comment
+   (`/// <summary>...`) and an accessibility modifier. This is two calls, not one:
+   - `CreateFile(filepath: "<scratch path>/Scratch.cs", namespaceName: "Scratch", typeKind: class, typeName: "Scratch")`
+     stubs `public class Scratch { }`.
+   - `Member(add, containerName: "Scratch", newMemberSource: "/// <summary>\n/// Does a thing.\n/// </summary>\nprivate void DoThing() { }")`
+     populates it with the doc-commented method, e.g. ending up equivalent to:
    ```csharp
    public class Scratch
    {
