@@ -511,8 +511,8 @@ public class SentinelAsyncifyTools
                 failed: 0, rolledBack: 0, skipped: dryRun ? engineResult.TotalRemoved : 0);
 
             var changeId = Guid.NewGuid().ToString("N")[..8];
-            var blobName = await OperationBlobWriter.WriteAsync(
-                "remove_migration_candidates", changeId, items, _workspaceManager.GetSolutionRoot(), cancellationToken);
+            var blobName = await OperationBlobWriter.WriteBatchBlobOrTripAsync(
+                _workspaceManager, "remove_migration_candidates", changeId, items, _workspaceManager.GetSolutionRoot(), _logger, cancellationToken);
 
             var patternLabel = pattern == null ? "all patterns" : $"pattern={pattern}";
             var directive = engineResult.TotalRemoved == 0
@@ -1419,8 +1419,8 @@ public class SentinelAsyncifyTools
             items.Add(new OperationItemRecord { FilePath = f.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = f.Reason, CompilerDiagnostics = f.Diagnostics.Count > 0 ? f.Diagnostics : null });
         }
 
-        var blobName = await OperationBlobWriter.WriteAsync(
-            "propagate_cancellation_token", changeId, items, _workspaceManager.GetSolutionRoot());
+        var blobName = await OperationBlobWriter.WriteBatchBlobOrTripAsync(
+            _workspaceManager, "propagate_cancellation_token", changeId, items, _workspaceManager.GetSolutionRoot(), _logger);
         var status = _workspaceManager.GetBreakerStatus();
         var failures = result.Failed
             .Take(15)
@@ -1658,8 +1658,8 @@ public class SentinelAsyncifyTools
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: 0);
 
         var changeId = Guid.NewGuid().ToString("N")[..8];
-        var blobName = await OperationBlobWriter.WriteAsync(
-            "bridge_async_methods", changeId, items, _workspaceManager.GetSolutionRoot());
+        var blobName = await OperationBlobWriter.WriteBatchBlobOrTripAsync(
+            _workspaceManager, "bridge_async_methods", changeId, items, _workspaceManager.GetSolutionRoot(), _logger);
         var status = _workspaceManager.GetBreakerStatus();
 
         var summary = new BatchResultSummary
@@ -1811,8 +1811,8 @@ public class SentinelAsyncifyTools
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
 
         var changeId = Guid.NewGuid().ToString("N")[..8];
-        var blobName = await OperationBlobWriter.WriteAsync(
-            "add_cancellation_token", changeId, items, _workspaceManager.GetSolutionRoot());
+        var blobName = await OperationBlobWriter.WriteBatchBlobOrTripAsync(
+            _workspaceManager, "add_cancellation_token", changeId, items, _workspaceManager.GetSolutionRoot(), _logger);
         var status = _workspaceManager.GetBreakerStatus();
 
         return new BatchResultSummary
@@ -2001,8 +2001,8 @@ public class SentinelAsyncifyTools
         // AlreadySatisfied and Skipped are excluded from the failure rate that drives severity/breaker.
         _workspaceManager.RecordBatchOutcome(succeeded, failed + blocked, rolledBack: 0, skipped: alreadySatisfied);
 
-        string blobName = await OperationBlobWriter.WriteAsync(
-            "uplift_callers", changeId, items, _workspaceManager.GetSolutionRoot());
+        string blobName = await OperationBlobWriter.WriteBatchBlobOrTripAsync(
+            _workspaceManager, "uplift_callers", changeId, items, _workspaceManager.GetSolutionRoot(), _logger);
 
         BreakerStatusReport status = _workspaceManager.GetBreakerStatus();
 
@@ -2308,8 +2308,8 @@ public class SentinelAsyncifyTools
 
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
 
-        var blobName = await OperationBlobWriter.WriteAsync(
-            "flag_migration_candidates", changeId, items, _workspaceManager.GetSolutionRoot());
+        var blobName = await OperationBlobWriter.WriteBatchBlobOrTripAsync(
+            _workspaceManager, "flag_migration_candidates", changeId, items, _workspaceManager.GetSolutionRoot(), _logger);
         var status = _workspaceManager.GetBreakerStatus();
 
         var flagDirective = status.Open ? status.Directive
@@ -3359,8 +3359,8 @@ public class SentinelAsyncifyTools
     {
         _workspaceManager.RecordBatchOutcome(state.Succeeded, state.Failed, rolledBack: 0, skipped: state.Skipped);
 
-        var blobName2 = await OperationBlobWriter.WriteAsync(
-            "asyncify", changeId, state.Items, _workspaceManager.GetSolutionRoot());
+        var blobName2 = await OperationBlobWriter.WriteBatchBlobOrTripAsync(
+            _workspaceManager, "asyncify", changeId, state.Items, _workspaceManager.GetSolutionRoot(), _logger);
         var status2 = _workspaceManager.GetBreakerStatus();
 
         string directive;
@@ -3594,8 +3594,8 @@ public class SentinelAsyncifyTools
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: overLimit);
 
         var changeId = Guid.NewGuid().ToString("N")[..8];
-        var blobName = await OperationBlobWriter.WriteAsync(
-            "event_handlers_to_async", changeId, items, _workspaceManager.GetSolutionRoot());
+        var blobName = await OperationBlobWriter.WriteBatchBlobOrTripAsync(
+            _workspaceManager, "event_handlers_to_async", changeId, items, _workspaceManager.GetSolutionRoot(), _logger);
         var status = _workspaceManager.GetBreakerStatus();
 
         return new BatchResultSummary
@@ -3809,8 +3809,8 @@ public class SentinelAsyncifyTools
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: 0);
 
         var changeId = Guid.NewGuid().ToString("N")[..8];
-        var blobName = await OperationBlobWriter.WriteAsync(
-            "extract_event_handlers", changeId, items, _workspaceManager.GetSolutionRoot());
+        var blobName = await OperationBlobWriter.WriteBatchBlobOrTripAsync(
+            _workspaceManager, "extract_event_handlers", changeId, items, _workspaceManager.GetSolutionRoot(), _logger);
         var status = _workspaceManager.GetBreakerStatus();
 
         return new BatchResultSummary

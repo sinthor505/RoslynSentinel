@@ -75,7 +75,6 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public Task RemoveDocumentByPathAsync(FilePath filePath, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     bool ICircuitBreaker.IsTripped() => throw new NotImplementedException();
     string? ICircuitBreaker.StateMessage() => throw new NotImplementedException();
-    void ICircuitBreaker.Reset() => throw new NotImplementedException();
     void IManualCircuitBreaker.Reset() => throw new NotImplementedException();
     bool IManualCircuitBreaker.IsTripped() => throw new NotImplementedException();
     string? IManualCircuitBreaker.StateMessage() => throw new NotImplementedException();
@@ -83,6 +82,19 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     bool IAutomaticCircuitBreaker.IsTripped() => throw new NotImplementedException();
     string? IAutomaticCircuitBreaker.StateMessage() => throw new NotImplementedException();
     void IAutomaticCircuitBreaker.Reset() => throw new NotImplementedException();
+
+    // Really implemented rather than a throw-stub, unlike the two breakers above: apply paths
+    // running against this fake trip it on a blob-write failure, and the fake has no solution root
+    // so blob writes legitimately don't happen. Throwing here would turn "no blob owed" into a
+    // NotImplementedException from inside every fake-backed apply test. State is exposed so a test
+    // can assert the trip without needing a real workspace.
+    private string? _unrecoverableHaltMessage;
+
+    void IUnrecoverableBreaker.Trip(string toolName, string changeId, string diagnostic) =>
+        _unrecoverableHaltMessage ??= $"{toolName}/{changeId}: {diagnostic}";
+
+    bool IUnrecoverableBreaker.IsTripped() => _unrecoverableHaltMessage is not null;
+    string? IUnrecoverableBreaker.StateMessage() => _unrecoverableHaltMessage;
     public Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<SymbolResolution> ResolveFromWireAsync(string sessionId, string projectName, string docCommentId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();

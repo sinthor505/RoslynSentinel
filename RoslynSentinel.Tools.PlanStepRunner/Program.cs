@@ -143,7 +143,12 @@ public static class Program
         {
             Name = "RoslynSentinel.Server.Advanced",
             Command = serverExe,
-            Arguments = ["--base-repo-dir=" + worktreePath, "--include-tools=" + options.IncludeTools],
+            // --testing puts ProjectDoc on docs/testing/ instead of docs/. Required here because
+            // the worktree is a copy of this very repo, so the runner-specific plan files and the
+            // production plans they mirror share basenames; without it ProjectDoc's basename
+            // fallback silently answered with the production copy (run 20260910-013550-398 spent
+            // all 60 turns implementing a plan it never asked for).
+            Arguments = ["--base-repo-dir=" + worktreePath, "--include-tools=" + options.IncludeTools, "--testing"],
             WorkingDirectory = worktreePath,
         });
 

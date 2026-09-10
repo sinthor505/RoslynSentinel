@@ -25,6 +25,15 @@ public class DocReadResult
     {
         get; set;
     }
+    /// <summary>
+    /// Set when basename fallback resolved the request to a path other than the one asked for.
+    /// Without this the substitution is invisible: Found=true and only Filename differs, which
+    /// once caused a whole agent run to execute the wrong plan (run 20260910-013550-398).
+    /// </summary>
+    public string? Warning
+    {
+        get; set;
+    }
 }
 
 public class DocWriteResult
@@ -64,22 +73,28 @@ public class DocListResult
 public class SentinelDocumentationTools
 {
     private readonly IWorkspaceManager _workspaceManager;
+    private readonly SentinelHostOptions _hostOptions;
     private readonly ILogger<SentinelDocumentationTools> _logger;
 
     private const int MaxDocBytes = 512 * 1024;   // 512 KB
 
     public SentinelDocumentationTools(
         IWorkspaceManager workspaceManager,
+        SentinelHostOptions hostOptions,
         ILogger<SentinelDocumentationTools> logger)
     {
         _workspaceManager = workspaceManager;
+        _hostOptions = hostOptions;
         _logger = logger;
     }
+
+    private bool IsTestingMode => _hostOptions.OperatingMode == OperatingMode.Testing;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Resolves the docs root and returns it, or populates <paramref name="error"/> and returns null.
+    /// Under <see cref="OperatingMode.Testing"/> this is <c>docs/testing/</c>, not <c>docs/</c>.
     /// </summary>
     private string? TryGetDocsRoot(out string error)
     {
@@ -91,7 +106,14 @@ public class SentinelDocumentationTools
         }
 
         error = "";
-        return Path.Combine(solutionRoot, "docs");
+
+        // docs/testing/ is kept entirely separate from docs/ (rather than being a subdirectory
+        // reachable from it) so an eval fixture can carry the same filename as the production doc
+        // it mirrors without either resolving to the other — the collision that made run
+        // 20260910-013550-398 execute a different plan than the one it asked for.
+        return IsTestingMode
+            ? Path.Combine(solutionRoot, "docs", "testing")
+            : Path.Combine(solutionRoot, "docs");
     }
 
     /// <summary>
@@ -106,9 +128,30 @@ public class SentinelDocumentationTools
         return Directory.Exists(currentDir) ? currentDir : docsRoot;
     }
 
-    private static DocReadResult ReadFile(string subdir, string filename, DocType docType, string docsRoot)
+    /// <summary>
+    /// True when <paramref name="filename"/> names a directory as well as a file — i.e. the caller
+    /// stated <em>where</em> the file is, not just what it's called. Basename fallback must not
+    /// override such a request: it discards the directory (see <see cref="FindByBasename"/>), so a
+    /// same-named file elsewhere in the tree would be substituted silently. Run
+    /// 20260910-013550-398 executed an entirely different plan for 60 turns this way.
+    /// </summary>
+    private static bool IsPathQualified(string filename) =>
+        filename.Contains('/') || filename.Contains('\\');
+
+    /// <param name="subdir">The docType's own subdirectory, e.g. docs/current/plans/.</param>
+    /// <param name="docTypeSubdirRoot">The directory those subdirs sit in — docs/current/ when it
+    /// exists, else docs/. Distinct from <paramref name="docsRoot"/>, and the base that action:list
+    /// paths for a docs/current/ layout are most naturally written against.</param>
+    /// <param name="docsRoot">docs/ (or docs/testing/ in testing mode).</param>
+    /// <param name="ignoreDocType">Testing mode: resolve against <paramref name="docsRoot"/> alone.</param>
+    private static DocReadResult ReadFile(string subdir, string filename, DocType docType, string docTypeSubdirRoot, string docsRoot, bool ignoreDocType)
     {
-        var (ok, fullPath, guardError) = DocPathGuard.ResolveSafe(subdir, filename);
+        // Testing mode ignores docType entirely and resolves against the whole testing doc root:
+        // fixtures don't need a docType-shaped layout, and a runner that guesses docType wrong
+        // still finds its file. Ambiguity within that root still errors via the guards below.
+        var primaryScope = ignoreDocType ? docsRoot : subdir;
+
+        var (ok, fullPath, guardError) = DocPathGuard.ResolveSafe(primaryScope, filename);
         if (ok && File.Exists(fullPath))
         {
             return new DocReadResult
@@ -119,17 +162,57 @@ public class SentinelDocumentationTools
             };
         }
 
-        // Fallback 1: match by basename (extension-insensitive) anywhere under subdir.
-        // Handles a bare name, a wrong/missing extension, or an un-guessed subfolder —
-        // all observed model behaviors when the exact relative path isn't already known.
-        var matches = FindByBasename(subdir, filename);
+        // Exact path relative to the wider roots, before any basename search: a caller who supplied
+        // a directory may simply have named one outside the docType subdirs (e.g. tests/… under
+        // docs/current/, or under docs/ itself), which is a legitimate exact hit, not a miss.
+        // Both bases are tried because a docs/current/ layout makes either spelling reasonable.
+        if (!ignoreDocType)
+        {
+            foreach (var wideRoot in docTypeSubdirRoot == docsRoot
+                         ? new[] { docsRoot }
+                         : new[] { docTypeSubdirRoot, docsRoot })
+            {
+                var (wideOk, widePath, _) = DocPathGuard.ResolveSafe(wideRoot, filename);
+                if (wideOk && File.Exists(widePath))
+                {
+                    return new DocReadResult
+                    {
+                        Found = true,
+                        Filename = filename,
+                        Content = File.ReadAllText(widePath)
+                    };
+                }
+            }
+        }
+
+        // A path-qualified request that missed both exact locations is a hard miss. Falling back to
+        // a basename search here would discard the directory the caller explicitly gave and could
+        // substitute a same-named file from elsewhere in the tree — which is exactly how run
+        // 20260910-013550-398 spent 60 turns implementing a plan it never asked for.
+        if (ok && IsPathQualified(filename))
+        {
+            return new DocReadResult
+            {
+                Found = false,
+                Filename = filename,
+                Error = ignoreDocType
+                    ? $"'{filename}' was not found under the testing doc root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted. Call ProjectDoc(action: list) to see the exact available paths."
+                    : $"'{filename}' was not found under docType='{docType}', nor at that path relative to the docs root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted — a same-named file in a different directory is not a valid substitute. Call ProjectDoc(action: list) to see the exact available paths."
+            };
+        }
+
+        // Fallback 1: match by basename (extension-insensitive) anywhere under the primary scope.
+        // Handles a bare name or a wrong/missing extension — both observed model behaviors when
+        // the exact relative path isn't already known.
+        var matches = FindByBasename(primaryScope, filename);
         if (matches.Count == 1)
         {
             return new DocReadResult
             {
                 Found = true,
                 Filename = matches[0],
-                Content = File.ReadAllText(Path.Combine(subdir, matches[0]))
+                Content = File.ReadAllText(Path.Combine(primaryScope, matches[0])),
+                Warning = BuildFallbackWarning(filename, matches[0])
             };
         }
 
@@ -143,46 +226,56 @@ public class SentinelDocumentationTools
             };
         }
 
-        // Fallback 2: the requested docType's subdirectory doesn't hold it, but action:list
-        // walks all of docs/ — so search that same full tree before giving up. Covers docs
-        // laid out outside the five known docType subdirs (e.g. docs/tests/...).
-        var (rootOk, rootFullPath, _) = DocPathGuard.ResolveSafe(docsRoot, filename);
-        if (rootOk && File.Exists(rootFullPath))
+        // Fallback 2 (bare names only — path-qualified requests already returned above): the
+        // requested docType's subdirectory doesn't hold it, but action:list walks all of docs/, so
+        // search that same full tree before giving up. Covers docs laid out outside the five known
+        // docType subdirs. Skipped when ignoreDocType already made the full root the primary scope.
+        if (!ignoreDocType)
         {
-            return new DocReadResult
+            var rootMatches = FindByBasename(docsRoot, filename);
+            if (rootMatches.Count == 1)
             {
-                Found = true,
-                Filename = filename,
-                Content = File.ReadAllText(rootFullPath)
-            };
-        }
+                return new DocReadResult
+                {
+                    Found = true,
+                    Filename = rootMatches[0],
+                    Content = File.ReadAllText(Path.Combine(docsRoot, rootMatches[0])),
+                    Warning = BuildFallbackWarning(filename, rootMatches[0])
+                };
+            }
 
-        var rootMatches = FindByBasename(docsRoot, filename);
-        if (rootMatches.Count == 1)
-        {
-            return new DocReadResult
+            if (rootMatches.Count > 1)
             {
-                Found = true,
-                Filename = rootMatches[0],
-                Content = File.ReadAllText(Path.Combine(docsRoot, rootMatches[0]))
-            };
-        }
-
-        if (rootMatches.Count > 1)
-        {
-            return new DocReadResult
-            {
-                Found = false,
-                Filename = filename,
-                Error = $"'{filename}' is ambiguous. Did you mean: {string.Join(", ", rootMatches)}"
-            };
+                return new DocReadResult
+                {
+                    Found = false,
+                    Filename = filename,
+                    Error = $"'{filename}' is ambiguous. Did you mean: {string.Join(", ", rootMatches)}"
+                };
+            }
         }
 
         string stem = Path.GetFileNameWithoutExtension(Path.GetFileName(filename));
         var notFoundError = ok
-            ? $"No file matching '{stem}' (with or without extension) was found under docType='{docType}', or anywhere else under docs/. Call ProjectDoc(action: list) to see all available files."
+            ? ignoreDocType
+                ? $"No file matching '{stem}' (with or without extension) was found anywhere under the testing doc root. Call ProjectDoc(action: list) to see all available files."
+                : $"No file matching '{stem}' (with or without extension) was found under docType='{docType}', or anywhere else under docs/. Call ProjectDoc(action: list) to see all available files."
             : guardError;
         return new DocReadResult { Found = false, Filename = filename, Error = notFoundError };
+    }
+
+    /// <summary>
+    /// Returns a warning when a fallback resolved to a path other than the one requested, or null
+    /// when the resolved path is what was asked for (a bare name that matched a file at the scope
+    /// root, say). Making every substitution visible is the point: the run-398 failure was
+    /// undetectable in the transcript precisely because a substituted read looked identical to a hit.
+    /// </summary>
+    private static string? BuildFallbackWarning(string requested, string resolved)
+    {
+        var normalizedRequest = requested.Replace('\\', '/');
+        return string.Equals(normalizedRequest, resolved, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : $"Requested '{requested}' but resolved to '{resolved}' by basename fallback. Confirm this is the file you meant before acting on its contents.";
     }
 
     /// <summary>
@@ -253,7 +346,7 @@ public class SentinelDocumentationTools
 
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
-    [Description("Unified accessor for project doc files under docs/ (or docs/current/ if that subdirectory exists). plan → .../plans/; handoff → .../handoffs/; completed_work → .../completed/ (append only); documentation → .../documentation/; state → docs/migration-state.yaml (name ignored, always directly under docs/). name required for all file-based operations, accepts a nested relative path (e.g. 'plan-x-steps/01-baseline.md') as shown by action:list; on read, a bare/wrong-extension name also falls back to a basename search, and if the docType's own subdirectory has no match, falls back further to searching all of docs/ (the same tree action:list walks) — so any file action:list can show, read can load regardless of docType. Auto-resolves if exactly one file matches. content required for write/append.")]
+    [Description("Unified accessor for project doc files under docs/ (or docs/current/ if that subdirectory exists). plan → .../plans/; handoff → .../handoffs/; completed_work → .../completed/ (append only); documentation → .../documentation/; state → docs/migration-state.yaml (name ignored, always directly under docs/). name required for all file-based operations, accepts a nested relative path (e.g. 'plan-x-steps/01-baseline.md') as shown by action:list. On read: a name containing a directory separator is treated as an explicit path and is either found there or reported not-found — never substituted with a same-named file elsewhere. A bare name (no separator) or a wrong extension falls back to a basename search under the docType's subdirectory, then across all of docs/ (the same tree action:list walks), auto-resolving if exactly one file matches; when a fallback resolves to a different path than requested, the result carries a warning field naming both. content required for write/append.")]
     public object ProjectDoc(
         [Description(ToolParams.Reason)] string reason,
         DocAction action,
@@ -369,7 +462,7 @@ public class SentinelDocumentationTools
 
             return action switch
             {
-                DocAction.read => (object)ReadFile(subdir, name, docType, docsRoot),
+                DocAction.read => (object)ReadFile(subdir, name, docType, docTypeSubdirRoot, docsRoot, ignoreDocType: IsTestingMode),
                 DocAction.write => WriteFile(subdir, name, content!),
                 DocAction.append => docType == DocType.completed_work
                     ? WriteFile(subdir, name, content!, append: true)

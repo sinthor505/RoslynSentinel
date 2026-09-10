@@ -624,7 +624,7 @@ public class SentinelAdvancedRefactoringTools
                     if (!autoStage)
                         return new ToolResult<object>() { Success = true, Data = new { Changes = changes } };
 
-                    var apply = await ValidateAndApplyAsync(changes, $"Extract interface '{newTypeName}' from '{className}'.", "ExtractMembers/interface", dryRun, returnDiff, cancellationToken);
+                    var apply = await ValidateAndApplyAsync(changes, $"Extract interface '{newTypeName}' from '{className}'.", "ExtractMembers_interface", dryRun, returnDiff, cancellationToken);
                     if (apply.Error is not null)
                         return new ToolResult<object> { Success = false, Error = apply.Error };
                     return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted interface '{newTypeName}' from '{className}'.", apply.DryRun, apply.Diff) };
@@ -645,7 +645,7 @@ public class SentinelAdvancedRefactoringTools
                 if (!autoStage)
                     return new ToolResult<object>() { Success = true, Data = partialChanges };
 
-                var partialApply = await ValidateAndApplyAsync(partialChanges, $"Extract members to partial for '{className}'.", "ExtractMembers/partial", dryRun, returnDiff, cancellationToken);
+                var partialApply = await ValidateAndApplyAsync(partialChanges, $"Extract members to partial for '{className}'.", "ExtractMembers_partial", dryRun, returnDiff, cancellationToken);
                 if (partialApply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = partialApply.Error };
                 return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(partialApply.ChangeId, partialChanges.Keys.ToList(), $"Extracted members of '{className}' to a new partial file.", partialApply.DryRun, partialApply.Diff) };
@@ -664,7 +664,7 @@ public class SentinelAdvancedRefactoringTools
                     if (!autoStage)
                         return new ToolResult<object>() { Success = true, Data = new { Changes = changes } };
 
-                    var apply = await ValidateAndApplyAsync(changes, $"Extract superclass '{newTypeName}' from {actualClassNames.Length} class(es).", "ExtractMembers/superclass", dryRun, returnDiff, cancellationToken);
+                    var apply = await ValidateAndApplyAsync(changes, $"Extract superclass '{newTypeName}' from {actualClassNames.Length} class(es).", "ExtractMembers_superclass", dryRun, returnDiff, cancellationToken);
                     if (apply.Error is not null)
                         return new ToolResult<object> { Success = false, Error = apply.Error };
                     return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted superclass '{newTypeName}' from {actualClassNames.Length} class(es).", apply.DryRun, apply.Diff) };
@@ -722,7 +722,7 @@ public class SentinelAdvancedRefactoringTools
                     };
 
                 var implChanges = new Dictionary<FilePath, string> { [filePath] = implResult.UpdatedText };
-                var implApply = await ValidateAndApplyAsync(implChanges, $"Implement '{interfaceName}' on '{className}'.", "SyncInterface/implement", dryRun, returnDiff, cancellationToken);
+                var implApply = await ValidateAndApplyAsync(implChanges, $"Implement '{interfaceName}' on '{className}'.", "SyncInterface_implement", dryRun, returnDiff, cancellationToken);
                 if (implApply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = implApply.Error };
                 return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(implApply.ChangeId, [filePath], $"Implemented '{interfaceName}' on '{className}' in {Path.GetFileName(filePath)}.", implApply.DryRun, implApply.Diff) };
@@ -746,7 +746,7 @@ public class SentinelAdvancedRefactoringTools
                     };
 
                 var syncChanges = new Dictionary<FilePath, string> { [filePath] = syncResult.UpdatedText };
-                var syncApply = await ValidateAndApplyAsync(syncChanges, $"Sync '{interfaceName}' to '{className}' implementation.", "SyncInterface/sync", dryRun, returnDiff, cancellationToken);
+                var syncApply = await ValidateAndApplyAsync(syncChanges, $"Sync '{interfaceName}' to '{className}' implementation.", "SyncInterface_sync", dryRun, returnDiff, cancellationToken);
                 if (syncApply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = syncApply.Error };
                 return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(syncApply.ChangeId, [filePath], $"Synced '{interfaceName}' to '{className}' implementation in {Path.GetFileName(filePath)}.", syncApply.DryRun, syncApply.Diff) };
@@ -788,7 +788,7 @@ public class SentinelAdvancedRefactoringTools
                 try
                 {
                     var methodChanges = await _refinementEngine.InlineMethodAsync(filePath, targetName);
-                    var methodApply = await ValidateAndApplyAsync(methodChanges, $"Inline method '{targetName}'.", "Inline/method", dryRun, returnDiff, cancellationToken);
+                    var methodApply = await ValidateAndApplyAsync(methodChanges, $"Inline method '{targetName}'.", "Inline_method", dryRun, returnDiff, cancellationToken);
                     if (methodApply.Error is not null)
                         return new ToolResult<object> { Success = false, Error = methodApply.Error };
                     return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(methodApply.ChangeId, methodChanges.Keys.ToList(), $"Inlined '{targetName}' at all call sites across {methodChanges.Count} file(s).", methodApply.DryRun, methodApply.Diff) };
@@ -806,7 +806,7 @@ public class SentinelAdvancedRefactoringTools
                     return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Inline/variable: variable '{targetName}' not found in '{filePath}'.") };
 
                 var varChanges = new Dictionary<FilePath, string> { [filePath] = updated };
-                var varApply = await ValidateAndApplyAsync(varChanges, $"Inline variable '{targetName}'.", "Inline/variable", dryRun, returnDiff, cancellationToken);
+                var varApply = await ValidateAndApplyAsync(varChanges, $"Inline variable '{targetName}'.", "Inline_variable", dryRun, returnDiff, cancellationToken);
                 if (varApply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = varApply.Error };
                 return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(varApply.ChangeId, [filePath], $"Inlined variable '{targetName}' into its usages in {Path.GetFileName(filePath)}.", varApply.DryRun, varApply.Diff) };
@@ -818,7 +818,7 @@ public class SentinelAdvancedRefactoringTools
                     return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Inline/field: field '{targetName}' not found in '{filePath}'.") };
 
                 var fieldChanges = new Dictionary<FilePath, string> { [filePath] = fieldResult.UpdatedText };
-                var fieldApply = await ValidateAndApplyAsync(fieldChanges, $"Inline field '{targetName}'.", "Inline/field", dryRun, returnDiff, cancellationToken);
+                var fieldApply = await ValidateAndApplyAsync(fieldChanges, $"Inline field '{targetName}'.", "Inline_field", dryRun, returnDiff, cancellationToken);
                 if (fieldApply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = fieldApply.Error };
                 return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(fieldApply.ChangeId, [filePath], $"Inlined field '{targetName}' into its usages in {Path.GetFileName(filePath)}.", fieldApply.DryRun, fieldApply.Diff) };
@@ -833,7 +833,7 @@ public class SentinelAdvancedRefactoringTools
                     return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Inline/parameter: parameter '{targetName}' not found in method '{methodName}' in '{filePath}'.") };
 
                 var paramChanges = new Dictionary<FilePath, string> { [filePath] = paramResult.UpdatedText };
-                var paramApply = await ValidateAndApplyAsync(paramChanges, $"Inline parameter '{targetName}' in '{methodName}'.", "Inline/parameter", dryRun, returnDiff, cancellationToken);
+                var paramApply = await ValidateAndApplyAsync(paramChanges, $"Inline parameter '{targetName}' in '{methodName}'.", "Inline_parameter", dryRun, returnDiff, cancellationToken);
                 if (paramApply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = paramApply.Error };
                 return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(paramApply.ChangeId, [filePath], $"Inlined parameter '{targetName}' into '{methodName}' body in {Path.GetFileName(filePath)}.", paramApply.DryRun, paramApply.Diff) };
@@ -885,7 +885,7 @@ public class SentinelAdvancedRefactoringTools
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
                     }
                     var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-                    var apply = await ValidateAndApplyAsync(changes, $"Wrap snippet in try/catch.", "WrapRange/tryCatch", dryRun, returnDiff, cancellationToken);
+                    var apply = await ValidateAndApplyAsync(changes, $"Wrap snippet in try/catch.", "WrapRange_tryCatch", dryRun, returnDiff, cancellationToken);
                     if (apply.Error is not null)
                         return new ToolResult<object> { Success = false, Error = apply.Error };
                     var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Wrapped snippet in a try/{exceptionType} block in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
@@ -903,7 +903,7 @@ public class SentinelAdvancedRefactoringTools
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
                     }
                     var usingChanges = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-                    var usingApply = await ValidateAndApplyAsync(usingChanges, $"Wrap snippet in using ({name}).", "WrapRange/using", dryRun, returnDiff, cancellationToken);
+                    var usingApply = await ValidateAndApplyAsync(usingChanges, $"Wrap snippet in using ({name}).", "WrapRange_using", dryRun, returnDiff, cancellationToken);
                     if (usingApply.Error is not null)
                         return new ToolResult<object> { Success = false, Error = usingApply.Error };
                     var usingSummary = new AppliedChangeSummary(usingApply.ChangeId, [filePath], $"Wrapped snippet in a using ({name}) block in {Path.GetFileName(filePath)}.", usingApply.DryRun, usingApply.Diff);
@@ -921,7 +921,7 @@ public class SentinelAdvancedRefactoringTools
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
                     }
                     var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-                    var apply = await ValidateAndApplyAsync(changes, $"Wrap snippet in #region '{name}'.", "WrapRange/region", dryRun, returnDiff, cancellationToken);
+                    var apply = await ValidateAndApplyAsync(changes, $"Wrap snippet in #region '{name}'.", "WrapRange_region", dryRun, returnDiff, cancellationToken);
                     if (apply.Error is not null)
                         return new ToolResult<object> { Success = false, Error = apply.Error };
                     var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Wrapped snippet in #region '{name}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
@@ -941,7 +941,7 @@ public class SentinelAdvancedRefactoringTools
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
                     }
                     var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-                    var apply = await ValidateAndApplyAsync(changes, $"Wrap lines {startLine}-{endLine} in try/catch.", "WrapRange/tryCatch", dryRun, returnDiff, cancellationToken);
+                    var apply = await ValidateAndApplyAsync(changes, $"Wrap lines {startLine}-{endLine} in try/catch.", "WrapRange_tryCatch", dryRun, returnDiff, cancellationToken);
                     if (apply.Error is not null)
                         return new ToolResult<object> { Success = false, Error = apply.Error };
                     var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Wrapped lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
@@ -959,7 +959,7 @@ public class SentinelAdvancedRefactoringTools
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
                     }
                     var usingChanges = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-                    var usingApply = await ValidateAndApplyAsync(usingChanges, $"Wrap lines {startLine}-{endLine} in using ({name}).", "WrapRange/using", dryRun, returnDiff, cancellationToken);
+                    var usingApply = await ValidateAndApplyAsync(usingChanges, $"Wrap lines {startLine}-{endLine} in using ({name}).", "WrapRange_using", dryRun, returnDiff, cancellationToken);
                     if (usingApply.Error is not null)
                         return new ToolResult<object> { Success = false, Error = usingApply.Error };
                     var usingSummary = new AppliedChangeSummary(usingApply.ChangeId, [filePath], $"Wrapped lines {startLine}-{endLine} in a using ({name}) block in {Path.GetFileName(filePath)}.", usingApply.DryRun, usingApply.Diff);
@@ -977,7 +977,7 @@ public class SentinelAdvancedRefactoringTools
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
                     }
                     var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-                    var apply = await ValidateAndApplyAsync(changes, $"Wrap lines {startLine}-{endLine} in #region '{name}'.", "WrapRange/region", dryRun, returnDiff, cancellationToken);
+                    var apply = await ValidateAndApplyAsync(changes, $"Wrap lines {startLine}-{endLine} in #region '{name}'.", "WrapRange_region", dryRun, returnDiff, cancellationToken);
                     if (apply.Error is not null)
                         return new ToolResult<object> { Success = false, Error = apply.Error };
                     var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Wrapped lines {startLine}-{endLine} in #region '{name}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
@@ -1020,7 +1020,7 @@ public class SentinelAdvancedRefactoringTools
                 if (!autoStage)
                     return new ToolResult<object> { Success = true, Data = changes };
 
-                var apply = await ValidateAndApplyAsync(changes, $"Move type '{typeName}' from '{Path.GetFileName(filePath)}'.", "MoveType/ownFile", dryRun, returnDiff, cancellationToken);
+                var apply = await ValidateAndApplyAsync(changes, $"Move type '{typeName}' from '{Path.GetFileName(filePath)}'.", "MoveType_ownFile", dryRun, returnDiff, cancellationToken);
                 if (apply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = apply.Error };
                 return new ToolResult<object>
@@ -1051,7 +1051,7 @@ public class SentinelAdvancedRefactoringTools
                     return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"MoveType/outerScope: nested type '{typeName}' not found in '{filePath}'.") };
 
                 var outerChanges = new Dictionary<FilePath, string> { [filePath] = outerResult.UpdatedText };
-                var outerApply = await ValidateAndApplyAsync(outerChanges, $"Move type '{typeName}' to outer scope.", "MoveType/outerScope", dryRun, returnDiff, cancellationToken);
+                var outerApply = await ValidateAndApplyAsync(outerChanges, $"Move type '{typeName}' to outer scope.", "MoveType_outerScope", dryRun, returnDiff, cancellationToken);
                 if (outerApply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = outerApply.Error };
                 return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(outerApply.ChangeId, [filePath], $"Moved '{typeName}' to outer namespace scope in {Path.GetFileName(filePath)}.", outerApply.DryRun, outerApply.Diff) };

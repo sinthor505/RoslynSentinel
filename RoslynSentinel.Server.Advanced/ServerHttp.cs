@@ -21,7 +21,7 @@ public class ServerHttp
     public static async Task Startup(string[] args)
     {
         // ── Arg parsing ──────────────────────────────────────────────────────
-        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools);
+        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
         LlmOptions.Configure(args);
 
@@ -46,6 +46,7 @@ public class ServerHttp
         ServerStartupHelpers.RegisterSerilogLoggerFactory(builder.Services);
         builder.WebHost.ConfigureKestrel(opts => opts.ListenAnyIP(port));
 
+        builder.Services.AddRoslynSentinelHostOptions(operatingMode);
         builder.Services.AddRoslynSentinelEnginesAdvanced();
 
         var mcpBuilder = builder.Services.AddMcpServer().WithHttpTransport();

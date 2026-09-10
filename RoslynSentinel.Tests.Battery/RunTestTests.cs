@@ -27,7 +27,8 @@ public class RunTestTests
             new BuildEngine(workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
-            new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)));
+            new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)),
+            WriteToolAdviceHelper.WithAllToolsExposed());
     }
 
     private const string FailingTestSource = """

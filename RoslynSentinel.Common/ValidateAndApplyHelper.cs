@@ -73,9 +73,47 @@ public static class ValidateAndApplyHelper
         }
 
         var changeId = Guid.NewGuid().ToString("n")[..8];
-        await OperationBlobWriter.WriteApplyBlobAsync(operationName, changeId, applyResult, workspaceManager.GetSolutionRoot());
+        var blob = await OperationBlobWriter.WriteApplyBlobAsync(
+            operationName, changeId, applyResult, workspaceManager.GetSolutionRoot(), logger);
 
         var appliedDiff = returnDiff ? BuildDiffFromPreImages(changes, applyResult.PreImages) : null;
+
+        // The blob-integrity invariant, enforced where both facts are known at once: an apply that
+        // wrote files and issues a changeId must have a resolvable blob. This return value used to
+        // be discarded entirely, which is why run 20260910-013550-398 saw status:"applied" with a
+        // confident undo instruction and no blob on disk.
+        //
+        // Deliberately not thrown: the files are already written, and reporting a landed edit as
+        // failed would invite the model to retry it — a corruption path worse than a missing undo
+        // record. Instead the result tells the truth (applied, not reversible) and the breaker
+        // refuses every subsequent mutation.
+        if (blob.IsIntegrityFailure)
+        {
+            var reason = blob.Diagnostic ?? "the operation blob could not be written";
+            ((IUnrecoverableBreaker)workspaceManager).Trip(operationName, changeId, reason);
+
+            // No changeId: one UndoLastApply cannot resolve is worse than none.
+            return new ApplyOutcome(null, null, false, appliedDiff, reason);
+        }
+
+        // Nothing was written, so no changeId should be issued either. Previously one was minted
+        // unconditionally, which meant any operation producing an empty change set — most commonly
+        // one whose refactoring feature is disabled in SentinelConfiguration, e.g. ExtractInterface,
+        // which returns an empty dictionary rather than an error — reported status:"applied" and
+        // handed back a handle UndoLastApply could never resolve. Not an integrity failure (nothing
+        // landed on disk), just a no-op, so the breaker deliberately stays untripped.
+        //
+        // Keyed on the apply result rather than on blob.Required: those diverge when there is no
+        // solution root at all (in-memory test solutions), where files are written to the workspace
+        // but no blob is applicable. Withholding the changeId there would misreport a real change.
+        if (applyResult.SucceededFiles.Count == 0)
+        {
+            return new ApplyOutcome(null, null, false, appliedDiff,
+                $"{operationName} produced no file changes, so nothing was written and there is " +
+                "nothing to undo. If you expected a change, the operation matched no target — or " +
+                "its refactoring feature is disabled on this server (see the Features tool).");
+        }
+
         return new ApplyOutcome(changeId, null, false, appliedDiff);
     }
 

@@ -112,7 +112,8 @@ public class MigrationScanResultTests
             _workspaceManager,
             NullLogger<SentinelScanTools>.Instance);
 
-        _workspaceTools = new SentinelWorkspaceTools(_workspaceManager, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)));
+        _workspaceTools = new SentinelWorkspaceTools(_workspaceManager, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)),
+            WriteToolAdviceHelper.WithAllToolsExposed());
 
         // Create a temp dir so GetSolutionRoot() returns a valid path for file-write tests.
         _tempDir = Path.Combine(Path.GetTempPath(), "MigrationScanResultTests_" + Guid.NewGuid().ToString("N"));
@@ -627,6 +628,7 @@ public class Svc
 
         var docTools = new SentinelDocumentationTools(
             _workspaceManager,
+            new SentinelHostOptions(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<SentinelDocumentationTools>.Instance);
 
         var result = docTools.ProjectDoc(reason: "Test", action: DocAction.read, docType: DocType.state) as DocReadResult;

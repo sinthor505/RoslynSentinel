@@ -1,6 +1,7 @@
 using System.Diagnostics;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Server.Basic;
@@ -11,6 +12,19 @@ namespace RoslynSentinel.Server.Basic;
 /// </summary>
 public static class RoslynSentinelServiceExtensionsBasic
 {
+    /// <summary>
+    /// Registers process-wide host settings (currently just <see cref="OperatingMode"/>). Call
+    /// this <em>before</em> <see cref="AddRoslynSentinelEnginesBasic"/>, which TryAdds a
+    /// Production-mode default for callers (chiefly the test assemblies) that never set one.
+    /// </summary>
+    public static IServiceCollection AddRoslynSentinelHostOptions(
+        this IServiceCollection services,
+        OperatingMode operatingMode)
+    {
+        services.AddSingleton(new SentinelHostOptions { OperatingMode = operatingMode });
+        return services;
+    }
+
     /// <summary>
     /// Registers all Roslyn analysis engine singletons into the DI container.
     /// </summary>
@@ -23,6 +37,10 @@ public static class RoslynSentinelServiceExtensionsBasic
     public static IServiceCollection AddRoslynSentinelEnginesBasic(this IServiceCollection services)
     {
         services.AddSingleton<SentinelConfiguration>();
+        // Defaults to Production. TryAdd (not Add) so a host that called
+        // AddRoslynSentinelHostOptions first keeps its own value — registering unconditionally
+        // here would make the last-wins order depend on which extension the host called last.
+        services.TryAddSingleton(new SentinelHostOptions());
         services.AddSingleton<PersistentWorkspaceManager>();
         services.AddSingleton<IWorkspaceManager>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
         services.AddSingleton<ISolutionProvider>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
@@ -111,6 +129,14 @@ public static class RoslynSentinelServiceExtensionsBasic
             ToolClassRegistry.BasicModeToToolClasses,
             resolvedIncludeTools,
             resolvedExcludeTools);
+
+        // Registered from the resolved class set (not a static) so error messages can only ever
+        // name a tool this server actually exposes, and so tests can construct one with an
+        // arbitrary tool set. Registering here (rather than in Advanced too) is sufficient because
+        // every class declaring a tool WriteToolAdviceHelper may name is in
+        // BasicModeToToolClasses, so this resolution already sees all of them — Advanced adds no
+        // whole-file-write tools. See WriteToolAdviceHelper's remarks.
+        services.AddSingleton(new WriteToolAdviceHelper(activeToolClasses));
 
         if (activeToolClasses.Contains("SentinelWorkspaceTools"))
         {
@@ -453,6 +479,55 @@ public static class RoslynSentinelServiceExtensionsBasic
                     }
 
                     return result;
+                }));
+
+            // Unrecoverable breaker: a server-integrity fault (currently a failed operation-blob
+            // write, meaning a change landed on disk with no undo record) halts the session for
+            // good. See IUnrecoverableBreaker for why this is not IManualCircuitBreaker and has no
+            // reset. Registered as its own filter rather than folded into the orientation-breaker
+            // one above so neither can mask the other's message.
+            //
+            // The authoritative enforcement is in PersistentWorkspaceManager.ApplyProposedChangesAsync
+            // — the write chokepoint, which no mutating tool can bypass. This filter exists so the
+            // refusal also arrives as a protocol-level IsError carrying the specific diagnostic,
+            // rather than only as a per-tool error, and so tools that would do expensive analysis
+            // before their first write fail fast.
+            //
+            // Allowlist rather than a list of mutating tools: a deny-list would silently omit any
+            // tool added later, which is the same forgotten-call-site mode that produced this
+            // defect. Anything not named here is refused, so the safe default is "refused". These
+            // are the tools an operator or agent needs to read the state and stop cleanly.
+            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+                ModelContextProtocol.Protocol.CallToolRequestParams,
+                ModelContextProtocol.Protocol.CallToolResult>(
+                async (context, cancellationToken) =>
+                {
+                    try
+                    {
+                        IUnrecoverableBreaker? breaker = context.Server.Services?.GetService<PersistentWorkspaceManager>();
+                        var toolName = context.Params?.Name;
+
+                        if (breaker is not null && breaker.IsTripped() &&
+                            toolName is not ("ReadFile" or "ListAll" or "ListSolutionItems" or "GetFileOutline"
+                                or "GetOperationDetail" or "GetWorkspaceHealth" or "IsSessionHalted" or "Git"))
+                        {
+                            return new ModelContextProtocol.Protocol.CallToolResult
+                            {
+                                Content = [new ModelContextProtocol.Protocol.TextContentBlock
+                                {
+                                    Text = breaker.StateMessage()
+                                        ?? "The server recorded an unrecoverable integrity failure. This session cannot continue. Stop and report to the user/operator."
+                                }],
+                                IsError = true,
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Unrecoverable breaker pre-check failed: {ex}");
+                    }
+
+                    return await next(context, cancellationToken);
                 }));
         });
 

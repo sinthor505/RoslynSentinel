@@ -52,6 +52,7 @@ public class SentinelWorkspaceTools
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelWorkspaceTools> _logger;
     private readonly WorkspaceReadNavigationTools _readNav;
+    private readonly WriteToolAdviceHelper _writeAdvice;
     private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
         WriteIndented = true,
@@ -62,7 +63,7 @@ public class SentinelWorkspaceTools
             }
     };
 
-    public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationTools readNav)
+    public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationTools readNav, WriteToolAdviceHelper writeAdvice)
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
@@ -78,6 +79,7 @@ public class SentinelWorkspaceTools
         _symbolNavigationEngine = symbolNavigationEngine;
         _testRunEngine = testRunEngine;
         _readNav = readNav;
+        _writeAdvice = writeAdvice;
     }
 
     [McpServerTool(Name = "Features")]
@@ -534,12 +536,26 @@ public class SentinelWorkspaceTools
     // alongside ApplyDiff) — see docs/current/design_applyunifieddiff_replace_snippet_v1.md.
     // ReplaceSnippet (below, on this default surface) replaces it for small, exact-text edits.
 
-    private const int MaxOldContentLines = 20;
-    private const int MaxContentChars = 200;
+    // Raised from 20 lines / 200 chars (shared across both parameters) after run
+    // 20260910-013550-398 livelocked here: the 200-char ceiling was the binding constraint —
+    // a 6-line C# insertion at normal indentation exceeds it long before the 20-line bound — and
+    // the only escape hatch the error named was gated off, so the model burned its last 24 turns
+    // reshaping the same edit. Bounds are per-parameter now rather than a shared char cap: unlike
+    // the ApplyDiff family, which anchors a small hunk inside a larger context, ReplaceSnippet
+    // replaces the entire matched span, so oldContent legitimately grows with the edit.
+    private const int MaxOldContentLines = 60;
+    private const int MaxOldContentChars = 2000;
+    private const int MaxNewContentLines = 60;
+    private const int MaxNewContentChars = 2000;
 
     [McpServerTool(Name = "ReplaceSnippet")]
     [Produces(DataTag.ChangeId)]
-    [Description("Replaces one exact block of text with another in a single file — for small, localized edits only (max 20 lines / 200 characters each for oldContent and newContent). 'filepath', 'oldContent' and 'newContent' are all REQUIRED. oldContent is matched verbatim (literal substring, or the same text with different line endings) against the current file content — copy it exactly, character-for-character including whitespace, from a prior ReadFile/GetMethodSource result; do not retype it from memory or approximate indentation, or the call fails with a 'not found' error rather than guessing. If oldContent matches more than once in the file, the call fails with an Ambiguous error naming the match count — retry with lineBefore/lineAfter (verbatim text from the line immediately above/below the intended match) to disambiguate. newContent may be empty (pure deletion) or longer than oldContent (net insertion). Returns ApplyChangesResult with UndoChangeId on successful apply. For an edit larger than the size limit, use WriteFile(operation=ReplaceFile) for a whole-file rewrite, or the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) for a structural change. For multiple small edits in the same file, call ReplaceSnippet once per edit. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
+    // Deliberately names no whole-file-write tool. Attribute arguments must be compile-time
+    // constants, so this text can't be generated per-session from the tool registry the way the
+    // over-cap error can (see WriteToolAdviceHelper) — and a hardcoded name here would be shown to
+    // the model on every single call even when that tool is gated off, which is the run-398 failure
+    // in its most persistent form. The error path is where the redirect is actually needed.
+    [Description("Replaces one exact block of text with another in a single file — for localized edits (max 60 lines / 2000 characters each for oldContent and newContent; an over-cap call reports which specific bound was exceeded and what to use instead). 'filepath', 'oldContent' and 'newContent' are all REQUIRED. oldContent is matched verbatim (literal substring, or the same text with different line endings) against the current file content — copy it exactly, character-for-character including whitespace, from a prior ReadFile/GetMethodSource result; do not retype it from memory or approximate indentation, or the call fails with a 'not found' error rather than guessing. If oldContent matches more than once in the file, the call fails with an Ambiguous error naming the match count — retry with lineBefore/lineAfter (verbatim text from the line immediately above/below the intended match) to disambiguate. newContent may be empty (pure deletion) or longer than oldContent (net insertion). Returns ApplyChangesResult with UndoChangeId on successful apply. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.). For multiple small edits in the same file, call ReplaceSnippet once per edit. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
     public async Task<ToolResult<object>> ReplaceSnippet(
         [Description(ToolParams.Reason)] string reason,
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
@@ -582,16 +598,40 @@ public class SentinelWorkspaceTools
                 };
             }
 
+            // Each bound is reported separately, with the actual value against the limit: run
+            // 20260910-013550-398 shows the model repeatedly guessing wrong about which of the four
+            // it had hit, because the old message named them all at once.
+            var exceeded = new List<string>();
             var oldContentLineCount = oldContent.Split('\n').Length;
-            if (oldContentLineCount > MaxOldContentLines || oldContent.Length > MaxContentChars || newContent.Length > MaxContentChars)
+            var newContentLineCount = newContent.Split('\n').Length;
+            if (oldContentLineCount > MaxOldContentLines)
             {
+                exceeded.Add($"oldContent is {oldContentLineCount} lines (limit {MaxOldContentLines})");
+            }
+            if (oldContent.Length > MaxOldContentChars)
+            {
+                exceeded.Add($"oldContent is {oldContent.Length} chars (limit {MaxOldContentChars})");
+            }
+            if (newContentLineCount > MaxNewContentLines)
+            {
+                exceeded.Add($"newContent is {newContentLineCount} lines (limit {MaxNewContentLines})");
+            }
+            if (newContent.Length > MaxNewContentChars)
+            {
+                exceeded.Add($"newContent is {newContent.Length} chars (limit {MaxNewContentChars})");
+            }
+
+            if (exceeded.Count > 0)
+            {
+                // Escape-hatch advice comes from WriteToolAdviceHelper, never a hardcoded tool name:
+                // the old text here named WriteFile unconditionally, and in run 398 WriteFile was
+                // gated off, so the one instruction the model was given was unfollowable.
+                var advice = _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet");
                 return new ToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.InvalidArgument,
-                        $"ReplaceSnippet: oldContent/newContent exceeds the size limit for a small localized edit (max {MaxOldContentLines} lines / {MaxContentChars} chars each). " +
-                        "For a whole-file rewrite, use WriteFile(operation=ReplaceFile). For a structural change (rename, signature, extract), use the matching Roslyn tool " +
-                        "(RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.). For multiple small edits in the same file, call ReplaceSnippet once per edit.")
+                        $"ReplaceSnippet: {string.Join("; ", exceeded)}. " + advice.Sentence)
                 };
             }
 
@@ -1105,14 +1145,21 @@ public class SentinelWorkspaceTools
     /// Writes a forensic blob for a completed apply so undo_last_apply can revert it.
     /// Uses pre-images from ApplyChangesResult.PreImages (populated by ApplyProposedChangesAsync).
     /// blobChangeId: if provided, uses this id for the blob filename; if null, mints a fresh id.
-    /// Logs a warning but does not throw on blob write failure — apply already succeeded.
     /// </summary>
-    internal async Task WriteBlobForApplyAsync(string toolName, ApplyChangesResult result, string? blobChangeId = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    /// <remarks>
+    /// Never throws: the apply already succeeded and the files are on disk, so failing the call
+    /// would report a landed edit as failed and invite a retry. On failure it instead trips the
+    /// unrecoverable breaker, which refuses every subsequent mutating call this session — the
+    /// previous behaviour was a log-only warning that no caller and no transcript ever saw.
+    /// Returns the result so callers can suppress their own undo advice; the trip happens here
+    /// regardless, so a caller that ignores it still cannot proceed.
+    /// </remarks>
+    internal async Task<BlobWriteResult> WriteBlobForApplyAsync(string toolName, ApplyChangesResult result, string? blobChangeId = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         if (result.SucceededFiles.Count == 0)
         {
-            return;
+            return BlobWriteResult.NotNeeded("no files written — blob not needed");
         }
 
         var changeId = blobChangeId ?? Guid.NewGuid().ToString("n")[..8];
@@ -1127,16 +1174,22 @@ public class SentinelWorkspaceTools
                 BeforeSource = before,
             };
         }).ToList();
-        var blobName = await OperationBlobWriter.WriteAsync(toolName, changeId, items, _workspaceManager.GetSolutionRoot(), cancellationToken);
-        // OperationBlobWriter returns a diagnostic string (not an exception) on failure.
-        if (blobName.StartsWith('('))
+        var blob = await OperationBlobWriter.WriteAsync(
+            toolName, changeId, items, _workspaceManager.GetSolutionRoot(), _logger, cancellationToken);
+
+        if (blob.IsIntegrityFailure)
         {
-            _logger.LogWarning("Blob write failed for {ToolName}/{ChangeId}: {Reason}. " + "undo_last_apply will not be available for this apply.", toolName, changeId, blobName);
+            // Files landed with no undo record. OperationBlobWriter has already logged the
+            // exception at Error; the trip is what makes it consequential rather than advisory.
+            ((IUnrecoverableBreaker)_workspaceManager).Trip(
+                toolName, changeId, blob.Diagnostic ?? "the operation blob could not be written");
         }
-        else if (_logger.IsEnabled(LogLevel.Information))
+        else if (blob.Written && _logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("Forensic blob written: {BlobName} (changeId={ChangeId})", blobName, changeId);
+            _logger.LogInformation("Forensic blob written: {BlobName} (changeId={ChangeId})", blob.FileName, changeId);
         }
+
+        return blob;
     }
 
     [McpServerTool(Name = "GetDiagnostics")]
@@ -1707,7 +1760,20 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError("NoOperationBlobFound", $"No operation blob found for changeId '{changeId}'. Ensure the apply completed successfully and a solution is loaded.")
+                    // Deliberately does not say "ensure the apply completed successfully" — the
+                    // old wording did, and it misdiagnosed every real occurrence: in both
+                    // recorded cases (run 20260910-013550-398, and the SyncTypeAndFilename
+                    // blocker) the apply had completed and the files were on disk. The blob was
+                    // missing, not the change. Tools now withhold the changeId rather than issue
+                    // an unusable one, so reaching this at all means the id is from another
+                    // session, a different solution, or was mistyped.
+                    Error = new ResultError("NoOperationBlobFound",
+                        $"No operation blob found for changeId '{changeId}' under .roslynsentinel/operations/. " +
+                        "This does not mean the change failed — it may well be on disk. It means no undo record " +
+                        "exists for that id here. Check the id against the value the applying tool returned, and " +
+                        "that this is the same server session and solution; a changeId from an earlier session or " +
+                        "a different solution root will not resolve. If the applying tool reported the change as " +
+                        "'not reversible', there is no undo record to find and the change must be reverted manually.")
                 };
             }
 
@@ -1719,7 +1785,17 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError("NoReversibleItems", $"No reversible items in blob for changeId '{changeId}'. Ensure the apply completed successfully and a solution is loaded.")
+                    // Same misdiagnosis as NoOperationBlobFound above: the blob exists, so the
+                    // apply plainly ran. What's absent is a pre-image to restore — see
+                    // docs/current/blockers/blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md,
+                    // where a rename recorded no BeforeSource and this message sent the
+                    // investigation after the apply instead of after the blob's contents.
+                    Error = new ResultError("NoReversibleItems",
+                        $"The operation blob for changeId '{changeId}' was found, but none of its items carry the " +
+                        "original file contents needed to revert. The change itself completed — this is a gap in " +
+                        "what was recorded, not a failed apply, and it is most common for operations that renamed " +
+                        "or created files rather than editing them in place. Revert manually (e.g. via version " +
+                        $"control); GetOperationDetail(changeId: \"{changeId}\") shows exactly which files were touched.")
                 };
             }
 

@@ -46,6 +46,9 @@ public static class ServerStartupHelpers
     /// activate in addition to whatever --mode resolves, e.g. "SentinelGitTools,SentinelScanTools".</param>
     /// <param name="excludeTools">Parsed --exclude-tools value: individual tool-class names to
     /// deactivate even if --mode or --include-tools would otherwise activate them. Always wins.</param>
+    /// <param name="operatingMode"><see cref="OperatingMode.Testing"/> when --testing is present,
+    /// otherwise <see cref="OperatingMode.Production"/>. Note this is deliberately a separate switch
+    /// from --mode, which means tool activation.</param>
     public static void ParseArgs(
         string[] args,
         HashSet<string> allModes,
@@ -54,8 +57,11 @@ public static class ServerStartupHelpers
         out string? solutionPath,
         out string? baseRepoDirectory,
         out HashSet<string> includeTools,
-        out HashSet<string> excludeTools)
+        out HashSet<string> excludeTools,
+        out OperatingMode operatingMode)
     {
+        operatingMode = args.Contains("--testing") ? OperatingMode.Testing : OperatingMode.Production;
+
         // No --mode/--modes means no mode set is loaded (activeModes ends up empty) — a caller
         // must opt in via --mode=all, an explicit mode list, or --include-tools.
         modeArg = GetArgValue(args, "--mode") ?? GetArgValue(args, "--modes") ?? "";
@@ -329,15 +335,21 @@ public static class ServerStartupHelpers
         HashSet<string> activeModes,
         string modeArg,
         HashSet<string>? includeTools = null,
-        HashSet<string>? excludeTools = null)
+        HashSet<string>? excludeTools = null,
+        OperatingMode operatingMode = OperatingMode.Production)
     {
         if (logger.IsEnabled(LogLevel.Information))
         {
+            // OperatingMode is logged explicitly (and names the doc root it selects) because a
+            // testing-mode server reading production docs — or the reverse — is otherwise only
+            // detectable by noticing that ProjectDoc returned the wrong file.
             logger.LogInformation(
-                "Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg}) | IncludeTools: {IncludeTools} | ExcludeTools: {ExcludeTools}",
+                "Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg}) | IncludeTools: {IncludeTools} | ExcludeTools: {ExcludeTools} | OperatingMode: {OperatingMode} (ProjectDoc root: {DocRoot})",
                 string.Join(", ", activeModes), modeArg,
                 includeTools is { Count: > 0 } ? string.Join(", ", includeTools) : "(none)",
-                excludeTools is { Count: > 0 } ? string.Join(", ", excludeTools) : "(none)");
+                excludeTools is { Count: > 0 } ? string.Join(", ", excludeTools) : "(none)",
+                operatingMode,
+                operatingMode == OperatingMode.Testing ? "docs/testing/" : "docs/");
         }
 
         Debug.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");

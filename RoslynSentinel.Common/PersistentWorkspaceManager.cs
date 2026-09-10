@@ -24,7 +24,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
+public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
@@ -163,6 +163,15 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private readonly Lock _orientationBreakerLock = new();
     private bool _orientationBreakerOpen;
     private int _consecutiveZeroMatchSearches;
+
+    // ── Unrecoverable breaker state ───────────────────────────────────────────
+    // A server-integrity fault: a change landed on disk but its operation blob did not, so the
+    // changeId returned to the agent can never be undone. Once tripped this stays tripped for the
+    // life of the process — there is deliberately no reset path (see IUnrecoverableBreaker). Its
+    // own lock rather than sharing _breakerLock: the two breakers are independent, and this one
+    // must remain readable from the request filter even while a batch outcome is being recorded.
+    private readonly Lock _unrecoverableBreakerLock = new();
+    private string? _unrecoverableHaltMessage;
 
     // Guards MSBuildLocator.RegisterInstance, which is process-global and not safe to call
     // from more than one thread at a time (e.g. multiple test fixtures constructing this type
@@ -1228,6 +1237,23 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             throw new SessionHaltedException(
                 "Session halted: external file drift was detected on a tracked file. This session cannot safely continue. Stop and report to the user/operator.");
         }
+
+        // Unrecoverable blob-integrity halt (see IUnrecoverableBreaker). Enforced here, at the
+        // write chokepoint every .cs mutation routes through, rather than from a list of mutating
+        // tool names in the request filter: a name list would silently omit any tool added later,
+        // which is the same forget-a-call-site mode this whole change exists to close. Read-only
+        // tools never reach this method, so they stay available with nothing to maintain.
+        // The request filter adds a matching IsError at the protocol level; this is the guarantee.
+        string? unrecoverableHalt;
+        lock (_unrecoverableBreakerLock)
+        {
+            unrecoverableHalt = _unrecoverableHaltMessage;
+        }
+        if (unrecoverableHalt is not null)
+        {
+            throw new SessionHaltedException(unrecoverableHalt);
+        }
+
         if (deletePaths.Count > 0 && changes.Keys.Any(deletePaths.Contains))
         {
             var overlap = changes.Keys.Where(deletePaths.Contains).ToList();
@@ -1900,13 +1926,63 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         _logger.LogInformation("Circuit breaker manually reset.");
     }
 
-    // This class implements two distinct breakers (IManualCircuitBreaker, IAutomaticCircuitBreaker)
-    // that both redeclare ICircuitBreaker's members with their own meaning — there is no single
-    // correct answer for "IsTripped()" on the bare ICircuitBreaker view, so it isn't meant to be
-    // called through that type. Cast to IManualCircuitBreaker or IAutomaticCircuitBreaker instead.
-    bool ICircuitBreaker.IsTripped() => throw new NotSupportedException($"Ambiguous: cast to {nameof(IManualCircuitBreaker)} or {nameof(IAutomaticCircuitBreaker)} instead of calling through the base {nameof(ICircuitBreaker)}.");
-    string? ICircuitBreaker.StateMessage() => throw new NotSupportedException($"Ambiguous: cast to {nameof(IManualCircuitBreaker)} or {nameof(IAutomaticCircuitBreaker)} instead of calling through the base {nameof(ICircuitBreaker)}.");
-    void ICircuitBreaker.Reset() => throw new NotSupportedException($"Ambiguous: cast to {nameof(IManualCircuitBreaker)} or {nameof(IAutomaticCircuitBreaker)} instead of calling through the base {nameof(ICircuitBreaker)}.");
+    // This class implements three distinct breakers (IManualCircuitBreaker,
+    // IAutomaticCircuitBreaker, IUnrecoverableBreaker) that each redeclare ICircuitBreaker's
+    // members with their own meaning — there is no single correct answer for "IsTripped()" on the
+    // bare ICircuitBreaker view, so it isn't meant to be called through that type. Cast to the
+    // specific breaker interface instead.
+    private static NotSupportedException AmbiguousBreakerView() =>
+        new($"Ambiguous: cast to {nameof(IManualCircuitBreaker)}, {nameof(IAutomaticCircuitBreaker)} or {nameof(IUnrecoverableBreaker)} instead of calling through the base {nameof(ICircuitBreaker)}.");
+
+    bool ICircuitBreaker.IsTripped() => throw AmbiguousBreakerView();
+    string? ICircuitBreaker.StateMessage() => throw AmbiguousBreakerView();
+
+    // ── IUnrecoverableBreaker ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Records an unrecoverable blob-integrity fault. Not reversible: see
+    /// <see cref="IUnrecoverableBreaker"/> for why no reset exists.
+    /// </summary>
+    void IUnrecoverableBreaker.Trip(string toolName, string changeId, string diagnostic)
+    {
+        lock (_unrecoverableBreakerLock)
+        {
+            if (_unrecoverableHaltMessage is not null)
+            {
+                // Keep the first trip. A later fault is almost certainly downstream of this one,
+                // and the earliest diagnostic is the one closest to the root cause.
+                return;
+            }
+
+            _unrecoverableHaltMessage =
+                $"The server recorded an unrecoverable operation-blob integrity failure while applying '{toolName}' " +
+                $"(changeId {changeId}): {diagnostic}. Changes may have been written to disk without an undo record, " +
+                "so UndoLastApply cannot reverse them. All mutating tools are disabled for the remainder of this " +
+                "session; there is no way to clear this from here. Stop, restart the server, and have an operator " +
+                "review the server log before making further changes.";
+        }
+
+        _logger.LogError(
+            "UNRECOVERABLE breaker TRIPPED by {ToolName} (changeId {ChangeId}): {Diagnostic}. " +
+            "A change may have applied with no undo record. All mutating tools are now disabled for this process.",
+            toolName, changeId, diagnostic);
+    }
+
+    bool IUnrecoverableBreaker.IsTripped()
+    {
+        lock (_unrecoverableBreakerLock)
+        {
+            return _unrecoverableHaltMessage is not null;
+        }
+    }
+
+    string? IUnrecoverableBreaker.StateMessage()
+    {
+        lock (_unrecoverableBreakerLock)
+        {
+            return _unrecoverableHaltMessage;
+        }
+    }
 
     /// <summary>True when the mutating-tools breaker is currently open.</summary>
     bool IManualCircuitBreaker.IsTripped()

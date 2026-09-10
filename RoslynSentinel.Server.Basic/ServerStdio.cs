@@ -33,7 +33,7 @@ public class ServerStdio
     public static async Task Startup(string[] args)
     {
         // ── Arg parsing ──────────────────────────────────────────────────────
-        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools);
+        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
 
         if (ServerStartupHelpers.HandleListTools(args, activeModes, includeTools, excludeTools))
         {
@@ -73,6 +73,7 @@ public class ServerStdio
 
         try
         {
+            builder.Services.AddRoslynSentinelHostOptions(operatingMode);
             builder.Services.AddRoslynSentinelEnginesBasic();
 
             var mcpBuilder = builder.Services.AddMcpServer();
@@ -95,7 +96,7 @@ public class ServerStdio
             host.Services.WarmupAndAutoLoadBasic(solutionPath, logger, baseRepoDirectory);
             SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
             SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
-            ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg, includeTools, excludeTools);
+            ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg, includeTools, excludeTools, operatingMode);
 
             try
             {

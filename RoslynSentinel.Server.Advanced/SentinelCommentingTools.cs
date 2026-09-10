@@ -352,7 +352,7 @@ public class SentinelCommentingTools
 
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped.Count - failed);
 
-        var blobName = await OperationBlobWriter.WriteAsync("bulk_comment", changeId, items, _workspaceManager.GetSolutionRoot(), cancellationToken);
+        var blobName = await OperationBlobWriter.WriteBatchBlobOrTripAsync(_workspaceManager, "bulk_comment", changeId, items, _workspaceManager.GetSolutionRoot(), _logger, cancellationToken);
 
         var status = _workspaceManager.GetBreakerStatus();
 

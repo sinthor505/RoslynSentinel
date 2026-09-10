@@ -41,7 +41,8 @@ public class BatteryTwentyTests
             _projectConsistencyEngine, _config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, _diagnosticEngine),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
-            new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)));
+            new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)),
+            WriteToolAdviceHelper.WithAllToolsExposed());
         _wholeFileWriteTools = new SentinelWholeFileWriteTools(_workspaceManager, _workspaceTools, _validationEngine, _diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
     }
 
