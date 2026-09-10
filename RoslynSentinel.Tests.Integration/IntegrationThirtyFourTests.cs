@@ -22,7 +22,7 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace RoslynSentinel.Tests.Battery;
+namespace RoslynSentinel.Tests.Integration;
 
 [TestFixture]
 [Category("Integration")]
