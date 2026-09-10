@@ -75,7 +75,7 @@ public sealed class GitWorktreeManager(string sourceRepo, string branch, string 
         }
 
         Console.WriteLine($"--clean: removing existing worktree at {path}");
-        RunGitOrThrow(sourceRepo, "worktree", "remove", "--force", path);
+        RunGitOrThrow(sourceRepo, "-c", "core.longpaths=true", "worktree", "remove", "--force", path);
     }
 
     /// <summary>
@@ -149,9 +149,17 @@ public sealed class GitWorktreeManager(string sourceRepo, string branch, string 
         return paths;
     }
 
-    public void RemoveWorktree(string worktreePath)
+    /// <summary>
+    /// Removes a step's worktree after its work is already committed. Returns the git error text on
+    /// failure instead of throwing — Windows' ~260-char path limit can make `git worktree remove`
+    /// fail deleting deeply-nested build output (e.g. "Filename too long") even though the commit
+    /// itself succeeded, and that's not worth aborting the whole run over (see --clean, which already
+    /// force-removes leftover worktrees on a later retry).
+    /// </summary>
+    public string? TryRemoveWorktree(string worktreePath)
     {
-        RunGitOrThrow(sourceRepo, "worktree", "remove", worktreePath);
+        var (exitCode, stdOut, stdErr) = RunGit(sourceRepo, "-c", "core.longpaths=true", "worktree", "remove", worktreePath);
+        return exitCode == 0 ? null : $"{stdOut}\n{stdErr}".Trim();
     }
 
     private static (int ExitCode, string StdOut, string StdErr) RunGit(string workingDirectory, params string[] gitArgs)

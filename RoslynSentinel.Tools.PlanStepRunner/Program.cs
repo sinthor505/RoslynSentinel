@@ -114,7 +114,17 @@ public static class Program
                 }
 
                 git.CommitWorktree(worktreePath, $"Plan step {step.FileName}");
-                git.RemoveWorktree(worktreePath);
+
+                // Cleanup failure after a successful commit isn't worth aborting the run over — the
+                // step's work is already safely on the branch. Windows' path-length limit can make
+                // this fail on deeply-nested build output; a leftover worktree is harmless (--clean
+                // discards it on a later retry).
+                var removeError = git.TryRemoveWorktree(worktreePath);
+                if (removeError is not null)
+                {
+                    Console.WriteLine($"Warning: failed to remove worktree at {worktreePath} after commit — leaving it in place.");
+                    Console.WriteLine($"  {removeError}");
+                }
             }
             catch (Exception)
             {
