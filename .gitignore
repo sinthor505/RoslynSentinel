@@ -30,3 +30,7 @@ _scratchbuild_*/
 lmstudio_logs/
 ModelTestingResults/
 PlanStepRunner/
+
+# Per-run model-eval / research writeups (see docs/research/testing/README.md).
+# Untracked by design: new run records accrete continuously and should not require a commit.
+/docs/research/
