@@ -399,7 +399,7 @@ public class PlanImplementVerifyAgentTests
             // variants' much larger budget absorbs comfortably). Turn cap is just a safety ceiling
             // underneath that, not the real constraint.
             var runner = new ModelAgentRunner(
-                agentClient, mcpClient, turnCap: turnCap, wallClockCap: TimeSpan.FromMinutes(10),
+                agentClient, mcpClient, repeatedFailureLimit: 10, turnCap: turnCap, wallClockCap: TimeSpan.FromMinutes(10),
                 logger: host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
 
             return await runner.RunAsync(systemPrompt, userPrompt, phaseRunDirectory, cancellationToken);

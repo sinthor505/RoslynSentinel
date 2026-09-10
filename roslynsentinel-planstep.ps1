@@ -58,7 +58,7 @@
 
 .PARAMETER PlanDir
     Path to plan-eval-defect-remediation-v2-steps-runner. Default:
-    docs\tests\plan-eval-defect-remediation-v2-steps-runner under this script's own repo root —
+    docs\testing\plan-eval-defect-remediation-v2-steps-runner under this script's own repo root —
     the canonical copy, kept independent of the sibling -impl checkout's own in-progress work.
 
 .PARAMETER Branch
@@ -180,10 +180,10 @@ else {
 }
 
 if (-not $PlanDir) {
-    $PlanDir = Join-Path $repoRoot 'docs\tests\plan-eval-defect-remediation-v2-steps-runner'
+    $PlanDir = Join-Path $repoRoot 'docs\testing\plan-eval-defect-remediation-v2-steps-runner'
 }
 if (-not (Test-Path $PlanDir)) {
-    throw "Plan directory not found: $PlanDir. Pass -PlanDir explicitly if plan-eval-defect-remediation-v2-steps-runner lives somewhere other than the default docs\tests location in this repo."
+    throw "Plan directory not found: $PlanDir. Pass -PlanDir explicitly if plan-eval-defect-remediation-v2-steps-runner lives somewhere other than the default docs\testing location in this repo."
 }
 
 $runnerProject = Join-Path $repoRoot 'RoslynSentinel.Tools.PlanStepRunner\RoslynSentinel.Tools.PlanStepRunner.csproj'

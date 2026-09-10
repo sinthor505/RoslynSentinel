@@ -236,7 +236,7 @@ public class PlanOnlyAgentTests
     public async Task Model_PlansWholeFileRewriteFix_PrefersCallingHelper()
     {
         var runner = new ModelAgentRunner(
-            _agentClient, _mcpClient, turnCap: 15, wallClockCap: TimeSpan.FromMinutes(15),
+            _agentClient, _mcpClient, repeatedFailureLimit: 10, turnCap: 15, wallClockCap: TimeSpan.FromMinutes(15),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var userPrompt = string.Format(PlanOnlyUserPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
         var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, TestContext.CurrentContext.CancellationToken);

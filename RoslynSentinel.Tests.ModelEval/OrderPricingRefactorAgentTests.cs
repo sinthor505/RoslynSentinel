@@ -315,7 +315,7 @@ public class OrderPricingRefactorAgentTests
     private async Task<AgentRunResult> RunOnceAsync(CancellationToken cancellationToken)
     {
         var runner = new ModelAgentRunner(
-            _agentClient, _mcpClient, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
+            _agentClient, _mcpClient, repeatedFailureLimit: 10, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var userPrompt = string.Format(UserPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
         return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);

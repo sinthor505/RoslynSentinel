@@ -522,7 +522,11 @@ public class WholeFileRewriteAgentTests
         // before the model genuinely gets stuck. 40 turns / 30 minutes gives real room to
         // either converge or fail on its own rather than on an artificial clock.
         var runner = new ModelAgentRunner(
-            _agentClient, _mcpClient, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
+            // repeatedFailureLimit is set well above this fixture's own AssertWithinBudget cap of 2
+            // failures per tool, so the breaker can never change an eval result — a run that would
+            // trip it has already failed its assertion. It's stated explicitly (not defaulted) so
+            // the knob is visible here if a future fixture wants to tune it.
+            _agentClient, _mcpClient, repeatedFailureLimit: 10, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var userPrompt = string.Format(userPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
         return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);

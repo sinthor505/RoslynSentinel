@@ -1488,7 +1488,7 @@ public class OrderPricingRefactorChainAgentTests
         // retry for the last one — a step-scaled cap gives real headroom to recover from that kind
         // of retry instead of cutting the run off right as it's converging.
         var runner = new ModelAgentRunner(
-            _agentClient, _mcpClient, turnCap: 60, wallClockCap: TimeSpan.FromMinutes(45),
+            _agentClient, _mcpClient, repeatedFailureLimit: 10, turnCap: 60, wallClockCap: TimeSpan.FromMinutes(45),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var userPrompt = string.Format(userPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
         return await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, cancellationToken);

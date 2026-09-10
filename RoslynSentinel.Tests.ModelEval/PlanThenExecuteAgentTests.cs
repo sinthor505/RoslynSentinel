@@ -183,7 +183,7 @@ public class PlanThenExecuteAgentTests
     public async Task Model_FixesWholeFileRewriteBug_PlanThenExecute()
     {
         var runner = new ModelAgentRunner(
-            _agentClient, _mcpClient, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
+            _agentClient, _mcpClient, repeatedFailureLimit: 10, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var userPrompt = string.Format(PlanThenExecuteUserPromptTemplate, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));
         var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, _runDirectory, TestContext.CurrentContext.CancellationToken);

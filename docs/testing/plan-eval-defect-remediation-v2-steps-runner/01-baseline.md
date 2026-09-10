@@ -1,3 +1,9 @@
+---
+# Enforced by PlanStepRunner, independently of the prose below: the runner halts before
+# committing if this step changed any file. The prose alone was not enough — run
+# 20260910-013550-398's model never saw it and implemented two later steps here instead.
+readOnly: true
+---
 # Step 0 — Baseline
 
 **This step implements only this file.** Do not read, open, or act on any other plan step file

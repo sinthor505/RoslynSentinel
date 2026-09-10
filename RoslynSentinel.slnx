@@ -13,5 +13,7 @@
   <Project Path="RoslynSentinel.Tests.Battery/RoslynSentinel.Tests.Battery.csproj" Id="0ccd2484-f855-4a5c-81bb-709723842a4a" />
   <Project Path="RoslynSentinel.Tests.Integration/RoslynSentinel.Tests.Integration.csproj" />
   <Project Path="RoslynSentinel.Tests.ModelEval/RoslynSentinel.Tests.ModelEval.csproj" />
+  <Project Path="RoslynSentinel.Tests.PlanStepRunner/RoslynSentinel.Tests.PlanStepRunner.csproj" />
   <Project Path="RoslynSentinel.Tests/RoslynSentinel.Tests.csproj" />
+  <Project Path="RoslynSentinel.Tools.PlanStepRunner/RoslynSentinel.Tools.PlanStepRunner.csproj" />
 </Solution>

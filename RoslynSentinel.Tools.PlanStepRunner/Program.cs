@@ -86,17 +86,30 @@ public static class Program
 
             try
             {
-                var outcome = await RunStepAsync(step, worktreePath, agentClient, options, loggerFactory, stepDir);
+                var outcome = await RunStepAsync(step, worktreePath, git, agentClient, options, loggerFactory, stepDir);
                 LogSummary(step, outcome);
 
-                var buildOptional = KnownBuildOptionalSteps.Contains(step.FileName);
                 var buildOk = outcome.BuildErrorCount == 0;
-                var shouldAdvance = outcome.Converged && !outcome.LooksBlocked && (buildOk || buildOptional);
+                var shouldAdvance = outcome.Converged && !outcome.LooksBlocked && (buildOk || step.BuildOptional);
 
                 if (!shouldAdvance)
                 {
                     Console.WriteLine($"HALTING before commit — inspect the worktree at {worktreePath}");
-                    Console.WriteLine($"  converged={outcome.Converged} blocked={outcome.LooksBlocked} buildErrors={outcome.BuildErrorCount} buildOptional={buildOptional}");
+                    Console.WriteLine($"  converged={outcome.Converged} blocked={outcome.LooksBlocked} buildErrors={outcome.BuildErrorCount} buildOptional={step.BuildOptional}");
+                    return 1;
+                }
+
+                // Scope enforcement, deliberately independent of anything the model was told. A
+                // read-only step's constraint used to live only in the step's prose, so when run
+                // 20260910-013550-398's model never saw that prose it performed two other steps'
+                // work and the runner was a turn-cap away from committing it under this step's
+                // name — silently corrupting every step that followed.
+                if (step.ReadOnly && outcome.TouchedPaths.Count > 0)
+                {
+                    Console.WriteLine(
+                        $"HALTING — read-only step {step.FileName} modified {outcome.TouchedPaths.Count} path(s): " +
+                        string.Join(", ", outcome.TouchedPaths));
+                    Console.WriteLine($"  worktree left for inspection at {worktreePath}");
                     return 1;
                 }
 
@@ -118,6 +131,7 @@ public static class Program
     private static async Task<StepOutcome> RunStepAsync(
         PlanStepFile step,
         string worktreePath,
+        GitWorktreeManager git,
         LmStudioAgentClient agentClient,
         RunnerOptions options,
         ILoggerFactory loggerFactory,
@@ -165,28 +179,45 @@ public static class Program
 
         var runner = new ModelAgentRunner(
             agentClient, mcpClient,
+            // Bail after 3 identical consecutive tool failures rather than letting the turn cap
+            // absorb the loop. Run 20260910-013550-398 spent its last 23 turns (~13 minutes)
+            // re-issuing one failing ReplaceSnippet call and was reported as TurnCapExceeded.
+            repeatedFailureLimit: 3,
             turnCap: options.TurnCap,
             wallClockCap: TimeSpan.FromMinutes(options.WallClockCapMinutes),
             logger: loggerFactory.CreateLogger<ModelAgentRunner>());
 
-        // step.FilePath points at the plan doc under options.SourceRepo (the root checkout) — rebase
-        // it onto worktreePath so the model reads the copy inside its own worktree, not the root
-        // repo's, since the MCP tools it calls are scoped to worktreePath.
-        var relativeStepPath = Path.GetRelativePath(options.SourceRepo, step.FilePath);
-        var worktreeStepPath = Path.Combine(worktreePath, relativeStepPath);
-
+        // The step text is inlined into the prompt rather than referenced by path. Handing over a
+        // path made the model re-resolve it through ProjectDoc, and in run 20260910-013550-398 that
+        // lookup silently answered with a *different* step file — so the model spent the whole run
+        // implementing a plan nobody asked for. Passing the content by value removes the lookup,
+        // and with it any chance of substitution, regardless of how ProjectDoc resolves names.
+        // step.Body already has any frontmatter stripped, so the model sees only the step itself.
         var userPrompt =
             "The solution is already loaded — do not call LoadSolution or ListWorkspaceSolutions, " +
             "go straight to reading/editing.\n" +
-            $"Review the planning doc `{worktreeStepPath}`.\n" +
-            "Implement the plan.";
+            "Implement the plan step below. It is reproduced here in full — do not look for it on " +
+            "disk, and do not read any other plan step file.\n\n" +
+            $"=== BEGIN PLAN STEP: {step.FileName} ===\n{step.Body}\n=== END PLAN STEP ===";
 
         var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, stepDir, CancellationToken.None);
+
+        if (result.RepeatedFailure is { } repeatedFailure)
+        {
+            WriteBlockerDoc(options, step, repeatedFailure, stepDir);
+        }
 
         var lastContent = result.Transcript.Turns.Count > 0
             ? result.Transcript.Turns[^1].ModelMessage.Content ?? ""
             : "";
         var looksBlocked = BlockedPhrases.Any(p => lastContent.Contains(p, StringComparison.OrdinalIgnoreCase));
+
+        // Read what the model touched *before* the Build/RunTest snapshots below, so the runner's
+        // own post-step tooling can't contribute paths that then look like the model's edits.
+        var touchedPaths = git.GetDirtyPaths(worktreePath)
+            .Where(p => !p.StartsWith(RunnerBuildOutputPrefix, StringComparison.Ordinal))
+            .ToList();
+        var unmentionedPaths = FindPathsNotMentionedInStep(step, touchedPaths);
 
         var buildResult = await mcpClient.CallToolAsync(
             "Build",
@@ -210,7 +241,103 @@ public static class Program
 
         return new StepOutcome(
             result.Converged, result.StopReason.ToString(), result.TurnCount, looksBlocked,
-            buildErrorCount, testText, stepDir);
+            buildErrorCount, testText, stepDir, touchedPaths, unmentionedPaths);
+    }
+
+    /// <summary>The runner's own build output inside each worktree — never the model's doing.</summary>
+    private const string RunnerBuildOutputPrefix = "bin-runner/";
+
+    /// <summary>
+    /// Files the step changed but never names. A warning signal only, deliberately never a halt:
+    /// a step like "sweep call sites" legitimately edits files it doesn't enumerate, so gating
+    /// advancement on this would halt correct runs. It exists to make an off-scope step visible in
+    /// the summary instead of being discovered later in whatever it corrupted.
+    /// </summary>
+    private static List<string> FindPathsNotMentionedInStep(PlanStepFile step, IEnumerable<string> touchedPaths) =>
+        touchedPaths
+            .Where(p =>
+            {
+                var stem = Path.GetFileNameWithoutExtension(p);
+                return stem.Length > 0 && !step.Body.Contains(stem, StringComparison.OrdinalIgnoreCase);
+            })
+            .ToList();
+
+    /// <summary>
+    /// Records a tripped repeated-failure breaker as a blocker doc in the source repo, matching the
+    /// convention in docs/current/blockers/. Written by the harness rather than relied upon from
+    /// the model: the working agreement is that a tool failure is a blocking finding to be written
+    /// up, and run 20260910-013550-398's model simply didn't — it kept retrying instead.
+    /// Deliberately targets the source repo, not the worktree, which is removed on success and
+    /// otherwise left only for manual inspection.
+    /// </summary>
+    private static void WriteBlockerDoc(
+        RunnerOptions options, PlanStepFile step, RepeatedFailureDetail failure, string stepDir)
+    {
+        try
+        {
+            var blockersDir = Path.Combine(options.SourceRepo, "docs", "current", "blockers");
+            Directory.CreateDirectory(blockersDir);
+
+            var slug = Slugify($"{failure.ToolName}-{Path.GetFileNameWithoutExtension(step.FileName)}");
+            var path = Path.Combine(blockersDir, $"blocking_error_{slug}.md");
+
+            var content =
+                $"""
+                # Repeated tool failure — `{failure.ToolName}` during plan step {step.FileName}
+
+                **Written automatically by PlanStepRunner** when its repeated-failure breaker tripped.
+
+                **Run directory:** `{options.RunDir}`
+                **Transcript:** `{stepDir}`
+                **Step:** `{step.FileName}` (readOnly={step.ReadOnly}, buildOptional={step.BuildOptional})
+
+                ## What happened
+
+                `{failure.ToolName}` failed {failure.FailureCount} consecutive times with the same
+                failure signature across turns {failure.FirstTurn}–{failure.LastTurn}. The run was
+                terminated rather than allowed to consume its remaining turn budget re-issuing the
+                same call.
+
+                **Signature:** `{failure.Signature}`
+
+                ## Final failing call
+
+                Arguments:
+
+                ```json
+                {failure.ArgumentsJson}
+                ```
+
+                Result:
+
+                ```json
+                {failure.ResultJson}
+                ```
+
+                ## Next steps
+
+                Confirm whether this is a tool defect or a plan-content problem, then either fix the
+                tool or amend the step. Delete this file once resolved.
+
+                """;
+
+            File.WriteAllText(path, content);
+            Console.WriteLine($"Wrote blocker doc: {path}");
+        }
+        catch (Exception ex)
+        {
+            // The blocker doc is diagnostics, not the deliverable — failing to write it must not
+            // mask the underlying breaker trip, which the caller reports through StepOutcome.
+            Console.WriteLine($"WARNING — could not write blocker doc for {step.FileName}: {ex.Message}");
+        }
+    }
+
+    private static string Slugify(string value)
+    {
+        var chars = value.ToLowerInvariant()
+            .Select(c => char.IsLetterOrDigit(c) ? c : '_')
+            .ToArray();
+        return new string(chars).Trim('_');
     }
 
     private static readonly string[] BlockedPhrases =
@@ -219,24 +346,30 @@ public static class Program
         "cannot find", "could not find", "unable to proceed", "cannot proceed",
     ];
 
-    // Originally seeded from commit 5dfbbf8 "Add build-checkpoint instructions at known-broken
-    // plan steps" (02-phase1-types.md, 09-phase3-directivekind.md, 12-phase3-diffhunkanalyzer.md
-    // under the old, unmerged step numbering). Of those three, only 02-phase1-types.md's own Gate
-    // section ever actually left the solution non-compiling on purpose — the other two always
-    // required a clean build to advance despite being on this list. 02-phase1-types.md was since
-    // merged into 02-phase1-types-and-engine-fix.md, whose own Gate now restores a clean build by
-    // the end of the same step (the merge that folded step 1.2's engine fix into step 1.1) — so no
-    // current step is build-optional. Every step requires a clean build to advance, since the
-    // next step's worktree is built from this one's committed tip. Re-populate this if a future
-    // plan revision reintroduces a step whose own Gate section explicitly documents leaving the
-    // solution non-compiling on purpose.
-    private static readonly HashSet<string> KnownBuildOptionalSteps = new(StringComparer.OrdinalIgnoreCase);
+    // Build-optionality used to live here as a hardcoded name set (seeded from commit 5dfbbf8's
+    // build-checkpoint work, and empty by the time it was removed). It now comes from each step's
+    // own `buildOptional:` frontmatter, so the flag lives with the step whose Gate section
+    // justifies it instead of in a list that silently goes stale when steps are renamed or merged.
+    // No current step sets it: every step must build clean to advance, because the next step's
+    // worktree is built from this one's committed tip. See PlanStepFile.BuildOptional.
 
     private static void LogSummary(PlanStepFile step, StepOutcome outcome)
     {
         Console.WriteLine(
             $"[{step.FileName}] converged={outcome.Converged} stopReason={outcome.StopReason} " +
-            $"turns={outcome.TurnCount} blocked={outcome.LooksBlocked} buildErrors={outcome.BuildErrorCount}");
+            $"turns={outcome.TurnCount} blocked={outcome.LooksBlocked} buildErrors={outcome.BuildErrorCount} " +
+            $"filesTouched={outcome.TouchedPaths.Count}");
+
+        if (outcome.UnmentionedPaths.Count > 0)
+        {
+            Console.WriteLine(
+                $"[{step.FileName}] WARNING — {outcome.UnmentionedPaths.Count} changed file(s) are not " +
+                $"named anywhere in the step text: {string.Join(", ", outcome.UnmentionedPaths)}");
+            Console.WriteLine(
+                $"[{step.FileName}]   (not a halt — a step may legitimately touch call sites it doesn't " +
+                "enumerate; review if the step looks off-scope.)");
+        }
+
         Console.WriteLine($"[{step.FileName}] transcript: {outcome.TranscriptDir}");
     }
 
@@ -276,6 +409,15 @@ public static class Program
     }
 }
 
+/// <param name="TouchedPaths">
+/// Repo-relative paths the model changed, excluding the runner's own build output. Read before the
+/// post-step build/test snapshots so it reflects the model's edits alone.
+/// </param>
+/// <param name="UnmentionedPaths">
+/// Subset of <paramref name="TouchedPaths"/> whose file name never appears in the step text — a
+/// possible scope violation, reported as a warning only.
+/// </param>
 internal sealed record StepOutcome(
     bool Converged, string StopReason, int TurnCount, bool LooksBlocked,
-    int BuildErrorCount, string TestSnapshotJson, string TranscriptDir);
+    int BuildErrorCount, string TestSnapshotJson, string TranscriptDir,
+    IReadOnlyList<string> TouchedPaths, IReadOnlyList<string> UnmentionedPaths);

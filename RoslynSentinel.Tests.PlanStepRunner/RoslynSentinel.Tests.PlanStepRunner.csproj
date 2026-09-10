@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- No StartupObject here, deliberately. The referenced projects are OutputType=Exe, but their
+         Main methods live in *referenced assemblies*, not this compilation, so they can't collide
+         with anything and there is no entry point to disambiguate. (Setting StartupObject to the
+         runner's Program fails with CS1555 for the same reason — the property only resolves types
+         being compiled here.) The runner's own csproj does need it, because it compiles its own
+         Program.Main and is itself an Exe, so it has a real entry point to nominate. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="NUnit" Version="5.0.0-beta.1" />
+    <PackageReference Include="NUnit.Analyzers" Version="4.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="6.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RoslynSentinel.Tools.PlanStepRunner\RoslynSentinel.Tools.PlanStepRunner.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+</Project>

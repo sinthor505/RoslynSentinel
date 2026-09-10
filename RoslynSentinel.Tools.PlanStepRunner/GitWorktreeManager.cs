@@ -78,6 +78,22 @@ public sealed class GitWorktreeManager(string sourceRepo, string branch, string 
         RunGitOrThrow(sourceRepo, "worktree", "remove", "--force", path);
     }
 
+    /// <summary>
+    /// Every path the model touched in <paramref name="worktreePath"/> — modified, deleted, and
+    /// untracked alike — as forward-slashed repo-relative paths.
+    /// </summary>
+    /// <remarks>
+    /// Called <em>before</em> <see cref="CommitWorktree"/>'s `git add -A`, so a read-only step's
+    /// violation is caught while the tree is still unstaged. `--untracked-files=all` is explicit
+    /// rather than relying on the default: a step that only adds new files would otherwise be
+    /// invisible here if the repo's status.showUntrackedFiles config were ever changed.
+    /// </remarks>
+    public IReadOnlyList<string> GetDirtyPaths(string worktreePath)
+    {
+        var status = RunGit(worktreePath, "status", "--porcelain", "--untracked-files=all");
+        return ParsePorcelainPaths(status.StdOut);
+    }
+
     public void CommitWorktree(string worktreePath, string message)
     {
         RunGitOrThrow(worktreePath, "add", "-A");
@@ -92,6 +108,45 @@ public sealed class GitWorktreeManager(string sourceRepo, string branch, string 
         }
 
         RunGitOrThrow(worktreePath, "commit", "-m", message);
+    }
+
+    /// <summary>
+    /// Pulls the path out of each `git status --porcelain` line. Each line is "XY &lt;path&gt;",
+    /// where a rename/copy renders as "old -&gt; new" — the new path is the one that matters for
+    /// "what did this step touch", so that's what's returned. Quoted paths (git quotes anything
+    /// with spaces or non-ASCII under the default core.quotepath) are unwrapped.
+    /// </summary>
+    private static List<string> ParsePorcelainPaths(string porcelainOutput)
+    {
+        var paths = new List<string>();
+        foreach (var rawLine in porcelainOutput.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.Length <= 3)
+            {
+                continue;
+            }
+
+            var path = line[3..].Trim();
+
+            var renameArrow = path.IndexOf(" -> ", StringComparison.Ordinal);
+            if (renameArrow >= 0)
+            {
+                path = path[(renameArrow + 4)..];
+            }
+
+            if (path.Length >= 2 && path[0] == '"' && path[^1] == '"')
+            {
+                path = path[1..^1];
+            }
+
+            if (path.Length > 0)
+            {
+                paths.Add(path.Replace('\\', '/'));
+            }
+        }
+
+        return paths;
     }
 
     public void RemoveWorktree(string worktreePath)

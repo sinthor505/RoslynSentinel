@@ -382,7 +382,7 @@ public class SizeThresholdAgentTests
     private async Task<AgentRunResult> RunOnceAsync(string promptVariant, CancellationToken cancellationToken)
     {
         var runner = new ModelAgentRunner(
-            _agentClient, _mcpClient, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
+            _agentClient, _mcpClient, repeatedFailureLimit: 10, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
             logger: _host.Services.GetRequiredService<ILogger<ModelAgentRunner>>());
         var template = promptVariant == "TwoStep" ? TwoStepUserPromptTemplate : UserPromptTemplate;
         var userPrompt = string.Format(template, Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core"));

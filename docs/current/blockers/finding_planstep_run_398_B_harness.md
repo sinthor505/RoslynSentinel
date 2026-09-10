@@ -1,5 +1,17 @@
 # PlanStepRunner run 20260910-013550-398 — Category B: Harness / runner
 
+**Status: RESOLVED 2026-09-10.** B1 (inline step content by value), B3 (frontmatter-driven
+`readOnly`/`buildOptional`, enforced before commit; scope-violation check added as warn-only),
+and B4 (in-loop repeated-consecutive-failure breaker, `AgentStopReason.RepeatedToolFailure`,
+auto-written blocker doc) are all implemented and covered by unit tests
+(`RoslynSentinel.Tests.PlanStepRunner`, `RepeatedToolFailureBreakerTests`). B2 needed no code
+change — `WriteToolAdviceHelper.cs` already derives its advice text from the live tool-class
+set rather than naming a gated-off tool (option 1 below, already in place). Also fixed in the
+same pass: a stale `docs\tests\` path in `roslynsentinel-planstep.ps1` left over from the
+`docs\testing\` directory move in `e3d32b8`, which otherwise made the runner unrunnable via
+its front door. Live end-to-end verification against a real LM Studio host is still pending;
+the fixes below are otherwise complete and build/test-clean.
+
 **Source run:** `PlanStepRunner/20260910-013550-398/01-baseline/`
 **Outcome:** `TurnCapExceeded` after 60 turns / 24m18s; worktree non-compiling (190 errors),
 uncommitted, `01-baseline` never completed.

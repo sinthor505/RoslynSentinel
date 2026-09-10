@@ -23,18 +23,41 @@ public sealed class ModelAgentRunner
     private readonly int _turnCap;
     private readonly TimeSpan _wallClockCap;
     private readonly int _maxTokensPerTurn;
+    private readonly int _repeatedFailureLimit;
     private readonly ILogger<ModelAgentRunner> _logger;
 
+    /// <param name="repeatedFailureLimit">
+    /// How many <em>consecutive</em> identically-failing tool calls end the run with
+    /// <see cref="AgentStopReason.RepeatedToolFailure"/>. Required, with no default, so every call
+    /// site states its own tolerance rather than silently inheriting one — the eval fixtures want a
+    /// high, non-interfering value while an unattended runner wants to bail early.
+    /// <para>
+    /// Not to be confused with <c>AgentToolErrorAssertions.AssertWithinBudget</c>: that is a
+    /// post-hoc NUnit assertion over a finished transcript, which is exactly why it could not stop
+    /// run 20260910-013550-398 from spending its last 23 turns re-issuing one failing call. This is
+    /// a live in-loop guard.
+    /// </para>
+    /// </param>
     public ModelAgentRunner(
         LmStudioAgentClient llm,
         McpClient mcpClient,
+        int repeatedFailureLimit,
         int turnCap = 25,
         TimeSpan? wallClockCap = null,
         int maxTokensPerTurn = 8192,
         ILogger<ModelAgentRunner>? logger = null)
     {
+        if (repeatedFailureLimit < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(repeatedFailureLimit), repeatedFailureLimit,
+                "repeatedFailureLimit must be at least 1. Pass a deliberately high value (the eval " +
+                "fixtures use 10) to make the breaker effectively inert rather than disabling it.");
+        }
+
         _llm = llm;
         _mcpClient = mcpClient;
+        _repeatedFailureLimit = repeatedFailureLimit;
         _turnCap = turnCap;
         _wallClockCap = wallClockCap ?? TimeSpan.FromMinutes(10);
         _maxTokensPerTurn = maxTokensPerTurn;
@@ -71,6 +94,14 @@ public sealed class ModelAgentRunner
         var overallStopwatch = Stopwatch.StartNew();
         var stopReason = AgentStopReason.TurnCapExceeded;
         var turnNumber = 0;
+
+        // Consecutive-failure tracking for the repeated-failure breaker. Consecutive rather than
+        // cumulative: three different tools failing once each is a model exploring, while the same
+        // call failing three times running is a model stuck, and only the latter should end the run.
+        string? lastFailureSignature = null;
+        var consecutiveFailures = 0;
+        var firstFailureTurn = 0;
+        RepeatedFailureDetail? repeatedFailure = null;
 
         while (turnNumber < _turnCap)
         {
@@ -153,6 +184,45 @@ public sealed class ModelAgentRunner
                     Content = resultJson,
                 });
                 await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
+
+                if (!isError)
+                {
+                    lastFailureSignature = null;
+                    consecutiveFailures = 0;
+                    continue;
+                }
+
+                var signature = BuildFailureSignature(toolCall.Name, toolCall.ArgumentsJson, resultJson);
+                if (signature == lastFailureSignature)
+                {
+                    consecutiveFailures++;
+                }
+                else
+                {
+                    lastFailureSignature = signature;
+                    consecutiveFailures = 1;
+                    firstFailureTurn = turnNumber;
+                }
+
+                if (consecutiveFailures >= _repeatedFailureLimit)
+                {
+                    stopReason = AgentStopReason.RepeatedToolFailure;
+                    repeatedFailure = new RepeatedFailureDetail(
+                        toolCall.Name, signature, consecutiveFailures,
+                        firstFailureTurn, turnNumber, toolCall.ArgumentsJson, resultJson);
+                    _logger.LogWarning(
+                        "Turn {Turn}: {Tool} failed {Count} consecutive time(s) with the same signature " +
+                        "[{Signature}] across turns {FirstTurn}-{LastTurn} — tripping the repeated-failure " +
+                        "breaker (limit {Limit}) instead of burning the remaining turn budget.",
+                        turnNumber, toolCall.Name, consecutiveFailures, signature,
+                        firstFailureTurn, turnNumber, _repeatedFailureLimit);
+                    break;
+                }
+            }
+
+            if (stopReason == AgentStopReason.RepeatedToolFailure)
+            {
+                break;
             }
         }
 
@@ -166,7 +236,90 @@ public sealed class ModelAgentRunner
             Transcript = transcript,
             TranscriptPath = transcriptPath,
             TurnCount = turnNumber,
+            RepeatedFailure = repeatedFailure,
         };
+    }
+
+    /// <summary>
+    /// Identity of a tool failure, for deciding whether two consecutive failures are "the same
+    /// failure again" or genuine forward motion. Keyed on tool + error code + target path, so a
+    /// model that fixes one argument and hits a different error is not counted as looping.
+    /// </summary>
+    /// <remarks>
+    /// Falls back to a message prefix when no <c>errorCode</c> is present, so a tool that reports
+    /// failure without one still trips the breaker rather than looping forever under the radar.
+    /// The prefix is truncated because several error messages embed the offending content itself,
+    /// which would otherwise make every attempt look unique.
+    /// </remarks>
+    private static string BuildFailureSignature(string toolName, string argumentsJson, string resultJson)
+    {
+        var errorCode = TryReadStringProperty(resultJson, "errorCode");
+        var target = TryReadStringProperty(argumentsJson, "filePath")
+            ?? TryReadStringProperty(argumentsJson, "filepath")
+            ?? TryReadStringProperty(argumentsJson, "docCommentId")
+            ?? "";
+
+        if (errorCode is null)
+        {
+            var message = TryReadStringProperty(resultJson, "message")
+                ?? TryReadStringProperty(resultJson, "error")
+                ?? resultJson;
+            errorCode = "msg:" + message[..Math.Min(120, message.Length)];
+        }
+
+        return $"{toolName}|{errorCode}|{target}";
+    }
+
+    private static string? TryReadStringProperty(string json, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return FindStringProperty(doc.RootElement, propertyName, depth: 0);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Finds <paramref name="propertyName"/> at the root or shallowly nested beneath it — error
+    /// codes on this server sit under a "data"/"error" envelope about as often as at the top level.
+    /// Depth-bounded so a large successful payload isn't walked exhaustively.
+    /// </summary>
+    private static string? FindStringProperty(JsonElement element, string propertyName, int depth)
+    {
+        if (depth > 3 || element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (element.TryGetProperty(propertyName, out var direct) && direct.ValueKind == JsonValueKind.String)
+        {
+            return direct.GetString();
+        }
+
+        foreach (var child in element.EnumerateObject())
+        {
+            if (child.Value.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var nested = FindStringProperty(child.Value, propertyName, depth + 1);
+            if (nested is not null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     private async Task<(string ResultJson, bool IsError, TimeSpan Latency)> ExecuteToolCallAsync(
