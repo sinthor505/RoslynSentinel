@@ -115,7 +115,7 @@ Checked two other candidates that might have already covered this and confirmed 
 `OrderProcessor.cs` → `Order.cs`, but the sample's `OrderProcessor.cs` still contains `class Order`
 today with a comment noting the mismatch is planted intentionally — i.e. that scenario documents an
 *intended* agent task, not a recorded successful run, and the rename was never actually applied to
-the sample on disk. `RoslynSentinel.Tests.Battery/BatteryTwentyNineTests.cs` (`B29_AllEngines_
+the sample on disk. `RoslynSentinel.Tests.Integration/IntegrationTwentyNineTests.cs` (`B29_AllEngines_
 RealSolution_SmokeTests`) does load a real on-disk solution (via `ROSLYN_SENTINEL_TEST_SLN`), but
 its own file header states all its tests are read-only ("nothing is written to disk") and it never
 calls `SyncTypeAndFilename` — it wouldn't hit this bug either way.
