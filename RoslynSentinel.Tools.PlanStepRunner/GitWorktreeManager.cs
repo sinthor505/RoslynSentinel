@@ -4,32 +4,35 @@ using System.Text.RegularExpressions;
 namespace RoslynSentinel.Tools.PlanStepRunner;
 
 /// <summary>
-/// Runs each plan step in its own git worktree branched off a dedicated, runner-owned branch
-/// (default "eval-defect-remediation-v2-auto-&lt;run-timestamp&gt;", unique per run so two runs
-/// never contend over the same branch's single allowed worktree checkout) — never the user's own
-/// in-progress branch/worktree.
-/// A successful step commits onto that branch and the worktree is removed; a failed/halted step
+/// Runs each plan step in its own git worktree, branched per <see cref="IStepBranchStrategy"/>
+/// (default: one dedicated run-owned branch shared by every step, e.g.
+/// "eval-defect-remediation-v2-auto-&lt;run-timestamp&gt;" — see <see cref="SharedBranchStrategy"/>)
+/// — never the user's own in-progress branch/worktree.
+/// A successful step commits onto its branch and the worktree is removed; a failed/halted step
 /// leaves its worktree in place under &lt;runDir&gt;\&lt;step-name&gt;\Worktree so the run is
 /// inspectable and independently re-runnable via --start-step/--end-step (or --clean, to discard
 /// that leftover worktree first) without disturbing anything upstream.
 /// </summary>
-public sealed class GitWorktreeManager(string sourceRepo, string branch, string runDir)
+public sealed class GitWorktreeManager(string sourceRepo, IStepBranchStrategy branchStrategy, string runDir)
 {
     private string WorktreePath(string stepFileName) =>
         Path.Combine(runDir, Path.GetFileNameWithoutExtension(stepFileName), "Worktree");
 
-    public void EnsureBranchExists()
+    /// <summary>Creates this step's branch off <see cref="IStepBranchStrategy.BaseRefFor"/> if it doesn't exist yet. No-op otherwise (e.g. a shared branch already created by an earlier step, or resuming onto one from a prior run).</summary>
+    public void EnsureBranchExists(PlanStepFile step)
     {
+        var branch = branchStrategy.BranchFor(step);
         if (RunGit(sourceRepo, "rev-parse", "--verify", "--quiet", branch).ExitCode != 0)
         {
-            Console.WriteLine($"Branch '{branch}' does not exist — creating it off the current HEAD of {sourceRepo}.");
-            RunGitOrThrow(sourceRepo, "branch", branch);
+            var baseRef = branchStrategy.BaseRefFor(step);
+            Console.WriteLine($"Branch '{branch}' does not exist — creating it off '{baseRef}' in {sourceRepo}.");
+            RunGitOrThrow(sourceRepo, "branch", branch, baseRef);
         }
     }
 
-    public string CreateWorktree(string stepFileName)
+    public string CreateWorktree(PlanStepFile step)
     {
-        var path = WorktreePath(stepFileName);
+        var path = WorktreePath(step.FileName);
 
         if (Directory.Exists(path))
         {
@@ -41,6 +44,7 @@ public sealed class GitWorktreeManager(string sourceRepo, string branch, string 
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
+        var branch = branchStrategy.BranchFor(step);
         var (exitCode, stdOut, stdErr) = RunGit(sourceRepo, "worktree", "add", path, branch);
         if (exitCode != 0)
         {

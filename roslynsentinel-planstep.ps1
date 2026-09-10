@@ -62,11 +62,22 @@
     the canonical copy, kept independent of the sibling -impl checkout's own in-progress work.
 
 .PARAMETER Branch
-    Git branch PlanStepRunner commits each successful step onto, created off -ImplRepo's current
-    HEAD if it doesn't already exist. Default: eval-defect-remediation-v2-auto-<run timestamp> -
-    unique per run (not one fixed shared name) so two runs, or an old halted run left over from a
-    previous invocation, never contend over git's one-worktree-per-branch limit. -ExistingRun
-    resumes onto the same default automatically; pass -Branch explicitly to override either way.
+    In -BranchMode Shared (default): the one git branch every step commits onto, created off
+    -ImplRepo's current HEAD if it doesn't already exist. Default:
+    eval-defect-remediation-v2-auto-<run timestamp> - unique per run (not one fixed shared name)
+    so two runs, or an old halted run left over from a previous invocation, never contend over
+    git's one-worktree-per-branch limit. -ExistingRun resumes onto the same default automatically;
+    pass -Branch explicitly to override either way.
+    In -BranchMode Stacked: used as a branch-name prefix instead - each step gets its own branch
+    (<Branch>/<step-name>), stacked off the previous step's tip.
+
+.PARAMETER BranchMode
+    Shared (default): every step in the run commits onto one branch in place - matches how a
+    manual per-step LM Studio session would look, and how every run before this flag existed
+    worked. Stacked: each step gets its own branch off the previous step's tip
+    (<Branch>/01-baseline, <Branch>/02-..., ...) - removes the shared branch's implicit
+    one-worktree-per-branch contention and keeps each step's history separately inspectable, at
+    the cost of one branch left behind per step instead of one per run.
 
 .PARAMETER ExistingRun
     Timestamp (e.g. 20260909-171952-844) of an existing RoslynSentinel\PlanStepRunner\<timestamp>
@@ -143,6 +154,9 @@ param(
 
     [string]$Branch,
 
+    [ValidateSet('Shared', 'Stacked')]
+    [string]$BranchMode = 'Shared',
+
     [string]$ExistingRun,
 
     [switch]$Clean,
@@ -211,7 +225,7 @@ Write-Host ""
 Write-Host "=== PlanStepRunner: steps $StartStep-$EndStep against $baseUrl (model=$Model) ===" -ForegroundColor Cyan
 Write-Host "    --plan-dir $PlanDir" -ForegroundColor Cyan
 Write-Host "    --repo $ImplRepo" -ForegroundColor Cyan
-Write-Host "    --branch $Branch" -ForegroundColor Cyan
+Write-Host "    --branch $Branch --branch-mode $BranchMode" -ForegroundColor Cyan
 Write-Host "    --run-dir $runDir" -ForegroundColor Cyan
 if ($Clean) {
     Write-Host "    --clean" -ForegroundColor Cyan
@@ -229,6 +243,7 @@ $runnerArgs = @(
     '--plan-dir', $PlanDir
     '--repo', $ImplRepo
     '--branch', $Branch
+    '--branch-mode', $BranchMode
     '--start-step', $StartStep
     '--end-step', $EndStep
     '--turn-cap', $TurnCap

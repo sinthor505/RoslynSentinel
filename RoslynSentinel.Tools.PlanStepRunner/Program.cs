@@ -54,20 +54,24 @@ public static class Program
             Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600)),
         };
 
-        var git = new GitWorktreeManager(options.SourceRepo, options.Branch, options.RunDir);
-        git.EnsureBranchExists();
+        IStepBranchStrategy branchStrategy = options.BranchMode == BranchMode.Stacked
+            ? new StackedBranchStrategy(options.Branch, "HEAD", stepFiles)
+            : new SharedBranchStrategy(options.Branch, "HEAD");
+        var git = new GitWorktreeManager(options.SourceRepo, branchStrategy, options.RunDir);
 
         foreach (var step in stepFiles)
         {
             Console.WriteLine();
             Console.WriteLine($"=== Step {step.FileName} ===");
 
+            git.EnsureBranchExists(step);
+
             if (options.Clean)
             {
                 git.RemoveWorktreeIfExists(step.FileName);
             }
 
-            var worktreePath = git.CreateWorktree(step.FileName);
+            var worktreePath = git.CreateWorktree(step);
             Console.WriteLine($"Worktree: {worktreePath}");
 
             var stepDir = Path.Combine(options.RunDir, Path.GetFileNameWithoutExtension(step.FileName), "Logs");

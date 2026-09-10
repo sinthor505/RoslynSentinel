@@ -1,11 +1,25 @@
 namespace RoslynSentinel.Tools.PlanStepRunner;
 
+/// <summary>
+/// How each step's worktree branch relates to the others — see <see cref="IStepBranchStrategy"/>
+/// for what each mode actually does.
+/// </summary>
+public enum BranchMode
+{
+    /// <summary>All steps share one branch (today's default). --branch names that shared branch.</summary>
+    Shared,
+
+    /// <summary>Each step gets its own branch, stacked off the previous step's tip. --branch is used as the branch-name prefix.</summary>
+    Stacked,
+}
+
 /// <summary>Parsed --plan-runner-* command-line options (kept separate from LlmOptions' --llm-* flags it shares the argv with).</summary>
 public sealed class RunnerOptions
 {
     public required string PlanDir { get; init; }
     public required string SourceRepo { get; init; }
     public required string Branch { get; init; }
+    public required BranchMode BranchMode { get; init; }
     public required string RunDir { get; init; }
     public required int StartStep { get; init; }
     public required int EndStep { get; init; }
@@ -34,6 +48,14 @@ public sealed class RunnerOptions
         // without needing to pass --branch explicitly.
         var branch = GetArg(args, "--branch") ?? "eval-defect-remediation-v2-auto-" + Path.GetFileName(runDir);
 
+        var branchModeArg = GetArg(args, "--branch-mode") ?? "shared";
+        var branchMode = branchModeArg.ToLowerInvariant() switch
+        {
+            "shared" => BranchMode.Shared,
+            "stacked" => BranchMode.Stacked,
+            _ => throw new ArgumentException($"--branch-mode must be 'shared' or 'stacked', but was '{branchModeArg}'."),
+        };
+
         var startStep = int.TryParse(GetArg(args, "--start-step"), out var s) ? s : 0;
         var endStep = int.TryParse(GetArg(args, "--end-step"), out var e) ? e : int.MaxValue;
         var turnCap = int.TryParse(GetArg(args, "--turn-cap"), out var tc) ? tc : 40;
@@ -52,6 +74,7 @@ public sealed class RunnerOptions
             PlanDir = planDir,
             SourceRepo = sourceRepo,
             Branch = branch,
+            BranchMode = branchMode,
             RunDir = runDir,
             StartStep = startStep,
             EndStep = endStep,
