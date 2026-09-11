@@ -39,6 +39,8 @@ public sealed class LmStudioAgentClient
         _model = LlmOptions.Model
             ?? throw new InvalidOperationException(
                 "The LLM model must be set via --llm-model or the ROSLYNSENTINEL_LLM_MODEL environment variable (LM Studio needs the loaded model's name).");
+
+        _logger.LogInformation("LM Studio agent client targeting model {Model} at {BaseAddress}", _model, httpClient.BaseAddress);
     }
 
     public async Task<AgentChatMessage> CompleteAsync(

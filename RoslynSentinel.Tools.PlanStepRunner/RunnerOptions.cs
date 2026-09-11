@@ -16,17 +16,50 @@ public enum BranchMode
 /// <summary>Parsed --plan-runner-* command-line options (kept separate from LlmOptions' --llm-* flags it shares the argv with).</summary>
 public sealed class RunnerOptions
 {
-    public required string PlanDir { get; init; }
-    public required string SourceRepo { get; init; }
-    public required string Branch { get; init; }
-    public required BranchMode BranchMode { get; init; }
-    public required string RunDir { get; init; }
-    public required int StartStep { get; init; }
-    public required int EndStep { get; init; }
-    public required int TurnCap { get; init; }
-    public required int WallClockCapMinutes { get; init; }
-    public required string IncludeTools { get; init; }
-    public required bool Clean { get; init; }
+    public required string PlanDir
+    {
+        get; init;
+    }
+    public required string SourceRepo
+    {
+        get; init;
+    }
+    public required string Branch
+    {
+        get; init;
+    }
+    public required BranchMode BranchMode
+    {
+        get; init;
+    }
+    public required string RunDir
+    {
+        get; init;
+    }
+    public required int StartStep
+    {
+        get; init;
+    }
+    public required int EndStep
+    {
+        get; init;
+    }
+    public required int TurnCap
+    {
+        get; init;
+    }
+    public required int WallClockCapMinutes
+    {
+        get; init;
+    }
+    public required string IncludeTools
+    {
+        get; init;
+    }
+    public required bool Clean
+    {
+        get; init;
+    }
 
     public static RunnerOptions Parse(string[] args)
     {
@@ -48,7 +81,7 @@ public sealed class RunnerOptions
         // independent. Deriving the default from RunDir's own leaf name means -ExistingRun (which
         // recomputes the same RunDir from a timestamp) naturally resumes onto the same branch too,
         // without needing to pass --branch explicitly.
-        var branch = GetArg(args, "--branch") ?? "eval-defect-remediation-v2-auto-" + Path.GetFileName(runDir);
+        var branch = GetArg(args, "--branch") ?? ("eval-defect-remediation-v2-auto-" + Path.GetFileName(runDir));
 
         var branchModeArg = GetArg(args, "--branch-mode") ?? "shared";
         var branchMode = branchModeArg.ToLowerInvariant() switch

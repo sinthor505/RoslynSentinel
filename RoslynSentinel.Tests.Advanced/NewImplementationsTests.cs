@@ -1178,5 +1178,4 @@ public class C
         Assert.That(result.UpdatedText, Does.Contain("product"), "Extracted variable name must appear.");
         Assert.That(result.UpdatedText, Does.Contain("var"), "Local variable should be declared with var.");
     }
-
 }

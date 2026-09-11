@@ -32,9 +32,9 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
     }
 
     // construct from whatever the wire sent, against the known root
-    public static FilePathWrapper FromWire(string pathArg, string? solutionRoot)
+    public static FilePathWrapper FromWire(string? pathArg, string? solutionRoot)
     {
-        var clean = NormalizeWirePath(pathArg);
+        var clean = NormalizeWirePath(pathArg ?? string.Empty);
 
         if (string.IsNullOrWhiteSpace(clean))
         {

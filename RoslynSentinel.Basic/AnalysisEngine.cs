@@ -1797,8 +1797,8 @@ public class AnalysisEngine
                                    ma.Name.Identifier.Text == "Count");
                     bool hasMaxConstant = classDecl.Members.OfType<FieldDeclarationSyntax>()
                         .Any(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword)) &&
-                                  (f.Declaration.Variables.Any(v => v.Identifier.Text.Contains("max", StringComparison.OrdinalIgnoreCase) ||
-                                                                     v.Identifier.Text.Contains("limit", StringComparison.OrdinalIgnoreCase))));
+                                  f.Declaration.Variables.Any(v => v.Identifier.Text.Contains("max", StringComparison.OrdinalIgnoreCase) ||
+                                                                     v.Identifier.Text.Contains("limit", StringComparison.OrdinalIgnoreCase)));
 
                     if (!hasClear && !hasCountCheck && !hasMaxConstant)
                     {

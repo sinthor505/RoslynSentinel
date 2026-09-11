@@ -806,10 +806,10 @@ public class AsyncSafetyEngine
                 {
                     if (!seen.Add(name))
                     {
-                        var line = method.DescendantNodes()
+                        var line = (method.DescendantNodes()
                             .OfType<AwaitExpressionSyntax>()
                             .Where(a => a.Expression is IdentifierNameSyntax id2 && id2.Identifier.Text == name)
-                            .Skip(1).FirstOrDefault()?.GetLocation().GetLineSpan().StartLinePosition.Line + 1 ?? 0;
+                            .Skip(1).FirstOrDefault()?.GetLocation().GetLineSpan().StartLinePosition.Line + 1) ?? 0;
                         reports.Add(new AsyncSafetyReport(docPath, methodName,
                             $"Line {line}: ValueTask variable '{name}' is awaited more than once. ValueTask may only be awaited once."));
                     }
@@ -1246,7 +1246,7 @@ public class AsyncSafetyEngine
                     }
 
                     bool isTaskReturning = IsTaskReturningSemantic(semanticModel, inv, cancellationToken)
-                        ?? methodName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true;
+                        ?? (methodName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true);
 
                     if (isTaskReturning)
                     {
@@ -1316,7 +1316,7 @@ public class AsyncSafetyEngine
                     }
 
                     bool isTaskReturning = semanticResult
-                        ?? methodName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true;
+                        ?? (methodName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true);
 
                     if (isTaskReturning)
                     {

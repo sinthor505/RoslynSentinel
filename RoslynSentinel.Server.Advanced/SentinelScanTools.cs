@@ -434,7 +434,7 @@ public class SentinelScanTools
                     return new ToolResult<object>() { Success = true, Data = result94 };
 
                 default:
-                    return new ToolResult<object>() { Success = false, Data = ($"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list.") };
+                    return new ToolResult<object>() { Success = false, Data = $"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list." };
             }
         }
         catch (ArgumentException aex)
@@ -521,7 +521,7 @@ public class SentinelScanTools
                     var resultUnreachableCode = await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName, cancellationToken);
                     return new ToolResult<object>() { Success = true, Data = resultUnreachableCode };
                 default:
-                    return new ToolResult<object>() { Success = false, Data = ($"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode.") };
+                    return new ToolResult<object>() { Success = false, Data = $"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode." };
             }
         }
         catch (Exception ex)
@@ -548,8 +548,6 @@ public class SentinelScanTools
                 $"Received scope=\"{scope}\", scopeName={(scopeName == null ? "null" : $"\"{scopeName}\"")}.");
         return scopeName;
     }
-
-
 
     internal sealed record ScanDescriptor(DetectorId Id, string Domain, string ScopeHint, string Description);
 

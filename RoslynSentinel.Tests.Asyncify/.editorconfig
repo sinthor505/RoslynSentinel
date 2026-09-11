@@ -6,6 +6,7 @@ root = true
 
 # Surpress warnings
 dotnet_diagnostic.AsyncFixer01.severity = none
+dotnet_diagnostic.AsyncFixer02.severity = none
 dotnet_diagnostic.CA1859.severity = none
 
 #### Core EditorConfig Options ####
