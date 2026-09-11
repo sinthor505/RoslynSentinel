@@ -58,7 +58,7 @@ public class ReplaceSnippetSizeGuardTests
         Assert.That(newContent.Length, Is.LessThan(2000), "must stay under the new char cap");
 
         var result = await tools.ReplaceSnippet(
-            reason: "test", ProposedChangeAction.validate, targetFile,
+            reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: anchor, newContent: newContent);
 
         Assert.That(result.Error?.Message ?? "", Does.Not.Contain("limit"),
@@ -78,7 +78,7 @@ public class ReplaceSnippetSizeGuardTests
         var oversized = new string('x', 2500);
 
         var result = await tools.ReplaceSnippet(
-            reason: "test", ProposedChangeAction.validate, targetFile,
+            reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: anchor, newContent: oversized);
 
         Assert.That(result.Success, Is.False);
@@ -101,7 +101,7 @@ public class ReplaceSnippetSizeGuardTests
         var tooManyLines = string.Join('\n', Enumerable.Range(0, 80).Select(i => $"line {i}"));
 
         var result = await tools.ReplaceSnippet(
-            reason: "test", ProposedChangeAction.validate, targetFile,
+            reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: tooManyLines, newContent: new string('y', 2500));
 
         Assert.That(result.Success, Is.False);
@@ -127,7 +127,7 @@ public class ReplaceSnippetSizeGuardTests
         var anchor = (await File.ReadAllTextAsync(targetFile)).Split('\n')[0];
 
         var result = await tools.ReplaceSnippet(
-            reason: "test", ProposedChangeAction.validate, targetFile,
+            reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: anchor, newContent: new string('z', 2500));
 
         Assert.That(result.Success, Is.False);

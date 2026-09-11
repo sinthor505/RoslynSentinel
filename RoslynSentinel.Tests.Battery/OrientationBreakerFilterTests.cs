@@ -65,7 +65,7 @@ public class OrientationBreakerFilterTests
 
         var loadResult = await _client.CallToolAsync(
             "LoadSolution",
-            new Dictionary<string, object?> { ["reason"] = "test", ["solutionPath"] = _fixture.SolutionPath }!,
+            new Dictionary<string, object?> { ["reason"] = "test message", ["solutionPath"] = _fixture.SolutionPath }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
         Assert.That(loadResult.IsError, Is.Not.True, "Fixture solution failed to load — cannot exercise the filter without a loaded solution.");
     }
@@ -82,7 +82,7 @@ public class OrientationBreakerFilterTests
     private async Task<CallToolResult> SearchForGuaranteedNoMatchAsync(string pattern) =>
         await _client.CallToolAsync(
             "SearchSolutionText",
-            new Dictionary<string, object?> { ["reason"] = "test", ["pattern"] = pattern, ["searchMode"] = "literal" }!,
+            new Dictionary<string, object?> { ["reason"] = "test message", ["pattern"] = pattern, ["searchMode"] = "literal" }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
     [Test]
@@ -90,7 +90,7 @@ public class OrientationBreakerFilterTests
     {
         var result = await _client.CallToolAsync(
             "ListAll",
-            new Dictionary<string, object?> { ["reason"] = "test" }!,
+            new Dictionary<string, object?> { ["reason"] = "test message" }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         Assert.That(result.IsError, Is.Not.True);
@@ -108,7 +108,7 @@ public class OrientationBreakerFilterTests
         // ListWorkspaceSolutions is not on the allowlist (ListAll, ListSolutionItems, GetFileOutline, ReadFile).
         var blocked = await _client.CallToolAsync(
             "ListWorkspaceSolutions",
-            new Dictionary<string, object?> { ["reason"] = "test", ["workspacePath"] = _fixture.SolutionDirectory }!,
+            new Dictionary<string, object?> { ["reason"] = "test message", ["workspacePath"] = _fixture.SolutionDirectory }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         Assert.That(blocked.IsError, Is.True, "A non-allowlisted tool call should be short-circuited while the orientation breaker is tripped.");
@@ -126,14 +126,14 @@ public class OrientationBreakerFilterTests
 
         var listAllResult = await _client.CallToolAsync(
             "ListAll",
-            new Dictionary<string, object?> { ["reason"] = "test" }!,
+            new Dictionary<string, object?> { ["reason"] = "test message" }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
         Assert.That(listAllResult.IsError, Is.Not.True, "ListAll is allowlisted, so it should reach the real tool and succeed even while tripped.");
 
         // Breaker should now be reset — a previously-blocked, non-allowlisted tool should succeed again.
         var afterReset = await _client.CallToolAsync(
             "ListWorkspaceSolutions",
-            new Dictionary<string, object?> { ["reason"] = "test", ["workspacePath"] = _fixture.SolutionDirectory }!,
+            new Dictionary<string, object?> { ["reason"] = "test message", ["workspacePath"] = _fixture.SolutionDirectory }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         Assert.That(afterReset.IsError, Is.Not.True, "A successful allowlisted call while tripped should auto-reset the breaker.");
@@ -148,13 +148,13 @@ public class OrientationBreakerFilterTests
         // A pattern virtually certain to exist in the sample solution's own source.
         var matchResult = await _client.CallToolAsync(
             "SearchSolutionText",
-            new Dictionary<string, object?> { ["reason"] = "test", ["pattern"] = "class", ["searchMode"] = "literal" }!,
+            new Dictionary<string, object?> { ["reason"] = "test message", ["pattern"] = "class", ["searchMode"] = "literal" }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
         Assert.That(matchResult.IsError, Is.Not.True);
 
         var notBlocked = await _client.CallToolAsync(
             "ListWorkspaceSolutions",
-            new Dictionary<string, object?> { ["reason"] = "test", ["workspacePath"] = _fixture.SolutionDirectory }!,
+            new Dictionary<string, object?> { ["reason"] = "test message", ["workspacePath"] = _fixture.SolutionDirectory }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         Assert.That(notBlocked.IsError, Is.Not.True, "A non-zero-match search mid-streak should reset the streak, so the breaker should never have tripped.");

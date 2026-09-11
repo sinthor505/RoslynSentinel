@@ -88,7 +88,7 @@ public interface IOrderRepository
     public void GenerateClassesFromJson_ValidJson_ReturnsResult()
     {
         var json = @"{""id"": 1, ""name"": ""test"", ""active"": true}";
-        var result = _tools.GenerateClassesFromJson(reason: "test", json, "Product", "TestProj");
+        var result = _tools.GenerateClassesFromJson(reason: "test message", json, "Product", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -96,7 +96,7 @@ public interface IOrderRepository
     public void GenerateClassesFromJson_NestedJson_ReturnsResult()
     {
         var json = @"{""order"": {""id"": 1, ""items"": [{""sku"": ""A""}]}}";
-        var result = _tools.GenerateClassesFromJson(reason: "test", json, "Root", "TestProj");
+        var result = _tools.GenerateClassesFromJson(reason: "test message", json, "Root", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -106,7 +106,7 @@ public interface IOrderRepository
     public async Task GenerateHttpClient_ValidController_ReturnsCode()
     {
         SetSource(ControllerSource, "Orders.cs");
-        var result = await _tools.GenerateHttpClient(reason: "test", "Orders.cs", "OrdersController");
+        var result = await _tools.GenerateHttpClient(reason: "test message", "Orders.cs", "OrdersController");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -114,7 +114,7 @@ public interface IOrderRepository
     public async Task GenerateHttpClient_NonExistentFile_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.GenerateHttpClient(reason: "test", "NonExistent.cs", "OrdersController");
+        var result = await _tools.GenerateHttpClient(reason: "test message", "NonExistent.cs", "OrdersController");
 
         Assert.That(result, Is.Not.Null,
             "Tools return a message rather than throwing for an unknown file.");
@@ -192,7 +192,7 @@ public interface IOrderRepository
     public async Task GenerateDefaultConfigJson_ValidProject_ReturnsJson()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _tools.GenerateDefaultConfigJson(reason: "test", "TestProj");
+        var result = await _tools.GenerateDefaultConfigJson(reason: "test message", "TestProj");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -200,7 +200,7 @@ public interface IOrderRepository
     public async Task GenerateDefaultConfigJson_UnknownProject_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.GenerateDefaultConfigJson(reason: "test", "NoSuchProject");
+        var result = await _tools.GenerateDefaultConfigJson(reason: "test message", "NoSuchProject");
 
         Assert.That(result, Is.Not.Null,
             "Tools return a message rather than throwing for an unknown project.");
@@ -303,7 +303,7 @@ public interface IOrderRepository
     {
         const string src = @"namespace TestProj; public class Order { public string GetLabel(int id) { return string.Format(""{0}"", id); } }";
         SetSource(src, "Order.cs");
-        var result = await _tools.InterpolateStringSafe(reason: "test", "Order.cs", @"string.Format(""{0}""");
+        var result = await _tools.InterpolateStringSafe(reason: "test message", "Order.cs", @"string.Format(""{0}""");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -311,7 +311,7 @@ public interface IOrderRepository
     public async Task InterpolateStringSafe_NonExistentFile_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.InterpolateStringSafe(reason: "test", "NonExistent.cs", "string.Format");
+        var result = await _tools.InterpolateStringSafe(reason: "test message", "NonExistent.cs", "string.Format");
 
         Assert.That(result, Is.Not.Null,
             "Tools return a message rather than throwing for an unknown file.");

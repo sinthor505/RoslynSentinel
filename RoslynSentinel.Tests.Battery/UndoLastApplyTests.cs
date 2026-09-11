@@ -91,7 +91,7 @@ public class UndoLastApplyTests
     [Test]
     public async Task UndoLastApply_NoBlobForChangeId_ReturnsNoOperationBlobFoundAsync()
     {
-        var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test", "nonexistent-change-id");
+        var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test message", "nonexistent-change-id");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("NoOperationBlobFound"));
@@ -106,7 +106,7 @@ public class UndoLastApplyTests
             new { FilePath = Path.Combine(_tempDir, "Foo.cs"), Outcome = ItemRecordOutcome.Failed, BeforeSource = (string?)null },
         });
 
-        var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test", changeId);
+        var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test message", changeId);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("NoReversibleItems"));
@@ -121,7 +121,7 @@ public class UndoLastApplyTests
             new { FilePath = Path.Combine(_tempDir, "Foo.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
         });
 
-        var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test", changeId);
+        var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test message", changeId);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("NoReversibleItems"));
@@ -137,7 +137,7 @@ public class UndoLastApplyTests
             new { FilePath = outsidePath, Outcome = ItemRecordOutcome.Succeeded, BeforeSource = "old content" },
         });
 
-        var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test", changeId: changeId);
+        var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test message", changeId: changeId);
 
         // revertChanges ends up empty (item skipped as outside solution root), so
         // ApplyProposedChangesAsync is never called — reaches the tool's success path with 0
@@ -187,7 +187,7 @@ public class UndoLastApplyTests
         // before it ever reaches undo logic.
         workspaceManager.ClearExternalFileChanges();
 
-        var result = await workspaceTools.UndoLastApply(reason: "test", changeId: changeId);
+        var result = await workspaceTools.UndoLastApply(reason: "test message", changeId: changeId);
 
         Assert.That(result.Success, Is.True);
         Assert.That((string)result.Data!, Does.Contain("Reverted 1 files"));

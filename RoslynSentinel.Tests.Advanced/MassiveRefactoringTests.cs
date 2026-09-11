@@ -82,7 +82,7 @@ public class MassiveRefactoringTests
     public async Task ExtractInterface_ShouldCreateInterface(int id)
     {
         SetSource($"public class C{id} {{ public void M{id}() {{}} }}", $"C{id}.cs");
-        var result = await _advancedRefactoringTools.ExtractMembers(reason: "test", $"C{id}.cs", $"C{id}", ExtractAsType.@interface, $"IC{id}", autoStage: false);
+        var result = await _advancedRefactoringTools.ExtractMembers(reason: "test message", $"C{id}.cs", $"C{id}", ExtractAsType.@interface, $"IC{id}", autoStage: false);
 
         // With autoStage:false the tool returns Data = new { Changes = Dictionary<FilePathWrapper, string> }.
         Assert.That(result.Success, Is.True, result.Error?.Message);
@@ -108,7 +108,7 @@ public class MassiveRefactoringTests
         var handle = (await symbolNavEngine.LocateSymbolAsync($"OldM{id}")).Single();
 
         var result = await _refactoringTools.RenameSymbol(
-            reason: "test", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
+            reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
             newName: $"NewM{id}", sessionId: _workspaceManager.SessionId.ToString());
         Assert.That(result.Success, Is.True);
         var json = System.Text.Json.JsonSerializer.Serialize(result);
@@ -124,7 +124,7 @@ public class MassiveRefactoringTests
     public async Task MoveTypeToFile_ShouldSeparateTypes(int id)
     {
         SetSource($"public class C{id} {{}} public class D{id} {{}}", $"C{id}.cs");
-        var result = await _advancedRefactoringTools.MoveType(reason: "test", $"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
+        var result = await _advancedRefactoringTools.MoveType(reason: "test message", $"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
 
         // Dictionary keys are FilePathWrapper, not string, since the server split.
         Assert.That(result.Success, Is.True, result.Error?.Message);

@@ -24,8 +24,28 @@ public readonly record struct ToolCallReason
 
 public sealed class ToolCallReasonJsonConverter : JsonConverter<ToolCallReason>
 {
+    public const int MinLength = 10;
+
     public override ToolCallReason Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => new(reader.GetString() ?? string.Empty);
+    {
+        if (reader.TokenType != JsonTokenType.String)
+        {
+            throw new JsonException(
+                $"'reason' must be a descriptive string (at least {MinLength} characters, including a space), " +
+                $"but got a {reader.TokenType} value.");
+        }
+
+        var value = reader.GetString() ?? string.Empty;
+        var trimmed = value.Trim();
+        if (trimmed.Length < MinLength || !trimmed.Contains(' '))
+        {
+            throw new JsonException(
+                $"'reason' must be a descriptive string of at least {MinLength} characters that contains a space " +
+                $"(e.g. \"Fix null check in Foo\"), but got '{value}'.");
+        }
+
+        return new(value);
+    }
 
     public override void Write(Utf8JsonWriter writer, ToolCallReason value, JsonSerializerOptions options)
         => writer.WriteStringValue(value.Value);

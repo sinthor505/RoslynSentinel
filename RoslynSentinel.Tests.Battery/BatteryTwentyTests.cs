@@ -60,28 +60,28 @@ public class BatteryTwentyTests
     [Test]
     public async Task Features_List_ReturnsList()
     {
-        var result = await _workspaceTools.Features(reason: "test", FeaturesAction.list);
+        var result = await _workspaceTools.Features(reason: "test message", FeaturesAction.list);
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task Features_UpdateEmpty_ReturnsResult()
     {
-        var result = await _workspaceTools.Features(reason: "test", FeaturesAction.update, enabled: new List<KeyValuePair<string, bool>>());
+        var result = await _workspaceTools.Features(reason: "test message", FeaturesAction.update, enabled: new List<KeyValuePair<string, bool>>());
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task Features_GetEmptyList_ReturnsResult()
     {
-        var result = await _workspaceTools.Features(reason: "test", FeaturesAction.get, names: new List<string>());
+        var result = await _workspaceTools.Features(reason: "test message", FeaturesAction.get, names: new List<string>());
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task Features_GetWithFeatureName_ReturnsResult()
     {
-        var result = await _workspaceTools.Features(reason: "test", FeaturesAction.list);
+        var result = await _workspaceTools.Features(reason: "test message", FeaturesAction.list);
         var features = result.Data as System.Collections.IEnumerable;
         Assert.That(features, Is.Not.Null);
         Assert.Pass("Features list retrieved successfully.");
@@ -93,7 +93,7 @@ public class BatteryTwentyTests
     public async Task List_Projects_WithLoadedSolution_ReturnsList()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.projects);
+        var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.projects);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -101,7 +101,7 @@ public class BatteryTwentyTests
     public async Task List_Projects_NoSolution_ReturnsStructuredError()
     {
         // Tools no longer throw: they return ToolResult with Success=false and a ResultError.
-        var result = await _workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.projects);
+        var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.projects);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -111,7 +111,7 @@ public class BatteryTwentyTests
     public async Task List_Files_KnownProject_ReturnsFileList()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.files, "TestProj");
+        var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.files, "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -119,7 +119,7 @@ public class BatteryTwentyTests
     public async Task List_Files_UnknownProject_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.files, "NoSuchProject");
+        var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.files, "NoSuchProject");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -130,14 +130,14 @@ public class BatteryTwentyTests
     public async Task List_Dependencies_KnownProject_ReturnsReport()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.dependencies, "TestProj");
+        var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.dependencies, "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task List_SolutionItems_NoSolutionLoaded_ReturnsStructuredError()
     {
-        var result = await _workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.solutionItems);
+        var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.solutionItems);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -162,7 +162,7 @@ public class BatteryTwentyTests
         {
             _workspaceManager.SolutionPath = slnPath;
 
-            var result = await _workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.solutionItems);
+            var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.solutionItems);
 
             Assert.That(result.Success, Is.True);
             var items = result.Data as List<SolutionItemFile>;
@@ -191,7 +191,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_LiteralPattern_ReturnsNoWarning()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "Order");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "Order");
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Warning, Is.Null);
@@ -201,7 +201,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_RegexLikePattern_ReturnsBothLiteralAndRegexResults()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", @"^namespace TestProj");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test message", @"^namespace TestProj");
 
         Assert.That(result.Success, Is.True, "a pattern with regex metacharacters must still be searched literally, not just as regex");
         var payload = (TextSearchResult)result.Data!;
@@ -215,7 +215,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         // "Order" contains no regex metacharacters, so every regex match is also a literal match
         // at the same file/line/col — regexResults should be empty and the overlap reported.
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "Order");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "Order");
 
         Assert.That(result.Success, Is.True);
         var payload = (TextSearchResult)result.Data!;
@@ -228,7 +228,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_NoMatches_ReturnsNoMatchesError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "ThisPatternDoesNotAppearAnywhere");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "ThisPatternDoesNotAppearAnywhere");
 
         Assert.That(result.Success, Is.False, "Zero matches in both modes should surface as a failure so the protocol-level IsError filter picks it up.");
         Assert.That(result.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
@@ -242,7 +242,7 @@ public class BatteryTwentyTests
         // perfectly normal literal substring to search for. Must not throw a parse error, and
         // literal search must still work.
         SetSource("namespace TestProj; // array like foo[bar\npublic class Order { }", "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "foo[bar");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "foo[bar");
 
         Assert.That(result.Success, Is.True, "an unclosed '[' is not valid regex, but the literal substring search must still work");
         var payload = (TextSearchResult)result.Data!;
@@ -268,7 +268,7 @@ public class BatteryTwentyTests
         }
         """, "Test.cs");
 
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "return a + b");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "return a + b");
 
         Assert.That(result.Success, Is.True);
         var payload = (TextSearchResult)result.Data!;
@@ -290,7 +290,7 @@ public class BatteryTwentyTests
         }
         """, "Test.cs");
 
-        var result = await _workspaceTools.SearchSolutionText(reason: "test", "using System");
+        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "using System");
 
         Assert.That(result.Success, Is.True);
         var payload = (TextSearchResult)result.Data!;
@@ -312,7 +312,7 @@ public class BatteryTwentyTests
                 "TestProj", projectCsproj, [("Foo.cs", initialContent, tempFile)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var before = await _workspaceTools.SearchSolutionText(reason: "test", "Bar");
+            var before = await _workspaceTools.SearchSolutionText(reason: "test message", "Bar");
             Assert.That(before.Success, Is.True);
             Assert.That(before.WorkspaceVersion, Is.Not.Null);
 
@@ -322,7 +322,7 @@ public class BatteryTwentyTests
                 new Dictionary<FilePathWrapper, string> { [tempFile] = updatedContent });
             Assert.That(applyResult.Success, Is.True);
 
-            var after = await _workspaceTools.SearchSolutionText(reason: "test", "Baz");
+            var after = await _workspaceTools.SearchSolutionText(reason: "test message", "Baz");
 
             Assert.That(after.Success, Is.True);
             Assert.That(after.WorkspaceVersion, Is.Not.Null);
@@ -340,7 +340,7 @@ public class BatteryTwentyTests
     [Test]
     public async Task LoadSolution_NonExistentPath_ReturnsErrorString()
     {
-        var result = await _workspaceTools.LoadSolution(reason: "test", "fake_path.sln");
+        var result = await _workspaceTools.LoadSolution(reason: "test message", "fake_path.sln");
         Assert.That(result.Success, Is.False, "nonexistent solution path should not succeed");
         Assert.That(result.Error?.Message, Is.Not.Null.And.Not.Empty, "should carry an error message");
     }
@@ -359,7 +359,7 @@ public class BatteryTwentyTests
         {
             var wrappedPath = $"  \"{tempDir}\"  ";
 
-            var result = _workspaceTools.ListWorkspaceSolutions(reason: "test", wrappedPath);
+            var result = _workspaceTools.ListWorkspaceSolutions(reason: "test message", wrappedPath);
 
             Assert.That(result.Success, Is.True,
                 "A workspacePath wrapped in quotes/whitespace must still resolve to the real directory.");
@@ -373,7 +373,7 @@ public class BatteryTwentyTests
     [Test]
     public void ListWorkspaceSolutions_UnknownPath_ReturnsInvalidArgument()
     {
-        var result = _workspaceTools.ListWorkspaceSolutions(reason: "test", Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_DoesNotExist_" + Guid.NewGuid()));
+        var result = _workspaceTools.ListWorkspaceSolutions(reason: "test message", Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_DoesNotExist_" + Guid.NewGuid()));
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
@@ -388,7 +388,7 @@ public class BatteryTwentyTests
         // observed hanging 30+ minutes while climbing to 4.6GB RAM in a real model-eval run.
         var driveRoot = Path.GetPathRoot(Path.GetTempPath())!;
 
-        var result = _workspaceTools.ListWorkspaceSolutions(reason: "test", driveRoot);
+        var result = _workspaceTools.ListWorkspaceSolutions(reason: "test message", driveRoot);
 
         Assert.That(result.Success, Is.False, "scanning an entire drive root must be rejected, not attempted");
         Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
@@ -399,7 +399,7 @@ public class BatteryTwentyTests
     {
         // "/" is the exact value observed triggering the hang above — NormalizeWirePath leaves it
         // untouched, and Directory.Exists("/") is true on Windows (resolves to the current drive).
-        var result = _workspaceTools.ListWorkspaceSolutions(reason: "test", "/");
+        var result = _workspaceTools.ListWorkspaceSolutions(reason: "test message", "/");
 
         Assert.That(result.Success, Is.False, "'/' resolves to a drive root and must be rejected");
         Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
@@ -420,7 +420,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
 
-        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test", ChangesetFormat.diff, ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
+        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -432,7 +432,7 @@ public class BatteryTwentyTests
         {
             ["Test.cs"] = SimpleSource + " // changed"
         };
-        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test", ChangesetFormat.files, ProposedChangeAction.validate, changes: changes);
+        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test message", ChangesetFormat.files, ProposedChangeAction.validate, changes: changes);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -440,7 +440,7 @@ public class BatteryTwentyTests
     public async Task ApplyDiff_Diff_Apply_NonExistentFile_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test", ChangesetFormat.diff, ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
+        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -453,7 +453,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
-        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -461,7 +461,7 @@ public class BatteryTwentyTests
     public async Task ApplyUnifiedDiff_MissingFilepath_ReturnsInvalidArgument()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: "", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filepath: "", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -471,7 +471,7 @@ public class BatteryTwentyTests
     public async Task ApplyUnifiedDiff_MissingUnifiedDiff_ReturnsInvalidArgument()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: "Test.cs", unifiedDiff: "");
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filepath: "Test.cs", unifiedDiff: "");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -481,7 +481,7 @@ public class BatteryTwentyTests
     public async Task ApplyUnifiedDiff_Apply_NonExistentFile_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test", ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -491,7 +491,7 @@ public class BatteryTwentyTests
     public async Task ApplyDiff_Files_Apply_EmptyChanges_ReturnsResult()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test", ChangesetFormat.files, ProposedChangeAction.apply, changes: new Dictionary<string, string>());
+        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply, changes: new Dictionary<string, string>());
         Assert.That(result, Is.Not.Null);
     }
 
@@ -501,7 +501,7 @@ public class BatteryTwentyTests
     public async Task RetryFailedChanges_NoFailedChanges_ReturnsResult()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.RetryFailedChanges(reason: "test");
+        var result = await _workspaceTools.RetryFailedChanges(reason: "test message");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -511,7 +511,7 @@ public class BatteryTwentyTests
     public async Task GetDiagnostics_File_ValidFile_ReturnsSummary()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.GetDiagnostics(reason: "test", ToolScope.file, "Test.cs");
+        var result = await _workspaceTools.GetDiagnostics(reason: "test message", ToolScope.file, "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -521,7 +521,7 @@ public class BatteryTwentyTests
     public async Task SafeDelete_ValidPosition_ReturnsString()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test", "Test.cs", projectName: "", docCommentId: "", line: 1, column: 1);
+        var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test message", "Test.cs", projectName: "", docCommentId: "", line: 1, column: 1);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -550,7 +550,7 @@ public class Order
     {
         SetSource(DeadMethodSource, "Test.cs");
 
-        var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test", "Test.cs", symbolName: "BuildInternalDebugLabel");
+        var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test message", "Test.cs", symbolName: "BuildInternalDebugLabel");
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
     }
@@ -560,7 +560,7 @@ public class Order
     {
         SetSource(DeadMethodSource, "Test.cs");
 
-        var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test", "Test.cs", symbolName: "BuildInternalDebugLabel",
+        var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test message", "Test.cs", symbolName: "BuildInternalDebugLabel",
             contextSnippet: "private string BuildInternalDebugLabel()");
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
@@ -571,7 +571,7 @@ public class Order
     {
         SetSource(DeadMethodSource, "Test.cs");
 
-        var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test", "Test.cs", symbolName: "NoSuchMethod");
+        var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test message", "Test.cs", symbolName: "NoSuchMethod");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.Message, Does.Contain("NoSuchMethod"));
@@ -586,7 +586,7 @@ public class Order
         SetSource(DeadMethodSource, "Test.cs");
 
         var docCommentId = "M:TestProj.Order.BuildInternalDebugLabel";
-        var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test", "Test.cs", projectName: "TestProj", docCommentId: docCommentId);
+        var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test message", "Test.cs", projectName: "TestProj", docCommentId: docCommentId);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
     }
@@ -597,7 +597,7 @@ public class Order
     public async Task CreateProject_NewProjectName_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.CreateProject(reason: "test", "NewTestProject");
+        var result = await _workspaceTools.CreateProject(reason: "test message", "NewTestProject");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -607,7 +607,7 @@ public class Order
     public async Task GetDiagnostics_Project_KnownProject_ReturnsSummary()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.GetDiagnostics(reason: "test", ToolScope.project, "TestProj");
+        var result = await _workspaceTools.GetDiagnostics(reason: "test message", ToolScope.project, "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -615,7 +615,7 @@ public class Order
     public async Task GetDiagnostics_Solution_ReturnsSummary()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.GetDiagnostics(reason: "test", ToolScope.solution);
+        var result = await _workspaceTools.GetDiagnostics(reason: "test message", ToolScope.solution);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -625,7 +625,7 @@ public class Order
     public async Task Build_QuickBuild_CleanSource_ReturnsSuccess()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.Build(reason: "test", BuildVerifyLevel.quickBuild);
+        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
         Assert.That(result.Success, Is.True);
         var data = (BuildResult)result.Data!;
@@ -638,7 +638,7 @@ public class Order
     public async Task Build_QuickBuild_SourceWithCompileError_ReturnsBuildFailure()
     {
         SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
-        var result = await _workspaceTools.Build(reason: "test", BuildVerifyLevel.quickBuild);
+        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
         Assert.That(result.Success, Is.True, "The tool call itself succeeds; the build outcome is carried in Data.BuildSucceeded.");
         var data = (BuildResult)result.Data!;
@@ -658,7 +658,7 @@ public class Order
         ]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _workspaceTools.Build(reason: "test", BuildVerifyLevel.quickBuild);
+        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
         Assert.That(result.Success, Is.True);
         var data = (BuildResult)result.Data!;
@@ -675,7 +675,7 @@ public class Order
     public async Task GetDiagnostics_VerifyQuickBuild_AttachesBuildVerification()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.GetDiagnostics(reason: "test", ToolScope.solution, verify: BuildVerifyLevel.quickBuild);
+        var result = await _workspaceTools.GetDiagnostics(reason: "test message", ToolScope.solution, verify: BuildVerifyLevel.quickBuild);
 
         Assert.That(result.Success, Is.True);
         var data = (DiagnosticSummary)result.Data!;
@@ -687,7 +687,7 @@ public class Order
     public async Task GetWorkspaceHealth_VerifyQuickBuild_AttachesBuildVerification()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.GetWorkspaceHealth(reason: "test", verify: BuildVerifyLevel.quickBuild);
+        var result = await _workspaceTools.GetWorkspaceHealth(reason: "test message", verify: BuildVerifyLevel.quickBuild);
 
         Assert.That(result.Success, Is.True);
         var data = (WorkspaceHealthReport)result.Data!;
@@ -700,7 +700,7 @@ public class Order
     public async Task SplitProjectByFolder_NonExistentFolder_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SplitProjectByFolder(reason: "test", "TestProj", "NonExistentFolder", "NewProject");
+        var result = await _workspaceTools.SplitProjectByFolder(reason: "test message", "TestProj", "NonExistentFolder", "NewProject");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);

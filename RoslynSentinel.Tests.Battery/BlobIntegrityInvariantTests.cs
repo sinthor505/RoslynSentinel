@@ -102,7 +102,7 @@ public class BlobIntegrityInvariantTests
         var bodyLine = Array.FindIndex(lines, l => l.TrimStart().StartsWith("public ")) + 2;
 
         var result = await _tools.WrapRange(
-            reason: "test", _targetFile, startLine: bodyLine, endLine: bodyLine,
+            reason: "test message", _targetFile, startLine: bodyLine, endLine: bodyLine,
             wrapper: "region", name: "TestRegion", dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "WrapRange");
@@ -114,7 +114,7 @@ public class BlobIntegrityInvariantTests
         var typeName = await FindATypeNameAsync();
 
         var result = await _tools.MoveType(
-            reason: "test", _targetFile, typeName, destination: "ownFile", dryRun: false);
+            reason: "test message", _targetFile, typeName, destination: "ownFile", dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "MoveType");
     }
@@ -125,7 +125,7 @@ public class BlobIntegrityInvariantTests
         var typeName = await FindATypeNameAsync();
 
         var result = await _tools.ExtractMembers(
-            reason: "test", _targetFile, typeName, ExtractAsType.@interface,
+            reason: "test message", _targetFile, typeName, ExtractAsType.@interface,
             newTypeName: "IExtractedForTest", dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "ExtractMembers");
@@ -137,7 +137,7 @@ public class BlobIntegrityInvariantTests
         var typeName = await FindATypeNameAsync();
 
         var result = await _tools.SyncInterface(
-            reason: "test", _targetFile, interfaceName: "IDisposable", action: SyncInterfaceAction.sync,
+            reason: "test message", _targetFile, interfaceName: "IDisposable", action: SyncInterfaceAction.sync,
             className: typeName, dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "SyncInterface");
@@ -147,7 +147,7 @@ public class BlobIntegrityInvariantTests
     public async Task Inline_IssuedChangeIdResolvesToABlobAsync()
     {
         var result = await _tools.Inline(
-            reason: "test", _targetFile, targetName: "value", kind: InlineKind.variable, dryRun: false);
+            reason: "test message", _targetFile, targetName: "value", kind: InlineKind.variable, dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "Inline");
     }

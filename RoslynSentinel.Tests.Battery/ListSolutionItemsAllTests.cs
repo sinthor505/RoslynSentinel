@@ -40,7 +40,7 @@ public class ListSolutionItemsAllTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.all);
+        var result = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
     }
@@ -53,7 +53,7 @@ public class ListSolutionItemsAllTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.all);
+        var result = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
         Assert.That(result.Success, Is.True, result.Error?.Message);
 
         var combined = (SolutionItemsAllResult)result.Data!;
@@ -79,16 +79,16 @@ public class ListSolutionItemsAllTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var allResult = await workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.all);
+        var allResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
         var combined = (SolutionItemsAllResult)allResult.Data!;
 
-        var projectsResult = await workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.projects);
+        var projectsResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.projects);
         var projectsOnly = (List<ProjectInfoEntry>)projectsResult.Data!;
         Assert.That(combined.Projects.Select(p => p.Name), Is.EquivalentTo(projectsOnly.Select(p => p.Name)));
 
         foreach (var project in projectsOnly)
         {
-            var filesResult = await workspaceTools.ListSolutionItems(reason: "test", SolutionItemsKind.files, projectName: project.Name);
+            var filesResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.files, projectName: project.Name);
             var filesOnly = (List<string>)filesResult.Data!;
             var detail = combined.ProjectDetails.Single(d => d.ProjectName == project.Name);
             Assert.That(detail.Files, Is.EquivalentTo(filesOnly));

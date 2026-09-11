@@ -71,7 +71,7 @@ public class ApplyDiffSizeGuardTests
 
         var fragment = "using System;\n";
         var result = await wholeFileWriteTools.ApplyDiff(
-            reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
+            reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = fragment });
 
         Assert.That(result.Success, Is.False);
@@ -88,7 +88,6 @@ public class ApplyDiffSizeGuardTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
 
@@ -101,7 +100,7 @@ public class ApplyDiffSizeGuardTests
         SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var result = await wholeFileWriteTools.ApplyDiff(
-            reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
+            reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = commentedOut });
 
         Assert.That(result.Success, Is.False);
@@ -219,7 +218,7 @@ public class ApplyDiffSizeGuardTests
         var lightlyModified = originalContent + "\n// small trailing comment\n";
 
         var result = await wholeFileWriteTools.ApplyDiff(
-            reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
+            reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = lightlyModified });
 
         Assert.That(result.Success, Is.True);
@@ -242,7 +241,7 @@ public class ApplyDiffSizeGuardTests
         var content = "namespace ContosoOrders;\npublic class BrandNewFile { }\n";
 
         var result = await wholeFileWriteTools.ApplyDiff(
-            reason: "test", ChangesetFormat.files, ProposedChangeAction.apply,
+            reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [newFilePath] = content });
 
         Assert.That(result.Success, Is.True);

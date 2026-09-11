@@ -24,13 +24,13 @@ public class SentinelAdminToolsTests
     [Test]
     public void ListExternalDiskChanges_Always_ReturnsList()
     {
-        var result = _tools.ListExternalDiskChanges(reason: "test");
+        var result = _tools.ListExternalDiskChanges(reason: "test message");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public void AcknowledgeExternalFileChanges_Always_DoesNotThrow()
     {
-        Assert.DoesNotThrow(() => _tools.AcknowledgeExternalFileChanges(reason: "test"));
+        Assert.DoesNotThrow(() => _tools.AcknowledgeExternalFileChanges(reason: "test message"));
     }
 }

@@ -57,7 +57,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
         var data = (TestRunResult)result.Data!;
@@ -76,7 +76,7 @@ public class RunTestTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.project, scopeName: "DoesNotExist");
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.project, scopeName: "DoesNotExist");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("TestRunFailed"));
@@ -91,7 +91,7 @@ public class RunTestTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.file);
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.file);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("TestRunFailed"));
@@ -110,7 +110,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution, filter: "FullyQualifiedName~AlwaysFails", timeoutSeconds: 120);
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~AlwaysFails", timeoutSeconds: 120);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
         var data = (TestRunResult)result.Data!;
@@ -133,7 +133,7 @@ public class RunTestTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution, filter: "FullyQualifiedName~NoSuchTestNameAnywhere", timeoutSeconds: 120);
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~NoSuchTestNameAnywhere", timeoutSeconds: 120);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
         var data = (TestRunResult)result.Data!;
@@ -178,7 +178,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "SharedFailureTests.cs"), sharedFailureSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution, resultsType: TestResultsFilter.skipped, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.skipped, timeoutSeconds: 120);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
         var data = (TestRunResult)result.Data!;
@@ -197,7 +197,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution, resultsType: TestResultsFilter.failed, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.failed, timeoutSeconds: 120);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
         var data = (TestRunResult)result.Data!;
@@ -214,7 +214,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution, resultsType: TestResultsFilter.all, summary: true, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.all, summary: true, timeoutSeconds: 120);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
         var data = (TestRunResult)result.Data!;
@@ -229,7 +229,7 @@ public class RunTestTests
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution);
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.Not.EqualTo("Exception"));
@@ -251,7 +251,7 @@ public class RunTestTests
 
         Assert.That(rateLimitError, Is.Not.Null, "expected CheckRateLimit to start rejecting within 15 calls at a limit of 10.");
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution);
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo("TestRunFailed"));
@@ -270,7 +270,7 @@ public class RunTestTests
         // its own GUID-suffixed filename, so only a leftover from *this* call would show up as new.
         var before = new HashSet<string>(Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx"));
 
-        var result = await workspaceTools.RunTest(reason: "test", ToolScope.solution, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
         Assert.That(result.Success, Is.True, result.Error?.Message);
         var after = Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx");

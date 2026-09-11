@@ -166,7 +166,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ExtractSuperclass_AutoStageTrue_ReturnsAppliedChangeSummary()
     {
         SetMultiFile(("Dog.cs", RefactorSource));
-        var result = await _advTools.ExtractMembers(reason: "test", "Dog.cs", "Dog", ExtractAsType.superclass, "AnimalBase");
+        var result = await _advTools.ExtractMembers(reason: "test message", "Dog.cs", "Dog", ExtractAsType.superclass, "AnimalBase");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -176,7 +176,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task SafeDeleteSymbol_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.remove, memberName: "GetLabel");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -186,7 +186,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ChangeSignature_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ChangeSignature(reason: "test", "Order.cs", "Order", [1, 0]);
+        var result = await _advTools.ChangeSignature(reason: "test message", "Order.cs", "Order", [1, 0]);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -196,7 +196,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ExtractInterface_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ExtractMembers(reason: "test", "Order.cs", "Order", ExtractAsType.@interface, "IOrder");
+        var result = await _advTools.ExtractMembers(reason: "test message", "Order.cs", "Order", ExtractAsType.@interface, "IOrder");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -206,7 +206,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveTypeToFile_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.MoveType(reason: "test", "Order.cs", "Status", "ownFile");
+        var result = await _advTools.MoveType(reason: "test message", "Order.cs", "Status", "ownFile");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -216,7 +216,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveAllTypesToFiles_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.MoveAllTypesToFiles(reason: "test", ToolScope.file, "Order.cs");
+        var result = await _advTools.MoveAllTypesToFiles(reason: "test message", ToolScope.file, "Order.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -235,7 +235,7 @@ public enum Status { Active = 1, Pending = 2 }
         var handle = located.Single();
 
         var result = await _tools.RenameSymbol(
-            reason: "test", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
+            reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
             newName: "GetDisplayLabel", sessionId: _workspaceManager.SessionId.ToString());
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
@@ -246,7 +246,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.RenameSymbol(
-            reason: "test", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol",
+            reason: "test message", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol",
             newName: "NewName", sessionId: _workspaceManager.SessionId.ToString());
 
         Assert.That(result.Success, Is.False);
@@ -269,7 +269,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveAllTypesToFilesInSolution_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.MoveAllTypesToFiles(reason: "test", ToolScope.solution);
+        var result = await _advTools.MoveAllTypesToFiles(reason: "test message", ToolScope.solution);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -279,7 +279,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task UsingDirective_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.UsingDirective(reason: "test", "Order.cs", AddRemoveViewAction.add, "System.Linq");
+        var result = await _tools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -287,7 +287,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task UsingDirective_AutoStageFalse_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.UsingDirective(reason: "test", "Order.cs", AddRemoveViewAction.add, "System.Linq", autoStage: false);
+        var result = await _tools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq", autoStage: false);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -297,7 +297,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ModifyEnum_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyEnum(reason: "test", "Order.cs", "Status", "Active,Pending,Cancelled");
+        var result = await _tools.ModifyEnum(reason: "test message", "Order.cs", "Status", "Active,Pending,Cancelled");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -307,7 +307,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_Add_OnEnumContainer_Succeeds()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.add, "Status", newMemberSource: "Cancelled");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Status", newMemberSource: "Cancelled");
         Assert.That(result.Success, Is.True);
     }
 
@@ -315,7 +315,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_Remove_OnEnumMember_Succeeds()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.remove, memberName: "Pending", skipPrecheck: true);
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "Pending", skipPrecheck: true);
         Assert.That(result.Success, Is.True);
     }
 
@@ -323,7 +323,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_Replace_OnEnumMember_Succeeds()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.replace, memberName: "Pending", newMemberSource: "InProgress=2");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "Pending", newMemberSource: "InProgress=2");
         Assert.That(result.Success, Is.True);
     }
 
@@ -331,7 +331,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_View_OnEnumContainer_ReturnsEnumMembers()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.view, "Status");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.view, "Status");
         Assert.That(result.Success, Is.True);
     }
 
@@ -341,7 +341,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InsertMemberAfter_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.add, "Order", newMemberSource: "public string Description => \"\";", position: "after:GetLabel");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Order", newMemberSource: "public string Description => \"\";", position: "after:GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -351,7 +351,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InsertMemberBefore_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.add, "Order", newMemberSource: "public string Tag => \"\";", position: "before:GetLabel");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Order", newMemberSource: "public string Tag => \"\";", position: "before:GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -361,7 +361,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddAttribute_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyAttribute(reason: "test", "Order.cs", "Order", "[Serializable]", AttributeModifyAction.add);
+        var result = await _tools.ModifyAttribute(reason: "test message", "Order.cs", "Order", "[Serializable]", AttributeModifyAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -371,7 +371,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddBaseType_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyBaseType(reason: "test", "Order.cs", "Order", "IService", AddRemoveAction.add);
+        var result = await _tools.ModifyBaseType(reason: "test message", "Order.cs", "Order", "IService", AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -381,7 +381,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveAttribute_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyAttribute(reason: "test", "Order.cs", "Order", "Serializable", AttributeModifyAction.remove);
+        var result = await _tools.ModifyAttribute(reason: "test message", "Order.cs", "Order", "Serializable", AttributeModifyAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -391,7 +391,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveBaseType_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyBaseType(reason: "test", "Order.cs", "Order", "IService", AddRemoveAction.remove);
+        var result = await _tools.ModifyBaseType(reason: "test message", "Order.cs", "Order", "IService", AddRemoveAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -401,7 +401,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveMember_ToBaseClass_AutoStageTrue_ReturnsNotNull()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
-        var result = await _advTools.MoveMember(reason: "test", "Refactor.cs", "Dog", ["Sound"], "Animal");
+        var result = await _advTools.MoveMember(reason: "test message", "Refactor.cs", "Dog", ["Sound"], "Animal");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -411,7 +411,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ChangeAccessibility_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ChangeAccessibility(reason: "test", "Order.cs", "OrderId", AccessibilityLevel.@internal);
+        var result = await _tools.ChangeAccessibility(reason: "test message", "Order.cs", "OrderId", AccessibilityLevel.@internal);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -421,12 +421,12 @@ public enum Status { Active = 1, Pending = 2 }
         SetSource(SimpleSource, "Order.cs");
         var versionBeforeAnyMutation = _workspaceManager.WorkspaceVersion;
 
-        var first = await _tools.ChangeAccessibility(reason: "test", "Order.cs", "OrderId", AccessibilityLevel.@internal);
+        var first = await _tools.ChangeAccessibility(reason: "test message", "Order.cs", "OrderId", AccessibilityLevel.@internal);
         var firstSummary = (AppliedChangeSummary)first.Data!;
         Assert.That(firstSummary.WorkspaceVersion, Is.Not.Null);
         Assert.That(firstSummary.WorkspaceVersion, Is.GreaterThan(versionBeforeAnyMutation));
 
-        var second = await _tools.ChangeAccessibility(reason: "test", "Order.cs", "CustomerName", AccessibilityLevel.@internal);
+        var second = await _tools.ChangeAccessibility(reason: "test message", "Order.cs", "CustomerName", AccessibilityLevel.@internal);
         var secondSummary = (AppliedChangeSummary)second.Data!;
         Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion!),
             "A second mutation must stamp a strictly higher version than the first.");
@@ -438,7 +438,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddModifier_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier(reason: "test", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.add);
+        var result = await _tools.ModifyModifier(reason: "test message", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -448,7 +448,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveModifier_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier(reason: "test", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.remove);
+        var result = await _tools.ModifyModifier(reason: "test message", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -463,7 +463,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task SummaryComment_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.SummaryComment(reason: "test", "Order.cs", AddRemoveViewAction.add, "Order", "Represents an order.");
+        var result = await _tools.SummaryComment(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "Represents an order.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -473,7 +473,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddProperty_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.add, "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -483,7 +483,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddField_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.add, "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -503,7 +503,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task WrapInTryCatch_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.WrapRange(reason: "test", "Order.cs", 8, 10, "tryCatch");
+        var result = await _advTools.WrapRange(reason: "test message", "Order.cs", 8, 10, "tryCatch");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -513,7 +513,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ConstructorParameter_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ConstructorParameter(reason: "test", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
+        var result = await _tools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -523,7 +523,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_View_ListsExistingParameters()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.MethodSignature(reason: "test", "Order.cs", AddRemoveViewAction.view, "GetLabel");
+        var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.view, "GetLabel");
         Assert.That(result.Success, Is.True, result.Error?.Message);
     }
 
@@ -531,7 +531,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_Add_AppendsRequiredParameter_NoExistingCallers()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.MethodSignature(reason: "test", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool");
+        var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool");
         Assert.That(result.Success, Is.True, result.Error?.Message);
     }
 
@@ -541,7 +541,7 @@ public enum Status { Active = 1, Pending = 2 }
         SetMultiFile(
             ("Order.cs", SimpleSource),
             ("Caller.cs", "namespace TestProj;\npublic class Caller { public string Use(Order o) => o.GetStatus(); }"));
-        var result = await _tools.MethodSignature(reason: "test", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool", defaultValue: "false");
+        var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool", defaultValue: "false");
         Assert.That(result.Success, Is.True, result.Error?.Message);
     }
 
@@ -554,7 +554,7 @@ public enum Status { Active = 1, Pending = 2 }
         SetMultiFile(
             ("Order.cs", orderSourceWithRename),
             ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
-        var result = await _tools.MethodSignature(reason: "test", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
+        var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(result.Success, Is.True, result.Error?.Message);
     }
 
@@ -562,7 +562,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_Remove_NonLastParameter_Refused()
     {
         SetSource(RefactorSource, "Animal.cs");
-        var result = await _tools.MethodSignature(reason: "test", "Animal.cs", AddRemoveViewAction.remove, "Process", "a");
+        var result = await _tools.MethodSignature(reason: "test message", "Animal.cs", AddRemoveViewAction.remove, "Process", "a");
         Assert.That(result.Success, Is.False, "Removing a non-trailing parameter must be refused, not silently applied.");
         Assert.That(result.Error, Is.Not.Null);
         Assert.That(result.Error!.Message, Does.Contain("last parameter"));
@@ -577,7 +577,7 @@ public enum Status { Active = 1, Pending = 2 }
         SetMultiFile(
             ("Order.cs", orderSourceWithRename),
             ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(first: \"a\", last: \"b\"); }"));
-        var result = await _tools.MethodSignature(reason: "test", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
+        var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(result.Success, Is.False, "A named-argument call site cannot be safely rewritten and must refuse the whole operation.");
         Assert.That(result.Error, Is.Not.Null);
         Assert.That(result.Error!.Message, Does.Contain("named arguments"));
@@ -589,7 +589,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task WrapInRegion_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.WrapRange(reason: "test", "Order.cs", 3, 6, "region", "Properties");
+        var result = await _advTools.WrapRange(reason: "test message", "Order.cs", 3, 6, "region", "Properties");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -601,7 +601,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task SyncTypeAndFilename_ValidFile_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.SyncTypeAndFilename(reason: "test", "Order.cs");
+        var result = await _tools.SyncTypeAndFilename(reason: "test message", "Order.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -632,7 +632,7 @@ public enum Status { Active = 1, Pending = 2 }
                 [("Mismatched.cs", mismatchedSource, oldPath)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var result = await _tools.SyncTypeAndFilename(reason: "test", oldPath, dryRun: true);
+            var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath, dryRun: true);
 
             Assert.That(File.Exists(oldPath), Is.True, "dryRun must never delete the original file, even when validation fails.");
             Assert.That(File.Exists(newPath), Is.False, "dryRun must never write the renamed file.");
@@ -669,7 +669,7 @@ public enum Status { Active = 1, Pending = 2 }
                 [("Mismatched.cs", mismatchedSource, oldPath)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var result = await _tools.SyncTypeAndFilename(reason: "test", oldPath);
+            var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath);
 
             Assert.That(result.Success, Is.True, $"Expected rename to succeed; error: {result.Error?.Message}");
             Assert.That(File.Exists(oldPath), Is.False, "Old file should be deleted after a successful rename.");
@@ -694,7 +694,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineMethod_ValidMethod_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Inline(reason: "test", "Order.cs", "GetLabel", InlineKind.method);
+        var result = await _advTools.Inline(reason: "test message", "Order.cs", "GetLabel", InlineKind.method);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -714,7 +714,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task IntroduceField_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Introduce(reason: "test", "Order.cs", "string.Format", "labelFormatter", IntroduceAsType.field);
+        var result = await _advTools.Introduce(reason: "test message", "Order.cs", "string.Format", "labelFormatter", IntroduceAsType.field);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -724,7 +724,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task IntroduceParameter_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Introduce(reason: "test", "Order.cs", "GetLabel", "GetLabel", IntroduceAsType.parameter);
+        var result = await _advTools.Introduce(reason: "test message", "Order.cs", "GetLabel", "GetLabel", IntroduceAsType.parameter);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -734,7 +734,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineField_ValidField_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Inline(reason: "test", "Order.cs", "OrderId", InlineKind.field);
+        var result = await _advTools.Inline(reason: "test message", "Order.cs", "OrderId", InlineKind.field);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -744,7 +744,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineParameter_ValidParameter_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Inline(reason: "test", "Order.cs", "orderId", InlineKind.parameter, "Order");
+        var result = await _advTools.Inline(reason: "test message", "Order.cs", "orderId", InlineKind.parameter, "Order");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -754,7 +754,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MakeMethodStatic_ValidMethod_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier(reason: "test", "Order.cs", "GetLabel", NonAccessibilityModifier.@static, AddRemoveAction.add);
+        var result = await _tools.ModifyModifier(reason: "test message", "Order.cs", "GetLabel", NonAccessibilityModifier.@static, AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -795,7 +795,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task WrapInUsing_ValidLineRange_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.WrapRange(reason: "test", "Order.cs", 8, 10, "using", "resource");
+        var result = await _advTools.WrapRange(reason: "test message", "Order.cs", 8, 10, "using", "resource");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -805,7 +805,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ConvertAnonymousToNamed_ValidFile_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ConvertAnonymousToNamed(reason: "test", "Order.cs", "OrderData");
+        var result = await _advTools.ConvertAnonymousToNamed(reason: "test message", "Order.cs", "OrderData");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -820,7 +820,7 @@ public enum Status { Active = 1, Pending = 2 }
         // dryRun avoids writing to disk under a bare relative filename (resolves against the test
         // runner's CWD) — without it, a stray file left by a prior run makes the diff spuriously
         // empty since the on-disk "before" already matches the freshly-computed "after".
-        var result = await _advTools.InlineClass(reason: "test", "Helper.cs", "Owner.cs", "Helper", dryRun: true, returnDiff: true);
+        var result = await _advTools.InlineClass(reason: "test message", "Helper.cs", "Owner.cs", "Helper", dryRun: true, returnDiff: true);
         Assert.That(result.Success, Is.True, result.Error?.Message);
         var summary = (AppliedChangeSummary)result.Data!;
         Assert.That(summary.AffectedFiles.Select(f => f.ToString()), Has.Some.Contains("Owner.cs"));
@@ -834,7 +834,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task IntroduceVariable_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Introduce(reason: "test", "Order.cs", "string.Format", "formatted", IntroduceAsType.localVariable);
+        var result = await _advTools.Introduce(reason: "test message", "Order.cs", "string.Format", "formatted", IntroduceAsType.localVariable);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -844,7 +844,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineVariable_ValidVariable_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Inline(reason: "test", "Order.cs", "OrderId", InlineKind.variable);
+        var result = await _advTools.Inline(reason: "test message", "Order.cs", "OrderId", InlineKind.variable);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -864,7 +864,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ExtractMembersToPartial_ValidMembers_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ExtractMembers(reason: "test", "Order.cs", "Order", ExtractAsType.partialClass, memberNames: ["GetLabel"]);
+        var result = await _advTools.ExtractMembers(reason: "test message", "Order.cs", "Order", ExtractAsType.partialClass, memberNames: ["GetLabel"]);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -885,7 +885,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         const string src = "namespace TestProj; public class Outer { public class Inner {} }";
         SetSource(src, "Outer.cs");
-        var result = await _advTools.MoveType(reason: "test", "Outer.cs", "Inner", "outerScope");
+        var result = await _advTools.MoveType(reason: "test message", "Outer.cs", "Inner", "outerScope");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -895,7 +895,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ReplaceMember_ValidMember_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.replace, memberName: "GetLabel", newMemberSource: "public string GetLabel() => $\"{OrderId}: {CustomerName}\";");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "GetLabel", newMemberSource: "public string GetLabel() => $\"{OrderId}: {CustomerName}\";");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -905,7 +905,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddMemberToClass_ValidClass_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.add, "Order", newMemberSource: "public string Tag { get; set; }");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Order", newMemberSource: "public string Tag { get; set; }");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -915,7 +915,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveMember_ValidMember_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.remove, memberName: "GetLabel");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -923,7 +923,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveMember_ZeroReferences_SucceedsAsBefore()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.remove, memberName: "GetLabel");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
         Assert.That(result.Success, Is.True, "GetLabel has no callers in SimpleSource — default precheck must let it through.");
     }
 
@@ -944,7 +944,7 @@ public enum Status { Active = 1, Pending = 2 }
         }
         """, "Helper.cs");
 
-        var result = await _tools.Member(reason: "test", "Helper.cs", MemberAction.remove, memberName: "GetName");
+        var result = await _tools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName");
 
         Assert.That(result.Success, Is.False, "A member with a real caller must be refused by default.");
         Assert.That(result.Error, Is.Not.Null);
@@ -973,7 +973,7 @@ public enum Status { Active = 1, Pending = 2 }
         }
         """, "Helper.cs");
 
-        var result = await _tools.Member(reason: "test", "Helper.cs", MemberAction.remove, memberName: "GetName", skipPrecheck: true);
+        var result = await _tools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName", skipPrecheck: true);
 
         Assert.That(result.Success, Is.False, "The engine's own caller check still applies even with skipPrecheck: true.");
     }
@@ -1001,11 +1001,11 @@ public enum Status { Active = 1, Pending = 2 }
         }
         """, "Greeter.cs");
 
-        var refused = await _tools.Member(reason: "test", "Greeter.cs", MemberAction.remove, memberName: "Greet");
+        var refused = await _tools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet");
         Assert.That(refused.Success, Is.False, "An interface member's implementation must be caught by the default precheck.");
         Assert.That(refused.Error!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
 
-        var result = await _tools.Member(reason: "test", "Greeter.cs", MemberAction.remove, memberName: "Greet", skipPrecheck: true);
+        var result = await _tools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet", skipPrecheck: true);
         Assert.That(result.Success, Is.False, "Removing an interface's sole implementation still breaks compilation — the separate compile-validation safety net catches it.");
         Assert.That(result.Error!.Message, Does.Contain("does not implement interface member"),
             "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped.");
@@ -1035,7 +1035,7 @@ public enum Status { Active = 1, Pending = 2 }
             }
             """));
 
-        var result = await _tools.Member(reason: "test", "Dog.cs", MemberAction.remove, memberName: "Speak");
+        var result = await _tools.Member(reason: "test message", "Dog.cs", MemberAction.remove, memberName: "Speak");
         Assert.That(result.Success, Is.True, "An override with no callers and nothing overriding it in turn must succeed under the default precheck.");
     }
 
@@ -1055,7 +1055,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InvertAssignments_ValidLineRange_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.InvertAssignments(reason: "test", "Order.cs", 8, 12);
+        var result = await _advTools.InvertAssignments(reason: "test message", "Order.cs", 8, 12);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1088,7 +1088,7 @@ public enum Status { Active = 1, Pending = 2 }
 public interface IWorker { void Work(); }
 public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         SetSource(src, "Worker.cs");
-        var result = await _advTools.SyncInterface(reason: "test", "Worker.cs", "IWorker", SyncInterfaceAction.sync, "Worker");
+        var result = await _advTools.SyncInterface(reason: "test message", "Worker.cs", "IWorker", SyncInterfaceAction.sync, "Worker");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1098,7 +1098,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     public async Task IntroduceParameterObject_ValidMethod_ReturnsString()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
-        var result = await _advTools.IntroduceParameterObject(reason: "test", "Refactor.cs", "Process");
+        var result = await _advTools.IntroduceParameterObject(reason: "test message", "Refactor.cs", "Process");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1106,7 +1106,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     public async Task IntroduceParameterObject_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _advTools.IntroduceParameterObject(reason: "test", "NonExistent.cs", "Process");
+        var result = await _advTools.IntroduceParameterObject(reason: "test message", "NonExistent.cs", "Process");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1135,7 +1135,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     {
         const string src = @"namespace TestProj; public class C { public string GetLabel() { return ""hello""; } }";
         SetSource(src, "C.cs");
-        var result = await _advTools.Introduce(reason: "test", "C.cs", @"""hello""", "HelloLabel", IntroduceAsType.@constant);
+        var result = await _advTools.Introduce(reason: "test message", "C.cs", @"""hello""", "HelloLabel", IntroduceAsType.@constant);
     }
 
     // --- AnalyzeControlFlow ---
@@ -1193,7 +1193,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     public async Task ExtractLocalVariable_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ExtractLocalVariable(reason: "test", "Order.cs", "GetLabel", "label");
+        var result = await _tools.ExtractLocalVariable(reason: "test message", "Order.cs", "GetLabel", "label");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1201,7 +1201,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     public async Task ExtractLocalVariable_NonExistentFile_ReturnsStructuredError()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.ExtractLocalVariable(reason: "test", "NonExistent.cs", "GetLabel", "label");
+        var result = await _tools.ExtractLocalVariable(reason: "test message", "NonExistent.cs", "GetLabel", "label");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);

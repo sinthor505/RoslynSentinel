@@ -87,7 +87,7 @@ public class McpTasksHarnessBulkCommentTests
         var requestParams = new CallToolRequestParams
         {
             Name = "BulkComment",
-            Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test", ["scope"] = "solution", ["dryRun"] = true }),
+            Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test message", ["scope"] = "solution", ["dryRun"] = true }),
         };
 
         var augmented = await _client.CallToolAsTaskAsync(requestParams, TestContext.CurrentContext.CancellationToken);
@@ -99,7 +99,7 @@ public class McpTasksHarnessBulkCommentTests
     [Test]
     public async Task TaskCapableClient_PollingToCompletion_DryRunMatchesSynchronousResult()
     {
-        var arguments = new Dictionary<string, object?> { ["reason"] = "test", ["scope"] = "solution", ["dryRun"] = true };
+        var arguments = new Dictionary<string, object?> { ["reason"] = "test message", ["scope"] = "solution", ["dryRun"] = true };
 
         var syncResult = await _client.CallToolAsync(
             "BulkComment",
@@ -140,7 +140,7 @@ public class McpTasksHarnessBulkCommentTests
         var requestParams = new CallToolRequestParams
         {
             Name = "BulkComment",
-            Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test", ["scope"] = "project", ["projectName"] = "ContosoOrders.Core", ["dryRun"] = false }),
+            Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test message", ["scope"] = "project", ["projectName"] = "ContosoOrders.Core", ["dryRun"] = false }),
         };
 
         var result = await _client.CallToolWithPollingAsync(requestParams, cancellationToken: TestContext.CurrentContext.CancellationToken);
@@ -173,7 +173,7 @@ public class McpTasksHarnessBulkCommentTests
         var requestParams = new CallToolRequestParams
         {
             Name = "BulkComment",
-            Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test", ["scope"] = "project", ["projectName"] = "ContosoOrders.Core", ["dryRun"] = false }),
+            Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test message", ["scope"] = "project", ["projectName"] = "ContosoOrders.Core", ["dryRun"] = false }),
         };
 
         var result = await _client.CallToolWithPollingAsync(requestParams, cancellationToken: TestContext.CurrentContext.CancellationToken);
@@ -196,7 +196,7 @@ public class McpTasksHarnessBulkCommentTests
         var requestParams = new CallToolRequestParams
         {
             Name = "BulkComment",
-            Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test", ["scope"] = "project", ["projectName"] = "ContosoOrders.Core", ["dryRun"] = false }),
+            Arguments = ToArguments(new Dictionary<string, object?> { ["reason"] = "test message", ["scope"] = "project", ["projectName"] = "ContosoOrders.Core", ["dryRun"] = false }),
         };
 
         var augmented = await _client.CallToolAsTaskAsync(requestParams, TestContext.CurrentContext.CancellationToken);
