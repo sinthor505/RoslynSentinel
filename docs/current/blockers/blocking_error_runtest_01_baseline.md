@@ -2,8 +2,8 @@
 
 **Written automatically by PlanStepRunner** when its repeated-failure breaker tripped.
 
-**Run directory:** `C:\Users\Administrator\source\repos\RoslynSentinel\PlanStepRunner\20260911-182024-926`
-**Transcript:** `C:\Users\Administrator\source\repos\RoslynSentinel\PlanStepRunner\20260911-182024-926\01-baseline\Logs`
+**Run directory:** `C:\Users\Administrator\source\repos\RoslynSentinel\PlanStepRunner\20260911-203648-263`
+**Transcript:** `C:\Users\Administrator\source\repos\RoslynSentinel\PlanStepRunner\20260911-203648-263\01-baseline\Logs`
 **Step:** `01-baseline.md` (readOnly=True, buildOptional=False)
 
 ## What happened
@@ -13,7 +13,7 @@ failure signature across turns 1–1. The run was
 terminated rather than allowed to consume its remaining turn budget re-issuing the
 same call.
 
-**Signature:** `RunTest|msg:Tool call failed unexpectedly (JsonException): The JSON value could not be converted to RoslynSentinel.Common.ToolCallRe|`
+**Signature:** `RunTest|msg:Tool call failed unexpectedly (JsonException): 'reason' must be a descriptive string (at least 10 characters, including |`
 
 ## Final failing call
 
@@ -26,7 +26,7 @@ Arguments:
 Result:
 
 ```json
-Tool call failed unexpectedly (JsonException): The JSON value could not be converted to RoslynSentinel.Common.ToolCallReason. Path: $ | LineNumber: 0 | BytePositionInLine: 17.
+Tool call failed unexpectedly (JsonException): 'reason' must be a descriptive string (at least 10 characters, including a space), but got a Number value.
 ```
 
 ## Next steps

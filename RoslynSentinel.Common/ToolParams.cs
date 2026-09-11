@@ -89,6 +89,6 @@ public static class ToolParams
 
     // Transcript review
     public const string Reason =
-        "Required. A brief note on why you're calling this tool right now — helps when reviewing " +
-        "agent transcripts later. Not validated or acted on.";
+        "Required. A brief descriptive phrase (at least 10 characters, must contain a space) for why " +
+        "you're calling this tool right now — helps when reviewing agent transcripts later.";
 }
