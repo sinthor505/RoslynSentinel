@@ -3,4 +3,3 @@
 WARNING CS8602 RoslynSentinel.Tests.Advanced\ComprehensiveToolTests.cs:308
 WARNING CS8602 RoslynSentinel.Tests.Basic\CodeEditingTests.cs:152
 WARNING CS8602 RoslynSentinel.Tests.Battery\RunTestTests.cs:205
-WARNING CS8604 RoslynSentinel.Server.Basic\SentinelWorkspaceTools.cs:2046
