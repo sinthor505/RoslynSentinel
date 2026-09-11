@@ -155,14 +155,30 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
 public sealed class FilePathJsonConverter : JsonConverter<FilePathWrapper>
 {
     public override FilePathWrapper Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => new FilePathWrapper(FilePathWrapper.NormalizeWirePath(reader.GetString()!));
+    {
+        if (reader.TokenType != JsonTokenType.String)
+        {
+            throw new JsonException(
+                $"A file path parameter must be a string, but got a {reader.TokenType} value.");
+        }
+
+        return new FilePathWrapper(FilePathWrapper.NormalizeWirePath(reader.GetString()!));
+    }
 
     public override void Write(Utf8JsonWriter writer, FilePathWrapper value, JsonSerializerOptions options)
         => writer.WriteStringValue(value.ToString());
 
     // Required for Dictionary<FilePathWrapper, TValue> key serialization
     public override FilePathWrapper ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => new FilePathWrapper(FilePathWrapper.NormalizeWirePath(reader.GetString()!));
+    {
+        if (reader.TokenType != JsonTokenType.PropertyName)
+        {
+            throw new JsonException(
+                $"A file path dictionary key must be a string, but got a {reader.TokenType} value.");
+        }
+
+        return new FilePathWrapper(FilePathWrapper.NormalizeWirePath(reader.GetString()!));
+    }
 
     public override void WriteAsPropertyName(Utf8JsonWriter writer, FilePathWrapper value, JsonSerializerOptions options)
         => writer.WritePropertyName(value.ToString());
