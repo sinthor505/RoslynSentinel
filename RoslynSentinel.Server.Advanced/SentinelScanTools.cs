@@ -495,7 +495,7 @@ public class SentinelScanTools
     [Description("Analyses a method from a chosen angle: control flow, data flow, path coverage, or unreachable code.")]
     public async Task<ToolResult<object>> AnalyzeMethod(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [Description("controlFlow: return paths, throw sites, infinite loop detection. dataFlow: unassigned reads, written/read variables, closure captures. pathCoverage: execution paths for test coverage. unreachableCode: statements after an unconditional return/throw.")]
         [ToolOption(ToolOptionTag.Aspect)] string aspect,
@@ -754,7 +754,7 @@ public class SentinelScanTools
     [Description("Finds duplicate statement sequences within the methods of a single class using structural hashing, which matches regardless of variable names or literal values.")]
     public async Task<ToolResult<object>> ScanDuplicateBlocksInClass(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.ClassName)] string className,
         [Description("Minimum statement-sequence length to report. Lower (e.g. 3) finds more, smaller clones; higher (6+) finds only substantial ones.")]
         [ToolOption(ToolOptionTag.Filter)] int minStatements = 4,

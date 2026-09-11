@@ -89,11 +89,11 @@ public class SentinelSymbolTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
 
         try
         {
-            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind.ToString(), containingType, containingNamespace, projectName, filePath, exactMatch, cancellationToken);
+            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind.ToString(), containingType, containingNamespace, projectName, filePathResolved, exactMatch, cancellationToken);
             if (result.Count == 0)
             {
                 return new ToolResult<object>
@@ -128,7 +128,7 @@ public class SentinelSymbolTools
     [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol — if you only have a name, use LocateSymbol first to find the declaring file.")]
     public async Task<ToolResult<object>> InspectSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Description("info returns type, kind, accessibility, attributes, and documentation. blastRadius returns all call sites and affected projects — for a full caller/override breakdown instead of a summary, use FindReferences.")]
         [ToolOption(ToolOptionTag.Aspect)] InspectSymbolAspect aspect,
@@ -138,13 +138,13 @@ public class SentinelSymbolTools
         CancellationToken cancellationToken = default
         )
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
             if (aspect == InspectSymbolAspect.info)
             {
-                var symbolInfo = await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                var symbolInfo = await _symbolNavigationEngine.GetSymbolInfoAsync(filePathResolved, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (symbolInfo == null)
                 {
                     var snippetPreview = contextSnippet.Length > 60 ? contextSnippet[..60] + "…" : contextSnippet;
@@ -152,7 +152,7 @@ public class SentinelSymbolTools
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.Exception,
-                            $"Could not resolve a symbol in '{filePath}' for contextSnippet \"{snippetPreview}\". " +
+                            $"Could not resolve a symbol in '{filePathResolved}' for contextSnippet \"{snippetPreview}\". " +
                             "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
                             "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
                             "more than one location and lineBefore/lineAfter did not disambiguate. Re-check the snippet " +
@@ -167,7 +167,7 @@ public class SentinelSymbolTools
             }
             if (aspect == InspectSymbolAspect.blastRadius)
             {
-                var result = await _impactAnalyzer.AnalyzeImpactAsync(filePath, contextSnippet, lineBefore, lineAfter);
+                var result = await _impactAnalyzer.AnalyzeImpactAsync(filePathResolved, contextSnippet, lineBefore, lineAfter);
                 return new ToolResult<object>
                 {
                     Success = true,
@@ -182,7 +182,7 @@ public class SentinelSymbolTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "InspectSymbol ({Aspect}) failed in '{FilePathWrapper}'", aspect, filePath);
+            _logger.LogError(ex, "InspectSymbol ({Aspect}) failed in '{FilePathWrapper}'", aspect, filePathResolved);
             return new ToolResult<object>
             {
                 Success = false,
@@ -203,13 +203,15 @@ public class SentinelSymbolTools
     };
 
     private async Task<List<object>> RunRelationshipQueryAsync(
-        FindUsagesSearchKind searchKind, string name, string? projectName, FilePathWrapper filePath, bool sortByFrequency, CancellationToken cancellationToken)
+        FindUsagesSearchKind searchKind, string name, string? projectName, FilePathWrapper filepath, bool sortByFrequency, CancellationToken cancellationToken)
     {
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+
         object result = searchKind switch
         {
             FindUsagesSearchKind.implementorsOf => await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName, cancellationToken),
-            FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePath, cancellationToken),
-            FindUsagesSearchKind.objectCreations => await _discoveryEngine.FindObjectCreationSitesAsync(name, filePath, projectName, sortByFrequency, cancellationToken),
+            FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePathResolved, cancellationToken),
+            FindUsagesSearchKind.objectCreations => await _discoveryEngine.FindObjectCreationSitesAsync(name, filePathResolved, projectName, sortByFrequency, cancellationToken),
             FindUsagesSearchKind.extensionsFor => await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName, cancellationToken),
             FindUsagesSearchKind.typesWithAttribute => await _semanticSearchEngine.FindTypesByAttributeAsync(name, cancellationToken),
             FindUsagesSearchKind.methodsByReturnType => await _semanticSearchEngine.FindMethodsByReturnTypeAsync(name, cancellationToken),
@@ -238,7 +240,7 @@ public class SentinelSymbolTools
     {
         try
         {
-            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
 
             if (searchKind == FindUsagesSearchKind.objectCreations)
             {
@@ -258,7 +260,7 @@ public class SentinelSymbolTools
                 }
             }
 
-            var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePath, sortByFrequency, cancellationToken);
+            var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePathResolved, sortByFrequency, cancellationToken);
             if (results.Count > 0)
             {
                 return await ToolResult<object>.ForPossiblyLargeDataAsync(
@@ -276,7 +278,7 @@ public class SentinelSymbolTools
             {
                 try
                 {
-                    var otherResults = await RunRelationshipQueryAsync(otherKind, name, projectName, filePath, sortByFrequency, cancellationToken);
+                    var otherResults = await RunRelationshipQueryAsync(otherKind, name, projectName, filePathResolved, sortByFrequency, cancellationToken);
                     if (otherResults.Count > 0)
                     {
                         broadened[otherKind.ToString()] = otherResults;
@@ -326,7 +328,7 @@ public class SentinelSymbolTools
     [Description("Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
     public async Task<ToolResult<object>> GetBestInsertionPoint(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.ContainerName)] string containerName,
         [Description("The kind of member being inserted.")]
         [ExternalInputRequired(DataTag.MemberKind)] InsertionMemberKind memberKind,
@@ -334,11 +336,11 @@ public class SentinelSymbolTools
         CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
-            var result = await _discoveryEngine.FindBestInsertionPointAsync(filePath, containerName, memberKind.ToString());
+            var result = await _discoveryEngine.FindBestInsertionPointAsync(filePathResolved, containerName, memberKind.ToString());
             return new ToolResult<object>
             {
                 Success = true,
@@ -347,7 +349,7 @@ public class SentinelSymbolTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetBestInsertionPoint failed for '{ContainerName}' in '{FilePathWrapper}'", containerName, filePath);
+            _logger.LogError(ex, "GetBestInsertionPoint failed for '{ContainerName}' in '{FilePathWrapper}'", containerName, filePathResolved);
             return new ToolResult<object>
             {
                 Success = false,
@@ -373,12 +375,12 @@ public class SentinelSymbolTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath ?? string.Empty, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath ?? string.Empty, _workspaceManager.GetSolutionRoot());
 
         try
         {
             var result = await _discoveryEngine.PreviewRenameImpactAsync(
-                filePath, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, sessionId, cancellationToken);
+                filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, sessionId, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -387,7 +389,7 @@ public class SentinelSymbolTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "PreviewRenameImpact failed for '{SymbolName}' in '{FilePathWrapper}'", symbolName, filePath);
+            _logger.LogError(ex, "PreviewRenameImpact failed for '{SymbolName}' in '{FilePathWrapper}'", symbolName, filePathResolved);
             return new ToolResult<object>
             {
                 Success = false,
@@ -413,11 +415,11 @@ public class SentinelSymbolTools
     {
         try
         {
-            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
 
             if (kind == FindReferencesKind.callers)
             {
-                var result = await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 return new ToolResult<object>
                 {
                     Success = true,
@@ -426,7 +428,7 @@ public class SentinelSymbolTools
             }
             if (kind == FindReferencesKind.implementations)
             {
-                var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+                var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
                 return new ToolResult<object>
                 {
                     Success = true,
@@ -435,8 +437,8 @@ public class SentinelSymbolTools
             }
             if (kind == FindReferencesKind.all)
             {
-                var callers = await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
-                var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+                var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
+                var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
                 return new ToolResult<object>
                 {
                     Success = true,

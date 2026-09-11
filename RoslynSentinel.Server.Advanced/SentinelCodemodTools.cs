@@ -114,7 +114,7 @@ public class SentinelCodemodTools
     [Description("Applies a file-wide code transformation. Call DescribeAdvancedToolOptions(\"apply_file_codemod\") for the list of transform values.")]
     public async Task<ToolResult<object>> ApplyFileCodemod(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_file_codemod\") for valid values.")]
         [ExternalInputRequired(DataTag.DataType)] string transform,
         [Description("Only used by add_configure_await_false: true (default) appends .ConfigureAwait(false) to all awaits.")]
@@ -395,7 +395,7 @@ public class SentinelCodemodTools
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: direction is required for transform=convert_expression_body ("ToExpression" or "ToBlock"); unused by other transforms. Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> ApplyMethodCodemod(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string methodName,
         [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_method_codemod\") for valid values.")]
         [ExternalInputRequired(DataTag.Transform)] string transform,
@@ -770,7 +770,7 @@ public class SentinelCodemodTools
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: propertyName is required by transforms that target a specific property (e.g. convert_property_safe); unused by class-wide transforms. direction is required for transform=convert_property_safe ("ToFullProperty" or "ToAutoProperty"). Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> ApplyClassCodemod(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [ExternalInputRequired(DataTag.ClassName)] string className,
         [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_class_codemod\") for valid values.")]
         [ExternalInputRequired(DataTag.Transform)] string transform,

@@ -95,11 +95,11 @@ public class WorkspaceReadNavigationImpl
         string filepath, string methodName,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-            var normalizedPath = Path.GetFullPath(filePath);
+            var normalizedPath = Path.GetFullPath(filePathResolved);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
             if (document == null)
             {
@@ -129,7 +129,7 @@ public class WorkspaceReadNavigationImpl
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError("MethodNotFound", $"Method or constructor '{methodName}' not found in '{filePath}'.")
+                    Error = new ResultError("MethodNotFound", $"Method or constructor '{methodName}' not found in '{filePathResolved}'.")
                 };
             }
 
@@ -183,7 +183,7 @@ public class WorkspaceReadNavigationImpl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
+            _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePathResolved);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -197,11 +197,11 @@ public class WorkspaceReadNavigationImpl
         string filepath,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-            var normalizedPath = Path.GetFullPath(filePath);
+            var normalizedPath = Path.GetFullPath(filePathResolved);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
             if (document == null)
             {
@@ -238,7 +238,7 @@ public class WorkspaceReadNavigationImpl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePath);
+            _logger.LogError(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePathResolved);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -765,7 +765,7 @@ public class WorkspaceReadNavigationImpl
         int offset = 0,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         string? resolvedPath = null;
 
@@ -779,15 +779,15 @@ public class WorkspaceReadNavigationImpl
                     .FirstOrDefault();
             }
         }
-        else if (!string.IsNullOrEmpty(filePath))
+        else if (!string.IsNullOrEmpty(filePathResolved.Absolute))
         {
             // Validate: path must be inside the largeresults directory and match the largeresult_*.json pattern.
-            var fileName = System.IO.Path.GetFileName(filePath);
+            var fileName = System.IO.Path.GetFileName(filePathResolved.Absolute);
             if (!string.IsNullOrEmpty(solutionRoot))
             {
                 var resultsDir = System.IO.Path.GetFullPath(
                     System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "largeresults"));
-                var candidate = System.IO.Path.GetFullPath(filePath);
+                var candidate = System.IO.Path.GetFullPath(filePathResolved.Absolute);
                 if (candidate.StartsWith(resultsDir, StringComparison.OrdinalIgnoreCase)
                     && fileName.StartsWith("largeresult_", StringComparison.OrdinalIgnoreCase)
                     && fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)

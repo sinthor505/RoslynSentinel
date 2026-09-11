@@ -576,7 +576,7 @@ public class SentinelWorkspaceTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [ToolOption(ToolOptionTag.OldContent, required: true)][Description(ToolParams.OldContent)] string oldContent,
         [ToolOption(ToolOptionTag.NewContent, required: true)][Description(ToolParams.NewContent)] string newContent,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -587,8 +587,8 @@ public class SentinelWorkspaceTools
     {
         try
         {
-            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
-            if (!filePath.Validated)
+            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+            if (!filePathResolved.Validated)
             {
                 return new ToolResult<object>()
                 {
@@ -657,7 +657,7 @@ public class SentinelWorkspaceTools
                 try
                 {
                     var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-                    var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePath == filePath.Absolute);
+                    var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePath == filePathResolved.Absolute);
                     if (document == null)
                     {
                         return new ToolResult<object>()
@@ -675,7 +675,7 @@ public class SentinelWorkspaceTools
                     // project_replacesnippet_silent_splice_corruption_adjacent_lines memory).
                     var match = ContextHelper.FindExactSnippetPosition(oldText, oldContent, lineBefore, lineAfter);
                     var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
-                    var targetPath = document.FilePath ?? filePath;
+                    var targetPath = document.FilePath ?? filePathResolved;
                     var snippetChanges = new Dictionary<FilePathWrapper, string>
                     {
                         [targetPath] = newFileContent
@@ -722,11 +722,11 @@ public class SentinelWorkspaceTools
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePathWrapper}'", action, filePath);
+                    _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePathWrapper}'", action, filePathResolved);
                     return new ToolResult<object>()
                     {
                         Success = false,
-                        Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet {action} for '{filePath}'")
+                        Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet {action} for '{filePathResolved}'")
                     };
                 }
             }
@@ -756,16 +756,16 @@ public class SentinelWorkspaceTools
     [Description("Creates a new file. Fails if the file already exists — this tool never overwrites or writes free-form whole-file content. Parent directories are created automatically if missing.")]
     public async Task<ToolResult<object>> CreateFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Required for .cs files, ignored otherwise. Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery').")] string? namespaceName = null,
         [Description("Required for .cs files, ignored otherwise. Kind of top-level type to seed the file with — this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. Use staticClass for a static utility/helper class (e.g. static test helpers, extension-method containers) — static is only valid on classes, not the other kinds. For a second top-level type in the same file, add it afterward with Member(add, containerName: null, newMemberSource: \"...\").")] NewTypeKind? typeKind = null,
         [Description("Required for .cs files, ignored otherwise. Name of the top-level type to seed the file with (e.g. 'Foo').")] string? typeName = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
         try
         {
-            if (!filePath.Validated)
+            if (!filePathResolved.Validated)
             {
                 return new ToolResult<object>()
                 {
@@ -774,16 +774,16 @@ public class SentinelWorkspaceTools
                 };
             }
 
-            if (File.Exists(filePath))
+            if (File.Exists(filePathResolved.Absolute))
             {
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePath}' already exists. CreateFile never overwrites — use Member/ReplaceSnippet to edit an existing file.")
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePathResolved}' already exists. CreateFile never overwrites — use Member/ReplaceSnippet to edit an existing file.")
                 };
             }
 
-            bool isCSharpFile = filePath.Absolute.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
+            bool isCSharpFile = filePathResolved.Absolute.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
             if (isCSharpFile && string.IsNullOrWhiteSpace(namespaceName))
             {
                 return new ToolResult<object>()
@@ -813,13 +813,13 @@ public class SentinelWorkspaceTools
                 content = "";
             }
 
-            var directory = Path.GetDirectoryName((string)filePath);
+            var directory = Path.GetDirectoryName((string)filePathResolved.Absolute);
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
             }
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = content };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = content };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: true, cancellationToken: cancellationToken);
             if (!result.Success && result.ValidationResult != null)
             {
@@ -837,7 +837,7 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"CreateFile failed to write '{filePath}': {result.Summary}")
+                    Error = new ResultError(ToolErrorCode.Exception, $"CreateFile failed to write '{filePathResolved}': {result.Summary}")
                 };
             }
 
@@ -851,7 +851,7 @@ public class SentinelWorkspaceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "CreateFile failed for '{FilePathWrapper}'", filePath);
+            _logger.LogError(ex, "CreateFile failed for '{FilePathWrapper}'", filePathResolved);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -915,7 +915,7 @@ public class SentinelWorkspaceTools
                 };
             }
 
-            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
             if (changesetFormat == ChangesetFormat.files)
             {
                 if (changes == null)
@@ -1015,7 +1015,7 @@ public class SentinelWorkspaceTools
             }
             else if (changesetFormat == ChangesetFormat.diff)
             {
-                if (!filePath.Validated && string.IsNullOrEmpty(unifiedDiff))
+                if (!filePathResolved.Validated && string.IsNullOrEmpty(unifiedDiff))
                 {
                     return new ToolResult<object>()
                     {
@@ -1024,7 +1024,7 @@ public class SentinelWorkspaceTools
                     };
                 }
 
-                if (!filePath.Validated)
+                if (!filePathResolved.Validated)
                 {
                     return new ToolResult<object>()
                     {
@@ -1047,7 +1047,7 @@ public class SentinelWorkspaceTools
                     try
                     {
                         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-                        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePathWrapper == filePath.Absolute);
+                        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePathWrapper == filePathResolved.Absolute);
                         if (document == null)
                         {
                             return new ToolResult<object>()
@@ -1090,18 +1090,18 @@ public class SentinelWorkspaceTools
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePathWrapper}'", filePath);
+                        _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePathWrapper}'", filePathResolved);
                         return new ToolResult<object>()
                         {
                             Success = false,
-                            Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePath}'")
+                            Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePathResolved}'")
                         };
                     }
                 }
 
                 if (action == ProposedChangeAction.validate)
                 {
-                    var validationResult = await _validationEngine.ValidateDiffAsync(filePath.Absolute, unifiedDiff);
+                    var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff);
                     return validationResult.Success ? new ToolResult<object>()
                     {
                         Success = true,
@@ -1404,7 +1404,7 @@ public class SentinelWorkspaceTools
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Distinction from RemoveMember: this tool refuses if ANY usage is found; RemoveMember checks for callers/implementations but allows skipPrecheck. Returns changeId.")]
     public async Task<ToolResult<object>> SafeDeleteUnusedSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Preferred resolution path, together with docCommentId — as returned by LocateSymbol/FindReferences. The most reliable and accurate way to identify the target.")] string projectName = "",
         [Description("Preferred resolution path, together with projectName — as returned by LocateSymbol/FindReferences.")] string docCommentId = "",
         [Description("Fallback resolution path if projectName/docCommentId aren't available. Combine with contextSnippet/lineBefore/lineAfter to disambiguate; symbolName alone is enough if there's only one declaration with that name.")]
@@ -1418,7 +1418,7 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.Offset, required: false)] int column = 0, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         async Task<ToolResult<object>> ApplyAndRespondAsync(DocumentEditResult result)
         {
             if (string.IsNullOrEmpty(result.UpdatedText))
@@ -1426,13 +1426,13 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePath}' ({result.Outcome}). {result.Message}")
+                    Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}")
                 };
             }
 
             var changes = new Dictionary<FilePathWrapper, string>
             {
-                [filePath] = result.UpdatedText
+                [filePathResolved] = result.UpdatedText
             };
             var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken);
             if (!apply.Success)
@@ -1450,7 +1450,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = true,
-                Data = new AppliedChangeSummary(changeId, [filePath], $"Deleted unused symbol in {Path.GetFileName(filePath)}.", false)
+                Data = new AppliedChangeSummary(changeId, [filePathResolved], $"Deleted unused symbol in {Path.GetFileName(filePathResolved)}.", false)
             };
         }
 
@@ -1474,7 +1474,7 @@ public class SentinelWorkspaceTools
                     };
                 }
 
-                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, resolution.Symbol!, cancellationToken);
+                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePathResolved, resolution.Symbol!, cancellationToken);
                 return await ApplyAndRespondAsync(result);
             }
 
@@ -1485,7 +1485,7 @@ public class SentinelWorkspaceTools
             // tool exposes a column, only a line, making that pair effectively unobtainable too.
             if (!string.IsNullOrEmpty(symbolName))
             {
-                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 return await ApplyAndRespondAsync(result);
             }
 
@@ -1493,7 +1493,7 @@ public class SentinelWorkspaceTools
             // no other tool surfaces; prefer symbolName+contextSnippet above when possible.
             if (line > 0 && column > 0)
             {
-                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column, cancellationToken);
+                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePathResolved, line, column, cancellationToken);
                 return await ApplyAndRespondAsync(result);
             }
 
@@ -1506,7 +1506,7 @@ public class SentinelWorkspaceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePathWrapper}' at {Line}:{Column} or handle {ProjectName}/{DocCommentId}", filePath, line, column, projectName, docCommentId);
+            _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePathWrapper}' at {Line}:{Column} or handle {ProjectName}/{DocCommentId}", filePathResolved, line, column, projectName, docCommentId);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -1609,23 +1609,26 @@ public class SentinelWorkspaceTools
     [Description("Returns the full source text of a named method or constructor, plus a structured list of its attributes. For a constructor, pass the containing class's name (e.g. methodName: \"OrderService\" for `public OrderService(...)`). Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
     public Task<ToolResult<object>> GetMethodSource(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Consumes(DataTag.MethodName, required: true)] string methodName, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Consumes(DataTag.MethodName, required: true)] string methodName, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
-        => _readNav.GetMethodSource(reason, filepath, methodName, cancellationToken);
+    {
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        return _readNav.GetMethodSource(reason, filePathResolved, methodName, cancellationToken);
+    }
 
     [McpServerTool(Name = "ReadFile")]
     [Produces(DataTag.SourceCode)]
     [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file — useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/largeresults and returned as a resultId (see GetMethodSource) instead of inline text.")]
     public async Task<ToolResult<object>> ReadFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null, [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null, [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-            var normalizedPath = Path.GetFullPath(filePath);
+            var normalizedPath = Path.GetFullPath(filePathResolved);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
 
             SourceText sourceText;
@@ -1640,7 +1643,7 @@ public class SentinelWorkspaceTools
                 // never become tracked Documents (PersistentWorkspaceManager only syncs .cs files
                 // belonging to a resolvable project into CurrentSolution). Fall back to a raw disk
                 // read so ReadFile can see everything WriteFile is able to write.
-                var diskContent = await FileIoHelper.ReadAllTextIfExistsAsync(filePath, cancellationToken);
+                var diskContent = await FileIoHelper.ReadAllTextIfExistsAsync(filePathResolved, cancellationToken);
                 if (diskContent == null)
                 {
                     return new ToolResult<object>()
@@ -1675,7 +1678,7 @@ public class SentinelWorkspaceTools
                     Success = true,
                     Data = new
                     {
-                        filePath = (string)filePath,
+                        filePath = (string)filePathResolved,
                         startLine = from,
                         endLine = to,
                         totalLines,
@@ -1691,7 +1694,7 @@ public class SentinelWorkspaceTools
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             if (textBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {
-                var fullResult = new FileSourceResult { FilePath = (string)filePath, StartLine = 1, EndLine = totalLines, TotalLines = totalLines, Source = fullText };
+                var fullResult = new FileSourceResult { FilePath = (string)filePathResolved, StartLine = 1, EndLine = totalLines, TotalLines = totalLines, Source = fullText };
                 var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.FileSource, cancellationToken);
 
                 // GetFileOutline never offloads its own result (it has no size threshold of its
@@ -1703,12 +1706,12 @@ public class SentinelWorkspaceTools
                 object? outlineData = null;
                 try
                 {
-                    var fileOutline = await _readNav.GetFileOutline(reason: "test", filepath, cancellationToken);
+                    var fileOutline = await _readNav.GetFileOutline(reason: "test", filePathResolved, cancellationToken);
                     outlineData = fileOutline.Data;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePath);
+                    _logger.LogWarning(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePathResolved);
                 }
 
                 return new ToolResult<object>
@@ -1729,7 +1732,7 @@ public class SentinelWorkspaceTools
                 Success = true,
                 Data = new
                 {
-                    filePath = (string)filePath,
+                    filePath = (string)filePathResolved,
                     startLine = 1,
                     endLine = totalLines,
                     totalLines,
@@ -1740,7 +1743,7 @@ public class SentinelWorkspaceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ReadFile failed for '{FilePathWrapper}'", filePath);
+            _logger.LogError(ex, "ReadFile failed for '{FilePathWrapper}'", filePathResolved);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -1754,9 +1757,13 @@ public class SentinelWorkspaceTools
     [Description("Returns a structural outline of a file — namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
     public Task<ToolResult<object>> GetFileOutline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
-        => _readNav.GetFileOutline(reason, filepath, cancellationToken);
+    {
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        return _readNav.GetFileOutline(reason, filePathResolved, cancellationToken);
+    }
+
     [McpServerTool(Name = "ListAll")]
     [Produces(DataTag.Report)]
     [Description("Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared anywhere in the loaded solution, one row per symbol with its file, kind, name, container, and line range — the solution-wide equivalent of GetFileOutline. Call this FIRST when you don't already know the exact name of the type/method/field you need — it is cheaper and more reliable than guessing plausible-sounding names and searching for each one individually with SearchSolutionText. Can return a lot of rows on a large solution; narrow with kind and/or projectName first.")]
@@ -2035,5 +2042,8 @@ public class SentinelWorkspaceTools
         [Description("Number of records to skip before taking limit.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
         CancellationToken cancellationToken = default)
-        => _readNav.GetLargeResult(reason, resultId, filepath, limit, offset, cancellationToken);
+    {
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        return _readNav.GetLargeResult(reason, resultId, filePathResolved, limit, offset, cancellationToken);
+    }
 }

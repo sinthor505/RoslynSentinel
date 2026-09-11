@@ -7,8 +7,19 @@ namespace RoslynSentinel.Server.Basic;
 /// <summary>
 /// Thin MCP surface for the read/navigation slice of workspace tools. Holds all [McpServerTool]
 /// attributes and delegates every call to <see cref="WorkspaceReadNavigationImpl"/>, which carries
-/// the actual implementation. See docs/current/plan_split_workspace_refactoring_tools_for_di.md
+/// the actual implementation. See docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md
 /// (Decision 1-Amendment).
+///
+/// This class is a trial slice of that plan's DI split, landed ahead of the rest: today it is
+/// registered in DI only as a plain singleton consumed internally by <c>SentinelWorkspaceTools</c>
+/// (field <c>_readNav</c>) — the plan's Decision 4 mode strings ("WorkspaceReadNav"/"WorkspaceFileIO")
+/// that would call <c>mcpBuilder.WithTools&lt;WorkspaceReadNavigationTools&gt;()</c> and make the
+/// [McpServerTool] attributes below live have not been added to
+/// ServiceRegistrationExtensionsBasic.cs yet. So GetMethodSource/GetFileOutline/GetLargeResult here
+/// are currently NOT reachable over MCP — the real, registered versions of those three tool names
+/// are the ones in SentinelWorkspaceTools.cs, which is what MCP clients actually call. This is not
+/// dead code or an accidental duplicate; it is the intended shape once Decision 4/Decision 7 step 4
+/// finish wiring the fine-grained mode strings.
 /// </summary>
 [McpServerToolType]
 public class WorkspaceReadNavigationTools
@@ -24,7 +35,7 @@ public class WorkspaceReadNavigationTools
     [Description("Returns the full source text of a named method or constructor, plus a structured list of its attributes.")]
     public Task<ToolResult<object>> GetMethodSource(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Method or constructor name. For a constructor, pass the containing class's name (e.g. \"OrderService\" for `public OrderService(...)`). Case-sensitive with case-insensitive fallback; returns the first match for overloaded names.")]
         [Consumes(DataTag.MethodName, required: true)] string methodName,
         CancellationToken cancellationToken = default)
@@ -35,9 +46,10 @@ public class WorkspaceReadNavigationTools
     [Description("Returns a structural outline of a file — namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
     public Task<ToolResult<object>> GetFileOutline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         CancellationToken cancellationToken = default)
         => _impl.GetFileOutline(reason, filepath, cancellationToken);
+
     [McpServerTool(Name = "ListAll")]
     [Produces(DataTag.Report)]
     [Description("Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared in the loaded solution, one row per symbol with its file, kind, name, container, and line range. Call this first when you don't already know the exact name of a type/method/field.")]

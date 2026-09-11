@@ -133,7 +133,7 @@ public class SentinelAdvancedRefactoringTools
     [Description("Reorders method parameters and updates all call sites across the solution.")]
     public async Task<ToolResult<object>> ChangeSignature(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [Description("Zero-based index array specifying the new parameter order, e.g. [1,0,2] to swap the first two parameters.")]
         [ExternalInputRequired(DataTag.Order, required: true)] int[] newParameterOrder,
@@ -179,7 +179,7 @@ public class SentinelAdvancedRefactoringTools
     [Description("Converts the first anonymous object creation expression in the file to a formal named class declaration. Validates and writes to disk immediately; dryRun=true to preview without writing.")]
     public async Task<ToolResult<object>> ConvertAnonymousToNamed(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [ExternalInputRequired(DataTag.SourceFilepath, required: true)] string filepath,
+        [ExternalInputRequired(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [ExternalInputRequired(DataTag.ClassName, required: true)] string newClassName,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -357,7 +357,7 @@ public class SentinelAdvancedRefactoringTools
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of (startLine and endLine) or contextSnippet must be supplied; none of these params is individually required by the schema.
     public async Task<ToolResult<object>> InvertAssignments(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("1-based start line of the range. Provide both startLine and endLine, or use contextSnippet instead.")]
         [Consumes(DataTag.StartLine)] int startLine = 0,
         [Description("1-based end line of the range. Provide both startLine and endLine, or use contextSnippet instead.")]
@@ -415,7 +415,7 @@ public class SentinelAdvancedRefactoringTools
     [Description("Moves one or more methods/properties/fields from a class into a target class as a single atomic change, rewriting call sites solution-wide as needed.")]
     public async Task<ToolResult<object>> MoveMember(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.ClassName, required: true)] string className,
         [Description("Members to move. Instance members can only move to an existing base type (pull-up); moving to anywhere else requires the member to be static first, since other call sites may still reference the source-class instance.")]
         [Consumes(DataTag.SymbolName, required: true)] string[] memberNames,
@@ -474,7 +474,7 @@ public class SentinelAdvancedRefactoringTools
     [Description("Encapsulates method parameters into a new C# 12 record type, appended to the end of the file. Rewrites parameter references in the method body but leaves call sites for manual follow-up, flagged with a TODO comment.")]
     public async Task<ToolResult<object>> IntroduceParameterObject(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [Description("Name for the generated record type. Defaults to a name derived from the method.")]
         string? newTypeName = null,
@@ -524,7 +524,7 @@ public class SentinelAdvancedRefactoringTools
     [Description("Introduces a named symbol (local variable, private field, parameter, or private constant) from an expression.")]
     public async Task<ToolResult<object>> Introduce(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)][Description("The path to the source file.")] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)][Description("The path to the source file.")] FilePathWrapper filepath,
         [Consumes(DataTag.ContextSnippet, required: true)][Description("A verbatim substring identifying the expression to introduce a symbol from.")] string contextSnippet,
         [ExternalInputRequired(DataTag.SymbolName)][Description("The name of the new symbol to introduce.")] string newName,
         [ExternalInputRequired(DataTag.SymbolKind)][Description("The kind of symbol to introduce.")] IntroduceAsType newType,
@@ -606,7 +606,7 @@ public class SentinelAdvancedRefactoringTools
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: newTypeName required for newType=interface/superclass; memberNames required for newType=partial; none individually required by the schema. Enforced at runtime.
     public async Task<ToolResult<object>> ExtractMembers(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)][Description("The file path of the destination file.")] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)][Description("The file path of the destination file.")] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)][Description("The name of the class from which to extract members.")] string className,
         [ExternalInputRequired(DataTag.SymbolKind)][Description("The type of extraction to perform (interface, partial class, or superclass).")] ExtractAsType newType,
         [ExternalInputRequired(DataTag.SymbolName)][Description("The name of the new type to create when extracting members. Required for interface and superclass.")] string? newTypeName = null,
@@ -701,7 +701,7 @@ public class SentinelAdvancedRefactoringTools
     public async Task<ToolResult<object>> SyncInterface(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The class file. Required for action=implement/sync; ignored for action=verify.")]
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string interfaceName,
         [Description("implement: generate stub implementations for all unimplemented interface members on className, writing the updated class file. sync: add to interfaceName any public members found on className that are missing from it, writing the updated interface file. verify: report implementation coverage across all implementing classes (optionally scoped by projectName); className not needed.")]
         [Consumes(DataTag.Action, required: true)] SyncInterfaceAction action,
@@ -785,7 +785,7 @@ public class SentinelAdvancedRefactoringTools
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: methodName required for kind=parameter; not needed otherwise. Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> Inline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("The symbol name to inline. The parameter name when kind=parameter.")]
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         [Description("method: inline the method body at all call sites solution-wide (expression-body or single-return methods only). variable: inline a local variable into its usages. field: inline a field's value into its usages. parameter: inline a constant parameter into its method body (methodName required).")]
@@ -871,7 +871,7 @@ public class SentinelAdvancedRefactoringTools
     // TOOL-OPTION-REQUIRED-FLAG-STALE: wrapper carries a C# default ("") purely so it can stay after startLine/endLine in parameter order (existing positional call sites depend on this order); it is actually unconditionally required — the body always falls through to an "Unknown wrapper" error when it doesn't match tryCatch/using/region. The schema wrongly reports it optional.
     public async Task<ToolResult<object>> WrapRange(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("1-based start line of the range. Provide both startLine and endLine, or use contextSnippet instead.")]
         [Consumes(DataTag.StartLine)] int startLine = 0,
         [Description("1-based end line of the range. Provide both startLine and endLine, or use contextSnippet instead.")]
@@ -1027,7 +1027,7 @@ public class SentinelAdvancedRefactoringTools
     [Description("Moves a type to its own file, or a nested type out to its containing namespace scope.")]
     public async Task<ToolResult<object>> MoveType(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string typeName,
         [Description("ownFile: move the type into its own new .cs file. outerScope: move a nested type out to its containing namespace scope.")]
         string destination,
