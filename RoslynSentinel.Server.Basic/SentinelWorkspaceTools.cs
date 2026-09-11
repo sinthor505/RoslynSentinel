@@ -91,15 +91,20 @@ public class SentinelWorkspaceTools
         _readNav = readNav;
         _writeAdvice = writeAdvice;
     }
-
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
-    [Description("Queries or updates feature flags. list → all; get → by names; update → batch-update via enabled as [{Key: featureName, Value: bool}] pairs. delaySeconds (test-only) waits before acting, to exercise MCP task polling/cancellation.")]
+    [Description("Queries or updates feature flags.")]
     public async Task<ToolResult<object>> Features(
         [Description(ToolParams.Reason)] string reason,
+        [Description("list: returns all feature flags. get: returns only the flags named in names. update: batch-updates the flags named in enabled.")]
         FeaturesAction action,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=get, unused for list/update.
+        [Description("Required for action=get — the feature names to look up. Not used for list/update.")]
         List<string>? names = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=update, unused for list/get.
+        [Description("Required for action=update — [{Key: featureName, Value: bool}] pairs to apply. Not used for list/get.")]
         List<KeyValuePair<string, bool>>? enabled = null,
+        [Description("Test-only: waits this many seconds before acting, to exercise MCP task polling/cancellation.")]
         int delaySeconds = 0,
         CancellationToken cancellationToken = default)
     {
@@ -138,16 +143,17 @@ public class SentinelWorkspaceTools
         _config.BatchUpdateFeatureStatus(updates);
         return $"Updated {updates.Count} features.";
     }
-
     [McpServerTool(Name = "ListSolutionItems")]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
-    [Description("Lists projects, files, dependencies, or solution-folder items. REQUIRED PARAMS BY KIND — files: projectName. dependencies: projectName. projects: none. solutionItems: none. all: none. " +
-        "solutionItems (no projectName needed) returns files attached via the .sln's Solution Folders — e.g. plan/handoff docs referenced there for discoverability in an IDE. These are never part of any project's compiled Documents, so SearchSolutionText and kind=files will never find them; read their content with ProjectDoc. all (no projectName needed/used) returns everything in one call: every project, every solution-folder item, and every project's files and dependencies — use this when you want a complete, guaranteed-non-empty view of the solution instead of guessing which project or kind to ask for.")]
+    [Description("Lists projects, files, dependencies, or solution-folder items in the loaded solution.")]
     public async Task<ToolResult<object>> ListSolutionItems(
         [Description(ToolParams.Reason)] string reason,
+        [Description("files/dependencies: requires projectName. projects/solutionItems: ignore projectName, list every project or every solution-folder item respectively — solutionItems are files attached via the .sln's Solution Folders (e.g. plan/handoff docs), never part of any project's compiled Documents, so SearchSolutionText and kind=files won't find them; read their content with ProjectDoc. all: ignores projectName and returns everything in one call (every project, every solution-folder item, and every project's files and dependencies) — use this for a complete, guaranteed-non-empty view instead of guessing which project or kind to ask for.")]
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for kind=files/dependencies, unused for kind=projects/solutionItems/all.
+        [Description("Required for kind=files/dependencies. Not used for projects/solutionItems/all.")]
         [Consumes(DataTag.ProjectName)] string? projectName = null, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -326,12 +332,13 @@ public class SentinelWorkspaceTools
     /// (e.g. a node_modules-style tree, or a root one level above the intended one).
     /// </summary>
     private const int ListWorkspaceSolutionsMaxFilesWalked = 200_000;
-
     [McpServerTool(Name = "ListWorkspaceSolutions")]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.SolutionList)]
-    [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution. Pass your workspace root as workspacePath — a real project/repo directory, not a drive root or '/'.")]
-    public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions([Description(ToolParams.Reason)] string reason, string workspacePath, // RequestContext<CallToolRequestParams> requestParams = null,
+    [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution.")]
+    public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
+        [Description(ToolParams.Reason)] string reason,
+        [Description("Your workspace root — a real project/repo directory, not a drive root or '/'.")] string workspacePath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         workspacePath = FilePath.NormalizeWirePath(workspacePath);
@@ -557,7 +564,6 @@ public class SentinelWorkspaceTools
     private const int MaxOldContentChars = 2000;
     private const int MaxNewContentLines = 60;
     private const int MaxNewContentChars = 2000;
-
     [McpServerTool(Name = "ReplaceSnippet")]
     [Produces(DataTag.ChangeId)]
     // Deliberately names no whole-file-write tool. Attribute arguments must be compile-time
@@ -565,9 +571,10 @@ public class SentinelWorkspaceTools
     // over-cap error can (see WriteToolAdviceHelper) — and a hardcoded name here would be shown to
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
-    [Description("Replaces one exact block of text with another in a single file — for localized edits (max 60 lines / 2000 characters each for oldContent and newContent; an over-cap call reports which specific bound was exceeded and what to use instead). 'filepath', 'oldContent' and 'newContent' are all REQUIRED. oldContent is matched verbatim (literal substring, or the same text with different line endings) against the current file content — copy it exactly, character-for-character including whitespace, from a prior ReadFile/GetMethodSource result; do not retype it from memory or approximate indentation, or the call fails with a 'not found' error rather than guessing. If oldContent matches more than once in the file, the call fails with an Ambiguous error naming the match count — retry with lineBefore/lineAfter (verbatim text from the line immediately above/below the intended match) to disambiguate. newContent may be empty (pure deletion) or longer than oldContent (net insertion). Returns ApplyChangesResult with UndoChangeId on successful apply. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.). For multiple small edits in the same file, call ReplaceSnippet once per edit. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
+    [Description("Replaces one exact block of text with another in a single file, for localized edits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) instead. For multiple small edits in the same file, call this once per edit. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
     public async Task<ToolResult<object>> ReplaceSnippet(
         [Description(ToolParams.Reason)] string reason,
+        [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ToolOption(ToolOptionTag.OldContent, required: true)][Description(ToolParams.OldContent)] string oldContent,
@@ -740,16 +747,19 @@ public class SentinelWorkspaceTools
             };
         }
     }
-
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: namespaceName/typeKind/typeName are required for a .cs
+    // file (to seed a valid compilation unit) and ignored for every other file extension — a model
+    // creating a non-.cs file can omit all three, but a model creating a .cs file must supply all
+    // three or the call fails, and nothing besides the description text signals that split.
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Creates a new file. Fails if the file already exists — this tool never overwrites or writes free-form whole-file content. For a .cs file, namespaceName, typeKind and typeName are all REQUIRED — this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. Use typeKind=staticClass for a static utility/helper class (e.g. static test helpers, extension-method containers) — static is only valid on classes, not the other kinds. If the file needs a second top-level type, add it afterward with Member(add, containerName: null, newMemberSource: \"...\"). Parent directories are created automatically if missing.")]
+    [Description("Creates a new file. Fails if the file already exists — this tool never overwrites or writes free-form whole-file content. Parent directories are created automatically if missing.")]
     public async Task<ToolResult<object>> CreateFile(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Description("Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery'). Required for .cs files; ignored otherwise.")] string? namespaceName = null,
-        [Description("Kind of top-level type to seed the file with (class/record/interface/enum/struct/staticClass). Required for .cs files; ignored otherwise.")] NewTypeKind? typeKind = null,
-        [Description("Name of the top-level type to seed the file with (e.g. 'Foo'). Required for .cs files; ignored otherwise.")] string? typeName = null,
+        [Description("Required for .cs files, ignored otherwise. Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery').")] string? namespaceName = null,
+        [Description("Required for .cs files, ignored otherwise. Kind of top-level type to seed the file with — this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. Use staticClass for a static utility/helper class (e.g. static test helpers, extension-method containers) — static is only valid on classes, not the other kinds. For a second top-level type in the same file, add it afterward with Member(add, containerName: null, newMemberSource: \"...\").")] NewTypeKind? typeKind = null,
+        [Description("Required for .cs files, ignored otherwise. Name of the top-level type to seed the file with (e.g. 'Foo').")] string? typeName = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
@@ -845,7 +855,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"CreateFile for '{filePath}'")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateFile")
             };
         }
     }
@@ -1201,14 +1211,25 @@ public class SentinelWorkspaceTools
 
         return blob;
     }
-
     [McpServerTool(Name = "GetDiagnostics")]
     [Produces(DataTag.Report)]
-    [Description("Gets compiler diagnostics. REQUIRED PARAMS BY SCOPE — file: scopeName (as filePath). project: scopeName (as projectName). solution: none (scopeName ignored). " +
-        "summarize=true groups by diagnostic ID and returns counts. maxDetails caps raw list (default 50). topN caps groups (default 20). verify=quickBuild/fullBuild additionally runs a build check (see Build tool) and attaches it as BuildVerification.")]
+    [Description("Gets compiler diagnostics for a file, project, or the whole solution.")]
     public async Task<ToolResult<object>> GetDiagnostics(
         [Description(ToolParams.Reason)] string reason,
-        [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] ToolScope scope = ToolScope.solution, string? scopeName = null, bool summarize = false, [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50, [ToolOptionAttribute(ToolOptionTag.TopN)] int topN = 20, BuildVerifyLevel verify = BuildVerifyLevel.noBuild, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Description("file/project: also pass scopeName. solution: scopeName is ignored.")]
+        [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] ToolScope scope = ToolScope.solution,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for scope=file (as a filePath) and
+        // scope=project (as a projectName), ignored for scope=solution.
+        [Description("Required for scope=file (a filePath) or scope=project (a projectName). Ignored for scope=solution.")]
+        string? scopeName = null,
+        [Description("Groups results by diagnostic ID and returns counts instead of the raw list.")]
+        bool summarize = false,
+        [Description("Caps the raw diagnostics list. Ignored when summarize=true.")]
+        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
+        [Description("Caps the number of groups returned. Only used when summarize=true.")]
+        [ToolOptionAttribute(ToolOptionTag.TopN)] int topN = 20,
+        [Description("noBuild (default): diagnostics only. quickBuild/fullBuild: additionally runs a build check (see Build tool) and attaches it as BuildVerification.")]
+        BuildVerifyLevel verify = BuildVerifyLevel.noBuild, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -1373,13 +1394,28 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RunTest failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and dotnet is on PATH. Details: {ex.Message}") };
         }
     }
-
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: none of projectName/docCommentId/symbolName/line/column is
+    // individually required — the tool needs exactly one full resolution strategy: (projectName +
+    // docCommentId), or symbolName (optionally with contextSnippet/lineBefore/lineAfter), or
+    // (line + column). Supplying an incomplete subset of any one strategy (e.g. line without column)
+    // is accepted by the schema but rejected at runtime with InvalidArgument.
     [McpServerTool(Name = "SafeDeleteUnusedSymbol")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Deletes a symbol only if it has zero usages in the entire codebase. Preferred path: handle-based resolution using projectName and docCommentId (from LocateSymbol/FindReferences — the most reliable and accurate symbol resolution). Fallback paths: symbolName with contextSnippet/lineBefore/lineAfter (snippet-based resolution — symbolName alone if there's only one declaration with that name), or line/column (1-based, both required) at the declaration site. Distinction from RemoveMember: this tool refuses if ANY usage is found; RemoveMember checks for callers/implementations but allows skipPrecheck. Returns changeId.")]
+    [Description("Deletes a symbol only if it has zero usages in the entire codebase. Distinction from RemoveMember: this tool refuses if ANY usage is found; RemoveMember checks for callers/implementations but allows skipPrecheck. Returns changeId.")]
     public async Task<ToolResult<object>> SafeDeleteUnusedSymbol(
         [Description(ToolParams.Reason)] string reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Description("Project name containing the symbol. Required for handle-based resolution.")] string projectName = "", [Description("Documentation comment ID of the symbol. Required for handle-based resolution.")] string docCommentId = "", [Consumes(DataTag.SymbolName, required: false)] string? symbolName = null, [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null, [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null, [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null, [Consumes(DataTag.StartLine, required: false)] int line = 0, [Consumes(DataTag.Offset, required: false)] int column = 0, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("Preferred resolution path, together with docCommentId — as returned by LocateSymbol/FindReferences. The most reliable and accurate way to identify the target.")] string projectName = "",
+        [Description("Preferred resolution path, together with projectName — as returned by LocateSymbol/FindReferences.")] string docCommentId = "",
+        [Description("Fallback resolution path if projectName/docCommentId aren't available. Combine with contextSnippet/lineBefore/lineAfter to disambiguate; symbolName alone is enough if there's only one declaration with that name.")]
+        [Consumes(DataTag.SymbolName, required: false)] string? symbolName = null,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
+        [Description("Legacy fallback resolution path if neither of the above is available — 1-based line of the declaration site. Both line and column are required together.")]
+        [Consumes(DataTag.StartLine, required: false)] int line = 0,
+        [Description("Legacy fallback resolution path — 1-based column of the declaration site. Both line and column are required together.")]
+        [Consumes(DataTag.Offset, required: false)] int column = 0, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -1721,35 +1757,42 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
         => _readNav.GetFileOutline(reason, filepath, cancellationToken);
-
     [McpServerTool(Name = "ListAll")]
     [Produces(DataTag.Report)]
-    [Description("Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared anywhere in the loaded solution, one row per symbol with its file, kind, name, container, and line range — the solution-wide equivalent of GetFileOutline. Call this FIRST when you don't already know the exact name of the type/method/field you need — it is cheaper and more reliable than guessing plausible-sounding names and searching for each one individually with SearchSolutionText. kind filters to one symbol kind (default: all — every kind). Optional projectName restricts to one project. Can return a lot of rows on a large solution; narrow with kind and/or projectName first.")]
+    [Description("Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared anywhere in the loaded solution, one row per symbol with its file, kind, name, container, and line range — the solution-wide equivalent of GetFileOutline. Call this FIRST when you don't already know the exact name of the type/method/field you need — it is cheaper and more reliable than guessing plausible-sounding names and searching for each one individually with SearchSolutionText. Can return a lot of rows on a large solution; narrow with kind and/or projectName first.")]
     public Task<ToolResult<object>> ListAll(
         [Description(ToolParams.Reason)] string reason,
         [Description(ToolParams.ListAllKindValues)][ExternalInputRequired(DataTag.SymbolKind, required: false)] ListAllKind kind = ListAllKind.all,
+        [Description("Restricts results to one project. Omit to search the whole solution.")]
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
         CancellationToken cancellationToken = default)
         => _readNav.ListAll(reason, kind, projectName, cancellationToken);
-
-    /// <summary>Regex metacharacters that suggest a pattern was meant as a regex.</summary>
     [McpServerTool(Name = "SearchSolutionText")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
-    [Description("Searches all source files in the loaded solution for pattern, evaluated BOTH as a literal substring and (if it compiles) as a regex in a single pass — there is no search-mode to choose. Only searches documents that are part of a loaded project's source code (e.g. .cs files). For a known symbol (class/method/field/etc. by name), use LocateSymbol instead — it's semantic, not text-based, so it won't false-positive on comments/strings or miss partial-line matches. If you don't know the exact name you're looking for, call ListAll first — it's cheaper and more reliable than guessing plausible-sounding names and searching for each one individually here. Use ListSolutionItems(kind: solutionItems) to see files attached via the .sln's Solution Folders and other non-project files, use ProjectDoc to read plan/handoff/documentation files directly, and use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file. Returns literalResults (always the complete literal-substring match set) and regexResults (regex matches not already in literalResults — empty when pattern has no regex metacharacters, since every regex match is then also a literal match), plus regexOverlapCount (matches found both ways) and regexPatternValid (false if pattern doesn't compile as a regex — literal search is unaffected). Each match has file path, 1-based line and column, a preview, and enclosingMember (the name of the method/property/constructor/field/etc. containing the match, or null if the match isn't inside any member). fileGlob restricts to matching file paths. maxResults caps total matches scanned (default 200).")]
+    [Description("Searches all source files in the loaded solution for pattern, evaluated BOTH as a literal substring and (if it compiles) as a regex in a single pass — there is no search-mode to choose. Only searches documents that are part of a loaded project's source code (e.g. .cs files). For a known symbol (class/method/field/etc. by name), use LocateSymbol instead — it's semantic, not text-based, so it won't false-positive on comments/strings or miss partial-line matches. If you don't know the exact name you're looking for, call ListAll first — it's cheaper and more reliable than guessing plausible-sounding names and searching for each one individually here. Use ListSolutionItems(kind: solutionItems) to see files attached via the .sln's Solution Folders and other non-project files, use ProjectDoc to read plan/handoff/documentation files directly, and use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file. Returns literalResults (always the complete literal-substring match set) and regexResults (regex matches not already in literalResults — empty when pattern has no regex metacharacters, since every regex match is then also a literal match), plus regexOverlapCount (matches found both ways) and regexPatternValid (false if pattern doesn't compile as a regex — literal search is unaffected). Each match has file path, 1-based line and column, a preview, and enclosingMember (the name of the method/property/constructor/field/etc. containing the match, or null if the match isn't inside any member).")]
     public Task<ToolResult<object>> SearchSolutionText(
         [Description(ToolParams.Reason)] string reason,
-        [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern, [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null, [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Description("The text to search for — evaluated both as a literal substring and, if it compiles, as a regex.")]
+        [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
+        [Description("Restricts to matching file paths (glob syntax). Omit to search every file.")]
+        [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
+        [Description("Caps total matches scanned.")]
+        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
         => _readNav.SearchSolutionText(reason, pattern, fileGlob, maxResults, cancellationToken);
-
-    // ── Phase 2 — Blob persistence query + undo tools ───────────────────────
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Returns a filtered slice of an operation result blob by changeId. filter accepts prefix synonyms: fail/err → failures, warn/skip → skipped, ok/pass/info/success → succeeded, roll/revert/undo → rolledback, manual/manual_review/needs_manual_review → NeedsManualReview (bridge compiler-error skips), file:<path> to filter by path, or omit for all items. Unrecognised prefixes return an error. offset skips that many filtered items before taking maxItems; pass NextOffset from the previous response to page through the rest. TotalItems reflects the filtered count; HasMorePages is true when more items remain past this page.")]
+    [Description("Returns a filtered slice of an operation result blob by changeId. offset skips that many filtered items before taking maxItems; pass NextOffset from the previous response to page through the rest. TotalItems reflects the filtered count; HasMorePages is true when more items remain past this page.")]
     public Task<ToolResult<object>> GetOperationDetail(
         [Description(ToolParams.Reason)] string reason,
-        [Consumes(DataTag.ChangeId, required: true)] string changeId, [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null, [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxItems = 50, [ToolOptionAttribute(ToolOptionTag.Offset)] int offset = 0, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.ChangeId, required: true)] string changeId,
+        [Description("Filters items by outcome or path. Accepts prefix synonyms: fail/err → failures, warn/skip → skipped, ok/pass/info/success → succeeded, roll/revert/undo → rolledback, manual/manual_review/needs_manual_review → NeedsManualReview (bridge compiler-error skips), file:<path> to filter by path. Omit for all items. An unrecognised prefix returns an error.")]
+        [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null,
+        [Description("Caps how many filtered items this page returns.")]
+        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxItems = 50,
+        [Description("How many filtered items to skip before taking maxItems. Pass NextOffset from the previous response to continue paging.")]
+        [ToolOptionAttribute(ToolOptionTag.Offset)] int offset = 0, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
         => _readNav.GetOperationDetail(reason, changeId, filter, maxItems, offset, cancellationToken);
 
@@ -1978,14 +2021,18 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetLargeResult")]
     [Produces(DataTag.Report)]
-    [Description("""
-        Pages through a large result written to disk when output result payload exceeded the inline size threshold. Supply either resultId (resolves to .roslynsentinel/largeresults/largeresult_*_{resultId}.json) or filePath (must match the largeresult_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
-        """)]
+    [Description("Pages through a large result that was written to disk because it exceeded the inline size threshold.")]
     public Task<ToolResult<object>> GetLargeResult(
         [Description(ToolParams.Reason)] string reason,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filepath must be supplied;
+        // neither is individually required but the tool fails if both are omitted.
+        [Description("The result's resultId, as returned alongside the original truncated result. Required if filepath is omitted.")]
         [Consumes(DataTag.ResultId)] string? resultId = null,
+        [Description("Path to a largeresult_*.json file under .roslynsentinel/largeresults. Required if resultId is omitted.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Description("Maximum number of records to return.")]
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
+        [Description("Number of records to skip before taking limit.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
         CancellationToken cancellationToken = default)
         => _readNav.GetLargeResult(reason, resultId, filepath, limit, offset, cancellationToken);

@@ -296,51 +296,32 @@ public class SentinelGitTools
         'U' => "conflict",
         _ => code.ToString()
     };
-
-    // ── Git (unified) ─────────────────────────────────────────────────────────
-
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("""
-        Unified git tool. REQUIRED PARAMS BY OPERATION — status: none. log: none. diff: none. stage: none. commit: message. revert: commitHash.
-
-        OPERATION: status — branch name, staged, unstaged, and untracked files. No params.
-          When total changed files >50: IsTruncated=true; lists capped at 10 each (sample); TotalStagedCount/TotalUnstagedCount/TotalUntrackedCount and ByStatus breakdowns populated.
-
-        OPERATION: log — recent commits (hash, short hash, author, ISO date, subject).
-          count: number of commits to return (default 20, max 100).
-
-        OPERATION: diff — unified diff.
-          target: "working" (unstaged, default)|"staged"|<commit hash>.
-          paths: optional comma-separated repo-relative paths.
-          maxBytes: byte cap on output (default 65536, max 524288).
-
-        OPERATION: stage (also: add) — stages files, returns status. Does not commit.
-          stageAll: true → git add -A (all changes including new/untracked files). Default false.
-          files: comma-separated repo-relative paths. Omit to stage tracked changes (git add -u).
-
-        OPERATION: commit — stages files then creates a commit.
-          message: required. stageAll and files behave the same as in stage.
-
-        OPERATION: revert — creates an inverse commit. Non-destructive.
-          commitHash: required (full or short hash, from log).
-          noCommit: true → stage the revert without committing; call commit to finalise.
-        """)]
+    [Description("Unified git tool covering status, log, diff, staging, commit, and revert.")]
     public async Task<object> Git(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Which git operation to run.")]
         GitOperation operation,
-        // log
+        [Description("log: number of commits to return (max 100).")]
         int count = 20,
-        // diff
+        [Description("diff: \"working\" (unstaged), \"staged\", or a commit hash.")]
         string target = "working",
+        [Description("diff: comma-separated repo-relative paths to restrict the diff to.")]
         string? paths = null,
+        [Description("diff: byte cap on the returned diff (max 524288).")]
         int maxBytes = 65536,
-        // commit
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit, unused otherwise.
+        [Description("commit: the commit message. Required for operation=commit.")]
         string? message = null,
+        [Description("stage/commit: true stages all changes including untracked files (git add -A). Default stages only tracked changes (git add -u).")]
         bool stageAll = false,
+        [Description("stage/commit: comma-separated repo-relative paths to stage. Omit to stage tracked changes.")]
         string? files = null,
-        // revert
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is required when operation=revert, unused otherwise.
+        [Description("revert: the commit to revert (full or short hash, from log). Required for operation=revert.")]
         string? commitHash = null,
+        [Description("revert: true stages the revert without committing; call Git(operation: commit) to finalize.")]
         bool noCommit = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)

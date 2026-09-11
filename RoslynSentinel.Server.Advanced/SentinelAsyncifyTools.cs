@@ -62,51 +62,25 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "ScanAsyncMigrationCandidates")]
     [Produces(DataTag.MigrationCandidate)]
-    [Description("""
-        Step 1 of the bridge workflow — flags qualifying methods with [MigrationCandidate] attributes
-        then reports the results. With default parameters, scans the entire solution.
-
-        Set forceRescan=false when running multiple scans back-to-back to skip re-flagging and just
-        read existing attributes.
-
-        Full bridge workflow:
-          1. scan_migration_candidates(summarize: true)     ← you are here (flags + reports)
-          2. bridge_async_methods(targets: [...])
-          3. uplift_callers(targets: SuggestedUpliftTargets)
-          4. propagate_cancellation_token(targets: SuggestedPropagateTargets)
-
-        scope: solution (default), project, or file.
-          solution — scan entire solution (projectName and filePath ignored).
-          project  — restrict to one project; projectName required.
-          file     — restrict to a single file; filePath required (flag phase skipped).
-        projectName: required when scope=project.
-        filePath: optional additional filter — restrict results to a single file (scan only; does not
-          affect the flag phase).
-        forceRescan: re-evaluate already-flagged methods during the flag phase (default true). Set
-          false to skip flagging and just read existing attributes.
-        minScore: minimum score to flag and to filter scan results (default 50).
-        pattern: null (default) = all patterns.
-
-        summarize=true → guaranteed ≤2KB dashboard.
-          MigrationScanSummary fields: ByPattern (count per pattern), ByClass (ClassName, ProjectName,
-          Count — sorted desc, capped at 10; ByClassTruncated=true when truncated), ByScoreBucket
-          ("<0", "0-25", "26-50", "51-75", "76plus"), TopCandidates (MethodName, ClassName, Pattern,
-          Score, Summary — only when topN or minScore set, capped at 5 entries),
-          FlagPhase (BatchResultSummary from the internal flag run — null when forceRescan=false).
-
-        summarize=false + limit/offset → full paged List<MigrationCandidateFinding>. minScore filters in
-        both modes; TotalRecords reflects post-filter count. A method flagged for two patterns appears twice.
-        When results exceed the inline threshold, LargeResultInfo is populated with a resultId for paging.
-        """)]
+    [Description("Step 1 of the bridge workflow: flags qualifying methods with [MigrationCandidate] attributes, then reports the results. Full workflow: ScanAsyncMigrationCandidates(summarize: true) → BridgeAsyncMethods → UpliftCallers → PropagateCancellationToken.")]
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName is required when scope=project; filePath is required when scope=file (and skips the flag phase). Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> ScanAsyncMigrationCandidates(
         [Description(ToolParams.Reason)] string reason,
+        [Description("solution (default) scans everything; project restricts to one project (projectName required); file restricts to one file (filePath required, flag phase skipped).")]
         ToolScope scope = ToolScope.solution,
+        [Description("Required when scope=project.")]
         string? projectName = null,
+        [Description("Required when scope=file. Also usable as an additional scan-only filter under scope=project/solution.")]
         string? filePath = null,
+        [Description("Restricts results to one migration pattern. Omit for all patterns.")]
         AsyncMigrationPattern? pattern = null,
+        [Description("true returns a compact MigrationScanSummary dashboard (ByPattern, ByClass, ByScoreBucket, TopCandidates); false returns a full paged list of findings.")]
         bool summarize = false,
+        [Description("Only used with summarize=true: caps TopCandidates to this many entries.")]
         int? topN = null,
+        [Description("Minimum score to flag and to filter results, in both summarize modes.")]
         int? minScore = null,
+        [Description("Re-evaluate already-flagged methods during the flag phase. Set false to skip flagging and just read existing attributes.")]
         bool forceRescan = true,
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
@@ -322,15 +296,10 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "GetAsyncMigrationProgress")]
     [Produces(DataTag.AsyncMigrationProgressReport)]
-    [Description("""
-        Returns async migration progress statistics for the solution or a single project. Reports: total
-        async Task/ValueTask methods, how many have a CancellationToken parameter (and how many still need
-        one), percentage coverage, Asyncify-bridge wrapper count ([Obsolete("Asyncify-bridge:...")]),
-        bridge call sites pending migration (CS0618), and async void event handlers (informational —
-        their signatures cannot be extended). projectName=null → entire solution.
-        """)]
+    [Description("Returns async migration progress statistics: CancellationToken coverage, pending Asyncify-bridge call sites, and async void event handlers.")]
     public async Task<ToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Scopes the report to one project. Omit to report on the entire solution.")]
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
         // RequestContext<CallToolRequestParams> requestParams = null,        
         CancellationToken cancellationToken = default)
@@ -437,27 +406,19 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "ClearAsyncMigrationCandidateFlags")]
     [Produces(DataTag.BatchResultSummary)]
-    [Description("""
-        Removes [MigrationCandidate] attributes from methods, optionally filtered by pattern.
-        Use before forceRescan to get a completely clean slate, or to undo a flagging run.
-        Does NOT delete the MigrationCandidateAttribute.cs helper file — remove that manually
-        if you want to remove all traces.
-
-        scope: "project" (default) or "file".
-        projectName: restrict removal to one project (scope="project"). Null = entire solution.
-        filePath: restrict removal to one file (scope="file").
-        pattern: remove only attributes with this pattern string (e.g. "AsyncBridgeCandidate",
-                 "NeedsManualReview"). Null or omitted = remove all [MigrationCandidate] attributes.
-        dryRun: reports what would be removed without writing files.
-
-        Returns BatchResultSummary. Succeeded = attributes removed. BlobName = full per-method detail.
-        """)]
+    [Description("Removes [MigrationCandidate] attributes from methods, optionally filtered by pattern. Does not delete the MigrationCandidateAttribute.cs helper file.")]
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: filePath is required when scope=file; projectName only applies when scope=project (null there means the whole solution). Enforced at runtime, not by the schema.
     public async Task<ToolResult<BatchResultSummary>> ClearAsyncMigrationCandidateFlags(
         [Description(ToolParams.Reason)] string reason,
-        string scope = "project",
+        [Description("project (default) restricts by projectName (null = entire solution); file restricts to filePath.")]
+        ToolScope scope = ToolScope.project,
+        [Description("Restricts removal to one project. Only used when scope=project.")]
         string? projectName = null,
+        [Description("Required when scope=file: restricts removal to one file.")]
         string? filePath = null,
+        [Description("Remove only attributes with this pattern string (e.g. \"AsyncBridgeCandidate\", \"NeedsManualReview\"). Omit to remove all [MigrationCandidate] attributes.")]
         string? pattern = null,
+        [Description(ToolParams.DryRun)]
         bool dryRun = false,
         // RequestContext<CallToolRequestParams> requestParams = null,        
         CancellationToken cancellationToken = default)
@@ -475,7 +436,7 @@ public class SentinelAsyncifyTools
         try
         {
             FilePath? resolvedFilePath = null;
-            if (scope == "file")
+            if (scope == ToolScope.file)
             {
                 if (string.IsNullOrEmpty(filePath))
                     return new ToolResult<BatchResultSummary>
@@ -488,7 +449,7 @@ public class SentinelAsyncifyTools
             }
 
             var engineResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
-                projectName: scope == "project" ? projectName : null,
+                projectName: scope == ToolScope.project ? projectName : null,
                 filePath: resolvedFilePath.HasValue ? (string)resolvedFilePath.Value : null,
                 pattern: pattern,
                 dryRun: dryRun,
@@ -554,41 +515,16 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "BridgeAsyncMethods")]
     [Produces(DataTag.BatchResultSummary)]
-    [Description("""
-        Step 2 of the bridge workflow — converts each named method to the Asyncify-bridge pattern:
-        a sync wrapper that delegates to an async overload.
-        Use the asyncify macro to run all steps automatically.
-
-        Full bridge workflow:
-          1. scan_migration_candidates(summarize: true)   — flags + reports
-          2. bridge_async_methods                         ← you are here
-          3. uplift_callers(targets: SuggestedUpliftTargets)
-          4. propagate_cancellation_token(targets: SuggestedPropagateTargets)
-
-        targets: list of { FilePath, MethodNames } — MethodNames is required (not optional here).
-        dryRun: validates without writing files. SuggestedUpliftTargets is still populated.
-        maxItems: max (file × method) items to process (default 100).
-        propagateCancellationTokens: propagate CT in the new async overload (default true).
-
-        Each method is applied sequentially and written immediately so later methods in the same file
-        see the updated source. Errors on one method do not abort others.
-
-        Returns BridgeAsyncMethodsResult:
-          Summary.ChangeId / Summary.BlobName — use with get_operation_detail for per-method detail.
-          Summary.Succeeded / Summary.Failed / Summary.Attempted — aggregate counts.
-          SuggestedUpliftTargets — pass directly as targets to uplift_callers. Each entry has
-            BridgedMethodName; SymbolId is null (enrich from ObsoleteCallerFinding.SymbolId when
-            disambiguation is needed). Empty when Succeeded=0.
-        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
-        IMPORTANT: targets must be non-empty. An empty list is a no-op — no methods are processed.
-        Call scan_migration_candidates(summarize: true) first to discover and flag candidates.
-        PREFER asyncify macro: use individual tools only when manual step-by-step control is required.
-        """)]
+    [Description("Step 2 of the bridge workflow: converts each named method to the Asyncify-bridge pattern (a sync wrapper delegating to an async overload). Prefer the Asyncify tool for automatic end-to-end migration; use this only for manual step-by-step control. Full workflow: ScanAsyncMigrationCandidates(summarize: true) → BridgeAsyncMethods → UpliftCallers(targets: SuggestedUpliftTargets) → PropagateCancellationToken.")]
     public async Task<ToolResult<BridgeAsyncMethodsResult>> BridgeAsyncMethods(
         [Description(ToolParams.Reason)] string reason,
+        [Description("{ FilePath, MethodNames } entries — MethodNames is required per entry. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
+        [Description(ToolParams.DryRun)]
         bool dryRun = false,
+        [Description("Maximum (file × method) items to process.")]
         int maxItems = 100,
+        [Description("Propagate CancellationToken into the new async overload.")]
         bool propagateCancellationTokens = true,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
@@ -648,38 +584,16 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "UpliftCallers")]
     [Produces(DataTag.BatchResultSummary)]
-    [Description("""
-        Step 3 of the bridge workflow — updates sync callers of each bridge wrapper to call the async
-        overload directly. Pass SuggestedUpliftTargets from bridge_async_methods as targets.
-
-        Full bridge workflow:
-          1. scan_migration_candidates(summarize: true)   — flags + reports
-          2. bridge_async_methods(targets: [...])
-          3. uplift_callers                               ← you are here
-          4. propagate_cancellation_token(targets: SuggestedPropagateTargets)
-
-        targets: list of { BridgedMethodName, ProjectName? }. Pass SuggestedUpliftTargets from
-          bridge_async_methods directly — no transformation required.
-        dryRun: reports without writing files. SuggestedPropagateTargets is still populated.
-        maxCallersPerMethod: max callers per bridged method (default 10).
-        propagateCancellationTokens: propagate CT in updated callers (default true).
-
-        Returns UpliftCallersResult:
-          Summary.ChangeId / Summary.BlobName — use with get_operation_detail for detail.
-          Summary.Succeeded = callers uplifted. Summary.Failed = callers flagged NeedsManualReview.
-          SuggestedPropagateTargets — pass directly as targets to propagate_cancellation_token.
-            Each entry has FilePath (files touched during uplift); MethodNames is null (whole file).
-            Empty when Succeeded=0.
-        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
-        IMPORTANT: targets must be non-empty. An empty list is a no-op — no callers are uplifted.
-        Pass SuggestedUpliftTargets from bridge_async_methods as targets.
-        PREFER asyncify macro: use individual tools only when manual step-by-step control is required.
-        """)]
+    [Description("Step 3 of the bridge workflow: updates sync callers of each bridge wrapper to call the async overload directly. Pass SuggestedUpliftTargets from BridgeAsyncMethods as targets. Prefer the Asyncify tool for automatic end-to-end migration; use this only for manual step-by-step control.")]
     public async Task<ToolResult<UpliftCallersResult>> UpliftCallers(
         [Description(ToolParams.Reason)] string reason,
+        [Description("{ BridgedMethodName, ProjectName? } entries — pass SuggestedUpliftTargets from BridgeAsyncMethods directly. Must be non-empty; an empty list is a no-op.")]
         List<UpliftTarget> targets,
+        [Description(ToolParams.DryRun)]
         bool dryRun = false,
+        [Description("Maximum callers processed per bridged method.")]
         int maxCallersPerMethod = 10,
+        [Description("Propagate CancellationToken into updated callers.")]
         bool propagateCancellationTokens = true,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
@@ -745,34 +659,14 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "PropagateCancellationToken")]
     [Produces(DataTag.BatchResultSummary)]
-    [Description("""
-        Step 4 of the bridge workflow — threads CancellationToken through async call chains in the
-        specified files. Pass SuggestedPropagateTargets from uplift_callers as targets.
-        Also usable standalone to clean up CT forwarding in any set of files.
-
-        Full bridge workflow:
-          1. scan_migration_candidates(summarize: true)   — flags + reports
-          2. bridge_async_methods(targets: [...])
-          3. uplift_callers(targets: [...])
-          4. propagate_cancellation_token                  ← you are here
-               targets: SuggestedPropagateTargets from uplift_callers — no transformation required.
-
-        targets: list of { FilePath, MethodNames? }. null MethodNames = all eligible methods in the file.
-          Pass SuggestedPropagateTargets from uplift_callers directly.
-        dryRun: computes without writing files.
-        maxItems: max files to process (default 100).
-
-        Returns BatchResultSummary. BlobName = full per-file detail on disk.
-        Use get_operation_detail(changeId) for details.
-        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
-        IMPORTANT: targets must be non-empty. An empty list is a no-op — no files are processed.
-        Pass SuggestedPropagateTargets from uplift_callers as targets, or specify files explicitly.
-        PREFER asyncify macro: use individual tools only when manual step-by-step control is required.
-        """)]
+    [Description("Step 4 of the bridge workflow: threads CancellationToken through async call chains in the specified files. Pass SuggestedPropagateTargets from UpliftCallers as targets. Also usable standalone to clean up CT forwarding in any set of files.")]
     public async Task<ToolResult<BatchResultSummary>> PropagateCancellationToken(
         [Description(ToolParams.Reason)] string reason,
+        [Description("{ FilePath, MethodNames? } entries — null MethodNames means all eligible methods in the file. Pass SuggestedPropagateTargets from UpliftCallers directly. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
+        [Description(ToolParams.DryRun)]
         bool dryRun = false,
+        [Description("Maximum files to process.")]
         int maxItems = 100,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
@@ -820,27 +714,14 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "AddCancellationToken")]
     [Produces(DataTag.BatchResultSummary)]
     [Produces(DataTag.CancellationTokenSlot, Preference = 100)]
-    [Description("""
-        Utility — adds a CancellationToken parameter to async methods that lack one. Independent of
-        the main bridge path; use as needed to ensure async methods accept CT. Differs from
-        propagate_cancellation_token, which threads an existing CT through async call chains — this
-        tool adds the CT parameter to the method signature itself.
-
-        targets: list of { FilePath, MethodNames? }. null MethodNames = all eligible async methods in the file.
-        dryRun: computes without writing files.
-        maxItems: max files to process (default 100).
-
-        Returns BatchResultSummary. Succeeded = files modified. BlobName = full detail on disk.
-        Use get_operation_detail(changeId) for per-file details.
-        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
-        IMPORTANT: targets must be non-empty. An empty list is a no-op — no files are processed.
-        Specify the files (FilePath) where CancellationToken parameters should be added.
-        PREFER asyncify macro: use individual tools only when manual step-by-step control is required.
-        """)]
+    [Description("Adds a CancellationToken parameter to async methods that lack one, in the specified files. Independent of the bridge workflow. Differs from PropagateCancellationToken, which threads an existing CT through call chains rather than adding the parameter itself.")]
     public async Task<ToolResult<BatchResultSummary>> AddCancellationToken(
         [Description(ToolParams.Reason)] string reason,
+        [Description("{ FilePath, MethodNames? } entries — null MethodNames means all eligible async methods in the file. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
+        [Description(ToolParams.DryRun)]
         bool dryRun = false,
+        [Description("Maximum files to process.")]
         int maxItems = 100,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
@@ -887,42 +768,12 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "ExtractEventHandlers")]
     [Produces(DataTag.BatchResultSummary)]
-    [Description("""
-        Targeted extraction — extracts a nominated code block from inside a method into a new private
-        method using semantic analysis. Produces the correct return type (fixes the standard
-        extract_method bug where selections ending with 'return expr' produce void).
-
-        The asyncify macro (Phase 0) automates full-body extraction for HandlerExtractCandidate
-        methods. Use this tool when you need a custom extracted method name, partial-body (snippet)
-        extraction, or targeted one-off extraction outside the macro workflow.
-
-        Event handler path (manual):
-          1. scan_migration_candidates(pattern: "HandlerExtractCandidate")  — find handlers to extract
-          2. extract_event_handlers                     ← you are here
-          3. event_handlers_to_async(projectName: "...")
-
-        targets: list of { FilePath, NewMethodName, ContextSnippet, LineBefore?, LineAfter? }.
-          FilePath       — absolute path to the .cs file.
-          NewMethodName  — valid C# identifier for the new extracted method (required).
-          ContextSnippet — short unique fragment identifying the code block to extract (required).
-          LineBefore / LineAfter — optional disambiguation lines.
-          Targets in the same file are processed sequentially — each extraction sees the file as left
-          by the previous one.
-        dryRun: validates that each ContextSnippet is locatable without writing files. Use as a
-          pre-flight check before committing.
-
-        Returns BatchResultSummary. Failed = 1 per target where ContextSnippet could not be located
-        or extraction failed. Failures[].Reason contains the diagnostic.
-        BlobName = full per-target detail on disk.
-        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
-        IMPORTANT: targets must be non-empty. An empty list is a no-op — no handlers are extracted.
-        Call scan_migration_candidates(pattern: "HandlerExtractCandidate") to find candidates.
-        PREFER asyncify macro (Phase 0 auto-extracts HandlerExtractCandidate methods): use this tool
-        only for custom extracted method names, partial-body extraction, or one-off targeted extraction.
-        """)]
+    [Description("Extracts a nominated code block from inside a method into a new private method, using semantic analysis to produce the correct return type. Manual alternative to Asyncify's automatic Phase 0 extraction — use this for a custom extracted method name, partial-body extraction, or a one-off targeted extraction.")]
     public async Task<ToolResult<BatchResultSummary>> ExtractEventHandlers(
         [Description(ToolParams.Reason)] string reason,
+        [Description("{ FilePath, NewMethodName, ContextSnippet, LineBefore?, LineAfter? } entries. NewMethodName must be a valid C# identifier; ContextSnippet must uniquely identify the code block to extract. Targets in the same file are processed sequentially. Must be non-empty; an empty list is a no-op.")]
         List<HandlerExtractTarget> targets,
+        [Description("Validates that each ContextSnippet is locatable without writing files.")]
         bool dryRun = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
@@ -966,30 +817,16 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "EventHandlersToAsync")]
     [Produces(DataTag.BatchResultSummary)]
-    [Description("""
-        Event handler path, step 2 — converts all [MigrationCandidate("HandlerToAsyncCandidate")]-flagged
-        methods to the Asyncify-bridge pattern (sync wrapper + async overload). Auto-discovers candidates
-        by pattern; no explicit method list required.
-
-        Event handler path:
-          1. scan_migration_candidates(pattern: "HandlerExtractCandidate")
-          2. extract_event_handlers(targets: [...])
-          3. event_handlers_to_async                    ← you are here
-
-        projectName: scope discovery to one project; null = entire solution.
-        dryRun: validates without writing files.
-        maxItems: max methods to process (default 100).
-        propagateCancellationTokens: propagate CT in the new async overload (default true).
-
-        Returns BatchResultSummary. Succeeded = methods converted. Skipped = over maxItems limit.
-        BlobName = full per-method detail on disk. Use get_operation_detail(changeId) for details.
-        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
-        """)]
+    [Description("Converts all [MigrationCandidate(\"HandlerToAsyncCandidate\")]-flagged methods to the Asyncify-bridge pattern (sync wrapper + async overload). Auto-discovers candidates by pattern; follows ExtractEventHandlers in the event handler migration path.")]
     public async Task<ToolResult<BatchResultSummary>> EventHandlersToAsync(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Scopes candidate discovery to one project. Omit to scan the entire solution.")]
         string? projectName = null,
+        [Description(ToolParams.DryRun)]
         bool dryRun = false,
+        [Description("Maximum methods to process.")]
         int maxItems = 100,
+        [Description("Propagate CancellationToken into the new async overload.")]
         bool propagateCancellationTokens = true,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
@@ -1028,71 +865,34 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "Asyncify")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("""
-        Full-workflow macro — runs the complete bridge path (Flag → Bridge → Uplift → Propagate CT)
-        in a single call. The server owns and executes the fixed sequence. Use bridge_async_methods,
-        uplift_callers, and propagate_cancellation_token individually for step-by-step control.
-
-        Internal sequence:
-          Phase 0 (Extract)    — extracts the entire body of each HandlerExtractCandidate event
-                                 handler into a new private method (name = PascalCase of the
-                                 handler name, e.g. "button1_Click" → "Button1Click"). Uses
-                                 ExtractEntireBody so no ContextSnippet or manual input is needed.
-                                 The extracted method is then picked up by Phase 3a.
-          Phase 1 (Flag)       — discovers qualifying sync methods and flags
-                                 [MigrationCandidate("AsyncBridgeCandidate")].
-                                 Skipped when methodTargets is provided.
-          Phase 2 (Bridge)     — converts flagged methods to the Asyncify-bridge pattern.
-          Phase 3 (Uplift)     — uplifts callers of each bridge wrapper to the async overload.
-          Phase 3a (HandlerBridge) — bridges HandlerToAsyncCandidate methods (extracted event
-                                 handler bodies from Phase 0, or pre-existing flags). After
-                                 bridging, their event-handler callers become AsyncHandlerCandidate
-                                 and are picked up by Phase 3b.
-          Phase 3b (Handler)   — converts AsyncHandlerCandidate event handlers in-place to
-                                 async void (replaces bridge calls with await asyncCall()).
-          Phase 4 (Propagate)  — propagates CancellationToken in all bridged/handler files.
-                                 Skipped when propagateCancellationTokens=false or dryRun=true.
-
-        extract_event_handlers remains available for targeted extraction with custom method names
-        or snippet-based (partial-body) extraction not covered by Phase 0.
-
-        Checks the circuit breaker before starting; records total outcome across all phases;
-        writes one forensic blob. Full detail on disk — only summary counts returned inline.
-
-        projectName: project to process; null = entire solution.
-        methodTargets: explicit (FilePath, MethodName) list — skips Phase 1 (flag discovery).
-        exclusions: method names to skip in every phase.
-        dryRun: reports without writing files.
-        propagateCancellationTokens: run Phase 4 after bridge+uplift (default true).
-        maxMethods: max methods in bridge phase (default 50).
-        maxCallersPerMethod: max callers per bridged method in uplift (default 10).
-        minScore: minimum discovery score in Phase 1 (default 50).
-        scoreThreshold: min score eligible for bridge conversion in Phase 2 (default 60). Only methods
-          scoring ≥ scoreThreshold are bridged. Raise to focus on highest-impact candidates; lower to
-          include more. Use MinCandidateScore from a prior run to calibrate.
-        maxRuntimeSeconds: wall-clock limit in seconds — the current phase item finishes, then
-          remaining phases are skipped and a partial result is returned. 0 = no limit (default).
-          Set this below the MCP transport timeout to guarantee the tool returns in time.
-        maxIterations: total items cap across all phases (bridged + uplifted + CT-propagated).
-          Remaining phases are skipped when the count is reached. 0 = no limit (default).
-
-        Returns BatchResultSummary. BlobName = full per-phase, per-method detail on disk.
-        Succeeded = bridges + uplifts across all phases. Skipped = below-minScore / remaining candidates.
-        When stopped early, Directive contains "stopped_early" with the reason.
-        Use get_operation_detail(changeId) for per-phase breakdown.
-        Severity="halt" → circuit breaker opened; call get_breaker_status then reset_breaker.
+        Full-workflow macro: runs the complete async-migration bridge path (extract event handler bodies,
+        flag candidates, bridge to the Asyncify pattern, uplift callers, convert handlers, propagate
+        CancellationToken) in a single call. Use BridgeAsyncMethods/UpliftCallers/PropagateCancellationToken
+        individually for step-by-step control instead.
         """)]
     public async Task<ToolResult<BatchResultSummary>> Asyncify(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Scopes the run to one project. Omit to process the entire solution.")]
         string? projectName = null,
+        [Description("Explicit (FilePath, MethodName) list — skips the flag-discovery phase.")]
         List<FlagCandidateTarget>? methodTargets = null,
+        [Description("Method names to skip in every phase.")]
         List<string>? exclusions = null,
+        [Description(ToolParams.DryRun)]
         bool dryRun = false,
+        [Description("Run the CancellationToken-propagation phase after bridge+uplift.")]
         bool propagateCancellationTokens = true,
+        [Description("Maximum methods processed in the bridge phase.")]
         int maxMethods = 50,
+        [Description("Maximum callers processed per bridged method in the uplift phase.")]
         int maxCallersPerMethod = 10,
+        [Description("Minimum discovery score in the flag phase.")]
         int minScore = DefaultMinScore,
+        [Description("Minimum score eligible for bridge conversion. Raise to focus on highest-impact candidates; lower to include more. Use MinCandidateScore from a prior run to calibrate.")]
         int scoreThreshold = DefaultScoreThreshold,
+        [Description("Wall-clock limit in seconds; the current phase item finishes, then remaining phases are skipped and a partial result is returned. 0 = no limit. Set below the MCP transport timeout to guarantee a timely return.")]
         int maxRuntimeSeconds = 0,
+        [Description("Total items cap across all phases (bridged + uplifted + CT-propagated); remaining phases are skipped once reached. 0 = no limit.")]
         int maxIterations = 0,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
@@ -1144,30 +944,35 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "AsyncifyLoop")]
     [Description("""
-        Debug and test harness — runs Asyncify in a loop until the workflow converges
-        (Succeeded=0 and Failed=0), the circuit breaker opens, or maxLoops is reached.
-
-        Identical parameters to Asyncify. Attach a debugger to the server process and set
-        breakpoints anywhere in AsyncBatchEngine before calling this tool; every iteration
-        will hit those breakpoints without any inter-call overhead.
-
-        maxLoops: maximum number of Asyncify iterations to run (default 5).
-
-        Returns AsyncifyLoopResult with per-iteration BatchResultSummary entries and aggregate totals.
+        Debug and test harness: runs Asyncify in a loop until the workflow converges (Succeeded=0 and
+        Failed=0), the circuit breaker opens, or maxLoops is reached. Takes the same parameters as
+        Asyncify. Returns AsyncifyLoopResult with per-iteration BatchResultSummary entries and aggregate totals.
         """)]
     public async Task<ToolResult<AsyncifyLoopResult>> AsyncifyLoop(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Scopes the run to one project. Omit to process the entire solution.")]
         string? projectName = null,
+        [Description("Explicit (FilePath, MethodName) list — skips the flag-discovery phase.")]
         List<FlagCandidateTarget>? methodTargets = null,
+        [Description("Method names to skip in every phase.")]
         List<string>? exclusions = null,
+        [Description(ToolParams.DryRun)]
         bool dryRun = false,
+        [Description("Run the CancellationToken-propagation phase after bridge+uplift.")]
         bool propagateCancellationTokens = true,
+        [Description("Maximum methods processed in the bridge phase.")]
         int maxMethods = 50,
+        [Description("Maximum callers processed per bridged method in the uplift phase.")]
         int maxCallersPerMethod = 10,
+        [Description("Minimum discovery score in the flag phase.")]
         int minScore = DefaultMinScore,
+        [Description("Minimum score eligible for bridge conversion.")]
         int scoreThreshold = DefaultScoreThreshold,
+        [Description("Wall-clock limit in seconds per Asyncify iteration. 0 = no limit.")]
         int maxRuntimeSeconds = 0,
+        [Description("Total items cap per Asyncify iteration. 0 = no limit.")]
         int maxIterations = 0,
+        [Description("Maximum number of Asyncify iterations to run.")]
         int maxLoops = 5,
         CancellationToken cancellationToken = default)
     {
@@ -1314,25 +1119,12 @@ public class SentinelAsyncifyTools
     // ── Migration ledger query tools ──────────────────────────────────────────
 
     [McpServerTool(Name = "GetMigrationLedger")]
-    [Description("""
-        Returns the persisted migration ledger — a cross-run record of every method touched by
-        a migration phase (Bridge, Uplift, CtPropagated) and every idempotency/stale-flag skip.
-
-        The ledger survives server restarts and accumulates across sessions. Use it to:
-          - Identify methods being re-processed on each run (HitCount > 1 with repeated phases).
-          - Confirm that Bridge/Uplift/CtPropagated phases are making forward progress.
-          - Detect UpliftIdempotentSkip or BridgeStaleSkip patterns that indicate lingering flags.
-
-        phase: filter to entries that have at least one operation for this phase.
-          Valid values: Bridge, BridgeStaleSkip, Uplift, UpliftIdempotentSkip, CtPropagated.
-          Omit to return all entries.
-        repeatedOnly: when true, return only methods touched more than once across all runs.
-
-        Returns LedgerSnapshot with RunCount, TotalEntries, RepeatedMethods, and per-entry history.
-        """)]
+    [Description("Returns the persisted migration ledger: a cross-run record of every method touched by a migration phase and every idempotency/stale-flag skip. Survives server restarts and accumulates across sessions.")]
     public ToolResult<LedgerSnapshot> GetMigrationLedger(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Filters to entries with at least one operation for this phase: Bridge, BridgeStaleSkip, Uplift, UpliftIdempotentSkip, or CtPropagated. Omit to return all entries.")]
         string? phase = null,
+        [Description("Return only methods touched more than once across all runs.")]
         bool repeatedOnly = false)
     {
         return new ToolResult<LedgerSnapshot>

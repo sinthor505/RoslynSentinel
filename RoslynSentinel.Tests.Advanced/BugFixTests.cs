@@ -3907,7 +3907,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
         object? result = null;
 
         await Assert.DoesNotThrowAsync(async () =>
-            result = await tools.SyncInterface("nonexistent.cs", "IGhost", "sync", "Ghost"));
+            result = await tools.SyncInterface(reason: "test", "nonexistent.cs", "IGhost", SyncInterfaceAction.sync, "Ghost"));
 
         Assert.That(result, Is.Not.Null,
             "Tool returns engine content when engine signals no-changes-needed");

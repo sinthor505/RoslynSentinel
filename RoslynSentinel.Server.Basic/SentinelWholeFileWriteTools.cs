@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -27,14 +27,17 @@ public class SentinelWholeFileWriteTools
         _logger = logger;
         _symbolNavigationEngine = symbolNavigationEngine;
     }
-
     [McpServerTool(Name = "WriteFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Writes a whole file to disk. operation=CreateFile requires the file NOT to already exist (fails otherwise). operation=ReplaceFile requires the file to already exist (fails otherwise) and overwrites its full content — for a partial edit use ApplyUnifiedDiff instead. Routes through the same write-path chokepoint as every other mutating tool (drift-checked, undo-tracked via UndoLastApply). By default this delta-compiles the edited file plus every project that transitively references it BEFORE writing, and REJECTS the write if that introduces any new compiler error — so renaming or changing the signature of a member here will fail unless every call site is already consistent with the new form. For a change that necessarily spans multiple files (e.g. renaming a method used elsewhere), either use RenameSymbol/ChangeSignature to update all call sites atomically in one operation, or pass validateOnApply=false on the intermediate writes and validate once at the end — do not repeatedly retry the same whole-file write expecting a different file's state to change. Parent directories are created automatically if missing.")]
+    [Description("Writes a whole file to disk, creating or fully overwriting it. By default this delta-compiles the edited file plus every project that transitively references it before writing, and rejects the write if that introduces any new compiler error. For a partial edit, use ApplyUnifiedDiff instead. For a change that necessarily spans multiple files (e.g. renaming a method used elsewhere), use RenameSymbol/ChangeSignature to update all call sites atomically, or pass validateOnApply=false on intermediate writes and validate once at the end.")]
     public async Task<ToolResult<object>> WriteFile(
         [Description(ToolParams.Reason)] string reason,
+        [Description("CreateFile requires the file NOT to already exist (fails otherwise). ReplaceFile requires the file to already exist (fails otherwise).")]
         [ExternalInputRequired(DataTag.Action)] WriteFileOperation operation,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Description("Full content of the file.")] string content, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, CancellationToken cancellationToken = default)
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("Full content of the file. Parent directories are created automatically if missing.")] string content,
+        [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -282,13 +285,31 @@ public class SentinelWholeFileWriteTools
     /// dimension is exempt from both.
     /// </summary>
     private const double LargeShrinkRejectionThreshold = 0.5;
-
-
-
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: changesetFormat=files requires 'changes' (filepath/unifiedDiff
+    // unused); changesetFormat=diff requires 'filepath' and 'unifiedDiff' (changes unused). No single
+    // param is universally required beyond changesetFormat/action, so a model can supply the wrong
+    // subset for its chosen format and only find out at runtime.
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. IMPORTANT: for changesetFormat=files with action=apply, any file whose content would shrink by more than 50% (by line count, OR by active/non-comment C# code lines — so commenting out the whole file instead of shortening it is caught too) is rejected with errorCode=ConfirmationRequired — this is a strong signal you submitted only a changed fragment as if it were the whole file, or commented out code instead of actually editing/removing it, rather than a genuine whole-file rewrite. If that happens, re-submit the complete, unabridged file content in a fresh ApplyDiff call (or switch to changesetFormat=diff for a partial edit) — do not retry with a different action. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error — so renaming or changing the signature of a member will fail unless every call site (possibly in a different file) is updated to match in the SAME changeset. For a rename or signature change, prefer RenameSymbol/ChangeSignature, which update all call sites atomically in one operation; if you must do it manually across multiple ApplyDiff calls, either include every affected file's changes in one changesetFormat=files call, or pass validateOnApply=false on the intermediate calls and validate once at the end — do not repeatedly retry one file's edit expecting a different, not-yet-edited file to already match.")]
-    public async Task<ToolResult<object>> ApplyDiff([Description(ToolParams.Reason)] string reason, [ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<string, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
+    [Description("Applies or validates a change set, either as full file contents (changesetFormat=files) or as a unified diff against one file (changesetFormat=diff). For changesetFormat=diff, hunk line numbers are a starting guess — a mismatched position is re-anchored by searching nearby lines, so modest drift from an earlier edit is tolerated. For changesetFormat=files with action=apply, any file that would shrink by more than 50% (by line count or by active/non-comment code lines) is rejected with errorCode=ConfirmationRequired, since that usually signals a partial fragment or a comment-collapse was submitted instead of the full file. By default this also delta-compiles the edited project(s) plus every transitively-referencing project before writing, and rejects the change if it introduces a new compiler error — for a rename or signature change spanning files, prefer RenameSymbol/ChangeSignature, or pass validateOnApply=false on intermediate calls and validate once at the end.")]
+    public async Task<ToolResult<object>> ApplyDiff(
+        [Description(ToolParams.Reason)] string reason,
+        [Description("files: changes is a filePath→newContent dict (filepath/unifiedDiff unused). diff: filepath and unifiedDiff apply to a single file (changes unused).")]
+        [ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat,
+        [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required when changesetFormat=files, unused otherwise.
+        [Description("Required when changesetFormat=files: filePath→newContent for every file to write.")]
+        [ExternalInputRequired(DataTag.OperationId)] Dictionary<string, string>? changes = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required when changesetFormat=diff, unused otherwise.
+        [Description("Required when changesetFormat=diff: the single file unifiedDiff applies to.")]
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required when changesetFormat=diff, unused otherwise.
+        [Description("Required when changesetFormat=diff: the unified diff to apply to filepath.")]
+        [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null,
+        [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
+        [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -517,7 +538,6 @@ public class SentinelWholeFileWriteTools
             };
         }
     }
-
     // Simplified, diff-only sibling of ApplyDiff — collapses ApplyDiff's two required-param-sets
     // (files: 'changes' dict / diff: 'filepath'+'unifiedDiff', with 'filepath' silently ignored in
     // files mode) into a single always-required (filepath, unifiedDiff) pair, closing the common
@@ -531,11 +551,14 @@ public class SentinelWholeFileWriteTools
     // docs/current/design_applyunifieddiff_replace_snippet_v1.md.
     [McpServerTool(Name = "ApplyUnifiedDiff")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a unified diff against a single file. 'filepath' and 'unifiedDiff' are BOTH REQUIRED (filepath names the single file the diff applies to). Hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. For a whole-file rewrite, use WriteFile(operation=ReplaceFile) instead. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error — since this tool only touches one file per call, renaming or changing the signature of a member used elsewhere will fail here until the OTHER file's call site is fixed too. Prefer RenameSymbol/ChangeSignature for those cases (updates every call site atomically in one operation); otherwise pass validateOnApply=false here and on the other file's edit, then validate once after both are applied — do not repeatedly retry this file's edit expecting the other, not-yet-edited file to already match.")]
+    [Description("Applies or validates a unified diff against a single file. Hunk line numbers are a starting guess — a mismatched position is re-anchored by searching nearby lines, so modest drift from an earlier edit is tolerated. For a whole-file rewrite, use WriteFile(operation=ReplaceFile) instead. By default this also delta-compiles the edited project(s) plus every transitively-referencing project before writing, and rejects the change if it introduces a new compiler error — since this tool only touches one file per call, prefer RenameSymbol/ChangeSignature for a rename or signature change spanning files, or pass validateOnApply=false here and on the other file's edit, then validate once after both are applied.")]
     public async Task<ToolResult<object>> ApplyUnifiedDiff(
         [Description(ToolParams.Reason)] string reason,
+        [Description("apply: applies the diff. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
+        [Description("The single file unifiedDiff applies to.")]
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("The unified diff to apply to filepath.")]
         [ToolOption(ToolOptionTag.UnifiedDiff, required: true)] string unifiedDiff,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,

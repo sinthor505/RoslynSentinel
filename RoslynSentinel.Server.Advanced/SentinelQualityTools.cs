@@ -158,15 +158,15 @@ public class SentinelQualityTools
 
     [McpServerTool(Name = "AnalyzeForeachForLinqConversion")]
     [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Pre-flight safety check before convert_foreach_linq. contextSnippet: short foreach snippet (e.g. "foreach (var item in"). lineBefore/lineAfter disambiguate multiple matches. Returns IsSafeToConvert and rejection reasons.
-        """)]
-    // FIXES MS BUG: the standard tool produces incorrect code when the foreach loop body mutates the collection being iterated (e.g. adding/removing items from a List<T>), which is a common pattern. This tool uses Roslyn's ControlFlowAnalysis and DataFlowAnalysis to detect mutations to the collection variable within the loop body, and rejects conversion if any are found.
+    [Description("Pre-flight safety check before converting a foreach loop to LINQ: detects mutation of the collection being iterated within the loop body (a common pattern the standard conversion tool produces incorrect code for) using Roslyn's ControlFlowAnalysis and DataFlowAnalysis. Returns IsSafeToConvert and rejection reasons.")]
     public async Task<ToolResult<object>> AnalyzeForeachForLinqConversion(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("Short snippet identifying the foreach statement, e.g. \"foreach (var item in\".")]
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Description(ToolParams.LineBefore)]
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)]
         [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -200,15 +200,15 @@ public class SentinelQualityTools
 
     [McpServerTool(Name = "AnalyzeSwitchForPatternConversion")]
     [Produces(DataTag.Analysis)]
-    [Description("""
-        Pre-flight safety check before converting a switch statement to a switch expression. contextSnippet: verbatim substring from the switch keyword line (e.g. "switch (unit)"). lineBefore/lineAfter disambiguate. Returns IsSafeToConvert and rejection reasons.
-        """)]
-    // FIXES MS BUG: the standard tool silently drops variable assignments in multi-variable cases. This tool uses Roslyn's ControlFlowAnalysis and DataFlowAnalysis to detect all variables assigned within the switch, and rejects conversion if any are assigned in more than one case arm, or if their assigned value is read later in the method (indicating a likely dependency on the variable retaining its value across cases). IsSafeToConvert=true means the standard tool or convert_switch_to_pattern_safe will produce correct output.
+    [Description("Pre-flight safety check before converting a switch statement to a switch expression: detects variables assigned in more than one case arm, or read later in the method (indicating a dependency on the variable retaining its value across cases) — a pattern the standard conversion tool silently drops, using Roslyn's ControlFlowAnalysis and DataFlowAnalysis. Returns IsSafeToConvert and rejection reasons.")]
     public async Task<ToolResult<object>> AnalyzeSwitchForPatternConversion(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("Verbatim substring from the switch keyword line, e.g. \"switch (unit)\".")]
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Description(ToolParams.LineBefore)]
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)]
         [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)

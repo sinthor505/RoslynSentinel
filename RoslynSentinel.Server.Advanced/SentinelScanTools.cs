@@ -91,28 +91,25 @@ public class SentinelScanTools
 
     [McpServerTool(Name = "RunScanDetector")]
     [Produces(DataTag.ResultId)]
-    [Description("""
-    Dispatches a named detector across a file, project, or solution.
-    scope: file | project | solution. scopeName: filePath when scope=file;
-    projectName when scope=project; root type name for duplicate_blocks_in_hierarchy.
-    File-scope-only detectors require scope=file. unused_references requires scope=project.
-    detectorId values and scope hints: call describe_scan_detectors(domain?) for the full list.
-    """)]
+    [Description("Dispatches a named detector across a file, project, or solution. Call DescribeScanDetectors first to see available detector ids and which scope each one needs.")]
     public async Task<ToolResult<object>> RunScanDetector(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.DetectorName)] DetectorId detector,
-        [ExternalInputRequired(DataTag.Scope)] string scope,
+        [Description("Some detectors are restricted to a specific scope — see DescribeScanDetectors.")]
+        [ExternalInputRequired(DataTag.Scope)] ToolScope scope,
+        [Description("Required when scope=file: the file to scan.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Description("Required when scope=project: the project to scan. Also used as the root type name for the duplicate_blocks_in_hierarchy detector.")]
         [Consumes(DataTag.ProjectName, required: false)] string? scopeName = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         //string? filePath = scope == "file" ? scopeName : null;
-        string? projectName = scope == "project" ? scopeName : null;
+        string? projectName = scope == ToolScope.project ? scopeName : null;
 
         try
         {
-            FilePath filePath = String.IsNullOrEmpty(filepath) && scope == "file" ? default : FilePath.FromWire(filepath!, _workspaceManager.GetSolutionRoot());
+            FilePath filePath = String.IsNullOrEmpty(filepath) && scope == ToolScope.file ? default : FilePath.FromWire(filepath!, _workspaceManager.GetSolutionRoot());
 
             switch (detector)
             {
@@ -453,12 +450,12 @@ public class SentinelScanTools
 
     [McpServerTool(Name = "DescribeScanDetectors")]
     [Produces(DataTag.Report)]
-    [Description("""
-        Returns the catalogue of available scan detectors. domain filters by domain: async | concurrency | config | convention | correctness | dead-code | misc | performance | security | structure. detector returns info for a single detector by exact id. Both omitted → all 94 detectors. Each entry includes: Id, Domain, ScopeHint (file | project | solution | any combinations), Description.
-        """)]
+    [Description("Returns the catalogue of available scan detectors, each with its id, domain, scope requirements, and a description.")]
     public Task<ToolResult<object>> DescribeScanDetectors(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Filter by domain: async | concurrency | config | convention | correctness | dead-code | misc | performance | security | structure. Omit for all domains.")]
         [ToolOption(ToolOptionTag.Domain)] string? domain = null,
+        [Description("Return info for a single detector by exact id. Omit for all detectors.")]
         [ToolOption(ToolOptionTag.Detector)] string? detector = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -495,13 +492,12 @@ public class SentinelScanTools
 
     [McpServerTool(Name = "AnalyzeMethod")]
     [Produces(DataTag.Report)]
-    [Description("""
-        Analyses a method from multiple angles. aspect values: controlFlow (return paths, throw sites, infinite loop detection → ControlFlowSummary), dataFlow (unassigned reads, written/read variables, closure captures → DataFlowSummary), pathCoverage (execution paths for test coverage → PathCoverageReport), unreachableCode (statements after unconditional return/throw → List<string>).
-        """)]
+    [Description("Analyses a method from a chosen angle: control flow, data flow, path coverage, or unreachable code.")]
     public async Task<ToolResult<object>> AnalyzeMethod(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
+        [Description("controlFlow: return paths, throw sites, infinite loop detection. dataFlow: unassigned reads, written/read variables, closure captures. pathCoverage: execution paths for test coverage. unreachableCode: statements after an unconditional return/throw.")]
         [ToolOption(ToolOptionTag.Aspect)] string aspect,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -535,18 +531,18 @@ public class SentinelScanTools
         }
     }
 
-    private static FilePath RequireFile(string scope, string? scopeName)
+    private static FilePath RequireFile(ToolScope scope, string? scopeName)
     {
-        if (scope != "file" || string.IsNullOrEmpty(scopeName))
+        if (scope != ToolScope.file || string.IsNullOrEmpty(scopeName))
             throw new ArgumentException(
                 $"This detector requires scope=\"file\" with a valid filePath as scopeName. " +
                 $"Received scope=\"{scope}\", scopeName={(scopeName == null ? "null" : $"\"{scopeName}\"")}.");
         return scopeName;
     }
 
-    private static string RequireProject(string scope, string? scopeName)
+    private static string RequireProject(ToolScope scope, string? scopeName)
     {
-        if (scope != "project" || string.IsNullOrEmpty(scopeName))
+        if (scope != ToolScope.project || string.IsNullOrEmpty(scopeName))
         {
             return ("This detector requires scope='project' with a projectName as scopeName.");
         }
@@ -717,11 +713,14 @@ public class SentinelScanTools
 
     [McpServerTool(Name = "ScanBreakingChanges")]
     [Produces(DataTag.ApiBaseline)]
-    [Description("Compares a previously captured API surface baseline against current code and reports breaking changes: removed types, removed/renamed members, signature changes. baseline: the list returned by get_public_api_surface. Scope with projectName/filePath to match the baseline's original scope.")]
+    [Description("Compares a previously captured API surface baseline against current code and reports breaking changes: removed types, removed/renamed members, signature changes.")]
     public async Task<ToolResult<object>> ScanBreakingChanges(
         [Description(ToolParams.Reason)] string reason,
+       [Description("The baseline list returned by GetPublicApiSurface(persistBaseline: true).")]
        [ExternalInputRequired(DataTag.ApiBaseline)] List<PublicApiMember> baseline,
+       [Description("Scope to the project the baseline was captured from. Optional.")]
        [Consumes(DataTag.ProjectName)] string? projectName = null,
+       [Description("Scope to the file the baseline was captured from. Optional.")]
        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
        // RequestContext<CallToolRequestParams> requestParams = null,
        CancellationToken cancellationToken = default)
@@ -752,13 +751,12 @@ public class SentinelScanTools
 
     [McpServerTool(Name = "ScanDuplicateBlocksInClass")]
     [Produces(DataTag.Report)]
-    [Description("""
-        Finds duplicate statement sequences within the methods of a single class using structural hashing (SyntaxKind-based — matches regardless of variable names or literal values). Returns clone groups with: StatementCount, HasControlFlowExit (flag only, does not block finding), SnippetPreview, CapturedVariables (would become parameters if extracted), ProducedVariables (would need to be returned if extracted), and Occurrences (method, start line, end line, file). minStatements=3 for aggressive detection, 6+ for substantial clones only.
-        """)]
+    [Description("Finds duplicate statement sequences within the methods of a single class using structural hashing, which matches regardless of variable names or literal values.")]
     public async Task<ToolResult<object>> ScanDuplicateBlocksInClass(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ClassName)] string className,
+        [Description("Minimum statement-sequence length to report. Lower (e.g. 3) finds more, smaller clones; higher (6+) finds only substantial ones.")]
         [ToolOption(ToolOptionTag.Filter)] int minStatements = 4,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -787,15 +785,21 @@ public class SentinelScanTools
 
     [McpServerTool(Name = "GetPublicApiSurface")]
     [Produces(DataTag.Report)]
-    [Description("Returns the public API surface of a project. REQUIRED PARAMS BY MODE — persistBaseline=false (default): projectName required. persistBaseline=true: projectName optional (omit to scan the whole solution; filePath further narrows to one file). " +
-        "persistBaseline=false (default) → full List<ApiSurfaceEntry> with signatures, virtuality, and XML docs (for SDK documentation/API review). persistBaseline=true → compact List<PublicApiMember> baseline for passing to scan_breaking_changes. filePath scopes to a single file (persistBaseline=true only). includeMethods/includeProperties/includeTypes filter output (persistBaseline=false only). Returns a resultId and writes scan results to disk when output result payload exceeds the inline size threshold. Use get_large_result(resultId) to retrieve the results.")]
+    [Description("Returns the public API surface of a project: signatures, virtuality, and XML docs. With persistBaseline=true, returns a compact baseline instead, for later comparison via ScanBreakingChanges.")]
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName is required when persistBaseline=false (the default), but optional when persistBaseline=true (omit to scan the whole solution). Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> GetPublicApiSurface(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Required when persistBaseline=false. Optional when persistBaseline=true (omit to scan the whole solution).")]
         [Consumes(DataTag.ProjectName, required: true)] string? projectName = null,
+        [Description("false (default): return the full API surface with signatures and XML docs. true: return a compact baseline for ScanBreakingChanges.")]
         [ToolOption(ToolOptionTag.PersistBaseline)] bool persistBaseline = false,
+        [Description("Narrows to a single file. Only used when persistBaseline=true.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Description("Include methods in the result. Only used when persistBaseline=false.")]
         [ToolOption(ToolOptionTag.IncludeMethods)] bool includeMethods = true,
+        [Description("Include properties in the result. Only used when persistBaseline=false.")]
         [ToolOption(ToolOptionTag.IncludeProperties)] bool includeProperties = true,
+        [Description("Include types in the result. Only used when persistBaseline=false.")]
         [ToolOption(ToolOptionTag.IncludeTypes)] bool includeTypes = true,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)

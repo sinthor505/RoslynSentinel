@@ -71,14 +71,20 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetComprehensiveHealthReport")]
     [Produces(DataTag.Report)]
-    [Description("Generates a paged health report across one or more engines: Structure, Modernization, Performance, Safety, Architecture. Null engines → all engines. projectName/filePath narrow scope. offset/limit page project results. timeoutSeconds defaults to 25.")]
+    [Description("Generates a paged health report across one or more engines: Structure, Modernization, Performance, Safety, Architecture.")]
     public async Task<ToolResult<object>> GetComprehensiveHealthReport(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Engines to include. Omit to run all engines.")]
         List<HealthEngineType>? engines = null,
+        [Description("Restricts the report to one project. Omit for the whole solution.")]
         [Consumes(DataTag.ProjectName)] string? projectName = null,
+        [Description("Restricts the report to one file. Omit for the whole solution.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Description("Number of project results to skip before taking limit.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
+        [Description("Maximum number of project results to return.")]
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 10,
+        [Description("Maximum seconds to spend before returning partial results.")]
         [ToolOption(ToolOptionTag.Timeout)] int timeoutSeconds = 25,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -107,9 +113,10 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetSolutionMetrics")]
     [Produces(DataTag.Report)]
-    [Description("Returns deep metrics for the entire solution or a single project. projectName=null → solution-wide.")]
+    [Description("Returns deep metrics for the entire solution or a single project.")]
     public async Task<ToolResult<object>> GetSolutionMetrics(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Restricts metrics to one project. Omit for the whole solution.")]
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -170,11 +177,14 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetDiRegistrations")]
     [Produces(DataTag.Report)]
-    [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a scoped project/file. Returns service type, implementation type, lifetime, and source location. lifetimeFilter: Singleton, Scoped, or Transient.")]
+    [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a scoped project/file. Returns service type, implementation type, lifetime, and source location.")]
     public async Task<ToolResult<object>> GetDiRegistrations(
         [Description(ToolParams.Reason)] string reason,
+        [Description("Restricts results to one project. Omit to search the whole solution.")]
         [Consumes(DataTag.ProjectName)] string? projectName = null,
+        [Description("Restricts results to one file. Omit to search the whole solution.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Description("Filters by lifetime: Singleton, Scoped, or Transient. Omit for all lifetimes.")]
         [ToolOption(ToolOptionTag.Filter)] string? lifetimeFilter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -202,12 +212,14 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetCallGraph")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Builds a call graph for a method. direction: forward (what the method calls → CallGraphNode tree), reverse (who calls this method → ReverseCallGraphNode tree), tree (markdown call-tree string). maxDepth defaults to 3. For a single-level, flat list of callers instead of a multi-level tree, use FindReferences(kind: callers) — cheaper when you don't need depth beyond direct callers.")]
+    [Description("Builds a call graph for a method. For a single-level, flat list of callers instead of a multi-level tree, use FindReferences(kind: callers) — cheaper when you don't need depth beyond direct callers.")]
     public async Task<ToolResult<object>> GetCallGraph(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
+        [Description("forward: what the method calls, as a CallGraphNode tree. reverse: who calls this method, as a ReverseCallGraphNode tree. tree: a markdown call-tree string.")]
         [ToolOption(ToolOptionTag.Direction)] string direction = "forward",
+        [Description("Maximum levels of depth to traverse.")]
         [ToolOption(ToolOptionTag.MaxDepth)] int maxDepth = 3,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -313,13 +325,13 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "TraceVariableLifetime")]
     [Produces(DataTag.Report)]
-    [Description("""
-        Traces a variable's complete lifetime from declaration through every read, write, ref/out pass, return, and closure capture, across all code paths (loops, conditionals, try/catch) in the enclosing scope. For a local variable or parameter only — for a method/property/field's usages instead, use FindReferences. lineNumber: 1-based line of the declaration (disambiguates same-name variables). Returns: TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned, IsCapturedInClosure, and Accesses list with Line, Column, AccessKind (Declaration/Read/Write/Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.
-        """)]
+    [Description("Traces a local variable or parameter's complete lifetime from declaration through every read, write, ref/out pass, return, and closure capture, across all code paths (loops, conditionals, try/catch) in the enclosing scope. For a method/property/field's usages instead, use FindReferences. Returns TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned, IsCapturedInClosure, and an Accesses list with Line, Column, AccessKind (Declaration/Read/Write/Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.")]
     public async Task<ToolResult<object>> TraceVariableLifetime(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("Name of the local variable or parameter to trace.")]
         [Consumes(DataTag.SymbolName)] string variableName,
+        [Description("1-based line of the declaration. Disambiguates when the same name is declared more than once in the file.")]
         [Consumes(DataTag.StartLine)] int lineNumber,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)

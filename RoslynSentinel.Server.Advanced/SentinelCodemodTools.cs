@@ -111,14 +111,15 @@ public class SentinelCodemodTools
 
     [McpServerTool(Name = "ApplyFileCodemod")]
     [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Applies a file-wide code transformation; most transforms return updated file content. transform: call describe_advanced_tool_options("apply_file_codemod") for valid values. libraryMode=true → .ConfigureAwait(false) on all awaits (for add_configure_await_false). preview=true → returns updated content without writing (for format_document_safe / sort_and_deduplicate_usings). Some transforms return type-specific results (SourceTransformResult, UsingsCleanupResult, etc.). Throws InvalidOperationException if file not found or no changes needed.
-        """)]
+    [Description("Applies a file-wide code transformation. Call DescribeAdvancedToolOptions(\"apply_file_codemod\") for the list of transform values.")]
     public async Task<ToolResult<object>> ApplyFileCodemod(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_file_codemod\") for valid values.")]
         [ExternalInputRequired(DataTag.DataType)] string transform,
+        [Description("Only used by add_configure_await_false: true (default) appends .ConfigureAwait(false) to all awaits.")]
         [ExternalInputRequired(DataTag.LibraryMode)] bool libraryMode = true,
+        [Description("Only used by format_document_safe / sort_and_deduplicate_usings: true returns updated content without writing to disk.")]
         [ToolOption(ToolOptionTag.Preview)] bool preview = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -390,18 +391,20 @@ public class SentinelCodemodTools
 
     [McpServerTool(Name = "ApplyMethodCodemod")]
     [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Applies a method-scoped code transformation; most transforms return updated file content. transform: call describe_advanced_tool_options("apply_method_codemod") for valid values. direction: required for convert_expression_body — "ToExpression" or "ToBlock". lockFieldName names the lock field for make_method_thread_safe (default "_lock"). contextSnippet/lineBefore/lineAfter disambiguate convert_expression_body. Some transforms return type-specific results (SourceTransformResult, OutParamConversionResult). Throws InvalidOperationException if file or method not found.
-        """)]
+    [Description("Applies a method-scoped code transformation. Call DescribeAdvancedToolOptions(\"apply_method_codemod\") for the list of transform values.")]
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: direction is required for transform=convert_expression_body ("ToExpression" or "ToBlock"); unused by other transforms. Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> ApplyMethodCodemod(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string methodName,
+        [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_method_codemod\") for valid values.")]
         [ExternalInputRequired(DataTag.Transform)] string transform,
+        [Description("Required for transform=convert_expression_body: \"ToExpression\" or \"ToBlock\". Unused by other transforms.")]
         [ToolOption(ToolOptionTag.Direction)] string? direction = null,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
+        [Description("Only used by transform=make_method_thread_safe: the lock field's name.")]
         [ExternalInputRequired(DataTag.SymbolName)] string lockFieldName = "_lock",
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -763,15 +766,17 @@ public class SentinelCodemodTools
 
     [McpServerTool(Name = "ApplyClassCodemod")]
     [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Applies a class-scoped code transformation; returns updated file content as a string. transform: call describe_advanced_tool_options("apply_class_codemod") for valid values. direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty". contextSnippet/lineBefore/lineAfter disambiguate convert_property_safe. Throws InvalidOperationException if file or class not found.
-        """)]
+    [Description("Applies a class-scoped code transformation. Call DescribeAdvancedToolOptions(\"apply_class_codemod\") for the list of transform values.")]
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: propertyName is required by transforms that target a specific property (e.g. convert_property_safe); unused by class-wide transforms. direction is required for transform=convert_property_safe ("ToFullProperty" or "ToAutoProperty"). Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> ApplyClassCodemod(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.ClassName)] string className,
+        [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_class_codemod\") for valid values.")]
         [ExternalInputRequired(DataTag.Transform)] string transform,
+        [Description("Required by transforms that target a single property (e.g. convert_property_safe). Unused by class-wide transforms.")]
         [ExternalInputRequired(DataTag.PropertyName)] string? propertyName = null,
+        [Description("Required for transform=convert_property_safe: \"ToFullProperty\" or \"ToAutoProperty\". Unused by other transforms.")]
         [ToolOption(ToolOptionTag.Direction)] string? direction = null,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
@@ -1115,19 +1120,23 @@ public class SentinelCodemodTools
 
     [McpServerTool(Name = "Generate")]
     [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Generates new code for a type or method. kind: call describe_advanced_tool_options("generate") for valid values, required parameters per kind, and return types. filePath required for all kinds except generate_decorator_class. decoratorPrefix defaults to "Logging". framework for test generation: "NUnit" (default), "xunit", or "mstest". disambiguateLine resolves overloaded method targets for generate_path_driven_tests.
-        """)]
+    [Description("Generates new code for a type or method. Call DescribeAdvancedToolOptions(\"generate\") for the list of kind values, their required parameters, and return types.")]
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: filepath is required for every kind except generate_decorator_class. className/methodName/members/disambiguateLine requirements vary per kind — see DescribeAdvancedToolOptions("generate"). Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> Generate(
-        string kind,
+        [Description("The kind of code to generate. See DescribeAdvancedToolOptions(\"generate\") for valid values.")]
+        CodemodKind kind,
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Consumes(DataTag.ClassName)] string? className = null,
         [Consumes(DataTag.MethodName)] string? methodName = null,
         [Consumes(DataTag.MemberName)] string? members = null,
+        [Description("Only used by kind=generate_decorator_class: the prefix for the generated decorator class name.")]
         [ExternalInputRequired(DataTag.DecoratorPrefix)] string decoratorPrefix = "Logging",
+        [Description("Only used by kind=generate_decorator_class: scopes the interface lookup to one project.")]
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
+        [Description("Only used by kind=generate_path_driven_tests: \"NUnit\" (default), \"xunit\", or \"mstest\".")]
         [ExternalInputRequired(DataTag.Framework)] string framework = "NUnit",
+        [Description("Only used by kind=generate_path_driven_tests: resolves an overloaded method target.")]
         [ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -1138,7 +1147,7 @@ public class SentinelCodemodTools
 
             switch (kind)
             {
-                case "add_benchmark_stub":
+                case CodemodKind.add_benchmark_stub:
                     {
                         if (!filePath.Validated)
                         {
@@ -1163,7 +1172,7 @@ public class SentinelCodemodTools
 
                         return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
                     }
-                case "generate_constructor":
+                case CodemodKind.generate_constructor:
                     {
                         if (!filePath.Validated)
                         {
@@ -1183,7 +1192,7 @@ public class SentinelCodemodTools
 
                         return new ToolResult<object>() { Success = true, Data = result.ToJsonSummary() };
                     }
-                case "generate_decorator_class":
+                case CodemodKind.generate_decorator_class:
                     {
                         if (string.IsNullOrEmpty(className))
                         {
@@ -1198,7 +1207,7 @@ public class SentinelCodemodTools
 
                         return new ToolResult<object>() { Success = true, Data = result };
                     }
-                case "generate_equality_overrides":
+                case CodemodKind.generate_equality_overrides:
                     {
                         if (!filePath.Validated)
                         {
@@ -1218,7 +1227,7 @@ public class SentinelCodemodTools
 
                         return new ToolResult<object>() { Success = true, Data = result.ToJsonSummary() };
                     }
-                case "generate_fluent_builder":
+                case CodemodKind.generate_fluent_builder:
                     {
                         if (!filePath.Validated)
                         {
@@ -1241,7 +1250,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"generate_fluent_builder for '{className}' in '{filePath}'") };
                         }
                     }
-                case "generate_path_driven_tests":
+                case CodemodKind.generate_path_driven_tests:
                     {
                         if (!filePath.Validated)
                         {
@@ -1256,7 +1265,7 @@ public class SentinelCodemodTools
                         var result = await _pathDrivenTestEngine.GeneratePathDrivenTestsAsync(filePath, methodName, framework, disambiguateLine, cancellationToken);
                         return new ToolResult<object>() { Success = true, Data = result };
                     }
-                case "generate_repository_interface":
+                case CodemodKind.generate_repository_interface:
                     {
                         if (filePath.Validated)
                         {
@@ -1271,7 +1280,7 @@ public class SentinelCodemodTools
                         var result = await _codeGenerationEngine.GenerateRepositoryInterfaceAsync(filePath, className, cancellationToken);
                         return new ToolResult<object>() { Success = true, Data = result };
                     }
-                case "generate_test_scaffold":
+                case CodemodKind.generate_test_scaffold:
                     {
                         if (!filePath.Validated)
                         {
@@ -1286,7 +1295,7 @@ public class SentinelCodemodTools
                         var result = await _testingEngine.GenerateTestScaffoldAsync(filePath, className, cancellationToken);
                         return new ToolResult<object>() { Success = true, Data = result };
                     }
-                case "generate_test_skeleton":
+                case CodemodKind.generate_test_skeleton:
                     {
                         if (!filePath.Validated)
                         {
@@ -1301,7 +1310,7 @@ public class SentinelCodemodTools
                         var result = await _testingEngine.GenerateTestSkeletonAsync(filePath, className);
                         return new ToolResult<object>() { Success = true, Data = result };
                     }
-                case "generate_to_string_safe":
+                case CodemodKind.generate_to_string_safe:
                     {
                         if (!filePath.Validated)
                         {

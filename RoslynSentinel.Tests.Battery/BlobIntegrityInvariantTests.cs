@@ -137,7 +137,7 @@ public class BlobIntegrityInvariantTests
         var typeName = await FindATypeNameAsync();
 
         var result = await _tools.SyncInterface(
-            reason: "test", _targetFile, interfaceName: "IDisposable", action: "sync",
+            reason: "test", _targetFile, interfaceName: "IDisposable", action: SyncInterfaceAction.sync,
             className: typeName, dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "SyncInterface");
@@ -147,7 +147,7 @@ public class BlobIntegrityInvariantTests
     public async Task Inline_IssuedChangeIdResolvesToABlobAsync()
     {
         var result = await _tools.Inline(
-            reason: "test", _targetFile, targetName: "value", kind: "variable", dryRun: false);
+            reason: "test", _targetFile, targetName: "value", kind: InlineKind.variable, dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "Inline");
     }

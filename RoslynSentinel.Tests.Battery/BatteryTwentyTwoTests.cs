@@ -571,7 +571,7 @@ public class OrderService : IOrderService
     public async Task FindBestInsertionPoint_ValidClass_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolTools.GetBestInsertionPoint(reason: "test", "Test.cs", "Order", "method");
+        var result = await _symbolTools.GetBestInsertionPoint(reason: "test", "Test.cs", "Order", InsertionMemberKind.method);
         Assert.That(result, Is.Not.Null);
     }
 

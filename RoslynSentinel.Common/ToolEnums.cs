@@ -226,3 +226,29 @@ public enum ContentHashPurpose
 {
     Comment
 }
+// Added by AddTopLevelType (expected - used for diagnostics)
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum InsertionMemberKind
+{
+    field, constructor, destructor, property, @event, method, nestedtype
+}
+// Added by AddTopLevelType (expected - used for diagnostics)
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SyncInterfaceAction
+{
+    implement, sync, verify
+}
+// Added by AddTopLevelType (expected - used for diagnostics)
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum InlineKind
+{
+    method, variable, field, parameter
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum CodemodKind
+{
+    add_benchmark_stub, generate_constructor, generate_decorator_class, generate_equality_overrides,
+    generate_fluent_builder, generate_path_driven_tests, generate_repository_interface,
+    generate_test_scaffold, generate_test_skeleton, generate_to_string_safe
+}

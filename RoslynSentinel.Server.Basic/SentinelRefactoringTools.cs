@@ -285,43 +285,55 @@ public class SentinelRefactoringTools
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateMapping") };
         }
     }
-
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: required-param set depends entirely on 'operation' — add
+    // needs containerName (or, for a brand-new top-level type, newMemberSource alone with no
+    // typedKind); view needs containerName; remove needs memberName; replace needs memberName +
+    // newMemberSource. Within add, exactly one of newMemberSource or typedKind+typedName+typedType
+    // is required. No param besides filepath/operation is universally required, so a model can
+    // supply the wrong subset for its chosen operation and only find out at runtime.
     [McpServerTool(Name = "Member")]
     [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, replace, or view a type member (method, property, field, constructor). " +
-        "REQUIRED PARAMS BY OPERATION — add: containerName. view: containerName. remove: memberName. replace: memberName + newMemberSource. " +
-        "containerName is NOT needed for remove/replace (they resolve memberName directly, optionally disambiguated via contextSnippet/lineBefore/lineAfter, regardless of container) — only add/view need it. " +
-        "OPERATION add: containerName required. Two modes — pass newMemberSource (raw source, e.g. 'private decimal Foo() { ... }') with " +
-        "optional position (null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\"); OR pass typedKind (\"property\"/\"field\") " +
-        "with typedName+typedType to generate a typed member (property: hasSetter/isInit/accessibility default public; field: isReadonly/isStatic/initializer/accessibility default private). " +
-        "OPERATION add, NEW TOP-LEVEL TYPE: to add a brand-new enum/class/record/struct/interface that doesn't exist yet, omit containerName and pass the full type declaration as newMemberSource " +
-        "(e.g. 'public enum BuildOutcome { Success, Failure }'). Adds it to the file's namespace (or namespaceName, if the file has more than one). This is the only way to introduce a new top-level type — " +
-        "ModifyEnum/ChangeAccessibility/etc. all require the type to already exist. " +
-        "OPERATION remove: memberName required. By default checks for callers and implementations (via FindReferences(kind: all)) and refuses if found; pass skipPrecheck: true to remove unconditionally. For zero-usages-only contract, use SafeDeleteUnusedSymbol instead. " +
-        "OPERATION replace: memberName + newMemberSource required. This is the right choice even for a one-line change inside a member — don't avoid it just because the edit is small. " +
-        "Prefer this over a unified diff/patch (e.g. via ApplyDiff) to edit part of a member: even though ApplyDiff tolerates modest line-number drift, a whole-member replacement can't drift out of sync the way a hand-built diff hunk can. " +
-        "Read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your small edit in that copy, and pass the WHOLE resulting member as newSource — modifiers, signature, and body, not a fragment. " +
-        "OPERATION view: containerName required. Lists the container's direct members (name, kind, signature, line range) — use this to find the exact memberName/contextSnippet to pass to remove or replace. " +
-        "For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId for add/remove/replace, member list for view.")]
+    [Description("Add, remove, replace, or view a type member (method, property, field, constructor), or add a brand-new top-level type. This is the right choice even for a one-line change inside a member — read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
     public async Task<ToolResult<object>> Member(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("add: adds a member (or a new top-level type). remove: deletes a member — by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add (unless adding a brand-new
+        // top-level type — see newMemberSource) and operation=view; unused for remove/replace, which
+        // resolve memberName directly regardless of container.
+        [Description("Required for add (except when adding a brand-new top-level type) and view. Not needed for remove/replace.")]
         [Consumes(DataTag.SymbolName, required: false)] string? containerName = null,
-        [Description("Only used for operation 'add' when newMemberSource is a top-level type declaration (enum/class/record/struct/interface) and containerName is omitted. Disambiguates which namespace to add it to, when the file has more than one. Ignored otherwise.")][ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
+        [Description("Only used for operation=add when newMemberSource is a top-level type declaration (enum/class/record/struct/interface) and containerName is omitted. Disambiguates which namespace to add it to, when the file has more than one. Ignored otherwise.")]
+        [ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=remove and operation=replace;
+        // unused for add/view.
+        [Description("Required for remove and replace — the member to target. For overloaded targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=replace; for operation=add,
+        // required unless typedKind+typedName+typedType is supplied instead (exactly one of the two
+        // forms is required, not both); unused for remove/view. Also doubles as the full top-level
+        // type declaration when adding a brand-new type with containerName omitted.
+        [Description("replace: the full replacement member source (signature + body). add: either the full raw member source (with containerName), or a brand-new top-level type declaration (enum/class/record/struct/interface) with containerName omitted — mutually exclusive with typedKind.")]
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
+        [Description("add only: where to insert — null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\". Ignored for a brand-new top-level type.")]
         [ExternalInputRequired(DataTag.Position)] string? position = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: alternative to newMemberSource for operation=add — set
+        // this (with typedName+typedType) to generate a typed property/field instead of supplying
+        // raw source. Mutually exclusive with newMemberSource; unused for remove/view/replace.
+        [Description("add only, alternative to newMemberSource: generates a typed property or field. Requires typedName+typedType alongside it.")]
         [ExternalInputRequired(DataTag.SymbolKind, required: false)] TypedMemberKind? typedKind = null,
+        [Description("Required when typedKind is set: the generated member's name.")]
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? typedName = null,
+        [Description("Required when typedKind is set: the generated member's type.")]
         [ExternalInputRequired(DataTag.DataType, required: false)] string? typedType = null,
-        [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility)] string accessibility = "public",
-        [ExternalInputRequired(DataTag.HasSetter)] bool hasSetter = true,
-        [ExternalInputRequired(DataTag.IsInit)] bool isInit = false,
-        [ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
-        [ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
-        [ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
-        [Description("When false (default), refuses removal if the member has any callers or implementations (checked the same way as FindReferences(kind: all)). Set true to skip this check and remove unconditionally. remove only.")] bool skipPrecheck = false,
+        [Description(ToolParams.AccessibilityValues + " typedKind generation only.")][ExternalInputRequired(DataTag.Accessibility)] string accessibility = "public",
+        [Description("typedKind=property only.")][ExternalInputRequired(DataTag.HasSetter)] bool hasSetter = true,
+        [Description("typedKind=property only.")][ExternalInputRequired(DataTag.IsInit)] bool isInit = false,
+        [Description("typedKind=field only.")][ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
+        [Description("typedKind=field only.")][ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
+        [Description("typedKind=field only: optional initializer expression.")][ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
+        [Description("remove only. When false (default), refuses removal if the member has any callers or implementations (checked the same way as FindReferences(kind: all)). Set true to skip this check and remove unconditionally.")] bool skipPrecheck = false,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
@@ -525,17 +537,18 @@ public class SentinelRefactoringTools
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Member") };
         }
     }
-
     [McpServerTool(Name = "UsingDirective")]
     [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view using directives in a file. REQUIRED PARAMS BY OPERATION — add: namespaceName. remove: namespaceName. view: none. " +
-        "OPERATION add: inserts a using (namespaceName required; for static usings prefix with \"static \", e.g. \"static System.Math\"); no-op if already present. simplifyExisting (add only): after inserting, runs Roslyn's Simplifier (semantic-model-based, not text find/replace) over the file to shorten now-redundant fully-qualified references — it only reduces a name when doing so introduces no ambiguity. OPERATION remove: deletes the matching using directive (namespaceName required; same \"static \" prefix convention). OPERATION view: lists current using directives (name, isStatic, alias); no changes made, namespaceName not required. Returns changeId for add/remove, using list for view.")]
+    [Description("Add, remove, or view using directives in a file.")]
     public async Task<ToolResult<object>> UsingDirective(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("add: inserts a using; no-op if already present. remove: deletes the matching using directive. view: lists current using directives (name, isStatic, alias); makes no changes.")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add/remove, unused for operation=view.
+        [Description("Required for add/remove. For static usings, prefix with \"static \" (e.g. \"static System.Math\"). Not required for view.")]
         [Consumes(DataTag.SymbolName, required: false)] string? namespaceName = null,
-        [Description("Simplify existing fully-qualified references in the file after adding this using (add only). Uses Roslyn's Simplifier against the semantic model, not text find/replace, so it never introduces a naming collision.")] bool simplifyExisting = false,
+        [Description("add only. After inserting, runs Roslyn's Simplifier (semantic-model-based, not text find/replace) over the file to shorten now-redundant fully-qualified references — only reduces a name when doing so introduces no ambiguity.")] bool simplifyExisting = false,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -608,14 +621,14 @@ public class SentinelRefactoringTools
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UsingDirective") };
         }
     }
-
     [McpServerTool(Name = "ModifyEnum")]
     [Produces(DataTag.ChangeId)]
-    [Description("Replaces an enum's complete member list in one operation. Values is a comma-separated list of member names in desired order (e.g. \"Pending,Shipped,Cancelled\"); append \"=N\" to set explicit value (e.g. \"Archived=99\"). Omitted names are removed; new names are added. Explicit values (\"=N\") are preserved; implicit members take next ordinal from predecessor (as if hand-typed). Pass complete list every time, not delta. For enums with same name, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Use GetTypeInfo(typeName, include:\"members\") to see current values first. Returns changeId.")]
+    [Description("Replaces an enum's complete member list in one operation. Use GetTypeInfo(typeName, include:\"members\") to see current values first.")]
     public async Task<ToolResult<object>> ModifyEnum(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
+        [Description("Comma-separated list of member names in the desired order (e.g. \"Pending,Shipped,Cancelled\"); append \"=N\" for an explicit value (e.g. \"Archived=99\"). Omitted names are removed, new names are added, explicit values are preserved, and implicit members take the next ordinal from their predecessor — as if hand-typed. Pass the complete list every time, not a delta.")]
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string values,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -707,17 +720,17 @@ public class SentinelRefactoringTools
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ChangeAccessibility") };
         }
     }
-
     [McpServerTool(Name = "SummaryComment")]
     [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view a /// <summary> XML doc comment on a type or member. REQUIRED PARAMS BY OPERATION — add: summaryText. remove: none. view: none. " +
-        "OPERATION add: adds or replaces the summary (summaryText required); replaces any existing summary. OPERATION remove: deletes the summary comment if present; no-op if none exists. OPERATION view: returns the current summary text (or null if none); no changes made. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId for add/remove, summary text for view.")]
+    [Description("Add, remove, or view a /// <summary> XML doc comment on a type or member. For overloaded targets, combine targetName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
     public async Task<ToolResult<object>> SummaryComment(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("add: adds or replaces the summary, overwriting any existing one. remove: deletes the summary comment if present; no-op if none exists. view: returns the current summary text (or null if none); makes no changes.")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        [Description("The new summary text (add only, required for add).")][Consumes(DataTag.SourceCode, required: false)] string? summaryText = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add, unused for remove/view.
+        [Description("Required for add — the new summary text. Not used for remove/view.")][Consumes(DataTag.SourceCode, required: false)] string? summaryText = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
@@ -784,18 +797,22 @@ public class SentinelRefactoringTools
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SummaryComment") };
         }
     }
-
     [McpServerTool(Name = "ConstructorParameter")]
     [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view DI constructor parameters on a class. REQUIRED PARAMS BY OPERATION — add: paramName + paramType. remove: paramName. view: none. " +
-        "OPERATION add: creates private readonly field, parameter, and body assignment in one step (paramName, paramType required). fieldName overrides the default derived field name (_camelCase); passing fieldName equal to paramName or its underscore-prefixed form both resolve to '_paramName', never a bare name that would collide with the parameter. Creates a constructor if none exists. OPERATION remove: deletes the parameter and its assignment statement (paramName required); the backing field is only deleted if a solution-wide reference check confirms nothing else in the class still uses it — otherwise it's left in place. OPERATION view: lists current constructor parameters and their inferred backing fields; no changes made, paramName/paramType not required. For classes with the same name in the same file, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId for add/remove, parameter list for view.")]
+    [Description("Add, remove, or view DI constructor parameters on a class. For classes with the same name in the same file, combine className with contextSnippet/lineBefore/lineAfter to disambiguate.")]
     public async Task<ToolResult<object>> ConstructorParameter(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("add: creates a private readonly field, parameter, and body assignment in one step; creates a constructor if none exists. remove: deletes the parameter and its assignment statement — the backing field is only deleted if a solution-wide reference check confirms nothing else in the class still uses it, otherwise it's left in place. view: lists current constructor parameters and their inferred backing fields; makes no changes.")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
         [Consumes(DataTag.ClassName, required: true)] string className,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add/remove, unused for operation=view.
+        [Description("Required for add/remove. Not used for view.")]
         [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add, unused for remove/view.
+        [Description("Required for add. Not used for remove/view.")]
         [Consumes(DataTag.DataType, required: false)] string? paramType = null,
+        [Description("add only. Overrides the default derived field name (_camelCase); passing fieldName equal to paramName or its underscore-prefixed form both resolve to '_paramName', never a bare name that would collide with the parameter.")]
         [Consumes(DataTag.SymbolName, required: false)] string? fieldName = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -886,19 +903,23 @@ public class SentinelRefactoringTools
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ConstructorParameter") };
         }
     }
-
     [McpServerTool(Name = "MethodSignature")]
     [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view a method's parameters (general-purpose — not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). REQUIRED PARAMS BY OPERATION — add: paramName + paramType. remove: paramName. view: none. " +
-        "OPERATION add: appends a new parameter to the end of the parameter list (paramName, paramType required; defaultValue is an optional literal/expression, e.g. \"3\", making the parameter backward-compatible with existing call sites — for a default of the null literal specifically, use nullDefault:true instead of defaultValue:\"null\", since some MCP clients corrupt the literal string \"null\" in transit; see nullDefault's own description). OPERATION remove: only the LAST parameter can be removed (paramName must match it) — this is a deliberate restriction, since removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely; call sites passing the removed argument positionally are updated automatically, but a call site using named arguments or one that can't be safely re-parsed causes the whole operation to be refused with no changes made. OPERATION view: lists current parameters (name, type, default value); no changes made, paramName/paramType not required. For overloaded methods, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId for add/remove, parameter list for view.")]
+    [Description("Add, remove, or view a method's parameters (general-purpose — not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
     public async Task<ToolResult<object>> MethodSignature(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("add: appends a new parameter to the end of the parameter list. remove: only the LAST parameter can be removed (paramName must match it) — a deliberate restriction, since removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely; call sites passing the removed argument positionally are updated automatically, but a call site using named arguments (or one that can't be safely re-parsed) causes the whole operation to be refused with no changes made. view: lists current parameters (name, type, default value); makes no changes.")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
         [Consumes(DataTag.MethodName, required: true)] string methodName,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add/remove, unused for operation=view.
+        [Description("Required for add/remove. Not used for view.")]
         [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add, unused for remove/view.
+        [Description("Required for add. Not used for remove/view.")]
         [Consumes(DataTag.DataType, required: false)] string? paramType = null,
-        [Description("Optional literal or expression for the new parameter's default value (e.g. \"3\", \"\\\"foo\\\"\"). add only — omit for a required parameter. Do NOT pass the literal string \"null\" here to get a null default — use nullDefault:true instead (some MCP clients corrupt the string \"null\" in transit, silently producing a required parameter instead of one defaulted to null).")][ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
+        [Description("add only. Optional literal or expression for the new parameter's default value (e.g. \"3\", \"\\\"foo\\\"\") — omit for a required parameter. Do NOT pass the literal string \"null\" here to get a null default — use nullDefault:true instead (some MCP clients corrupt the string \"null\" in transit, silently producing a required parameter instead of one defaulted to null). Mutually exclusive with nullDefault.")]
+        [ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
@@ -907,7 +928,7 @@ public class SentinelRefactoringTools
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default,
-        [Description("add only. Sets the new parameter's default to the null literal directly, bypassing defaultValue entirely. Use this instead of defaultValue:\"null\" — see defaultValue's description for why. Mutually exclusive with defaultValue.")] bool nullDefault = false)
+        [Description("add only. Sets the new parameter's default to the null literal directly, bypassing defaultValue entirely — use this instead of defaultValue:\"null\". Mutually exclusive with defaultValue.")] bool nullDefault = false)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -1117,17 +1138,20 @@ public class SentinelRefactoringTools
             };
         }
     }
-
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds, replaces, or removes an attribute (with [Attribute] syntax) on a type or member. Action: add/replace/remove. existingAttribute name can include or omit brackets. newAttribute required for replace. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. This tool is for [Attribute] syntax only — use ChangeAccessibility for accessibility and ModifyModifier for non-accessibility keywords. Returns changeId.")]
+    [Description("Adds, replaces, or removes an [Attribute] on a type or member. Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords, not this tool.")]
     public async Task<ToolResult<object>> ModifyAttribute(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("For overloaded/duplicate-named targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
+        [Description("The attribute to add/replace/remove. May include or omit the surrounding [ ] brackets.")]
         [ExternalInputRequired(DataTag.AttributeName, required: true)] string existingAttribute,
-        [ExternalInputRequired(DataTag.AttributeName, required: false)] string newAttribute,
-        [ExternalInputRequired(DataTag.Action, required: true)] AttributeModifyAction action,
+        [Consumes(DataTag.Action, required: true)] AttributeModifyAction action,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=replace, unused for add/remove.
+        [Description("Required for action=replace — the attribute to replace existingAttribute with. Not used for add/remove.")]
+        [ExternalInputRequired(DataTag.AttributeName, required: false)] string? newAttribute = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
@@ -1140,6 +1164,11 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
+            if (action == AttributeModifyAction.replace && string.IsNullOrEmpty(newAttribute))
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute: newAttribute is required for action 'replace'.") };
+            }
+
             DocumentEditResult updated;
             if (action == AttributeModifyAction.add)
             {
@@ -1147,7 +1176,7 @@ public class SentinelRefactoringTools
             }
             else if (action == AttributeModifyAction.replace)
             {
-                updated = await _refactoringEngine.ReplaceAttributeAsync(filePath, targetName, existingAttribute, newAttribute, contextSnippet, lineBefore, lineAfter);
+                updated = await _refactoringEngine.ReplaceAttributeAsync(filePath, targetName, existingAttribute, newAttribute!, contextSnippet, lineBefore, lineAfter);
             }
             else if (action == AttributeModifyAction.remove)
             {
@@ -1248,16 +1277,16 @@ public class SentinelRefactoringTools
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyModifier") };
         }
     }
-
     [McpServerTool(Name = "ModifyBaseType")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a base type or interface from a type declaration. Action: add or remove. For types with the same name in the same file, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId.")]
+    [Description("Adds or removes a base type or interface from a type declaration.")]
     public async Task<ToolResult<object>> ModifyBaseType(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("For types with the same name in the same file, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: true)] string typeName,
-        string baseTypeName,
-        AddRemoveAction action,
+        [Description("The base type or interface name to add or remove.")] string baseTypeName,
+        [Description("add or remove.")] AddRemoveAction action,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,

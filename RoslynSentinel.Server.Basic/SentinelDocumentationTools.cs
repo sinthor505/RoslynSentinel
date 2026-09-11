@@ -341,17 +341,22 @@ public class SentinelDocumentationTools
             BytesWritten = bytes
         };
     }
-
-    // ── project_doc ──────────────────────────────────────────────────────────
-
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
-    [Description("Unified accessor for project doc files under docs/ (or docs/current/ if that subdirectory exists). plan → .../plans/; handoff → .../handoffs/; completed_work → .../completed/ (append only); documentation → .../documentation/; state → docs/migration-state.yaml (name ignored, always directly under docs/). name required for all file-based operations, accepts a nested relative path (e.g. 'plan-x-steps/01-baseline.md') as shown by action:list. On read: a name containing a directory separator is treated as an explicit path and is either found there or reported not-found — never substituted with a same-named file elsewhere. A bare name (no separator) or a wrong extension falls back to a basename search under the docType's subdirectory, then across all of docs/ (the same tree action:list walks), auto-resolving if exactly one file matches; when a fallback resolves to a different path than requested, the result carries a warning field naming both. content required for write/append.")]
+    [Description("Reads, writes, appends, or lists project doc files under docs/ (or docs/current/ if it exists). A bare filename or wrong extension falls back to a basename search; if that substitutes a different file than requested, the result's Warning field names both.")]
     public object ProjectDoc(
         [Description(ToolParams.Reason)] string reason,
+        [Description("read, write, append (completed_work only), or list.")]
         DocAction action,
+        [Description("Which doc category to operate on: plan → plans/, handoff → handoffs/, completed_work → completed/ (append-only), documentation → documentation/, state → docs/migration-state.yaml (name is ignored).")]
         DocType docType,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: name is required for every action except when
+        // docType=state (which uses a fixed filename) or action=list.
+        [Description("File name or nested relative path (e.g. \"plan-x-steps/01-baseline.md\"), as shown by action=list. A path containing a directory separator is treated as explicit and never substituted. Required for all file-based operations except docType=state.")]
         string? name = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: content is required when action=write or action=append,
+        // not used otherwise.
+        [Description("File content. Required for action=write or action=append.")]
         string? content = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -375,7 +380,7 @@ public class SentinelDocumentationTools
                     : new DocWriteResult { Success = false, Filename = name ?? "", Error = error };
             }
 
-            // ── list ─────────────────────────────────────────────────────────────
+            // ── list ───────────────────────────────────────────────────────────────
             if (action == DocAction.list)
             {
                 if (!Directory.Exists(docsRoot))
@@ -390,7 +395,7 @@ public class SentinelDocumentationTools
                 return new DocListResult { Files = files, Count = files.Count };
             }
 
-            // ── state (special: fixed path, no filename) ─────────────────────────
+            // ── state (special: fixed path, no filename) ─────────────────────────────
             if (docType == DocType.state)
             {
                 if (action == DocAction.read)
@@ -425,7 +430,7 @@ public class SentinelDocumentationTools
                 return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = $"action='{action}' is not valid for docType=state. Valid: read, write." };
             }
 
-            // ── file-based doc types ──────────────────────────────────────────────
+            // ── file-based doc types ───────────────────────────────────────────────
             if (name is null)
             {
                 return action == DocAction.read

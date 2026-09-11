@@ -216,7 +216,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveAllTypesToFiles_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.MoveAllTypesToFiles(reason: "test", "Order.cs");
+        var result = await _advTools.MoveAllTypesToFiles(reason: "test", ToolScope.file, "Order.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -256,7 +256,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveAllTypesToFilesInProject_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.MoveAllTypesToFiles("project", "TestProj");
+        var result = await _advTools.MoveAllTypesToFiles("test", ToolScope.project, "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -266,7 +266,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveAllTypesToFilesInSolution_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.MoveAllTypesToFiles(reason: "test", "solution");
+        var result = await _advTools.MoveAllTypesToFiles(reason: "test", ToolScope.solution);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -324,7 +324,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddAttribute_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyAttribute(reason: "test", "Order.cs", "Order", "[Serializable]", "", AttributeModifyAction.add);
+        var result = await _tools.ModifyAttribute(reason: "test", "Order.cs", "Order", "[Serializable]", AttributeModifyAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -344,7 +344,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveAttribute_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyAttribute(reason: "test", "Order.cs", "Order", "Serializable", "", AttributeModifyAction.remove);
+        var result = await _tools.ModifyAttribute(reason: "test", "Order.cs", "Order", "Serializable", AttributeModifyAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -657,7 +657,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineMethod_ValidMethod_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Inline(reason: "test", "Order.cs", "GetLabel", "method");
+        var result = await _advTools.Inline(reason: "test", "Order.cs", "GetLabel", InlineKind.method);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -697,7 +697,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineField_ValidField_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Inline(reason: "test", "Order.cs", "OrderId", "field");
+        var result = await _advTools.Inline(reason: "test", "Order.cs", "OrderId", InlineKind.field);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -707,7 +707,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineParameter_ValidParameter_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Inline("Order.cs", "orderId", "parameter", "Order");
+        var result = await _advTools.Inline(reason: "test", "Order.cs", "orderId", InlineKind.parameter, "Order");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -807,7 +807,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineVariable_ValidVariable_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.Inline(reason: "test", "Order.cs", "OrderId", "variable");
+        var result = await _advTools.Inline(reason: "test", "Order.cs", "OrderId", InlineKind.variable);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1051,7 +1051,7 @@ public enum Status { Active = 1, Pending = 2 }
 public interface IWorker { void Work(); }
 public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         SetSource(src, "Worker.cs");
-        var result = await _advTools.SyncInterface("Worker.cs", "IWorker", "sync", "Worker");
+        var result = await _advTools.SyncInterface(reason: "test", "Worker.cs", "IWorker", SyncInterfaceAction.sync, "Worker");
         Assert.That(result, Is.Not.Null);
     }
 

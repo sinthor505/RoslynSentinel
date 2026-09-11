@@ -130,18 +130,15 @@ public class SentinelGenerationTools
 
     [McpServerTool(Name = "InterpolateStringSafe")]
     [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Converts a string.Format(...) call to an interpolated string ($"...").        
-        contextSnippet: verbatim substring identifying the string.Format call to convert (required).
-        Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
-        Returns the updated file content.
-        """)]
-    // Unlike the built-in convert_to_interpolated_string, this resolves const string format arguments via the semantic model, so it works even when the format string is a named const rather than a literal. Handles {0:format} format specifiers correctly.
+    [Description("Converts a string.Format(...) call to an interpolated string. Resolves const string format arguments via the semantic model (works even when the format string is a named const, not just a literal) and handles {0:format} specifiers correctly.")]
     public async Task<string> InterpolateStringSafe(
         [Description(ToolParams.Reason)] string reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("Verbatim substring identifying the string.Format call to convert.")]
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Description(ToolParams.LineBefore)]
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)]
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
