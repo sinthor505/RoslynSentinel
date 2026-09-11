@@ -25,6 +25,7 @@ public sealed class LmStudioAgentClient
     private readonly HttpClient _httpClient;
     private readonly ILogger<LmStudioAgentClient> _logger;
     private readonly string _model;
+    private readonly Task _loadedModelStatusCheck;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -41,6 +42,63 @@ public sealed class LmStudioAgentClient
                 "The LLM model must be set via --llm-model or the ROSLYNSENTINEL_LLM_MODEL environment variable (LM Studio needs the loaded model's name).");
 
         _logger.LogInformation("LM Studio agent client targeting model {Model} at {BaseAddress}", _model, httpClient.BaseAddress);
+        _loadedModelStatusCheck = LogLoadedModelStatusAsync();
+    }
+
+    /// <summary>
+    /// Best-effort startup check against LM Studio's native REST API (<c>/api/v1/models</c>, not the
+    /// OpenAI-compat <c>/v1/models</c> — only the native one reports which models are actually
+    /// loaded right now vs merely downloaded, see reference_lmstudio_loaded_models_endpoint) so a run
+    /// against the wrong/unloaded model shows up as the first line of agent.log instead of only being
+    /// discoverable after the fact. Never throws — a failed check is logged and otherwise ignored, it
+    /// must not block or fail the run over a diagnostic nicety. Kicked off (not awaited) from the
+    /// constructor — a constructor can't be async — and awaited by <see cref="CompleteOnceAsync"/>
+    /// before the first real request, so it never delays DI construction but still guarantees its
+    /// log line lands before anything else.
+    /// </summary>
+    private async Task LogLoadedModelStatusAsync()
+    {
+        try
+        {
+            var baseUrl = LlmOptions.BaseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
+                ? LlmOptions.BaseUrl[..^"/v1".Length]
+                : LlmOptions.BaseUrl;
+
+            using var response = await _httpClient.GetAsync($"{baseUrl}/api/v1/models");
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Could not verify loaded model via {Url} ({StatusCode}); proceeding without confirmation.",
+                    $"{baseUrl}/api/v1/models", response.StatusCode);
+                return;
+            }
+
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var match = doc.RootElement.GetProperty("models").EnumerateArray()
+                .FirstOrDefault(m => string.Equals(
+                    m.TryGetProperty("key", out var k) ? k.GetString() : null, _model, StringComparison.Ordinal));
+
+            if (match.ValueKind != JsonValueKind.Object)
+            {
+                _logger.LogWarning(
+                    "Configured model {Model} was not found in LM Studio's model list at all — check ROSLYNSENTINEL_LLM_MODEL/--llm-model for a typo.",
+                    _model);
+            }
+            else if (!match.TryGetProperty("loaded_instances", out var instances) || instances.GetArrayLength() == 0)
+            {
+                _logger.LogWarning(
+                    "Configured model {Model} is known to LM Studio but has no loaded instance — requests will fail or LM Studio will need to load it on demand.",
+                    _model);
+            }
+            else
+            {
+                _logger.LogInformation("Confirmed {Model} has a loaded instance on LM Studio.", _model);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Loaded-model check against LM Studio failed; proceeding without confirmation.");
+        }
     }
 
     public async Task<AgentChatMessage> CompleteAsync(
@@ -74,6 +132,8 @@ public sealed class LmStudioAgentClient
         int maxTokens,
         CancellationToken cancellationToken)
     {
+        await _loadedModelStatusCheck;
+
         var requestBody = new ResponsesRequest
         {
             Model = _model,
