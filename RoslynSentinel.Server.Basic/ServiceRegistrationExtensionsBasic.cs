@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Server.Basic;
 
@@ -143,22 +144,22 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<WorkspaceReadNavigationImpl>();
             services.AddSingleton<WorkspaceReadNavigationTools>();
             services.AddSingleton<SentinelWorkspaceTools>();
-            mcpBuilder.WithTools<SentinelWorkspaceTools>();
+            mcpBuilder.WithToolsFixed<SentinelWorkspaceTools>();
         }
         if (activeToolClasses.Contains("SentinelDocumentationTools"))
         {
             services.AddSingleton<SentinelDocumentationTools>();
-            mcpBuilder.WithTools<SentinelDocumentationTools>();
+            mcpBuilder.WithToolsFixed<SentinelDocumentationTools>();
         }
         if (activeToolClasses.Contains("SentinelSymbolTools"))
         {
             services.AddSingleton<SentinelSymbolTools>();
-            mcpBuilder.WithTools<SentinelSymbolTools>();
+            mcpBuilder.WithToolsFixed<SentinelSymbolTools>();
         }
         if (activeToolClasses.Contains("SentinelGitTools"))
         {
             services.AddSingleton<SentinelGitTools>();
-            mcpBuilder.WithTools<SentinelGitTools>();
+            mcpBuilder.WithToolsFixed<SentinelGitTools>();
         }
         if (activeToolClasses.Contains("SentinelAdminTools"))
         {
@@ -166,7 +167,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             // ServerStdio.cs/ServerHttp.cs), so --mode alone can't reach it; only an explicit
             // --mode=Admin or --include-tools=SentinelAdminTools activates it.
             services.AddSingleton<SentinelAdminTools>();
-            mcpBuilder.WithTools<SentinelAdminTools>();
+            mcpBuilder.WithToolsFixed<SentinelAdminTools>();
         }
         if (activeToolClasses.Contains("SentinelWholeFileWriteTools"))
         {
@@ -175,7 +176,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             // --mode=Admin/--mode=WholeFileWrite or --include-tools=SentinelWholeFileWriteTools
             // activates it.
             services.AddSingleton<SentinelWholeFileWriteTools>();
-            mcpBuilder.WithTools<SentinelWholeFileWriteTools>();
+            mcpBuilder.WithToolsFixed<SentinelWholeFileWriteTools>();
         }
         if (activeToolClasses.Contains("SentinelIntelligenceTools"))
         {
@@ -190,7 +191,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         if (activeToolClasses.Contains("SentinelRefactoringTools"))
         {
             services.AddSingleton<SentinelRefactoringTools>();
-            mcpBuilder.WithTools<SentinelRefactoringTools>();
+            mcpBuilder.WithToolsFixed<SentinelRefactoringTools>();
         }
         if (activeToolClasses.Contains("SentinelAdvancedRefactoringTools"))
         {

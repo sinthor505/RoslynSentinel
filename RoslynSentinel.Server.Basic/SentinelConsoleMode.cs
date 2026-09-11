@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 
 using ModelContextProtocol.Server;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Server.Basic;
 
@@ -552,7 +553,7 @@ public static partial class SentinelConsoleMode
                     .SelectMany(type =>
                     {
                         var instance = services.GetService(type);
-                        var opts = new McpServerToolCreateOptions { Services = services };
+                        var opts = new McpServerToolCreateOptions { Services = services, SchemaCreateOptions = McpToolSchemaFix.SchemaCreateOptions };
                         return type
                             .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                             .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null
