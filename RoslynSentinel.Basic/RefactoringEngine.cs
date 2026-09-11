@@ -1194,6 +1194,18 @@ public class RefactoringEngine
             };
         }
 
+        if (container is EnumDeclarationSyntax)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Cannot add a member to enum \"{containerName}\" via AddMember: enum members " +
+                          "are not MemberDeclarationSyntax and use comma-separated syntax, not this method's " +
+                          "member grammar. Use ModifyEnumAsync instead."
+            };
+        }
+
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
         if (newMember == null)
         {
@@ -1212,7 +1224,10 @@ public class RefactoringEngine
             InterfaceDeclarationSyntax i => (BaseTypeDeclarationSyntax)i.AddMembers(newMember),
             RecordDeclarationSyntax r => (BaseTypeDeclarationSyntax)r.AddMembers(newMember),
             StructDeclarationSyntax s => (BaseTypeDeclarationSyntax)s.AddMembers(newMember),
-            _ => container
+            _ => throw new NotSupportedException(
+                $"AddMemberAsync: unhandled container type {container.GetType().Name} for \"{containerName}\". " +
+                "This is a bug — every BaseTypeDeclarationSyntax subtype must have an explicit case here; " +
+                "silently returning the container unchanged would falsely report success.")
         };
         return new DocumentEditResult
         {

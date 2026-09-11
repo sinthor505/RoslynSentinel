@@ -87,6 +87,25 @@ public class Animal
         Assert.That(result.UpdatedText, Does.Contain("Speak"), "Method should be added to class.");
     }
 
+    [Test]
+    public async Task AddMember_ToEnum_RejectsInsteadOfSilentNoOp()
+    {
+        SetSource(@"
+public enum ToolScope
+{
+    file, project, solution
+}
+", "ToolScope.cs");
+
+        var result = await _engine.AddMemberAsync("ToolScope.cs", "ToolScope", "reproScratchMarker");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit),
+            "Enum containers must be rejected loudly, not silently return the container unchanged " +
+            "while reporting Modified (see docs/current/issue_member_add_silent_persistence.md).");
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "No text should be produced for a rejected edit.");
+        Assert.That(result.Message, Does.Contain("ModifyEnumAsync"), "Error should point at the enum-shaped tool.");
+    }
+
     // ══════════════════════════════════════════════════════════════
     // AddTopLevelTypeAsync
     // ══════════════════════════════════════════════════════════════
@@ -373,6 +392,24 @@ public class Widget
         Assert.That(resizeIdx, Is.GreaterThan(drawIdx), "Resize should be after Draw.");
     }
 
+    [Test]
+    public async Task InsertMemberAfter_OnEnum_RejectsInsteadOfSilentNoOp()
+    {
+        SetSource(@"
+public enum ToolScope
+{
+    file, project, solution
+}
+", "ToolScope.cs");
+
+        var result = await _engine.InsertMemberAfterAsync("ToolScope.cs", "ToolScope", "file", "reproScratchMarker");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit),
+            "Enum containers aren't TypeDeclarationSyntax, so this falls back to AddMemberAsync, which " +
+            "must reject rather than silently no-op (see docs/current/issue_member_add_silent_persistence.md).");
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+    }
+
     // ══════════════════════════════════════════════════════════════
     // InsertMemberBeforeAsync
     // ══════════════════════════════════════════════════════════════
@@ -431,6 +468,24 @@ public class Logger
         var initIdx = result.UpdatedText!.IndexOf("Init");
         var logIdx = result.UpdatedText!.IndexOf("Log()");
         Assert.That(initIdx, Is.LessThan(logIdx), "Init should appear before Log.");
+    }
+
+    [Test]
+    public async Task InsertMemberBefore_OnEnum_RejectsInsteadOfSilentNoOp()
+    {
+        SetSource(@"
+public enum ToolScope
+{
+    file, project, solution
+}
+", "ToolScope.cs");
+
+        var result = await _engine.InsertMemberBeforeAsync("ToolScope.cs", "ToolScope", "solution", "reproScratchMarker");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit),
+            "Enum containers aren't TypeDeclarationSyntax, so this falls back to AddMemberAsync, which " +
+            "must reject rather than silently no-op (see docs/current/issue_member_add_silent_persistence.md).");
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
     // ══════════════════════════════════════════════════════════════

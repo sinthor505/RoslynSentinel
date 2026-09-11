@@ -36,6 +36,50 @@ From `finding_mcp_tool_desc_revision_blockers.md` (deleted, superseded by this e
   parameters, which breaks existing positional call sites — already flagged in-code via the
   `TOOL-OPTION-REQUIRED-FLAG-STALE` comment; no further action taken, left for a dedicated future pass.
 
+## `Member(add)`/`InsertMemberAfter`/`InsertMemberBefore` silently no-op'd on enum containers — closed (2026-09-11)
+
+The last still-open item from the blockers pass above (`issue_member_add_silent_persistence.md`,
+deleted, superseded by this entry). `Member(operation: "add", ...)` against an enum container (e.g.
+`ToolScope`, `InlineKind` in `RoslynSentinel.Common/ToolEnums.cs`) reported full success — a real
+`changeId`, `status: "applied"`, `"Written to disk."` — while the file was byte-for-byte unchanged.
+`InsertMemberAfterAsync`/`InsertMemberBeforeAsync` exhibited the identical symptom against enums.
+
+Root cause, confirmed via a live VS debugger attached to the running MCP server process while
+stepping through the exact repro call: `RefactoringEngine.AddMemberAsync`'s container-type switch
+(`RefactoringEngine.cs:1209-1216`) had explicit cases for
+`Class`/`Interface`/`Record`/`StructDeclarationSyntax` only; `EnumDeclarationSyntax` fell to a
+`_ => container` fallback that silently returned the container unmodified while the method still
+reported `Outcome = Modified`. `InsertMemberAfterAsync`/`InsertMemberBeforeAsync` check `container is
+TypeDeclarationSyntax` (which does not include `EnumDeclarationSyntax`, a direct
+`BaseTypeDeclarationSyntax` subtype) and fall back to calling `AddMemberAsync` for anything that
+isn't, landing on the same gap. This was unrelated to concurrency, workspace staleness, or
+container-name resolution — all suspected at length during the investigation — `container` resolved
+correctly as a genuine `EnumDeclarationSyntax` every time; the switch simply never handled that case.
+Also confirmed unrelated to `newMemberSource` validity: `EnumMemberDeclarationSyntax` doesn't derive
+from `MemberDeclarationSyntax`, so `AddMemberAsync`'s whole approach (parse via
+`SyntaxFactory.ParseMemberDeclaration`, splice via `AddMembers`) can never produce a valid enum
+member regardless of input — enums need `ModifyEnumAsync`, an existing, separate tool built for
+exactly this.
+
+Fixed by rejecting enum containers explicitly in `AddMemberAsync` (`EditOutcome.CannotEdit`, message
+pointing callers at `ModifyEnumAsync`), and changing the switch's fallback from `_ => container` to
+`_ => throw new NotSupportedException(...)` so any future unhandled container-type subtype fails
+loudly instead of silently reporting false success — general hardening against the same bug class
+recurring for a future Roslyn syntax-node subtype. Regression tests added to
+`RoslynSentinel.Tests.Basic/CodeEditingTests.cs`: `AddMember_ToEnum_RejectsInsteadOfSilentNoOp`,
+`InsertMemberAfter_OnEnum_RejectsInsteadOfSilentNoOp`, `InsertMemberBefore_OnEnum_RejectsInsteadOfSilentNoOp`.
+
+Left open, as a separate and still-unconfirmed issue: `Member(operation: "view")` throws "Cannot
+edit: container not found" on the same enum containers that `add` used to silently no-op against —
+this is not caused by the switch-statement gap fixed here and was not fixed by this change; `view`
+apparently uses a different container-resolution path than `add`'s `ResolveTypeByNameOrSnippet`,
+contrary to what was assumed early in the investigation. Also left open as independent, not-yet-applied
+hardening ideas surfaced during the investigation (unrelated to the actual root cause, but still
+valid): populating `AfterSource` in operation blobs from a fresh disk read unconditionally (not just
+on a real write), verifying a claimed write actually landed on disk before returning `Succeeded`, and
+making both no-op fast paths in `PersistentWorkspaceManager.ApplyProposedChangesAsync` log
+unconditionally rather than only the first branch.
+
 ## `ChangeAccessibility` moved to an enum; `ListAll` tool added — closed (commit de39a8d)
 
 `ChangeAccessibility`'s `accessibility` parameter changed from `string` to a new
