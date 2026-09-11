@@ -5,6 +5,37 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Blockers from the MCP tool description/param/enum/optionality revision pass — closed (2026-09-10)
+
+From `finding_mcp_tool_desc_revision_blockers.md` (deleted, superseded by this entry and by
+`issue_member_add_silent_persistence.md` for the one item still open):
+
+- **`RequireProject` returned its own error string instead of throwing** (`SentinelScanTools.cs`) —
+  fixed to throw `ArgumentException` matching `RequireFile`'s existing message shape, so
+  `RunScanDetector`'s existing `catch (ArgumentException aex)` block now correctly surfaces
+  `ToolErrorCode.InvalidArgument` instead of passing the error text into `FindUnusedReferencesAsync`
+  as if it were a real project name. Regression test added:
+  `BatteryTwentyTwoTests.RunScanDetector_UnusedReferencesWithoutProjectScope_ReturnsInvalidArgument`.
+- **`ApplyUnifiedDiff` "HEADER COUNT MISMATCH" read as an error but was purely cosmetic** —
+  confirmed via code trace that declared hunk-header line counts are never used in the actual
+  apply/anchor path (`DiffEngine.cs` only uses the declared *start line* as a re-anchor guess, with a
+  content-based fallback search); `DiffHunkAnalyzer.cs`'s wording changed to an explicitly
+  informational "header line-count hint" note, and a pure header-count mismatch (no unmarked blank
+  line, no malformed lines) no longer sets `DiffReport.HasFindings` or populates the
+  `diffHunkFindings` response field. `DiffHunkAnalyzerTests.cs` updated to match.
+- **Test call sites masked by loose assertions (class-of-bug audit)** — full-repo audit (156 test
+  files, 92 candidate call sites) found 3 remaining `RenameSymbol` call sites
+  (`BatteryTwentyFourTests.cs:237,246`, `MassiveRefactoringTests.cs:110`) missing the `reason:` named
+  argument, shifting every positional string argument one slot early. Fixed by adding full named
+  arguments; assertions tightened to check `result.Success` where they previously only checked
+  non-null. All other candidate call sites in the audit were already correctly labeled.
+- **`WrapRange.wrapper` schema reports optional but is unconditionally required** — confirmed root
+  cause: the MCP SDK's `AIFunctionFactory` derives JSON-schema `required` purely from C# default-value
+  presence, and this repo's own `Consumes`/`ExternalInputRequired` attributes are documentation-only,
+  never consulted by schema generation. Real fix requires reordering `wrapper` before other defaulted
+  parameters, which breaks existing positional call sites — already flagged in-code via the
+  `TOOL-OPTION-REQUIRED-FLAG-STALE` comment; no further action taken, left for a dedicated future pass.
+
 ## `ChangeAccessibility` moved to an enum; `ListAll` tool added — closed (commit de39a8d)
 
 `ChangeAccessibility`'s `accessibility` parameter changed from `string` to a new

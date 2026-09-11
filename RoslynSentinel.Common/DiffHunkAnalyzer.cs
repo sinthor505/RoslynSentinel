@@ -36,9 +36,10 @@ public static class DiffHunkAnalyzer
             sb.Append(Header);
             if (!HeaderCountsMatchBody)
             {
-                sb.Append($" [HEADER COUNT MISMATCH: declared old={DeclaredOldCount}/new={DeclaredNewCount}, " +
+                sb.Append($" [header line-count hint: declared old={DeclaredOldCount}/new={DeclaredNewCount}, " +
                           $"actual old={ActualOldCount}/new={ActualNewCount} " +
-                          $"(context={ActualContextLines}, -={ActualRemovalLines}, +={ActualAdditionLines})]");
+                          $"(context={ActualContextLines}, -={ActualRemovalLines}, +={ActualAdditionLines}) " +
+                          $"— informational only; apply re-anchors on content, not declared counts]");
             }
             if (EndsWithUnmarkedBlankLine)
             {
@@ -51,7 +52,7 @@ public static class DiffHunkAnalyzer
 
     public sealed record DiffReport(int HunkCount, IReadOnlyList<HunkReport> Hunks, IReadOnlyList<string> MalformedLines)
     {
-        public bool HasFindings => Hunks.Any(h => !h.HeaderCountsMatchBody || h.EndsWithUnmarkedBlankLine) || MalformedLines.Count > 0;
+        public bool HasFindings => Hunks.Any(h => h.EndsWithUnmarkedBlankLine) || MalformedLines.Count > 0;
 
         public string Describe()
         {

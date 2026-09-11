@@ -163,6 +163,20 @@ public class OrderService : IOrderService
         _workspaceManager.SetTestSolution(solution);
     }
 
+    // --- RunScanDetector ---
+
+    [Test]
+    public async Task RunScanDetector_UnusedReferencesWithoutProjectScope_ReturnsInvalidArgument()
+    {
+        SetSource(RichSource, "Test.cs");
+        var result = await _scanTools.RunScanDetector(
+            reason: "test", detector: SentinelScanTools.DetectorId.unused_references, scope: ToolScope.file, filepath: "Test.cs");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+    }
+
     // --- GetComprehensiveHealthReport ---
 
     [Test]

@@ -543,9 +543,9 @@ public class SentinelScanTools
     private static string RequireProject(ToolScope scope, string? scopeName)
     {
         if (scope != ToolScope.project || string.IsNullOrEmpty(scopeName))
-        {
-            return ("This detector requires scope='project' with a projectName as scopeName.");
-        }
+            throw new ArgumentException(
+                $"This detector requires scope=\"project\" with a valid projectName as scopeName. " +
+                $"Received scope=\"{scope}\", scopeName={(scopeName == null ? "null" : $"\"{scopeName}\"")}.");
         return scopeName;
     }
 

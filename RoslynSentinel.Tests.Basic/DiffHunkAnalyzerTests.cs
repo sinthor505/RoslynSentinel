@@ -37,8 +37,10 @@ public class DiffHunkAnalyzerTests
         Assert.That(hunk.ActualOldCount, Is.EqualTo(3));
         Assert.That(hunk.DeclaredNewCount, Is.EqualTo(7));
         Assert.That(hunk.ActualNewCount, Is.EqualTo(3));
-        Assert.That(report.HasFindings, Is.True);
-        Assert.That(report.Describe(), Does.Contain("HEADER COUNT MISMATCH"));
+        // A header line-count mismatch alone is informational, not a finding — the apply/anchor
+        // path never trusts declared counts, so this doesn't warrant surfacing as a warning.
+        Assert.That(report.HasFindings, Is.False);
+        Assert.That(hunk.Describe(), Does.Contain("header line-count hint"));
     }
 
     [Test]
@@ -100,6 +102,8 @@ public class DiffHunkAnalyzerTests
         Assert.That(report.Hunks[1].HeaderCountsMatchBody, Is.False, "hunk 2's header falsely claimed 7/7 lines");
         Assert.That(report.Hunks[1].ActualOldCount, Is.EqualTo(3));
         Assert.That(report.Hunks[1].ActualNewCount, Is.EqualTo(3));
-        Assert.That(report.HasFindings, Is.True);
+        // Header line-count mismatches alone are informational, not findings (see above) — neither
+        // hunk here has an unmarked blank line or malformed content.
+        Assert.That(report.HasFindings, Is.False);
     }
 }

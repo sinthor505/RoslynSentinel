@@ -108,7 +108,9 @@ public class MassiveRefactoringTests
         var handle = (await symbolNavEngine.LocateSymbolAsync($"OldM{id}")).Single();
 
         var result = await _refactoringTools.RenameSymbol(
-            handle.ProjectName, handle.DocCommentId!, $"NewM{id}", _workspaceManager.SessionId.ToString());
+            reason: "test", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
+            newName: $"NewM{id}", sessionId: _workspaceManager.SessionId.ToString());
+        Assert.That(result.Success, Is.True);
         var json = System.Text.Json.JsonSerializer.Serialize(result);
         Assert.That(json, Contains.Substring($"NewM{id}"));
     }
