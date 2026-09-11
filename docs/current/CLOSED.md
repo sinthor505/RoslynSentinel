@@ -69,16 +69,46 @@ recurring for a future Roslyn syntax-node subtype. Regression tests added to
 `RoslynSentinel.Tests.Basic/CodeEditingTests.cs`: `AddMember_ToEnum_RejectsInsteadOfSilentNoOp`,
 `InsertMemberAfter_OnEnum_RejectsInsteadOfSilentNoOp`, `InsertMemberBefore_OnEnum_RejectsInsteadOfSilentNoOp`.
 
-Left open, as a separate and still-unconfirmed issue: `Member(operation: "view")` throws "Cannot
-edit: container not found" on the same enum containers that `add` used to silently no-op against —
-this is not caused by the switch-statement gap fixed here and was not fixed by this change; `view`
-apparently uses a different container-resolution path than `add`'s `ResolveTypeByNameOrSnippet`,
-contrary to what was assumed early in the investigation. Also left open as independent, not-yet-applied
-hardening ideas surfaced during the investigation (unrelated to the actual root cause, but still
-valid): populating `AfterSource` in operation blobs from a fresh disk read unconditionally (not just
-on a real write), verifying a claimed write actually landed on disk before returning `Succeeded`, and
-making both no-op fast paths in `PersistentWorkspaceManager.ApplyProposedChangesAsync` log
-unconditionally rather than only the first branch.
+**Correction (2026-09-11):** `Member(operation: "view")`'s "Cannot edit: container not found" on
+enum containers was originally logged above as a separate, unreconciled issue, on the theory that
+`view` used a different container-resolution path than `add`. That theory was wrong: `view` is
+backed by `RefactoringEngine.GetContainerMembersAsync`, which calls the exact same
+`ResolveTypeByNameOrSnippet` as `AddMemberAsync` and hit the identical `is not
+TypeDeclarationSyntax` missing-case pattern — the same bug class as this entry's root cause,
+recurring in a second method. Fixed by adding an `EnumDeclarationSyntax` branch to
+`GetContainerMembersAsync` that returns each enum member as a `ContainerMemberInfo` (`Kind =
+"enumMember"`, `Signature` = `"Name"` or `"Name = Value"`).
+
+**`Member` now genuinely supports enum containers for add/remove/replace/view, not just rejection
+(2026-09-11).** Rather than leaving enums permanently rejected, `Member`'s `add`/`remove`/`replace`
+operations now detect an enum container/member and translate the request into the pre-existing,
+unmodified `ModifyEnumAsync` (the tool already built for enums' comma-separated full-list-replace
+model), via three new `RefactoringEngine` methods: `AddEnumMemberAsync`, `RemoveEnumMemberAsync`,
+`ReplaceEnumMemberAsync` — each reads the current member list via `GetContainerMembersAsync`,
+applies the requested add/remove/substitute, and delegates the actual edit/renumbering/
+collision-detection to `ModifyEnumAsync`. Two cheap pre-check helpers,
+`IsEnumContainerAsync` (probes whether a container name resolves to an `EnumDeclarationSyntax`) and
+`TryGetEnumMemberContainerNameAsync` (resolves a member name via the pre-existing
+`ResolveMemberOrEnumMemberByNameOrSnippet` and, if it's an `EnumMemberDeclarationSyntax`, returns
+its parent enum's name), let `SentinelRefactoringTools.Member`'s dispatch route correctly without
+duplicating `ModifyEnumAsync`'s diffing logic. `typedKind` (property/field generation) still isn't
+meaningful for enums and is explicitly rejected with guidance. Every enum-path failure's error
+message ends with guidance to retry via `ModifyEnum(enumName: "...", values: ...)` directly as a
+fallback. `AddMemberAsync`/`InsertMemberAfterAsync`/`InsertMemberBeforeAsync` themselves are
+unchanged and still correctly reject enums at the engine layer — the new support lives at the
+`Member` tool-dispatch layer, one level up. Regression tests: `RoslynSentinel.Tests.Basic/CodeEditingTests.cs`
+(engine-layer: `IsEnumContainer_*`, `GetContainerMembers_OnEnum_ReturnsEnumMembers`,
+`AddEnumMember_*`, `RemoveEnumMember_*`, `ReplaceEnumMember_*`, `TryGetEnumMemberContainerName_*`)
+and `RoslynSentinel.Tests.Battery/BatteryTwentyFourTests.cs` (tool-layer: `Member_Add_OnEnumContainer_Succeeds`,
+`Member_Remove_OnEnumMember_Succeeds`, `Member_Replace_OnEnumMember_Succeeds`,
+`Member_View_OnEnumContainer_ReturnsEnumMembers`).
+
+Also left open as independent, not-yet-applied hardening ideas surfaced during the original
+investigation (unrelated to the actual root cause, but still valid): populating `AfterSource` in
+operation blobs from a fresh disk read unconditionally (not just on a real write), verifying a
+claimed write actually landed on disk before returning `Succeeded`, and making both no-op fast
+paths in `PersistentWorkspaceManager.ApplyProposedChangesAsync` log unconditionally rather than
+only the first branch.
 
 ## `ChangeAccessibility` moved to an enum; `ListAll` tool added — closed (commit de39a8d)
 

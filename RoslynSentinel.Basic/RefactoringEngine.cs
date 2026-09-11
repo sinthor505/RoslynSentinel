@@ -2396,6 +2396,116 @@ public class RefactoringEngine
         static int? GetExistingExplicitValue(EnumMemberDeclarationSyntax member) => member.EqualsValue?.Value is LiteralExpressionSyntax { Token.Value: int existingValue } ? existingValue : null;
     }
 
+    /// <summary>
+    /// Enum equivalent of AddMemberAsync/InsertMemberAfterAsync/InsertMemberBeforeAsync — enums can't
+    /// use those (EnumMemberDeclarationSyntax isn't a MemberDeclarationSyntax, and enum bodies use
+    /// comma-separated syntax, not the member grammar SyntaxFactory.ParseMemberDeclaration expects).
+    /// <paramref name="newMemberToken"/> is a single "Name" or "Name=IntValue" token, matching one
+    /// entry of ModifyEnumAsync's values list — not a full member declaration. Internally reads the
+    /// enum's current members, splices the new token at the position implied by
+    /// afterMemberName/beforeMemberName (append to the end when both are null), and delegates the
+    /// actual edit to ModifyEnumAsync so renumbering/collision-detection logic isn't duplicated.
+    /// </summary>
+    public async Task<DocumentEditResult> AddEnumMemberAsync(FilePathWrapper filePath, string enumName, string newMemberToken, string? afterMemberName = null, string? beforeMemberName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var (outcome, message, existing) = await GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        if (outcome != EditOutcome.Modified)
+        {
+            return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
+        }
+
+        var newToken = newMemberToken.Trim();
+        var newName = newToken.Split('=')[0].Trim();
+        if (existing.Any(m => m.Name == newName))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Cannot edit: enum '{enumName}' already has a member named '{newName}'. Use operation 'replace' to change it."
+            };
+        }
+
+        var names = existing.Select(m => m.Signature).ToList();
+        if (afterMemberName != null)
+        {
+            var idx = existing.FindIndex(m => m.Name == afterMemberName);
+            if (idx < 0)
+            {
+                return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, FilePath = filePath, Message = $"// Cannot edit: member '{afterMemberName}' not found in enum '{enumName}'." };
+            }
+
+            names.Insert(idx + 1, newToken);
+        }
+        else if (beforeMemberName != null)
+        {
+            var idx = existing.FindIndex(m => m.Name == beforeMemberName);
+            if (idx < 0)
+            {
+                return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, FilePath = filePath, Message = $"// Cannot edit: member '{beforeMemberName}' not found in enum '{enumName}'." };
+            }
+
+            names.Insert(idx, newToken);
+        }
+        else
+        {
+            names.Add(newToken);
+        }
+
+        return await ModifyEnumAsync(filePath, enumName, string.Join(",", names), contextSnippet, lineBefore, lineAfter, cancellationToken);
+    }
+
+    /// <summary>
+    /// Enum equivalent of RemoveMemberAsync. Reads the enum's current members, drops the named one,
+    /// and delegates to ModifyEnumAsync (which treats "in existing but not in the requested list" as
+    /// a removal) so renumbering logic isn't duplicated.
+    /// </summary>
+    public async Task<DocumentEditResult> RemoveEnumMemberAsync(FilePathWrapper filePath, string enumName, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var (outcome, message, existing) = await GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        if (outcome != EditOutcome.Modified)
+        {
+            return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
+        }
+
+        if (!existing.Any(m => m.Name == memberName))
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, FilePath = filePath, Message = $"// Cannot edit: member '{memberName}' not found in enum '{enumName}'." };
+        }
+
+        var names = existing.Where(m => m.Name != memberName).Select(m => m.Signature).ToList();
+        if (names.Count == 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotRemove, FilePath = filePath, Message = $"// Cannot edit: removing '{memberName}' would leave enum '{enumName}' with no members." };
+        }
+
+        return await ModifyEnumAsync(filePath, enumName, string.Join(",", names), contextSnippet, lineBefore, lineAfter, cancellationToken);
+    }
+
+    /// <summary>
+    /// Enum equivalent of ReplaceMemberAsync. Reads the enum's current members, substitutes the named
+    /// one with <paramref name="newMemberToken"/> ("Name" or "Name=IntValue") at the same position,
+    /// and delegates to ModifyEnumAsync.
+    /// </summary>
+    public async Task<DocumentEditResult> ReplaceEnumMemberAsync(FilePathWrapper filePath, string enumName, string memberName, string newMemberToken, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var (outcome, message, existing) = await GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        if (outcome != EditOutcome.Modified)
+        {
+            return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
+        }
+
+        var idx = existing.FindIndex(m => m.Name == memberName);
+        if (idx < 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, FilePath = filePath, Message = $"// Cannot edit: member '{memberName}' not found in enum '{enumName}'." };
+        }
+
+        var names = existing.Select(m => m.Signature).ToList();
+        names[idx] = newMemberToken.Trim();
+        return await ModifyEnumAsync(filePath, enumName, string.Join(",", names), contextSnippet, lineBefore, lineAfter, cancellationToken);
+    }
+
     public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePathWrapper filePath, string containerName, string afterMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -4747,6 +4857,76 @@ public class RefactoringEngine
         throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
     }
 
+    /// <summary>
+    /// Cheap pre-check so callers (e.g. Member's dispatch for remove/replace, which only take a bare
+    /// memberName) can detect that the named member is actually an enum member and route to
+    /// RemoveEnumMemberAsync/ReplaceEnumMemberAsync instead of RemoveMemberAsync/ReplaceMemberAsync
+    /// (whose resolver, ResolveMemberByNameOrSnippet, can never match an EnumMemberDeclarationSyntax —
+    /// it isn't a MemberDeclarationSyntax). Returns null if memberName doesn't resolve to an enum
+    /// member at all (including "not found" and "ambiguous") — callers should let the normal
+    /// resolution path in whichever method they call next surface the real error in that case.
+    /// </summary>
+    public async Task<string?> TryGetEnumMemberContainerNameAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return null;
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
+            return target is EnumMemberDeclarationSyntax enumMember && enumMember.Parent is EnumDeclarationSyntax enumDecl ? enumDecl.Identifier.Text : null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Cheap pre-check so callers (e.g. Member's dispatch) can route to the enum-specific
+    /// Add/Remove/ReplaceEnumMemberAsync methods instead of the class/struct/interface/record-only
+    /// AddMemberAsync/RemoveMemberAsync/ReplaceMemberAsync/InsertMemberAfterAsync/InsertMemberBeforeAsync
+    /// family. Returns false (not an error) if the container isn't found at all — callers should let
+    /// the normal resolution path in whichever method they call next surface the real "not found"
+    /// error, rather than this pre-check swallowing it.
+    /// </summary>
+    public async Task<bool> IsEnumContainerAsync(FilePathWrapper filePath, string containerName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return false;
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter) is EnumDeclarationSyntax;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     public record ContainerMemberInfo(string? Name, string Kind, string Signature, int StartLine, int EndLine);
     /// <summary>
     /// Lists the direct members of one container (class/struct/interface/record) in one file,
@@ -4780,6 +4960,17 @@ public class RefactoringEngine
         catch (InvalidOperationException ex)
         {
             return (EditOutcome.CannotEdit, ex.Message, []);
+        }
+
+        if (containerNode is EnumDeclarationSyntax enumDecl)
+        {
+            var enumLines = sourceText.Lines;
+            var enumResult = enumDecl.Members.Select(m =>
+            {
+                var signature = m.EqualsValue != null ? $"{m.Identifier.Text} = {m.EqualsValue.Value}" : m.Identifier.Text;
+                return new ContainerMemberInfo(m.Identifier.Text, "enumMember", signature, enumLines.GetLineFromPosition(m.SpanStart).LineNumber + 1, enumLines.GetLineFromPosition(m.Span.End).LineNumber + 1);
+            }).ToList();
+            return (EditOutcome.Modified, null, enumResult);
         }
 
         if (containerNode == null || containerNode is not TypeDeclarationSyntax typeDecl)

@@ -301,6 +301,40 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
+    // --- Member on enum containers (routes to AddEnumMemberAsync/RemoveEnumMemberAsync/ReplaceEnumMemberAsync) ---
+
+    [Test]
+    public async Task Member_Add_OnEnumContainer_Succeeds()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.add, "Status", newMemberSource: "Cancelled");
+        Assert.That(result.Success, Is.True);
+    }
+
+    [Test]
+    public async Task Member_Remove_OnEnumMember_Succeeds()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.remove, memberName: "Pending", skipPrecheck: true);
+        Assert.That(result.Success, Is.True);
+    }
+
+    [Test]
+    public async Task Member_Replace_OnEnumMember_Succeeds()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.replace, memberName: "Pending", newMemberSource: "InProgress=2");
+        Assert.That(result.Success, Is.True);
+    }
+
+    [Test]
+    public async Task Member_View_OnEnumContainer_ReturnsEnumMembers()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _tools.Member(reason: "test", "Order.cs", MemberAction.view, "Status");
+        Assert.That(result.Success, Is.True);
+    }
+
     // --- InsertMemberAfter ---
 
     [Test]

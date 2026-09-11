@@ -107,6 +107,183 @@ public enum ToolScope
     }
 
     // ══════════════════════════════════════════════════════════════
+    // Enum member support: AddEnumMemberAsync / RemoveEnumMemberAsync /
+    // ReplaceEnumMemberAsync / IsEnumContainerAsync / TryGetEnumMemberContainerNameAsync /
+    // GetContainerMembersAsync(enum) — all delegate to the pre-existing ModifyEnumAsync.
+    // ══════════════════════════════════════════════════════════════
+
+    private const string ToolScopeEnumSource = @"
+public enum ToolScope
+{
+    file, project, solution
+}
+";
+
+    [Test]
+    public async Task IsEnumContainer_OnEnum_ReturnsTrue()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+        Assert.That(await _engine.IsEnumContainerAsync("ToolScope.cs", "ToolScope"), Is.True);
+    }
+
+    [Test]
+    public async Task IsEnumContainer_OnClass_ReturnsFalse()
+    {
+        SetSource("public class Widget { }", "Widget.cs");
+        Assert.That(await _engine.IsEnumContainerAsync("Widget.cs", "Widget"), Is.False);
+    }
+
+    [Test]
+    public async Task IsEnumContainer_NotFound_ReturnsFalse()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+        Assert.That(await _engine.IsEnumContainerAsync("ToolScope.cs", "NoSuchType"), Is.False);
+    }
+
+    [Test]
+    public async Task GetContainerMembers_OnEnum_ReturnsEnumMembers()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+
+        var (outcome, message, members) = await _engine.GetContainerMembersAsync("ToolScope.cs", "ToolScope");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(members.Select(m => m.Name), Is.EquivalentTo(new[] { "file", "project", "solution" }));
+        Assert.That(members, Has.All.Matches<RefactoringEngine.ContainerMemberInfo>(m => m.Kind == "enumMember"));
+    }
+
+    [Test]
+    public async Task AddEnumMember_Appends_WhenNoPositionGiven()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+
+        var result = await _engine.AddEnumMemberAsync("ToolScope.cs", "ToolScope", "process");
+
+        Assert.That(result.UpdatedText, Does.Contain("process"));
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+    }
+
+    [Test]
+    public async Task AddEnumMember_InsertsAfterNamedMember()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+
+        var result = await _engine.AddEnumMemberAsync("ToolScope.cs", "ToolScope", "process", afterMemberName: "project");
+
+        Assert.That(result.UpdatedText, Does.Contain("process"));
+        var projectIndex = result.UpdatedText!.IndexOf("project", StringComparison.Ordinal);
+        var processIndex = result.UpdatedText.IndexOf("process", StringComparison.Ordinal);
+        Assert.That(processIndex, Is.GreaterThan(projectIndex), "'process' should appear after 'project' in the member list.");
+    }
+
+    [Test]
+    public async Task AddEnumMember_DuplicateName_ReturnsErrorWithoutText()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+
+        var result = await _engine.AddEnumMemberAsync("ToolScope.cs", "ToolScope", "project");
+
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(result.Message, Does.Contain("project"));
+    }
+
+    [Test]
+    public async Task RemoveEnumMember_RemovesNamedMember()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+
+        var result = await _engine.RemoveEnumMemberAsync("ToolScope.cs", "ToolScope", "project");
+
+        Assert.That(result.UpdatedText, Does.Not.Contain("project"));
+        Assert.That(result.UpdatedText, Does.Contain("file"));
+        Assert.That(result.UpdatedText, Does.Contain("solution"));
+    }
+
+    [Test]
+    public async Task RemoveEnumMember_NotFound_ReturnsErrorWithoutText()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+
+        var result = await _engine.RemoveEnumMemberAsync("ToolScope.cs", "ToolScope", "nonexistent");
+
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+    }
+
+    [Test]
+    public async Task RemoveEnumMember_LastMember_RefusesWithCannotRemove()
+    {
+        SetSource(@"
+public enum Singleton
+{
+    only
+}
+", "Singleton.cs");
+
+        var result = await _engine.RemoveEnumMemberAsync("Singleton.cs", "Singleton", "only");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotRemove));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+    }
+
+    [Test]
+    public async Task ReplaceEnumMember_SubstitutesNamedMemberInPlace()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+
+        var result = await _engine.ReplaceEnumMemberAsync("ToolScope.cs", "ToolScope", "project", "workspace=5");
+
+        Assert.That(result.UpdatedText, Does.Contain("workspace"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("project"));
+        Assert.That(result.UpdatedText, Does.Contain("file"));
+        Assert.That(result.UpdatedText, Does.Contain("solution"));
+    }
+
+    [Test]
+    public async Task ReplaceEnumMember_NotFound_ReturnsErrorWithoutText()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+
+        var result = await _engine.ReplaceEnumMemberAsync("ToolScope.cs", "ToolScope", "nonexistent", "workspace");
+
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+    }
+
+    [Test]
+    public async Task TryGetEnumMemberContainerName_OnEnumMember_ReturnsEnumName()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+
+        var containerName = await _engine.TryGetEnumMemberContainerNameAsync("ToolScope.cs", "project");
+
+        Assert.That(containerName, Is.EqualTo("ToolScope"));
+    }
+
+    [Test]
+    public async Task TryGetEnumMemberContainerName_OnRegularMember_ReturnsNull()
+    {
+        SetSource(@"
+public class Animal
+{
+    public string Name { get; set; }
+}
+", "Animal.cs");
+
+        var containerName = await _engine.TryGetEnumMemberContainerNameAsync("Animal.cs", "Name");
+
+        Assert.That(containerName, Is.Null);
+    }
+
+    [Test]
+    public async Task TryGetEnumMemberContainerName_NotFound_ReturnsNull()
+    {
+        SetSource(ToolScopeEnumSource, "ToolScope.cs");
+
+        var containerName = await _engine.TryGetEnumMemberContainerNameAsync("ToolScope.cs", "nonexistent");
+
+        Assert.That(containerName, Is.Null);
+    }
+
+    // ══════════════════════════════════════════════════════════════
     // AddTopLevelTypeAsync
     // ══════════════════════════════════════════════════════════════
 

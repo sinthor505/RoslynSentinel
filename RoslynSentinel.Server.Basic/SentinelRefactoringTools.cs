@@ -365,6 +365,27 @@ public class SentinelRefactoringTools
                 ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
                 IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
+                var replaceEnumName = await _refactoringEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                if (replaceEnumName != null)
+                {
+                    var enumReplaced = await _refactoringEngine.ReplaceEnumMemberAsync(filePathResolved, replaceEnumName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    if (string.IsNullOrEmpty(enumReplaced.UpdatedText))
+                        return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member: {enumReplaced.Message} Retry using ModifyEnum(enumName: \"{replaceEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") };
+
+                    var enumReplaceChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumReplaced.UpdatedText! };
+                    var enumReplaceApply = await ValidateAndApplyAsync(enumReplaceChanges, $"Replaced '{memberName}' in enum '{replaceEnumName}'.", "Member", dryRun, returnDiff, progress, cancellationToken: cancellationToken);
+                    if (enumReplaceApply.Error is not null)
+                        return new ToolResult<object> { Success = false, Error = enumReplaceApply.Error };
+                    return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                        new MemberChangedContentResult
+                        {
+                            Summary = new AppliedChangeSummary(enumReplaceApply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}.", enumReplaceApply.DryRun, enumReplaceApply.Diff),
+                            ChangedContent = newMemberSource
+                        },
+                        _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
+                        workspaceVersion: _workspaceManager.WorkspaceVersion);
+                }
+
                 var result = await _refactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (string.IsNullOrEmpty(result.UpdatedText))
                 {
@@ -419,6 +440,20 @@ public class SentinelRefactoringTools
                     }
                 }
 
+                var removeEnumName = await _refactoringEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                if (removeEnumName != null)
+                {
+                    var enumRemoved = await _refactoringEngine.RemoveEnumMemberAsync(filePathResolved, removeEnumName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    if (string.IsNullOrEmpty(enumRemoved.UpdatedText))
+                        return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member: {enumRemoved.Message} Retry using ModifyEnum(enumName: \"{removeEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") };
+
+                    var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText! };
+                    var enumRemoveApply = await ValidateAndApplyAsync(enumRemoveChanges, $"Removed '{memberName}' from enum '{removeEnumName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
+                    if (enumRemoveApply.Error is not null)
+                        return new ToolResult<object> { Success = false, Error = enumRemoveApply.Error };
+                    return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(enumRemoveApply.ChangeId, [filePathResolved], $"Removed '{memberName}' from enum '{removeEnumName}' in {Path.GetFileName(filePathResolved)}.", enumRemoveApply.DryRun, enumRemoveApply.Diff, _workspaceManager.WorkspaceVersion) };
+                }
+
                 var result = await _refactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter);
                 if (string.IsNullOrEmpty(result.UpdatedText))
                     return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member: member '{memberName}' not found in '{filePathResolved}'.") };
@@ -463,6 +498,38 @@ public class SentinelRefactoringTools
             if (hasRawSource == hasTypedSpec)
             {
                 return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Member: for operation 'add', pass exactly one of newMemberSource (raw source) or typedKind+typedName+typedType (generated property/field).") };
+            }
+
+            if (await _refactoringEngine.IsEnumContainerAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken))
+            {
+                if (hasTypedSpec)
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: '{containerName}' is an enum — typedKind (property/field generation) doesn't apply. Pass newMemberSource as a bare member token ('Name' or 'Name=IntValue') instead, or retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly.") };
+
+                string? afterName = position != null && position.StartsWith("after:", StringComparison.OrdinalIgnoreCase) ? position.Substring("after:".Length) : null;
+                string? beforeName = position != null && position.StartsWith("before:", StringComparison.OrdinalIgnoreCase) ? position.Substring("before:".Length) : null;
+                if (position != null && afterName == null && beforeName == null && position != "end")
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
+
+                var enumAdded = await _refactoringEngine.AddEnumMemberAsync(filePathResolved, containerName, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                if (string.IsNullOrEmpty(enumAdded.UpdatedText))
+                    return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member: {enumAdded.Message} Retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly with the full desired member list if this keeps failing.") };
+
+                if (!autoStage)
+                    return new ToolResult<object>() { Success = true, Data = enumAdded.ToJsonSummary() };
+
+                var enumAddDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+                var enumAddChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText! };
+                var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
+                if (enumAddApply.Error is not null)
+                    return new ToolResult<object> { Success = false, Error = enumAddApply.Error };
+                return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                    new MemberChangedContentResult
+                    {
+                        Summary = new AppliedChangeSummary(enumAddApply.ChangeId, [filePathResolved], enumAddDescription, enumAddApply.DryRun, enumAddApply.Diff),
+                        ChangedContent = newMemberSource ?? ""
+                    },
+                    _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
+                    workspaceVersion: _workspaceManager.WorkspaceVersion);
             }
 
             DocumentEditResult updated;
