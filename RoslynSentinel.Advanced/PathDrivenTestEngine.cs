@@ -25,7 +25,7 @@ public class PathDrivenTestEngine
     /// loop body writes to a variable that appears in a return statement (outgoing path).
     /// </summary>
     public async Task<PathDrivenTestReport> GeneratePathDrivenTestsAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string methodName,
         string framework = "NUnit",
         int? disambiguateLine = null,

@@ -109,7 +109,7 @@ public class SentinelScanTools
 
         try
         {
-            FilePath filePath = String.IsNullOrEmpty(filepath) && scope == ToolScope.file ? default : FilePath.FromWire(filepath!, _workspaceManager.GetSolutionRoot());
+            FilePathWrapper filePath = String.IsNullOrEmpty(filepath) && scope == ToolScope.file ? default : FilePathWrapper.FromWire(filepath!, _workspaceManager.GetSolutionRoot());
 
             switch (detector)
             {
@@ -502,7 +502,7 @@ public class SentinelScanTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -526,12 +526,12 @@ public class SentinelScanTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "AnalyzeMethod ({Aspect}) failed for '{MethodName}' in '{FilePath}'", aspect, methodName, filePath);
+            _logger.LogError(ex, "AnalyzeMethod ({Aspect}) failed for '{MethodName}' in '{FilePathWrapper}'", aspect, methodName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeMethod") };
         }
     }
 
-    private static FilePath RequireFile(ToolScope scope, string? scopeName)
+    private static FilePathWrapper RequireFile(ToolScope scope, string? scopeName)
     {
         if (scope != ToolScope.file || string.IsNullOrEmpty(scopeName))
             throw new ArgumentException(
@@ -727,7 +727,7 @@ public class SentinelScanTools
     {
         try
         {
-            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
 
             var result = await _breakingChangeEngine.DetectBreakingChangesAsync(baseline, projectName, filePath, cancellationToken);
             return await ToolResult<object>.ForPossiblyLargeDataAsync(
@@ -761,7 +761,7 @@ public class SentinelScanTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -774,7 +774,7 @@ public class SentinelScanTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ScanDuplicateBlocksInClass failed for '{ClassName}' in '{FilePath}'", className, filePath);
+            _logger.LogError(ex, "ScanDuplicateBlocksInClass failed for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
             return new ToolResult<object>
             {
                 Success = false,
@@ -806,7 +806,7 @@ public class SentinelScanTools
     {
         try
         {
-            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
 
             ToolResult<object> toolResult = new ToolResult<object>() { Success = false };
 

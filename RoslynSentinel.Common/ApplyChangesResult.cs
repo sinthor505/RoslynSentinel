@@ -19,7 +19,7 @@
 public record ApplyChangesResult(
     bool Success,
     List<string> SucceededFiles,
-    Dictionary<FilePath, string> FailedFiles,
+    Dictionary<FilePathWrapper, string> FailedFiles,
     string Summary,
     bool WorkspaceInSync = false,
     int WorkspaceVersion = 0,

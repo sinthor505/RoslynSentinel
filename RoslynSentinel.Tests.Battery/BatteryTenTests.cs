@@ -34,9 +34,9 @@ public class ValidationEngineTests
     [Test]
     public async Task ValidateChanges_ValidNewContent_SucceedsWithNoErrors()
     {
-        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
+        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePathWrapper, string>
         {
-            [new FilePath("Greeter.cs")] = "public class Greeter { public string Greet() => \"Hi!\"; }"
+            [new FilePathWrapper("Greeter.cs")] = "public class Greeter { public string Greet() => \"Hi!\"; }"
         });
 
         Assert.That(result.Success, Is.True, "Syntactically valid replacement should pass");
@@ -51,9 +51,9 @@ public class ValidationEngineTests
         // compilation to validate it against. This stays pass-through by design; see
         // ValidateChanges_NewFileInKnownProject_* below for the case that IS now validated
         // (a new file whose containing project CAN be inferred).
-        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
+        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePathWrapper, string>
         {
-            [new FilePath("DoesNotExist.cs")] = "public class X {}"
+            [new FilePathWrapper("DoesNotExist.cs")] = "public class X {}"
         });
 
         Assert.That(result.Success, Is.True,
@@ -70,9 +70,9 @@ public class ValidationEngineTests
         _workspaceManager.SetTestSolution(solution);
 
         var newFilePath = Path.Combine(projectDir, "NewFile.cs");
-        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
+        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePathWrapper, string>
         {
-            [new FilePath(newFilePath)] = "public class NewFile { public NoSuchType Field; }"
+            [new FilePathWrapper(newFilePath)] = "public class NewFile { public NoSuchType Field; }"
         });
 
         Assert.That(result.Success, Is.False, "A brand-new file with an unresolved type should fail validation");
@@ -88,9 +88,9 @@ public class ValidationEngineTests
         _workspaceManager.SetTestSolution(solution);
 
         var newFilePath = Path.Combine(projectDir, "NewFile.cs");
-        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
+        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePathWrapper, string>
         {
-            [new FilePath(newFilePath)] = "public class NewFile { public string Name; }"
+            [new FilePathWrapper(newFilePath)] = "public class NewFile { public string Name; }"
         });
 
         Assert.That(result.Success, Is.True, "A syntactically and semantically valid new file should pass");
@@ -101,9 +101,9 @@ public class ValidationEngineTests
     public async Task ValidateChanges_BreakingContent_ReturnsFalseWithCompileError()
     {
         // CS0029: cannot implicitly convert type 'string' to 'int'
-        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
+        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePathWrapper, string>
         {
-            [new FilePath("Greeter.cs")] = "public class Greeter { void M() { int x = \"not a number\"; } }"
+            [new FilePathWrapper("Greeter.cs")] = "public class Greeter { void M() { int x = \"not a number\"; } }"
         });
 
         Assert.That(result, Is.Not.Null, "Should always return a report, never throw");

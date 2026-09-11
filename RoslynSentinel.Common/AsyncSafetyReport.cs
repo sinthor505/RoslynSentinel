@@ -1,3 +1,3 @@
 namespace RoslynSentinel.Common;
 
-public record AsyncSafetyReport(FilePath filePath, string MethodName, string Reason);
+public record AsyncSafetyReport(FilePathWrapper filePath, string MethodName, string Reason);

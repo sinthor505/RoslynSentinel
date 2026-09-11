@@ -17,7 +17,7 @@ public class IDEStyleEngine
     /// <summary>
     /// Simplifies member access by removing unnecessary 'this.' or base qualifiers.
     /// </summary>
-    public async Task<DocumentEditResult> SimplifyMemberAccessAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SimplifyMemberAccessAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -61,7 +61,7 @@ public class IDEStyleEngine
     /// <summary>
     /// Converts standard assignments to object initializers.
     /// </summary>
-    public async Task<DocumentEditResult> UseObjectInitializersAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseObjectInitializersAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -193,7 +193,7 @@ public class IDEStyleEngine
     /// To:        x?.Method(args);
     /// Only transforms standalone expression-statement bodies with no else clause.
     /// </summary>
-    public async Task<DocumentEditResult> UseNullPropagationAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseNullPropagationAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

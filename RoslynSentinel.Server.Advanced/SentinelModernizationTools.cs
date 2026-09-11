@@ -69,7 +69,7 @@ public class SentinelModernizationTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -82,7 +82,7 @@ public class SentinelModernizationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "InvertBooleanLogic failed for '{BoolName}' in '{FilePath}'", boolName, filePath);
+            _logger.LogError(ex, "InvertBooleanLogic failed for '{BoolName}' in '{FilePathWrapper}'", boolName, filePath);
             return new ToolResult<object>
             {
                 Success = false,

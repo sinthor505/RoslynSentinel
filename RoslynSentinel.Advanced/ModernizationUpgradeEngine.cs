@@ -19,7 +19,7 @@ public class ModernizationUpgradeEngine
     /// and:      str.Substring(start)         → str.AsSpan(start).ToString()
     /// Scoped to the named method when methodName is provided; otherwise transforms entire file.
     /// </summary>
-    public async Task<DocumentEditResult> UseSpanForParsingAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseSpanForParsingAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -113,7 +113,7 @@ public class ModernizationUpgradeEngine
     /// <summary>
     /// Upgrades code to use modern pattern matching (is Type t) instead of casts.
     /// </summary>
-    public async Task<DocumentEditResult> UpgradePatternMatchingAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UpgradePatternMatchingAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -157,7 +157,7 @@ public class ModernizationUpgradeEngine
     /// After:   var x = GetValue() ?? throw new ArgumentNullException(nameof(x));
     /// Only transforms cases where the assignment and null check are consecutive statements in the same block.
     /// </summary>
-    public async Task<DocumentEditResult> UseThrowExpressionsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseThrowExpressionsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

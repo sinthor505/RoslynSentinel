@@ -23,7 +23,7 @@ public class TestingEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<TestComplexityReport> CalculateComplexityAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<TestComplexityReport> CalculateComplexityAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -55,7 +55,7 @@ public class TestingEngine
         return new TestComplexityReport(methodName, complexity, conditionals);
     }
 
-    public async Task<TestSkeletonReport> GenerateTestSkeletonAsync(FilePath filePath, string className, string framework = "NUnit", CancellationToken cancellationToken = default)
+    public async Task<TestSkeletonReport> GenerateTestSkeletonAsync(FilePathWrapper filePath, string className, string framework = "NUnit", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -156,7 +156,7 @@ public class TestingEngine
         return new TestSkeletonReport(testFilePath, sb.ToString());
     }
 
-    public async Task<TestScaffoldResult> GenerateTestScaffoldAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<TestScaffoldResult> GenerateTestScaffoldAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects
@@ -282,7 +282,7 @@ public class TestingEngine
         return $"_mock{withoutI}";
     }
 
-    public async Task<DocumentEditResult> AddBenchmarkStubAsync(FilePath filePath, string className, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddBenchmarkStubAsync(FilePathWrapper filePath, string className, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

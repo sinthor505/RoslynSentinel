@@ -1,4 +1,4 @@
-// Regression coverage for FilePath.FromWire.
+// Regression coverage for FilePathWrapper.FromWire.
 //
 // PersistentWorkspaceManager.GetSolutionRoot() returns null whenever no solution is loaded, or
 // the loaded solution is in-memory and has no file path. Tool methods call FromWire before their
@@ -13,13 +13,13 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_NullSolutionRoot_RelativePath_DoesNotThrow()
     {
-        Assert.DoesNotThrow(() => FilePath.FromWire("Test.cs", null));
+        Assert.DoesNotThrow(() => FilePathWrapper.FromWire("Test.cs", null));
     }
 
     [Test]
     public void FromWire_NullSolutionRoot_RelativePath_PreservesCallerPath()
     {
-        var result = FilePath.FromWire("Test.cs", null);
+        var result = FilePathWrapper.FromWire("Test.cs", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
             "With no solution root the caller's path must be preserved verbatim — resolving it "
@@ -29,7 +29,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_EmptySolutionRoot_RelativePath_PreservesCallerPath()
     {
-        var result = FilePath.FromWire("Sub/Test.cs", "   ");
+        var result = FilePathWrapper.FromWire("Sub/Test.cs", "   ");
 
         Assert.That(result.Absolute, Is.EqualTo(Path.Combine("Sub", "Test.cs")),
             "Path content is preserved but separators are canonicalized to the platform separator.");
@@ -40,7 +40,7 @@ public class FilePathFromWireTests
     {
         var rooted = Path.Combine(Path.GetTempPath(), "Test.cs");
 
-        var result = FilePath.FromWire(rooted, null);
+        var result = FilePathWrapper.FromWire(rooted, null);
 
         Assert.That(result.Absolute, Is.EqualTo(Path.GetFullPath(rooted)));
     }
@@ -50,7 +50,7 @@ public class FilePathFromWireTests
     {
         var root = Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar);
 
-        var result = FilePath.FromWire("Test.cs", root);
+        var result = FilePathWrapper.FromWire("Test.cs", root);
 
         Assert.That(result.Absolute, Is.EqualTo(Path.GetFullPath(Path.Combine(root, "Test.cs"))));
     }
@@ -58,7 +58,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_EmptyPath_NullSolutionRoot_ReturnsEmpty()
     {
-        var result = FilePath.FromWire("", null);
+        var result = FilePathWrapper.FromWire("", null);
 
         Assert.That(result.Absolute, Is.Empty);
     }
@@ -68,7 +68,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_PathWrappedInSingleQuotes_QuotesAreStripped()
     {
-        var result = FilePath.FromWire("'Test.cs'", null);
+        var result = FilePathWrapper.FromWire("'Test.cs'", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
             "Stray wrapping single quotes must be stripped before the path is used.");
@@ -77,7 +77,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_PathWrappedInDoubleQuotes_QuotesAreStripped()
     {
-        var result = FilePath.FromWire("\"Test.cs\"", null);
+        var result = FilePathWrapper.FromWire("\"Test.cs\"", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
             "Stray wrapping double quotes must be stripped before the path is used.");
@@ -86,7 +86,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_PathWithSurroundingWhitespace_IsTrimmed()
     {
-        var result = FilePath.FromWire("  Test.cs\n", null);
+        var result = FilePathWrapper.FromWire("  Test.cs\n", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
             "Leading/trailing whitespace must be trimmed before the path is used.");
@@ -95,7 +95,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_PathWithSmartQuotes_QuotesAreStripped()
     {
-        var result = FilePath.FromWire("\u2018Test.cs\u2019", null);
+        var result = FilePathWrapper.FromWire("\u2018Test.cs\u2019", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
             "Smart/curly quotes must be stripped just like straight quotes.");
@@ -104,22 +104,22 @@ public class FilePathFromWireTests
     [Test]
     public void NormalizeWirePath_UncPathWrappedInQuotes_PreservesLeadingSlashes()
     {
-        var result = FilePath.NormalizeWirePath("\"\\\\server\\share\\Test.cs\"");
+        var result = FilePathWrapper.NormalizeWirePath("\"\\\\server\\share\\Test.cs\"");
 
         Assert.That(result, Is.EqualTo(@"\\server\share\Test.cs"),
             "Quote-stripping must not consume the UNC path's leading double backslash.");
     }
 
     // Regression coverage for the PlanImplementVerify run-5 harness bug: a model submitting
-    // forward-slash paths for every ApplyDiff call got a FilePath whose Absolute never matched
+    // forward-slash paths for every ApplyDiff call got a FilePathWrapper whose Absolute never matched
     // FileSystemWatcher's always-backslash e.FullPath, silently defeating the self-write
     // drift-suppression dictionary lookup and flagging the model's own write as "external drift"
     // that no amount of reloading could ever clear.
     [Test]
     public void Constructor_ForwardSlashPath_CanonicalizesToPlatformSeparator()
     {
-        var forwardSlash = new FilePath("C:/Users/dev/Foo.cs");
-        var backSlash = new FilePath(@"C:\Users\dev\Foo.cs");
+        var forwardSlash = new FilePathWrapper("C:/Users/dev/Foo.cs");
+        var backSlash = new FilePathWrapper(@"C:\Users\dev\Foo.cs");
 
         Assert.That(forwardSlash.Absolute, Is.EqualTo(backSlash.Absolute),
             "A path submitted with forward slashes must produce the same Absolute value as the "
@@ -130,7 +130,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_UncPath_PreservesLeadingDoubleSlash()
     {
-        var result = FilePath.FromWire(@"\\server\share\Test.cs", null);
+        var result = FilePathWrapper.FromWire(@"\\server\share\Test.cs", null);
 
         Assert.That(result.Absolute, Does.StartWith(@"\\"),
             "Canonicalization must not collapse the UNC path's required leading double separator.");

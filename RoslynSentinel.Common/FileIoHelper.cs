@@ -11,7 +11,7 @@ namespace RoslynSentinel.Common;
 public static class FileIoHelper
 {
     /// <summary>Reads a file's full text, holding the per-path lock so the read can't observe a partially-written file.</summary>
-    public static async Task<string> ReadAllTextAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public static async Task<string> ReadAllTextAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         using (await FilePathLock.AcquireAsync(filePath, cancellationToken))
         {
@@ -20,7 +20,7 @@ public static class FileIoHelper
     }
 
     /// <summary>Reads a file's full text if it exists, or returns null. Holds the per-path lock for the duration.</summary>
-    public static async Task<string?> ReadAllTextIfExistsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public static async Task<string?> ReadAllTextIfExistsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         using (await FilePathLock.AcquireAsync(filePath, cancellationToken))
         {
@@ -29,7 +29,7 @@ public static class FileIoHelper
     }
 
     /// <summary>Writes text to a file, creating the parent directory if needed. Holds the per-path lock for the duration of the write.</summary>
-    public static async Task WriteAllTextAsync(FilePath filePath, string content, CancellationToken cancellationToken = default)
+    public static async Task WriteAllTextAsync(FilePathWrapper filePath, string content, CancellationToken cancellationToken = default)
     {
         using (await FilePathLock.AcquireAsync(filePath, cancellationToken))
         {
@@ -44,7 +44,7 @@ public static class FileIoHelper
     }
 
     /// <summary>Deletes a file if it exists. Holds the per-path lock for the duration.</summary>
-    public static async Task DeleteAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public static async Task DeleteAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         using (await FilePathLock.AcquireAsync(filePath, cancellationToken))
         {
@@ -56,5 +56,5 @@ public static class FileIoHelper
     }
 
     /// <summary>True if a write/delete to this path is currently in flight through this helper.</summary>
-    public static bool IsLocked(FilePath filePath) => FilePathLock.IsLocked(filePath);
+    public static bool IsLocked(FilePathWrapper filePath) => FilePathLock.IsLocked(filePath);
 }

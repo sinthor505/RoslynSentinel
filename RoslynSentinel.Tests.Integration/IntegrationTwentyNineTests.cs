@@ -832,7 +832,7 @@ public class RealSolution_SmokeTests_Battery28
         foreach (var issue in issues)
         {
             Assert.That(issue.filePath.Absolute, Is.Not.Null.And.Not.Empty,
-                "Every SafetyIssue must have a non-empty FilePath.");
+                "Every SafetyIssue must have a non-empty FilePathWrapper.");
             Assert.That(issue.Type, Is.Not.Null.And.Not.Empty,
                 "Every SafetyIssue must have a non-empty Type.");
             Assert.That(issue.Description, Is.Not.Null.And.Not.Empty,

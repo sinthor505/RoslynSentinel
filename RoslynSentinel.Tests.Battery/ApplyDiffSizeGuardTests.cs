@@ -135,7 +135,7 @@ public class ApplyDiffSizeGuardTests
         // project_searchmode_literal_override_bug.md's validation-scope fix).
         var rejected = await tools.ApplyDiffWithConfirmationCode(
             ChangesetFormat.files, ProposedChangeAction.apply,
-            changes: new Dictionary<FilePath, string> { [targetFile] = fragment },
+            changes: new Dictionary<FilePathWrapper, string> { [targetFile] = fragment },
             validateOnApply: false);
         Assert.That(rejected.Success, Is.False);
 
@@ -190,7 +190,7 @@ public class ApplyDiffSizeGuardTests
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var rejected = await tools.ApplyDiffWithConfirmationCode(
             ChangesetFormat.files, ProposedChangeAction.apply,
-            changes: new Dictionary<FilePath, string> { [targetFile] = "using System;\n" },
+            changes: new Dictionary<FilePathWrapper, string> { [targetFile] = "using System;\n" },
             validateOnApply: false);
         var code = ExtractConfirmationCode(rejected.Error!.Message);
 

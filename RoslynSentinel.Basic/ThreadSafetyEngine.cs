@@ -31,7 +31,7 @@ public class ThreadSafetyEngine
     /// <summary>
     /// Adds a private lock object and wraps a method's body in a lock statement.
     /// </summary>
-    public async Task<DocumentEditResult> MakeMethodThreadSafeAsync(FilePath filePath, string methodName, string lockFieldName = "_lock", CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> MakeMethodThreadSafeAsync(FilePathWrapper filePath, string methodName, string lockFieldName = "_lock", CancellationToken cancellationToken = default)
     {
         try
         {
@@ -151,7 +151,7 @@ public class ThreadSafetyEngine
     /// Converts lock statements inside a method and ALL other methods to async-safe SemaphoreSlim pattern.
     /// Adds a SemaphoreSlim field and replaces all lock statements with await _semaphore.WaitAsync() + try/finally.
     /// </summary>
-    public async Task<DocumentEditResult> ConvertLockToSemaphoreSlimAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertLockToSemaphoreSlimAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         try
         {

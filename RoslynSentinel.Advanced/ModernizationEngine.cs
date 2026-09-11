@@ -15,7 +15,7 @@ public class ModernizationEngine
         _config = config;
     }
 
-    public async Task<DocumentEditResult> ClassToRecordAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ClassToRecordAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ClassToRecord"))
         {
@@ -133,7 +133,7 @@ public class ModernizationEngine
         };
     }
 
-    public async Task<DocumentEditResult> RecordToClassAsync(FilePath filePath, string recordName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RecordToClassAsync(FilePathWrapper filePath, string recordName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("RecordToClass"))
         {
@@ -206,7 +206,7 @@ public class ModernizationEngine
         };
     }
 
-    public async Task<DocumentEditResult> ConvertMethodToExpressionBodyAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertMethodToExpressionBodyAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -272,7 +272,7 @@ public class ModernizationEngine
         };
     }
 
-    public async Task<DocumentEditResult> ConvertToPatternAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToPatternAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);

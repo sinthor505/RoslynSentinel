@@ -7,7 +7,7 @@
 /// </summary>
 public record AppliedChangeSummary(
     string? ChangeId,
-    List<FilePath> AffectedFiles,
+    List<FilePathWrapper> AffectedFiles,
     string Description,
     bool DryRun,
     string? Diff = null,

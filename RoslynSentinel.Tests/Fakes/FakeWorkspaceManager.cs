@@ -30,7 +30,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public int WorkspaceVersion => 0;
     public Guid SessionId => Guid.Empty;
 
-    public Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePath, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePath>? deletePaths = null)
+    public Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
         => throw new NotImplementedException();
     public BatchResultSummary? CheckBreaker() => throw new NotImplementedException();
     // Always under limit — tests exercising real rate-limit behavior use their own IRateLimiter (see RunTestTests).
@@ -49,7 +49,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems() => throw new NotImplementedException();
 
     // Mirrors PersistentWorkspaceManager.GetSolutionRoot(): CurrentSolution built via
-    // TestSolutionBuilder has no FilePath (it's an AdhocWorkspace solution), so this falls
+    // TestSolutionBuilder has no FilePathWrapper (it's an AdhocWorkspace solution), so this falls
     // back to SolutionPath, which tests can set directly when a root is needed.
     public string? GetSolutionRoot()
     {
@@ -72,7 +72,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public void RecordBatchOutcome(int succeeded, int failed, int rolledBack, int skipped) => throw new NotImplementedException();
-    public Task RemoveDocumentByPathAsync(FilePath filePath, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task RemoveDocumentByPathAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     bool ICircuitBreaker.IsTripped() => throw new NotImplementedException();
     string? ICircuitBreaker.StateMessage() => throw new NotImplementedException();
     void IManualCircuitBreaker.Reset() => throw new NotImplementedException();
@@ -99,20 +99,20 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public Task<SymbolResolution> ResolveFromWireAsync(string sessionId, string projectName, string docCommentId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public string CachePendingChangeset(Dictionary<FilePath, string> changes, int retryCount, bool validateOnApply) => throw new NotImplementedException();
-    public (Dictionary<FilePath, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode) => throw new NotImplementedException();
+    public string CachePendingChangeset(Dictionary<FilePathWrapper, string> changes, int retryCount, bool validateOnApply) => throw new NotImplementedException();
+    public (Dictionary<FilePathWrapper, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode) => throw new NotImplementedException();
 
     // Mirrors PersistentWorkspaceManager.SetFilePath(): resolves a wire path against
-    // GetSolutionRoot(). Returns an unvalidated FilePath (SolutionRoot null/empty) rather than
+    // GetSolutionRoot(). Returns an unvalidated FilePathWrapper (SolutionRoot null/empty) rather than
     // throwing, same as the real implementation, when no root is set.
-    public FilePath SetFilePath(string? filepath)
+    public FilePathWrapper SetFilePath(string? filepath)
     {
-        FilePath filePath = default;
+        FilePathWrapper filePath = default;
         var solutionRoot = GetSolutionRoot();
 
         if (!string.IsNullOrWhiteSpace(filepath) && !string.IsNullOrWhiteSpace(solutionRoot))
         {
-            filePath = FilePath.FromWire(filepath, solutionRoot);
+            filePath = FilePathWrapper.FromWire(filepath, solutionRoot);
         }
 
         return filePath;

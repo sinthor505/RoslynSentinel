@@ -1,3 +1,3 @@
 namespace RoslynSentinel.Common;
 
-public record InterfaceCandidateReport(FilePath filePath, string ClassName, List<string> PublicMethods);
+public record InterfaceCandidateReport(FilePathWrapper filePath, string ClassName, List<string> PublicMethods);

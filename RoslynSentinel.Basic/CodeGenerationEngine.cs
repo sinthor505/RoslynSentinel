@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Basic;
 
-public record GenerationResult(FilePath filePath, string Content);
+public record GenerationResult(FilePathWrapper filePath, string Content);
 
 public record RepositoryInterfaceResult(
     string InterfaceName,
@@ -174,7 +174,7 @@ public partial class CodeGenerationEngine
         return false;
     }
 
-    public async Task<DocumentEditResult> GenerateConstructorAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateConstructorAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -290,7 +290,7 @@ public partial class CodeGenerationEngine
             name.Contains(sub, StringComparison.OrdinalIgnoreCase));
 
     public async Task<GenerateToStringResult> GenerateToStringAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string className,
         string[]? excludeProperties = null,
         CancellationToken cancellationToken = default)
@@ -497,7 +497,7 @@ public partial class CodeGenerationEngine
     /// Given a concrete repository class, generates: interface code, DI registration snippet, and Moq mock setup snippet.
     /// </summary>
     public async Task<RepositoryInterfaceResult> GenerateRepositoryInterfaceAsync(
-        FilePath filePath, string className, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -597,7 +597,7 @@ public partial class CodeGenerationEngine
     }
 
     public async Task<FluentBuilderResult> GenerateFluentBuilderAsync(
-        FilePath filePath, string className, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -854,7 +854,7 @@ public partial class CodeGenerationEngine
         );
     }
 
-    public async Task<DocumentEditResult> ImplementInterfaceAsync(FilePath filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ImplementInterfaceAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -1007,7 +1007,7 @@ public partial class CodeGenerationEngine
     /// contextSnippet: optional verbatim substring to disambiguate when multiple properties share a name.
     /// </summary>
     public async Task<DocumentEditResult> ConvertPropertySafeAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string propertyName,
         string direction,
         string? contextSnippet = null,
@@ -1236,7 +1236,7 @@ public partial class CodeGenerationEngine
     /// contextSnippet: verbatim substring identifying the string.Format call to convert.
     /// </summary>
     public async Task<DocumentEditResult> InterpolateStringAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string contextSnippet,
         string? lineBefore = null,
         string? lineAfter = null,

@@ -30,7 +30,7 @@ public class ProjectStructureEngine
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
-    public async Task<DocumentEditResult> FixMismatchedNamespacesAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> FixMismatchedNamespacesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -79,7 +79,7 @@ public class ProjectStructureEngine
         };
     }
 
-    public async Task<DocumentEditResult> PreviewMoveFileToNamespaceFolderAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> PreviewMoveFileToNamespaceFolderAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)

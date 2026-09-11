@@ -16,7 +16,7 @@ public class ApiAutomationEngine
     /// <summary>
     /// Scans a Web API controller and generates a typed HttpClient for it.
     /// </summary>
-    public async Task<DocumentEditResult> GenerateHttpClientForControllerAsync(FilePath filePath, string controllerName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateHttpClientForControllerAsync(FilePathWrapper filePath, string controllerName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

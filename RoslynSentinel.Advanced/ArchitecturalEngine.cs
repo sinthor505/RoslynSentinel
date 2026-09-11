@@ -22,7 +22,7 @@ public class ArchitecturalEngine
     /// <summary>
     /// Converts a class into a .NET BackgroundService.
     /// </summary>
-    public async Task<DocumentEditResult> ConvertToBackgroundServiceAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToBackgroundServiceAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -399,7 +399,7 @@ public class ArchitecturalEngine
         string Description,
         string SourceLayer,
         string ForbiddenDependency,
-        FilePath FilePath,
+        FilePathWrapper FilePath,
         int Line
     );
 

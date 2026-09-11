@@ -14,7 +14,7 @@ public class InventoryEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<CodeInventoryReport> GetCodeInventoryAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<CodeInventoryReport> GetCodeInventoryAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
@@ -49,7 +49,7 @@ public class InventoryEngine
         return new CodeInventoryReport(filePath, namespaces, classes, interfaces, methods, properties);
     }
 
-    public async Task<CodeInventoryReport> GetCodeInventoryAsync2(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<CodeInventoryReport> GetCodeInventoryAsync2(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);

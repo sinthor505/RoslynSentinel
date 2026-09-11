@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace RoslynSentinel.Advanced;
 
-public record MoveMemberResult(Dictionary<FilePath, string> Changes, List<SkippedCallSite> SkippedCallSites);
+public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites);
 
 public class AdvancedStructuralEngine
 {
@@ -16,7 +16,7 @@ public class AdvancedStructuralEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<DocumentEditResult> ConvertAbstractClassToInterfaceAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertAbstractClassToInterfaceAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -57,7 +57,7 @@ public class AdvancedStructuralEngine
         };
     }
 
-    public async Task<DocumentEditResult> ReplaceConstructorWithFactoryAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReplaceConstructorWithFactoryAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -102,10 +102,10 @@ public class AdvancedStructuralEngine
         };
     }
 
-    public async Task<Dictionary<FilePath, string>> ExtractSuperclassAsync(FilePath[] filePaths, string[] classNames, string newBaseClassName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> ExtractSuperclassAsync(FilePathWrapper[] filePaths, string[] classNames, string newBaseClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-        var changes = new Dictionary<FilePath, string>();
+        var changes = new Dictionary<FilePathWrapper, string>();
         var firstFile = filePaths[0];
         var document = solution.GetDocumentIdsWithFilePath(firstFile).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
@@ -164,7 +164,7 @@ public class AdvancedStructuralEngine
     ///  - No existing class named targetClassName: synthesizes a new class (same behavior as the
     ///    former ExtractMembers as=class). STATIC MEMBERS ONLY, same reasoning as above.
     /// </summary>
-    public async Task<MoveMemberResult> MoveMemberAsync(FilePath filePath, string className, string[] memberNames, string targetClassName, FilePath? targetFilePath = null, CancellationToken cancellationToken = default)
+    public async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -302,7 +302,7 @@ public class AdvancedStructuralEngine
 
     private static async Task<MoveMemberResult> MoveMembersToBaseTypeAsync(
         Solution solution,
-        FilePath filePath,
+        FilePathWrapper filePath,
         CompilationUnitSyntax root,
         ClassDeclarationSyntax classNode,
         List<MemberDeclarationSyntax> membersToMove,
@@ -377,7 +377,7 @@ public class AdvancedStructuralEngine
             var combinedBaseClassNode = baseClassAfterRemoval.AddMembers(membersForBase);
             var finalRoot = combinedRoot.ReplaceNode(baseClassAfterRemoval, combinedBaseClassNode);
 
-            return new MoveMemberResult(new Dictionary<FilePath, string>
+            return new MoveMemberResult(new Dictionary<FilePathWrapper, string>
             {
                 { filePath, finalRoot.NormalizeWhitespace().ToFullString() }
             }, new List<SkippedCallSite>());
@@ -398,7 +398,7 @@ public class AdvancedStructuralEngine
         var newBaseClassNode = baseClassNode.AddMembers(membersForBase);
         var newBaseRoot = baseRoot.ReplaceNode(baseClassNode, newBaseClassNode);
 
-        return new MoveMemberResult(new Dictionary<FilePath, string>
+        return new MoveMemberResult(new Dictionary<FilePathWrapper, string>
         {
             { filePath, newDerivedRoot.NormalizeWhitespace().ToFullString() },
             { baseFile, newBaseRoot.NormalizeWhitespace().ToFullString() }
@@ -412,11 +412,11 @@ public class AdvancedStructuralEngine
     /// </summary>
     private static async Task<MoveMemberResult> MoveMembersToExistingClassAsync(
         Solution solution,
-        FilePath filePath,
+        FilePathWrapper filePath,
         CompilationUnitSyntax root,
         ClassDeclarationSyntax classNode,
         List<MemberDeclarationSyntax> membersToMove,
-        FilePath targetFilePath,
+        FilePathWrapper targetFilePath,
         ClassDeclarationSyntax targetClassNode,
         string targetClassName,
         List<ISymbol> memberSymbols,
@@ -447,7 +447,7 @@ public class AdvancedStructuralEngine
                 SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(targetClassName), (SimpleNameSyntax)original));
         }
 
-        var result = new Dictionary<FilePath, string>();
+        var result = new Dictionary<FilePathWrapper, string>();
 
         if (sameFile)
         {
@@ -513,7 +513,7 @@ public class AdvancedStructuralEngine
 
     private static async Task<MoveMemberResult> MoveMembersToNewClassAsync(
         Solution solution,
-        FilePath filePath,
+        FilePathWrapper filePath,
         CompilationUnitSyntax root,
         ClassDeclarationSyntax classNode,
         List<MemberDeclarationSyntax> membersToMove,
@@ -566,7 +566,7 @@ public class AdvancedStructuralEngine
         var updatedRoot = root.ReplaceNode(classNode, updatedSourceClass);
         var newFilePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs");
 
-        var result = new Dictionary<FilePath, string>
+        var result = new Dictionary<FilePathWrapper, string>
         {
             { newFilePath, newFileRoot.NormalizeWhitespace().ToFullString() },
             { filePath, updatedRoot.NormalizeWhitespace().ToFullString() }
@@ -620,7 +620,7 @@ public class AdvancedStructuralEngine
     /// then removes the source class declaration. Also renames all type references to the
     /// inlined class across the solution to point to the target class name.
     /// </summary>
-    public async Task<Dictionary<FilePath, string>> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         bool sameFile = string.Equals(
@@ -633,7 +633,7 @@ public class AdvancedStructuralEngine
             .Select(solution.GetDocument).FirstOrDefault();
         if (sourceDoc == null)
         {
-            return new Dictionary<FilePath, string>
+            return new Dictionary<FilePathWrapper, string>
             {
                 { "__error__", $"Source file '{Path.GetFileName(sourceFilePath)}' not found in solution." }
             };
@@ -642,7 +642,7 @@ public class AdvancedStructuralEngine
         var sourceRoot = await sourceDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (sourceRoot == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var sourceClass = sourceRoot.DescendantNodes()
@@ -650,7 +650,7 @@ public class AdvancedStructuralEngine
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (sourceClass == null)
         {
-            return new Dictionary<FilePath, string>
+            return new Dictionary<FilePathWrapper, string>
             {
                 { "__error__", $"Class '{className}' not found in '{Path.GetFileName(sourceFilePath)}'." }
             };
@@ -661,7 +661,7 @@ public class AdvancedStructuralEngine
         var classSymbol = semanticModel?.GetDeclaredSymbol(sourceClass, cancellationToken) as INamedTypeSymbol;
 
         var membersToInline = sourceClass.Members;
-        var result = new Dictionary<FilePath, string>();
+        var result = new Dictionary<FilePathWrapper, string>();
         string targetClassName;
 
         if (sameFile)
@@ -672,7 +672,7 @@ public class AdvancedStructuralEngine
                 .FirstOrDefault(c => c.Identifier.Text != className);
             if (targetClass == null)
             {
-                return new Dictionary<FilePath, string>
+                return new Dictionary<FilePathWrapper, string>
                 {
                     { "__error__", $"No target class found in '{Path.GetFileName(sourceFilePath)}' to inline '{className}' into." }
                 };
@@ -705,7 +705,7 @@ public class AdvancedStructuralEngine
                 .Select(solution.GetDocument).FirstOrDefault();
             if (targetDoc == null)
             {
-                return new Dictionary<FilePath, string>
+                return new Dictionary<FilePathWrapper, string>
                 {
                     { "__error__", $"Target file '{Path.GetFileName(targetFilePath)}' not found in solution." }
                 };
@@ -717,7 +717,7 @@ public class AdvancedStructuralEngine
                 .FirstOrDefault();
             if (targetClass == null)
             {
-                return new Dictionary<FilePath, string>
+                return new Dictionary<FilePathWrapper, string>
                 {
                     { "__error__", $"No class found in target file '{Path.GetFileName(targetFilePath)}'." }
                 };
@@ -749,7 +749,7 @@ public class AdvancedStructuralEngine
         string oldName,
         string newName,
         HashSet<string> skipPaths,
-        Dictionary<FilePath, string> result,
+        Dictionary<FilePathWrapper, string> result,
         CancellationToken cancellationToken = default)
     {
         var references = await SymbolFinder.FindReferencesAsync(classSymbol, solution, cancellationToken);

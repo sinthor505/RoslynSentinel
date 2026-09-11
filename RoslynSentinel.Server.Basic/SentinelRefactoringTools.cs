@@ -107,7 +107,7 @@ public class SentinelRefactoringTools
     /// the server had faulted. Run 20260910-013550-398 hit this via a generic containerName —
     /// see docs/current/feedback_agent_friendly_error_messages.md.
     /// </remarks>
-    private static ToolResult<object>? RequireUpdatedText(DocumentEditResult updated, string operationName, FilePath filePath)
+    private static ToolResult<object>? RequireUpdatedText(DocumentEditResult updated, string operationName, FilePathWrapper filePath)
     {
         if (!string.IsNullOrEmpty(updated.UpdatedText))
         {
@@ -141,24 +141,24 @@ public class SentinelRefactoringTools
     /// partially fails, so a change never lands half-applied.
     /// </summary>
     private Task<ApplyOutcome> ValidateAndApplyAsync(
-        Dictionary<FilePath, string> changes,
+        Dictionary<FilePathWrapper, string> changes,
         string description,
         string operationName,
         bool dryRun = false,
         bool returnDiff = false,
         IProgress<ProgressNotificationValue>? progress = default,
-        IReadOnlyCollection<FilePath>? removePaths = null,
+        IReadOnlyCollection<FilePathWrapper>? removePaths = null,
         CancellationToken cancellationToken = default) =>
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
             dryRun, returnDiff, progress, removePaths, cancellationToken,
             describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
 
-    private Task<string> BuildDiffAsync(Dictionary<FilePath, string> changes, CancellationToken cancellationToken) =>
+    private Task<string> BuildDiffAsync(Dictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken) =>
         ValidateAndApplyHelper.BuildDiffAsync(_workspaceManager, changes, cancellationToken);
 
     internal static string BuildDiffFromPreImages(
-        Dictionary<FilePath, string> changes,
+        Dictionary<FilePathWrapper, string> changes,
         IReadOnlyDictionary<string, string?>? preImages) =>
         ValidateAndApplyHelper.BuildDiffFromPreImages(changes, preImages);
 
@@ -263,7 +263,7 @@ public class SentinelRefactoringTools
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -273,7 +273,7 @@ public class SentinelRefactoringTools
             if (string.IsNullOrEmpty(result.UpdatedText))
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' → '{toType}' in '{filePath}'. Ensure both types exist in the solution.") };
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = result.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -281,7 +281,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GenerateMapping failed for '{FromType}' to '{ToType}' in '{FilePath}'", fromType, toType, filePath);
+            _logger.LogError(ex, "GenerateMapping failed for '{FromType}' to '{ToType}' in '{FilePathWrapper}'", fromType, toType, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateMapping") };
         }
     }
@@ -343,7 +343,7 @@ public class SentinelRefactoringTools
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             if (operation == MemberAction.view)
@@ -379,7 +379,7 @@ public class SentinelRefactoringTools
                     return new ToolResult<object> { Success = false, Error = new ResultError(ErrorCodeFor(result.Outcome), errorReason) };
                 }
 
-                var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+                var changes = new Dictionary<FilePathWrapper, string> { [filePath] = result.UpdatedText };
                 var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress, cancellationToken: cancellationToken);
                 if (apply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -423,7 +423,7 @@ public class SentinelRefactoringTools
                 if (string.IsNullOrEmpty(result.UpdatedText))
                     return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member: member '{memberName}' not found in '{filePath}'.") };
 
-                var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+                var changes = new Dictionary<FilePathWrapper, string> { [filePath] = result.UpdatedText };
                 var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (apply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -444,7 +444,7 @@ public class SentinelRefactoringTools
 
                 var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePath)}.";
 
-                var topLevelChanges = new Dictionary<FilePath, string> { [filePath] = topLevelResult.UpdatedText! };
+                var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePath] = topLevelResult.UpdatedText! };
                 var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (topLevelApply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = topLevelApply.Error };
@@ -518,7 +518,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "Member", filePath) is { } guardResult)
                 return guardResult;
 
-            var addChanges = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            var addChanges = new Dictionary<FilePathWrapper, string> { [filePath] = updated.UpdatedText! };
             var addApply = await ValidateAndApplyAsync(addChanges, description, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (addApply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = addApply.Error };
@@ -533,7 +533,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Member ({Operation}) failed for '{ContainerOrMemberName}' in '{FilePath}'", operation, containerName ?? memberName, filePath);
+            _logger.LogError(ex, "Member ({Operation}) failed for '{ContainerOrMemberName}' in '{FilePathWrapper}'", operation, containerName ?? memberName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Member") };
         }
     }
@@ -555,7 +555,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             if (operation == AddRemoveViewAction.view)
@@ -590,7 +590,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "UsingDirective", filePath) is { } guardResult)
                 return guardResult;
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{opName} using {namespaceName}.", "UsingDirective", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -617,7 +617,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "UsingDirective failed for '{Namespace}' in '{FilePath}'", namespaceName, filePath);
+            _logger.LogError(ex, "UsingDirective failed for '{Namespace}' in '{FilePathWrapper}'", namespaceName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UsingDirective") };
         }
     }
@@ -639,7 +639,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             var updated = await _refactoringEngine.ModifyEnumAsync(filePath, enumName, values, contextSnippet, lineBefore, lineAfter);
@@ -655,7 +655,7 @@ public class SentinelRefactoringTools
                 ? $"Sets '{enumName}' members in {Path.GetFileName(filePath)} to match the requested list."
                 : $"'{enumName}' in {Path.GetFileName(filePath)}: {updated.Message}.";
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, description, "ModifyEnum", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -665,7 +665,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ModifyEnum failed for '{EnumName}' in '{FilePath}'", enumName, filePath);
+            _logger.LogError(ex, "ModifyEnum failed for '{EnumName}' in '{FilePathWrapper}'", enumName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyEnum") };
         }
     }
@@ -687,7 +687,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePath, targetName, accessibility, contextSnippet, lineBefore, lineAfter);
@@ -705,7 +705,7 @@ public class SentinelRefactoringTools
                 AccessibilityLevel.privateProtected => "private protected",
                 _ => accessibility.ToString()
             };
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibilityKeyword}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -716,7 +716,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ChangeAccessibility failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
+            _logger.LogError(ex, "ChangeAccessibility failed for '{TargetName}' in '{FilePathWrapper}'", targetName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ChangeAccessibility") };
         }
     }
@@ -741,7 +741,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             if (operation == AddRemoveViewAction.view)
@@ -773,7 +773,7 @@ public class SentinelRefactoringTools
                 ? $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}."
                 : $"Removed XML summary comment from '{targetName}' in {Path.GetFileName(filePath)}.";
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, description, "SummaryComment", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -793,7 +793,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SummaryComment failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
+            _logger.LogError(ex, "SummaryComment failed for '{TargetName}' in '{FilePathWrapper}'", targetName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SummaryComment") };
         }
     }
@@ -823,7 +823,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             if (operation == AddRemoveViewAction.view)
@@ -879,7 +879,7 @@ public class SentinelRefactoringTools
                 : $"Removed '{paramName}' DI parameter from '{className}' in {Path.GetFileName(filePath)}."
                     + (updated.Message?.Contains("fieldRemoved='True'") == true ? $" Also removed unused backing field '{resolvedFieldName}'." : "");
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, description, "ConstructorParameter", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -899,7 +899,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ConstructorParameter failed for '{ClassName}' in '{FilePath}'", className, filePath);
+            _logger.LogError(ex, "ConstructorParameter failed for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ConstructorParameter") };
         }
     }
@@ -930,7 +930,7 @@ public class SentinelRefactoringTools
         CancellationToken cancellationToken = default,
         [Description("add only. Sets the new parameter's default to the null literal directly, bypassing defaultValue entirely — use this instead of defaultValue:\"null\". Mutually exclusive with defaultValue.")] bool nullDefault = false)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             if (operation == AddRemoveViewAction.view)
@@ -962,13 +962,13 @@ public class SentinelRefactoringTools
             }
 
             DocumentEditResult updated;
-            Dictionary<FilePath, string> changes;
+            Dictionary<FilePathWrapper, string> changes;
             if (operation == AddRemoveViewAction.add)
             {
                 updated = await _refactoringEngine.AddMethodParameterAsync(filePath, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken, nullDefault);
                 if (RequireUpdatedText(updated, "MethodSignature", filePath) is { } addGuardResult)
                     return addGuardResult;
-                changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+                changes = new Dictionary<FilePathWrapper, string> { [filePath] = updated.UpdatedText! };
             }
             else
             {
@@ -1007,7 +1007,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MethodSignature failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            _logger.LogError(ex, "MethodSignature failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MethodSignature") };
         }
     }
@@ -1028,7 +1028,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             var result = await _refactoringEngine.ExtractLocalVariableAsync(filePath, exactExpressionText, variableName, lineBefore, lineAfter);
@@ -1044,7 +1044,7 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, errorReason) };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = result.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Extract local variable '{variableName}'.", "ExtractLocalVariable", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -1057,7 +1057,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ExtractLocalVariable failed for '{VariableName}' in '{FilePath}'", variableName, filePath);
+            _logger.LogError(ex, "ExtractLocalVariable failed for '{VariableName}' in '{FilePathWrapper}'", variableName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractLocalVariable") };
         }
     }
@@ -1080,7 +1080,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("ExtractMethodSafe: {File} method={Name}", filePath, newMethodName);
@@ -1118,7 +1118,7 @@ public class SentinelRefactoringTools
             // whole-file UpdatedContent, so showing just the new method here would mean duplicating
             // its formatting/signature-inference logic. Revisit only if that engine method starts
             // returning the extracted method's text alongside UpdatedContent.
-            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedContent };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = result.UpdatedContent };
             var apply = await ValidateAndApplyAsync(changes, $"Extract '{newMethodName}' from '{filePath}'.", "ExtractMethodSafe", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -1130,7 +1130,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ExtractMethodSafe failed for '{NewMethodName}' in '{FilePath}'", newMethodName, filePath);
+            _logger.LogError(ex, "ExtractMethodSafe failed for '{NewMethodName}' in '{FilePathWrapper}'", newMethodName, filePath);
             return new ToolResult<object>
             {
                 Success = false,
@@ -1161,7 +1161,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             if (action == AttributeModifyAction.replace && string.IsNullOrEmpty(newAttribute))
@@ -1193,7 +1193,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "ModifyAttribute", filePath) is { } guardResult)
                 return guardResult;
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -1215,7 +1215,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ModifyAttribute failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
+            _logger.LogError(ex, "ModifyAttribute failed for '{TargetName}' in '{FilePathWrapper}'", targetName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyAttribute") };
         }
     }
@@ -1238,7 +1238,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         var modifierText = modifier.ToString();
         try
         {
@@ -1262,7 +1262,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "ModifyModifier", filePath) is { } guardResult)
                 return guardResult;
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifierText}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -1273,7 +1273,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ModifyModifier failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
+            _logger.LogError(ex, "ModifyModifier failed for '{TargetName}' in '{FilePathWrapper}'", targetName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyModifier") };
         }
     }
@@ -1296,7 +1296,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             DocumentEditResult updated;
@@ -1319,7 +1319,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "ModifyBaseType", filePath) is { } guardResult)
                 return guardResult;
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -1330,7 +1330,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ModifyBaseType failed for '{TypeName}' in '{FilePath}'", typeName, filePath);
+            _logger.LogError(ex, "ModifyBaseType failed for '{TypeName}' in '{FilePathWrapper}'", typeName, filePath);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyBaseType") };
         }
     }
@@ -1346,7 +1346,7 @@ public class SentinelRefactoringTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -1362,7 +1362,7 @@ public class SentinelRefactoringTools
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename: target file '{newPath}' already exists — refusing to overwrite.") };
             }
 
-            var changes = new Dictionary<FilePath, string> { [newPath] = content };
+            var changes = new Dictionary<FilePathWrapper, string> { [newPath] = content };
             var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", dryRun, returnDiff, removePaths: [filePath], cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -1402,7 +1402,7 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SyncTypeAndFilename unexpected exception for '{FilePath}'", filePath);
+            _logger.LogError(ex, "SyncTypeAndFilename unexpected exception for '{FilePathWrapper}'", filePath);
             return new ToolResult<object> { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"SyncTypeAndFilename for '{filePath}'") };
         }
     }

@@ -41,7 +41,7 @@ public class WorkspaceRefreshTests
             await File.WriteAllTextAsync(tempFile, updatedContent);
 
             var result = await _manager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { [tempFile] = updatedContent });
+                new Dictionary<FilePathWrapper, string> { [tempFile] = updatedContent });
 
             Assert.That(result.WorkspaceInSync, Is.True);
 
@@ -78,7 +78,7 @@ public class WorkspaceRefreshTests
             _manager.SetTestSolution(solution);
 
             var result = await _manager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { [newFilePath] = content });
+                new Dictionary<FilePathWrapper, string> { [newFilePath] = content });
 
             Assert.That(result.WorkspaceInSync, Is.True);
 
@@ -118,7 +118,7 @@ public class WorkspaceRefreshTests
             const string updatedCsproj = "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>";
 
             var result = await _manager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { [csprojFile] = updatedCsproj });
+                new Dictionary<FilePathWrapper, string> { [csprojFile] = updatedCsproj });
 
             // Structural change: fast path sets needsFullReload; WorkspaceInSync must be false.
             Assert.That(result.WorkspaceInSync, Is.False, "Structural change should set WorkspaceInSync=false");

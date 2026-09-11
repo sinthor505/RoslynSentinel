@@ -97,7 +97,7 @@ public class MsToolAugmentEngine
     /// property bug in the standard <c>encapsulate_field</c> tool.
     /// </summary>
     public async Task<MsAugmentResult> EncapsulateFieldSafeAsync(
-        FilePath filePath, string fieldName, string? overridePropertyName = null,
+        FilePathWrapper filePath, string fieldName, string? overridePropertyName = null,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -240,7 +240,7 @@ public class MsToolAugmentEngine
     /// tool to avoid silent data loss.
     /// </summary>
     public async Task<SwitchConversionAnalysis> AnalyzeSwitchForPatternConversionAsync(
-        FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -309,7 +309,7 @@ public class MsToolAugmentEngine
     /// where cases assign to multiple variables — preventing silent data loss.
     /// </summary>
     public async Task<MsAugmentResult> ConvertSwitchToPatternSafeAsync(
-        FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var analysis = await AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (!analysis.IsSafeToConvert)
@@ -442,7 +442,7 @@ public class MsToolAugmentEngine
     /// (e.g., <c>string.Format(MyConst, arg1, arg2)</c>).
     /// </summary>
     public async Task<MsAugmentResult> ConvertStringFormatToInterpolatedSmartAsync(
-        FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -589,7 +589,7 @@ public class MsToolAugmentEngine
     /// is technically "used").
     /// </summary>
     public async Task<UsingsCleanupResult> SortAndDeduplicateUsingsAsync(
-        FilePath filePath, bool writeToFile = true, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, bool writeToFile = true, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException($"File not found: {filePath}");
@@ -629,7 +629,7 @@ public class MsToolAugmentEngine
         if (writeToFile)
         {
             await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { [filePath] = updatedContent },
+                new Dictionary<FilePathWrapper, string> { [filePath] = updatedContent },
                 cancellationToken: cancellationToken);
         }
 
@@ -690,7 +690,7 @@ public class MsToolAugmentEngine
     /// returns the formatted content WITHOUT modifying the file on disk.
     /// </summary>
     public async Task<MsAugmentResult> FormatDocumentSafeAsync(
-        FilePath filePath, bool preview = true, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, bool preview = true, CancellationToken cancellationToken = default)
     {
         string source;
         try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
@@ -712,7 +712,7 @@ public class MsToolAugmentEngine
                 // Solution is loaded — route through the shared chokepoint so this write gets
                 // drift detection, pre-image capture, and workspace resync like every other tool.
                 var result = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePath, string> { [filePath] = formatted },
+                    new Dictionary<FilePathWrapper, string> { [filePath] = formatted },
                     cancellationToken: cancellationToken);
                 if (!result.Success)
                 {
@@ -744,7 +744,7 @@ public class MsToolAugmentEngine
     /// standard tool silently destroys by re-initializing the collection variable.
     /// </summary>
     public async Task<ForeachLinqAnalysis> AnalyzeForeachForLinqConversionAsync(
-        FilePath filePath, string contextSnippet,
+        FilePathWrapper filePath, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
@@ -881,7 +881,7 @@ public class MsToolAugmentEngine
     /// is silently ignored and the file is modified on disk.
     /// </summary>
     public async Task<AddUsingsPreview> PreviewAddMissingUsingsAsync(
-        FilePath filePath, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         // Solution must be loaded — this tool requires semantic analysis
         var currentSolution = _workspaceManager.CurrentSolution;
@@ -1037,7 +1037,7 @@ public class MsToolAugmentEngine
     /// end of line" error. Replaces ALL identical literals in the file.
     /// </summary>
     public async Task<MsAugmentResult> ExtractConstantSafeAsync(
-        FilePath filePath, string contextSnippet, string constantName,
+        FilePathWrapper filePath, string contextSnippet, string constantName,
         string? lineBefore = null, string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
@@ -1188,7 +1188,7 @@ public class MsToolAugmentEngine
     /// <param name="members">Optional explicit list of property/field names to include.
     ///     If null/empty, all public instance properties and fields are used.</param>
     public async Task<MsAugmentResult> GenerateToStringSafeAsync(
-        FilePath filePath, string typeName, IList<string>? members = null,
+        FilePathWrapper filePath, string typeName, IList<string>? members = null,
         CancellationToken cancellationToken = default)
     {
         // Read source: prefer workspace (always in sync, supports testability)
@@ -1396,7 +1396,7 @@ public class MsToolAugmentEngine
     /// Expression-bodied methods are not supported in this mode.
     /// </param>
     public async Task<MsAugmentResult> ExtractMethodSafeAsync(
-        FilePath filePath, string newMethodName, string contextSnippet,
+        FilePathWrapper filePath, string newMethodName, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null,
         bool extractEntireBody = false,
         CancellationToken cancellationToken = default)

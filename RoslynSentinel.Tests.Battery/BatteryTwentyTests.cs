@@ -319,7 +319,7 @@ public class BatteryTwentyTests
             const string updatedContent = "namespace TestProj; public class Foo { public int Bar() => 2; public int Baz() => 3; }";
             await File.WriteAllTextAsync(tempFile, updatedContent);
             var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { [tempFile] = updatedContent });
+                new Dictionary<FilePathWrapper, string> { [tempFile] = updatedContent });
             Assert.That(applyResult.Success, Is.True);
 
             var after = await _workspaceTools.SearchSolutionText(reason: "test", "Baz");

@@ -15,10 +15,10 @@ namespace RoslynSentinel.Basic;
 
 public record ExtractMethodResult(bool Success, string? ErrorMessage, string? BeforeSnippet, string? CallSiteReplacement, string? ExtractedMethodText, string? UpdatedSourceContent);
 public record UsingDirectiveInfo(string Name, bool IsStatic, string? Alias);
-public record ResidualMention(FilePath FilePath, int LineNumber, string LineText);
-public record SkippedCallSite(FilePath FilePath, int LineNumber, string Reason);
-public record ChangeSignatureResult(Dictionary<FilePath, string> Changes, List<SkippedCallSite> SkippedCallSites);
-public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePath, string> PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null, List<ResidualMention>? ResidualMentions = null)
+public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string LineText);
+public record SkippedCallSite(FilePathWrapper FilePath, int LineNumber, string Reason);
+public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites);
+public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePathWrapper, string> PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null, List<ResidualMention>? ResidualMentions = null)
 {
     public string ToToolResponse()
     {
@@ -144,7 +144,7 @@ public class RefactoringEngine
         return normalized.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
     }
 
-    public async Task<DocumentEditResult> FormatDocumentAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> FormatDocumentAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -167,48 +167,48 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePath filePath, string methodName, int[] newParameterOrder, CancellationToken cancellationToken = default)
+    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, int[] newParameterOrder, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
+            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (root == null || semanticModel == null)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
+            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
         }
 
         var methodDecl = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodDecl == null)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
+            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
         }
 
         var parameters = methodDecl.ParameterList.Parameters.ToList();
         if (parameters.Count == 0)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
+            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
         }
 
         // Validate order array
         if (newParameterOrder.Length != parameters.Count)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
+            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
         }
 
         if (newParameterOrder.Any(i => i < 0 || i >= parameters.Count))
         {
-            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
+            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
         }
 
         if (newParameterOrder.Distinct().Count() != parameters.Count)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
+            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
         }
 
         var reorderedParams = newParameterOrder.Select(i => parameters[i]).ToList();
@@ -216,7 +216,7 @@ public class RefactoringEngine
         var updatedMethodDecl = methodDecl.WithParameterList(newParamList);
         var updatedRoot = root.ReplaceNode(methodDecl, updatedMethodDecl);
         var updatedDoc = document.WithSyntaxRoot(updatedRoot);
-        var pendingChanges = new Dictionary<FilePath, string>
+        var pendingChanges = new Dictionary<FilePathWrapper, string>
         {
             [filePath] = (await updatedDoc.GetTextAsync(cancellationToken)).ToString()
         };
@@ -284,7 +284,7 @@ public class RefactoringEngine
         }
 
         // Format all changed files
-        var result = new Dictionary<FilePath, string>();
+        var result = new Dictionary<FilePathWrapper, string>();
         foreach (var kvp in pendingChanges)
         {
             var doc = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.FilePath == kvp.Key);
@@ -302,7 +302,7 @@ public class RefactoringEngine
         return new ChangeSignatureResult(result, skippedCallSites);
     }
 
-    public async Task<ExtractMethodResult> ExtractMethodAsync(FilePath filePath, int startLine, string startLineText, int endLine, string endLineText, string newMethodName, CancellationToken cancellationToken = default)
+    public async Task<ExtractMethodResult> ExtractMethodAsync(FilePathWrapper filePath, int startLine, string startLineText, int endLine, string endLineText, string newMethodName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ExtractMethod"))
         {
@@ -522,25 +522,25 @@ public class RefactoringEngine
         return new ExtractMethodResult(true, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
     }
 
-    public async Task<Dictionary<FilePath, string>> MoveTypeToFileAsync(FilePath filePath, string typeName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> MoveTypeToFileAsync(FilePathWrapper filePath, string typeName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var typeNode = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == typeName);
         if (typeNode == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var (newRoot, cleanTypeNode) = BuildSplitFileRoot(root!, typeNode);
@@ -560,7 +560,7 @@ public class RefactoringEngine
         // Guard: if the type's name already matches the source file name, it's already in its own file — nothing to move
         if (string.Equals(typeName, Path.GetFileNameWithoutExtension(document.Name), StringComparison.OrdinalIgnoreCase))
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var updatedOrig = RemoveOrphanedRegionDirectives(root!.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia)!);
@@ -570,7 +570,7 @@ public class RefactoringEngine
         var updatedOrigDoc = document.WithSyntaxRoot(updatedOrig);
         var formattedOrigDoc = await Formatter.FormatAsync(updatedOrigDoc, null, cancellationToken);
         var updatedOrigContent = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
-        return new Dictionary<FilePath, string>
+        return new Dictionary<FilePathWrapper, string>
         {
             {
                 filePath,
@@ -583,18 +583,18 @@ public class RefactoringEngine
         };
     }
 
-    private async Task<Dictionary<FilePath, string>> MoveAllTypesToFilesForDocumentAsync(Document document, CancellationToken cancellationToken = default)
+    private async Task<Dictionary<FilePathWrapper, string>> MoveAllTypesToFilesForDocumentAsync(Document document, CancellationToken cancellationToken = default)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var allTypes = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => t.Parent is CompilationUnitSyntax || t.Parent is BaseNamespaceDeclarationSyntax).ToList();
         if (allTypes.Count <= 1)
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var fileBaseName = Path.GetFileNameWithoutExtension(document.FilePath ?? document.Name);
@@ -602,10 +602,10 @@ public class RefactoringEngine
         var typesToMove = allTypes.Where(t => t != primaryType).ToList();
         if (typesToMove.Count == 0)
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
-        var changes = new Dictionary<FilePath, string>();
+        var changes = new Dictionary<FilePathWrapper, string>();
         var sourceDirectory = Path.GetDirectoryName(document.FilePath) ?? "";
         foreach (var typeNode in typesToMove)
         {
@@ -686,33 +686,33 @@ public class RefactoringEngine
         return toRemove.Count == 0 ? root : (CompilationUnitSyntax)root.ReplaceTrivia(toRemove, (_, _) => SyntaxFactory.Whitespace(""));
     }
 
-    public async Task<Dictionary<FilePath, string>> MoveAllTypesToFilesAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> MoveAllTypesToFilesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         return await MoveAllTypesToFilesForDocumentAsync(document, cancellationToken);
     }
 
-    public async Task<Dictionary<FilePath, string>> MoveAllTypesToFilesInProjectAsync(string projectName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> MoveAllTypesToFilesInProjectAsync(string projectName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"Project '{projectName}' not found.");
-        var allChanges = new Dictionary<FilePath, string>();
+        var allChanges = new Dictionary<FilePathWrapper, string>();
         foreach (var document in project.Documents.Where(d => d.FilePath?.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, cancellationToken))
@@ -724,15 +724,15 @@ public class RefactoringEngine
         return allChanges;
     }
 
-    public async Task<Dictionary<FilePath, string>> MoveAllTypesToFilesInSolutionAsync(CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> MoveAllTypesToFilesInSolutionAsync(CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-        var allChanges = new Dictionary<FilePath, string>();
+        var allChanges = new Dictionary<FilePathWrapper, string>();
         foreach (var document in solution.Projects.SelectMany(p => p.Documents).Where(d => d.FilePath?.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, cancellationToken))
@@ -744,11 +744,11 @@ public class RefactoringEngine
         return allChanges;
     }
 
-    public async Task<Dictionary<FilePath, string>> ExtractInterfaceAsync(FilePath filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> ExtractInterfaceAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ExtractInterface"))
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -757,7 +757,7 @@ public class RefactoringEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         // Extract public instance methods (exclude static, constructors)
@@ -800,7 +800,7 @@ public class RefactoringEngine
         var origDoc = document.WithSyntaxRoot(updatedOrig);
         var formattedOrigDoc = await Formatter.FormatAsync(origDoc, null, cancellationToken);
         var origContent = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
-        return new Dictionary<FilePath, string>
+        return new Dictionary<FilePathWrapper, string>
         {
             {
                 filePath,
@@ -815,7 +815,7 @@ public class RefactoringEngine
 
     public async Task<RenameSymbolResult> RenameSymbolAsync(SymbolHandle handle, ISymbol symbol, string newName, CancellationToken cancellationToken = default)
     {
-        static RenameSymbolResult Err(string msg, string n) => new("", n, new Dictionary<FilePath, string>(), msg);
+        static RenameSymbolResult Err(string msg, string n) => new("", n, new Dictionary<FilePathWrapper, string>(), msg);
         if (!_config.IsFeatureEnabled("Rename"))
         {
             return Err("Feature 'Rename' is disabled.", newName);
@@ -834,13 +834,13 @@ public class RefactoringEngine
             RenameInStrings = true,
         };
         var updated = await Microsoft.CodeAnalysis.Rename.Renamer.RenameSymbolAsync(solution, symbol, renameOptions, newName, cancellationToken);
-        var pendingChanges = new Dictionary<FilePath, string>();
+        var pendingChanges = new Dictionary<FilePathWrapper, string>();
         foreach (var pc in updated.GetChanges(solution).GetProjectChanges())
         {
             foreach (var docId in pc.GetChangedDocuments())
             {
                 var newDoc = updated.GetDocument(docId)!;
-                var filePth = new FilePath(newDoc.FilePath ?? newDoc.Name, _workspaceManager.GetSolutionRoot());
+                var filePth = new FilePathWrapper(newDoc.FilePath ?? newDoc.Name, _workspaceManager.GetSolutionRoot());
                 pendingChanges[filePth] = (await newDoc.GetTextAsync(cancellationToken)).ToString();
             }
         }
@@ -882,7 +882,7 @@ public class RefactoringEngine
                     continue;
                 }
 
-                var filePath = new FilePath(document.FilePath, _workspaceManager.GetSolutionRoot());
+                var filePath = new FilePathWrapper(document.FilePath, _workspaceManager.GetSolutionRoot());
                 var lines = sourceText.Split(separator, StringSplitOptions.None);
                 for (int i = 0; i < lines.Length; i++)
                 {
@@ -957,7 +957,7 @@ public class RefactoringEngine
         }
     }
 
-    public async Task<DocumentEditResult> ConvertIndexerToMethodAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertIndexerToMethodAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ConvertIndexerToMethod"))
         {
@@ -1023,7 +1023,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddRemoveParamsAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddRemoveParamsAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("AddRemoveParams"))
         {
@@ -1072,7 +1072,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ReplaceMemberAsync(FilePath filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReplaceMemberAsync(FilePathWrapper filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1143,7 +1143,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddMemberAsync(FilePath filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddMemberAsync(FilePathWrapper filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1232,7 +1232,7 @@ public class RefactoringEngine
     /// with no namespace (global namespace). If the file has multiple namespaces and namespaceName
     /// wasn't given, that's ambiguous and reported as such rather than guessed.
     /// </summary>
-    public async Task<DocumentEditResult> AddTopLevelTypeAsync(FilePath filePath, string newTypeSource, string? namespaceName = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddTopLevelTypeAsync(FilePathWrapper filePath, string newTypeSource, string? namespaceName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1325,7 +1325,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveMemberAsync(FilePath filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveMemberAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1406,7 +1406,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ConvertToPrimaryConstructorAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToPrimaryConstructorAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("PrimaryConstructors"))
         {
@@ -1466,7 +1466,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ConvertExpressionBodyAsync(FilePath filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertExpressionBodyAsync(FilePathWrapper filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ConvertExpressionBody"))
         {
@@ -1600,7 +1600,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ExtractConstantAsync(FilePath filePath, string contextSnippet, string constantName, string visibility = "private", string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ExtractConstantAsync(FilePathWrapper filePath, string contextSnippet, string constantName, string visibility = "private", string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ExtractConstant"))
         {
@@ -1699,7 +1699,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ExtractLocalVariableAsync(FilePath filePath, string contextSnippet, string? newVariableName = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ExtractLocalVariableAsync(FilePathWrapper filePath, string contextSnippet, string? newVariableName = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ExtractLocalVariable"))
         {
@@ -1955,7 +1955,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<ControlFlowSummary> AnalyzeControlFlowAsync(FilePath filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<ControlFlowSummary> AnalyzeControlFlowAsync(FilePathWrapper filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1999,7 +1999,7 @@ public class RefactoringEngine
         return new ControlFlowSummary(methodName, flow.EndPointIsReachable == false, flow.ReturnStatements.Length > 0, flow.ReturnStatements.Length == 0, returnPoints, throwPoints, flow.ExitPoints.Length);
     }
 
-    public async Task<DataFlowSummary> AnalyzeDataFlowAsync(FilePath filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DataFlowSummary> AnalyzeDataFlowAsync(FilePathWrapper filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2052,7 +2052,7 @@ public class RefactoringEngine
         return new DataFlowSummary(methodName, flow.ReadOutside.Select(s => s.Name).ToList(), flow.WrittenInside.Select(s => s.Name).ToList(), flow.ReadInside.Select(s => s.Name).ToList(), flow.WrittenOutside.Select(s => s.Name).ToList(), flow.Captured.Select(s => s.Name).ToList(), warnings);
     }
 
-    public async Task<DocumentEditResult> AddUsingDirectiveAsync(FilePath filePath, string namespaceName, bool simplifyExisting = false, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddUsingDirectiveAsync(FilePathWrapper filePath, string namespaceName, bool simplifyExisting = false, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2122,7 +2122,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveUsingDirectiveAsync(FilePath filePath, string namespaceName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveUsingDirectiveAsync(FilePathWrapper filePath, string namespaceName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2168,7 +2168,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<List<UsingDirectiveInfo>> GetUsingDirectivesAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<UsingDirectiveInfo>> GetUsingDirectivesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2199,7 +2199,7 @@ public class RefactoringEngine
     /// body — so a mid-list insert or removal can shift a retained implicit member's underlying
     /// value. Pass "=N" explicitly for any member whose numeric value must not move. 
     /// </summary>
-    public async Task<DocumentEditResult> ModifyEnumAsync(FilePath filePath, string enumName, string values, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ModifyEnumAsync(FilePathWrapper filePath, string enumName, string values, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2381,7 +2381,7 @@ public class RefactoringEngine
         static int? GetExistingExplicitValue(EnumMemberDeclarationSyntax member) => member.EqualsValue?.Value is LiteralExpressionSyntax { Token.Value: int existingValue } ? existingValue : null;
     }
 
-    public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePath filePath, string containerName, string afterMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePathWrapper filePath, string containerName, string afterMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2471,7 +2471,7 @@ public class RefactoringEngine
         return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
     }
 
-    public async Task<DocumentEditResult> InsertMemberBeforeAsync(FilePath filePath, string containerName, string beforeMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InsertMemberBeforeAsync(FilePathWrapper filePath, string containerName, string beforeMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2560,7 +2560,7 @@ public class RefactoringEngine
         return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
     }
 
-    public async Task<DocumentEditResult> AddAttributeAsync(FilePath filePath, string targetName, string attributeSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddAttributeAsync(FilePathWrapper filePath, string targetName, string attributeSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2665,7 +2665,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddBaseTypeAsync(FilePathWrapper filePath, string typeName, string baseTypeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2738,7 +2738,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ReplaceAttributeAsync(FilePath filePath, string targetName, string oldAttributeName, string newAttributeSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReplaceAttributeAsync(FilePathWrapper filePath, string targetName, string oldAttributeName, string newAttributeSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2842,7 +2842,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveAttributeAsync(FilePath filePath, string targetName, string attributeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveAttributeAsync(FilePathWrapper filePath, string targetName, string attributeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2910,7 +2910,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveBaseTypeAsync(FilePathWrapper filePath, string typeName, string baseTypeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2981,7 +2981,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePath filePath, string targetName, AccessibilityLevel accessibility, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePathWrapper filePath, string targetName, AccessibilityLevel accessibility, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3061,7 +3061,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddModifierAsync(FilePath filePath, string targetName, string modifier, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddModifierAsync(FilePathWrapper filePath, string targetName, string modifier, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3139,7 +3139,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveModifierAsync(FilePath filePath, string targetName, string modifier, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveModifierAsync(FilePathWrapper filePath, string targetName, string modifier, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3216,7 +3216,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePath filePath, string targetName, string summaryText, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePathWrapper filePath, string targetName, string summaryText, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3240,7 +3240,7 @@ public class RefactoringEngine
     /// (e.g. <c>CommentingEngine</c> commenting several members in the same file before a single
     /// disk write) reuse this logic without each call reading back the workspace's committed state.
     /// </summary>
-    public async Task<DocumentEditResult> AddSummaryCommentCoreAsync(Document document, FilePath filePath, string targetName, string summaryText, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName, CancellationToken cancellationToken)
+    public async Task<DocumentEditResult> AddSummaryCommentCoreAsync(Document document, FilePathWrapper filePath, string targetName, string summaryText, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName, CancellationToken cancellationToken)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -3399,7 +3399,7 @@ public class RefactoringEngine
         return joined.Trim();
     }
 
-    public async Task<DocumentEditResult> RemoveSummaryCommentAsync(FilePath filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveSummaryCommentAsync(FilePathWrapper filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3470,7 +3470,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<(EditOutcome Outcome, string? Message, string? SummaryText)> GetSummaryCommentAsync(FilePath filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
+    public async Task<(EditOutcome Outcome, string? Message, string? SummaryText)> GetSummaryCommentAsync(FilePathWrapper filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3511,14 +3511,14 @@ public class RefactoringEngine
         return (EditOutcome.Modified, null, string.Join(" ", lines));
     }
 
-    public async Task<DocumentEditResult> AddPropertyAsync(FilePath filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddPropertyAsync(FilePathWrapper filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var setter = hasSetter ? (isInit ? " init;" : " set;") : "";
         var source = $"{accessibility} {propertyType} {propertyName} {{ get;{setter} }}";
         return await AddMemberAsync(filePath, containerName, source, contextSnippet, lineBefore, lineAfter, cancellationToken);
     }
 
-    public async Task<DocumentEditResult> AddFieldAsync(FilePath filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddFieldAsync(FilePathWrapper filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var parts = new System.Text.StringBuilder();
         parts.Append(accessibility);
@@ -3542,7 +3542,7 @@ public class RefactoringEngine
         return await AddMemberAsync(filePath, containerName, parts.ToString(), contextSnippet, lineBefore, lineAfter, cancellationToken);
     }
 
-    public async Task<DocumentEditResult> SortMembersAsync(FilePath filePath, string containerName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SortMembersAsync(FilePathWrapper filePath, string containerName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3592,7 +3592,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePath filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePathWrapper filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3685,7 +3685,7 @@ public class RefactoringEngine
     /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a try/catch block.
     /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then wraps the enclosing statements.
     /// </summary>
-    public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePath filePath, string contextSnippet, string? lineBefore, string? lineAfter, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3803,7 +3803,7 @@ public class RefactoringEngine
         }
     }
 
-    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePath filePath, string className, string paramName, string paramType, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePathWrapper filePath, string className, string paramName, string paramType, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3930,7 +3930,7 @@ public class RefactoringEngine
     /// nothing outside the removed assignment reads or writes it — otherwise the field is left in
     /// place so removal never silently breaks code that still depends on it.
     /// </summary>
-    public async Task<DocumentEditResult> RemoveConstructorParameterAsync(FilePath filePath, string className, string paramName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveConstructorParameterAsync(FilePathWrapper filePath, string className, string paramName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -4070,7 +4070,7 @@ public class RefactoringEngine
     /// inferred from a `<field> = <paramName>;` (or `this.<field> = <paramName>;`) assignment
     /// statement in the constructor body — the same convention AddConstructorParameterAsync writes.
     /// </summary>
-    public async Task<(EditOutcome Outcome, string? Message, List<ConstructorParameterInfo> Parameters)> GetConstructorParametersAsync(FilePath filePath, string className, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<(EditOutcome Outcome, string? Message, List<ConstructorParameterInfo> Parameters)> GetConstructorParametersAsync(FilePathWrapper filePath, string className, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -4132,7 +4132,7 @@ public class RefactoringEngine
     /// contextSnippet/lineBefore/lineAfter disambiguate overloads the same way every other
     /// member-targeting tool does.
     /// </summary>
-    public async Task<(EditOutcome Outcome, string? Message, List<MethodParameterInfo> Parameters)> GetMethodParametersAsync(FilePath filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<(EditOutcome Outcome, string? Message, List<MethodParameterInfo> Parameters)> GetMethodParametersAsync(FilePathWrapper filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -4182,7 +4182,7 @@ public class RefactoringEngine
     /// parameter instead of one defaulted to null. nullDefault:true sidesteps that entirely since
     /// it never depends on a string surviving the trip.
     /// </summary>
-    public async Task<DocumentEditResult> AddMethodParameterAsync(FilePath filePath, string methodName, string paramName, string paramType, string? defaultValue = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, bool nullDefault = false)
+    public async Task<DocumentEditResult> AddMethodParameterAsync(FilePathWrapper filePath, string methodName, string paramName, string paramType, string? defaultValue = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, bool nullDefault = false)
     {
         if (nullDefault && defaultValue != null)
         {
@@ -4285,7 +4285,7 @@ public class RefactoringEngine
     /// here a skip can't be tolerated (see above), so those cases are refused outright instead of
     /// silently left broken.
     /// </summary>
-    public async Task<DocumentEditResult> RemoveMethodParameterAsync(FilePath filePath, string methodName, string paramName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveMethodParameterAsync(FilePathWrapper filePath, string methodName, string paramName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -4362,7 +4362,7 @@ public class RefactoringEngine
         var targetParamCount = parameters.Count;
         var newParams = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(parameters.Take(targetParamCount - 1)));
         var newMethodDecl = methodDecl.WithParameterList(newParams);
-        var pendingChanges = new Dictionary<FilePath, string>
+        var pendingChanges = new Dictionary<FilePathWrapper, string>
         {
             [filePath] = await ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken)
         };
@@ -4445,7 +4445,7 @@ public class RefactoringEngine
         // Format every touched file (the declaration was already formatted via
         // ReplaceNodeFormattedAsync above; call-site files were edited via raw ReplaceNode/
         // ToFullString and still need it).
-        var result = new Dictionary<FilePath, string>();
+        var result = new Dictionary<FilePathWrapper, string>();
         foreach (var kvp in pendingChanges)
         {
             if (kvp.Key == filePath)
@@ -4476,7 +4476,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> WrapInRegionAsync(FilePath filePath, int startLine, int endLine, string regionName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> WrapInRegionAsync(FilePathWrapper filePath, int startLine, int endLine, string regionName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -4520,7 +4520,7 @@ public class RefactoringEngine
     /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a #region block.
     /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then derives the line number.
     /// </summary>
-    public async Task<DocumentEditResult> WrapInRegionAsync(FilePath filePath, string contextSnippet, string? lineBefore, string? lineAfter, string regionName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> WrapInRegionAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, string regionName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -4741,7 +4741,7 @@ public class RefactoringEngine
     /// output lines up with what RemoveMember/ReplaceMember need: an exact memberName plus enough
     /// signature text to build a contextSnippet if the name turns out to be overloaded.
     /// </summary>
-    public async Task<(EditOutcome Outcome, string? Message, List<ContainerMemberInfo> Members)> GetContainerMembersAsync(FilePath filePath, string containerName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<(EditOutcome Outcome, string? Message, List<ContainerMemberInfo> Members)> GetContainerMembersAsync(FilePathWrapper filePath, string containerName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -4948,7 +4948,7 @@ public class RefactoringEngine
         return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
     }
 
-    public async Task<DocumentEditResult> SyncInterfaceToImplementationAsync(FilePath filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SyncInterfaceToImplementationAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         // Find the class document
@@ -5115,7 +5115,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> UpdateXmlDocsFromSignatureAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UpdateXmlDocsFromSignatureAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -5247,7 +5247,7 @@ public class RefactoringEngine
     /// Shows changed line ranges with ±3 lines of context (like a unified diff).
     /// Returns Changed=false and an empty hunks list if the file is already formatted correctly.
     /// </summary>
-    public async Task<FormatPreviewResult> FormatDocumentPreviewAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<FormatPreviewResult> FormatDocumentPreviewAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);

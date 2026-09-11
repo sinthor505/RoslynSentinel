@@ -16,7 +16,7 @@ public class ModernLoggingEngine
     /// <summary>
     /// Converts a standard logger call (e.g. _logger.LogInformation("Msg {Param}", p)) into a source-generated [LoggerMessage] method.
     /// </summary>
-    public async Task<DocumentEditResult> ConvertToSourceGeneratedLoggingAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToSourceGeneratedLoggingAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");

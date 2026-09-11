@@ -15,7 +15,7 @@ public record OutParamConversionResult(
     string? NewSignature,
     int CallSitesRewritten,
     List<string> CallSiteWarnings,
-    Dictionary<FilePath, string>? Changes = null
+    Dictionary<FilePathWrapper, string>? Changes = null
 );
 
 public class OutParamRefactoringEngine
@@ -28,7 +28,7 @@ public class OutParamRefactoringEngine
     }
 
     public async Task<OutParamConversionResult> ConvertOutParamsToValueTupleAsync(
-        FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
@@ -284,13 +284,13 @@ public class OutParamRefactoringEngine
         // Materialize the changed documents as file text for the caller to route through the
         // shared write chokepoint (ApplyDiff/ApplyProposedChangesAsync) — this engine must not
         // write to disk itself.
-        var changes = new Dictionary<FilePath, string>();
+        var changes = new Dictionary<FilePathWrapper, string>();
         foreach (var pc in updatedSolution.GetChanges(solution).GetProjectChanges())
         {
             foreach (var docId in pc.GetChangedDocuments())
             {
                 var newDoc = updatedSolution.GetDocument(docId)!;
-                var changedPath = new FilePath(newDoc.FilePath ?? newDoc.Name, _workspaceManager.GetSolutionRoot());
+                var changedPath = new FilePathWrapper(newDoc.FilePath ?? newDoc.Name, _workspaceManager.GetSolutionRoot());
                 changes[changedPath] = (await newDoc.GetTextAsync(cancellationToken)).ToString();
             }
         }

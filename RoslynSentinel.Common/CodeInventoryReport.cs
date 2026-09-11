@@ -1,7 +1,7 @@
 namespace RoslynSentinel.Common;
 
 public record CodeInventoryReport(
-    FilePath filePath,
+    FilePathWrapper filePath,
     List<string> Namespaces,
     List<string> Classes,
     List<string> Interfaces,

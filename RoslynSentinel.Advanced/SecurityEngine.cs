@@ -22,7 +22,7 @@ public class SecurityEngine
         "accesskey", "credential", "passphrase", "apisecret"
     ];
 
-    public async Task<List<SecurityIssueReport>> AnalyzeSecurityAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<SecurityIssueReport>> AnalyzeSecurityAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
@@ -411,7 +411,7 @@ public class SecurityEngine
     /// the pattern string literal contains known dangerous constructs.
     /// </summary>
     public async Task<List<SecurityIssueReport>> FindReDoSPatternsAsync(
-        FilePath filePath, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
@@ -522,7 +522,7 @@ public class SecurityEngine
     /// Regex injection and ReDoS attacks.
     /// </summary>
     public async Task<List<SecurityIssueReport>> FindUnvalidatedRegexSourceAsync(
-        FilePath filePath, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var issues = new List<SecurityIssueReport>();
@@ -670,7 +670,7 @@ public class SecurityEngine
     /// from user input, a ReDoS amplification vector.
     /// </summary>
     public async Task<List<SecurityIssueReport>> FindRegexNewInLoopAsync(
-        FilePath filePath, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var issues = new List<SecurityIssueReport>();
@@ -739,7 +739,7 @@ public class SecurityEngine
     ///   4. JsonSerializer.Deserialize without null check on result — can silently return null.
     /// </summary>
     public async Task<List<SecurityIssueReport>> DetectJsonAntiPatternsAsync(
-        FilePath filePath, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);

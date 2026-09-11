@@ -30,7 +30,7 @@ public class SyntaxUpgradeEngine
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
-    public async Task<DocumentEditResult> UpgradeToModernGuardsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UpgradeToModernGuardsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ModernGuardClauses"))
         {
@@ -87,7 +87,7 @@ public class SyntaxUpgradeEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddBracesAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddBracesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("IDE0011"))
         {
@@ -132,7 +132,7 @@ public class SyntaxUpgradeEngine
         };
     }
 
-    public async Task<DocumentEditResult> UpgradePatternMatchingAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UpgradePatternMatchingAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("PatternMatching"))
         {
@@ -177,7 +177,7 @@ public class SyntaxUpgradeEngine
         };
     }
 
-    public async Task<DocumentEditResult> UseNameofExpressionAsync(FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseNameofExpressionAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("UnboundNameof"))
         {
@@ -235,7 +235,7 @@ public class SyntaxUpgradeEngine
         };
     }
 
-    public async Task<DocumentEditResult> ConvertSwitchToExpressionAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertSwitchToExpressionAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("IfToSwitch"))
         {
@@ -302,7 +302,7 @@ public class SyntaxUpgradeEngine
         };
     }
 
-    public async Task<DocumentEditResult> ConvertSwitchExpressionToStatementAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertSwitchExpressionToStatementAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -335,7 +335,7 @@ public class SyntaxUpgradeEngine
         };
     }
 
-    public async Task<DocumentEditResult> CleanupImplicitSpansAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> CleanupImplicitSpansAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ImplicitSpanCleanup"))
         {
@@ -380,7 +380,7 @@ public class SyntaxUpgradeEngine
         };
     }
 
-    public async Task<DocumentEditResult> UseFieldBackedPropertiesAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseFieldBackedPropertiesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("FieldBackedProperties"))
         {
@@ -571,7 +571,7 @@ public class SyntaxUpgradeEngine
         prop.AccessorList != null &&
         prop.AccessorList.Accessors.All(a => a.Body == null && a.ExpressionBody == null);
 
-    public async Task<DocumentEditResult> UpgradeToPrimaryConstructorAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UpgradeToPrimaryConstructorAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -797,7 +797,7 @@ public class SyntaxUpgradeEngine
         };
     }
 
-    public async Task<DocumentEditResult> UpgradeToFileScopedNamespaceAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UpgradeToFileScopedNamespaceAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -861,7 +861,7 @@ public class SyntaxUpgradeEngine
         };
     }
 
-    public async Task<DocumentEditResult> UseExceptionExpressionsAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseExceptionExpressionsAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)

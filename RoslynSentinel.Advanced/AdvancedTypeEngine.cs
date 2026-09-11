@@ -13,7 +13,7 @@ public class AdvancedTypeEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<Dictionary<FilePath, string>> ConvertTupleToClassAsync(FilePath filePath, string methodName, string newClassName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> ConvertTupleToClassAsync(FilePathWrapper filePath, string methodName, string newClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -64,14 +64,14 @@ public class AdvancedTypeEngine
         var newMethodNode = methodNode.WithReturnType(SyntaxFactory.ParseTypeName(newClassName));
         var updatedRoot = root.ReplaceNode(methodNode, newMethodNode);
 
-        return new Dictionary<FilePath, string>
+        return new Dictionary<FilePathWrapper, string>
         {
             { filePath, updatedRoot.NormalizeWhitespace().ToFullString() },
             { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), classRoot.NormalizeWhitespace().ToFullString() }
         };
     }
 
-    public async Task<Dictionary<FilePath, string>> ChangePropertyTypeAsync(FilePath filePath, string className, string propertyName, string newType, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> ChangePropertyTypeAsync(FilePathWrapper filePath, string className, string propertyName, string newType, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -88,7 +88,7 @@ public class AdvancedTypeEngine
         var newRoot = root!.ReplaceNode(propNode, newPropNode);
 
         var updatedSolution = solution.WithDocumentSyntaxRoot(document.Id, newRoot);
-        var changes = new Dictionary<FilePath, string>();
+        var changes = new Dictionary<FilePathWrapper, string>();
         foreach (var docId in updatedSolution.GetChanges(solution).GetProjectChanges().SelectMany(pc => pc.GetChangedDocuments()))
         {
             var doc = updatedSolution.GetDocument(docId)!;
@@ -99,7 +99,7 @@ public class AdvancedTypeEngine
         return changes;
     }
 
-    public async Task<Dictionary<FilePath, string>> ConvertAnonymousToNamedAsync(FilePath filePath, string newClassName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> ConvertAnonymousToNamedAsync(FilePathWrapper filePath, string newClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -122,7 +122,7 @@ public class AdvancedTypeEngine
                 .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
                 .AddMembers(properties.ToArray());
 
-            return new Dictionary<FilePath, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), newClass.NormalizeWhitespace().ToFullString() } };
+            return new Dictionary<FilePathWrapper, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), newClass.NormalizeWhitespace().ToFullString() } };
         }
 
         throw new InvalidOperationException("Anonymous type not found.");

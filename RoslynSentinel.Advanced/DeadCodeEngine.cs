@@ -14,7 +14,7 @@ public class DeadCodeEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<List<DeadCodeReport>> FindUnusedPrivateMembersAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<List<DeadCodeReport>> FindUnusedPrivateMembersAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -70,7 +70,7 @@ public class DeadCodeEngine
         return reports;
     }
 
-    public async Task<List<DeadCodeReport>> DetectUnusedPrivateFieldsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<DeadCodeReport>> DetectUnusedPrivateFieldsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -123,7 +123,7 @@ public class DeadCodeEngine
         return reports;
     }
 
-    public async Task<List<DeadCodeReport>> DetectUnusedLocalVariablesAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<DeadCodeReport>> DetectUnusedLocalVariablesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -181,7 +181,7 @@ public class DeadCodeEngine
         return reports;
     }
 
-    public async Task<List<DeadCodeReport>> FindUnusedConstructorsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<DeadCodeReport>> FindUnusedConstructorsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -233,7 +233,7 @@ public class DeadCodeEngine
         return reports;
     }
 
-    public async Task<List<DeadCodeReport>> CheckForUnusedEventSubscriptionsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<DeadCodeReport>> CheckForUnusedEventSubscriptionsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

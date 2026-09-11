@@ -1104,7 +1104,7 @@ public class Product
             _workspaceManager.SetTestSolution(solution);
         }
 
-        // ── Bug 8a: FindStringMagicValues — locations must have non-empty FilePath/Line/Snippet ───
+        // ── Bug 8a: FindStringMagicValues — locations must have non-empty FilePathWrapper/Line/Snippet ───
 
         [Test]
         public async Task FindStringMagicValues_LocationsHaveFilePath()
@@ -1126,7 +1126,7 @@ public class Product
             foreach (var loc in finding.Locations)
             {
                 Assert.That(loc.FilePath.Absolute, Is.Not.Null.And.Not.Empty,
-                    "Location.FilePath must not be empty (value tuple serialization bug)");
+                    "Location.FilePathWrapper must not be empty (value tuple serialization bug)");
                 Assert.That(loc.Line, Is.GreaterThan(0),
                     "Location.Line must be a real line number");
                 Assert.That(loc.Snippet, Is.Not.Null.And.Not.Empty,
@@ -2126,7 +2126,7 @@ public class ProductsController
             var doc = sol?.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == "ProductsController.cs");
             if (doc != null)
             {
-                System.Diagnostics.Debug.WriteLine($"Found doc: {doc.Name}, FilePath={doc.FilePath}, Project={doc.Project.Name}, Namespace={doc.Project.DefaultNamespace}");
+                System.Diagnostics.Debug.WriteLine($"Found doc: {doc.Name}, FilePathWrapper={doc.FilePath}, Project={doc.Project.Name}, Namespace={doc.Project.DefaultNamespace}");
             }
 
             // Pass just the filename - the engine will look it up.
@@ -3051,7 +3051,7 @@ public class Cat
 
             SetMultipleFiles(("Dog.cs", code));
 
-            var result = await _advancedStructuralEngine.ExtractSuperclassAsync(new FilePath[] { new FilePath("Dog.cs") }, new[] { "Dog", "Cat" }, "Animal");
+            var result = await _advancedStructuralEngine.ExtractSuperclassAsync(new FilePathWrapper[] { new FilePathWrapper("Dog.cs") }, new[] { "Dog", "Cat" }, "Animal");
 
             Assert.That(result, Is.Not.Null, "Should return a result");
             // Base class should have the common Name property

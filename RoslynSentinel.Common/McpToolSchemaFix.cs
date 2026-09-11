@@ -18,7 +18,7 @@ namespace RoslynSentinel.Common;
 /// <remarks>
 /// Any tool parameter (or POCO property on a class used as a parameter) typed as a custom struct
 /// whose <see cref="System.Text.Json.Serialization.JsonConverter{T}"/> only implements
-/// <c>ReadAsPropertyName</c>/<c>WriteAsPropertyName</c> (e.g. <see cref="FilePath"/>, or a future
+/// <c>ReadAsPropertyName</c>/<c>WriteAsPropertyName</c> (e.g. <see cref="FilePathWrapper"/>, or a future
 /// wrapper like a <c>ToolCallReason</c>) makes <c>JsonSchemaExporter</c> fall back to emitting the
 /// bare schema node <c>true</c> — legal JSON Schema 2020-12, but rejected outright by LM Studio's
 /// grammar converter with "Unrecognized schema: true" the instant MCP tools are enabled. The SDK's

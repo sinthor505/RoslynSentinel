@@ -30,7 +30,7 @@ public class CodeStyleEngine
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
-    public async Task<DocumentEditResult> FixDangerousLockAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> FixDangerousLockAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("LockModernization"))
         {
@@ -107,7 +107,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePath filePath, string propertyName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePathWrapper filePath, string propertyName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ConvertPropertyToMethod"))
         {
@@ -181,7 +181,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> SimplifyVerbosityAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SimplifyVerbosityAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("SimplifyVerbosity"))
         {
@@ -226,7 +226,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> UseCollectionExpressionsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseCollectionExpressionsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("CollectionExpressions"))
         {
@@ -271,7 +271,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> UseTimeProviderAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseTimeProviderAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("TimeProviderInjection"))
         {
@@ -337,7 +337,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> SimplifyAllNamesAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SimplifyAllNamesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("IDE0001"))
         {
@@ -382,7 +382,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> UseIndexFromEndAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseIndexFromEndAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("LengthMinusOneToIndex"))
         {

@@ -2,7 +2,7 @@ namespace RoslynSentinel.Common;
 
 public record PathDrivenTestReport(
     string MethodName,
-    FilePath filePath,
+    FilePathWrapper filePath,
     string ClassName,
     int PathCount,
     List<PathDrivenTestCase> TestCases,

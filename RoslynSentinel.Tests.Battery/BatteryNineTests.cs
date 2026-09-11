@@ -125,7 +125,7 @@ public class SolutionManagementEngineTests
     [Test]
     public async Task CreateProject_NullSolutionPath_ThrowsMissingSolutionPath()
     {
-        // AdhocWorkspace has no FilePath; SolutionPath is also null → "Solution path not found."
+        // AdhocWorkspace has no FilePathWrapper; SolutionPath is also null → "Solution path not found."
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _engine.CreateProjectAsync("NewProject", "classlib"));
 

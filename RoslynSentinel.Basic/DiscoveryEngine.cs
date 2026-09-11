@@ -13,12 +13,12 @@ public record AttributeUsageSite(
     string ContainingType,
     string ContainingNamespace,
     string ProjectName,
-    FilePath FilePath, int Line);
-public record TodoCommentFinding(FilePath FilePath, int Line, string Kind, string Text);
+    FilePathWrapper FilePath, int Line);
+public record TodoCommentFinding(FilePathWrapper FilePath, int Line, string Kind, string Text);
 public record RenameImpactPreview(string SymbolName, int TotalReferences, int FilesAffected, bool HasTestReferences, List<string> AffectedFiles);
 
 public record ThrowSiteInfo(
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     int Line,
     int Column,
     string ExceptionType,
@@ -27,7 +27,7 @@ public record ThrowSiteInfo(
     string? MessageLiteral);
 
 public record ObjectCreationSite(
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     int Line,
     int Column,
     string TypeName,
@@ -507,7 +507,7 @@ public class DiscoveryEngine
     }
 
     public async Task<BestInsertionResult> FindBestInsertionPointAsync(
-        FilePath filePath, string containerName, string memberKind, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, string containerName, string memberKind, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -655,7 +655,7 @@ public class DiscoveryEngine
     }
 
     public async Task<RenameImpactPreview> PreviewRenameImpactAsync(
-        FilePath filePath = default,
+        FilePathWrapper filePath = default,
         string? symbolName = null,
         string? contextSnippet = null,
         string? lineBefore = null,

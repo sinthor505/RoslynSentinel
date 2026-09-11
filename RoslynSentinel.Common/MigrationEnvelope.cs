@@ -30,7 +30,7 @@ public sealed class ClassCandidateSummary
 {
     public string ClassName { get; set; } = string.Empty;
     public string ProjectName { get; set; } = string.Empty;  // .csproj name, not full path
-    public FilePath filePath { get; set; } = string.Empty;  // absolute path to the source file
+    public FilePathWrapper filePath { get; set; } = string.Empty;  // absolute path to the source file
     public int Count
     {
         get; set;
@@ -39,7 +39,7 @@ public sealed class ClassCandidateSummary
 
 /// <summary>
 /// Slim per-class row used in <see cref="MigrationScanSummary.ByClass"/> (summarize=true path).
-/// Omits FilePath to keep the summary response small.
+/// Omits FilePathWrapper to keep the summary response small.
 /// </summary>
 public sealed record ClassCandidateSummarySlim(
     string ClassName,
@@ -48,7 +48,7 @@ public sealed record ClassCandidateSummarySlim(
 
 /// <summary>
 /// Slim candidate entry used in <see cref="MigrationScanSummary.TopCandidates"/> (summarize=true path).
-/// Omits FilePath, FlaggedDate, Line, and full Reason breakdown to keep the summary small.
+/// Omits FilePathWrapper, FlaggedDate, Line, and full Reason breakdown to keep the summary small.
 /// </summary>
 public sealed record TopCandidateSummaryEntry(
     string MethodName,

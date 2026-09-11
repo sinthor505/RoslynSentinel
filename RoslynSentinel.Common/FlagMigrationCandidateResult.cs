@@ -22,7 +22,7 @@ namespace RoslynSentinel.Common;
 /// </param>
 /// <param name="Summary">Human-readable summary of the flag action for log display.</param>
 public record FlagMigrationCandidateResult(
-    FilePath filePath,
+    FilePathWrapper filePath,
     string MethodName,
     string Pattern,
     int Line,

@@ -9,7 +9,7 @@ namespace RoslynSentinel.Common;
 /// <param name="Reason">Human-readable reason for skipping.</param>
 /// <param name="Diagnostics">Roslyn compiler diagnostics that caused the skip (may be empty).</param>
 public record BridgeSkippedInfo(
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     string MethodName,
     string Reason,
     List<DiagnosticInfo> Diagnostics,

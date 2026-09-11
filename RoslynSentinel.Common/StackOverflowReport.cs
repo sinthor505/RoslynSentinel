@@ -1,7 +1,7 @@
 namespace RoslynSentinel.Common;
 
 public sealed record StackOverflowReport(
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     int DefiniteCount,
     int SuspiciousCount,
     int InformationalCount,

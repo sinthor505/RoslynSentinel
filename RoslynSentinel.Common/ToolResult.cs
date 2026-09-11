@@ -201,7 +201,7 @@ public record LargeResultInfo
     {
         get; init;
     }
-    public FilePath FilePath
+    public FilePathWrapper FilePath
     {
         get; init;
     }
@@ -225,7 +225,7 @@ public record LargeResultInfo
     public LargeResultInfo(
     string resultType,
     bool writtenToFile,
-    FilePath filePath,
+    FilePathWrapper filePath,
     string resultId,
     long sizeBytes,
     int totalRecords,

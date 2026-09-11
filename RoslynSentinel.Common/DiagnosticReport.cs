@@ -45,7 +45,7 @@ public record DiagnosticInfo(
     string Id,
     string Severity,
     string Message,
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     int StartLine,
     int StartColumn,
     int EndLine,

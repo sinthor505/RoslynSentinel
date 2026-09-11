@@ -65,7 +65,7 @@ public class SentinelGenerationTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         var fileIds = _workspaceManager.CurrentSolution?.GetDocumentIdsWithFilePath(filePath);
         if (fileIds == null || fileIds.Value.Length == 0)
@@ -85,7 +85,7 @@ public class SentinelGenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePath}'", controllerName, filePath);
+            _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePathWrapper}'", controllerName, filePath);
             return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateHttpClient");
         }
     }
@@ -143,7 +143,7 @@ public class SentinelGenerationTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         var interpFileIds = _workspaceManager.CurrentSolution?.GetDocumentIdsWithFilePath(filePath);
         if (interpFileIds == null || interpFileIds.Value.Length == 0)
@@ -163,7 +163,7 @@ public class SentinelGenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePath}'", filePath);
+            _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePathWrapper}'", filePath);
             return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "InterpolateStringSafe");
         }
     }

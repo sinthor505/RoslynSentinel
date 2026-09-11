@@ -152,8 +152,8 @@ public sealed class FailureRouter
                     if (!string.IsNullOrEmpty(ctx.FilePath))
                     {
                         string json = string.IsNullOrEmpty(ctx.MethodName)
-                            ? $"[{{\"FilePath\":{JsonSerializer.Serialize(ctx.FilePath)}}}]"
-                            : $"[{{\"FilePath\":{JsonSerializer.Serialize(ctx.FilePath)},\"MethodNames\":[{JsonSerializer.Serialize(ctx.MethodName)}]}}]";
+                            ? $"[{{\"FilePathWrapper\":{JsonSerializer.Serialize(ctx.FilePath)}}}]"
+                            : $"[{{\"FilePathWrapper\":{JsonSerializer.Serialize(ctx.FilePath)},\"MethodNames\":[{JsonSerializer.Serialize(ctx.MethodName)}]}}]";
                         result["targets"] = json;
                     }
                     break;

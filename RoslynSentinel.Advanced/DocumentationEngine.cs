@@ -13,7 +13,7 @@ public class DocumentationEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<DocumentEditResult> GenerateXmlDocumentationStubsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateXmlDocumentationStubsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
@@ -68,7 +68,7 @@ public class DocumentationEngine
         };
     }
 
-    public async Task<DocumentEditResult> DocumentPocoFieldsAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> DocumentPocoFieldsAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

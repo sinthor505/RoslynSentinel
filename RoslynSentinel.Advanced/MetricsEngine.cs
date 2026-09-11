@@ -28,7 +28,7 @@ public record MethodFieldUsage(
 
 public record CohesionAnalysis(
     string TypeName,
-    FilePath filePath,
+    FilePathWrapper filePath,
     int Line,
     int FieldCount,
     int MethodCount,
@@ -102,7 +102,7 @@ public class MetricsEngine
     }
 
     public async Task<List<CohesionAnalysis>> AnalyzeTypeCohesionAsync(
-        FilePath filePath, string? className = null, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, string? className = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 

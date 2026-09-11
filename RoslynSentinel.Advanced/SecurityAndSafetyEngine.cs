@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynSentinel.Advanced;
 
-public record SafetyIssue(FilePath filePath, int Line, int Column, string Type, string Description);
+public record SafetyIssue(FilePathWrapper filePath, int Line, int Column, string Type, string Description);
 
 public class SecurityAndSafetyEngine
 {
@@ -29,7 +29,7 @@ public class SecurityAndSafetyEngine
         "Single", "Double", "Decimal", "Char", "IntPtr", "UIntPtr"
     };
 
-    public async Task<List<SafetyIssue>> FindUnsafeTypeCastsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<SafetyIssue>> FindUnsafeTypeCastsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -71,7 +71,7 @@ public class SecurityAndSafetyEngine
         return issues;
     }
 
-    public async Task<List<SafetyIssue>> DetectMissingNullChecksAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<SafetyIssue>> DetectMissingNullChecksAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -301,7 +301,7 @@ public class SecurityAndSafetyEngine
     /// visible null guard in the containing method.
     /// </summary>
     public async Task<List<SafetyIssue>> FindNullDereferenceChainAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -418,7 +418,7 @@ public class SecurityAndSafetyEngine
     /// without being wrapped in a checked block — potential silent overflow.
     /// </summary>
     public async Task<List<SafetyIssue>> FindArithmeticOverflowRisksAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);

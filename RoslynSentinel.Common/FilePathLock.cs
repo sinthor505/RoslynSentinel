@@ -31,7 +31,7 @@ public static class FilePathLock
     /// </summary>
     /// <param name="filePath">The file path to check.</param>
     /// <returns>True if a lock is currently held; false if no lock exists or the path is free.</returns>
-    public static bool IsLocked(FilePath filePath)
+    public static bool IsLocked(FilePathWrapper filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath.ToString());
 
@@ -39,14 +39,14 @@ public static class FilePathLock
         return Map.TryGetValue(key, out Entry? entry) && entry.Sem.CurrentCount == 0;
     }
 
-    public static Task<IDisposable> AcquireAsync(FilePath filePath, CancellationToken ct = default)
+    public static Task<IDisposable> AcquireAsync(FilePathWrapper filePath, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath.ToString());
 
         return AcquireAsync(filePath, Timeout.InfiniteTimeSpan, ct);
     }
 
-    private static async Task<IDisposable> AcquireAsync(FilePath filePath, TimeSpan timeout, CancellationToken ct = default)
+    private static async Task<IDisposable> AcquireAsync(FilePathWrapper filePath, TimeSpan timeout, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath.ToString());
 
@@ -119,7 +119,7 @@ public static class FilePathLock
         }
     }
 
-    private static string Normalize(FilePath filePath)
+    private static string Normalize(FilePathWrapper filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath.ToString());
 

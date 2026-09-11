@@ -18,7 +18,7 @@ public record EngineResultBase
     {
         get; init;
     }
-    public FilePath FilePath
+    public FilePathWrapper FilePath
     {
         get; init;
     }

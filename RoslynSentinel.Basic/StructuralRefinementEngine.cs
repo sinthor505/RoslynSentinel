@@ -44,7 +44,7 @@ public class StructuralRefinementEngine
     /// Synchronizes the filename to match the primary type declared in the file.
     /// Uses staging mechanism (returns change ID) instead of direct file writes.
     /// </summary>
-    public async Task<DocumentEditResult> SyncTypeAndFilenameAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SyncTypeAndFilenameAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
@@ -72,7 +72,7 @@ public class StructuralRefinementEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                Changes = new Dictionary<FilePath, string> { [newPath] = sourceText.ToString() },
+                Changes = new Dictionary<FilePathWrapper, string> { [newPath] = sourceText.ToString() },
                 Message = $"Renaming '{currentName}' to '{expectedName}' to match primary type '{primaryType.Identifier.Text}'."
             };
         }
@@ -88,7 +88,7 @@ public class StructuralRefinementEngine
     /// <summary>
     /// Safe deletes a symbol only if it has no usages in the entire solution (legacy: line/column-based).
     /// </summary>
-    public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePath filePath, int line, int column, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePathWrapper filePath, int line, int column, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("SafeDeleteUnusedSymbol"))
         {
@@ -155,7 +155,7 @@ public class StructuralRefinementEngine
     /// resolution — an agent-friendly alternative to the line/column overload above, which requires
     /// a column that a caller who only knows a line number has no cheap way to obtain).
     /// </summary>
-    public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePath filePath, string symbolName, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePathWrapper filePath, string symbolName, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -252,7 +252,7 @@ public class StructuralRefinementEngine
     /// docs/TODO.md's "Duplicate/dead SafeDeleteSymbolAsync" entry). Returns a blocking
     /// <see cref="DocumentEditResult"/> if a match is found anywhere, otherwise null.
     /// </summary>
-    private static async Task<DocumentEditResult?> CheckReflectionRiskAsync(Solution solution, FilePath filePath, ISymbol symbol, CancellationToken cancellationToken = default)
+    private static async Task<DocumentEditResult?> CheckReflectionRiskAsync(Solution solution, FilePathWrapper filePath, ISymbol symbol, CancellationToken cancellationToken = default)
     {
         foreach (var proj in solution.Projects)
         {
@@ -279,7 +279,7 @@ public class StructuralRefinementEngine
     /// <summary>
     /// Safe deletes a symbol only if it has no usages in the entire solution (handle-based resolution).
     /// </summary>
-    public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePath filePath, ISymbol symbol, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePathWrapper filePath, ISymbol symbol, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("SafeDeleteUnusedSymbol"))
         {

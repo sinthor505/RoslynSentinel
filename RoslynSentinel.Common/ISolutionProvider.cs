@@ -39,6 +39,6 @@ public interface ISolutionProvider
     List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems();
     /// <summary>Directory containing the loaded solution/project, or null if none is loaded.</summary>
     string? GetSolutionRoot();
-    /// <summary>Resolves a wire-format relative path against the solution root into a validated FilePath.</summary>
-    FilePath SetFilePath(string? filepath);
+    /// <summary>Resolves a wire-format relative path against the solution root into a validated FilePathWrapper.</summary>
+    FilePathWrapper SetFilePath(string? filepath);
 }

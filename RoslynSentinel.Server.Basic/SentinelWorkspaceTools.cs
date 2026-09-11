@@ -12,7 +12,7 @@ namespace RoslynSentinel.Server.Basic;
 /// <summary>Structural outline entry returned by get_file_outline.</summary>
 public record OutlineItem(string Kind, string Name, string? Container, int StartLine, int EndLine);
 /// <summary>Single solution-wide symbol entry returned by ListAll — an OutlineItem plus the file it was found in.</summary>
-public record SolutionSymbolEntry(FilePath FilePath, string Kind, string Name, string? Container, int StartLine, int EndLine);
+public record SolutionSymbolEntry(FilePathWrapper FilePath, string Kind, string Name, string? Container, int StartLine, int EndLine);
 /// <summary>Return payload for <c>GetFileOutline</c>.</summary>
 public record FileOutlineResult
 {
@@ -22,7 +22,7 @@ public record FileOutlineResult
     public List<OutlineItem> Symbols { get; init; } = new();
 }
 /// <summary>Single text-search hit returned by search_solution_text.</summary>
-public record TextSearchMatch(FilePath filePath, int Line, int Column, string Preview, MatchKind MatchedAs, string? EnclosingMember = null);
+public record TextSearchMatch(FilePathWrapper filePath, int Line, int Column, string Preview, MatchKind MatchedAs, string? EnclosingMember = null);
 /// <summary>
 /// Return payload for <c>SearchSolutionText</c>: the literal substring matches (always the
 /// complete set) and the regex matches not already present in <see cref="LiteralResults"/> (empty
@@ -38,7 +38,7 @@ public record TextSearchResult(List<TextSearchMatch> LiteralResults, List<TextSe
 /// returned by ListSolutionItems(kind: solutionItems). SolutionFolder is the enclosing folder's
 /// display name (e.g. "Solution Items").
 /// </summary>
-public record SolutionItemFile(FilePath FilePath, string SolutionFolder);
+public record SolutionItemFile(FilePathWrapper FilePath, string SolutionFolder);
 /// <summary>A project entry returned by ListSolutionItems(kind: projects).</summary>
 public record ProjectInfoEntry(string Name, string? FilePath);
 /// <summary>One project's aggregated files and dependencies, as returned within ListSolutionItems(kind: all).</summary>
@@ -184,7 +184,7 @@ public class SentinelWorkspaceTools
                     };
                 }
 
-                var items = _workspaceManager.GetSolutionFolderItems().Select(i => new SolutionItemFile(new FilePath(Path.GetFullPath(Path.Combine(solutionRoot, i.RelativePath)), solutionRoot), i.SolutionFolder)).ToList();
+                var items = _workspaceManager.GetSolutionFolderItems().Select(i => new SolutionItemFile(new FilePathWrapper(Path.GetFullPath(Path.Combine(solutionRoot, i.RelativePath)), solutionRoot), i.SolutionFolder)).ToList();
                 return await ToolResult<object>.ForPossiblyLargeDataAsync(
                     items,
                     solutionRoot,
@@ -269,7 +269,7 @@ public class SentinelWorkspaceTools
                 if (solutionRoot is not null)
                 {
                     solutionItems = _workspaceManager.GetSolutionFolderItems()
-                        .Select(i => new SolutionItemFile(new FilePath(Path.GetFullPath(Path.Combine(solutionRoot, i.RelativePath)), solutionRoot), i.SolutionFolder))
+                        .Select(i => new SolutionItemFile(new FilePathWrapper(Path.GetFullPath(Path.Combine(solutionRoot, i.RelativePath)), solutionRoot), i.SolutionFolder))
                         .ToList();
                 }
 
@@ -341,7 +341,7 @@ public class SentinelWorkspaceTools
         [Description("Your workspace root — a real project/repo directory, not a drive root or '/'.")] string workspacePath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        workspacePath = FilePath.NormalizeWirePath(workspacePath);
+        workspacePath = FilePathWrapper.NormalizeWirePath(workspacePath);
         if (!Directory.Exists(workspacePath))
         {
             return new ToolResult<List<SolutionFileInfo>>
@@ -480,7 +480,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    // True only when solutionPath is rooted AND string-matches (case-insensitively, via FilePath's
+    // True only when solutionPath is rooted AND string-matches (case-insensitively, via FilePathWrapper's
     // canonicalized separators) the currently tracked SolutionPath. A relative path never matches —
     // ResolveSolutionPath's private multi-candidate disk search is the only reliable way to know
     // what a relative path resolves to, and duplicating it here isn't worth it for a fast-path check.
@@ -493,8 +493,8 @@ public class SentinelWorkspaceTools
         }
 
         var solutionRootForCompare = _workspaceManager.GetSolutionRoot();
-        var requested = new FilePath(solutionPath, solutionRootForCompare);
-        var current = new FilePath(currentPath, solutionRootForCompare);
+        var requested = new FilePathWrapper(solutionPath, solutionRootForCompare);
+        var current = new FilePathWrapper(currentPath, solutionRootForCompare);
         return string.Equals(requested.Absolute, current.Absolute, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -587,7 +587,7 @@ public class SentinelWorkspaceTools
     {
         try
         {
-            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
             if (!filePath.Validated)
             {
                 return new ToolResult<object>()
@@ -676,7 +676,7 @@ public class SentinelWorkspaceTools
                     var match = ContextHelper.FindExactSnippetPosition(oldText, oldContent, lineBefore, lineAfter);
                     var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
                     var targetPath = document.FilePath ?? filePath;
-                    var snippetChanges = new Dictionary<FilePath, string>
+                    var snippetChanges = new Dictionary<FilePathWrapper, string>
                     {
                         [targetPath] = newFileContent
                     };
@@ -722,7 +722,7 @@ public class SentinelWorkspaceTools
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePath}'", action, filePath);
+                    _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePathWrapper}'", action, filePath);
                     return new ToolResult<object>()
                     {
                         Success = false,
@@ -762,7 +762,7 @@ public class SentinelWorkspaceTools
         [Description("Required for .cs files, ignored otherwise. Name of the top-level type to seed the file with (e.g. 'Foo').")] string? typeName = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
         try
         {
             if (!filePath.Validated)
@@ -819,7 +819,7 @@ public class SentinelWorkspaceTools
                 Directory.CreateDirectory(directory);
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = content };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = content };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: true, cancellationToken: cancellationToken);
             if (!result.Success && result.ValidationResult != null)
             {
@@ -851,7 +851,7 @@ public class SentinelWorkspaceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "CreateFile failed for '{FilePath}'", filePath);
+            _logger.LogError(ex, "CreateFile failed for '{FilePathWrapper}'", filePath);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -866,7 +866,7 @@ public class SentinelWorkspaceTools
     //[McpServerTool(Name = "ApplyDiffWithConfirmationCode")]
     [Produces(DataTag.ChangeId)]
     [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead. IMPORTANT: for changesetFormat=files with action=apply, any file whose content would shrink by more than 50% is rejected with errorCode=ConfirmationRequired — this is a strong signal you submitted only a changed fragment as if it were the whole file, rather than a genuine whole-file rewrite. If the rewrite is really intended, call ApplyDiff again with action=confirmationCode and confirmationCode set to the code from the rejection — do not resend changes/filepath/unifiedDiff on that call, the original changeset is already cached server-side.")]
-    public async Task<ToolResult<object>> ApplyDiffWithConfirmationCode([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [ToolOption(ToolOptionTag.ConfirmationCode)][Description("Required when action=confirmationCode. The code returned by a prior apply call that was rejected for exceeding the whole-file-rewrite size threshold. Replays that exact cached changeset — do not also pass changes/filepath/unifiedDiff.")] string? confirmationCode = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<ToolResult<object>> ApplyDiffWithConfirmationCode([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePathWrapper, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [ToolOption(ToolOptionTag.ConfirmationCode)][Description("Required when action=confirmationCode. The code returned by a prior apply call that was rejected for exceeding the whole-file-rewrite size threshold. Replays that exact cached changeset — do not also pass changes/filepath/unifiedDiff.")] string? confirmationCode = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         try
@@ -915,7 +915,7 @@ public class SentinelWorkspaceTools
                 };
             }
 
-            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
             if (changesetFormat == ChangesetFormat.files)
             {
                 if (changes == null)
@@ -1047,7 +1047,7 @@ public class SentinelWorkspaceTools
                     try
                     {
                         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-                        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePath == filePath.Absolute);
+                        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePathWrapper == filePath.Absolute);
                         if (document == null)
                         {
                             return new ToolResult<object>()
@@ -1059,8 +1059,8 @@ public class SentinelWorkspaceTools
 
                         var oldText = await document.GetTextAsync();
                         var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
-                        var targetPath = document.FilePath ?? filePath;
-                        var diffChanges = new Dictionary<FilePath, string>
+                        var targetPath = document.FilePathWrapper ?? filePath;
+                        var diffChanges = new Dictionary<FilePathWrapper, string>
                         {
                             [targetPath] = newContent
                         };
@@ -1090,7 +1090,7 @@ public class SentinelWorkspaceTools
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePath}'", filePath);
+                        _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePathWrapper}'", filePath);
                         return new ToolResult<object>()
                         {
                             Success = false,
@@ -1418,7 +1418,7 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.Offset, required: false)] int column = 0, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         async Task<ToolResult<object>> ApplyAndRespondAsync(DocumentEditResult result)
         {
             if (string.IsNullOrEmpty(result.UpdatedText))
@@ -1430,7 +1430,7 @@ public class SentinelWorkspaceTools
                 };
             }
 
-            var changes = new Dictionary<FilePath, string>
+            var changes = new Dictionary<FilePathWrapper, string>
             {
                 [filePath] = result.UpdatedText
             };
@@ -1506,7 +1506,7 @@ public class SentinelWorkspaceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePath}' at {Line}:{Column} or handle {ProjectName}/{DocCommentId}", filePath, line, column, projectName, docCommentId);
+            _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePathWrapper}' at {Line}:{Column} or handle {ProjectName}/{DocCommentId}", filePath, line, column, projectName, docCommentId);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -1621,7 +1621,7 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null, [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -1708,7 +1708,7 @@ public class SentinelWorkspaceTools
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "GetFileOutline failed for '{FilePath}'", filePath);
+                    _logger.LogWarning(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePath);
                 }
 
                 return new ToolResult<object>
@@ -1740,7 +1740,7 @@ public class SentinelWorkspaceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ReadFile failed for '{FilePath}'", filePath);
+            _logger.LogError(ex, "ReadFile failed for '{FilePathWrapper}'", filePath);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -1853,7 +1853,7 @@ public class SentinelWorkspaceTools
             }
 
             var failed = new List<string>();
-            var revertChanges = new Dictionary<FilePath, string>();
+            var revertChanges = new Dictionary<FilePathWrapper, string>();
             foreach (var item in revertable)
             {
                 // Security: only revert files under the solution root to prevent path traversal.

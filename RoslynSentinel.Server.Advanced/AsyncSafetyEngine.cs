@@ -13,7 +13,7 @@ public class AsyncSafetyEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<List<AsyncSafetyReport>> DetectAsyncVoidMethodsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> DetectAsyncVoidMethodsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -62,7 +62,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindTaskYieldUsageAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindTaskYieldUsageAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -102,7 +102,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindTaskDelayUsageAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindTaskDelayUsageAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -142,7 +142,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindTaskDelayZeroUsageAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindTaskDelayZeroUsageAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -209,7 +209,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindTaskWhenAllUsageAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindTaskWhenAllUsageAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -312,7 +312,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindConfigureAwaitMissingAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindConfigureAwaitMissingAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -366,7 +366,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindBlockingCallsInAsyncAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindBlockingCallsInAsyncAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -440,7 +440,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindAsyncInConstructorAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindAsyncInConstructorAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -498,7 +498,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindTaskRunInAsyncAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindTaskRunInAsyncAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -538,7 +538,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindConcurrentCollectionOpportunitiesAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindConcurrentCollectionOpportunitiesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -595,7 +595,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindUnsafeLazyInitAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindUnsafeLazyInitAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -758,7 +758,7 @@ public class AsyncSafetyEngine
         return false;
     }
 
-    public async Task<List<AsyncSafetyReport>> DetectValueTaskMisuseAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> DetectValueTaskMisuseAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
@@ -949,7 +949,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    public async Task<List<AsyncSafetyReport>> FindAsyncOverSyncAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindAsyncOverSyncAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)

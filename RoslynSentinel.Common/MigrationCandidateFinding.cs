@@ -15,7 +15,7 @@ namespace RoslynSentinel.Common;
 /// <param name="FlaggedDate">ISO date string (yyyy-MM-dd) when the method was flagged, or <c>null</c>.</param>
 /// <param name="Line">1-based source line of the method declaration.</param>
 public record MigrationCandidateFinding(
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     string MethodName,
     string ClassName,
     string Pattern,

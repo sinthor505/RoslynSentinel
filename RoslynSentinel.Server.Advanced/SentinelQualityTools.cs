@@ -101,7 +101,7 @@ public class SentinelQualityTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             var result = await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName, cancellationToken);
@@ -113,7 +113,7 @@ public class SentinelQualityTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetTestCoverageMap failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            _logger.LogError(ex, "GetTestCoverageMap failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
             return new ToolResult<object>
             {
                 Success = false,
@@ -132,7 +132,7 @@ public class SentinelQualityTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -145,7 +145,7 @@ public class SentinelQualityTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetMethodComplexity failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            _logger.LogError(ex, "GetMethodComplexity failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
             return new ToolResult<object>
             {
                 Success = false,
@@ -171,7 +171,7 @@ public class SentinelQualityTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("AnalyzeForeachForLinqConversion: {File}", filePath);
@@ -213,7 +213,7 @@ public class SentinelQualityTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

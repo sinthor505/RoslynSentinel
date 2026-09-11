@@ -19,7 +19,7 @@ public record BestInsertionResult : EngineResultBase
         get; init;
     } = string.Empty;
 
-    public BestInsertionResult(FilePath filePath, string containerName, string memberKind, int insertBeforeLine, string reason)
+    public BestInsertionResult(FilePathWrapper filePath, string containerName, string memberKind, int insertBeforeLine, string reason)
     {
         this.FilePath = filePath;
         this.ContainerName = containerName;

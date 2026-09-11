@@ -90,7 +90,7 @@ public class UnrecoverableBreakerTests
 
         Breaker.Trip("Member_add", "aaa11111", "blob write failed");
 
-        var changes = new Dictionary<FilePath, string>
+        var changes = new Dictionary<FilePathWrapper, string>
         {
             [_workspaceManager.SetFilePath(targetFile)] = original + "\n// appended by test\n"
         };
@@ -113,7 +113,7 @@ public class UnrecoverableBreakerTests
             .First(f => !f.Contains("obj", StringComparison.OrdinalIgnoreCase));
         var original = await File.ReadAllTextAsync(targetFile);
 
-        var changes = new Dictionary<FilePath, string>
+        var changes = new Dictionary<FilePathWrapper, string>
         {
             [_workspaceManager.SetFilePath(targetFile)] = original + "\n// appended by test\n"
         };

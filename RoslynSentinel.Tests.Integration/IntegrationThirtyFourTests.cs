@@ -389,7 +389,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var config = new SentinelConfiguration();
         var engine = new RefactoringEngine(
             NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
-        Dictionary<FilePath, string>? result = null;
+        Dictionary<FilePathWrapper, string>? result = null;
         var file = _realFilePath;
         await Assert.DoesNotThrowAsync(async () =>
             result = await engine.MoveAllTypesToFilesAsync(file),
@@ -432,7 +432,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     public async Task GranularRefactoringEngine_ExtractMembersToPartial_DoesNotThrow()
     {
         var engine = new GranularRefactoringEngine(_workspaceManager);
-        Dictionary<FilePath, string>? result = null;
+        Dictionary<FilePathWrapper, string>? result = null;
         await Assert.DoesNotThrowAsync(async () =>
             result = await engine.ExtractMembersToPartialAsync(
                 _realFilePath, _realClassName, new[] { _realMethodName }),
@@ -479,7 +479,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         foreach (var issue in issues)
         {
             Assert.That(issue.FilePath.Absolute, Is.Not.Null.And.Not.Empty,
-                "Every PerformanceIssueReport must have a non-null FilePath.");
+                "Every PerformanceIssueReport must have a non-null FilePathWrapper.");
             Assert.That(issue.Description, Is.Not.Null.And.Not.Empty,
                 "Every PerformanceIssueReport must have a non-empty Description.");
         }

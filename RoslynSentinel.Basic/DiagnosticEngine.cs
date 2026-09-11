@@ -18,7 +18,7 @@ public class DiagnosticEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");

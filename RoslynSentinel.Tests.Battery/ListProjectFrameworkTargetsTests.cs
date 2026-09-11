@@ -2,7 +2,7 @@
 // is a thin try/catch wrapper with no branches of its own; the real branching lives in
 // ProjectConsistencyEngine.GetProjectFrameworkSummaryAsync, which reads each project's .csproj file
 // directly off disk (not from the in-memory Roslyn solution) looking for TargetFramework/TargetFrameworks
-// elements. TestSolutionBuilder's on-disk overload only sets Project.FilePath — it doesn't write the
+// elements. TestSolutionBuilder's on-disk overload only sets Project.FilePathWrapper — it doesn't write the
 // .csproj content — so the fixture writes real .csproj files itself.
 
 using Microsoft.Extensions.Logging.Abstractions;

@@ -17,7 +17,7 @@ public class LogicOptimizationEngine
     /// <summary>
     /// Simplifies redundant logic like 'if (x == true)' to 'if (x)'.
     /// </summary>
-    public async Task<DocumentEditResult> SimplifyBooleanExpressionsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SimplifyBooleanExpressionsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -56,7 +56,7 @@ public class LogicOptimizationEngine
     /// <summary>
     /// Adds ArgumentNullException.ThrowIfNull checks to all reference type parameters in a method.
     /// </summary>
-    public async Task<DocumentEditResult> AddGuardClausesAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddGuardClausesAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -131,7 +131,7 @@ public class LogicOptimizationEngine
     /// Converts patterns like 'if (x == null) x = y;' to 'x ??= y;'
     /// and 'x == null ? y : x' to 'x ?? y'.
     /// </summary>
-    public async Task<DocumentEditResult> ConvertToNullCoalescingAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToNullCoalescingAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -180,7 +180,7 @@ public class LogicOptimizationEngine
     /// - No float/double comparisons (precision issues)
     /// - No string comparisons without case sensitivity handling
     /// </summary>
-    public async Task<DocumentEditResult> ConvertToSwitchAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToSwitchAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

@@ -33,7 +33,7 @@ public class CodeFlowEngine
     /// <summary>
     /// Reduces block depth by finding if statements that encompass the whole method body and inverting them to return early.
     /// </summary>
-    public async Task<DocumentEditResult> ReduceBlockDepthAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReduceBlockDepthAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         try
         {

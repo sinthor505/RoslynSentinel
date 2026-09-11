@@ -42,7 +42,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     // by the exception's own throw path.
     private volatile bool _sessionHalted;
     private volatile bool _disposed = false;
-    private readonly ConcurrentDictionary<FilePath, string> _failedChangesCache = new();
+    private readonly ConcurrentDictionary<FilePathWrapper, string> _failedChangesCache = new();
     // _internalChanges/_externalChanges are the older path-key + ~5s-freshness-window
     // self-write-suppression mechanism (see OnFileSystemChanged). _knownFileHashes (below) is a
     // newer, content-based check layered IN FRONT of this one, not a replacement — deliberately,
@@ -53,14 +53,14 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     // _internalChanges/_externalChanges are an intentional future-removal candidate once the
     // hash-based gate has proven itself in production, not a bug to "clean up" reflexively.
     private readonly ConcurrentDictionary<string, (DateTime Timestamp, string Content)> _internalChanges = new();
-    // Content-hash baseline: path (normalized via FilePath's own case-insensitive, separator-
+    // Content-hash baseline: path (normalized via FilePathWrapper's own case-insensitive, separator-
     // canonicalized equality/hashing) → SHA-256 of the last content RoslynSentinel itself wrote or
     // loaded for that file. Populated wholesale on LoadSolutionAsync, updated per-file on a
     // successful ApplyProposedChangesAsync write, and consulted first in OnFileSystemChanged: a
     // watcher event whose on-disk hash still matches the recorded hash is provably our own echo or
     // a no-op, regardless of path-key formatting or timing — see the hard-blocker doc for why this
     // closes a whole class of false positive, not just today's two known bugs.
-    private readonly ConcurrentDictionary<FilePath, string> _knownFileHashes = new();
+    private readonly ConcurrentDictionary<FilePathWrapper, string> _knownFileHashes = new();
 
     /// <summary>
     /// Changesets rejected by <c>ApplyDiff</c>'s whole-file-rewrite size guard, keyed by a
@@ -73,14 +73,14 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private static readonly TimeSpan PendingConfirmationTtl = TimeSpan.FromMinutes(10);
 
     private sealed record PendingChangeset(
-        Dictionary<FilePath, string> Changes, int RetryCount, bool ValidateOnApply, DateTime ExpiresAtUtc);
+        Dictionary<FilePathWrapper, string> Changes, int RetryCount, bool ValidateOnApply, DateTime ExpiresAtUtc);
 
     /// <summary>
     /// Caches <paramref name="changes"/> under a fresh confirmation code and returns the code.
     /// Also opportunistically sweeps expired entries so the cache doesn't grow unbounded across
     /// a long-running server session.
     /// </summary>
-    public string CachePendingChangeset(Dictionary<FilePath, string> changes, int retryCount, bool validateOnApply)
+    public string CachePendingChangeset(Dictionary<FilePathWrapper, string> changes, int retryCount, bool validateOnApply)
     {
         foreach (var kvp in _pendingConfirmations)
         {
@@ -99,7 +99,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// Retrieves and removes the changeset cached under <paramref name="confirmationCode"/>.
     /// Returns null if the code is unrecognized or has expired (one-time use).
     /// </summary>
-    public (Dictionary<FilePath, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode)
+    public (Dictionary<FilePathWrapper, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode)
     {
         if (!_pendingConfirmations.TryRemove(confirmationCode, out var pending))
         {
@@ -195,11 +195,11 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
     }
 
-    // Delegates to FilePath.NormalizeWirePath — the same sanitization every other tool's path
-    // argument gets via FilePath.FromWire — so LoadSolution doesn't drift from that behavior.
+    // Delegates to FilePathWrapper.NormalizeWirePath — the same sanitization every other tool's path
+    // argument gets via FilePathWrapper.FromWire — so LoadSolution doesn't drift from that behavior.
     private static string? SanitizePathArgument(string? path)
     {
-        return string.IsNullOrEmpty(path) ? path : FilePath.NormalizeWirePath(path);
+        return string.IsNullOrEmpty(path) ? path : FilePathWrapper.NormalizeWirePath(path);
     }
 
     /// <summary>
@@ -337,7 +337,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             try
             {
                 var content = File.ReadAllText(document.FilePath);
-                _knownFileHashes[new FilePath(document.FilePath)] = ComputeContentHash(content);
+                _knownFileHashes[new FilePathWrapper(document.FilePath)] = ComputeContentHash(content);
             }
             catch (IOException)
             {
@@ -626,7 +626,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         // treats them specially.
         if (e.ChangeType is WatcherChangeTypes.Changed or WatcherChangeTypes.Created)
         {
-            var hashKey = new FilePath(e.FullPath);
+            var hashKey = new FilePathWrapper(e.FullPath);
             if (_knownFileHashes.TryGetValue(hashKey, out var recordedHash))
             {
                 try
@@ -1100,7 +1100,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// duplicate type in the compilation, corrupting symbol resolution for everything downstream.
     /// No-op if the path isn't currently tracked.
     /// </summary>
-    public async Task RemoveDocumentByPathAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task RemoveDocumentByPathAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         await _solutionLock.WaitAsync(cancellationToken);
         try
@@ -1218,13 +1218,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// compiler-checked constraint — keep it in mind when adding a new write path.
     /// </remarks>
     public async Task<ApplyChangesResult> ApplyProposedChangesAsync(
-        Dictionary<FilePath, string> changes,
+        Dictionary<FilePathWrapper, string> changes,
         int retryCount = 3,
         bool validateChanges = false,
         bool rollbackOnPartialFailure = false,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default,
-        IReadOnlyCollection<FilePath>? deletePaths = null)
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
     {
         deletePaths ??= [];
 
@@ -1301,7 +1301,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         await _solutionLock.WaitAsync(cancellationToken);
         var succeeded = new List<string>();
         var noOp = new List<string>();
-        var failed = new Dictionary<FilePath, string>();
+        var failed = new Dictionary<FilePathWrapper, string>();
         bool needsFullReload = false;
 
         // Clear retry cache for this specific batch
@@ -1335,7 +1335,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     preImages[key] = null;
                     if (_logger.IsEnabled(LogLevel.Warning))
                     {
-                        _logger.LogWarning("Pre-image capture failed for {FilePath}: {Message}", key, ex.Message);
+                        _logger.LogWarning("Pre-image capture failed for {FilePathWrapper}: {Message}", key, ex.Message);
                     }
                 }
             }
@@ -1357,7 +1357,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     _knownFileHashes.TryRemove(filePath, out _);
                     if (_logger.IsEnabled(LogLevel.Information))
                     {
-                        _logger.LogInformation("Deleted {FilePath}", filePath);
+                        _logger.LogInformation("Deleted {FilePathWrapper}", filePath);
                     }
                 }
                 catch (Exception ex)
@@ -1365,7 +1365,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     failed[filePath] = ex.Message;
                     if (_logger.IsEnabled(LogLevel.Error))
                     {
-                        _logger.LogError(ex, "Failed to delete {FilePath}", filePath);
+                        _logger.LogError(ex, "Failed to delete {FilePathWrapper}", filePath);
                     }
                 }
             }
@@ -1380,7 +1380,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 preImages.TryGetValue(filePath, out var preImage);
                 if (preImage == newContent)
                 {
-                    _logger.LogWarning("Skipping no-op write for {FilePath}: proposed content is identical to existing content.", filePath);
+                    _logger.LogWarning("Skipping no-op write for {FilePathWrapper}: proposed content is identical to existing content.", filePath);
                     Debug.WriteLine($"[Warning] Skipping no-op write for {filePath}: proposed content is identical to existing content.");
                     succeeded.Add(filePath);
                     noOp.Add(filePath);
@@ -1400,7 +1400,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         var normalizedExisting = CSharpSyntaxTree.ParseText(preImage).GetRoot().NormalizeWhitespace().ToFullString();
                         if (normalizedNew == normalizedExisting)
                         {
-                            _logger.LogInformation("Skipping whitespace-only write for {FilePath}: content is semantically identical after normalization.", filePath);
+                            _logger.LogInformation("Skipping whitespace-only write for {FilePathWrapper}: content is semantically identical after normalization.", filePath);
                             succeeded.Add(filePath);
                             noOp.Add(filePath);
                             continue;
@@ -1428,7 +1428,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         if (formattedText != newContent)
                         {
                             var lineDelta = CountLines(formattedText) - CountLines(newContent);
-                            _logger.LogDebug("Formatter divergence for {FilePath}: written content differs from Formatter.Format output (line delta {LineDelta}).", filePath, lineDelta);
+                            _logger.LogDebug("Formatter divergence for {FilePathWrapper}: written content differs from Formatter.Format output (line delta {LineDelta}).", filePath, lineDelta);
                         }
                     }
                     catch
@@ -1459,7 +1459,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         _knownFileHashes[filePath] = ComputeContentHash(newContent);
                         if (_logger.IsEnabled(LogLevel.Information))
                         {
-                            _logger.LogInformation("Wrote changes to {FilePath} (Attempt {Attempt})", filePath, attempt + 1);
+                            _logger.LogInformation("Wrote changes to {FilePathWrapper} (Attempt {Attempt})", filePath, attempt + 1);
                         }
                         break;
                     }
@@ -1468,7 +1468,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         lastError = ex.Message;
                         if (_logger.IsEnabled(LogLevel.Warning))
                         {
-                            _logger.LogWarning("IO error writing to {FilePath}: {Message}. Retrying... ({Attempt}/{Max})", filePath, ex.Message, attempt + 1, retryCount);
+                            _logger.LogWarning("IO error writing to {FilePathWrapper}: {Message}. Retrying... ({Attempt}/{Max})", filePath, ex.Message, attempt + 1, retryCount);
                         }
                         if (attempt < retryCount)
                         {
@@ -1480,7 +1480,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         lastError = ex.Message;
                         if (_logger.IsEnabled(LogLevel.Error))
                         {
-                            _logger.LogError(ex, "Permanent failure writing to {FilePath}", filePath);
+                            _logger.LogError(ex, "Permanent failure writing to {FilePathWrapper}", filePath);
                         }
                         break;
                     }
@@ -1524,7 +1524,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     {
                         if (_logger.IsEnabled(LogLevel.Error))
                         {
-                            _logger.LogError(ex, "Rollback failed for {FilePath} after partial-apply failure — file may be left in a partially-applied state.", filePath);
+                            _logger.LogError(ex, "Rollback failed for {FilePathWrapper} after partial-apply failure — file may be left in a partially-applied state.", filePath);
                         }
                     }
                 }
@@ -1643,7 +1643,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             {
                 if (_logger.IsEnabled(LogLevel.Warning))
                 {
-                    _logger.LogWarning("Could not read {FilePath} for in-memory update: {Message}", filePath, ex.Message);
+                    _logger.LogWarning("Could not read {FilePathWrapper} for in-memory update: {Message}", filePath, ex.Message);
                 }
                 continue;
             }
@@ -1671,7 +1671,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 {
                     if (_logger.IsEnabled(LogLevel.Warning))
                     {
-                        _logger.LogWarning("New .cs file {FilePath} does not belong to any project in the solution; skipping in-memory update.", filePath);
+                        _logger.LogWarning("New .cs file {FilePathWrapper} does not belong to any project in the solution; skipping in-memory update.", filePath);
                     }
                 }
             }
@@ -1776,7 +1776,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// </summary>
     public async Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default)
     {
-        var toRetry = new Dictionary<FilePath, string>();
+        var toRetry = new Dictionary<FilePathWrapper, string>();
 
         if (specificFiles == null || specificFiles.Count == 0)
         {
@@ -1798,7 +1798,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
         if (toRetry.Count == 0)
         {
-            return new ApplyChangesResult(true, new List<string>(), new Dictionary<FilePath, string>(), "No matching failed changes found in cache to retry.");
+            return new ApplyChangesResult(true, new List<string>(), new Dictionary<FilePathWrapper, string>(), "No matching failed changes found in cache to retry.");
         }
 
         return await ApplyProposedChangesAsync(toRetry, retryCount);
@@ -2146,14 +2146,14 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         };
     }
 
-    public FilePath SetFilePath(string? filepath)
+    public FilePathWrapper SetFilePath(string? filepath)
     {
-        FilePath filePath = default;
+        FilePathWrapper filePath = default;
         string? solutionRoot = this.GetSolutionRoot();
 
         if (!string.IsNullOrWhiteSpace(filepath) && !string.IsNullOrWhiteSpace(solutionRoot))
         {
-            filePath = FilePath.FromWire(filepath, solutionRoot);
+            filePath = FilePathWrapper.FromWire(filepath, solutionRoot);
         }
 
         return filePath;

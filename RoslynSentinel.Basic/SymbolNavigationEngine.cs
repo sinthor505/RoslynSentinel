@@ -142,7 +142,7 @@ public class SymbolNavigationEngine
 
     /// <summary>
     /// Locates all declaration sites for a symbol by name without requiring a file path.
-    /// Returns structured SymbolLocation records whose FilePath and ContextSnippet fields
+    /// Returns structured SymbolLocation records whose FilePathWrapper and ContextSnippet fields
     /// can be passed directly to inspect_symbol, find_references, get_call_graph, rename_symbol,
     /// and all other filePath-gated tools — eliminating the search_solution_text bootstrap step.
     ///
@@ -153,7 +153,7 @@ public class SymbolNavigationEngine
     ///
     /// Returns all matches. Overloads appear as separate entries distinguishable by Signature.
     /// When multiple results are returned, inspect Signature and ContainingType to pick the target,
-    /// then supply the chosen FilePath + ContextSnippet to the next tool call.
+    /// then supply the chosen FilePathWrapper + ContextSnippet to the next tool call.
     /// </summary>    
     public async Task<List<SymbolLocation>> LocateSymbolAsync(
         string symbolName,
@@ -161,7 +161,7 @@ public class SymbolNavigationEngine
         string? containingType = null,
         string? containingNamespace = null,
         string? projectName = null,
-        FilePath filePath = default,
+        FilePathWrapper filePath = default,
         bool exactMatch = true,
         CancellationToken cancellationToken = default)
     {
@@ -326,7 +326,7 @@ public class SymbolNavigationEngine
         };
     }
 
-    public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -929,7 +929,7 @@ public class SymbolNavigationEngine
     }
 
     public async Task<List<ReadonlyFieldCandidate>> FindReadonlyFieldCandidatesAsync(
-        FilePath filePath, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -999,7 +999,7 @@ public class SymbolNavigationEngine
     /// qualifier, accessibility, or a genuinely different symbol.
     /// </summary>
     public async Task<FileUsingContext?> GetFileUsingContextAsync(
-        FilePath filePath, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -1068,7 +1068,7 @@ public class SymbolNavigationEngine
     /// without needing full caller-method resolution.
     /// </summary>
     public async Task<string?> GetEnclosingTypeNameAsync(
-        FilePath filePath, int line, int column, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, int line, int column, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -1091,7 +1091,7 @@ public class SymbolNavigationEngine
     }
 
     public async Task<CallGraphNode?> GetCallGraphAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string methodName,
         int maxDepth = 3,
         CancellationToken cancellationToken = default)
@@ -1230,7 +1230,7 @@ public class SymbolNavigationEngine
     }
 
     public async Task<ReverseCallGraphNode?> GetReverseCallGraphAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string methodName,
         int maxDepth = 3,
         CancellationToken cancellationToken = default)
@@ -1404,7 +1404,7 @@ public class SymbolNavigationEngine
 
         ISymbol? symbol = null;
 
-        // The MCP tool layer resolves an omitted `filepath` to FilePath's empty-string default
+        // The MCP tool layer resolves an omitted `filepath` to FilePathWrapper's empty-string default
         // (via SetFilePath), not a C# null — so checking `filePath != null` alone always took this
         // branch, even when no filepath was actually supplied, silently bypassing the by-name
         // fallback below. Treat blank the same as null.
@@ -1582,7 +1582,7 @@ public class SymbolNavigationEngine
         // an empty list that reads identically to a confirmed zero-implementations result.
         string? scopedResolutionFailure = null;
 
-        // The MCP tool layer resolves an omitted `filepath` to FilePath's empty-string default
+        // The MCP tool layer resolves an omitted `filepath` to FilePathWrapper's empty-string default
         // (via SetFilePath), not a C# null — so checking `filePath != null` alone always took this
         // branch, even when no filepath was actually supplied, silently bypassing the by-name
         // fallback below. Treat blank the same as null.
@@ -1703,7 +1703,7 @@ public class SymbolNavigationEngine
     /// across all code paths (loops, conditionals, try/catch) in the enclosing method.
     /// </summary>
     public async Task<VariableLifetimeReport> TraceVariableLifetimeAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string variableName,
         int lineNumber,
         CancellationToken cancellationToken = default)

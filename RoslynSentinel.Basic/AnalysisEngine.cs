@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.Formatting;
 namespace RoslynSentinel.Basic;
 
 public record DuplicateMethodGroup(string Hash, List<MethodLocation> Locations);
-public record MethodLocation(FilePath filePath, string TypeName, string MethodName);
+public record MethodLocation(FilePathWrapper filePath, string TypeName, string MethodName);
 
 public class AnalysisEngine
 {
@@ -257,7 +257,7 @@ public class AnalysisEngine
             .Select(t => $"Type '{t.Name}' in {t.Document} is never instantiated.").ToList();
     }
 
-    public async Task<List<string>> DetectUnreachableCodeAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<List<string>> DetectUnreachableCodeAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -336,7 +336,7 @@ public class AnalysisEngine
         return false;
     }
 
-    public async Task<DocumentEditResult> GenerateCallTreeAsync(FilePath filePath, string methodName, int depth = 3, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateCallTreeAsync(FilePathWrapper filePath, string methodName, int depth = 3, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -465,7 +465,7 @@ public class AnalysisEngine
         }
     }
 
-    public async Task<DocumentEditResult> GenerateEqualityOverridesAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateEqualityOverridesAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -673,7 +673,7 @@ public class AnalysisEngine
         return "object";
     }
 
-    public async Task<List<string>> DetectMemoryLeaksAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<string>> DetectMemoryLeaksAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MemoryLeaks"))
         {
@@ -875,7 +875,7 @@ public class AnalysisEngine
             || typeName.StartsWith("Queue<") || typeName.StartsWith("Stack<");
     }
 
-    public async Task<List<string>> AnalyzeSemaphoreUsageAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<string>> AnalyzeSemaphoreUsageAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("SemaphoreLeaks"))
         {
@@ -963,7 +963,7 @@ public class AnalysisEngine
         return results;
     }
 
-    public async Task<List<string>> FindPossibleInfiniteLoopsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<List<string>> FindPossibleInfiniteLoopsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
@@ -2385,7 +2385,7 @@ public class AnalysisEngine
     /// <summary>
     /// Derives the expected namespace for a file based on its path relative to the project root.
     /// </summary>
-    private static string DeriveExpectedNamespace(FilePath filePath, string projectRoot, string rootNamespace)
+    private static string DeriveExpectedNamespace(FilePathWrapper filePath, string projectRoot, string rootNamespace)
     {
         // Get the directory containing the file, relative to the project root.
         var fileDir = Path.GetDirectoryName(filePath) ?? "";

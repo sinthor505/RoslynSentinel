@@ -89,7 +89,7 @@ public class SentinelIntelligenceTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
 
         try
         {
@@ -150,7 +150,7 @@ public class SentinelIntelligenceTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -166,7 +166,7 @@ public class SentinelIntelligenceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetCodeInventory failed for '{FilePath}'", filePath);
+            _logger.LogError(ex, "GetCodeInventory failed for '{FilePathWrapper}'", filePath);
             return new ToolResult<object>
             {
                 Success = false,
@@ -189,7 +189,7 @@ public class SentinelIntelligenceTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
         try
         {
             var result = await _dependencyInjectionEngine.FindDiRegistrationsAsync(projectName, filePath, lifetimeFilter, cancellationToken);
@@ -224,7 +224,7 @@ public class SentinelIntelligenceTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -301,7 +301,7 @@ public class SentinelIntelligenceTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -314,7 +314,7 @@ public class SentinelIntelligenceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "PreviewMoveFileToNamespaceFolder failed for '{FilePath}'", filePath);
+            _logger.LogError(ex, "PreviewMoveFileToNamespaceFolder failed for '{FilePathWrapper}'", filePath);
             return new ToolResult<string>
             {
                 Success = false,
@@ -336,7 +336,7 @@ public class SentinelIntelligenceTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -349,7 +349,7 @@ public class SentinelIntelligenceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "TraceVariableLifetime failed for '{VariableName}' in '{FilePath}'", variableName, filePath);
+            _logger.LogError(ex, "TraceVariableLifetime failed for '{VariableName}' in '{FilePathWrapper}'", variableName, filePath);
             return new ToolResult<object>
             {
                 Success = false,

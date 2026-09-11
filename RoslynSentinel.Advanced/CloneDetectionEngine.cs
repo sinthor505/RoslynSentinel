@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace RoslynSentinel.Advanced;
 
 public record DuplicateBlockLocation(
-    FilePath filePath,
+    FilePathWrapper filePath,
     string MethodName,
     string ContainingType,
     int StartLine,
@@ -34,7 +34,7 @@ public class CloneDetectionEngine
     // ── Within a single class ─────────────────────────────────────────────────
 
     public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInClassAsync(
-        FilePath filePath, string className, int minStatements = 4, CancellationToken cancellationToken = default)
+        FilePathWrapper filePath, string className, int minStatements = 4, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
@@ -220,7 +220,7 @@ public class CloneDetectionEngine
     private record StatementWindow(
         string Hash,
         StatementSyntax[] Statements,
-        FilePath FilePath,
+        FilePathWrapper FilePath,
         string MethodName,
         string ContainingType,
         SemanticModel? Model
@@ -228,7 +228,7 @@ public class CloneDetectionEngine
 
     private List<(string Hash, StatementWindow Window)> CollectWindows(
         List<MethodDeclarationSyntax> methods,
-        FilePath FilePath,
+        FilePathWrapper FilePath,
         string typeName,
         int minStatements)
     {

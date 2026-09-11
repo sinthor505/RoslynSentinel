@@ -155,7 +155,7 @@ public class SentinelAsyncifyTools
                 .GroupBy(f => f.Pattern)
                 .ToDictionary(g => g.Key, g => g.Count());
 
-            // B1: use slim type (no FilePath) and cap at 10 to keep summary unconditionally inline-safe.
+            // B1: use slim type (no FilePathWrapper) and cap at 10 to keep summary unconditionally inline-safe.
             const int MaxByClass = 10;
             var allByClass = aggregateFindings
                 .GroupBy(f => (f.ClassName, f.ProjectName))
@@ -435,7 +435,7 @@ public class SentinelAsyncifyTools
 
         try
         {
-            FilePath? resolvedFilePath = null;
+            FilePathWrapper? resolvedFilePath = null;
             if (scope == ToolScope.file)
             {
                 if (string.IsNullOrEmpty(filePath))
@@ -445,7 +445,7 @@ public class SentinelAsyncifyTools
                         Error = new ResultError(MigrationErrorCode.InvalidArgument,
                                       "scope=\"file\" requires a filePath.")
                     };
-                resolvedFilePath = FilePath.FromWire(filePath, _workspaceManager.GetSolutionRoot());
+                resolvedFilePath = FilePathWrapper.FromWire(filePath, _workspaceManager.GetSolutionRoot());
             }
 
             var engineResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
@@ -518,7 +518,7 @@ public class SentinelAsyncifyTools
     [Description("Step 2 of the bridge workflow: converts each named method to the Asyncify-bridge pattern (a sync wrapper delegating to an async overload). Prefer the Asyncify tool for automatic end-to-end migration; use this only for manual step-by-step control. Full workflow: ScanAsyncMigrationCandidates(summarize: true) → BridgeAsyncMethods → UpliftCallers(targets: SuggestedUpliftTargets) → PropagateCancellationToken.")]
     public async Task<ToolResult<BridgeAsyncMethodsResult>> BridgeAsyncMethods(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("{ FilePath, MethodNames } entries — MethodNames is required per entry. Must be non-empty; an empty list is a no-op.")]
+        [Description("{ FilePathWrapper, MethodNames } entries — MethodNames is required per entry. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
         [Description(ToolParams.DryRun)]
         bool dryRun = false,
@@ -662,7 +662,7 @@ public class SentinelAsyncifyTools
     [Description("Step 4 of the bridge workflow: threads CancellationToken through async call chains in the specified files. Pass SuggestedPropagateTargets from UpliftCallers as targets. Also usable standalone to clean up CT forwarding in any set of files.")]
     public async Task<ToolResult<BatchResultSummary>> PropagateCancellationToken(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("{ FilePath, MethodNames? } entries — null MethodNames means all eligible methods in the file. Pass SuggestedPropagateTargets from UpliftCallers directly. Must be non-empty; an empty list is a no-op.")]
+        [Description("{ FilePathWrapper, MethodNames? } entries — null MethodNames means all eligible methods in the file. Pass SuggestedPropagateTargets from UpliftCallers directly. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
         [Description(ToolParams.DryRun)]
         bool dryRun = false,
@@ -717,7 +717,7 @@ public class SentinelAsyncifyTools
     [Description("Adds a CancellationToken parameter to async methods that lack one, in the specified files. Independent of the bridge workflow. Differs from PropagateCancellationToken, which threads an existing CT through call chains rather than adding the parameter itself.")]
     public async Task<ToolResult<BatchResultSummary>> AddCancellationToken(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("{ FilePath, MethodNames? } entries — null MethodNames means all eligible async methods in the file. Must be non-empty; an empty list is a no-op.")]
+        [Description("{ FilePathWrapper, MethodNames? } entries — null MethodNames means all eligible async methods in the file. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
         [Description(ToolParams.DryRun)]
         bool dryRun = false,
@@ -743,7 +743,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = true,
-                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Specify the files (FilePath) where CancellationToken parameters should be added. Prefer the asyncify macro." }
+                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Specify the files (FilePathWrapper) where CancellationToken parameters should be added. Prefer the asyncify macro." }
             };
 
         try
@@ -771,7 +771,7 @@ public class SentinelAsyncifyTools
     [Description("Extracts a nominated code block from inside a method into a new private method, using semantic analysis to produce the correct return type. Manual alternative to Asyncify's automatic Phase 0 extraction — use this for a custom extracted method name, partial-body extraction, or a one-off targeted extraction.")]
     public async Task<ToolResult<BatchResultSummary>> ExtractEventHandlers(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("{ FilePath, NewMethodName, ContextSnippet, LineBefore?, LineAfter? } entries. NewMethodName must be a valid C# identifier; ContextSnippet must uniquely identify the code block to extract. Targets in the same file are processed sequentially. Must be non-empty; an empty list is a no-op.")]
+        [Description("{ FilePathWrapper, NewMethodName, ContextSnippet, LineBefore?, LineAfter? } entries. NewMethodName must be a valid C# identifier; ContextSnippet must uniquely identify the code block to extract. Targets in the same file are processed sequentially. Must be non-empty; an empty list is a no-op.")]
         List<HandlerExtractTarget> targets,
         [Description("Validates that each ContextSnippet is locatable without writing files.")]
         bool dryRun = false,
@@ -874,7 +874,7 @@ public class SentinelAsyncifyTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Scopes the run to one project. Omit to process the entire solution.")]
         string? projectName = null,
-        [Description("Explicit (FilePath, MethodName) list — skips the flag-discovery phase.")]
+        [Description("Explicit (FilePathWrapper, MethodName) list — skips the flag-discovery phase.")]
         List<FlagCandidateTarget>? methodTargets = null,
         [Description("Method names to skip in every phase.")]
         List<string>? exclusions = null,
@@ -952,7 +952,7 @@ public class SentinelAsyncifyTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Scopes the run to one project. Omit to process the entire solution.")]
         string? projectName = null,
-        [Description("Explicit (FilePath, MethodName) list — skips the flag-discovery phase.")]
+        [Description("Explicit (FilePathWrapper, MethodName) list — skips the flag-discovery phase.")]
         List<FlagCandidateTarget>? methodTargets = null,
         [Description("Method names to skip in every phase.")]
         List<string>? exclusions = null,
@@ -1321,7 +1321,7 @@ public class SentinelAsyncifyTools
                     }
 
                     var bridgeValidation = await _validationEngine.ValidateChangesAsync(
-                        new Dictionary<FilePath, string> { { target.FilePath, updatedSource } },
+                        new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
                         cancellationToken: cancellationToken);
                     if (!bridgeValidation.Success)
                     {
@@ -1341,7 +1341,7 @@ public class SentinelAsyncifyTools
                     }
 
                     var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<FilePath, string> { { target.FilePath, updatedSource } }, validateChanges: true);
+                        new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } }, validateChanges: true);
 
                     string? beforeSource782 = null;
                     applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSource782);
@@ -1371,7 +1371,7 @@ public class SentinelAsyncifyTools
                             if (ctResult.Outcome == EditOutcome.Modified && ctResult.UpdatedText != null)
                             {
                                 var ctApplyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                                    new Dictionary<FilePath, string> { { target.FilePath, ctResult.UpdatedText } },
+                                    new Dictionary<FilePathWrapper, string> { { target.FilePath, ctResult.UpdatedText } },
                                     validateChanges: true);
                                 if (ctApplyResult.Success)
                                 {
@@ -1493,7 +1493,7 @@ public class SentinelAsyncifyTools
             return halt;
         }
 
-        var allChanges = new Dictionary<FilePath, string>();
+        var allChanges = new Dictionary<FilePathWrapper, string>();
         int succeeded = 0;
         int failed = 0;
         int skipped = 0;
@@ -1542,7 +1542,7 @@ public class SentinelAsyncifyTools
                     if (!input.DryRun)
                     {
                         var ctFileValidation = await _validationEngine.ValidateChangesAsync(
-                            new Dictionary<FilePath, string> { { target.FilePath, updatedSource } },
+                            new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
                             cancellationToken: cancellationToken);
                         if (!ctFileValidation.Success)
                         {
@@ -2018,13 +2018,13 @@ public class SentinelAsyncifyTools
                 // scope="targets" — explicit list
                 var targets = input.Targets ?? new List<FlagCandidateTarget>();
                 var tuples = targets.Select(t =>
-                    (FilePath: (FilePath)t.FilePath, MethodName: t.MethodName,
+                    (FilePath: (FilePathWrapper)t.FilePath, MethodName: t.MethodName,
                      Pattern: t.Pattern, Score: t.Score, Reason: t.Reason))
                     .ToList();
 
                 var (results, errors) = await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples);
 
-                var allChanges = new Dictionary<FilePath, string>();
+                var allChanges = new Dictionary<FilePathWrapper, string>();
                 for (int i = 0; i < results.Count; i++)
                 {
                     var r = results[i];
@@ -2163,8 +2163,8 @@ public class SentinelAsyncifyTools
         public int BridgeStaleFlagSkips;
         public int FlagPhaseScanned;
         public int FlagPhaseNewFlags;
-        public readonly List<FilePath> HandlerConvertedFiles = new();
-        public readonly List<FilePath> HandlerBridgedFiles = new();
+        public readonly List<FilePathWrapper> HandlerConvertedFiles = new();
+        public readonly List<FilePathWrapper> HandlerBridgedFiles = new();
 
         public AsyncifyRunState(CancellationToken cancellationToken, int maxRuntimeSeconds)
         {
@@ -2327,7 +2327,7 @@ public class SentinelAsyncifyTools
                 }
 
                 var extractValidation = await _validationEngine.ValidateChangesAsync(
-                    new Dictionary<FilePath, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
+                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
                     cancellationToken: state.InnerToken);
                 if (!extractValidation.Success)
                 {
@@ -2340,7 +2340,7 @@ public class SentinelAsyncifyTools
                 }
 
                 await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePath, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
+                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
                     validateChanges: true);
 
                 state.Items.Add(new OperationItemRecord
@@ -2485,7 +2485,7 @@ public class SentinelAsyncifyTools
         {
             var tuples = input.MethodTargets
                 .Where(t => input.Exclusions?.Contains(t.MethodName) != true)
-                .Select(t => (FilePath: (FilePath)t.FilePath, MethodName: t.MethodName,
+                .Select(t => (FilePath: (FilePathWrapper)t.FilePath, MethodName: t.MethodName,
                               Pattern: t.Pattern, Score: t.Score, Reason: t.Reason))
                 .ToList();
 
@@ -2494,7 +2494,7 @@ public class SentinelAsyncifyTools
                 var (flagResults, flagErrors) =
                     await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples);
 
-                var allChanges = new Dictionary<FilePath, string>();
+                var allChanges = new Dictionary<FilePathWrapper, string>();
                 for (int i = 0; i < flagResults.Count; i++)
                 {
                     var r = flagResults[i];
@@ -2844,7 +2844,7 @@ public class SentinelAsyncifyTools
                 }
 
                 var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePath, string> { { candidate.FilePath, updatedSource } },
+                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, updatedSource } },
                     validateChanges: true, cancellationToken: state.InnerToken);
                 if (!applyResult3a.Success && applyResult3a.ValidationResult != null)
                 {
@@ -2948,7 +2948,7 @@ public class SentinelAsyncifyTools
                 if (!string.IsNullOrEmpty(handlerResult.UpdatedText))
                 {
                     var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<FilePath, string> { { handler.FilePath, handlerResult.UpdatedText } },
+                        new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText } },
                         validateChanges: true, cancellationToken: state.InnerToken);
                     if (!applyResult3b.Success && applyResult3b.ValidationResult != null)
                     {
@@ -3333,7 +3333,7 @@ public class SentinelAsyncifyTools
                 }
 
                 var handlerToAsyncValidation = await _validationEngine.ValidateChangesAsync(
-                    new Dictionary<FilePath, string> { { filePath, updatedSource } },
+                    new Dictionary<FilePathWrapper, string> { { filePath, updatedSource } },
                     cancellationToken: cancellationToken);
                 if (!handlerToAsyncValidation.Success)
                 {
@@ -3342,7 +3342,7 @@ public class SentinelAsyncifyTools
                 }
 
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePath, string> { { filePath, updatedSource } });
+                    new Dictionary<FilePathWrapper, string> { { filePath, updatedSource } });
 
                 string? beforeSource = null;
                 _ = applyResult.PreImages?.TryGetValue(filePath, out beforeSource);
@@ -3557,7 +3557,7 @@ public class SentinelAsyncifyTools
             {
                 var updatedContent = extractResult.UpdatedContent!;
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePath, string> { { target.FilePath, updatedContent } });
+                    new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedContent } });
 
                 string? beforeSource = null;
                 _ = applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSource);

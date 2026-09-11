@@ -89,7 +89,7 @@ public class SentinelSymbolTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
 
         try
         {
@@ -138,7 +138,7 @@ public class SentinelSymbolTools
         CancellationToken cancellationToken = default
         )
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -182,7 +182,7 @@ public class SentinelSymbolTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "InspectSymbol ({Aspect}) failed in '{FilePath}'", aspect, filePath);
+            _logger.LogError(ex, "InspectSymbol ({Aspect}) failed in '{FilePathWrapper}'", aspect, filePath);
             return new ToolResult<object>
             {
                 Success = false,
@@ -203,7 +203,7 @@ public class SentinelSymbolTools
     };
 
     private async Task<List<object>> RunRelationshipQueryAsync(
-        FindUsagesSearchKind searchKind, string name, string? projectName, FilePath filePath, bool sortByFrequency, CancellationToken cancellationToken)
+        FindUsagesSearchKind searchKind, string name, string? projectName, FilePathWrapper filePath, bool sortByFrequency, CancellationToken cancellationToken)
     {
         object result = searchKind switch
         {
@@ -238,7 +238,7 @@ public class SentinelSymbolTools
     {
         try
         {
-            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
 
             if (searchKind == FindUsagesSearchKind.objectCreations)
             {
@@ -334,7 +334,7 @@ public class SentinelSymbolTools
         CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -347,7 +347,7 @@ public class SentinelSymbolTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetBestInsertionPoint failed for '{ContainerName}' in '{FilePath}'", containerName, filePath);
+            _logger.LogError(ex, "GetBestInsertionPoint failed for '{ContainerName}' in '{FilePathWrapper}'", containerName, filePath);
             return new ToolResult<object>
             {
                 Success = false,
@@ -373,7 +373,7 @@ public class SentinelSymbolTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath ?? string.Empty, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath ?? string.Empty, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -387,7 +387,7 @@ public class SentinelSymbolTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "PreviewRenameImpact failed for '{SymbolName}' in '{FilePath}'", symbolName, filePath);
+            _logger.LogError(ex, "PreviewRenameImpact failed for '{SymbolName}' in '{FilePathWrapper}'", symbolName, filePath);
             return new ToolResult<object>
             {
                 Success = false,
@@ -413,7 +413,7 @@ public class SentinelSymbolTools
     {
         try
         {
-            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
 
             if (kind == FindReferencesKind.callers)
             {

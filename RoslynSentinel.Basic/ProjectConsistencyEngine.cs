@@ -48,7 +48,7 @@ public class ProjectConsistencyEngine
         var issues = new List<ProjectConsistencyIssue>();
 
         // Read TargetFramework from .csproj XML for each project that has a file path
-        var frameworkByProject = new Dictionary<string, (string Framework, FilePath filePath)>();
+        var frameworkByProject = new Dictionary<string, (string Framework, FilePathWrapper filePath)>();
 
         foreach (var project in projects)
         {

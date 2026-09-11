@@ -59,7 +59,7 @@ public class SemanticRefactoringLibrary
     /// - No variable shadowing in nested scopes
     /// - Complex expressions will be parenthesized if needed
     /// </summary>
-    public async Task<string> InlineVariableAsync(FilePath filePath, string variableName, CancellationToken cancellationToken = default)
+    public async Task<string> InlineVariableAsync(FilePathWrapper filePath, string variableName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -194,7 +194,7 @@ public class SemanticRefactoringLibrary
     /// <summary>
     /// Converts a simple property into a get/set method pair.
     /// </summary>
-    public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePath filePath, string className, string propertyName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePathWrapper filePath, string className, string propertyName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -244,7 +244,7 @@ public class SemanticRefactoringLibrary
     /// <summary>
     /// Wraps a block of code in a using statement for an IDisposable object.
     /// </summary>
-    public async Task<DocumentEditResult> WrapInUsingAsync(FilePath filePath, int startLine, int endLine, string disposalName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> WrapInUsingAsync(FilePathWrapper filePath, int startLine, int endLine, string disposalName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -292,7 +292,7 @@ public class SemanticRefactoringLibrary
     /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a using statement.
     /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then wraps the enclosing statements.
     /// </summary>
-    public async Task<DocumentEditResult> WrapInUsingAsync(FilePath filePath, string contextSnippet, string? lineBefore, string? lineAfter, string disposalName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> WrapInUsingAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, string disposalName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

@@ -12,7 +12,7 @@ namespace RoslynSentinel.Common;
 /// <param name="MethodName">Name of the original (now bridge-wrapper) method.</param>
 /// <param name="AsyncMethodName">Name of the newly created async overload.</param>
 public record BridgeAppliedInfo(
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     string MethodName,
     string AsyncMethodName
 )

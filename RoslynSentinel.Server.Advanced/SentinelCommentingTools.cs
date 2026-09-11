@@ -2,7 +2,6 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Advanced;
@@ -121,7 +120,7 @@ public class SentinelCommentingTools
     {
         var changeId = Guid.NewGuid().ToString("N")[..8];
         var items = new List<OperationItemRecord>();
-        var touchedFiles = new HashSet<FilePath>();
+        var touchedFiles = new HashSet<FilePathWrapper>();
         var skipped = new List<FailureDetail>();
 
         // Collapses per-member Skipped detail down to a reason→count dict and per-file activity down
@@ -314,7 +313,7 @@ public class SentinelCommentingTools
             }
 
             var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { { currentFilePath, finalText } }, validateChanges: true, cancellationToken: cancellationToken);
+                new Dictionary<FilePathWrapper, string> { { currentFilePath, finalText } }, validateChanges: true, cancellationToken: cancellationToken);
 
             if (!applyResult.Success)
             {

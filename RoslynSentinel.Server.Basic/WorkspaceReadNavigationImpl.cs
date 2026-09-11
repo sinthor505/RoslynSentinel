@@ -95,7 +95,7 @@ public class WorkspaceReadNavigationImpl
         string filepath, string methodName,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -183,7 +183,7 @@ public class WorkspaceReadNavigationImpl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -197,7 +197,7 @@ public class WorkspaceReadNavigationImpl
         string filepath,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -238,7 +238,7 @@ public class WorkspaceReadNavigationImpl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetFileOutline failed for '{FilePath}'", filePath);
+            _logger.LogError(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePath);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -371,7 +371,7 @@ public class WorkspaceReadNavigationImpl
                         continue;
                     }
 
-                    var filePath = new FilePath(document.FilePath, solutionRoot);
+                    var filePath = new FilePathWrapper(document.FilePath, solutionRoot);
                     foreach (var item in ExtractOutlineItems(root))
                     {
                         if (kindFilter != null && item.Kind != kindFilter)
@@ -439,7 +439,7 @@ public class WorkspaceReadNavigationImpl
                         return;
                     }
 
-                    var docPath = new FilePath(document.FilePath ?? "", _workspaceManager.GetSolutionRoot());
+                    var docPath = new FilePathWrapper(document.FilePath ?? "", _workspaceManager.GetSolutionRoot());
                     if (!string.IsNullOrEmpty(fileGlob) && !GlobMatchesFileName(docPath, fileGlob))
                     {
                         return;
@@ -587,7 +587,7 @@ public class WorkspaceReadNavigationImpl
     // the path relative to the solution root instead — matching them against Path.GetFileName()
     // would strip the very directory segment the glob is testing for, so a glob like "**/*.cs"
     // could never match anything.
-    private static bool GlobMatchesFileName(FilePath filePath, string glob)
+    private static bool GlobMatchesFileName(FilePathWrapper filePath, string glob)
     {
         var normalizedGlob = glob.Replace('\\', '/');
         var candidate = normalizedGlob.Contains('/') ? filePath.Relative.Replace('\\', '/') : Path.GetFileName(filePath.Absolute);
@@ -765,7 +765,7 @@ public class WorkspaceReadNavigationImpl
         int offset = 0,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         string? resolvedPath = null;
 

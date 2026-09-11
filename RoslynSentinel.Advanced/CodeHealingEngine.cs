@@ -15,7 +15,7 @@ public class CodeHealingEngine
         _config = config;
     }
 
-    public async Task<DocumentEditResult> FixThreadSleepAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> FixThreadSleepAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("EPC33"))
         {
@@ -167,10 +167,10 @@ public class CodeHealingEngine
         };
     }
 
-    public async Task<Dictionary<FilePath, string>> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-        var changes = new Dictionary<FilePath, string>();
+        var changes = new Dictionary<FilePathWrapper, string>();
 
         foreach (var target in targets)
         {
@@ -217,5 +217,5 @@ public class {newExceptionName} : Exception
         return changes;
     }
 
-    public record ExceptionTarget(FilePath FilePath, int Line, string NewExceptionName);
+    public record ExceptionTarget(FilePathWrapper FilePath, int Line, string NewExceptionName);
 }

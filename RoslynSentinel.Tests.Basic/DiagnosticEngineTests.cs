@@ -22,7 +22,7 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = new DiagnosticEngine(fake);
 
-        var result = await engine.GetFileDiagnosticsAsync(new FilePath("Test.cs"));
+        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
 
         Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success));
         Assert.That(result.Data.Errors, Is.EqualTo(0));
@@ -39,7 +39,7 @@ public class DiagnosticEngineTests
         fake.SetTestSolution(solution);
         var engine = new DiagnosticEngine(fake);
 
-        var result = await engine.GetFileDiagnosticsAsync(new FilePath("Test.cs"));
+        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
 
         Assert.That(result.Data.Errors, Is.GreaterThan(0));
     }
@@ -51,7 +51,7 @@ public class DiagnosticEngineTests
         var engine = new DiagnosticEngine(fake);
 
         await Assert.ThatAsync(
-            () => engine.GetFileDiagnosticsAsync(new FilePath("Test.cs")),
+            () => engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs")),
             Throws.TypeOf<SolutionNotLoadedException>());
     }
 }

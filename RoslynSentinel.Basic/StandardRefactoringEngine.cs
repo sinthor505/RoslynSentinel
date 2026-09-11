@@ -31,7 +31,7 @@ public class StandardRefactoringEngine
     /// <summary>
     /// Converts a method with no parameters to a property.
     /// </summary>
-    public async Task<DocumentEditResult> ConvertMethodToPropertyAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertMethodToPropertyAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -98,7 +98,7 @@ public class StandardRefactoringEngine
     /// <summary>
     /// Makes a method static if it doesn't access any instance members.
     /// </summary>
-    public async Task<DocumentEditResult> MakeMethodStaticAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> MakeMethodStaticAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -160,7 +160,7 @@ public class StandardRefactoringEngine
     /// <summary>
     /// Inverts a boolean variable or parameter name and its usages.
     /// </summary>
-    public async Task<DocumentEditResult> InvertBooleanAsync(FilePath filePath, string boolName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InvertBooleanAsync(FilePathWrapper filePath, string boolName, CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
 

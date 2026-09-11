@@ -15,7 +15,7 @@ public class BatchTarget
     public string FilePath
     {
         get => _filePath;
-        set => _filePath = RoslynSentinel.Common.FilePath.NormalizeWirePath(value ?? "");
+        set => _filePath = RoslynSentinel.Common.FilePathWrapper.NormalizeWirePath(value ?? "");
     }
     public string[]? MethodNames
     {
@@ -161,9 +161,9 @@ public static class FailureSummary
 /// <summary>One target in a <c>handler_extract</c> call.</summary>
 public class HandlerExtractTarget
 {
-    // Wire type is string, not FilePath: a FilePath-typed property on a class used as a
+    // Wire type is string, not FilePathWrapper: a FilePathWrapper-typed property on a class used as a
     // List<T> tool parameter makes JsonSchemaExporter emit an unrepresentable `true` schema
-    // node for this property (same root cause as ApplyDiff's Dictionary<FilePath,...> fix),
+    // node for this property (same root cause as ApplyDiff's Dictionary<FilePathWrapper,...> fix),
     // which LM Studio's grammar converter rejects with "Unrecognized schema: true".
     /// <summary>Absolute path of the .cs file containing the code to extract.</summary>
     public string FilePath { get; set; } = "";
@@ -210,7 +210,7 @@ public class RunUpliftInput
 /// <summary>One target in a <c>flag_migration_candidates</c> call (scope="targets").</summary>
 public class FlagCandidateTarget
 {
-    // Wire type is string, not FilePath — see comment on HandlerExtractTarget.FilePath above.
+    // Wire type is string, not FilePathWrapper — see comment on HandlerExtractTarget.FilePathWrapper above.
     public string FilePath { get; set; } = "";
     public string MethodName { get; set; } = "";
     public string Pattern { get; set; } = "AsyncBridgeCandidate";
@@ -337,7 +337,7 @@ public class UpliftCallersResult
     public BatchResultSummary Summary { get; init; } = new();
     /// <summary>
     /// Files touched during uplift, ready to pass as <c>targets</c> to
-    /// <c>propagate_cancellation_token</c>. Each entry has <c>FilePath</c>;
+    /// <c>propagate_cancellation_token</c>. Each entry has <c>FilePathWrapper</c>;
     /// <c>MethodNames</c> is null (process whole file).
     /// </summary>
     public List<BatchTarget> SuggestedPropagateTargets { get; init; } = new();
@@ -364,7 +364,7 @@ public class AsyncMigrateInput
     // ── BatchTargetInput ops: propagate_cancellation_token, convert_to_async_bridge, add_cancellation_token ─
 
     /// <summary>
-    /// File/method targets. Each entry has FilePath and optional MethodNames array.
+    /// File/method targets. Each entry has FilePathWrapper and optional MethodNames array.
     /// Used by: propagate_cancellation_token, convert_to_async_bridge, add_cancellation_token.
     /// </summary>
     public List<BatchTarget>? BatchTargets
@@ -417,7 +417,7 @@ public class AsyncMigrateInput
 
     // ── asyncify ───────────────────────────────────────────────────────────────
 
-    /// <summary>Explicit (FilePath, MethodName) targets; skips the flag-discovery phase. asyncify only.</summary>
+    /// <summary>Explicit (FilePathWrapper, MethodName) targets; skips the flag-discovery phase. asyncify only.</summary>
     public List<FlagCandidateTarget>? MethodTargets
     {
         get; set;

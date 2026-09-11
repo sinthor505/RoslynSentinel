@@ -19,7 +19,7 @@ public class ValidationEngine
         _diffEngine = diffEngine;
     }
 
-    public async Task<DiagnosticReport> ValidateDiffAsync(FilePath filePath, string unifiedDiff, CancellationToken cancellationToken = default)
+    public async Task<DiagnosticReport> ValidateDiffAsync(FilePathWrapper filePath, string unifiedDiff, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documentId = solution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
@@ -38,7 +38,7 @@ public class ValidationEngine
         try
         {
             var newText = _diffEngine.ApplyDiff(oldText, unifiedDiff);
-            return await ValidateChangesAsync(solution, new Dictionary<FilePath, string> { { filePath, newText.ToString() } }, cancellationToken: cancellationToken);
+            return await ValidateChangesAsync(solution, new Dictionary<FilePathWrapper, string> { { filePath, newText.ToString() } }, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
@@ -55,7 +55,7 @@ public class ValidationEngine
     /// not already present before it (delta approach).
     /// When errors are found, writes a blob to .roslynsentinel/validation/ for manual review.
     /// </summary>
-    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges,
+    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePathWrapper, string> fileChanges,
         CancellationToken cancellationToken = default)
         => await ValidateChangesAsync(fileChanges, removePaths: null, cancellationToken);
 
@@ -63,10 +63,10 @@ public class ValidationEngine
     /// Paths whose existing Document (if any) should be removed from the candidate solution
     /// before <paramref name="fileChanges"/> is applied — for a rename-shaped change where the
     /// old path's document would otherwise coexist with the new path's, causing a spurious
-    /// duplicate-declaration diagnostic. See <see cref="ValidateChangesAsync(Solution, Dictionary{FilePath, string}, IReadOnlyCollection{FilePath}?, CancellationToken)"/>.
+    /// duplicate-declaration diagnostic. See <see cref="ValidateChangesAsync(Solution, Dictionary{FilePathWrapper, string}, IReadOnlyCollection{FilePathWrapper}?, CancellationToken)"/>.
     /// </param>
-    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges,
-        IReadOnlyCollection<FilePath>? removePaths, CancellationToken cancellationToken = default)
+    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePathWrapper, string> fileChanges,
+        IReadOnlyCollection<FilePathWrapper>? removePaths, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var report = await ValidateChangesAsync(solution, fileChanges, removePaths, cancellationToken);
@@ -101,8 +101,8 @@ public class ValidationEngine
     /// diagnostic on the otherwise-normal case of renaming a file to match its unique type).
     /// </summary>
     public static async Task<DiagnosticReport> ValidateChangesAsync(
-        Solution baseline, Dictionary<FilePath, string> fileChanges,
-        IReadOnlyCollection<FilePath>? removePaths = null, CancellationToken cancellationToken = default)
+        Solution baseline, Dictionary<FilePathWrapper, string> fileChanges,
+        IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default)
     {
         Debug.WriteLine("Starting validation of proposed changes...");
         var candidate = baseline;

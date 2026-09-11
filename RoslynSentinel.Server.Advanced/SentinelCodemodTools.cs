@@ -126,7 +126,7 @@ public class SentinelCodemodTools
     {
         try
         {
-            FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+            FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
             switch (transform)
             {
                 case "add_braces":
@@ -203,7 +203,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "fix_thread_sleep unexpected exception for '{FilePath}'", filePath);
+                            _logger.LogError(ex, "fix_thread_sleep unexpected exception for '{FilePathWrapper}'", filePath);
                             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"fix_thread_sleep for '{filePath}'") };
                         }
                     }
@@ -411,7 +411,7 @@ public class SentinelCodemodTools
     {
         try
         {
-            FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+            FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
             switch (transform)
             {
                 case "add_guard_clauses":
@@ -508,7 +508,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "convert_static_to_extension unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath);
+                            _logger.LogError(ex, "convert_static_to_extension unexpected exception for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
                             return new ToolResult<object>
                             {
                                 Success = false,
@@ -598,7 +598,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "generate_async_overload unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath);
+                            _logger.LogError(ex, "generate_async_overload unexpected exception for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
                             return new ToolResult<object>
                             {
                                 Success = false,
@@ -786,7 +786,7 @@ public class SentinelCodemodTools
     {
         try
         {
-            FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+            FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
             switch (transform)
             {
@@ -822,7 +822,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "add_validation_to_poco unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath);
+                            _logger.LogError(ex, "add_validation_to_poco unexpected exception for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
                             return new ToolResult<object>
                             {
                                 Success = false,
@@ -883,7 +883,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "convert_abstract_to_interface unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath);
+                            _logger.LogError(ex, "convert_abstract_to_interface unexpected exception for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
                             return new ToolResult<object>
                             {
                                 Success = false,
@@ -1143,7 +1143,7 @@ public class SentinelCodemodTools
     {
         try
         {
-            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
 
             switch (kind)
             {
@@ -1246,7 +1246,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "generate_fluent_builder failed for '{ClassName}' in '{FilePath}'", className, filePath);
+                            _logger.LogError(ex, "generate_fluent_builder failed for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
                             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"generate_fluent_builder for '{className}' in '{filePath}'") };
                         }
                     }

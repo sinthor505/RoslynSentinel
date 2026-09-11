@@ -1,7 +1,7 @@
 namespace RoslynSentinel.Common;
 
 public record ReferenceInfo(
-    FilePath filePath,
+    FilePathWrapper filePath,
     int Line,
     int Column,
     string Preview

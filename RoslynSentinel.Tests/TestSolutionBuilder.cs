@@ -52,7 +52,7 @@ public static class TestSolutionBuilder
             references.Add(MetadataReference.CreateFromFile(objectAssembly));
         }
 
-        // Create a mock project FilePath for test purposes
+        // Create a mock project FilePathWrapper for test purposes
         var projectPath = Path.Combine(Path.GetTempPath(), "TestProj", $"{projectName}.csproj");
         
         var projectInfo = ProjectInfo.Create(projectId, VersionStamp.Default, projectName, projectName, LanguageNames.CSharp)
@@ -73,7 +73,7 @@ public static class TestSolutionBuilder
     }
 
     // Overload for tests that need real on-disk file paths.
-    // projectCsprojPath sets the project's FilePath (controls FindContainingProject lookups).
+    // projectCsprojPath sets the project's FilePathWrapper (controls FindContainingProject lookups).
     // Each document's filePath must be the absolute path that will be written to disk.
     public static Solution CreateSolutionWithProject(
         string projectName,

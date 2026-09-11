@@ -133,3 +133,27 @@ triggered it in the original report.
 - Once actually fixed and reproduced-then-fixed, add a regression test in
   `RoslynSentinel.Tests.Battery` alongside `BlobIntegrityInvariantTests.cs`/`UndoLastApplyTests.cs`
   replaying the confirmed repro, then move this doc's content into `docs/current/CLOSED.md`.
+
+## Longer-term structural idea (not scoped for this fix)
+
+The root cause here is that `string` is used to represent both "text read from disk right now" and
+"text read from the in-memory Roslyn workspace, possibly stale relative to disk" — nothing in the
+type system distinguishes them, so a `preImage == newContent` comparison across the two silently
+type-checks even though the two sides may have diverged for reasons the guard can't see. A candidate
+fix at the type level: introduce distinct wrapper types (e.g. `DiskText`/`WorkspaceText`, or a
+generic `Sourced<T>` tagged by origin with no implicit conversion between tags) so a
+disk-vs-workspace comparison requires an explicit, visible unwrap — forcing whoever writes that
+comparison to consciously decide whether it's valid, rather than the compiler allowing it silently.
+A single struct with a `sourceType: disk/memory` property was considered and rejected as weaker:
+it still permits comparing/assigning across sources at runtime with no compile-time signal, which is
+exactly the failure mode here — the same bug could occur even with `sourceType` present, since
+nothing would stop `preImage.sourceType == disk` from being compared to `newContent.sourceType ==
+memory` without an explicit check.
+
+This is a bigger refactor than this bug warrants on its own: `PersistentWorkspaceManager
+.ApplyProposedChangesAsync` would need retyping, plus every `RefactoringEngine.*Async` method that
+returns `UpdatedText` via `DocumentEditResult`, plus every call site that currently consumes
+`UpdatedText` as a plain `string`. Worth scoping as its own future pass if this bug class recurs
+again elsewhere (it has now surfaced twice — see `blocking_error_applydiff_silent_noop_false_success.md`
+— across two different engines feeding the same guard), rather than folding into the narrower fix
+for this specific issue.

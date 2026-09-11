@@ -12,6 +12,6 @@ public record SourceTransformResult(
     string UpdatedSource,
     bool WroteToFile,
     bool WorkspaceUpdated,
-    FilePath filePath
+    FilePathWrapper filePath
 );
 // v2 — ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)

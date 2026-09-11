@@ -63,7 +63,7 @@ public class GenericContainerNameTests
     public async Task AddMember_ResolvesEverySpellingOfAGenericContainerAsync(string containerName)
     {
         var result = await _refactoringEngine.AddMemberAsync(
-            FilePath.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
+            FilePathWrapper.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
             containerName,
             "public int Added { get; set; }");
 
@@ -82,7 +82,7 @@ public class GenericContainerNameTests
         // handles Foo<T> but a comma-splitting one does not, and the whitespace variant is the
         // spelling a caller copying from a declaration line actually produces.
         var result = await _refactoringEngine.AddMemberAsync(
-            FilePath.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
+            FilePathWrapper.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
             containerName,
             "public int Added { get; set; }");
 
@@ -96,7 +96,7 @@ public class GenericContainerNameTests
         // Normalization must not disturb the ordinary case, which is the overwhelming majority of
         // calls through this chokepoint.
         var result = await _refactoringEngine.AddMemberAsync(
-            FilePath.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
+            FilePathWrapper.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
             "PlainType",
             "public int Added { get; set; }");
 
@@ -110,7 +110,7 @@ public class GenericContainerNameTests
         // it were a line of code. Listing what's available is what lets the caller correct itself
         // in one turn instead of guessing, and immediately reveals a wrong-file mistake.
         var result = await _refactoringEngine.AddMemberAsync(
-            FilePath.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
+            FilePathWrapper.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
             "NoSuchType",
             "public int Added { get; set; }");
 

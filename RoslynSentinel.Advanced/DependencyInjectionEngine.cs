@@ -8,7 +8,7 @@ public record DiRegistration(
     string Lifetime,
     string ServiceType,
     string? ImplementationType,
-    FilePath filePath,
+    FilePathWrapper filePath,
     int Line,
     string CallSite);
 
@@ -31,7 +31,7 @@ public class DependencyInjectionEngine
     /// <summary>
     /// Analyzes a class to find what it needs in its constructor and checks if those are likely registered.
     /// </summary>
-    public async Task<List<DependencyReport>> AnalyzeDependenciesAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<List<DependencyReport>> AnalyzeDependenciesAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -240,7 +240,7 @@ public class DependencyInjectionEngine
     /// <summary>
     /// Injects a new dependency into a class constructor and adds the corresponding private field.
     /// </summary>
-    public async Task<DocumentEditResult> AddDependencyAsync(FilePath filePath, string className, string dependencyType, string dependencyName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddDependencyAsync(FilePathWrapper filePath, string className, string dependencyType, string dependencyName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -490,7 +490,7 @@ public class DependencyInjectionEngine
         string ConsumerLifetime,
         string DependencyType,
         string DependencyLifetime,
-        FilePath filePath,
+        FilePathWrapper filePath,
         int Line
     );
 
@@ -507,7 +507,7 @@ public class DependencyInjectionEngine
         var registrations = await FindDiRegistrationsAsync(projectName: projectName, cancellationToken: cancellationToken);
 
         // Also parse lambda factory registrations (task 13)
-        var lifetimeMap = new Dictionary<FilePath, string>();
+        var lifetimeMap = new Dictionary<FilePathWrapper, string>();
         foreach (var reg in registrations)
         {
             var svc = SimpleName(reg.ServiceType);

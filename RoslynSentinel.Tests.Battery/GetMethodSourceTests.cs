@@ -132,7 +132,7 @@ public class GetMethodSourceTests
             new[] { ("Big.cs", bigSource, bigDocPath) });
         _workspaceManager.SetTestSolution(solution);
         // GetMethodSource only offloads when GetSolutionRoot() is non-empty; the fake derives that
-        // from SolutionPath since the AdhocWorkspace solution here has no FilePath of its own.
+        // from SolutionPath since the AdhocWorkspace solution here has no FilePathWrapper of its own.
         _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
 
         var result = await _tools.GetMethodSource(reason: "test", bigDocPath, "Huge");

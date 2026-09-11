@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace RoslynSentinel.Advanced;
 
-public record MagicValueLocation(FilePath FilePath, int Line, string Snippet);
+public record MagicValueLocation(FilePathWrapper FilePath, int Line, string Snippet);
 
 public record MagicValueFinding(
     string Value,
@@ -17,7 +17,7 @@ public record MagicValueFinding(
 public record OutParamMethodFinding(
     string MethodName,
     string ContainingType,
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     int Line,
     string CurrentReturnType,
     List<string> OutParamNames,
@@ -28,7 +28,7 @@ public record OutParamMethodFinding(
 public record MissingCancellationTokenFinding(
     string MethodName,
     string ContainingType,
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     int Line,
     List<string> CalleesAcceptingToken
 );
@@ -37,7 +37,7 @@ public record ExceptionHandlingFinding(
     string Pattern,
     string Description,
     string Severity,
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     int Line,
     string Snippet
 );
@@ -59,7 +59,7 @@ public record ObsoleteCallerFinding(
     string DeclaringType,
     string CallerMethod,
     string CallerType,
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     int Line,
     string CodeSnippet
 );
@@ -212,7 +212,7 @@ public class AntiPatternEngine
 
     // ── BlockingTaskWait ──────────────────────────────────────────────────────
 
-    private static IEnumerable<AntiPatternFinding> DetectBlockingTaskWait(SyntaxNode root, FilePath filePath, SemanticModel? model = null)
+    private static IEnumerable<AntiPatternFinding> DetectBlockingTaskWait(SyntaxNode root, FilePathWrapper filePath, SemanticModel? model = null)
     {
         // .Result and .Wait() — use semantic model to verify Task/ValueTask type when available
         foreach (var ma in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
@@ -300,7 +300,7 @@ public class AntiPatternEngine
 
     // ── AsyncVoidMethod ───────────────────────────────────────────────────────
 
-    private static IEnumerable<AntiPatternFinding> DetectAsyncVoidMethod(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectAsyncVoidMethod(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
@@ -345,7 +345,7 @@ public class AntiPatternEngine
 
     // ── StringConcatInLoop ────────────────────────────────────────────────────
 
-    private static IEnumerable<AntiPatternFinding> DetectStringConcatInLoop(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectStringConcatInLoop(SyntaxNode root, FilePathWrapper filePath)
     {
         static bool IsInsideLoop(SyntaxNode node) =>
             node.Ancestors().Any(a =>
@@ -448,7 +448,7 @@ public class AntiPatternEngine
             t.IsKind(SyntaxKind.SingleLineCommentTrivia) ||
             t.IsKind(SyntaxKind.MultiLineCommentTrivia));
 
-    private static IEnumerable<AntiPatternFinding> DetectCatchExceptionSwallow(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectCatchExceptionSwallow(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var catchClause in root.DescendantNodes().OfType<CatchClauseSyntax>())
         {
@@ -484,7 +484,7 @@ public class AntiPatternEngine
 
     // ── DisposedObjectUsage ───────────────────────────────────────────────────
 
-    private static IEnumerable<AntiPatternFinding> DetectDisposedObjectUsage(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectDisposedObjectUsage(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
@@ -535,7 +535,7 @@ public class AntiPatternEngine
 
     // ── MissingCancellationToken ──────────────────────────────────────────────
 
-    private static IEnumerable<AntiPatternFinding> DetectMissingCancellationToken(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectMissingCancellationToken(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
@@ -580,7 +580,7 @@ public class AntiPatternEngine
 
     private static readonly HashSet<double> ExemptNumbers = new() { -1, 0, 1 };
 
-    private static IEnumerable<AntiPatternFinding> DetectMagicNumbers(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectMagicNumbers(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var literal in root.DescendantNodes().OfType<LiteralExpressionSyntax>())
         {
@@ -645,7 +645,7 @@ public class AntiPatternEngine
         "Run", "StartNew", "Factory"
     };
 
-    private static IEnumerable<AntiPatternFinding> DetectFireAndForgetTask(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectFireAndForgetTask(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
@@ -739,7 +739,7 @@ public class AntiPatternEngine
         "OpenText", "OpenRead", "OpenWrite", "CreateText", "Open", "Create", "AppendText"
     };
 
-    private static IEnumerable<AntiPatternFinding> DetectMissingDispose(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectMissingDispose(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
@@ -823,7 +823,7 @@ public class AntiPatternEngine
     // The using-statement form (using (s = expr) { }) disposes on exit but does not scope the
     // variable — s remains accessible after and is now disposed. Use 'using var' to prevent this.
 
-    private static IEnumerable<AntiPatternFinding> DetectDisposedAfterUsing(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectDisposedAfterUsing(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
@@ -906,7 +906,7 @@ public class AntiPatternEngine
             { "WebClient.DownloadData",     "await HttpClient.GetByteArrayAsync(...)" },
         };
 
-    private static IEnumerable<AntiPatternFinding> DetectSyncCallInAsyncContext(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectSyncCallInAsyncContext(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
@@ -950,7 +950,7 @@ public class AntiPatternEngine
     // This blocks one thread-pool thread waiting for ANOTHER thread-pool thread — under
     // load the pool saturates and new work cannot start (thread starvation cascade).
 
-    private static IEnumerable<AntiPatternFinding> DetectTaskRunBlocking(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectTaskRunBlocking(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var ma in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
         {
@@ -995,7 +995,7 @@ public class AntiPatternEngine
     // NamedHandlerThisCapture: += this.Method on an external publisher — keeps 'this' alive
 
     private static IEnumerable<AntiPatternFinding> DetectNamedHandlerLeaks(
-        SyntaxNode root, FilePath filePath, HashSet<string> activePatterns)
+        SyntaxNode root, FilePathWrapper filePath, HashSet<string> activePatterns)
     {
         foreach (var classNode in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
         {
@@ -1221,7 +1221,7 @@ public class AntiPatternEngine
     }
 
     private static IEnumerable<AntiPatternFinding> CheckFieldNamingConventions(
-        ClassDeclarationSyntax classDecl, FilePath filePath)
+        ClassDeclarationSyntax classDecl, FilePathWrapper filePath)
     {
         foreach (var field in classDecl.Members.OfType<FieldDeclarationSyntax>())
         {
@@ -1278,7 +1278,7 @@ public class AntiPatternEngine
     }
 
     private static IEnumerable<AntiPatternFinding> CheckMethodNamingConventions(
-        ClassDeclarationSyntax classDecl, FilePath filePath)
+        ClassDeclarationSyntax classDecl, FilePathWrapper filePath)
     {
         foreach (var method in classDecl.Members.OfType<MethodDeclarationSyntax>())
         {
@@ -1309,7 +1309,7 @@ public class AntiPatternEngine
     }
 
     private static IEnumerable<AntiPatternFinding> CheckParameterNamingConventions(
-        ClassDeclarationSyntax classDecl, FilePath filePath)
+        ClassDeclarationSyntax classDecl, FilePathWrapper filePath)
     {
         foreach (var method in classDecl.Members.OfType<MethodDeclarationSyntax>())
         {
@@ -1608,7 +1608,7 @@ public class AntiPatternEngine
     // ── AnalyzeExceptionHandling ──────────────────────────────────────────────
 
     public async Task<List<ExceptionHandlingFinding>> AnalyzeExceptionHandlingAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -2224,7 +2224,7 @@ public class AntiPatternEngine
     // Throwing from a finally block suppresses the original exception; the caller
     // sees the finally-throw instead of the real error, destroying stack context.
 
-    private static IEnumerable<AntiPatternFinding> DetectThrowInFinally(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectThrowInFinally(SyntaxNode root, FilePathWrapper filePath)
     {
         foreach (var tryStmt in root.DescendantNodes().OfType<TryStatementSyntax>())
         {
@@ -2257,7 +2257,7 @@ public class AntiPatternEngine
     // Subscribing an instance method to a static event without unsubscribing in
     // Dispose pins the instance in memory for the lifetime of the AppDomain.
 
-    private static IEnumerable<AntiPatternFinding> DetectStaticEventSubscription(SyntaxNode root, FilePath filePath)
+    private static IEnumerable<AntiPatternFinding> DetectStaticEventSubscription(SyntaxNode root, FilePathWrapper filePath)
     {
         // Collect unsubscribe targets: everything on the RHS of a -= assignment
         var unsubscribeTargets = root.DescendantNodes()

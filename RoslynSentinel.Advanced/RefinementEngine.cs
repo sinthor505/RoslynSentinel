@@ -19,7 +19,7 @@ public class RefinementEngine
     /// solution-wide with the method's expression, then removing the method declaration.
     /// Returns a dictionary of filePath→updatedContent for every affected file.
     /// </summary>
-    public async Task<Dictionary<FilePath, string>> InlineMethodAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> InlineMethodAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -71,7 +71,7 @@ public class RefinementEngine
             .GroupBy(l => l.Document.Id)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        var result = new Dictionary<FilePath, string>();
+        var result = new Dictionary<FilePathWrapper, string>();
         var expressionTemplate = expressionToInline; // capture once
 
         // Process each document that has call sites (including the defining document)

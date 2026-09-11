@@ -1,3 +1,3 @@
 namespace RoslynSentinel.Common;
 
-public record TestSkeletonReport(FilePath filePath, string Content);
+public record TestSkeletonReport(FilePathWrapper filePath, string Content);

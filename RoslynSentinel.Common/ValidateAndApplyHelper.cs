@@ -19,14 +19,14 @@ public static class ValidateAndApplyHelper
         ValidationEngine validationEngine,
         IWorkspaceManager workspaceManager,
         ILogger logger,
-        Dictionary<FilePath, string> changes,
+        Dictionary<FilePathWrapper, string> changes,
         string operationName,
         bool dryRun = false,
         bool returnDiff = false,
         IProgress<ProgressNotificationValue>? progress = default,
-        IReadOnlyCollection<FilePath>? removePaths = null,
+        IReadOnlyCollection<FilePathWrapper>? removePaths = null,
         CancellationToken cancellationToken = default,
-        IReadOnlyCollection<FilePath>? deletePaths = null,
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
         Func<DiagnosticReport, CancellationToken, Task<string>>? describeValidationFailure = null)
     {
         DiagnosticReport validation;
@@ -119,7 +119,7 @@ public static class ValidateAndApplyHelper
 
     public static async Task<string> BuildDiffAsync(
         IWorkspaceManager workspaceManager,
-        Dictionary<FilePath, string> changes,
+        Dictionary<FilePathWrapper, string> changes,
         CancellationToken cancellationToken)
     {
         var solution = await workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -143,7 +143,7 @@ public static class ValidateAndApplyHelper
     }
 
     public static string BuildDiffFromPreImages(
-        Dictionary<FilePath, string> changes,
+        Dictionary<FilePathWrapper, string> changes,
         IReadOnlyDictionary<string, string?>? preImages)
     {
         var parts = new List<string>();

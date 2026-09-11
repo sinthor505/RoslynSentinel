@@ -6,7 +6,7 @@ public record AntiPatternFinding(
     [property: JsonPropertyName("patternType")] string Pattern,
     string Description,
     string Severity,
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     int Line,
     string Snippet,
     string Remediation = ""

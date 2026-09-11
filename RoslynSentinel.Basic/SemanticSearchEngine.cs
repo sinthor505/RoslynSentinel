@@ -9,7 +9,7 @@ namespace RoslynSentinel.Basic;
 // SearchResult now includes Line and ContextSnippet so callers can feed results
 // directly into filePath-gated tools without a separate text-search step.
 public record SearchResult(
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     string MemberName,
     string Detail,
     int? Line = null,
@@ -29,7 +29,7 @@ public class SemanticSearchEngine
     /// Finds all methods whose return type matches returnType using the semantic model.
     /// Uses compilation.GetSymbolsWithName for an initial name-based pre-filter when
     /// the return type is a named type, then falls back to a full solution walk for
-    /// primitives and generic types. Each result includes FilePath, Line, and ContextSnippet
+    /// primitives and generic types. Each result includes FilePathWrapper, Line, and ContextSnippet
     /// for direct use with inspect_symbol / find_references / get_call_graph.
     /// </summary>
     public async Task<List<SearchResult>> FindMethodsByReturnTypeAsync(
@@ -108,7 +108,7 @@ public class SemanticSearchEngine
     /// <summary>
     /// Finds all types decorated with a specific attribute using the semantic model.
     /// Resolves both "Foo" and "FooAttribute" spelling variants. Each result includes
-    /// FilePath, Line, and ContextSnippet for direct use with filePath-gated tools.
+    /// FilePathWrapper, Line, and ContextSnippet for direct use with filePath-gated tools.
     /// </summary>
     public async Task<List<SearchResult>> FindTypesByAttributeAsync(
         string attributeName,

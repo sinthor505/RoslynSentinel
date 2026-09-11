@@ -13,7 +13,7 @@ public class AdvancedRefactoringEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<DocumentEditResult> ReplaceStringConcatWithInterpolationAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReplaceStringConcatWithInterpolationAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -93,7 +93,7 @@ public class AdvancedRefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> OptimizeTaskWaitAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> OptimizeTaskWaitAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -312,7 +312,7 @@ public class AdvancedRefactoringEngine
         (type is IdentifierNameSyntax id && id.Identifier.Text is "Task" or "ValueTask")
         || (type is GenericNameSyntax gn && gn.Identifier.Text is "Task" or "ValueTask");
 
-    public async Task<Dictionary<FilePath, string>> ExtractServiceFromControllerAsync(FilePath filePath, string controllerName, string serviceName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> ExtractServiceFromControllerAsync(FilePathWrapper filePath, string controllerName, string serviceName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
@@ -348,7 +348,7 @@ public class AdvancedRefactoringEngine
             serviceRoot = serviceRoot.AddMembers(serviceClass);
         }
 
-        return new Dictionary<FilePath, string>
+        return new Dictionary<FilePathWrapper, string>
         {
             { filePath, updatedRoot.ToFullString() },
             { Path.Combine(Path.GetDirectoryName(filePath)!, $"{serviceName}.cs"), serviceRoot.NormalizeWhitespace().ToFullString() }

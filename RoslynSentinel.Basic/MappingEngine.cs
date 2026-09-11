@@ -18,7 +18,7 @@ public class MappingEngine
     /// Generates a mapping method between two types based on property names.
     /// </summary>
     public async Task<DocumentEditResult> GenerateMappingAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string fromType,
         string toType,
         CancellationToken cancellationToken = default)
@@ -93,7 +93,7 @@ public class MappingEngine
     /// <summary>
     /// Inverts the direction of all assignments in a selected block of code.
     /// </summary>
-    public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePath filePath, int startLine, int endLine, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePathWrapper filePath, int startLine, int endLine, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -141,7 +141,7 @@ public class MappingEngine
     /// Inverts all assignment expressions within a code snippet (identified via contextSnippet, lineBefore/lineAfter).
     /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then inverts assignments near that position.
     /// </summary>
-    public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePath filePath, string contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

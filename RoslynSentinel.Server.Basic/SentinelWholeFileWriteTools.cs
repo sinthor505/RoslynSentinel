@@ -39,7 +39,7 @@ public class SentinelWholeFileWriteTools
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             bool exists = File.Exists(filePath);
@@ -67,7 +67,7 @@ public class SentinelWholeFileWriteTools
                 Directory.CreateDirectory(directory);
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = content };
+            var changes = new Dictionary<FilePathWrapper, string> { [filePath] = content };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: validateOnApply, cancellationToken: cancellationToken);
             if (!result.Success && result.ValidationResult != null)
             {
@@ -99,7 +99,7 @@ public class SentinelWholeFileWriteTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "WriteFile failed for '{FilePath}'", filePath);
+            _logger.LogError(ex, "WriteFile failed for '{FilePathWrapper}'", filePath);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -115,7 +115,7 @@ public class SentinelWholeFileWriteTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath, CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
             if (!File.Exists(filePath))
@@ -150,7 +150,7 @@ public class SentinelWholeFileWriteTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "DeleteFile failed for '{FilePath}'", filePath);
+            _logger.LogError(ex, "DeleteFile failed for '{FilePathWrapper}'", filePath);
             return new ToolResult<object>()
             {
                 Success = false,
@@ -258,7 +258,7 @@ public class SentinelWholeFileWriteTools
         ApplyChangesResult strippedResult,
         DiffHunkAnalyzer.DiffReport diffReport,
         bool returnDiff,
-        Dictionary<FilePath, string> diffChanges,
+        Dictionary<FilePathWrapper, string> diffChanges,
         IReadOnlyDictionary<string, string?>? preImages)
     {
         if (!returnDiff && !diffReport.HasFindings)
@@ -314,7 +314,7 @@ public class SentinelWholeFileWriteTools
     {
         try
         {
-            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
             if (changesetFormat == ChangesetFormat.files)
             {
                 if (changes == null)
@@ -326,12 +326,12 @@ public class SentinelWholeFileWriteTools
                     };
                 }
 
-                // MCP wire type is Dictionary<string,string>: a Dictionary<FilePath,...> tool
+                // MCP wire type is Dictionary<string,string>: a Dictionary<FilePathWrapper,...> tool
                 // parameter makes System.Text.Json.Schema.JsonSchemaExporter fall back to an
                 // unrepresentable `true` schema node for the key type, which LM Studio's grammar
                 // converter rejects outright ("Unrecognized schema: true"). Resolve keys to
-                // FilePath here instead, after the schema boundary.
-                Dictionary<FilePath, string> resolvedChanges = changes.ToDictionary(
+                // FilePathWrapper here instead, after the schema boundary.
+                Dictionary<FilePathWrapper, string> resolvedChanges = changes.ToDictionary(
                     kvp => _workspaceManager.SetFilePath(kvp.Key),
                     kvp => kvp.Value);
 
@@ -472,7 +472,7 @@ public class SentinelWholeFileWriteTools
                         var oldText = await document.GetTextAsync();
                         var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff, out var diffReport).ToString();
                         var targetPath = document.FilePath ?? filePath;
-                        var diffChanges = new Dictionary<FilePath, string>
+                        var diffChanges = new Dictionary<FilePathWrapper, string>
                         {
                             [targetPath] = newContent
                         };
@@ -496,7 +496,7 @@ public class SentinelWholeFileWriteTools
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePath}'", filePath);
+                        _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePathWrapper}'", filePath);
                         return new ToolResult<object>()
                         {
                             Success = false,
@@ -566,7 +566,7 @@ public class SentinelWholeFileWriteTools
     {
         try
         {
-            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
             if (!filePath.Validated)
             {
                 return new ToolResult<object>()
@@ -603,7 +603,7 @@ public class SentinelWholeFileWriteTools
                     var oldText = await document.GetTextAsync();
                     var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff, out var diffReport).ToString();
                     var targetPath = document.FilePath ?? filePath;
-                    var diffChanges = new Dictionary<FilePath, string>
+                    var diffChanges = new Dictionary<FilePathWrapper, string>
                     {
                         [targetPath] = newContent
                     };
@@ -627,7 +627,7 @@ public class SentinelWholeFileWriteTools
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "ApplyUnifiedDiff apply unexpected exception for '{FilePath}'", filePath);
+                    _logger.LogError(ex, "ApplyUnifiedDiff apply unexpected exception for '{FilePathWrapper}'", filePath);
                     return new ToolResult<object>()
                     {
                         Success = false,

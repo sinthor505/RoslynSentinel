@@ -19,7 +19,7 @@ namespace RoslynSentinel.Advanced;
 /// <param name="CallerMethod">Name of the original (now bridge-wrapper) caller method.</param>
 /// <param name="CallerAsyncMethod">Name of the new async caller overload.</param>
 public record UpliftCallerInfo(
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     string CallerMethod,
     string CallerAsyncMethod
 )
@@ -43,7 +43,7 @@ public record UpliftCallerInfo(
 /// <param name="Reason">Human-readable reason for skipping.</param>
 /// <param name="Diagnostics">Roslyn compiler diagnostics that caused the skip (may be empty).</param>
 public record UpliftSkippedInfo(
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     string CallerMethod,
     string Reason,
     List<DiagnosticInfo> Diagnostics,
@@ -466,14 +466,14 @@ public class AsyncBatchEngine
                     if (ctResult.Outcome == EditOutcome.Modified && ctResult.UpdatedText != null)
                     {
                         var ctValidation = await _validationEngine.ValidateChangesAsync(
-                            new Dictionary<FilePath, string> { { candidate.FilePath, ctResult.UpdatedText } },
+                            new Dictionary<FilePathWrapper, string> { { candidate.FilePath, ctResult.UpdatedText } },
                             cancellationToken);
                         if (ctValidation.Success)
                         {
                             string? beforeSource = File.Exists(candidate.FilePath)
                                 ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
                             await _workspaceManager.ApplyProposedChangesAsync(
-                                new Dictionary<FilePath, string> { { candidate.FilePath, ctResult.UpdatedText } });
+                                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, ctResult.UpdatedText } });
                             applied.Add(new BridgeAppliedInfo(candidate.FilePath, candidate.MethodName, asyncMethodName)
                             {
                                 BeforeSource = beforeSource,
@@ -508,14 +508,14 @@ public class AsyncBatchEngine
                                 "RunBridgeBatch: rewriting bridge-call body of '{AsyncMethod}' in {File}",
                                 asyncMethodName, candidate.FilePath);
                             var bodyValidation = await _validationEngine.ValidateChangesAsync(
-                                new Dictionary<FilePath, string> { { candidate.FilePath, bodyRewrite.UpdatedText } },
+                                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, bodyRewrite.UpdatedText } },
                                 cancellationToken);
                             if (bodyValidation.Success)
                             {
                                 string? beforeSource = File.Exists(candidate.FilePath)
                                     ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
                                 await _workspaceManager.ApplyProposedChangesAsync(
-                                    new Dictionary<FilePath, string> { { candidate.FilePath, bodyRewrite.UpdatedText } });
+                                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, bodyRewrite.UpdatedText } });
                                 applied.Add(new BridgeAppliedInfo(candidate.FilePath, candidate.MethodName, asyncMethodName)
                                 {
                                     BeforeSource = beforeSource,
@@ -688,7 +688,7 @@ public class AsyncBatchEngine
             // Step C: validate in-memory — no MSBuild required.
             Debug.WriteLine($"Validating in-memory for {candidate.MethodName} in {candidate.FilePath}...");
             var validation = await _validationEngine.ValidateChangesAsync(
-                new Dictionary<FilePath, string> { { candidate.FilePath, sourceToValidate } },
+                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, sourceToValidate } },
                 cancellationToken);
 
             if (!validation.Success)
@@ -732,7 +732,7 @@ public class AsyncBatchEngine
                 : null;
 
             await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { { candidate.FilePath, sourceToValidate } });
+                new Dictionary<FilePathWrapper, string> { { candidate.FilePath, sourceToValidate } });
 
             applied.Add(new BridgeAppliedInfo(
                 candidate.FilePath, candidate.MethodName, candidate.MethodName + "Async")
@@ -1006,7 +1006,7 @@ public class AsyncBatchEngine
                 }
 
                 var validation = await _validationEngine.ValidateChangesAsync(
-                    new Dictionary<FilePath, string> { { callerFilePath, transformed! } },
+                    new Dictionary<FilePathWrapper, string> { { callerFilePath, transformed! } },
                     cancellationToken);
 
                 if (!validation.Success)
@@ -1047,7 +1047,7 @@ public class AsyncBatchEngine
                     ? await File.ReadAllTextAsync(callerFilePath, cancellationToken) : null;
 
                 await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePath, string> { { callerFilePath, transformed! } },
+                    new Dictionary<FilePathWrapper, string> { { callerFilePath, transformed! } },
                     progress: progress, cancellationToken: cancellationToken);
 
                 uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, asyncName!)
@@ -1683,7 +1683,7 @@ public class AsyncBatchEngine
 
             // Validate
             var validation = await _validationEngine.ValidateChangesAsync(
-                new Dictionary<FilePath, string> { { target.FilePath, updatedSource } },
+                new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
                 cancellationToken: cancellationToken);
 
             if (!validation.Success)
@@ -1738,7 +1738,7 @@ public class AsyncBatchEngine
                 : null;
 
             await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { { target.FilePath, updatedSource } },
+                new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
                 progress: progress,
                 cancellationToken: cancellationToken);
 

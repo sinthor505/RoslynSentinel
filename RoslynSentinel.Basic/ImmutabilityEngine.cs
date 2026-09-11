@@ -31,7 +31,7 @@ public class ImmutabilityEngine
     /// <summary>
     /// Converts a class to be immutable by making fields readonly and properties init-only.
     /// </summary>
-    public async Task<DocumentEditResult> MakeClassImmutableAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> MakeClassImmutableAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

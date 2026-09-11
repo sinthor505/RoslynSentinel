@@ -20,7 +20,7 @@ public class AsyncOptimizationEngine
     /// Analyzes methods returning Task/Task<T> and converts them to ValueTask/ValueTask<T> if they frequently complete synchronously.
     /// Also updates interface signatures if the method implements an interface.
     /// </summary>
-    public async Task<DocumentEditResult> OptimizeToValueTaskAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> OptimizeToValueTaskAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException("File not found.");
@@ -106,7 +106,7 @@ public class AsyncOptimizationEngine
     /// <summary>
     /// Finds sequences of independent awaits and converts them to Task.WhenAll.
     /// </summary>
-    public async Task<DocumentEditResult> OptimizeIndependentAwaitsAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> OptimizeIndependentAwaitsAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -294,7 +294,7 @@ public class AsyncOptimizationEngine
     /// <summary>
     /// Creates an async version of a synchronous method.
     /// </summary>
-    public async Task<DocumentEditResult> GenerateAsyncOverloadAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateAsyncOverloadAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException("File not found.");
@@ -385,7 +385,7 @@ public class AsyncOptimizationEngine
     /// method has ref/out parameters, or the async overload already exists.
     /// </exception>
     public async Task<DocumentEditResult> ConvertToAsyncBridgeAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string methodName,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
@@ -607,7 +607,7 @@ public class AsyncOptimizationEngine
     /// covers the common case.
     /// </summary>
     public async Task<DocumentEditResult> ConvertEventHandlerCallerToAsyncVoidAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string methodName,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
@@ -760,7 +760,7 @@ public class AsyncOptimizationEngine
     /// <see cref="EditOutcome.TargetNotFound"/> when the method could not be located.
     /// </returns>
     public async Task<DocumentEditResult> RewriteObsoleteCallsInAsyncMethodAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string asyncMethodName,
         string? sourceText = null,
         IProgress<ProgressNotificationValue>? progress = default,
@@ -938,7 +938,7 @@ public class AsyncOptimizationEngine
     /// Adds .ConfigureAwait(false) (or true) to all await expressions that don't already have it.
     /// </summary>
     public async Task<DocumentEditResult> AddConfigureAwaitFalseAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         bool libraryMode = true,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
@@ -984,7 +984,7 @@ public class AsyncOptimizationEngine
     /// Removes all .ConfigureAwait(x) calls, leaving the bare awaited expression.
     /// </summary>
     public async Task<DocumentEditResult> RemoveConfigureAwaitFalseAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
@@ -1022,7 +1022,7 @@ public class AsyncOptimizationEngine
     /// Transforms results.Add(x) patterns to yield return x. Falls back to scaffold for complex bodies.
     /// </summary>
     public async Task<DocumentEditResult> ConvertToAsyncEnumerableAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string methodName,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
@@ -1215,7 +1215,7 @@ public class AsyncOptimizationEngine
     }
 
     public async Task<DocumentEditResult> AddCancellationTokenToMethodAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string methodName,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
@@ -1412,7 +1412,7 @@ public class AsyncOptimizationEngine
     /// </returns>
     public async Task<(string UpdatedSource, List<string> Modified, List<string> Skipped)>
         ApplyCancellationTokenToFileAsync(
-            FilePath filePath,
+            FilePathWrapper filePath,
             string[]? methodNames = null,
             IProgress<ProgressNotificationValue>? progress = default,
             CancellationToken cancellationToken = default)
@@ -1658,7 +1658,7 @@ public class AsyncOptimizationEngine
     /// <summary>Engine-internal result from <see cref="FlagMigrationCandidateAsync"/>.</summary>
     public record FlagMigrationCandidateEngineResult(
         /// <summary>File path → updated source for every file that must be written to disk.</summary>
-        Dictionary<FilePath, string> Changes,
+        Dictionary<FilePathWrapper, string> Changes,
         /// <summary><c>true</c> if the method already carried a <c>[MigrationCandidate]</c> for this pattern.</summary>
         bool WasAlreadyFlagged,
         /// <summary>The pattern string from the previous attribute, or <c>null</c> if the method was not previously flagged.</summary>
@@ -1791,7 +1791,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// Thrown when the file or method is not found in the loaded solution.
     /// </exception>
     public async Task<FlagMigrationCandidateEngineResult> FlagMigrationCandidateAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string methodName,
         string pattern,
         int score = 0,
@@ -1878,7 +1878,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var newRoot = root.ReplaceNode(methodNode, updatedMethod);
         var newSource = newRoot.NormalizeWhitespace().ToFullString();
 
-        var result = new Dictionary<FilePath, string> { { filePath, newSource } };
+        var result = new Dictionary<FilePathWrapper, string> { { filePath, newSource } };
 
         // ── Inject MigrationCandidateAttribute.cs if not yet in the solution ─
         var alreadyDefined = solution.Projects
@@ -1930,7 +1930,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// the error is recorded separately in the caller's error list.
     /// </returns>
     public async Task<(List<FlagMigrationCandidateEngineResult> Results, List<(int Index, string Error)> Errors)>
-        FlagMultipleMigrationCandidatesAsync(IReadOnlyList<(FilePath FilePath, string MethodName, string Pattern, int Score, string? Reason)> items,
+        FlagMultipleMigrationCandidatesAsync(IReadOnlyList<(FilePathWrapper FilePath, string MethodName, string Pattern, int Score, string? Reason)> items,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
@@ -1965,7 +1965,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 {
                     errors.Add((i, $"File '{filePath}' not found in the loaded solution."));
                     resultSlots[i] = new FlagMigrationCandidateEngineResult(
-                        new Dictionary<FilePath, string>(), false, null, false, -1);
+                        new Dictionary<FilePathWrapper, string>(), false, null, false, -1);
                 }
 
                 continue;
@@ -1978,7 +1978,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 {
                     errors.Add((i, $"Could not get syntax root for '{filePath}'."));
                     resultSlots[i] = new FlagMigrationCandidateEngineResult(
-                        new Dictionary<FilePath, string>(), false, null, false, -1);
+                        new Dictionary<FilePathWrapper, string>(), false, null, false, -1);
                 }
 
                 continue;
@@ -1997,7 +1997,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 {
                     errors.Add((idx, $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive."));
                     resultSlots[idx] = new FlagMigrationCandidateEngineResult(
-                        new Dictionary<FilePath, string>(), false, null, false, -1);
+                        new Dictionary<FilePathWrapper, string>(), false, null, false, -1);
                     continue;
                 }
 
@@ -2052,7 +2052,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 root = root.ReplaceNode(methodNode, updatedMethod);
 
                 resultSlots[idx] = new FlagMigrationCandidateEngineResult(
-                    Changes: new Dictionary<FilePath, string>(), // populated below after all methods in file
+                    Changes: new Dictionary<FilePathWrapper, string>(), // populated below after all methods in file
                     WasAlreadyFlagged: wasAlreadyFlagged,
                     PreviousPattern: previousPattern,
                     AttributeClassInjected: false, // set on first item for this file
@@ -2061,7 +2061,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
             // Write final combined source once for all methods in this file.
             var finalSource = root.NormalizeWhitespace().ToFullString();
-            var fileChanges = new Dictionary<FilePath, string> { { filePath, finalSource } };
+            var fileChanges = new Dictionary<FilePathWrapper, string> { { filePath, finalSource } };
 
             // Inject MigrationCandidateAttribute.cs if not yet in solution (check once per file).
             var alreadyDefined = solution.Projects.SelectMany(p => p.Documents)
@@ -2281,7 +2281,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
     /// <summary>Internal per-method scoring output used by <see cref="FlagCandidatesInProjectAsync"/>.</summary>
     public record CandidateScoredItem(
-        FilePath FilePath,
+        FilePathWrapper FilePath,
         string MethodName,
         string ClassName,
         int Line,
@@ -2304,7 +2304,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// <summary>Engine-internal result from <see cref="FlagCandidatesInProjectAsync"/>.</summary>
     public record FlagCandidatesInProjectEngineResult(
         /// <summary>All file paths → updated source that must be written to disk.</summary>
-        Dictionary<FilePath, string> Changes,
+        Dictionary<FilePathWrapper, string> Changes,
         /// <summary>Details for every method that was flagged.</summary>
         IReadOnlyList<CandidateScoredItem> Flagged,
         /// <summary>Details for every method that was scored but fell below <c>minScore</c>.</summary>
@@ -2387,7 +2387,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var flagged = new List<CandidateScoredItem>();
         var skipped = new List<CandidateScoredItem>();
         var alreadyFlagged = new List<CandidateScoredItem>();
-        var fileChanges = new Dictionary<FilePath, string>();
+        var fileChanges = new Dictionary<FilePathWrapper, string>();
         int totalExamined = 0;
         bool attrClassInjected = false;
 
@@ -2918,7 +2918,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// </returns>
     public async Task<DocumentEditResult>
         PropagateCancellationTokenInMethodAsync(
-            FilePath filePath,
+            FilePathWrapper filePath,
             string methodName,
             IProgress<ProgressNotificationValue>? progress = default,
             CancellationToken cancellationToken = default)
@@ -3218,7 +3218,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// </summary>
     public async Task<(string UpdatedSource, PropagateCtFileResult Result)>
         PropagateCancellationTokenInFileAsync(
-            FilePath filePath,
+            FilePathWrapper filePath,
             string[]? methodNames = null,
             IProgress<ProgressNotificationValue>? progress = default,
             CancellationToken cancellationToken = default)
@@ -3459,7 +3459,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     public Task<(string UpdatedSource, PropagateCtFileResult Result)>
         PropagateCancellationTokenInSourceAsync(
             string source,
-            FilePath filePath,
+            FilePathWrapper filePath,
             string methodName,
             IProgress<ProgressNotificationValue>? progress = default,
             CancellationToken cancellationToken = default)
@@ -3597,10 +3597,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
     // ── Remove migration candidates ──────────────────────────────────────────
 
-    public record RemovedCandidateInfo(FilePath FilePath, string MethodName, string RemovedPattern, int Line);
+    public record RemovedCandidateInfo(FilePathWrapper FilePath, string MethodName, string RemovedPattern, int Line);
 
     public record RemoveMigrationCandidatesEngineResult(
-        Dictionary<FilePath, string> Changes,
+        Dictionary<FilePathWrapper, string> Changes,
         int TotalRemoved,
         int FilesModified,
         IReadOnlyList<RemovedCandidateInfo> Removed);
@@ -3639,7 +3639,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             documents = solution.Projects.SelectMany(p => p.Documents);
         }
 
-        var changes = new Dictionary<FilePath, string>();
+        var changes = new Dictionary<FilePathWrapper, string>();
         var removed = new List<RemovedCandidateInfo>();
 
         foreach (var doc in documents)
@@ -3689,7 +3689,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
             if (newRoot != root && !dryRun)
             {
-                changes[(FilePath)doc.FilePath] = newRoot.ToFullString();
+                changes[(FilePathWrapper)doc.FilePath] = newRoot.ToFullString();
             }
         }
 

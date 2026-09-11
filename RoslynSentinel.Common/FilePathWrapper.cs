@@ -4,14 +4,14 @@ using System.Text.Json.Serialization;
 namespace RoslynSentinel.Common;
 
 [JsonConverter(typeof(FilePathJsonConverter))]
-public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
+public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparable<FilePathWrapper>
 {
     public readonly bool Validated;  // whether the path has been validated as absolute and normalized
 
     public string Absolute { get; } = string.Empty;
     public string Relative { get; } = string.Empty;
 
-    public FilePath(string path, string? solutionRoot = "", bool validated = false)
+    public FilePathWrapper(string path, string? solutionRoot = "", bool validated = false)
     {
         Absolute = string.IsNullOrWhiteSpace(path) ? string.Empty : CanonicalizeSeparators(path);
         Relative = string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(solutionRoot) ? string.Empty : Path.GetRelativePath(solutionRoot, Absolute);
@@ -20,7 +20,7 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
 
     // Models frequently submit forward-slash paths (e.g. "C:/Users/.../Foo.cs") regardless of
     // platform. FileSystemWatcher's e.FullPath always reports backslashes on Windows, so an
-    // uncanonicalized forward-slash FilePath used as a dictionary key (e.g. _internalChanges in
+    // uncanonicalized forward-slash FilePathWrapper used as a dictionary key (e.g. _internalChanges in
     // PersistentWorkspaceManager) can never match the watcher's own-write-suppression lookup —
     // a deterministic miss, not a race. Canonicalize here so every construction path (bare
     // constructor, FromWire, JSON converter) agrees on separators. UNC prefix (\\) is preserved.
@@ -32,18 +32,18 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     }
 
     // construct from whatever the wire sent, against the known root
-    public static FilePath FromWire(string pathArg, string? solutionRoot)
+    public static FilePathWrapper FromWire(string pathArg, string? solutionRoot)
     {
         var clean = NormalizeWirePath(pathArg);
 
         if (string.IsNullOrWhiteSpace(clean))
         {
-            return new FilePath(string.Empty, solutionRoot);
+            return new FilePathWrapper(string.Empty, solutionRoot);
         }
 
         if (Path.IsPathRooted(clean))
         {
-            return new FilePath(Path.GetFullPath(clean), solutionRoot, validated: true);
+            return new FilePathWrapper(Path.GetFullPath(clean), solutionRoot, validated: true);
         }
 
         // PersistentWorkspaceManager.GetSolutionRoot() returns null whenever no solution is
@@ -54,10 +54,10 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
         // produce a path that points nowhere near the solution.
         if (string.IsNullOrWhiteSpace(solutionRoot))
         {
-            return new FilePath(clean, solutionRoot);
+            return new FilePathWrapper(clean, solutionRoot);
         }
 
-        return new FilePath(Path.GetFullPath(Path.Combine(solutionRoot, clean)), solutionRoot, validated: true);
+        return new FilePathWrapper(Path.GetFullPath(Path.Combine(solutionRoot, clean)), solutionRoot, validated: true);
     }
 
     // Agents sometimes pass path arguments wrapped in stray quotes (straight or smart) or
@@ -97,7 +97,7 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     public override string ToString() => Absolute ?? string.Empty;
     public override bool Equals(object? obj)
     {
-        return obj is FilePath other && string.Equals(Absolute, other.Absolute, StringComparison.OrdinalIgnoreCase);
+        return obj is FilePathWrapper other && string.Equals(Absolute, other.Absolute, StringComparison.OrdinalIgnoreCase);
     }
 
     // compare to string for convenience
@@ -106,21 +106,21 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
         return string.Equals(Absolute, other, StringComparison.OrdinalIgnoreCase);
     }
 
-    // implicit conversion from string to FilePath for convenience
-    public static implicit operator FilePath(string path) => new FilePath(path);
+    // implicit conversion from string to FilePathWrapper for convenience
+    public static implicit operator FilePathWrapper(string path) => new FilePathWrapper(path);
 
     //implicit conversion from filePath to string for convenience
-    public static implicit operator string(FilePath filePath) => filePath.Absolute;
+    public static implicit operator string(FilePathWrapper filePath) => filePath.Absolute;
 
     //Equality operators for convenience
-    public static bool operator ==(FilePath left, FilePath right) => left.Equals(right);
-    public static bool operator !=(FilePath left, FilePath right) => !left.Equals(right);
+    public static bool operator ==(FilePathWrapper left, FilePathWrapper right) => left.Equals(right);
+    public static bool operator !=(FilePathWrapper left, FilePathWrapper right) => !left.Equals(right);
 
     // string equality operators for Windows
-    public static bool operator ==(FilePath left, string? right) => left.Equals(right);
-    public static bool operator !=(FilePath left, string? right) => !left.Equals(right);
-    public static bool operator ==(string? left, FilePath right) => right.Equals(left);
-    public static bool operator !=(string? left, FilePath right) => !right.Equals(left);
+    public static bool operator ==(FilePathWrapper left, string? right) => left.Equals(right);
+    public static bool operator !=(FilePathWrapper left, string? right) => !left.Equals(right);
+    public static bool operator ==(string? left, FilePathWrapper right) => right.Equals(left);
+    public static bool operator !=(string? left, FilePathWrapper right) => !right.Equals(left);
 
     public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Absolute);
 
@@ -130,40 +130,40 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     //endswith for convenience
     public bool EndsWith(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.Absolute.EndsWith(value, comparisonType);
 
-    public static bool operator <(FilePath left, string right) => !left.Absolute.StartsWith(right, StringComparison.OrdinalIgnoreCase);
+    public static bool operator <(FilePathWrapper left, string right) => !left.Absolute.StartsWith(right, StringComparison.OrdinalIgnoreCase);
 
-    public static bool operator >(FilePath left, string right) => left.Absolute.StartsWith(right, StringComparison.OrdinalIgnoreCase);
+    public static bool operator >(FilePathWrapper left, string right) => left.Absolute.StartsWith(right, StringComparison.OrdinalIgnoreCase);
 
     // contains operator for convenience
     public bool Contains(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.Absolute.Contains(value, comparisonType);
 
-    public bool Equals(FilePath other)
+    public bool Equals(FilePathWrapper other)
     {
         return StringComparer.OrdinalIgnoreCase.Equals(Absolute, other.Absolute);
     }
 
-    public int CompareTo(FilePath other)
+    public int CompareTo(FilePathWrapper other)
     {
         return StringComparer.OrdinalIgnoreCase.Compare(Absolute, other.Absolute);
     }
 }
 
 /// <summary>
-/// Enables System.Text.Json to serialize <see cref="FilePath"/> both as a plain JSON string
-/// and as a dictionary property name (required for Dictionary&lt;FilePath, ...&gt; serialization).
+/// Enables System.Text.Json to serialize <see cref="FilePathWrapper"/> both as a plain JSON string
+/// and as a dictionary property name (required for Dictionary&lt;FilePathWrapper, ...&gt; serialization).
 /// </summary>
-public sealed class FilePathJsonConverter : JsonConverter<FilePath>
+public sealed class FilePathJsonConverter : JsonConverter<FilePathWrapper>
 {
-    public override FilePath Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => new FilePath(FilePath.NormalizeWirePath(reader.GetString()!));
+    public override FilePathWrapper Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => new FilePathWrapper(FilePathWrapper.NormalizeWirePath(reader.GetString()!));
 
-    public override void Write(Utf8JsonWriter writer, FilePath value, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, FilePathWrapper value, JsonSerializerOptions options)
         => writer.WriteStringValue(value.ToString());
 
-    // Required for Dictionary<FilePath, TValue> key serialization
-    public override FilePath ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => new FilePath(FilePath.NormalizeWirePath(reader.GetString()!));
+    // Required for Dictionary<FilePathWrapper, TValue> key serialization
+    public override FilePathWrapper ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => new FilePathWrapper(FilePathWrapper.NormalizeWirePath(reader.GetString()!));
 
-    public override void WriteAsPropertyName(Utf8JsonWriter writer, FilePath value, JsonSerializerOptions options)
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, FilePathWrapper value, JsonSerializerOptions options)
         => writer.WritePropertyName(value.ToString());
 }

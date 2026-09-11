@@ -26,7 +26,7 @@ public static class LargeResultHelper
     /// ReadFile once did) produce a file GetLargeResult cannot read - always go through this method
     /// instead of reimplementing the write.
     /// </summary>
-    public static async Task<(bool offloaded, FilePath filePath, string? resultId, byte[] jsonBytes)> StoreLargeResultAsync<T>(
+    public static async Task<(bool offloaded, FilePathWrapper filePath, string? resultId, byte[] jsonBytes)> StoreLargeResultAsync<T>(
         T data, string? solutionRoot, ResultWrapperType wrapperType, CancellationToken cancellationToken)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
@@ -47,7 +47,7 @@ public static class LargeResultHelper
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
         var filePathString = Path.Combine(dir, $"largeresult_{timestamp}_{resultId}.json");
         await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
-        return (true, new FilePath(filePathString, solutionRoot, validated: true), resultId, jsonBytes);
+        return (true, new FilePathWrapper(filePathString, solutionRoot, validated: true), resultId, jsonBytes);
     }
 }
 

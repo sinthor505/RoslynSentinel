@@ -55,7 +55,7 @@ public class GranularRefactoringEngine
     /// Dispatches a named micro-refactoring against a specific line in a file.
     /// </summary>
     /// <param name="refactoringId">One of: type-to-var, remove-unused-local, add-braces, remove-braces, extract-constant</param>
-    public async Task<DocumentEditResult> RunMicroRefactoringAsync(FilePath filePath, string refactoringId, int line, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RunMicroRefactoringAsync(FilePathWrapper filePath, string refactoringId, int line, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -233,7 +233,7 @@ public class GranularRefactoringEngine
         return newRoot.ReplaceNode(newType, updatedType);
     }
 
-    public async Task<DocumentEditResult> InlineFieldAsync(FilePath filePath, string fieldName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InlineFieldAsync(FilePathWrapper filePath, string fieldName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -298,7 +298,7 @@ public class GranularRefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> InlineParameterAsync(FilePath filePath, string methodName, string parameterName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InlineParameterAsync(FilePathWrapper filePath, string methodName, string parameterName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -345,7 +345,7 @@ public class GranularRefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ConvertMethodToIndexerAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertMethodToIndexerAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -435,7 +435,7 @@ public class GranularRefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> IntroduceFieldAsync(FilePath filePath, string contextSnippet, string newFieldName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> IntroduceFieldAsync(FilePathWrapper filePath, string contextSnippet, string newFieldName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -565,7 +565,7 @@ public class GranularRefactoringEngine
         return true;
     }
 
-    public async Task<DocumentEditResult> IntroduceParameterAsync(FilePath filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> IntroduceParameterAsync(FilePathWrapper filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         // NOTE: Single-file only — call sites in other files are not updated.
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -679,7 +679,7 @@ public class GranularRefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> IntroduceVariableAsync(FilePath filePath, string contextSnippet, string newVariableName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> IntroduceVariableAsync(FilePathWrapper filePath, string contextSnippet, string newVariableName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -807,7 +807,7 @@ public class GranularRefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> MoveTypeToOuterScopeAsync(FilePath filePath, string nestedTypeName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> MoveTypeToOuterScopeAsync(FilePathWrapper filePath, string nestedTypeName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -917,13 +917,13 @@ public class GranularRefactoringEngine
         };
     }
 
-    public async Task<Dictionary<FilePath, string>> ExtractMembersToPartialAsync(FilePath filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> ExtractMembersToPartialAsync(FilePathWrapper filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new Dictionary<FilePathWrapper, string>();
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
@@ -977,13 +977,13 @@ public class GranularRefactoringEngine
                 formattedCode = formattedCode.Replace(";namespace", ";\n\nnamespace");
             }
 
-            return new Dictionary<FilePath, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{className}.Partial.cs"), formattedCode } };
+            return new Dictionary<FilePathWrapper, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{className}.Partial.cs"), formattedCode } };
         }
-        return new Dictionary<FilePath, string>();
+        return new Dictionary<FilePathWrapper, string>();
     }
 
     public async Task<DocumentEditResult> IntroduceParameterObjectAsync(
-        FilePath filePath,
+        FilePathWrapper filePath,
         string methodName,
         string? newTypeName = null,
         string[]? parameterNames = null,

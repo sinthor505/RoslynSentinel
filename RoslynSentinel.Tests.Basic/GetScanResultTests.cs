@@ -16,8 +16,8 @@ namespace RoslynSentinel.Tests.Basic;
 ///   T2  – Unknown resultId (file doesn't exist) → error
 ///   T3  – Valid resultId, MigrationCandidateFindingList file → findings returned, TotalRecords set
 ///   T4  – Valid resultId, ApiSurfaceEntryList file → entries returned
-///   T5  – FilePath inside largeresults directory → findings returned
-///   T6  – FilePath outside largeresults directory → error
+///   T5  – FilePathWrapper inside largeresults directory → findings returned
+///   T6  – FilePathWrapper outside largeresults directory → error
 /// </summary>
 [TestFixture]
 public class GetLargeResultTests
@@ -102,7 +102,7 @@ public class GetLargeResultTests
     private static List<SolutionSymbolEntry> MakeSolutionSymbolEntries(int count = 5) =>
         Enumerable.Range(0, count)
             .Select(i => new SolutionSymbolEntry(
-                FilePath: new FilePath($"File_{i}.cs", null),
+                FilePath: new FilePathWrapper($"File_{i}.cs", null),
                 Kind: "method",
                 Name: $"Method_{i}",
                 Container: "MyClass",
@@ -228,7 +228,7 @@ public class GetLargeResultTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T5 – FilePath inside scans directory → findings returned
+    // T5 – FilePathWrapper inside scans directory → findings returned
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -246,7 +246,7 @@ public class GetLargeResultTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T6 – FilePath outside scans directory → error
+    // T6 – FilePathWrapper outside scans directory → error
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]

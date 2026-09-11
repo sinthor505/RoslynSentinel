@@ -141,7 +141,7 @@ public class ReadFileTests
             new[] { ("Big.cs", bigSource, bigDocPath) });
         _workspaceManager.SetTestSolution(solution);
         // ReadFile only offloads when GetSolutionRoot() is non-empty; the fake derives that from
-        // SolutionPath since the AdhocWorkspace solution here has no FilePath of its own.
+        // SolutionPath since the AdhocWorkspace solution here has no FilePathWrapper of its own.
         _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
 
         var result = await _tools.ReadFile(reason: "test", bigDocPath);

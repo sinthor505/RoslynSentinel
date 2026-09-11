@@ -1,7 +1,7 @@
 namespace RoslynSentinel.Common;
 
 public record VariableAccess(
-    FilePath FilePath,
+    FilePathWrapper FilePath,
     int Line,
     int Column,
     string AccessKind,

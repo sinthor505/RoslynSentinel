@@ -20,19 +20,19 @@
     public sealed record DocumentEditResult : EngineResultBase
     {
 
-        public Dictionary<FilePath, string> Changes { get; init; } = new Dictionary<FilePath, string>();
+        public Dictionary<FilePathWrapper, string> Changes { get; init; } = new Dictionary<FilePathWrapper, string>();
 
         public DocumentEditResult()
         {
         }
 
-        public DocumentEditResult(EditOutcome outcome, FilePath filePath)
+        public DocumentEditResult(EditOutcome outcome, FilePathWrapper filePath)
         {
             this.Outcome = outcome;
             this.FilePath = filePath;
         }
 
-        public DocumentEditResult(EditOutcome outcome, FilePath filePath, string changeId, bool isCommitted = false, string? updatedText = null)
+        public DocumentEditResult(EditOutcome outcome, FilePathWrapper filePath, string changeId, bool isCommitted = false, string? updatedText = null)
         {
             this.Outcome = outcome;
             this.FilePath = filePath;
@@ -46,17 +46,17 @@
             return System.Text.Json.JsonSerializer.Serialize(this, _jsonOptions);
         }
 
-        public static DocumentEditResult DocumentNotFound(FilePath filePath)
+        public static DocumentEditResult DocumentNotFound(FilePathWrapper filePath)
         {
             return new DocumentEditResult(EditOutcome.DocumentNotFound, filePath) { Message = $"File not found: {filePath}" };
         }
 
-        public static DocumentEditResult TargetNotFound(FilePath filePath)
+        public static DocumentEditResult TargetNotFound(FilePathWrapper filePath)
         {
             return new DocumentEditResult(EditOutcome.TargetNotFound, filePath) { Message = $"Target not found in file: {filePath}" };
         }
 
-        public static DocumentEditResult FeatureDisabled(FilePath filePath)
+        public static DocumentEditResult FeatureDisabled(FilePathWrapper filePath)
         {
             return new DocumentEditResult(EditOutcome.FeatureDisabled, filePath) { Message = $"Feature is disabled." };
         }

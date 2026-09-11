@@ -43,7 +43,7 @@ public class CommentingEngine
 
     /// <summary>One member found while walking scope, with everything needed to seed/comment it.</summary>
     public sealed record MemberSite(
-        FilePath FilePath,
+        FilePathWrapper FilePath,
         string ProjectName,
         string MemberName,
         string ContextSnippet,
@@ -63,13 +63,13 @@ public class CommentingEngine
     /// projects are dropped from <c>Changes</c> rather than seeded with an attribute that can't
     /// compile.
     /// </summary>
-    public async Task<(Dictionary<FilePath, string> Changes, int SeededCount, int AlreadyTaggedCount, List<string> UnresolvedProjects)> SeedContentHashesAsync(
+    public async Task<(Dictionary<FilePathWrapper, string> Changes, int SeededCount, int AlreadyTaggedCount, List<string> UnresolvedProjects)> SeedContentHashesAsync(
         ToolScope scope, string? projectName, string? filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = EnumerateScopedDocuments(solution, scope, projectName, filePath);
 
-        var changes = new Dictionary<FilePath, string>();
+        var changes = new Dictionary<FilePathWrapper, string>();
         int seeded = 0;
         int alreadyTagged = 0;
 
@@ -154,7 +154,7 @@ public class CommentingEngine
 
             var droppedPaths = documents
                 .Where(d => d.FilePath != null && unresolvedIdSet.Contains(d.Project.Id))
-                .Select(d => (FilePath)d.FilePath!)
+                .Select(d => (FilePathWrapper)d.FilePath!)
                 .ToHashSet();
 
             foreach (var path in droppedPaths)
@@ -197,7 +197,7 @@ public class CommentingEngine
             }
 
             // Ordinal among same-kind/same-name/same-containing-type siblings in this document's
-            // original root (e.g. the 2nd of 3 "Equals" overloads on FilePath) — overloaded
+            // original root (e.g. the 2nd of 3 "Equals" overloads on FilePathWrapper) — overloaded
             // methods/constructors share GetTaggableMemberName, so MemberName+ContainingTypeName
             // alone can't tell CommentFileAsync's post-edit re-lookup which physical sibling this
             // site refers to. See the matching note on FindEquivalentMember/FindEquivalentMemberByName.
@@ -282,7 +282,7 @@ public class CommentingEngine
     /// multi-member files is measured — for now, correctness/reuse win over the extra round-trips.
     /// </summary>
     public async Task<(string? FinalText, List<MemberCommentOutcome> Outcomes)> CommentFileAsync(
-        Solution baseSolution, FilePath filePath, IReadOnlyList<MemberSite> fileMembers, int maxTokens, CancellationToken cancellationToken = default)
+        Solution baseSolution, FilePathWrapper filePath, IReadOnlyList<MemberSite> fileMembers, int maxTokens, CancellationToken cancellationToken = default)
     {
         var outcomes = new List<MemberCommentOutcome>();
         var document = baseSolution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -633,7 +633,7 @@ public class CommentingEngine
     /// overloaded methods/constructors share GetTaggableMemberName, so a name-only fallback always
     /// resolved to sibling #0 once SpanStart drifted, silently re-tagging (or skipping, once already
     /// tagged) the same overload on every later iteration and leaving other overloads never seeded at
-    /// all. Confirmed live: FilePath.cs's 3 "Equals" overloads (object?/string?/FilePath) — only the
+    /// all. Confirmed live: FilePathWrapper.cs's 3 "Equals" overloads (object?/string?/FilePathWrapper) — only the
     /// first ever got a [ContentHash], the other two were never tagged across repeated solution-scope
     /// runs, then permanently failed AddSummaryComment with "contextSnippet ambiguous" downstream
     /// because there was nothing distinguishing an un-seeded candidate from an untagged one.
@@ -687,7 +687,7 @@ public class CommentingEngine
             }
         }
 
-        // Same-type overloads (e.g. FilePath's 3 "Equals" methods) all pass the containingTypeName
+        // Same-type overloads (e.g. FilePathWrapper's 3 "Equals" methods) all pass the containingTypeName
         // narrowing above identically, so nameOrdinal — this site's 0-based position among its
         // original same-kind/same-name/same-containing-type siblings — is the only remaining way to
         // pick the right physical sibling instead of always re-targeting the first one.
@@ -704,7 +704,7 @@ public class CommentingEngine
     /// this as fatal for those projects rather than seeding members that can't possibly compile.
     /// </summary>
     private static async Task<List<ProjectId>> InjectAttributeClassIfMissingAsync(
-        Solution solution, IReadOnlyList<Document> scopedDocuments, Dictionary<FilePath, string> changes, CancellationToken cancellationToken)
+        Solution solution, IReadOnlyList<Document> scopedDocuments, Dictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken)
     {
         // Per-project, not solution-wide: [ContentHash] is a plain type, invisible across project
         // boundaries without a reference, so each project that gets a member tagged needs its own
