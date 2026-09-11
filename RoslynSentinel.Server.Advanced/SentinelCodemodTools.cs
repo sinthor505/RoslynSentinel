@@ -113,7 +113,7 @@ public class SentinelCodemodTools
     [Produces(DataTag.ResultOnly)]
     [Description("Applies a file-wide code transformation. Call DescribeAdvancedToolOptions(\"apply_file_codemod\") for the list of transform values.")]
     public async Task<ToolResult<object>> ApplyFileCodemod(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_file_codemod\") for valid values.")]
         [ExternalInputRequired(DataTag.DataType)] string transform,
@@ -394,7 +394,7 @@ public class SentinelCodemodTools
     [Description("Applies a method-scoped code transformation. Call DescribeAdvancedToolOptions(\"apply_method_codemod\") for the list of transform values.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: direction is required for transform=convert_expression_body ("ToExpression" or "ToBlock"); unused by other transforms. Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> ApplyMethodCodemod(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string methodName,
         [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_method_codemod\") for valid values.")]
@@ -769,7 +769,7 @@ public class SentinelCodemodTools
     [Description("Applies a class-scoped code transformation. Call DescribeAdvancedToolOptions(\"apply_class_codemod\") for the list of transform values.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: propertyName is required by transforms that target a specific property (e.g. convert_property_safe); unused by class-wide transforms. direction is required for transform=convert_property_safe ("ToFullProperty" or "ToAutoProperty"). Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> ApplyClassCodemod(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.ClassName)] string className,
         [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_class_codemod\") for valid values.")]
@@ -1125,7 +1125,7 @@ public class SentinelCodemodTools
     public async Task<ToolResult<object>> Generate(
         [Description("The kind of code to generate. See DescribeAdvancedToolOptions(\"generate\") for valid values.")]
         CodemodKind kind,
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Consumes(DataTag.ClassName)] string? className = null,
         [Consumes(DataTag.MethodName)] string? methodName = null,

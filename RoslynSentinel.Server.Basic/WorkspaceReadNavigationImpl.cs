@@ -5,9 +5,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Server.Basic;
@@ -93,7 +91,7 @@ public class WorkspaceReadNavigationImpl
     }
 
     public async Task<ToolResult<object>> GetMethodSource(
-        string reason,
+        ToolCallReason reason,
         string filepath, string methodName,
         CancellationToken cancellationToken = default)
     {
@@ -195,7 +193,7 @@ public class WorkspaceReadNavigationImpl
     }
 
     public async Task<ToolResult<object>> GetFileOutline(
-        string reason,
+        ToolCallReason reason,
         string filepath,
         CancellationToken cancellationToken = default)
     {
@@ -336,7 +334,7 @@ public class WorkspaceReadNavigationImpl
     }
 
     public async Task<ToolResult<object>> ListAll(
-        string reason,
+        ToolCallReason reason,
         ListAllKind kind = ListAllKind.all,
         string? projectName = null,
         CancellationToken cancellationToken = default)
@@ -406,7 +404,7 @@ public class WorkspaceReadNavigationImpl
     }
 
     public async Task<ToolResult<object>> SearchSolutionText(
-        string reason,
+        ToolCallReason reason,
         string pattern, string? fileGlob = null, int maxResults = 200,
         CancellationToken cancellationToken = default)
     {
@@ -640,7 +638,7 @@ public class WorkspaceReadNavigationImpl
     }
 
     public async Task<ToolResult<object>> GetOperationDetail(
-        string reason,
+        ToolCallReason reason,
         string changeId, string? filter = null, int maxItems = 50, int offset = 0,
         CancellationToken cancellationToken = default)
     {
@@ -760,7 +758,7 @@ public class WorkspaceReadNavigationImpl
     private static List<MethodAttributeInfo> ExtractAttributes(BaseMethodDeclarationSyntax method) => method.AttributeLists.SelectMany(al => al.Attributes).Select(a => new MethodAttributeInfo { Name = a.Name.ToString(), Arguments = a.ArgumentList?.Arguments.ToString() ?? "", }).ToList();
 
     public async Task<ToolResult<object>> GetLargeResult(
-        string reason,
+        ToolCallReason reason,
         string? resultId = null,
         string? filepath = null,
         int limit = 50,

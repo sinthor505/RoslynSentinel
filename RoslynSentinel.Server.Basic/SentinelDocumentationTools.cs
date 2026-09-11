@@ -345,7 +345,7 @@ public class SentinelDocumentationTools
     [Produces(DataTag.Documentation)]
     [Description("Reads, writes, appends, or lists project doc files under docs/ (or docs/current/ if it exists). A bare filename or wrong extension falls back to a basename search; if that substitutes a different file than requested, the result's Warning field names both.")]
     public object ProjectDoc(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("read, write, append (completed_work only), or list.")]
         DocAction action,
         [Description("Which doc category to operate on: plan → plans/, handoff → handoffs/, completed_work → completed/ (append-only), documentation → documentation/, state → docs/migration-state.yaml (name is ignored).")]

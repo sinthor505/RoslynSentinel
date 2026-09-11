@@ -95,7 +95,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Queries or updates feature flags.")]
     public async Task<ToolResult<object>> Features(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("list: returns all feature flags. get: returns only the flags named in names. update: batch-updates the flags named in enabled.")]
         FeaturesAction action,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=get, unused for list/update.
@@ -149,7 +149,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.DependencyList)]
     [Description("Lists projects, files, dependencies, or solution-folder items in the loaded solution.")]
     public async Task<ToolResult<object>> ListSolutionItems(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("files/dependencies: requires projectName. projects/solutionItems: ignore projectName, list every project or every solution-folder item respectively — solutionItems are files attached via the .sln's Solution Folders (e.g. plan/handoff docs), never part of any project's compiled Documents, so SearchSolutionText and kind=files won't find them; read their content with ProjectDoc. all: ignores projectName and returns everything in one call (every project, every solution-folder item, and every project's files and dependencies) — use this for a complete, guaranteed-non-empty view instead of guessing which project or kind to ask for.")]
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for kind=files/dependencies, unused for kind=projects/solutionItems/all.
@@ -337,7 +337,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.SolutionList)]
     [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution.")]
     public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Your workspace root — a real project/repo directory, not a drive root or '/'.")] string workspacePath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -414,7 +414,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, omit baseRepoDir and let the server resolve it against its configured base directory — only pass baseRepoDir if you have independently confirmed that exact directory exists on this host; a fabricated/guessed baseRepoDir is rejected with an error rather than silently ignored. If this exact solution is already loaded, this is a no-op by default (no re-read from disk) — pass forceReload:true to discard in-memory state and re-open it from disk.")]
     public async Task<ToolResult<object>> LoadSolution(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath, [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call. Must exist on this host — omit this entirely rather than guessing a value.")] string? baseRepoDir = null, [Description("If the given solutionPath is already loaded, false (default) returns immediately without touching the workspace. true forces a full reload from disk, discarding any in-memory state (equivalent to today's unconditional LoadSolution behavior). Has no effect when a different or no solution is currently loaded — that always loads normally regardless of this flag.")] bool forceReload = false, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -573,7 +573,7 @@ public class SentinelWorkspaceTools
     // in its most persistent form. The error path is where the redirect is actually needed.
     [Description("Replaces one exact block of text with another in a single file, for localized edits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) instead. For multiple small edits in the same file, call this once per edit. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
     public async Task<ToolResult<object>> ReplaceSnippet(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
@@ -755,7 +755,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ChangeId)]
     [Description("Creates a new file. Fails if the file already exists — this tool never overwrites or writes free-form whole-file content. Parent directories are created automatically if missing.")]
     public async Task<ToolResult<object>> CreateFile(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("Required for .cs files, ignored otherwise. Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery').")] string? namespaceName = null,
         [Description("Required for .cs files, ignored otherwise. Kind of top-level type to seed the file with — this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. Use staticClass for a static utility/helper class (e.g. static test helpers, extension-method containers) — static is only valid on classes, not the other kinds. For a second top-level type in the same file, add it afterward with Member(add, containerName: null, newMemberSource: \"...\").")] NewTypeKind? typeKind = null,
@@ -1138,7 +1138,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Retries failed file writes using server-cached content — no need to re-send file contents. specificFiles limits to a subset. retryCount defaults to 3.")]
     public async Task<ToolResult<object>> RetryFailedChanges(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: false)] List<string>? specificFiles = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -1215,7 +1215,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Gets compiler diagnostics for a file, project, or the whole solution.")]
     public async Task<ToolResult<object>> GetDiagnostics(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("file/project: also pass scopeName. solution: scopeName is ignored.")]
         [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] ToolScope scope = ToolScope.solution,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for scope=file (as a filePath) and
@@ -1319,7 +1319,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Compiles the loaded solution and reports errors/warnings. level=quickBuild uses in-memory Roslyn diagnostics (fast, same check GetDiagnostics does). level=fullBuild shells out to `dotnet build` (slower, catches MSBuild-only failures — NuGet restore, resource copy, post-build events — that quickBuild can't see). Returns BuildSucceeded, ExitCode, ErrorCount/WarningCount, capped Errors/Warnings lists, ErrorSummary/WarningSummary (grouped by diagnostic Id, uncapped, for spotting one cause behind many errors), Duration.")]
     public async Task<ToolResult<object>> Build(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
         ToolScope scope = ToolScope.solution,
         string? scopeName = null,
@@ -1356,7 +1356,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). resultsType defaults to \"failed\" so a clean run stays a short summary with no per-test list; pass \"all\" to see every test's outcome. Set summary=true to omit the Results list entirely (just counts + FailureSummary), regardless of resultsType. filter is passed through to `dotnet test --filter` — an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests.")]
     public async Task<ToolResult<object>> RunTest(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         ToolScope scope = ToolScope.solution,
         string? scopeName = null,
         string? filter = null,
@@ -1403,7 +1403,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Distinction from RemoveMember: this tool refuses if ANY usage is found; RemoveMember checks for callers/implementations but allows skipPrecheck. Returns changeId.")]
     public async Task<ToolResult<object>> SafeDeleteUnusedSymbol(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("Preferred resolution path, together with docCommentId — as returned by LocateSymbol/FindReferences. The most reliable and accurate way to identify the target.")] string projectName = "",
         [Description("Preferred resolution path, together with projectName — as returned by LocateSymbol/FindReferences.")] string docCommentId = "",
@@ -1519,7 +1519,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Creates a new project and adds it to the current solution. projectType defaults to console.")]
     public async Task<ToolResult<object>> CreateProject(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.ProjectName, required: true)] string projectName, [ExternalInputRequired(DataTag.ProjectType)] string projectType = "console", // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -1547,7 +1547,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
     public async Task<ToolResult<object>> SplitProjectByFolder(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.ProjectName, required: true)] string sourceProjectName, [ExternalInputRequired(DataTag.ClassName, required: true)] string folderName, [ExternalInputRequired(DataTag.ProjectName, required: true)] string targetProjectName, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -1608,7 +1608,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.SourceCode)]
     [Description("Returns the full source text of a named method or constructor, plus a structured list of its attributes. For a constructor, pass the containing class's name (e.g. methodName: \"OrderService\" for `public OrderService(...)`). Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
     public Task<ToolResult<object>> GetMethodSource(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Consumes(DataTag.MethodName, required: true)] string methodName, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
         => _readNav.GetMethodSource(reason, filepath, methodName, cancellationToken);
@@ -1617,7 +1617,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.SourceCode)]
     [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file — useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/largeresults and returned as a resultId (see GetMethodSource) instead of inline text.")]
     public async Task<ToolResult<object>> ReadFile(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null, [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -1753,7 +1753,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file — namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
     public Task<ToolResult<object>> GetFileOutline(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
         => _readNav.GetFileOutline(reason, filepath, cancellationToken);
@@ -1761,7 +1761,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared anywhere in the loaded solution, one row per symbol with its file, kind, name, container, and line range — the solution-wide equivalent of GetFileOutline. Call this FIRST when you don't already know the exact name of the type/method/field you need — it is cheaper and more reliable than guessing plausible-sounding names and searching for each one individually with SearchSolutionText. Can return a lot of rows on a large solution; narrow with kind and/or projectName first.")]
     public Task<ToolResult<object>> ListAll(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description(ToolParams.ListAllKindValues)][ExternalInputRequired(DataTag.SymbolKind, required: false)] ListAllKind kind = ListAllKind.all,
         [Description("Restricts results to one project. Omit to search the whole solution.")]
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
@@ -1772,7 +1772,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Description("Searches all source files in the loaded solution for pattern, evaluated BOTH as a literal substring and (if it compiles) as a regex in a single pass — there is no search-mode to choose. Only searches documents that are part of a loaded project's source code (e.g. .cs files). For a known symbol (class/method/field/etc. by name), use LocateSymbol instead — it's semantic, not text-based, so it won't false-positive on comments/strings or miss partial-line matches. If you don't know the exact name you're looking for, call ListAll first — it's cheaper and more reliable than guessing plausible-sounding names and searching for each one individually here. Use ListSolutionItems(kind: solutionItems) to see files attached via the .sln's Solution Folders and other non-project files, use ProjectDoc to read plan/handoff/documentation files directly, and use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file. Returns literalResults (always the complete literal-substring match set) and regexResults (regex matches not already in literalResults — empty when pattern has no regex metacharacters, since every regex match is then also a literal match), plus regexOverlapCount (matches found both ways) and regexPatternValid (false if pattern doesn't compile as a regex — literal search is unaffected). Each match has file path, 1-based line and column, a preview, and enclosingMember (the name of the method/property/constructor/field/etc. containing the match, or null if the match isn't inside any member).")]
     public Task<ToolResult<object>> SearchSolutionText(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The text to search for — evaluated both as a literal substring and, if it compiles, as a regex.")]
         [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
         [Description("Restricts to matching file paths (glob syntax). Omit to search every file.")]
@@ -1785,7 +1785,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Returns a filtered slice of an operation result blob by changeId. offset skips that many filtered items before taking maxItems; pass NextOffset from the previous response to page through the rest. TotalItems reflects the filtered count; HasMorePages is true when more items remain past this page.")]
     public Task<ToolResult<object>> GetOperationDetail(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [Description("Filters items by outcome or path. Accepts prefix synonyms: fail/err → failures, warn/skip → skipped, ok/pass/info/success → succeeded, roll/revert/undo → rolledback, manual/manual_review/needs_manual_review → NeedsManualReview (bridge compiler-error skips), file:<path> to filter by path. Omit for all items. An unrecognised prefix returns an error.")]
         [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null,
@@ -1800,7 +1800,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: apply_diff, refactoring-tool writes, and batch-first tools.")]
     public async Task<ToolResult<object>> UndoLastApply(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.OperationId, required: true)] string changeId, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -1947,7 +1947,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Targeted workspace health check — reads actual workspace/solution state directly rather than environment probes. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary, StaleDocumentCount, RequiresReload, SampleStaleFiles. IsOperational=true + HasLoadedSolution=false means no solution loaded yet — not an error. RequiresReload=true means files changed on disk since the last LoadSolution call. verify=quickBuild/fullBuild additionally runs a build check and attaches it as BuildVerification.")]
     public async Task<ToolResult<object>> GetWorkspaceHealth(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
     // RequestContext<CallToolRequestParams> requestParams = null,
     BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
@@ -1993,7 +1993,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value. No parameters.")]
     public async Task<ToolResult<object>> ListProjectFrameworkTargets(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -2023,7 +2023,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Pages through a large result that was written to disk because it exceeded the inline size threshold.")]
     public Task<ToolResult<object>> GetLargeResult(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filepath must be supplied;
         // neither is individually required but the tool fails if both are omitted.
         [Description("The result's resultId, as returned alongside the original truncated result. Required if filepath is omitted.")]

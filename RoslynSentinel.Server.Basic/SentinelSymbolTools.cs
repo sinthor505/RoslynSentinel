@@ -74,7 +74,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.ProjectName)]
     [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text — use SearchSolutionText for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
     public async Task<ToolResult<object>> LocateSymbol(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
         [Description("Restricts the search to one kind of symbol.")]
         [ExternalInputRequired(DataTag.SymbolKind)] SymbolKindFilter symbolKind = SymbolKindFilter.any,
@@ -127,7 +127,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.SymbolId)]
     [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol — if you only have a name, use LocateSymbol first to find the declaring file.")]
     public async Task<ToolResult<object>> InspectSymbol(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Description("info returns type, kind, accessibility, attributes, and documentation. blastRadius returns all call sites and affected projects — for a full caller/override breakdown instead of a summary, use FindReferences.")]
@@ -225,7 +225,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.Report)]
     [Description("Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites, extension methods, types carrying an attribute, or methods by return type. If the targeted searchKind returns zero results, automatically broadens to all kinds and reports whatever is found. For call-site/override queries on a method or property, use FindReferences instead.")]
     public async Task<ToolResult<object>> QuerySymbolRelationships(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string name,
         [Description("Which relationship to query.")]
         [ExternalInputRequired(DataTag.SymbolKind)] FindUsagesSearchKind searchKind,
@@ -325,7 +325,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.StartLine)]
     [Description("Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
     public async Task<ToolResult<object>> GetBestInsertionPoint(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContainerName)] string containerName,
         [Description("The kind of member being inserted.")]
@@ -359,7 +359,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.Report)]
     [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count, plus whether any affected file is a test file. For the full per-location list, use FindReferences.")]
     public async Task<ToolResult<object>> PreviewRenameImpact(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Together with symbolName, resolves the target when docCommentId isn't known. Use contextSnippet/lineBefore/lineAfter to disambiguate if the name appears more than once.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Consumes(DataTag.SymbolName)] string? symbolName = null,
@@ -399,7 +399,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.Report)]
     [Description("Finds call sites and/or implementations for a symbol. This is a single-level, flat lookup — for a multi-level call tree use GetCallGraph, for a local variable's read/write/capture sites use TraceVariableLifetime, for a rename-impact summary use PreviewRenameImpact, and for type-relationship queries (implementors, attribute usage, object creation, etc.) use QuerySymbolRelationships.")]
     public async Task<ToolResult<object>> FindReferences(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
         [Description("callers: call sites only. implementations: overrides/interface implementations only. all: both, clearly labeled.")]
         [Consumes(DataTag.SymbolKind)] FindReferencesKind kind,
@@ -463,7 +463,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.Report)]
     [Description("Returns type information for a type you already know the name of — hierarchy, members, or both. If you're not sure the type exists or need to disambiguate a common name, use LocateSymbol first. To change an enum's values, use ModifyEnum.")]
     public async Task<ToolResult<object>> GetTypeInfo(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.DataType)] string typeName,
         [Description("hierarchy: base class chain, interfaces, derived types. members: all public/protected members — for an enum, each value appears as a Field member with its explicit/ordinal value inline in Signature (e.g. \"Status.Active = 1\"), and inherited System.Enum/ValueType noise is excluded automatically. both: hierarchy and members together (default).")]
         [ToolOptionAttribute(ToolOptionTag.Filter)] TypeInfoInclude include = TypeInfoInclude.both,

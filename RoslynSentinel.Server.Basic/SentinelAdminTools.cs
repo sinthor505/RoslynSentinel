@@ -27,7 +27,7 @@ public class SentinelAdminTools
     [Produces(DataTag.FileList)]
     [Description("Returns files modified on disk since the AI last synced. No parameters.")]
     public List<string> ListExternalDiskChanges(
-    [Description(ToolParams.Reason)] string reason,
+    [Description(ToolParams.Reason)] ToolCallReason reason,
     CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
@@ -38,7 +38,7 @@ public class SentinelAdminTools
     [Produces(DataTag.ResultOnly)]
     [Description("Returns whether the session-wide fatal drift latch is currently set. No parameters.")]
     public bool IsSessionHalted(
-    [Description(ToolParams.Reason)] string reason,
+    [Description(ToolParams.Reason)] ToolCallReason reason,
     CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
@@ -49,7 +49,7 @@ public class SentinelAdminTools
     [Produces(DataTag.ResultOnly)]
     [Description("Clears the external-change list and, if set, the session-wide fatal drift latch, after an operator has reviewed the disk changes. No parameters.")]
     public string AcknowledgeExternalFileChanges(
-    [Description(ToolParams.Reason)] string reason,
+    [Description(ToolParams.Reason)] ToolCallReason reason,
     CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;

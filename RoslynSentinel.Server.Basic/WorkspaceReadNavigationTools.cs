@@ -23,7 +23,7 @@ public class WorkspaceReadNavigationTools
     [Produces(DataTag.SourceCode)]
     [Description("Returns the full source text of a named method or constructor, plus a structured list of its attributes.")]
     public Task<ToolResult<object>> GetMethodSource(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("Method or constructor name. For a constructor, pass the containing class's name (e.g. \"OrderService\" for `public OrderService(...)`). Case-sensitive with case-insensitive fallback; returns the first match for overloaded names.")]
         [Consumes(DataTag.MethodName, required: true)] string methodName,
@@ -34,7 +34,7 @@ public class WorkspaceReadNavigationTools
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file — namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
     public Task<ToolResult<object>> GetFileOutline(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         CancellationToken cancellationToken = default)
         => _impl.GetFileOutline(reason, filepath, cancellationToken);
@@ -42,7 +42,7 @@ public class WorkspaceReadNavigationTools
     [Produces(DataTag.Report)]
     [Description("Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared in the loaded solution, one row per symbol with its file, kind, name, container, and line range. Call this first when you don't already know the exact name of a type/method/field.")]
     public Task<ToolResult<object>> ListAll(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Restricts results to one symbol kind. Defaults to all kinds.")]
         [ExternalInputRequired(DataTag.SymbolKind, required: false)] ListAllKind kind = ListAllKind.all,
         [Description("Restricts results to one project. Omit to search the whole solution.")]
@@ -54,7 +54,7 @@ public class WorkspaceReadNavigationTools
     [Produces(DataTag.FileList)]
     [Description("Searches source files in the loaded solution for a pattern, evaluated both as a literal substring and (if it compiles) as a regex in one pass. Returns literalResults (all literal-substring matches) and regexResults (additional regex-only matches), plus regexOverlapCount and regexPatternValid. Each match has file, line, column, a preview, and the enclosing member name. For a known symbol name, LocateSymbol is more precise. If you don't know the exact name, call ListAll first.")]
     public Task<ToolResult<object>> SearchSolutionText(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Text to search for, matched both as a literal substring and as a regex.")]
         [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
         [Description("Restricts the search to files whose path matches this glob.")]
@@ -67,7 +67,7 @@ public class WorkspaceReadNavigationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Returns a filtered, paged slice of an operation result blob by changeId.")]
     public Task<ToolResult<object>> GetOperationDetail(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [Description("Filters items by outcome or path. Accepts prefixes fail/err (failures), warn/skip (skipped), ok/pass/info/success (succeeded), roll/revert/undo (rolled back), manual (needs manual review); or file:<path> to filter by path. Omit for all items.")]
         [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null,
@@ -81,7 +81,7 @@ public class WorkspaceReadNavigationTools
     [Produces(DataTag.Report)]
     [Description("Pages through a large result that was written to disk because it exceeded the inline size threshold.")]
     public Task<ToolResult<object>> GetLargeResult(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filepath must be supplied;
         // neither is individually required but the tool fails if both are omitted.
         [Description("The result's resultId, as returned alongside the original truncated result. Required if filepath is omitted.")]

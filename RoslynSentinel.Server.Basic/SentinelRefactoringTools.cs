@@ -166,7 +166,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Renames a symbol and all its references across the solution, including mentions in XML doc comments, inline comments, and string literals. Returns changeId and updatedHandle for the renamed symbol, plus residualMentions for any leftover occurrences of the old name that rename couldn't reach (e.g. embedded in an unrelated identifier, or in a non-source file). Does NOT simplify call sites or add/remove using directives — if the rename target's new name needs a namespace not already in scope at a call site, or you want to shorten a fully-qualified reference, use the UsingDirective tool separately.")]
     public async Task<ToolResult<object>> RenameSymbol(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description(ToolParams.ProjectName)] string projectName,
         [Description(ToolParams.DocCommentId)] string docCommentId,
         [Description("New name for the symbol. Must be a valid C# identifier.")] string newName,
@@ -295,7 +295,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, replace, or view a type member (method, property, field, constructor), or add a brand-new top-level type. This is the right choice even for a one-line change inside a member — read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
     public async Task<ToolResult<object>> Member(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("add: adds a member (or a new top-level type). remove: deletes a member — by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
@@ -541,7 +541,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view using directives in a file.")]
     public async Task<ToolResult<object>> UsingDirective(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("add: inserts a using; no-op if already present. remove: deletes the matching using directive. view: lists current using directives (name, isStatic, alias); makes no changes.")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
@@ -625,7 +625,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Replaces an enum's complete member list in one operation. Use GetTypeInfo(typeName, include:\"members\") to see current values first.")]
     public async Task<ToolResult<object>> ModifyEnum(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
         [Description("Comma-separated list of member names in the desired order (e.g. \"Pending,Shipped,Cancelled\"); append \"=N\" for an explicit value (e.g. \"Archived=99\"). Omitted names are removed, new names are added, explicit values are preserved, and implicit members take the next ordinal from their predecessor — as if hand-typed. Pass the complete list every time, not a delta.")]
@@ -674,7 +674,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Changes the accessibility (private, public, internal, protected, protected internal, private protected) of a type or member to the given target level in one step — replaces whatever accessibility is currently present, so there's no separate remove/add pairing to get wrong. For overloaded members, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. This tool covers accessibility only — use ChangeAccessibility for accessibility, ModifyAttribute for [Attribute] syntax, and ModifyModifier for non-accessibility keywords (virtual/abstract/static/etc.). Returns changeId.")]
     public async Task<ToolResult<object>> ChangeAccessibility(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility, required: true)] AccessibilityLevel accessibility,
@@ -724,7 +724,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view a /// <summary> XML doc comment on a type or member. For overloaded targets, combine targetName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
     public async Task<ToolResult<object>> SummaryComment(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("add: adds or replaces the summary, overwriting any existing one. remove: deletes the summary comment if present; no-op if none exists. view: returns the current summary text (or null if none); makes no changes.")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
@@ -801,7 +801,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view DI constructor parameters on a class. For classes with the same name in the same file, combine className with contextSnippet/lineBefore/lineAfter to disambiguate.")]
     public async Task<ToolResult<object>> ConstructorParameter(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("add: creates a private readonly field, parameter, and body assignment in one step; creates a constructor if none exists. remove: deletes the parameter and its assignment statement — the backing field is only deleted if a solution-wide reference check confirms nothing else in the class still uses it, otherwise it's left in place. view: lists current constructor parameters and their inferred backing fields; makes no changes.")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
@@ -907,7 +907,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view a method's parameters (general-purpose — not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
     public async Task<ToolResult<object>> MethodSignature(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("add: appends a new parameter to the end of the parameter list. remove: only the LAST parameter can be removed (paramName must match it) — a deliberate restriction, since removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely; call sites passing the removed argument positionally are updated automatically, but a call site using named arguments (or one that can't be safely re-parsed) causes the whole operation to be refused with no changes made. view: lists current parameters (name, type, default value); makes no changes.")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
@@ -1016,7 +1016,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Extracts an inline expression into a named local variable declaration. exactExpressionText is NOT a search fragment (unlike contextSnippet on other tools) — it must be the WHOLE expression to extract, copied verbatim.")]
     public async Task<ToolResult<object>> ExtractLocalVariable(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("The exact expression to extract, copied VERBATIM character-for-character from a prior ReadFile/GetMethodSource result — the whole expression, not a shortened/unique fragment. This is NOT a search anchor like contextSnippet on other tools: it must match the target expression's full text exactly (whitespace differences are tolerated, but the expression itself must be complete). A partial expression may still resolve to the nearest enclosing expression rather than the one you intended, silently extracting the wrong span — if in doubt, include the whole expression, not less.")]
         [Consumes(DataTag.ContextSnippet, required: true)] string exactExpressionText,
@@ -1067,7 +1067,7 @@ public class SentinelRefactoringTools
     [Description("Extracts selected statements into a new method with the correct return type inferred from the selection. newMethodName must be a valid C# identifier. exactSourceBlock is NOT a search fragment (unlike contextSnippet on other tools) — the entire range you want extracted must appear in it verbatim, since its matched span IS the extraction boundary; a too-short excerpt silently extracts only that narrower range, not the whole intended block. Written to disk (or staged, per autoStage) like other refactoring tools — not preview-only. Returns changeId.")]
     // Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent).
     public async Task<ToolResult<object>> ExtractMethodSafe(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string newMethodName,
         [Description("The exact statements to extract, copied VERBATIM character-for-character from a prior ReadFile/GetMethodSource result — not retyped from memory, not a shortened/unique fragment. This is NOT a search anchor like contextSnippet on other tools: the whole extracted range (every statement, including blank lines/comments within it, exactly as they appear in the file) must be present here, because the matched span directly becomes the extraction boundary. Passing only part of the intended range (e.g. just the first statement) will silently extract only that part, stranding the rest — some ambiguous narrow selections are refused with an error, but do not rely on that guard catching every case; when in doubt, include more of the surrounding block, not less.")]
@@ -1142,7 +1142,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Adds, replaces, or removes an [Attribute] on a type or member. Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords, not this tool.")]
     public async Task<ToolResult<object>> ModifyAttribute(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("For overloaded/duplicate-named targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
@@ -1224,7 +1224,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a non-accessibility modifier keyword. Action: add or remove. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Does NOT cover accessibility (private/public/etc.) — use ChangeAccessibility for those, or ModifyAttribute for [Attribute] syntax. Returns changeId.")]
     public async Task<ToolResult<object>> ModifyModifier(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         [ExternalInputRequired(DataTag.Modifier, required: true)] NonAccessibilityModifier modifier,
@@ -1281,7 +1281,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a base type or interface from a type declaration.")]
     public async Task<ToolResult<object>> ModifyBaseType(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("For types with the same name in the same file, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: true)] string typeName,
@@ -1339,7 +1339,7 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ResultOnly)]
     [Description("Synchronizes the filename to match the primary type declared in the file.")]
     public async Task<ToolResult<object>> SyncTypeAndFilename(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,

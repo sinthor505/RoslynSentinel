@@ -93,7 +93,7 @@ public class SentinelScanTools
     [Produces(DataTag.ResultId)]
     [Description("Dispatches a named detector across a file, project, or solution. Call DescribeScanDetectors first to see available detector ids and which scope each one needs.")]
     public async Task<ToolResult<object>> RunScanDetector(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.DetectorName)] DetectorId detector,
         [Description("Some detectors are restricted to a specific scope — see DescribeScanDetectors.")]
         [ExternalInputRequired(DataTag.Scope)] ToolScope scope,
@@ -452,7 +452,7 @@ public class SentinelScanTools
     [Produces(DataTag.Report)]
     [Description("Returns the catalogue of available scan detectors, each with its id, domain, scope requirements, and a description.")]
     public Task<ToolResult<object>> DescribeScanDetectors(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Filter by domain: async | concurrency | config | convention | correctness | dead-code | misc | performance | security | structure. Omit for all domains.")]
         [ToolOption(ToolOptionTag.Domain)] string? domain = null,
         [Description("Return info for a single detector by exact id. Omit for all detectors.")]
@@ -494,7 +494,7 @@ public class SentinelScanTools
     [Produces(DataTag.Report)]
     [Description("Analyses a method from a chosen angle: control flow, data flow, path coverage, or unreachable code.")]
     public async Task<ToolResult<object>> AnalyzeMethod(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [Description("controlFlow: return paths, throw sites, infinite loop detection. dataFlow: unassigned reads, written/read variables, closure captures. pathCoverage: execution paths for test coverage. unreachableCode: statements after an unconditional return/throw.")]
@@ -715,7 +715,7 @@ public class SentinelScanTools
     [Produces(DataTag.ApiBaseline)]
     [Description("Compares a previously captured API surface baseline against current code and reports breaking changes: removed types, removed/renamed members, signature changes.")]
     public async Task<ToolResult<object>> ScanBreakingChanges(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
        [Description("The baseline list returned by GetPublicApiSurface(persistBaseline: true).")]
        [ExternalInputRequired(DataTag.ApiBaseline)] List<PublicApiMember> baseline,
        [Description("Scope to the project the baseline was captured from. Optional.")]
@@ -753,7 +753,7 @@ public class SentinelScanTools
     [Produces(DataTag.Report)]
     [Description("Finds duplicate statement sequences within the methods of a single class using structural hashing, which matches regardless of variable names or literal values.")]
     public async Task<ToolResult<object>> ScanDuplicateBlocksInClass(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ClassName)] string className,
         [Description("Minimum statement-sequence length to report. Lower (e.g. 3) finds more, smaller clones; higher (6+) finds only substantial ones.")]
@@ -788,7 +788,7 @@ public class SentinelScanTools
     [Description("Returns the public API surface of a project: signatures, virtuality, and XML docs. With persistBaseline=true, returns a compact baseline instead, for later comparison via ScanBreakingChanges.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName is required when persistBaseline=false (the default), but optional when persistBaseline=true (omit to scan the whole solution). Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> GetPublicApiSurface(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Required when persistBaseline=false. Optional when persistBaseline=true (omit to scan the whole solution).")]
         [Consumes(DataTag.ProjectName, required: true)] string? projectName = null,
         [Description("false (default): return the full API surface with signatures and XML docs. true: return a compact baseline for ScanBreakingChanges.")]

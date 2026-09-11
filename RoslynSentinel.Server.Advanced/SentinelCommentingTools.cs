@@ -46,7 +46,7 @@ public class SentinelCommentingTools
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName required for scope=project, filePath required
     // for scope=file; neither is individually required by the schema (enforced at runtime instead).
     public async Task<ToolResult<CommentingResult>> BulkComment(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("solution (default): the whole loaded solution. project: restrict to one project, projectName required. file: restrict to a single file, filePath required.")]
         ToolScope scope = ToolScope.solution,
         [Description("Required for scope=project, ignored otherwise.")]

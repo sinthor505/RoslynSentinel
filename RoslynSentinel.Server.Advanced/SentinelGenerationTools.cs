@@ -36,7 +36,7 @@ public class SentinelGenerationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Generates C# class declarations from a JSON string using rootClassName as the top-level type name under the specified namespace.")]
     public object GenerateClassesFromJson(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.Json)] string json,
         [ExternalInputRequired(DataTag.ClassName)] string rootClassName,
         [ExternalInputRequired(DataTag.Namespace)] string @namespace
@@ -59,7 +59,7 @@ public class SentinelGenerationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
     public async Task<string> GenerateHttpClient(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.ClassName)] string controllerName,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -94,7 +94,7 @@ public class SentinelGenerationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
     public async Task<string> GenerateDefaultConfigJson(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.ProjectName, required: true)] string projectName,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -132,7 +132,7 @@ public class SentinelGenerationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Converts a string.Format(...) call to an interpolated string. Resolves const string format arguments via the semantic model (works even when the format string is a named const, not just a literal) and handles {0:format} specifiers correctly.")]
     public async Task<string> InterpolateStringSafe(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("Verbatim substring identifying the string.Format call to convert.")]
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,

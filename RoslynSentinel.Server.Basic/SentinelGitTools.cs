@@ -300,7 +300,7 @@ public class SentinelGitTools
     [Produces(DataTag.Report)]
     [Description("Unified git tool covering status, log, diff, staging, commit, and revert.")]
     public async Task<object> Git(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Which git operation to run.")]
         GitOperation operation,
         [Description("log: number of commits to return (max 100).")]

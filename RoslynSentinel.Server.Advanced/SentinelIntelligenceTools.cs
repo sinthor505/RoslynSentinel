@@ -73,7 +73,7 @@ public class SentinelIntelligenceTools
     [Produces(DataTag.Report)]
     [Description("Generates a paged health report across one or more engines: Structure, Modernization, Performance, Safety, Architecture.")]
     public async Task<ToolResult<object>> GetComprehensiveHealthReport(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Engines to include. Omit to run all engines.")]
         List<HealthEngineType>? engines = null,
         [Description("Restricts the report to one project. Omit for the whole solution.")]
@@ -115,7 +115,7 @@ public class SentinelIntelligenceTools
     [Produces(DataTag.Report)]
     [Description("Returns deep metrics for the entire solution or a single project.")]
     public async Task<ToolResult<object>> GetSolutionMetrics(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Restricts metrics to one project. Omit for the whole solution.")]
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -145,7 +145,7 @@ public class SentinelIntelligenceTools
     [Produces(DataTag.Report)]
     [Description("Returns a structured report of all namespaces, classes, methods, and properties in a file.")]
     public async Task<ToolResult<object>> GetCodeInventory(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -179,7 +179,7 @@ public class SentinelIntelligenceTools
     [Produces(DataTag.Report)]
     [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a scoped project/file. Returns service type, implementation type, lifetime, and source location.")]
     public async Task<ToolResult<object>> GetDiRegistrations(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Restricts results to one project. Omit to search the whole solution.")]
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Description("Restricts results to one file. Omit to search the whole solution.")]
@@ -214,7 +214,7 @@ public class SentinelIntelligenceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Builds a call graph for a method. For a single-level, flat list of callers instead of a multi-level tree, use FindReferences(kind: callers) — cheaper when you don't need depth beyond direct callers.")]
     public async Task<ToolResult<object>> GetCallGraph(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [Description("forward: what the method calls, as a CallGraphNode tree. reverse: who calls this method, as a ReverseCallGraphNode tree. tree: a markdown call-tree string.")]
@@ -296,7 +296,7 @@ public class SentinelIntelligenceTools
     [Produces(DataTag.Report)]
     [Description("Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves.")]
     public async Task<ToolResult<string>> PreviewMoveFileToNamespaceFolder(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -327,7 +327,7 @@ public class SentinelIntelligenceTools
     [Produces(DataTag.Report)]
     [Description("Traces a local variable or parameter's complete lifetime from declaration through every read, write, ref/out pass, return, and closure capture, across all code paths (loops, conditionals, try/catch) in the enclosing scope. For a method/property/field's usages instead, use FindReferences. Returns TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned, IsCapturedInClosure, and an Accesses list with Line, Column, AccessKind (Declaration/Read/Write/Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.")]
     public async Task<ToolResult<object>> TraceVariableLifetime(
-        [Description(ToolParams.Reason)] string reason,
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("Name of the local variable or parameter to trace.")]
         [Consumes(DataTag.SymbolName)] string variableName,
