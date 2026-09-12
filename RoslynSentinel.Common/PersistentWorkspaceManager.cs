@@ -2148,15 +2148,27 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     public FilePathWrapper SetFilePath(string? filepath)
     {
-        FilePathWrapper filePath = default;
         string? solutionRoot = this.GetSolutionRoot();
 
-        if (!string.IsNullOrWhiteSpace(filepath) && !string.IsNullOrWhiteSpace(solutionRoot))
+        // Validated == false is ambiguous on its own: it means either "filepath itself was
+        // empty/invalid" or "no solution is loaded" (so there was no root to resolve against).
+        // Callers must be able to tell these apart instead of always reporting "path is invalid"
+        // when the actual fix is to call LoadSolution. Check CurrentSolution directly rather than
+        // GetSolutionRoot(): an in-memory test solution (SetTestSolution) has CurrentSolution set
+        // but no on-disk path, so GetSolutionRoot() returns null even though a solution genuinely
+        // is loaded — that case must fall through to normal path resolution, not be misreported as
+        // "no solution loaded."
+        if (CurrentSolution is null)
         {
-            filePath = FilePathWrapper.FromWire(filepath, solutionRoot);
+            return new FilePathWrapper(string.Empty, solutionRoot, failureReason: FilePathFailureReason.NoSolutionLoaded);
         }
 
-        return filePath;
+        if (string.IsNullOrWhiteSpace(filepath))
+        {
+            return new FilePathWrapper(string.Empty, solutionRoot, failureReason: FilePathFailureReason.PathInvalid);
+        }
+
+        return FilePathWrapper.FromWire(filepath, solutionRoot);
     }
 
     // In PersistentWorkspaceManager

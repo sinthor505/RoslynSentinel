@@ -356,7 +356,7 @@ public class SentinelGitTools
     };
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool covering status, log, diff, staging, commit, and revert.")]
+    [Description("Unified git tool covering status, log, diff, staging, commit, revert, branch, checkout, push, fetch, and pull.")]
     public async Task<object> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Which git operation to run.")]
@@ -381,6 +381,19 @@ public class SentinelGitTools
         string? commitHash = null,
         [Description("revert: true stages the revert without committing; call Git(operation: commit) to finalize.")]
         bool noCommit = false,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: branchName is required for operation=checkout; optional for operation=branch (omit to list).
+        [Description("branch/checkout: the branch to create, delete, or switch to. branch: omit to list all branches instead. checkout: required.")]
+        string? branchName = null,
+        [Description("branch: base ref for a newly created branch (defaults to HEAD). checkout: base ref for a new branch, only used together with createBranch=true.")]
+        string? startPoint = null,
+        [Description("branch: true deletes branchName (git branch -d, refuses if unmerged) instead of creating it. Ignored when branchName is omitted (list mode).")]
+        bool deleteBranch = false,
+        [Description("checkout: true creates branchName first if it doesn't already exist (git checkout -b), optionally from startPoint.")]
+        bool createBranch = false,
+        [Description("push/fetch/pull: the remote to operate on.")]
+        string remoteName = "origin",
+        [Description("push: true also sets the pushed branch's upstream tracking (git push -u).")]
+        bool setUpstream = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -410,6 +423,11 @@ public class SentinelGitTools
             GitOperation.unstage => await UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
             GitOperation.commit => await CommitAsync(gitRoot, message, scope, resolvedPaths, cancellationToken),
             GitOperation.revert => await RevertAsync(gitRoot, commitHash, noCommit, cancellationToken),
+            GitOperation.branch => await BranchAsync(gitRoot, branchName, startPoint, deleteBranch, cancellationToken),
+            GitOperation.checkout => await CheckoutAsync(gitRoot, branchName, createBranch, startPoint, cancellationToken),
+            GitOperation.push => await PushAsync(gitRoot, remoteName, setUpstream, cancellationToken),
+            GitOperation.fetch => await FetchAsync(gitRoot, remoteName, cancellationToken),
+            GitOperation.pull => await PullAsync(gitRoot, remoteName, cancellationToken),
             _ => (object)new { Success = false, Error = $"Unknown operation '{operation}'." }
         };
     }
@@ -707,7 +725,23 @@ public class SentinelGitTools
             if (!stageResult.Success)
                 return new GitCommitResult { Success = false, Error = stageResult.Error };
 
-            var (commitExit, commitOut, commitErr) = await RunGitAsync(gitRoot, ["commit", "-m", message], cancellationToken);
+            // When specific files were named (scope=listed), restrict the commit itself to those
+            // paths via a pathspec. Without this, `git commit -m message` commits the ENTIRE
+            // current index regardless of what was just staged above — silently sweeping in
+            // anything left over from earlier staging in the same working tree. `files`/`paths`
+            // must narrow the commit, not just add to what StageAsync staged.
+            string[] commitArgs;
+            if (scope == GitStageScope.listed && !string.IsNullOrWhiteSpace(paths))
+            {
+                var filePaths = paths!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                commitArgs = ["commit", "-m", message, "--", .. filePaths];
+            }
+            else
+            {
+                commitArgs = ["commit", "-m", message];
+            }
+
+            var (commitExit, commitOut, commitErr) = await RunGitAsync(gitRoot, commitArgs, cancellationToken);
             if (commitExit != 0)
             {
                 var detail = string.Join("\n", new[] { commitOut.Trim(), commitErr.Trim() }
@@ -768,5 +802,254 @@ public class SentinelGitTools
             _logger.LogError(ex, "Git revert failed (hash={Hash})", commitHash);
             return new GitRevertResult { Success = false, Error = $"Git revert failed: {ex.Message}" };
         }
+    }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Lists branches (default), or creates/deletes one when <paramref name="branchName"/> is
+    /// given. Creation is a plain, non-destructive <c>git branch &lt;name&gt; [startPoint]</c> — it
+    /// does not switch to the new branch; use <c>checkout</c> for that, optionally with
+    /// <c>createBranch=true</c> to do both in one call. Deletion uses the safe <c>-d</c> form
+    /// (refuses an unmerged branch) rather than <c>-D</c>, so a mistaken delete can't silently
+    /// discard commits.
+    /// </summary>
+    private async Task<GitBranchResult> BranchAsync(
+        string gitRoot, string? branchName, string? startPoint, bool deleteBranch, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(branchName))
+            {
+                var (listExit, listOut, listErr) = await RunGitAsync(gitRoot,
+                    ["branch", "--list", "--all"], cancellationToken);
+                if (listExit != 0)
+                    return new GitBranchResult { Success = false, Error = listErr.Trim() };
+
+                var branches = new List<GitBranchEntry>();
+                foreach (var rawLine in listOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var line = rawLine.TrimEnd('\r');
+                    if (line.Length == 0) continue;
+                    var isCurrent = line.StartsWith("* ", StringComparison.Ordinal);
+                    var name = (isCurrent ? line[2..] : line[2..]).Trim();
+                    if (name.Contains("->", StringComparison.Ordinal)) continue; // e.g. "remotes/origin/HEAD -> origin/main"
+                    var isRemote = name.StartsWith("remotes/", StringComparison.Ordinal);
+                    branches.Add(new GitBranchEntry
+                    {
+                        Name = isRemote ? name["remotes/".Length..] : name,
+                        IsCurrent = isCurrent,
+                        IsRemote = isRemote,
+                    });
+                }
+
+                return new GitBranchResult { Success = true, Branches = branches };
+            }
+
+            if (deleteBranch)
+            {
+                var (delExit, _, delErr) = await RunGitAsync(gitRoot,
+                    ["branch", "-d", branchName], cancellationToken);
+                if (delExit != 0)
+                    return new GitBranchResult
+                    {
+                        Success = false,
+                        Error = $"git branch -d failed: {delErr.Trim()}. If the branch truly should be discarded unmerged, this tool deliberately does not expose -D; use the shell as a documented exception."
+                    };
+
+                return new GitBranchResult { Success = true, Deleted = branchName };
+            }
+
+            string[] createArgs = string.IsNullOrWhiteSpace(startPoint)
+                ? ["branch", branchName]
+                : ["branch", branchName, startPoint];
+            var (createExit, _, createErr) = await RunGitAsync(gitRoot, createArgs, cancellationToken);
+            if (createExit != 0)
+                return new GitBranchResult { Success = false, Error = $"git branch failed: {createErr.Trim()}" };
+
+            return new GitBranchResult { Success = true, Created = branchName };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Git branch failed");
+            return new GitBranchResult { Success = false, Error = $"Git branch failed: {ex.Message}" };
+        }
+    }
+
+    /// <summary>
+    /// Switches to <paramref name="branchName"/>, optionally creating it first
+    /// (<c>git checkout -b</c>) when <paramref name="createBranch"/> is set and it doesn't already
+    /// exist. Uses plain <c>checkout</c> rather than <c>switch</c> for compatibility with older git.
+    /// </summary>
+    private async Task<GitCheckoutResult> CheckoutAsync(
+        string gitRoot, string? branchName, bool createBranch, string? startPoint, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(branchName))
+        {
+            return new GitCheckoutResult
+            {
+                Success = false,
+                Error = "branchName is required for operation=checkout. Pass the branch to switch to, and createBranch=true if it doesn't exist yet."
+            };
+        }
+
+        try
+        {
+            List<string> args = ["checkout"];
+            if (createBranch)
+                args.Add("-b");
+            args.Add(branchName);
+            if (createBranch && !string.IsNullOrWhiteSpace(startPoint))
+                args.Add(startPoint);
+
+            var (exitCode, _, stderr) = await RunGitAsync(gitRoot, [.. args], cancellationToken);
+            if (exitCode != 0)
+                return new GitCheckoutResult { Success = false, Branch = branchName, Error = stderr.Trim() };
+
+            return new GitCheckoutResult { Success = true, Branch = branchName, CreatedNewBranch = createBranch };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Git checkout failed (branch={Branch})", branchName);
+            return new GitCheckoutResult { Success = false, Branch = branchName, Error = $"Git checkout failed: {ex.Message}" };
+        }
+    }
+
+    /// <summary>
+    /// Pushes the current branch to <paramref name="remoteName"/>. Never forces — there is no
+    /// exposed <c>--force</c>/<c>--force-with-lease</c>, since a wrong force-push is destructive to
+    /// shared history and this tool has no confirmation gate for it yet.
+    /// </summary>
+    private async Task<GitRemoteResult> PushAsync(
+        string gitRoot, string remoteName, bool setUpstream, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var (branchExit, branchOut, _) = await RunGitAsync(gitRoot,
+                ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken);
+            var branch = branchExit == 0 ? branchOut.Trim() : null;
+
+            List<string> args = ["push"];
+            if (setUpstream)
+                args.Add("-u");
+            args.Add(remoteName);
+            if (!string.IsNullOrEmpty(branch))
+                args.Add(branch);
+
+            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, [.. args], cancellationToken);
+            var detail = string.Join("\n", new[] { stdout.Trim(), stderr.Trim() }.Where(s => s.Length > 0));
+            if (exitCode != 0)
+                return new GitRemoteResult { Success = false, Operation = "push", Error = detail.Length > 0 ? detail : $"git push exited with code {exitCode}" };
+
+            return new GitRemoteResult { Success = true, Operation = "push", Detail = detail };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Git push failed (remote={Remote})", remoteName);
+            return new GitRemoteResult { Success = false, Operation = "push", Error = $"Git push failed: {ex.Message}" };
+        }
+    }
+
+    private async Task<GitRemoteResult> FetchAsync(
+        string gitRoot, string remoteName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, ["fetch", remoteName], cancellationToken);
+            var detail = string.Join("\n", new[] { stdout.Trim(), stderr.Trim() }.Where(s => s.Length > 0));
+            if (exitCode != 0)
+                return new GitRemoteResult { Success = false, Operation = "fetch", Error = detail.Length > 0 ? detail : $"git fetch exited with code {exitCode}" };
+
+            return new GitRemoteResult { Success = true, Operation = "fetch", Detail = detail };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Git fetch failed (remote={Remote})", remoteName);
+            return new GitRemoteResult { Success = false, Operation = "fetch", Error = $"Git fetch failed: {ex.Message}" };
+        }
+    }
+
+    /// <summary>
+    /// Pulls (fetch + merge, git's default) the current branch from <paramref name="remoteName"/>.
+    /// No <c>--rebase</c>/<c>--force</c> options exposed yet — a plain merge pull is the
+    /// least-surprising default and never rewrites local commits.
+    /// </summary>
+    private async Task<GitRemoteResult> PullAsync(
+        string gitRoot, string remoteName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, ["pull", remoteName], cancellationToken);
+            var detail = string.Join("\n", new[] { stdout.Trim(), stderr.Trim() }.Where(s => s.Length > 0));
+            if (exitCode != 0)
+                return new GitRemoteResult { Success = false, Operation = "pull", Error = detail.Length > 0 ? detail : $"git pull exited with code {exitCode}" };
+
+            return new GitRemoteResult { Success = true, Operation = "pull", Detail = detail };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Git pull failed (remote={Remote})", remoteName);
+            return new GitRemoteResult { Success = false, Operation = "pull", Error = $"Git pull failed: {ex.Message}" };
+        }
+    }}
+// Added by AddTopLevelType (expected - used for diagnostics)
+public class GitBranchEntry
+{
+    public string Name { get; set; } = "";
+    public bool IsCurrent
+    {
+        get; set;
+    }
+    public bool IsRemote
+    {
+        get; set;
+    }
+}
+
+public class GitBranchResult
+{
+    public bool Success
+    {
+        get; set;
+    }
+    public List<GitBranchEntry> Branches { get; set; } = [];
+    public string? Created
+    {
+        get; set;
+    }
+    public string? Deleted
+    {
+        get; set;
+    }
+    public string? Error
+    {
+        get; set;
+    }
+}// Added by AddTopLevelType (expected - used for diagnostics)
+public class GitCheckoutResult
+{
+    public bool Success
+    {
+        get; set;
+    }
+    public string Branch { get; set; } = "";
+    public bool CreatedNewBranch
+    {
+        get; set;
+    }
+    public string? Error
+    {
+        get; set;
+    }
+}// Added by AddTopLevelType (expected - used for diagnostics)
+public class GitRemoteResult
+{
+    public bool Success
+    {
+        get; set;
+    }
+    public string Operation { get; set; } = "";
+    public string Detail { get; set; } = "";
+    public string? Error
+    {
+        get; set;
     }
 }

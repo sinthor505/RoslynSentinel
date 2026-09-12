@@ -1,21 +1,45 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace RoslynSentinel.Common;
+
+/// <summary>
+/// Why a <see cref="FilePathWrapper"/> failed to validate. <c>Validated == false</c> can mean either
+/// the path argument itself was empty/invalid, or no solution was loaded at all (no root to resolve
+/// against) — callers need to tell these apart instead of assuming "path is invalid" when the real
+/// problem is "load a solution first."
+/// </summary>
+public enum FilePathFailureReason
+{
+    /// <summary>Validation succeeded, or was never attempted.</summary>
+    None = 0,
+
+    /// <summary>No solution is loaded, so there was no solution root to resolve against.</summary>
+    NoSolutionLoaded,
+
+    /// <summary>A solution is loaded, but the path argument itself was null/empty/whitespace.</summary>
+    PathInvalid,
+}
 
 [JsonConverter(typeof(FilePathJsonConverter))]
 public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparable<FilePathWrapper>
 {
     public readonly bool Validated;  // whether the path has been validated as absolute and normalized
 
+    /// <summary>
+    /// Why <see cref="Validated"/> is false. Branch on this instead of assuming the path was bad.
+    /// </summary>
+    public readonly FilePathFailureReason FailureReason;
+
     public string Absolute { get; } = string.Empty;
     public string Relative { get; } = string.Empty;
 
-    public FilePathWrapper(string path, string? solutionRoot = "", bool validated = false)
+    public FilePathWrapper(string path, string? solutionRoot = "", bool validated = false, FilePathFailureReason failureReason = FilePathFailureReason.None)
     {
         Absolute = string.IsNullOrWhiteSpace(path) ? string.Empty : CanonicalizeSeparators(path);
         Relative = string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(solutionRoot) ? string.Empty : Path.GetRelativePath(solutionRoot, Absolute);
         Validated = validated || File.Exists(Absolute);
+        FailureReason = Validated ? FilePathFailureReason.None : failureReason;
     }
 
     // Models frequently submit forward-slash paths (e.g. "C:/Users/.../Foo.cs") regardless of

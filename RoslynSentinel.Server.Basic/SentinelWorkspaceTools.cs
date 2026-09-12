@@ -593,7 +593,9 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'filepath' is required (it names the single file oldContent/newContent applies to).")
+                    Error = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
+                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ReplaceSnippet: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
+                        : new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'filepath' is required (it names the single file oldContent/newContent applies to).")
                 };
             }
 
@@ -770,7 +772,9 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'filepath' is required.")
+                    Error = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
+                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "CreateFile: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
+                        : new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'filepath' is required.")
                 };
             }
 

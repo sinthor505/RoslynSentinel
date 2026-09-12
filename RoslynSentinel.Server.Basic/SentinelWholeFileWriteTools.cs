@@ -427,6 +427,15 @@ public class SentinelWholeFileWriteTools
             }
             else if (changesetFormat == ChangesetFormat.diff)
             {
+                if (filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded)
+                {
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyDiff: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
+                    };
+                }
+
                 if (!filePathResolved.Validated && string.IsNullOrEmpty(unifiedDiff))
                 {
                     return new ToolResult<object>()
@@ -572,7 +581,9 @@ public class SentinelWholeFileWriteTools
                 return new ToolResult<object>()
                 {
                     Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'filepath' is required (it names the single file the unifiedDiff applies to).")
+                    Error = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
+                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyUnifiedDiff: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
+                        : new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'filepath' is required (it names the single file the unifiedDiff applies to).")
                 };
             }
 

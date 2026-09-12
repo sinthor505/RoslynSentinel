@@ -7,7 +7,19 @@ namespace RoslynSentinel.Common;
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum GitOperation
 {
-    status, log, diff, stage, add, unstage, commit, revert
+    status,
+    log,
+    diff,
+    stage,
+    add,
+    unstage,
+    commit,
+    revert,
+    branch,
+    checkout,
+    push,
+    fetch,
+    pull
 }
 
 /// <summary>

@@ -761,7 +761,18 @@ public class SentinelCodemodTools
             };
         }
     }
-
+    // Added by InsertMemberBefore (expected - used for diagnostics)
+    /// <summary>
+    /// Builds the "filePath is required for {kind}" error for a codemod switch case, distinguishing
+    /// "no solution is loaded" (a precondition failure independent of what filepath was passed) from
+    /// "the filepath argument itself was invalid" — see FilePathWrapper.FailureReason.
+    /// </summary>
+    private static ResultError BuildFilePathRequiredError(FilePathWrapper filePath, string kind)
+    {
+        return filePath.FailureReason == FilePathFailureReason.NoSolutionLoaded
+            ? new ResultError(ToolErrorCode.SolutionNotLoaded, $"{kind}: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.")
+            : new ResultError(ToolErrorCode.InvalidArgument, $"filePath is required for {kind}.");
+    }
     // ── 3. apply_class_codemod ────────────────────────────────────────────────
 
     [McpServerTool(Name = "ApplyClassCodemod")]
@@ -1151,7 +1162,7 @@ public class SentinelCodemodTools
                     {
                         if (!filePath.Validated)
                         {
-                            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath is required for add_benchmark_stub.") };
+                            return new ToolResult<object>() { Error = BuildFilePathRequiredError(filePath, "add_benchmark_stub") };
                         }
 
                         if (string.IsNullOrEmpty(className))
@@ -1176,7 +1187,7 @@ public class SentinelCodemodTools
                     {
                         if (!filePath.Validated)
                         {
-                            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath is required for generate_constructor.") };
+                            return new ToolResult<object>() { Error = BuildFilePathRequiredError(filePath, "generate_constructor") };
                         }
 
                         if (string.IsNullOrEmpty(className))
@@ -1211,7 +1222,7 @@ public class SentinelCodemodTools
                     {
                         if (!filePath.Validated)
                         {
-                            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath is required for generate_equality_overrides.") };
+                            return new ToolResult<object>() { Error = BuildFilePathRequiredError(filePath, "generate_equality_overrides") };
                         }
 
                         if (string.IsNullOrEmpty(className))
@@ -1231,7 +1242,7 @@ public class SentinelCodemodTools
                     {
                         if (!filePath.Validated)
                         {
-                            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath is required for generate_fluent_builder.") };
+                            return new ToolResult<object>() { Error = BuildFilePathRequiredError(filePath, "generate_fluent_builder") };
                         }
 
                         if (string.IsNullOrEmpty(className))
@@ -1254,7 +1265,7 @@ public class SentinelCodemodTools
                     {
                         if (!filePath.Validated)
                         {
-                            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath is required for generate_path_driven_tests.") };
+                            return new ToolResult<object>() { Error = BuildFilePathRequiredError(filePath, "generate_path_driven_tests") };
                         }
 
                         if (string.IsNullOrEmpty(methodName))
@@ -1267,9 +1278,9 @@ public class SentinelCodemodTools
                     }
                 case CodemodKind.generate_repository_interface:
                     {
-                        if (filePath.Validated)
+                        if (!filePath.Validated)
                         {
-                            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath is required for generate_repository_interface.") };
+                            return new ToolResult<object>() { Error = BuildFilePathRequiredError(filePath, "generate_repository_interface") };
                         }
 
                         if (string.IsNullOrEmpty(className))
@@ -1284,7 +1295,7 @@ public class SentinelCodemodTools
                     {
                         if (!filePath.Validated)
                         {
-                            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath is required for generate_test_scaffold.") };
+                            return new ToolResult<object>() { Error = BuildFilePathRequiredError(filePath, "generate_test_scaffold") };
                         }
 
                         if (string.IsNullOrEmpty(className))
@@ -1299,7 +1310,7 @@ public class SentinelCodemodTools
                     {
                         if (!filePath.Validated)
                         {
-                            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath is required for generate_test_skeleton.") };
+                            return new ToolResult<object>() { Error = BuildFilePathRequiredError(filePath, "generate_test_skeleton") };
                         }
 
                         if (string.IsNullOrEmpty(className))
@@ -1314,7 +1325,7 @@ public class SentinelCodemodTools
                     {
                         if (!filePath.Validated)
                         {
-                            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath is required for generate_to_string_safe.") };
+                            return new ToolResult<object>() { Error = BuildFilePathRequiredError(filePath, "generate_to_string_safe") };
                         }
 
                         if (string.IsNullOrEmpty(className))

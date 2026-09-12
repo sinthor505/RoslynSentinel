@@ -135,4 +135,44 @@ public class FilePathFromWireTests
         Assert.That(result.Absolute, Does.StartWith(@"\\"),
             "Canonicalization must not collapse the UNC path's required leading double separator.");
     }
-}
+    // Added by AddMember (expected - used for diagnostics)
+    // Regression coverage for the CreateFile "'filepath' is required" misdiagnosis bug: Validated
+    // == false used to be reported identically whether the path argument was bad or no solution was
+    // loaded at all. FailureReason lets a caller tell these apart instead of guessing.
+    [Test]
+    public void Constructor_NoFailureReasonGiven_ValidatedFalse_DefaultsToNone()
+    {
+        var result = new FilePathWrapper(string.Empty, null);
+
+        Assert.That(result.Validated, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(FilePathFailureReason.None),
+            "A construction path that never distinguished the cause must not silently claim one.");
+    }
+
+    [Test]
+    public void Constructor_FailureReasonNoSolutionLoaded_IsPreservedWhenNotValidated()
+    {
+        var result = new FilePathWrapper(string.Empty, null, failureReason: FilePathFailureReason.NoSolutionLoaded);
+
+        Assert.That(result.Validated, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(FilePathFailureReason.NoSolutionLoaded));
+    }
+
+    [Test]
+    public void Constructor_FailureReasonPathInvalid_IsPreservedWhenNotValidated()
+    {
+        var result = new FilePathWrapper(string.Empty, "C:\\SomeRoot", failureReason: FilePathFailureReason.PathInvalid);
+
+        Assert.That(result.Validated, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(FilePathFailureReason.PathInvalid));
+    }
+
+    [Test]
+    public void Constructor_Validated_FailureReasonIsAlwaysNone()
+    {
+        var result = new FilePathWrapper("Test.cs", null, validated: true, failureReason: FilePathFailureReason.NoSolutionLoaded);
+
+        Assert.That(result.Validated, Is.True);
+        Assert.That(result.FailureReason, Is.EqualTo(FilePathFailureReason.None),
+            "A validated path has no failure to report, regardless of what the caller passed in.");
+    }}
