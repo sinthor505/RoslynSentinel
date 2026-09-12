@@ -890,7 +890,7 @@ public class MsToolAugmentEngine
             return new AddUsingsPreview(
                 SolutionRequired: true,
                 UsingsToAdd: [],
-                Warning: "No solution is loaded. Load a solution first using load_solution. " +
+                Warning: "No solution is loaded. Load a solution first using LoadSolution. " +
                          "(The standard add_missing_usings tool requires a solution too.)",
                 UpdatedContent: "");
         }
@@ -1832,7 +1832,7 @@ public class MsToolAugmentEngine
                 ProjectCount: 0,
                 DocumentCount: 0,
                 LoadErrors: loadErrors,
-                Summary: "Workspace is operational. No solution is currently loaded. Call load_solution to load a .sln or .csproj file."));
+                Summary: "Workspace is operational. No solution is currently loaded. Call LoadSolution to load a .sln or .csproj file."));
         }
 
         var projectCount = currentSolution.ProjectIds.Count;

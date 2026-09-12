@@ -92,7 +92,7 @@ and end the turn. Do not route around this hook.
         # un-blockable: the caller can't split it, and denying it leaves them stranded
         # with no MCP route. `reset` is the live example - Git can stage but not unstage,
         # so blocking a `git reset && git status` traps a mis-stage with no way back.
-        $uncovered = 'reset|restore|rm|mv|branch|checkout|switch|push|pull|fetch|clone|worktree|rebase|merge|stash|tag|cherry-pick|bisect|reflog|clean|apply|show'
+        $uncovered = 'reset|restore|rm|mv|branch|checkout|switch|push|pull|fetch|clone|worktree|rebase|merge|stash|tag|cherry-pick|bisect|reflog|clean|apply|show|update-index|ls-files|check-ignore|rev-parse|config|remote|blame'
         if ($command -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($uncovered)\b") { exit 0 }
 
         if ($command -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($covered)\b") {
@@ -106,7 +106,7 @@ status, log, diff, stage/add, commit and revert are covered by the MCP Git tool:
 
   Git(operation: "status")
   Git(operation: "diff",   target: "staged")
-  Git(operation: "stage",  files: "a.cs,b.cs", stageAll: true)
+  Git(operation: "stage",  scope: "listed", files: "a.cs,b.cs")
   Git(operation: "commit", message: "...")
 
 It also avoids the shell-quoting and CRLF footguns that Bash hits on Windows paths.

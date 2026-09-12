@@ -96,7 +96,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -276,7 +276,7 @@ public class SentinelAsyncifyTools
                         sizeBytes: allBytes.Length,
                         totalRecords: totalCount,
                         message: $"Result written to file ({allBytes.Length} bytes, {totalCount} records). " +
-                                       $"Use get_large_result(resultId: \"{resultId}\") to page through results. " +
+                                       $"Use GetLargeResult(resultId: \"{resultId}\") to page through results. " +
                                        "Pass limit and offset to control page size (default limit: 50).")
                 };
             }
@@ -310,7 +310,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -359,7 +359,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -429,7 +429,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -538,7 +538,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -607,7 +607,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -617,7 +617,7 @@ public class SentinelAsyncifyTools
                 Success = true,
                 Data = new UpliftCallersResult
                 {
-                    Summary = new BatchResultSummary { Directive = "targets was empty — no callers uplifted. Pass SuggestedUpliftTargets from bridge_async_methods as targets, or use the asyncify macro." },
+                    Summary = new BatchResultSummary { Directive = "targets was empty — no callers uplifted. Pass SuggestedUpliftTargets from BridgeAsyncMethods as targets, or use the asyncify macro." },
                     SuggestedPropagateTargets = new List<BatchTarget>()
                 }
             };
@@ -680,7 +680,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -688,7 +688,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = true,
-                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Pass SuggestedPropagateTargets from uplift_callers as targets, or specify files explicitly. Prefer the asyncify macro." }
+                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Pass SuggestedPropagateTargets from UpliftCallers as targets, or specify files explicitly. Prefer the asyncify macro." }
             };
 
         try
@@ -735,7 +735,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -787,7 +787,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -840,7 +840,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -906,7 +906,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -982,7 +982,7 @@ public class SentinelAsyncifyTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
+                              "No solution is loaded. Call LoadSolution first.")
             };
         }
 
@@ -3190,14 +3190,14 @@ public class SentinelAsyncifyTools
             {
                 directive = $"{state.BridgeBodyRewriteFailures} candidate(s) required manual review — " +
                             $"the async body rewrite produced compiler errors after replacing sync bridge calls with async equivalents. " +
-                            $"Call get_operation_detail(changeId=\"{changeId}\", filter=\"manual_review\") to see per-method compiler diagnostics.";
+                            $"Call GetOperationDetail(changeId=\"{changeId}\", filter=\"manual_review\") to see per-method compiler diagnostics.";
             }
             else
             {
                 directive = $"{state.BridgeStaleFlagSkips} candidate(s) skipped — async overloads already exist with CancellationToken " +
                             $"(stale [AsyncBridgeCandidate] flags from a prior Asyncify run). " +
                             $"Run ScanAsyncMigrationCandidates to refresh the candidate list, or " +
-                            $"call get_operation_detail(changeId=\"{changeId}\", filter=\"skipped\") to inspect skip reasons.";
+                            $"call GetOperationDetail(changeId=\"{changeId}\", filter=\"skipped\") to inspect skip reasons.";
             }
         }
         else
@@ -3429,7 +3429,7 @@ public class SentinelAsyncifyTools
         {
             if (string.IsNullOrWhiteSpace(target.NewMethodName))
             {
-                var reason = $"NewMethodName is required for extract_event_handlers (file: {target.FilePath})";
+                var reason = $"NewMethodName is required for ExtractEventHandlers (file: {target.FilePath})";
                 items.Add(new OperationItemRecord
                 {
                     FilePath = target.FilePath,
@@ -3452,7 +3452,7 @@ public class SentinelAsyncifyTools
 
             if (string.IsNullOrWhiteSpace(target.ContextSnippet) && !target.ExtractEntireBody)
             {
-                var reason = $"ContextSnippet is required for extract_event_handlers (file: {target.FilePath})";
+                var reason = $"ContextSnippet is required for ExtractEventHandlers (file: {target.FilePath})";
                 items.Add(new OperationItemRecord
                 {
                     FilePath = target.FilePath,

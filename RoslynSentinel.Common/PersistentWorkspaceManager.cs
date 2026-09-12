@@ -1123,7 +1123,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         try
         {
             return CurrentSolution ?? throw new SolutionNotLoadedException(
-                "No solution is loaded. Call load_solution with a .sln or .csproj path.");
+                "No solution is loaded. Call LoadSolution with a .sln or .csproj path.");
         }
         finally
         {
@@ -1552,7 +1552,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 {
                     if (_logger.IsEnabled(LogLevel.Warning))
                     {
-                        _logger.LogWarning(ex, "Workspace refresh failed after applying changes. Workspace may be stale; call load_solution to resync.");
+                        _logger.LogWarning(ex, "Workspace refresh failed after applying changes. Workspace may be stale; call LoadSolution to resync.");
                     }
                 }
             }

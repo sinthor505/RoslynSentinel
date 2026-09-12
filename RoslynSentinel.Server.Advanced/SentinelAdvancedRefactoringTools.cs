@@ -498,7 +498,7 @@ public class SentinelAdvancedRefactoringTools
                     Success = false,
                     Error = new ResultError(ToolErrorCode.Exception,
                     $"IntroduceParameterObject: method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
-                    "Verify the method name (case-sensitive) or use get_file_outline to list available methods.")
+                    "Verify the method name (case-sensitive) or use GetFileOutline to list available methods.")
                 };
 
             // Not wired into MemberChangedContentResult: the generated record's text isn't caller-

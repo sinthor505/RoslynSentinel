@@ -829,7 +829,7 @@ public class SentinelScanTools
                             sizeBytes: summaryResults.jsonBytes.Length,
                             totalRecords: apiResult.Count,
                             message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
-                                           $"Use get_large_result(resultId: \"{summaryResults.resultId}\") to page through results. " +
+                                           $"Use GetLargeResult(resultId: \"{summaryResults.resultId}\") to page through results. " +
                                            "Pass limit and offset to control page size (default limit: 50).")
                     };
                 }
@@ -874,7 +874,7 @@ public class SentinelScanTools
                             sizeBytes: summaryResults.jsonBytes.Length,
                             totalRecords: apiResult.Count,
                             message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
-                                           $"Use get_large_result(resultId: \"{summaryResults.resultId}\") to page through results. " +
+                                           $"Use GetLargeResult(resultId: \"{summaryResults.resultId}\") to page through results. " +
                                            "Pass limit and offset to control page size (default limit: 50).")
                     };
                 }

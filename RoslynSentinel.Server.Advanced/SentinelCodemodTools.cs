@@ -440,7 +440,7 @@ public class SentinelCodemodTools
                                 Error = new ResultError(ToolErrorCode.Exception,
                                 $"convert_expression_body ({direction}) found nothing to convert for '{methodName}' in '{filePath}'. " +
                                 "Possible causes: member not found (verify name and file are correct), member already has the target body style, " +
-                                "or contextSnippet did not uniquely match. Use get_file_outline to confirm the member exists.")
+                                "or contextSnippet did not uniquely match. Use GetFileOutline to confirm the member exists.")
                             };
                         }
 
@@ -466,7 +466,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                 $"convert_method_to_indexer: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                "The method must have exactly one parameter and return a value. Use get_file_outline to verify the method exists.")
+                                "The method must have exactly one parameter and return a value. Use GetFileOutline to verify the method exists.")
                             };
                         }
 
@@ -500,7 +500,7 @@ public class SentinelCodemodTools
                                     Success = false,
                                     Error = new ResultError(ToolErrorCode.Exception,
                                     $"convert_static_to_extension: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                    "The method must be static and have at least one parameter to become the 'this' parameter. Use get_file_outline to verify.")
+                                    "The method must be static and have at least one parameter to become the 'this' parameter. Use GetFileOutline to verify.")
                                 };
                             }
 
@@ -544,7 +544,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"convert_to_async_enumerable: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                    "The method must return Task<List<T>> or Task<IEnumerable<T>>. Use get_file_outline to verify the method signature.")
+                                    "The method must return Task<List<T>> or Task<IEnumerable<T>>. Use GetFileOutline to verify the method signature.")
                             };
                         }
 
@@ -564,7 +564,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"extension_to_static: method '{methodName}' not found or not an extension method in '{filePath}'. " +
-                                    "The method must be in a static class and have a 'this' parameter. Use get_file_outline to verify.")
+                                    "The method must be in a static class and have a 'this' parameter. Use GetFileOutline to verify.")
                             };
                         }
 
@@ -586,7 +586,7 @@ public class SentinelCodemodTools
                                     Success = false,
                                     Error = new ResultError(ToolErrorCode.Exception,
                                         $"generate_async_overload: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                        "The method must be synchronous and non-void. Use get_file_outline to verify the method exists and its signature.")
+                                        "The method must be synchronous and non-void. Use GetFileOutline to verify the method exists and its signature.")
                                 };
                             }
 
@@ -616,7 +616,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"make_method_static: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                    "The method must not access instance members. Use get_file_outline to verify the method exists.")
+                                    "The method must not access instance members. Use GetFileOutline to verify the method exists.")
                             };
                         }
 
@@ -636,7 +636,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"make_method_thread_safe: method '{methodName}' not found in '{filePath}'. " +
-                                    "Use get_file_outline to verify the method name (case-sensitive).")
+                                    "Use GetFileOutline to verify the method name (case-sensitive).")
                             };
                         }
 
@@ -674,7 +674,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"optimize_to_value_task: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                    "The method must return Task or Task<T> and be async. Use get_file_outline to verify.")
+                                    "The method must return Task or Task<T> and be async. Use GetFileOutline to verify.")
                             };
                         }
 
@@ -817,7 +817,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"add_validation_to_poco: class '{className}' not found in '{filePath}'. {ioe.Message} " +
-                                    "Use get_file_outline to verify the class name (case-sensitive).")
+                                    "Use GetFileOutline to verify the class name (case-sensitive).")
                             };
                         }
                         catch (Exception ex)
@@ -840,7 +840,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"class_to_record: class '{className}' not found or not eligible in '{filePath}'. " +
-                                    "The class must have no custom methods beyond property accessors. Use get_file_outline to verify.")
+                                    "The class must have no custom methods beyond property accessors. Use GetFileOutline to verify.")
                             };
                         }
 
@@ -862,7 +862,7 @@ public class SentinelCodemodTools
                                     Success = false,
                                     Error = new ResultError(ToolErrorCode.Exception,
                                         $"convert_abstract_to_interface: class '{className}' not found or is not abstract in '{filePath}'. " +
-                                        "The class must be declared with the 'abstract' keyword. Use get_file_outline to verify.")
+                                        "The class must be declared with the 'abstract' keyword. Use GetFileOutline to verify.")
                                 };
                             }
 
@@ -912,7 +912,7 @@ public class SentinelCodemodTools
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"convert_property_safe ({direction}): property '{propName}' not found or not eligible in '{filePath}'. " +
                                     "Possible causes: property name is wrong (case-sensitive), property already has the target style, " +
-                                    "or contextSnippet did not uniquely identify it. Use get_file_outline to list available properties.")
+                                    "or contextSnippet did not uniquely identify it. Use GetFileOutline to list available properties.")
                             };
                         }
 
@@ -933,7 +933,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"convert_property_to_methods: property '{propName}' not found in '{filePath}'. " +
-                                    "Use get_file_outline to list available properties (name is case-sensitive).")
+                                    "Use GetFileOutline to list available properties (name is case-sensitive).")
                             };
                         }
 
@@ -953,7 +953,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"convert_to_background_service: class '{className}' not found or not eligible in '{filePath}'. " +
-                                    "The class must not already implement BackgroundService. Use get_file_outline to verify.")
+                                    "The class must not already implement BackgroundService. Use GetFileOutline to verify.")
                             };
                         }
 
@@ -1009,7 +1009,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"make_class_immutable: class '{className}' not found or already immutable in '{filePath}'. " +
-                                    "Use get_file_outline to verify the class exists and has mutable properties.")
+                                    "Use GetFileOutline to verify the class exists and has mutable properties.")
                             };
                         }
 
@@ -1029,7 +1029,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"record_to_class: record '{className}' not found in '{filePath}'. " +
-                                    "The type must be declared as a 'record'. Use get_file_outline to verify.")
+                                    "The type must be declared as a 'record'. Use GetFileOutline to verify.")
                             };
                         }
 
@@ -1049,7 +1049,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"replace_constructor_with_factory: class '{className}' not found or not eligible in '{filePath}'. " +
-                                    "Use get_file_outline to verify the class name (case-sensitive).")
+                                    "Use GetFileOutline to verify the class name (case-sensitive).")
                             };
                         }
 
@@ -1087,7 +1087,7 @@ public class SentinelCodemodTools
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
                                     $"upgrade_to_primary_constructor: class '{className}' not found or not eligible in '{filePath}'. " +
-                                    "The constructor must only assign parameters to readonly fields (no other logic). Use get_file_outline to verify the class exists.")
+                                    "The constructor must only assign parameters to readonly fields (no other logic). Use GetFileOutline to verify the class exists.")
                             };
                         }
 

@@ -394,7 +394,7 @@ public class AsyncOptimizationEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault() ?? throw new InvalidOperationException(
-                $"File '{filePath}' not found in the loaded solution. Ensure load_solution has been called.");
+                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
 
@@ -616,7 +616,7 @@ public class AsyncOptimizationEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault() ?? throw new InvalidOperationException(
-                $"File '{filePath}' not found in the loaded solution. Ensure load_solution has been called.");
+                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
         var methodNode = root.DescendantNodes()
@@ -1803,7 +1803,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault() ?? throw new InvalidOperationException(
-                $"File '{filePath}' not found in the loaded solution. Ensure load_solution has been called.");
+                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
 
