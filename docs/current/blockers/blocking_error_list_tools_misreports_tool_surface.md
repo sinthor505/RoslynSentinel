@@ -2,6 +2,19 @@
 
 **Status:** OPEN — found 2026-09-12 while measuring the cost of trimming the MCP tool surface.
 
+> **An accurate manifest already exists — use it instead.** The server emits
+> `tool_list_<modes>.json` and `tool_list_simple_<modes>.json` next to the binary on every startup
+> (e.g. `bin-vscode/Advanced/tool_list_all_admin_wholefilewrite.json`), plus
+> `engine_methods_<modes>.json` at the repo root. These are generated from actual registration, so
+> they report all **110** tools in the served **PascalCase**, each with its real emitted
+> `inputSchema`, under a `_metadata`/`tools` envelope carrying `toolCount`, `generatedUtc` and
+> `totalPayloadChars`.
+>
+> That makes `--list-tools` a *redundant* second implementation rather than the only instrument —
+> which lowers the severity here but strengthens the case for deleting it. Two mechanisms answering
+> the same question, one of them wrong, is worse than one. The fix may simply be to have
+> `--list-tools` print the emitted manifest.
+
 `--list-tools` is the documented way to preview which tools a `--mode`/`--include-tools`
 combination would expose. `ServerStartupHelpers.DescribeNoActiveToolsFailure` points operators at
 it explicitly:

@@ -1,6 +1,28 @@
 # `Git` refuses to run without a loaded solution, and `LoadSolution` leaks a raw `ArgumentException`
 
-**Status:** OPEN — found 2026-09-12, reported per the dog-fooding policy in `CLAUDE.md`.
+**Status:** PARTIALLY FIXED 2026-09-12 (`07b0164`). Defect 2 is fixed at the chokepoint; defect 1
+remains OPEN. See the amendment below before acting on this document.
+
+## Amendment 2026-09-12 — what is actually fixed
+
+- **Defect 2 (raw `ArgumentException` on a missing required parameter): FIXED.** It was generic
+  dispatch-layer behaviour, not `LoadSolution`-specific, so `ToolArgumentValidator` now handles it
+  once at the `AddCallToolFilter` chokepoint for every tool. It also closes a defect found later
+  the same day and not listed below: **unknown parameter names were silently ignored**, producing
+  `success:true` with default behaviour instead of an error.
+- **snake_case identifiers in error text: FIXED** — 104 occurrences corrected server-wide.
+- **`Git`'s `stageAll` footgun: FIXED, and was already on master before this session.** The
+  parameter is now a `scope` enum (`tracked`/`all`/`listed`); naming files alongside a non-`listed`
+  scope is rejected rather than silently overridden. Verified live: `scope:"listed"` with 11 named
+  paths staged exactly those.
+- **Defect 1 (`Git` requires a loaded solution) is still OPEN** and is now the only item here.
+
+Note the original write-up below claims `Git` has no unstage operation. That was correct at the
+time; check the current `operation` enum before relying on it.
+
+---
+
+**Original status:** OPEN — found 2026-09-12, reported per the dog-fooding policy in `CLAUDE.md`.
 
 Two separate defects, hit back-to-back on the *first* live `Git` call after the dog-fooding
 enforcement hook (`.claude/hooks/enforce-dogfood.ps1`) went in. Both are affordance defects rather
