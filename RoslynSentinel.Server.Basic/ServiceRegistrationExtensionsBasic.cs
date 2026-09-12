@@ -139,6 +139,24 @@ public static class RoslynSentinelServiceExtensionsBasic
         // whole-file-write tools. See WriteToolAdviceHelper's remarks.
         services.AddSingleton(new WriteToolAdviceHelper(activeToolClasses));
 
+        // Captured once here (the same values ResolveActiveToolClasses/DescribeNoActiveToolsFailure
+        // use to build the startup guidance message) so McpServerStatus can report today's actual
+        // mode/include-tools/exclude-tools resolution instead of a caller having to guess or
+        // restart the server to find out.
+        services.AddSingleton(new ActiveToolSurface(
+            modeArg: string.Join(",", activeModes.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)),
+            activeModes: activeModes,
+            includeTools: resolvedIncludeTools,
+            excludeTools: resolvedExcludeTools,
+            activeToolClasses: activeToolClasses));
+
+        // Always registered, independent of activeToolClasses/--mode/--include-tools/
+        // --exclude-tools: the one tool meant to be reachable no matter what selection is in
+        // effect, since it exists for the case where the selection itself might be the problem.
+        // Deliberately not in ToolClassRegistry, so it's never counted or excludable.
+        services.AddSingleton<SentinelServerStatusTools>();
+        mcpBuilder.WithToolsFixed<SentinelServerStatusTools>();
+
         if (activeToolClasses.Contains("SentinelWorkspaceTools"))
         {
             services.AddSingleton<WorkspaceReadNavigationImpl>();
