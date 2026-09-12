@@ -17,7 +17,7 @@
     instruction, since PlanStepRunner already loads the worktree's solution itself before the
     model gets a turn.
 
-    Everything for one run lives under one folder: RoslynSentinel\PlanStepRunner\<timestamp>\,
+    Everything for one run lives under one folder: RoslynSentinel-TestRuns\PlanStepRunner\<timestamp>\,
     with each step getting its own <step-name>\ subfolder containing Worktree\ (only for a step
     currently in progress or halted - a successful step's worktree is removed once committed) and
     Logs\ (transcript + agent.log, kept regardless of outcome) - so a run, and each step within
@@ -80,7 +80,7 @@
     the cost of one branch left behind per step instead of one per run.
 
 .PARAMETER ExistingRun
-    Timestamp (e.g. 20260909-171952-844) of an existing RoslynSentinel\PlanStepRunner\<timestamp>
+    Timestamp (e.g. 20260909-171952-844) of an existing RoslynSentinel-TestRuns\PlanStepRunner\<timestamp>
     run folder to continue, instead of starting a new one. New steps in this invocation get their
     own fresh worktree/logs under that same folder, same as any run - this only controls which
     run folder they land in, so a halted step from an earlier invocation can be retried (typically
@@ -202,16 +202,18 @@ if (-not (Test-Path $PlanDir)) {
 
 $runnerProject = Join-Path $repoRoot 'RoslynSentinel.Tools.PlanStepRunner\RoslynSentinel.Tools.PlanStepRunner.csproj'
 
+$testRunsRoot = Join-Path (Split-Path $ImplRepo -Parent) 'RoslynSentinel-TestRuns\PlanStepRunner'
+
 if ($ExistingRun) {
     $runTimestamp = $ExistingRun
-    $runDir = Join-Path $ImplRepo "PlanStepRunner\$ExistingRun"
+    $runDir = Join-Path $testRunsRoot $ExistingRun
     if (-not (Test-Path $runDir)) {
-        throw "-ExistingRun '$ExistingRun' not found under $ImplRepo\PlanStepRunner\. Check the timestamp folder name (e.g. 20260909-171952-844)."
+        throw "-ExistingRun '$ExistingRun' not found under $testRunsRoot\. Check the timestamp folder name (e.g. 20260909-171952-844)."
     }
 }
 else {
     $runTimestamp = Get-Date -AsUTC -Format 'yyyyMMdd-HHmmss-fff'
-    $runDir = Join-Path $ImplRepo "PlanStepRunner\$runTimestamp"
+    $runDir = Join-Path $testRunsRoot $runTimestamp
 }
 
 # Computed here (not left to PlanStepRunner's own --run-dir/--branch defaults) so -ExistingRun can
