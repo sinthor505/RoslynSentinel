@@ -68,15 +68,16 @@ If unstated, infer and say so in one line. Category 5 warrants deep tracing; 3 w
 Helping the model changes what a run shows, so **say what you did**; this is honest labelling, not
 purity enforcement. An assisted run that teaches something beats a clean run that teaches nothing.
 
-- **Clean** — no intervention. Best for capability/repeatability (categories 2, 3), which need a
+- **Clean (L1)** — no intervention. Best for capability/repeatability (categories 2, 3), which need a
   stable baseline.
-- **Harness-assisted** — environment/harness friction only (stale path, rebuild, resume). Didn't
+- **Harness-assisted (L2)** — environment/harness friction only (stale path, rebuild, resume). Didn't
   touch task, prompt, fixture, or code under test. List interventions; result stands.
-- **Fixture-assisted** — you adjusted prompt/fixture/setup between attempts. Not baseline-comparable,
-  and that's fine — often the most productive mode, since "what wording would have made this work"
-  is the environment-defect question. A successful retry here is frequently the proposed fix.
-- **Directed** — you actively helped complete the task. Don't cite it for categories 2 or 3, but it's
-  legitimate for exploring how far something can get, or reproducing a bug. Note it plainly.
+- **Fixture-assisted (L3)** — you adjusted prompt/fixture/setup between attempts. Not
+  baseline-comparable, and that's fine — often the most productive mode, since "what wording would
+  have made this work" is the environment-defect question. A successful retry here is frequently the
+  proposed fix.
+- **Directed (L4)** — you actively helped complete the task. Don't cite it for categories 2 or 3, but
+  it's legitimate for exploring how far something can get, or reproducing a bug. Note it plainly.
 
 If you're about to help because a run is failing, note that the impulse is itself a finding — the
 environment failed to guide the model — then help anyway if completion is the actual goal.

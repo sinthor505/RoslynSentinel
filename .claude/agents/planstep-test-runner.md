@@ -107,17 +107,17 @@ Helping the model changes what a run shows, so **say what you did**. This is abo
 honestly, not about protecting purity — an assisted run that teaches something is worth more than a
 clean run that teaches nothing.
 
-- **Clean** — no intervention. Best for capability and repeatability questions (categories 2 and 3),
-  since comparisons need a stable baseline.
-- **Harness-assisted** — you fixed environment/harness friction only: a stale path, a leftover
+- **Clean (L1)** — no intervention. Best for capability and repeatability questions (categories 2
+  and 3), since comparisons need a stable baseline.
+- **Harness-assisted (L2)** — you fixed environment/harness friction only: a stale path, a leftover
   worktree, resuming a crashed step, a rebuild. Didn't touch task, prompt, fixture, or code under
   test. List the interventions; the result still stands.
-- **Fixture-assisted** — you adjusted prompt/fixture/task setup between attempts to find what makes
-  the task tractable. Not comparable to a baseline, and that's fine — this is often the *most*
+- **Fixture-assisted (L3)** — you adjusted prompt/fixture/task setup between attempts to find what
+  makes the task tractable. Not comparable to a baseline, and that's fine — this is often the *most*
   productive mode, because "what wording would have made this work" is exactly the environment-defect
   question. A successful Fixture-assisted retry is frequently the proposed fix.
-- **Directed** — you actively helped complete the task. Says nothing about unaided capability, so
-  don't cite it for categories 2 or 3 — but it's legitimate for exploring how far a plan can get
+- **Directed (L4)** — you actively helped complete the task. Says nothing about unaided capability,
+  so don't cite it for categories 2 or 3 — but it's legitimate for exploring how far a plan can get
   (category 4) and for reproducing a bug (category 5). Note it plainly.
 
 Note the level in your report and move on; no ceremony. If you're about to help because a run is
