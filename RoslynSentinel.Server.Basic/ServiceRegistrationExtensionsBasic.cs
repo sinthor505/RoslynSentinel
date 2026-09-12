@@ -237,6 +237,8 @@ public static class RoslynSentinelServiceExtensionsBasic
         // CallToolResult so the agent displays the helpful message rather than a generic error.
         mcpBuilder.WithRequestFilters(filters =>
         {
+            AddArgumentValidationFilter(filters);
+
             filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
                 ModelContextProtocol.Protocol.CallToolRequestParams,
                 ModelContextProtocol.Protocol.CallToolResult>(
@@ -560,5 +562,52 @@ public static class RoslynSentinelServiceExtensionsBasic
                     t => logger?.LogError(t.Exception!.GetBaseException(), "Auto-load solution failed: {Path}", solutionPath),
                     TaskContinuationOptions.OnlyOnFaulted);
         }
+    }
+    // Added by AddMember (expected - used for diagnostics)
+    /// <summary>
+    /// Registers the argument pre-flight filter: rejects a call whose arguments cannot succeed as
+    /// written, before the SDK's binder ever sees it.
+    /// <para>
+    /// Covers two dispatch-layer defects that no per-tool fix can reach — an unknown parameter is
+    /// silently discarded (the tool then runs on its defaults and reports <c>success:true</c> with
+    /// the wrong result), and a missing required parameter surfaces as a raw framework
+    /// <c>ArgumentException</c> naming an internal "arguments dictionary". See
+    /// <see cref="ToolArgumentValidator"/> for the full analysis.
+    /// </para>
+    /// <para>
+    /// Registered before every other call-tool filter so no other filter does work on a call that
+    /// cannot succeed.
+    /// </para>
+    /// </summary>
+    private static void AddArgumentValidationFilter(IMcpRequestFilterBuilder filters)
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                try
+                {
+                    var validationError = ToolArgumentValidator.Validate(
+                        context.Server, context.Params?.Name, context.Params?.Arguments);
+
+                    if (validationError is not null)
+                    {
+                        return new ModelContextProtocol.Protocol.CallToolResult
+                        {
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = validationError }],
+                            IsError = true,
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // A guardrail must never become the thing that blocks a valid call: if
+                    // validation itself throws, fall through and let the call run as it would have.
+                    Debug.WriteLine($"Tool argument validation filter failed: {ex}");
+                }
+
+                return await next(context, cancellationToken);
+            }));
     }
 }

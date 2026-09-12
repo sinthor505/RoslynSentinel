@@ -67,7 +67,7 @@ public class SentinelCommentingTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                    "No solution is loaded. Call load_solution first.")
+                    "No solution is loaded. Call LoadSolution first.")
             };
         }
 

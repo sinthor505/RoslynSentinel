@@ -101,7 +101,7 @@ public class SentinelDocumentationTools
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         if (solutionRoot is null)
         {
-            error = "No solution path configured. Call load_solution first.";
+            error = "No solution path configured. Call LoadSolution first.";
             return null;
         }
 

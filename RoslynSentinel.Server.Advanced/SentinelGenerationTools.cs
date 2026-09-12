@@ -78,7 +78,7 @@ public class SentinelGenerationTools
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
                 return $"GenerateHttpClient: controller class '{controllerName}' not found in '{Path.GetFileName(filePath)}'. " +
-                       "Verify the class name (case-sensitive). Use get_file_outline to list available classes.";
+                       "Verify the class name (case-sensitive). Use GetFileOutline to list available classes.";
             }
 
             return result.ToJsonSummary();

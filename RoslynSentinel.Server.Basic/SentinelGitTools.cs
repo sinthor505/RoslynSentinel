@@ -161,33 +161,91 @@ public class SentinelGitTools
         _workspaceManager = workspaceManager;
         _logger = logger;
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
+    /// <summary>
+    /// Finds the git repository root. Git operations read the working tree, not the Roslyn
+    /// compilation, so this deliberately does NOT require a loaded solution: it walks up from the
+    /// server's own base directory first and only falls back to the loaded solution's directory if
+    /// that finds nothing. Previously this returned "No solution path configured" for every
+    /// operation — coupling status/log/diff to state they never used, and failing the very first
+    /// Git call an agent makes.
+    /// </summary>
     private string? TryGetGitRoot(out string error)
     {
-        var solutionRoot = _workspaceManager.GetSolutionRoot();
-        if (solutionRoot is null)
+        // 1. Walk up from the server's base directory. This is the common case: the server runs
+        //    from a bin/ folder inside the repo it is operating on.
+        var fromBaseDirectory = FindRepositoryRoot(AppContext.BaseDirectory);
+        if (fromBaseDirectory is not null)
         {
-            error = "No solution path configured. Call load_solution first.";
+            error = "";
+            return fromBaseDirectory;
+        }
+
+        // 2. Walk up from the current working directory — covers a server whose binaries are
+        //    deployed outside the repo but which was launched from inside it.
+        var fromCurrentDirectory = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        if (fromCurrentDirectory is not null)
+        {
+            error = "";
+            return fromCurrentDirectory;
+        }
+
+        // 3. Last resort: the loaded solution's directory, if there is one.
+        var solutionRoot = _workspaceManager.GetSolutionRoot();
+        if (solutionRoot is not null)
+        {
+            var fromSolution = FindRepositoryRoot(solutionRoot);
+            if (fromSolution is not null)
+            {
+                error = "";
+                return fromSolution;
+            }
+
+            error = $"No git repository found. Searched upward from the server's base directory and from the loaded solution's directory ('{solutionRoot}') without finding a .git entry. Git operations need a git working tree, not a loaded solution.";
             return null;
         }
 
-        var dir = solutionRoot;
-        while (dir is not null)
-        {
-            if (Directory.Exists(Path.Combine(dir, ".git")))
-            {
-                error = "";
-                return dir;
-            }
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        error = $"No git repository found at '{solutionRoot}' or any parent directory.";
+        error = "No git repository found. Searched upward from the server's base directory and working directory without finding a .git entry, and no solution is loaded to search from either. If the repository is elsewhere, call LoadSolution with a solution inside it first.";
         return null;
     }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Walks up from <paramref name="startDirectory"/> looking for a <c>.git</c> entry. Accepts a
+    /// <c>.git</c> <b>file</b> as well as a directory: linked worktrees and submodules use a
+    /// <c>.git</c> file holding a gitdir pointer, and a directory-only check silently walks past
+    /// them into the parent repository — which is exactly how a PlanStepRunner harness clone would
+    /// end up having git operations aimed at the wrong repo.
+    /// </summary>
+    private static string? FindRepositoryRoot(string? startDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(startDirectory))
+            return null;
 
+        string? dir;
+        try
+        {
+            dir = Path.GetFullPath(startDirectory);
+        }
+        catch (Exception)
+        {
+            // A malformed or over-long path is not something the caller can act on — treat it as
+            // "nothing found here" so the next candidate directory still gets tried.
+            return null;
+        }
+
+        while (!string.IsNullOrEmpty(dir))
+        {
+            var gitEntry = Path.Combine(dir, ".git");
+            if (Directory.Exists(gitEntry) || File.Exists(gitEntry))
+                return dir;
+
+            var parent = Path.GetDirectoryName(dir);
+            if (parent == dir)
+                break;
+            dir = parent;
+        }
+
+        return null;
+    }
     private async Task<(int ExitCode, string Stdout, string Stderr)> RunGitAsync(
         string gitRoot, string[] args, CancellationToken cancellationToken)
     {
@@ -314,9 +372,9 @@ public class SentinelGitTools
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit, unused otherwise.
         [Description("commit: the commit message. Required for operation=commit.")]
         string? message = null,
-        [Description("stage/commit: true stages all changes including untracked files (git add -A). Default stages only tracked changes (git add -u).")]
-        bool stageAll = false,
-        [Description("stage/commit: comma-separated repo-relative paths to stage. Omit to stage tracked changes.")]
+        [Description("stage/commit: which files to stage. \"tracked\" (default) stages modifications and deletions of already-tracked files only (git add -u) and does NOT stage new files. \"all\" stages everything in the working tree including untracked files (git add -A). \"listed\" stages exactly the paths you name in files/paths, untracked ones included — use this whenever you know which files you want. Naming files alongside a scope other than \"listed\" is rejected, so a file list can never be silently overridden.")]
+        GitStageScope scope = GitStageScope.tracked,
+        [Description("stage/commit: comma-separated repo-relative paths to stage. Requires scope=\"listed\". Alias of paths for these operations — pass one or the other, not both.")]
         string? files = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is required when operation=revert, unused otherwise.
         [Description("revert: the commit to revert (full or short hash, from log). Required for operation=revert.")]
@@ -326,18 +384,31 @@ public class SentinelGitTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        var ct = cancellationToken;
         var gitRoot = TryGetGitRoot(out var rootError);
         if (gitRoot is null)
             return new { Success = false, Error = rootError };
+
+        // `files` and `paths` name the same concept; `paths` is the git-native spelling that `diff`
+        // already used, so `files` stays an accepted alias rather than breaking callers. Setting
+        // both is ambiguous, so it is refused instead of letting one silently win.
+        if (!string.IsNullOrWhiteSpace(files) && !string.IsNullOrWhiteSpace(paths))
+        {
+            return new
+            {
+                Success = false,
+                Error = "Both 'files' and 'paths' were supplied — they are aliases for the same list and must not be combined. Pass just one of them (either spelling is accepted)."
+            };
+        }
+        var resolvedPaths = !string.IsNullOrWhiteSpace(files) ? files : paths;
 
         return operation switch
         {
             GitOperation.status => await StatusAsync(gitRoot, cancellationToken),
             GitOperation.log => await LogAsync(gitRoot, count, cancellationToken),
-            GitOperation.diff => await DiffAsync(gitRoot, target, paths, maxBytes, cancellationToken),
-            GitOperation.stage or GitOperation.add => await StageAsync(gitRoot, stageAll, files, cancellationToken),
-            GitOperation.commit => await CommitAsync(gitRoot, message, stageAll, files, cancellationToken),
+            GitOperation.diff => await DiffAsync(gitRoot, target, resolvedPaths, maxBytes, cancellationToken),
+            GitOperation.stage or GitOperation.add => await StageAsync(gitRoot, scope, resolvedPaths, cancellationToken),
+            GitOperation.unstage => await UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
+            GitOperation.commit => await CommitAsync(gitRoot, message, scope, resolvedPaths, cancellationToken),
             GitOperation.revert => await RevertAsync(gitRoot, commitHash, noCommit, cancellationToken),
             _ => (object)new { Success = false, Error = $"Unknown operation '{operation}'." }
         };
@@ -507,20 +578,60 @@ public class SentinelGitTools
         }
     }
 
+    /// <summary>
+    /// Stages files according to <paramref name="scope"/>. Scope and path list are one decision
+    /// rather than two independent inputs: the former <c>stageAll</c> boolean could override an
+    /// explicit file list and run <c>git add -A</c>, quietly staging unrelated untracked files.
+    /// Every mismatch between scope and paths is refused up front, naming the conflict and the
+    /// call that would have worked.
+    /// </summary>
     private async Task<GitStatusResult> StageAsync(
-        string gitRoot, bool stageAll, string? files, CancellationToken cancellationToken)
+        string gitRoot, GitStageScope scope, string? paths, CancellationToken cancellationToken)
     {
+        var hasPaths = !string.IsNullOrWhiteSpace(paths);
+
+        if (scope != GitStageScope.listed && hasPaths)
+        {
+            return new GitStatusResult
+            {
+                Success = false,
+                Error = $"You named files to stage but passed scope=\"{scope}\", which ignores them. " +
+                        "Pass scope=\"listed\" to stage exactly the files you named (untracked ones " +
+                        $"included), or drop the file list to stage by scope=\"{scope}\". Nothing was staged."
+            };
+        }
+
+        if (scope == GitStageScope.listed && !hasPaths)
+        {
+            return new GitStatusResult
+            {
+                Success = false,
+                Error = "scope=\"listed\" stages exactly the files you name, but no files were given. " +
+                        "Pass files (or paths) as a comma-separated list of repo-relative paths, e.g. " +
+                        "files: \"src/Foo.cs,docs/notes.md\". To stage without naming files use " +
+                        "scope=\"tracked\" (already-tracked changes only) or scope=\"all\" (everything, " +
+                        "untracked included). Nothing was staged."
+            };
+        }
+
         try
         {
             string[] stageArgs;
-            if (stageAll)
-                stageArgs = ["add", "-A"];
-            else if (string.IsNullOrWhiteSpace(files))
-                stageArgs = ["add", "-u"];
-            else
+            switch (scope)
             {
-                var filePaths = files.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                stageArgs = ["add", "--", .. filePaths];
+                case GitStageScope.all:
+                    stageArgs = ["add", "-A"];
+                    break;
+                case GitStageScope.listed:
+                    // `git add -- <paths>` stages untracked paths as well as tracked modifications,
+                    // which is what "stage exactly these" has to mean to be useful.
+                    var filePaths = paths!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    stageArgs = ["add", "--", .. filePaths];
+                    break;
+                case GitStageScope.tracked:
+                default:
+                    stageArgs = ["add", "-u"];
+                    break;
             }
 
             var (stageExit, _, stageErr) = await RunGitAsync(gitRoot, stageArgs, cancellationToken);
@@ -535,16 +646,64 @@ public class SentinelGitTools
             return new GitStatusResult { Success = false, Error = $"Git stage failed: {ex.Message}" };
         }
     }
+    // Added by InsertMemberBefore (expected - used for diagnostics)
+    /// <summary>
+    /// Removes files from the index (<c>git reset</c>), leaving the working tree untouched. The
+    /// tool could previously stage but never un-stage, so any mis-stage forced a shell fallback —
+    /// a state the tool could create but not exit. With no paths this resets the whole index; with
+    /// paths it un-stages only those.
+    /// </summary>
+    private async Task<GitStatusResult> UnstageAsync(
+        string gitRoot, string? paths, CancellationToken cancellationToken)
+    {
+        try
+        {
+            string[] resetArgs;
+            if (string.IsNullOrWhiteSpace(paths))
+            {
+                // Whole index. Deliberately a plain `git reset` (mixed, no ref): it un-stages
+                // everything while leaving every working-tree edit on disk, so this can never
+                // destroy uncommitted work the way `reset --hard` would.
+                resetArgs = ["reset"];
+            }
+            else
+            {
+                var filePaths = paths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                resetArgs = ["reset", "--", .. filePaths];
+            }
 
+            var (resetExit, _, resetErr) = await RunGitAsync(gitRoot, resetArgs, cancellationToken);
+
+            // `git reset` exits 1 when the index still differs from HEAD after the reset, which is
+            // the normal outcome here, not a failure. Treat stderr content as the real signal
+            // rather than trusting the exit code alone.
+            var resetErrText = resetErr.Trim();
+            if (resetExit != 0 && resetErrText.Length > 0)
+                return new GitStatusResult { Success = false, Error = $"git reset failed: {resetErrText}" };
+
+            return await StatusAsync(gitRoot, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Git unstage failed");
+            return new GitStatusResult { Success = false, Error = $"Git unstage failed: {ex.Message}" };
+        }
+    }
     private async Task<GitCommitResult> CommitAsync(
-        string gitRoot, string? message, bool stageAll, string? files, CancellationToken cancellationToken)
+        string gitRoot, string? message, GitStageScope scope, string? paths, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(message))
-            return new GitCommitResult { Success = false, Error = "message is required for operation=commit." };
+        {
+            return new GitCommitResult
+            {
+                Success = false,
+                Error = "message is required for operation=commit. Pass message: \"<what this commit does>\". Nothing was committed."
+            };
+        }
 
         try
         {
-            var stageResult = await StageAsync(gitRoot, stageAll, files, cancellationToken);
+            var stageResult = await StageAsync(gitRoot, scope, paths, cancellationToken);
             if (!stageResult.Success)
                 return new GitCommitResult { Success = false, Error = stageResult.Error };
 
