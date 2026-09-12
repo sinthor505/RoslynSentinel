@@ -1,0 +1,75 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe",
+            "args": [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/enforce-dogfood.ps1"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(tasklist)",
+      "Bash(tasklist *)",
+
+      "mcp__root_roslyn_sentinel_advanced_stdio__AcknowledgeExternalFileChanges",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ApplyDiff",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ApplyUnifiedDiff",
+      "mcp__root_roslyn_sentinel_advanced_stdio__Build",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ChangeAccessibility",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ChangeSignature",
+      "mcp__root_roslyn_sentinel_advanced_stdio__CreateFile",
+      "mcp__root_roslyn_sentinel_advanced_stdio__DeleteFile",
+      "mcp__root_roslyn_sentinel_advanced_stdio__FindReferences",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetBestInsertionPoint",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetCallGraph",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetCodeInventory",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetDiagnostics",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetFileOutline",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetLargeResult",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetMethodSource",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetOperationDetail",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetPublicApiSurface",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetSolutionMetrics",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetTypeInfo",
+      "mcp__root_roslyn_sentinel_advanced_stdio__GetWorkspaceHealth",
+      "mcp__root_roslyn_sentinel_advanced_stdio__Git",
+      "mcp__root_roslyn_sentinel_advanced_stdio__InspectSymbol",
+      "mcp__root_roslyn_sentinel_advanced_stdio__IsSessionHalted",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ListAll",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ListExternalDiskChanges",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ListProjectFrameworkTargets",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ListSolutionItems",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ListWorkspaceSolutions",
+      "mcp__root_roslyn_sentinel_advanced_stdio__LoadSolution",
+      "mcp__root_roslyn_sentinel_advanced_stdio__LocateSymbol",
+      "mcp__root_roslyn_sentinel_advanced_stdio__Member",
+      "mcp__root_roslyn_sentinel_advanced_stdio__MethodSignature",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ModifyAttribute",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ModifyBaseType",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ModifyEnum",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ModifyModifier",
+      "mcp__root_roslyn_sentinel_advanced_stdio__PreviewRenameImpact",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ReadFile",
+      "mcp__root_roslyn_sentinel_advanced_stdio__RenameSymbol",
+      "mcp__root_roslyn_sentinel_advanced_stdio__ReplaceSnippet",
+      "mcp__root_roslyn_sentinel_advanced_stdio__RunTest",
+      "mcp__root_roslyn_sentinel_advanced_stdio__SearchSolutionText",
+      "mcp__root_roslyn_sentinel_advanced_stdio__UndoLastApply",
+      "mcp__root_roslyn_sentinel_advanced_stdio__UsingDirective",
+      "mcp__root_roslyn_sentinel_advanced_stdio__WriteFile"
+    ]
+  }
+}

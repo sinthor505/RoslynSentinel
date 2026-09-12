@@ -4,6 +4,37 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `Git` tool missing branch/push/checkout/worktree/stash — forces a shell fallback — not started
+
+Raised 2026-09-12 while wiring the dog-fooding enforcement hook
+(`.claude/hooks/enforce-dogfood.ps1`).
+
+`Git` currently implements `status`, `log`, `diff`, `stage`/`add`, `commit`, `revert`. The hook
+therefore blocks only those six via shell and has to **let everything else through**, because
+denying an operation with no MCP equivalent would strand the task with nowhere to go.
+
+Missing, in rough priority order:
+
+- **`branch`** (list / create / delete / show current) and **`checkout`**/`switch` — needed for any
+  branch-per-change workflow, and CLAUDE.md's own convention is to branch before committing off the
+  default branch.
+- **`push`** / **`fetch`** / **`pull`** — remote operations; `push` at minimum, since it's the one
+  step that currently always escapes the chokepoint.
+- **`worktree`** (add / list / remove) — PlanStepRunner drives worktrees directly, so this is the
+  gap with the most existing in-repo usage, and the one place where a wrong path silently produces
+  the `Worktree/` diff trap that CLAUDE.md warns about.
+- **`stash`** (push / pop / list) and **`tag`** — lower priority, occasional use.
+- **`show`** for a single commit, and `diff` between two arbitrary refs (today `target` takes
+  `working`/`staged`/a single hash).
+
+Why it matters beyond convenience: each uncovered operation is a permanent, sanctioned hole in the
+dog-fooding chokepoint, so those code paths never get exercised and never surface the bugs that
+dog-fooding exists to find. It is also the reason the hook's deny list has to be an allow-list of
+six strings rather than a blanket `git` match — expanding the tool lets the hook get stricter.
+
+Note the existing open blocker `blockers/blocking_error_git_stage_ignores_untracked_files.md`
+against the current `stage` implementation; worth fixing in the same pass.
+
 ## `docCommentId` parameter audit across all tools — not started
 
 **Found:** 2026-09-06, see [docCommentId_description_gap.md](./docCommentId_description_gap.md). `RenameSymbol`'s description

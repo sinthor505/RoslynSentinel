@@ -21,6 +21,12 @@ ClaudeFiles/
 *.csv
 *.json
 
+# The blanket *.json above swallows the Claude Code project config. settings.json is
+# checked in because it registers the dog-fooding PreToolUse hook - without it the hook
+# is inert on a fresh clone and enforcement silently doesn't exist. settings.local.json
+# stays ignored: it's per-machine (absolute paths, personal permission grants).
+!.claude/settings.json
+
 *.trx
 
 TestResults/

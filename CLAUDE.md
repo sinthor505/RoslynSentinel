@@ -13,6 +13,43 @@ falling back to grep, regex search-and-replace, file-read loops, or manual text 
 If an agent reaches for a shell command to inspect or modify C# code, that is a gap in the tool
 surface, not a deficiency in the agent.
 
+## Dog-fooding is mandatory — this is an instruction, not background
+
+**All C# reads and writes, and all git operations, go through the RoslynSentinel MCP tools.** This
+applies to work on RoslynSentinel's own source, which is nearly every task here — "I'm editing the
+server itself" is *not* an exemption, and treating it as one has silently voided this policy in past
+sessions.
+
+| Instead of | Use |
+| --- | --- |
+| `Read` a `.cs` | `ReadFile`, `GetFileOutline`, `GetMethodSource` |
+| `Grep` / `Glob` for C# symbols | `SearchSolutionText`, `LocateSymbol`, `FindReferences` |
+| `Edit` / `Write` a `.cs` | `Member`, `MethodSignature`, `ModifyModifier`, `ReplaceSnippet`, `ApplyDiff`, `RenameSymbol` |
+| `Bash(git status/log/diff/add/commit/revert)` | `Git(operation: ...)` |
+| `Bash(dotnet build/test)` | `Build`, `RunTest` |
+
+**Scope boundary:** non-C# files — `.md`, `.ps1`, `.json`, `.csproj` — are outside the Roslyn
+workspace and have no tool coverage. Use the normal file tools for those directly; that is the edge
+of where the tools apply, not a bypass. Likewise git operations the `Git` tool doesn't implement
+(branch, push, checkout, worktree, stash) legitimately use the shell — see `docs/current/TODO.md`.
+
+**Why it outranks convenience:** chokepointing every operation is the only way to surface
+in-memory-vs-on-disk drift, multi-call sequencing bugs, and edge cases that never appear in an
+isolated test. Falling back whenever a tool is awkward hides precisely the failures this exists to
+find — and the awkwardness *is itself the finding*, per the failure doctrine below.
+
+**A tool failure is a blocking finding.** If a needed MCP tool fails, returns wrong data, is
+unreachable, or has no equivalent operation: finish any in-flight edit, stop advancing the task,
+write `docs/current/blockers/blocking_error_<slug>.md` (slug from the real symptom — never a generic
+name, since several can be open at once), and end the turn. Do not retry speculatively, do not route
+around it with shell tools, and do not resume until told the issue is fixed.
+
+A `PreToolUse` hook (`.claude/hooks/enforce-dogfood.ps1`) blocks the common violations mechanically,
+because a rule enforced only by remembering decays across hundreds of calls. The hook is a backstop,
+not the policy — it cannot see intent, and reading a `.cs` with `Read` still violates this section
+even though nothing stops it. If the hook ever blocks something genuinely necessary, say so and stop;
+do not reword the command to slip past it.
+
 ## Failure doctrine: the environment is responsible
 
 This is the governing frame for interpreting **every** model-eval run, PlanStepRunner step, and

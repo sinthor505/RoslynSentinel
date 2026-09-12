@@ -1,6 +1,35 @@
 # Blocking error — `Git(operation: "stage")` silently ignores untracked files
 
-**Status:** OPEN — reported per docs/current/feedback_dogfood_mcp_blocking_errors.md, waiting for fix/confirmation.
+**Status:** OPEN, but **the diagnosis below is wrong** — see the 2026-09-12 amendment first.
+
+## Amendment 2026-09-12 — could not reproduce; the real defect is different
+
+Re-tested on current master. `Git(operation:"stage", files:"a,b,c")` **does** stage untracked
+files correctly — seven paths including four brand-new ones staged in one call, with nothing
+dropped and nothing extra swept in.
+
+Note the repro below calls the parameter **`paths:`**. The tool's actual parameter is **`files:`**
+(`paths:` exists, but only on `operation:"diff"`). The overwhelmingly likely explanation is that
+the original call passed `paths:` to `stage`, where it was **silently ignored** — so the tool fell
+back to its default of staging tracked changes only, which matches the reported symptom exactly.
+
+That makes this an *unknown-parameter-silently-ignored* defect, not an untracked-file defect, and
+it is a worse bug than the one originally filed: a mistyped or misremembered parameter name should
+be a hard validation error naming the valid parameters, never a silent behaviour change. A weak
+model that confuses `paths`/`files` between two operations of the same tool gets a `success:true`
+with the wrong result — the silent-wrong-behaviour class that is hardest to recover from.
+
+**A separate, confirmed defect found the same day:** `stageAll:true` silently **overrides** an
+explicit `files` list. Calling `stage` with five named files plus `stageAll:true` ran `git add -A`
+and staged eleven, including unrelated pre-existing untracked docs. Two parameters that each
+determine the file set, with one silently winning, is the actual footgun here.
+
+Both are covered in the fix brief; see `blocking_error_git_requires_loaded_solution.md` and the
+`Git` entry in `docs/current/TODO.md`. The original write-up is kept below for the record.
+
+---
+
+**Original status:** OPEN — reported per docs/current/feedback_dogfood_mcp_blocking_errors.md, waiting for fix/confirmation.
 
 ## Symptom
 

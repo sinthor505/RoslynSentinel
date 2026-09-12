@@ -7,7 +7,27 @@ namespace RoslynSentinel.Common;
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum GitOperation
 {
-    status, log, diff, stage, add, commit, revert
+    status, log, diff, stage, add, unstage, commit, revert
+}
+
+/// <summary>
+/// Which files a stage/commit operation acts on. Replaces the former <c>stageAll</c> boolean, which
+/// could silently override an explicit <c>files</c> list (a <c>files</c>+<c>stageAll:true</c> call
+/// ran <c>git add -A</c> and staged unrelated untracked files). Scope and file list are now one
+/// decision: <see cref="listed"/> is the only value that reads <c>files</c>, and combining
+/// <c>files</c> with any other scope is rejected rather than silently resolved.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum GitStageScope
+{
+    /// <summary>Stage modifications/deletions of already-tracked files only (<c>git add -u</c>). New untracked files are NOT staged.</summary>
+    tracked,
+
+    /// <summary>Stage every change in the working tree, including untracked files (<c>git add -A</c>). Ignores <c>files</c> — passing both is an error.</summary>
+    all,
+
+    /// <summary>Stage exactly the paths named in <c>files</c>, untracked ones included (<c>git add -- &lt;paths&gt;</c>). Requires <c>files</c>.</summary>
+    listed
 }
 
 // ── Workspace ─────────────────────────────────────────────────────────────────
