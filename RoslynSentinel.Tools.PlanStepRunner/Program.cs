@@ -48,6 +48,11 @@ public static class Program
         Directory.CreateDirectory(options.RunDir);
         Console.WriteLine($"Run directory: {options.RunDir}");
 
+        // RunDir's own leaf is already the run's de facto human identifier throughout memory/docs
+        // (e.g. "run 20260910-013550-398"), so it's reused as RunId rather than minting a second,
+        // unrelated id for the same run.
+        var runId = Path.GetFileName(options.RunDir);
+
         using var httpClient = new HttpClient
         {
             BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/"),
@@ -74,7 +79,8 @@ public static class Program
             var worktreePath = git.CreateWorktree(step);
             Console.WriteLine($"Worktree: {worktreePath}");
 
-            var stepDir = Path.Combine(options.RunDir, Path.GetFileNameWithoutExtension(step.FileName), "Logs");
+            var stepId = Path.GetFileNameWithoutExtension(step.FileName);
+            var stepDir = Path.Combine(options.RunDir, stepId, "Logs");
             Directory.CreateDirectory(stepDir);
 
             using var loggerFactory = LoggerFactory.Create(b =>
@@ -90,7 +96,7 @@ public static class Program
 
             try
             {
-                var outcome = await RunStepAsync(step, worktreePath, git, agentClient, options, loggerFactory, stepDir);
+                var outcome = await RunStepAsync(step, worktreePath, git, agentClient, options, loggerFactory, stepDir, runId, stepId);
                 LogSummary(step, outcome);
 
                 var buildOk = outcome.BuildErrorCount == 0;
@@ -149,7 +155,9 @@ public static class Program
         LmStudioAgentClient agentClient,
         RunnerOptions options,
         ILoggerFactory loggerFactory,
-        string stepDir)
+        string stepDir,
+        string runId,
+        string stepId)
     {
         var serverBinDir = Path.Combine(worktreePath, "bin-runner", "Advanced");
         await DotnetProcess.BuildAsync(
@@ -176,7 +184,7 @@ public static class Program
             // production plans they mirror share basenames; without it ProjectDoc's basename
             // fallback silently answered with the production copy (run 20260910-013550-398 spent
             // all 60 turns implementing a plan it never asked for).
-            Arguments = ["--base-repo-dir=" + worktreePath, "--include-tools=" + options.IncludeTools, "--testing"],
+            Arguments = ["--base-repo-dir=" + worktreePath, "--include-tools=" + options.IncludeTools, "--testing", "--log-dir=" + stepDir, "--run-id=" + runId, "--step-id=" + stepId],
             WorkingDirectory = worktreePath,
         });
 
@@ -214,7 +222,7 @@ public static class Program
             "disk, and do not read any other plan step file.\n\n" +
             $"=== BEGIN PLAN STEP: {step.FileName} ===\n{step.Body}\n=== END PLAN STEP ===";
 
-        var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, stepDir, CancellationToken.None);
+        var result = await runner.RunAsync(AgentSystemPrompts.CodingAgent, userPrompt, stepDir, CancellationToken.None, runId: runId);
 
         if (result.RepeatedFailure is { } repeatedFailure)
         {

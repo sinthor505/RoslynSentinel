@@ -39,8 +39,11 @@ public class ServerHttp
         }
 
         // ── Logging (file + console — stdout is safe for HTTP transport) ─────
-        var logPath = ServerStartupHelpers.ConfigureHttpLogging();
-        ServerStartupHelpers.AttachCrashHandlers();
+        var logDirectory = ServerStartupHelpers.ParseLogDirectory(args);
+        var runId = ServerStartupHelpers.ParseRunId(args);
+        var stepId = ServerStartupHelpers.ParseStepId(args);
+        var logPath = ServerStartupHelpers.ConfigureHttpLogging(logDirectory: logDirectory, runId: runId, stepId: stepId);
+        ServerStartupHelpers.AttachCrashHandlers(logDirectory, runId, stepId);
 
         // ── Host ─────────────────────────────────────────────────────────────
         var builder = WebApplication.CreateBuilder(args);

@@ -296,16 +296,36 @@ public static class ServerStartupHelpers
     // ── Logging ───────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Output template shared by every Serilog file/console sink this server configures. RunId and
+    /// StepId are enriched properties (see <see cref="ConfigureStdioLogging"/>/
+    /// <see cref="ConfigureHttpLogging"/>/<see cref="AttachCrashHandlers"/>), and must be named here
+    /// explicitly to appear in the written file — Serilog does not print enriched properties unless
+    /// the template references them. Always present (defaulting to "-" when the caller supplied
+    /// none) so the column position and grep pattern never change between a correlated and an
+    /// uncorrelated run.
+    /// </summary>
+    private const string LogOutputTemplate =
+        "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [Run={RunId} Step={StepId}] {Message:lj}{NewLine}{Exception}";
+
+    /// <summary>
     /// Configures Serilog for stdio servers: file-only, Information level.
     /// Stdout must stay clean for the MCP stdio transport.
     /// </summary>
-    public static string ConfigureStdioLogging(string logFileName = "server.log")
+    /// <param name="logFileName">Base log file name; a timestamp is inserted before the extension.</param>
+    /// <param name="logDirectory">Directory to write the log into. Defaults to
+    /// <c>AppDomain.CurrentDomain.BaseDirectory\logs</c> when null. Created if it doesn't exist.</param>
+    /// <param name="runId">Value stamped onto every log line as "Run=". Defaults to "-" when null.</param>
+    /// <param name="stepId">Value stamped onto every log line as "Step=". Defaults to "-" when null.</param>
+    public static string ConfigureStdioLogging(
+        string logFileName = "server.log", string? logDirectory = null, string? runId = null, string? stepId = null)
     {
-        var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", TimestampedLogFileName(logFileName));
+        var logPath = Path.Combine(ResolveLogDirectory(logDirectory), TimestampedLogFileName(logFileName));
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .Enrich.FromLogContext()
-            .WriteTo.File(logPath, rollingInterval: RollingInterval.Infinite)
+            .Enrich.WithProperty("RunId", runId ?? "-")
+            .Enrich.WithProperty("StepId", stepId ?? "-")
+            .WriteTo.File(logPath, rollingInterval: RollingInterval.Infinite, outputTemplate: LogOutputTemplate)
             .CreateLogger();
         return logPath;
     }
@@ -314,16 +334,60 @@ public static class ServerStartupHelpers
     /// Configures Serilog for HTTP servers: file + console, Verbose level.
     /// Console output is safe because stdout is not the MCP transport.
     /// </summary>
-    public static string ConfigureHttpLogging(string logFileName = "http-host.log")
+    /// <param name="logFileName">Base log file name; a timestamp is inserted before the extension.</param>
+    /// <param name="logDirectory">Directory to write the log into. Defaults to
+    /// <c>AppDomain.CurrentDomain.BaseDirectory\logs</c> when null. Created if it doesn't exist.</param>
+    /// <param name="runId">Value stamped onto every log line as "Run=". Defaults to "-" when null.</param>
+    /// <param name="stepId">Value stamped onto every log line as "Step=". Defaults to "-" when null.</param>
+    public static string ConfigureHttpLogging(
+        string logFileName = "http-host.log", string? logDirectory = null, string? runId = null, string? stepId = null)
     {
-        var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", TimestampedLogFileName(logFileName));
+        var logPath = Path.Combine(ResolveLogDirectory(logDirectory), TimestampedLogFileName(logFileName));
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Verbose()
             .Enrich.FromLogContext()
-            .WriteTo.File(logPath, rollingInterval: RollingInterval.Infinite)
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .Enrich.WithProperty("RunId", runId ?? "-")
+            .Enrich.WithProperty("StepId", stepId ?? "-")
+            .WriteTo.File(logPath, rollingInterval: RollingInterval.Infinite, outputTemplate: LogOutputTemplate)
+            .WriteTo.Console(outputTemplate: LogOutputTemplate)
             .CreateLogger();
         return logPath;
+    }
+
+    /// <summary>
+    /// Parses --log-dir (either "--log-dir=path" or "--log-dir path"); returns null if absent, in
+    /// which case callers fall back to their own default (see <see cref="ResolveLogDirectory"/>).
+    /// </summary>
+    public static string? ParseLogDirectory(string[] args) => GetArgValue(args, "--log-dir");
+
+    /// <summary>
+    /// Parses --run-id (either "--run-id=value" or "--run-id value"); returns null if absent, in
+    /// which case logging falls back to "-" (see <see cref="LogOutputTemplate"/>). Not required —
+    /// a server launched without it (e.g. an interactive VS Code session) logs and runs exactly as
+    /// before.
+    /// </summary>
+    public static string? ParseRunId(string[] args) => GetArgValue(args, "--run-id");
+
+    /// <summary>
+    /// Parses --step-id (either "--step-id=value" or "--step-id value"); returns null if absent,
+    /// same fallback behaviour as <see cref="ParseRunId"/>.
+    /// </summary>
+    public static string? ParseStepId(string[] args) => GetArgValue(args, "--step-id");
+
+    /// <summary>
+    /// Resolves the effective log directory: <paramref name="logDirectory"/> when supplied
+    /// (creating it if missing), otherwise the historical default of
+    /// <c>AppDomain.CurrentDomain.BaseDirectory\logs</c>.
+    /// </summary>
+    private static string ResolveLogDirectory(string? logDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(logDirectory))
+        {
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+        }
+
+        Directory.CreateDirectory(logDirectory);
+        return logDirectory;
     }
 
     /// <summary>
@@ -344,7 +408,12 @@ public static class ServerStartupHelpers
     /// Logs to Serilog and writes a crash.log file in the logs directory.
     /// Safe to call for both stdio and HTTP hosts; does not write to stdout.
     /// </summary>
-    public static void AttachCrashHandlers()
+    /// <param name="logDirectory">Directory to write crash.log into. Defaults to
+    /// <c>AppDomain.CurrentDomain.BaseDirectory\logs</c> when null, matching
+    /// <see cref="ConfigureStdioLogging"/>/<see cref="ConfigureHttpLogging"/>.</param>
+    /// <param name="runId">Value stamped onto each crash.log entry. Defaults to "-" when null.</param>
+    /// <param name="stepId">Value stamped onto each crash.log entry. Defaults to "-" when null.</param>
+    public static void AttachCrashHandlers(string? logDirectory = null, string? runId = null, string? stepId = null)
     {
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
@@ -353,9 +422,9 @@ public static class ServerStartupHelpers
                 e.IsTerminating, ex?.Message ?? e.ExceptionObject?.ToString());
             try
             {
-                var crashPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "crash.log");
+                var crashPath = Path.Combine(ResolveLogDirectory(logDirectory), "crash.log");
                 File.AppendAllText(crashPath,
-                    $"\n[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] CRASH (IsTerminating={e.IsTerminating})\n" +
+                    $"\n[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] CRASH (IsTerminating={e.IsTerminating}) [Run={runId ?? "-"} Step={stepId ?? "-"}]\n" +
                     (ex?.ToString() ?? e.ExceptionObject?.ToString() ?? "unknown") + "\n");
             }
             catch { /* best effort */ }

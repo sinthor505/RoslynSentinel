@@ -72,8 +72,11 @@ namespace RoslynSentinel.Server.Advanced
             }
 
             // ── Logging (file-only — stdout must stay clean for stdio transport) ─
-            var logPath = ServerStartupHelpers.ConfigureStdioLogging();
-            ServerStartupHelpers.AttachCrashHandlers();
+            var logDirectory = ServerStartupHelpers.ParseLogDirectory(args);
+            var runId = ServerStartupHelpers.ParseRunId(args);
+            var stepId = ServerStartupHelpers.ParseStepId(args);
+            var logPath = ServerStartupHelpers.ConfigureStdioLogging(logDirectory: logDirectory, runId: runId, stepId: stepId);
+            ServerStartupHelpers.AttachCrashHandlers(logDirectory, runId, stepId);
 
             // ── Host ─────────────────────────────────────────────────────────────
             var builder = Host.CreateApplicationBuilder(args);
