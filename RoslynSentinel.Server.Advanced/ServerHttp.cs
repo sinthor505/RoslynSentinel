@@ -25,7 +25,12 @@ public class ServerHttp
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
         LlmOptions.Configure(args);
 
-        if (ServerStartupHelpers.HandleListTools(args, activeModes, includeTools, excludeTools))
+        if (ServerStartupHelpers.HandleListTools(
+                args,
+                activeModes,
+                (mcpBuilder, services) => mcpBuilder.AddRoslynSentinelToolsAdvanced(services, activeModes, includeTools, excludeTools),
+                includeTools,
+                excludeTools))
         {
             return;
         }

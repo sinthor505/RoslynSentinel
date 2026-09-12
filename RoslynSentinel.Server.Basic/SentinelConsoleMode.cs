@@ -1,10 +1,10 @@
+// SentinelConsoleMode.cs v2
 using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,100 +21,106 @@ public static partial class SentinelConsoleMode
     private static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
     private static readonly JsonSerializerOptions CompactJson = new() { WriteIndented = false };
 
-    // ─── Snake-case helpers ──────────────────────────────────────────────────
+    // ─── --list-tools ──────────────────────────────────────────────────────
 
-    [GeneratedRegex(@"([a-z0-9])([A-Z])")]
-    private static partial Regex SnakeRegex1();
-
-    [GeneratedRegex(@"([A-Z]+)([A-Z][a-z])")]
-    private static partial Regex SnakeRegex2();
-
-    internal static string ToSnakeCase(string name)
+    /// <summary>
+    /// Builds the real MCP tool manifest for a given registration by constructing a throwaway
+    /// <see cref="ServiceCollection"/>, invoking <paramref name="registerTools"/> against it exactly
+    /// as a live server entry point would, then extracting the resulting <see cref="McpServerTool"/>
+    /// instances. This is the same mechanism <see cref="WriteStartupDump"/> uses against a real
+    /// host's <see cref="IServiceProvider"/>, so <c>--list-tools</c> can never drift from what a
+    /// running server actually serves — replacing a previous implementation
+    /// (<c>DiscoverTools</c>) that re-derived the tool surface via a separate, hardcoded
+    /// single-assembly reflection pass and reported snake_case names the server never serves. See
+    /// docs/current/blockers/blocking_error_list_tools_misreports_tool_surface.md.
+    /// </summary>
+    internal static List<ModelContextProtocol.Protocol.Tool> BuildToolManifestFor(
+        Func<IMcpServerBuilder, IServiceCollection, IMcpServerBuilder> registerTools)
     {
-        var s = SnakeRegex1().Replace(name, "$1_$2");
-        s = SnakeRegex2().Replace(s, "$1_$2");
-        return s.ToLowerInvariant();
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var mcpBuilder = services.AddMcpServer();
+        registerTools(mcpBuilder, services);
+
+        using var provider = services.BuildServiceProvider();
+        return ExtractToolManifest(provider);
     }
 
-    private static string FriendlyType(Type type)
+    /// <summary>
+    /// Reads <see cref="McpServerTool.ProtocolTool"/> from every registered DI instance. Falls back
+    /// to constructing tools directly via <see cref="McpServerTool.Create"/> over all loaded
+    /// RoslynSentinel.Server.* assemblies when DI registration returns zero (e.g. singleton factory
+    /// delay or scope mismatch at startup time) — mirrors what <c>WithToolsFixed&lt;T&gt;()</c> does.
+    /// Shared by <see cref="BuildToolManifestFor"/> and <see cref="WriteStartupDump"/> so the two
+    /// can never independently drift.
+    /// </summary>
+    private static List<ModelContextProtocol.Protocol.Tool> ExtractToolManifest(IServiceProvider services)
     {
-        if (!type.IsGenericType)
-        {
-            return type.Name;
-        }
-
-        var outer = type.Name[..type.Name.IndexOf('`')];
-        var args = string.Join(", ", type.GetGenericArguments().Select(FriendlyType));
-        return $"{outer}<{args}>";
-    }
-
-    // ─── Tool discovery via reflection ──────────────────────────────────────
-
-    private sealed record ToolEntry(string Name, string? Description, string Module, MethodInfo Method, Type ToolType);
-
-    private static IReadOnlyList<ToolEntry> DiscoverTools(
-        HashSet<string> activeModes,
-        HashSet<string>? includeTools = null,
-        HashSet<string>? excludeTools = null)
-    {
-        var activeToolClasses = ServerStartupHelpers.ResolveActiveToolClasses(
-            activeModes,
-            ToolClassRegistry.AdvancedModeToToolClasses,
-            includeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            excludeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-
-        return typeof(SentinelWorkspaceTools).Assembly
-            .GetTypes()
-            .Where(t =>
-            {
-                if (t.GetCustomAttribute<McpServerToolTypeAttribute>() == null)
-                {
-                    return false;
-                }
-
-                return activeToolClasses.Contains(t.Name);
-            })
-            .OrderBy(t => t.Name)
-            .SelectMany(type =>
-                type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-                    .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null)
-                    .Select(m => new ToolEntry(
-                        Name: ToSnakeCase(m.Name),
-                        Description: m.GetCustomAttribute<DescriptionAttribute>()?.Description,
-                        Module: type.Name.Replace("Sentinel", "", StringComparison.Ordinal)
-                                        .Replace("Tools", "", StringComparison.Ordinal),
-                        Method: m,
-                        ToolType: type)))
+        var tools = services.GetServices<McpServerTool>()
+            .Select(t => t.ProtocolTool)
             .OrderBy(t => t.Name)
             .ToList();
+
+        if (tools.Count == 0)
+        {
+            tools = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel.Server", StringComparison.Ordinal) == true)
+                .SelectMany(a => { try { return a.GetTypes(); } catch { return []; } })
+                .Where(t => t.IsClass && !t.IsAbstract && t.GetCustomAttribute<McpServerToolTypeAttribute>() != null)
+                .SelectMany(type =>
+                {
+                    var instance = services.GetService(type);
+                    var opts = new McpServerToolCreateOptions { Services = services, SchemaCreateOptions = McpToolSchemaFix.SchemaCreateOptions };
+                    return type
+                        .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                        .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null
+                                 && (m.IsStatic || instance != null))
+                        .SelectMany(m =>
+                        {
+                            try
+                            {
+                                return (IEnumerable<ModelContextProtocol.Protocol.Tool>)
+                                    [McpServerTool.Create(m, m.IsStatic ? null : instance, opts).ProtocolTool];
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.Error.WriteLine(
+                                    $"[ListTools] Skipping {type.Name}.{m.Name}: {ex.Message}");
+                                return [];
+                            }
+                        });
+                })
+                .OrderBy(t => t.Name)
+                .ToList();
+        }
+
+        return tools;
     }
 
-    // ─── --list-tools ────────────────────────────────────────────────────────
-
+    /// <summary>
+    /// Prints the tool surface <paramref name="registerTools"/> would expose. Defaults to a
+    /// names-only listing; pass <paramref name="full"/> (--full) for the same envelope
+    /// <c>tool_list_&lt;modes&gt;.json</c> carries (name/description/inputSchema).
+    /// </summary>
     public static void ListTools(
-        HashSet<string> activeModes,
+        Func<IMcpServerBuilder, IServiceCollection, IMcpServerBuilder> registerTools,
         string? outputPath,
-        HashSet<string>? includeTools = null,
-        HashSet<string>? excludeTools = null)
+        bool full = false)
     {
-        var tools = DiscoverTools(activeModes, includeTools, excludeTools);
+        var tools = BuildToolManifestFor(registerTools);
 
-        var data = tools.Select(t => (object)new
-        {
-            name = t.Name,
-            module = t.Module,
-            description = t.Description,
-            parameters = t.Method.GetParameters()
-                .Where(p => p.ParameterType != typeof(CancellationToken))
-                .Select(p => new
-                {
-                    name = p.Name,
-                    type = FriendlyType(p.ParameterType),
-                    required = !p.HasDefaultValue,
-                    description = p.GetCustomAttribute<DescriptionAttribute>()?.Description,
-                })
-                .ToArray(),
-        }).ToList();
+        object data = full
+            ? new
+            {
+                _metadata = new { toolCount = tools.Count, generatedUtc = DateTime.UtcNow.ToString("O") },
+                tools = tools.Select(t => new { name = t.Name, description = t.Description, inputSchema = t.InputSchema }),
+            }
+            : new
+            {
+                _metadata = new { toolCount = tools.Count, generatedUtc = DateTime.UtcNow.ToString("O") },
+                tools = tools.Select(t => t.Name).ToList(),
+            };
 
         var json = JsonSerializer.Serialize(data, PrettyJson);
 
@@ -129,7 +135,7 @@ public static partial class SentinelConsoleMode
         }
     }
 
-    // ─── --interactive REPL ──────────────────────────────────────────────────
+    // ─── --interactive REPL ────────────────────────────────────────────────
 
     private static int _msgId;
 
@@ -213,10 +219,7 @@ public static partial class SentinelConsoleMode
     public static async Task RunReplAsync(
         Stream clientWriteStream,
         Stream clientReadStream,
-        HashSet<string> activeModes,
-        CancellationTokenSource lifetimeCts,
-        HashSet<string>? includeTools = null,
-        HashSet<string>? excludeTools = null)
+        CancellationTokenSource lifetimeCts)
     {
         using var writer = new StreamWriter(clientWriteStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true)
         {
@@ -232,7 +235,7 @@ public static partial class SentinelConsoleMode
             cts.Cancel();
         };
 
-        // ── MCP handshake ────────────────────────────────────────────────────
+        // ── MCP handshake ──────────────────────────────────────────────────
         Console.Error.WriteLine("[interactive] Performing MCP handshake…");
         var initId = System.Threading.Interlocked.Increment(ref _msgId);
         try
@@ -281,10 +284,7 @@ public static partial class SentinelConsoleMode
         Console.Error.WriteLine("  describe <tool_name>        — show parameters");
         Console.Error.WriteLine("  exit                        — quit");
 
-        // Pre-build local tool dictionary (for describe / validation)
-        var localTools = DiscoverTools(activeModes, includeTools, excludeTools).ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
-
-        // ── REPL loop ────────────────────────────────────────────────────────
+        // ── REPL loop ──────────────────────────────────────────────────────
         while (!cts.IsCancellationRequested)
         {
             Console.Write("\nsentinel> ");
@@ -327,7 +327,7 @@ public static partial class SentinelConsoleMode
 
             if (input.StartsWith("describe ", StringComparison.OrdinalIgnoreCase))
             {
-                DescribeTool(localTools, input[9..].Trim());
+                await DescribeToolViaReplAsync(writer, reader, input[9..].Trim(), cts.Token).ConfigureAwait(false);
                 continue;
             }
 
@@ -484,47 +484,84 @@ public static partial class SentinelConsoleMode
         }
     }
 
-    private static void DescribeTool(Dictionary<string, ToolEntry> localTools, string toolName)
+    /// <summary>
+    /// Describes one tool by querying the live server's own <c>tools/list</c> over the REPL's
+    /// JSON-RPC connection, rather than a locally-cached reflection pass — so the description can
+    /// never disagree with what <c>tools/call</c> on the same connection would actually accept.
+    /// </summary>
+    private static async Task DescribeToolViaReplAsync(
+        StreamWriter writer, StreamReader reader,
+        string toolName,
+        CancellationToken cancellationToken)
     {
-        if (!localTools.TryGetValue(toolName, out var tool))
+        var id = System.Threading.Interlocked.Increment(ref _msgId);
+        await writer.WriteAsync(JsonSerializer.Serialize(new Dictionary<string, object?>
         {
-            Console.WriteLine($"  Unknown tool '{toolName}'.  Use '?' to list available tools.");
-            return;
-        }
+            ["jsonrpc"] = "2.0",
+            ["id"] = id,
+            ["method"] = "tools/list",
+            ["params"] = new { },
+        }, CompactJson) + "\n").ConfigureAwait(false);
 
-        Console.WriteLine($"\n  Tool  : {tool.Name}");
-        Console.WriteLine($"  Module: {tool.Module}");
-        Console.WriteLine($"  Desc  : {tool.Description}");
-
-        var parameters = tool.Method.GetParameters()
-            .Where(p => p.ParameterType != typeof(CancellationToken))
-            .ToList();
-
-        if (parameters.Count == 0)
+        try
         {
-            Console.WriteLine("  Params: (none)");
-        }
-        else
-        {
-            Console.WriteLine("  Params:");
-            foreach (var p in parameters)
+            using var tcs = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(tcs.Token, cancellationToken);
+            var resp = await ReadResponseAsync(reader, id, linked.Token).ConfigureAwait(false);
+
+            if (resp?["result"]?["tools"] is not JsonArray toolsArr)
             {
-                var req = p.HasDefaultValue ? "optional" : "required";
-                var pdesc = p.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "";
-                Console.WriteLine($"    {p.Name,-30} {FriendlyType(p.ParameterType),-22} [{req}]  {pdesc}");
+                Console.WriteLine("[error] Unexpected response from tools/list.");
+                return;
             }
+
+            var tool = toolsArr.FirstOrDefault(t =>
+                string.Equals(t?["name"]?.GetValue<string>(), toolName, StringComparison.OrdinalIgnoreCase));
+
+            if (tool is null)
+            {
+                Console.WriteLine($"  Unknown tool '{toolName}'.  Use '?' to list available tools.");
+                return;
+            }
+
+            Console.WriteLine($"\n  Tool  : {tool["name"]?.GetValue<string>()}");
+            Console.WriteLine($"  Desc  : {tool["description"]?.GetValue<string>()}");
+
+            if (tool["inputSchema"]?["properties"] is JsonObject props)
+            {
+                var required = (tool["inputSchema"]?["required"] as JsonArray)?
+                    .Select(r => r?.GetValue<string>())
+                    .Where(r => r is not null)
+                    .Select(r => r!)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                Console.WriteLine("  Params:");
+                foreach (var (paramName, schema) in props)
+                {
+                    var req = required.Contains(paramName) ? "required" : "optional";
+                    var typeName = schema?["type"]?.GetValue<string>() ?? "any";
+                    var pdesc = schema?["description"]?.GetValue<string>() ?? "";
+                    Console.WriteLine($"    {paramName,-30} {typeName,-10} [{req}]  {pdesc}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("  Params: (none)");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("[error] Timed out waiting for tools/list.");
         }
     }
 
-    // ─── Startup dump ────────────────────────────────────────────────────────
+    // ─── Startup dump ──────────────────────────────────────────────────────
 
     /// <summary>
     /// Writes tool_list.json (full MCP payload) and tool_list_simple.json (names only)
-    /// to <paramref name="outputDir"/> on every server startup.
-    /// Primary: reads <see cref="McpServerTool.ProtocolTool"/> from registered DI instances.
-    /// Fallback: creates tools directly via <see cref="McpServerTool.Create"/> over all
-    /// loaded RoslynSentinel.Server.* assemblies — used when DI registration returns zero
-    /// (e.g. singleton factory delay or scope mismatch at startup time).
+    /// to <paramref name="outputDir"/> on every server startup. Delegates extraction to
+    /// <see cref="ExtractToolManifest"/> — the same routine <see cref="ListTools"/> uses — so the
+    /// two can never independently drift.
     /// NOT an [McpServerTool] — internal diagnostic output only.
     /// </summary>
     public static void WriteStartupDump(IServiceProvider services, string outputDir, string modeArg)
@@ -536,46 +573,7 @@ public static partial class SentinelConsoleMode
                                          .Replace(",", "_")
                                          .Replace(" ", "_");
 
-            var tools = services.GetServices<McpServerTool>()
-                .Select(t => t.ProtocolTool)
-                .OrderBy(t => t.Name)
-                .ToList();
-
-            // Fallback: DI returned nothing — build directly from assembly metadata.
-            // Mirrors what WithTools<T>() does: Create(method, instance, options) for each
-            // [McpServerTool]-attributed method on every [McpServerToolType]-marked class.
-            if (tools.Count == 0)
-            {
-                tools = AppDomain.CurrentDomain.GetAssemblies()
-                    .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel.Server", StringComparison.Ordinal) == true)
-                    .SelectMany(a => { try { return a.GetTypes(); } catch { return []; } })
-                    .Where(t => t.IsClass && !t.IsAbstract && t.GetCustomAttribute<McpServerToolTypeAttribute>() != null)
-                    .SelectMany(type =>
-                    {
-                        var instance = services.GetService(type);
-                        var opts = new McpServerToolCreateOptions { Services = services, SchemaCreateOptions = McpToolSchemaFix.SchemaCreateOptions };
-                        return type
-                            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-                            .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null
-                                     && (m.IsStatic || instance != null))
-                            .SelectMany(m =>
-                            {
-                                try
-                                {
-                                    return (IEnumerable<ModelContextProtocol.Protocol.Tool>)
-                                        [McpServerTool.Create(m, m.IsStatic ? null : instance, opts).ProtocolTool];
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.Error.WriteLine(
-                                        $"[StartupDump] Skipping {type.Name}.{m.Name}: {ex.Message}");
-                                    return [];
-                                }
-                            });
-                    })
-                    .OrderBy(t => t.Name)
-                    .ToList();
-            }
+            var tools = ExtractToolManifest(services);
 
             string generatedUtc = DateTime.UtcNow.ToString("O");
             int totalChars = tools.Sum(t => t.Name.Length + (t.Description?.Length ?? 0));
@@ -602,7 +600,7 @@ public static partial class SentinelConsoleMode
                 JsonSerializer.Serialize(fullPayload, PrettyJson),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-            // ── tool_list_simple.json — names only for human readability ─────────
+            // ── tool_list_simple.json — names only for human readability ────────
             var simplePayload = new
             {
                 _metadata = new
@@ -624,7 +622,7 @@ public static partial class SentinelConsoleMode
         }
     }
 
-    // ─── Method inventory dump ───────────────────────────────────────────────
+    // ─── Method inventory dump ─────────────────────────────────────────────
 
     /// <summary>
     /// Writes <c>all_methods.csv</c> and <c>engine_methods.json</c> to the solution root
@@ -763,6 +761,18 @@ public static partial class SentinelConsoleMode
         }
 
         return FriendlyType(returnType);
+    }
+
+    private static string FriendlyType(Type type)
+    {
+        if (!type.IsGenericType)
+        {
+            return type.Name;
+        }
+
+        var outer = type.Name[..type.Name.IndexOf('`')];
+        var args = string.Join(", ", type.GetGenericArguments().Select(FriendlyType));
+        return $"{outer}<{args}>";
     }
 
     private static string EscapeCsvField(string s) => s.Replace("\"", "\"\"");

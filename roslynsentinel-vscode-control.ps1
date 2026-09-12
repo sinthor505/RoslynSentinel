@@ -202,7 +202,24 @@ function Start-HttpCopy {
         }
     }
 
-    Start-Process -FilePath $httpExe -ArgumentList "--transport=http", "--port=$VSCodePort" -WindowStyle Hidden
+    # Mirrors the --include-tools list in C:\Users\Administrator\.mcp.json's stdio launch, so this
+    # fallback serves the same tool surface rather than drifting into a second, unsynced set. Keep
+    # the two in sync by hand if either changes - stdio is primary; this copy only exists in case
+    # stdio flakes.
+    $includeTools = "SentinelWorkspaceTools,SentinelDocumentationTools,SentinelSymbolTools,SentinelGitTools,SentinelAdminTools,SentinelWholeFileWriteTools,SentinelRefactoringTools,SentinelAdvancedRefactoringTools,SentinelIntelligenceTools,SentinelScanTools,SentinelModernizationTools,SentinelCommentingTools"
+
+    # -WindowStyle Hidden means an unredirected child's console output is simply gone - the server's
+    # own graceful "no tools active" style errors were invisible here for the three days the
+    # include-tools line above was missing, and only a manual repro with explicit redirection
+    # surfaced the real message. Route stdout/stderr to logs\ (already used by the app's own
+    # http-host-*.log) so a future startup failure is self-diagnosing instead of requiring that
+    # again.
+    $launchLogDir = Join-Path $httpOutDir 'logs'
+    New-Item -ItemType Directory -Path $launchLogDir -Force | Out-Null
+    $launchStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $launchStdout = Join-Path $launchLogDir "launch-stdout-$launchStamp.log"
+    $launchStderr = Join-Path $launchLogDir "launch-stderr-$launchStamp.log"
+    Start-Process -FilePath $httpExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--include-tools=$includeTools" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
 
     $started = $null
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -211,7 +228,13 @@ function Start-HttpCopy {
         $started = Get-HttpCopyProcess
     }
     if (-not $started) {
-        Write-Warning "Start-Process returned but no matching process was found afterward - it may have exited immediately. Check for a port conflict or a startup error."
+        $exitStderr = Get-Content -Path $launchStderr -Raw -ErrorAction SilentlyContinue
+        if ($exitStderr) {
+            Write-Warning "Start-Process returned but no matching process was found afterward - it exited immediately. Its stderr:`n$exitStderr"
+        }
+        else {
+            Write-Warning "Start-Process returned but no matching process was found afterward - it may have exited immediately. Check for a port conflict or a startup error. (stderr log was empty: $launchStderr)"
+        }
         return $false
     }
 

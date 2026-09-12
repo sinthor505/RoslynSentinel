@@ -373,7 +373,24 @@ function Invoke-VSCodeServerRestart {
         return
     }
 
-    Start-Process -FilePath $vscodeExe -ArgumentList "--transport=http", "--port=$VSCodePort" -WindowStyle Hidden
+    # Mirrors the --include-tools list in C:\Users\Administrator\.mcp.json's stdio launch, so this
+    # fallback serves the same tool surface rather than drifting into a second, unsynced set. Keep
+    # the two in sync by hand if either changes - stdio is primary; this copy only exists in case
+    # stdio flakes. Same list duplicated in roslynsentinel-vscode-control.ps1's Start-HttpCopy.
+    $includeTools = "SentinelWorkspaceTools,SentinelDocumentationTools,SentinelSymbolTools,SentinelGitTools,SentinelAdminTools,SentinelWholeFileWriteTools,SentinelRefactoringTools,SentinelAdvancedRefactoringTools,SentinelIntelligenceTools,SentinelScanTools,SentinelModernizationTools,SentinelCommentingTools"
+
+    # -WindowStyle Hidden means an unredirected child's console output is simply gone - the server's
+    # own graceful "no tools active" style errors were invisible here for the three days the
+    # include-tools line above was missing, and only a manual repro with explicit redirection
+    # surfaced the real message. Route stdout/stderr to logs\ (already used by the app's own
+    # http-host-*.log) so a future startup failure is self-diagnosing instead of requiring that
+    # again.
+    $launchLogDir = Join-Path $vscodeOutDir 'logs'
+    New-Item -ItemType Directory -Path $launchLogDir -Force | Out-Null
+    $launchStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $launchStdout = Join-Path $launchLogDir "launch-stdout-$launchStamp.log"
+    $launchStderr = Join-Path $launchLogDir "launch-stderr-$launchStamp.log"
+    Start-Process -FilePath $vscodeExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--include-tools=$includeTools" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
 
     $started = $null
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -381,7 +398,19 @@ function Invoke-VSCodeServerRestart {
         Start-Sleep -Milliseconds 100
         $started = Get-Process -Name 'RoslynSentinel.Server.Advanced' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $vscodeExe }
     }
-    Write-Host "VS Code Advanced.Http copy restarted on port $VSCodePort (PID $($started.Id))." -ForegroundColor Green
+
+    if ($started) {
+        Write-Host "VS Code Advanced.Http copy restarted on port $VSCodePort (PID $($started.Id))." -ForegroundColor Green
+    }
+    else {
+        $exitStderr = Get-Content -Path $launchStderr -Raw -ErrorAction SilentlyContinue
+        if ($exitStderr) {
+            Write-Warning "VS Code Advanced.Http copy did not stay running - it exited immediately. Its stderr:`n$exitStderr"
+        }
+        else {
+            Write-Warning "VS Code Advanced.Http copy did not stay running - no matching process was found after starting it. (stderr log was empty: $launchStderr)"
+        }
+    }
 }
 #endregion
 

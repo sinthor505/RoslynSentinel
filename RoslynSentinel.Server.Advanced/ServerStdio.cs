@@ -38,7 +38,12 @@ namespace RoslynSentinel.Server.Advanced
             ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
             LlmOptions.Configure(args);
 
-            if (ServerStartupHelpers.HandleListTools(args, activeModes, includeTools, excludeTools))
+            if (ServerStartupHelpers.HandleListTools(
+                    args,
+                    activeModes,
+                    (mcpBuilder, services) => mcpBuilder.AddRoslynSentinelToolsAdvanced(services, activeModes, includeTools, excludeTools),
+                    includeTools,
+                    excludeTools))
             {
                 return;
             }
@@ -127,7 +132,7 @@ namespace RoslynSentinel.Server.Advanced
                         using var lifetimeCts = new CancellationTokenSource();
                         var hostTask = host.RunAsync(lifetimeCts.Token);
                         await SentinelConsoleMode.RunReplAsync(
-                            replWriteStream!, replReadStream!, activeModes, lifetimeCts, includeTools, excludeTools).ConfigureAwait(false);
+                            replWriteStream!, replReadStream!, lifetimeCts).ConfigureAwait(false);
                         await hostTask.ConfigureAwait(false);
                     }
                     else

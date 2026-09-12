@@ -185,9 +185,24 @@ public static class ServerStartupHelpers
     /// If --list-tools is present, writes the tool list and returns true.
     /// The caller should return immediately when this returns true.
     /// </summary>
+    /// <param name="args">Raw command-line args.</param>
+    /// <param name="activeModes">Resolved active modes (unused directly here now, kept for callers
+    /// that still want it available; the manifest itself comes entirely from
+    /// <paramref name="registerTools"/>, which already closes over modes/include/exclude).</param>
+    /// <param name="registerTools">The exact tool registration this entry point would perform
+    /// against a real host — e.g. <c>(b, s) => b.AddRoslynSentinelToolsBasic(s, activeModes,
+    /// includeTools, excludeTools)</c>. Invoked against a throwaway <see cref="IServiceCollection"/>
+    /// so the printed manifest is built the same way a live server's actually is, instead of a
+    /// separate reflection pass that can drift from it (see
+    /// docs/current/blockers/blocking_error_list_tools_misreports_tool_surface.md).</param>
+    /// <param name="includeTools">Parsed --include-tools, echoed through for symmetry with the
+    /// other Handle* helpers; not consulted directly since <paramref name="registerTools"/> already
+    /// captures it.</param>
+    /// <param name="excludeTools">Parsed --exclude-tools, same note as <paramref name="includeTools"/>.</param>
     public static bool HandleListTools(
         string[] args,
         HashSet<string> activeModes,
+        Func<IMcpServerBuilder, IServiceCollection, IMcpServerBuilder> registerTools,
         HashSet<string>? includeTools = null,
         HashSet<string>? excludeTools = null)
     {
@@ -197,7 +212,8 @@ public static class ServerStartupHelpers
         }
 
         var outputPath = GetArgValue(args, "--output");
-        SentinelConsoleMode.ListTools(activeModes, outputPath, includeTools, excludeTools);
+        var full = args.Contains("--full");
+        SentinelConsoleMode.ListTools(registerTools, outputPath, full);
         return true;
     }
 

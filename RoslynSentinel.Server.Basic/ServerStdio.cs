@@ -34,7 +34,12 @@ public class ServerStdio
         // ── Arg parsing ──────────────────────────────────────────────────────
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
 
-        if (ServerStartupHelpers.HandleListTools(args, activeModes, includeTools, excludeTools))
+        if (ServerStartupHelpers.HandleListTools(
+                args,
+                activeModes,
+                (mcpBuilder, services) => mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes, includeTools, excludeTools),
+                includeTools,
+                excludeTools))
         {
             return;
         }
@@ -119,7 +124,7 @@ public class ServerStdio
                     using var lifetimeCts = new CancellationTokenSource();
                     var hostTask = host.RunAsync(lifetimeCts.Token);
                     await SentinelConsoleMode.RunReplAsync(
-                        replWriteStream!, replReadStream!, activeModes, lifetimeCts, includeTools, excludeTools).ConfigureAwait(false);
+                        replWriteStream!, replReadStream!, lifetimeCts).ConfigureAwait(false);
                     await hostTask.ConfigureAwait(false);
                 }
                 else

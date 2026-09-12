@@ -22,7 +22,12 @@ public static class ServerHttp
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
 
-        if (ServerStartupHelpers.HandleListTools(args, activeModes, includeTools, excludeTools))
+        if (ServerStartupHelpers.HandleListTools(
+                args,
+                activeModes,
+                (mcpBuilder, services) => mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes, includeTools, excludeTools),
+                includeTools,
+                excludeTools))
         {
             return;
         }
