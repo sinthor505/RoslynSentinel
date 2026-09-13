@@ -14,12 +14,12 @@ public static class TestSolutionBuilder
     {
         var workspace = new AdhocWorkspace();
         var projectId = ProjectId.CreateNewId();
-        
+
         var references = new List<MetadataReference>();
-        
+
         // Use a more robust way to get all required base assemblies for .NET 10 tests
         var coreDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
-        
+
         string[] candidateNames = {
             "System.Runtime.dll",
             "mscorlib.dll",
@@ -54,7 +54,7 @@ public static class TestSolutionBuilder
 
         // Create a mock project FilePathWrapper for test purposes
         var projectPath = Path.Combine(Path.GetTempPath(), "TestProj", $"{projectName}.csproj");
-        
+
         var projectInfo = ProjectInfo.Create(projectId, VersionStamp.Default, projectName, projectName, LanguageNames.CSharp)
             .WithMetadataReferences(references)
             .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
@@ -131,5 +131,10 @@ public static class TestSolutionBuilder
         }
 
         return solution;
+    }
+    // Added by AddMember (expected - used for diagnostics)
+    public static Solution CreateEmptySolution()
+    {
+        return new AdhocWorkspace().CurrentSolution;
     }
 }
