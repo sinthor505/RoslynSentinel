@@ -51,7 +51,6 @@ public class WorkspaceReadNavigationImpl
                 new JsonStringEnumConverter()
             }
     };
-
     public WorkspaceReadNavigationImpl(IWorkspaceManager workspaceManager, ILogger<WorkspaceReadNavigationImpl> logger)
     {
         _workspaceManager = workspaceManager;
@@ -838,25 +837,57 @@ public class WorkspaceReadNavigationImpl
             if (all.Type == ResultWrapperType.Raw)
             {
                 var rawText = all.Data.ToString();
-                var windowSize = limit > 0 && limit < LargeResultHelper.OffloadThresholdBytes
-                    ? limit
-                    : LargeResultHelper.OffloadThresholdBytes;
                 var start = Math.Clamp(offset, 0, rawText.Length);
-                var length = Math.Min(windowSize, rawText.Length - start);
-                var slice = rawText.Substring(start, length);
+
+                // The offload filter's threshold check is on the raw response TEXT LENGTH (see
+                // AddCallToolFilter's block.Text.Length check in ServiceRegistrationExtensionsBasic.cs),
+                // i.e. the length of THIS method's own serialized ToolResult, not just the raw slice
+                // we embed in it. Two things inflate the final size past the slice length: the
+                // envelope's own field names/punctuation (text/offset/nextOffset/totalChars, the
+                // outer success/data/totalRecords/hasMorePages wrapper), and JSON string-escaping of
+                // the slice content itself — every '"' or '\' in the slice doubles in size once
+                // embedded as a JSON string value, and stored Raw payloads are frequently
+                // already-serialized JSON (quote-dense), so escaping overhead cannot be treated as a
+                // small fixed constant.
+                //
+                // Start from a worst-case bound (every slice char could double under escaping) and
+                // then verify by actually serializing the candidate response, shrinking if reality
+                // still exceeds the threshold. This guarantees the response this method returns can
+                // never itself be large enough for the filter to re-offload it, regardless of how
+                // quote-dense the stored content is.
+                const int envelopeOverheadBytes = 256;
+                var worstCaseMaxSlice = Math.Max(1, (LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes) / 2);
+                var requestedWindow = limit > 0 && limit < worstCaseMaxSlice ? limit : worstCaseMaxSlice;
+                var length = Math.Min(requestedWindow, rawText.Length - start);
+
+                object BuildRawPage(int candidateLength)
+                {
+                    var candidateSlice = rawText.Substring(start, candidateLength);
+                    var candidateNextOffset = start + candidateLength;
+                    var candidateHasMore = candidateNextOffset < rawText.Length;
+                    return new
+                    {
+                        text = candidateSlice,
+                        offset = start,
+                        nextOffset = candidateHasMore ? candidateNextOffset : (int?)null,
+                        totalChars = rawText.Length
+                    };
+                }
+
+                var pageData = BuildRawPage(length);
+                while (length > 0 && JsonSerializer.Serialize(pageData, _jsonOptions).Length > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
+                {
+                    length /= 2;
+                    pageData = BuildRawPage(length);
+                }
+
                 var nextOffset = start + length;
                 var hasMoreRaw = nextOffset < rawText.Length;
 
                 return new ToolResult<object>
                 {
                     Success = true,
-                    Data = new
-                    {
-                        text = slice,
-                        offset = start,
-                        nextOffset = hasMoreRaw ? nextOffset : (int?)null,
-                        totalChars = rawText.Length
-                    },
+                    Data = pageData,
                     TotalRecords = rawText.Length,
                     HasMorePages = hasMoreRaw,
                     Warning = hasMoreRaw

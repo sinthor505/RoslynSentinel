@@ -226,11 +226,13 @@ public class GetLargeResultTests
         Assert.That(names2, Is.EqualTo(new[] { "Method_2", "Method_3" }),
             "offset=2 must skip the first 2 records already seen at offset=0, not repeat the same page.");
     }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // T5 – FilePathWrapper inside scans directory → findings returned
-    // ══════════════════════════════════════════════════════════════════════════
-
+    // KNOWN PRE-EXISTING FAILURE (confirmed 2026-09-12, unrelated to the Raw/T9-T12 additions below):
+    // this fixture never calls _workspaceManager.SetTestSolution(...), so CurrentSolution stays
+    // null even though SolutionPath is set. SetFilePath (PersistentWorkspaceManager.cs) returns
+    // NoSolutionLoaded whenever CurrentSolution is null, regardless of SolutionPath, so
+    // GetLargeResult's filepath-resolution branch never runs and "Result file not found" is
+    // returned. Fix is to call _workspaceManager.SetTestSolution(...) in SetUp; left unfixed here
+    // since it's outside the scope of the Raw-offload test additions.
     [Test, CancelAfter(10000)]
     public async Task T5_GetLargeResult_ValidFilePath_InLargeResultsDir_ReturnsFindings()
     {
@@ -261,5 +263,115 @@ public class GetLargeResultTests
         Assert.That(result.Success, Is.False,
             "A result file outside .roslynsentinel/largeresults/ must be rejected.");
         Assert.That(result.Error, Is.Not.Null);
+    }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // T9-T12 – ResultWrapperType.Raw (the generic MCP request-filter offload backstop,
+    //          see docs/current/proposal_centralized_large_result_filter.md). Unlike every
+    //          other case above, Raw has no known element shape, so GetLargeResult pages over
+    //          the stored raw text itself as a byte/char window rather than a list.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(10000)]
+    public async Task T9_GetLargeResult_Raw_UnderOneWindow_ReturnsWholeTextNoMorePages()
+    {
+        var payload = new { message = "hello raw offload world", count = 3 };
+        var payloadJson = JsonSerializer.Serialize(payload);
+        var stored = await LargeResultHelper.StoreRawJsonAsync(
+            payloadJson, _tempDir, CancellationToken.None);
+        Assert.That(stored.offloaded, Is.True, "StoreRawJsonAsync should offload whenever a solutionRoot is available, regardless of size.");
+
+        // limit's default of 50 means a 50-CHAR window for Raw (unlike every other case, where it
+        // means 50 records) - pass the full threshold explicitly to read the whole short payload
+        // back in one window.
+        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, limit: LargeResultHelper.OffloadThresholdBytes);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.HasMorePages, Is.False, "The whole stored text fits in one window, so there should be no more pages.");
+        Assert.That(result.Warning, Is.Null);
+
+        var text = (string)result.Data!.GetType().GetProperty("text")!.GetValue(result.Data)!;
+        using var roundTripped = JsonDocument.Parse(text);
+        Assert.That(roundTripped.RootElement.GetProperty("message").GetString(), Is.EqualTo(payload.message),
+            "The Raw case must replay the stored JSON text verbatim, not re-shape it.");
+        Assert.That(roundTripped.RootElement.GetProperty("count").GetInt32(), Is.EqualTo(payload.count));
+    }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+
+    [Test, CancelAfter(10000)]
+    public async Task T10_GetLargeResult_Raw_OverThreshold_PagesInBoundedWindowsAndRoundTripsVerbatim()
+    {
+        // A JSON object whose single field is repeated past OffloadThresholdBytes so the stored
+        // text needs more than one window to read back in full.
+        var original = new string('x', LargeResultHelper.OffloadThresholdBytes + 500);
+        var originalJson = JsonSerializer.Serialize(new { data = original });
+        var stored = await LargeResultHelper.StoreRawJsonAsync(originalJson, _tempDir, CancellationToken.None);
+        Assert.That(stored.offloaded, Is.True);
+
+        var reassembled = new StringBuilder();
+        int? offset = 0;
+        var pageCount = 0;
+        while (offset is not null)
+        {
+            // limit's default of 50 means a 50-CHAR window for Raw (unlike every other case, where
+            // it means 50 records) - pass the full threshold explicitly on every page.
+            var page = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: offset.Value, limit: LargeResultHelper.OffloadThresholdBytes);
+            Assert.That(page.Success, Is.True);
+
+            var pageDataType = page.Data!.GetType();
+            var text = (string)pageDataType.GetProperty("text")!.GetValue(page.Data)!;
+            reassembled.Append(text);
+
+            // A single page must never itself be big enough to re-trigger the offload filter on
+            // its way back out — otherwise GetLargeResult(Raw) could re-offload under a new
+            // resultId in an unbounded fetch/still-too-big/re-offload loop.
+            Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.OffloadThresholdBytes));
+
+            offset = (int?)pageDataType.GetProperty("nextOffset")!.GetValue(page.Data);
+            pageCount++;
+            Assert.That(pageCount, Is.LessThan(10), "Paging should terminate quickly; more pages than this indicates a broken offset/hasMore computation.");
+        }
+
+        Assert.That(pageCount, Is.GreaterThan(1), "A payload larger than one window must take more than one page to read back.");
+
+        // The stored wrapper file is written with WriteIndented=true (LargeResultHelper.JsonOptions),
+        // which reformats the nested Data payload's whitespace even though StoreRawJsonAsync never
+        // re-shapes its structure - so compare parsed JSON, not raw text bytes.
+        using var reassembledDoc = JsonDocument.Parse(reassembled.ToString());
+        Assert.That(reassembledDoc.RootElement.GetProperty("data").GetString(), Is.EqualTo(original),
+            "Concatenating every page and re-parsing must reproduce the original stored JSON data exactly (structural round-trip).");
+    }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+
+    [Test, CancelAfter(10000)]
+    public async Task T11_GetLargeResult_Raw_NonZeroOffset_ClampsToTextLengthInsteadOfThrowing()
+    {
+        var original = "short text";
+        var stored = await LargeResultHelper.StoreRawJsonAsync(
+            JsonSerializer.Serialize(original), _tempDir, CancellationToken.None);
+
+        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: 100_000);
+
+        Assert.That(result.Success, Is.True, "An offset far past the end of the stored text must clamp, not throw a Substring range exception.");
+        var text = (string)result.Data!.GetType().GetProperty("text")!.GetValue(result.Data)!;
+        Assert.That(text, Is.Empty);
+        Assert.That(result.HasMorePages, Is.False);
+    }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+
+    [Test, CancelAfter(10000)]
+    public async Task T12_GetLargeResult_Raw_LimitSmallerThanThreshold_UsesLimitAsWindowSize()
+    {
+        var original = new string('y', 200);
+        var stored = await LargeResultHelper.StoreRawJsonAsync(
+            JsonSerializer.Serialize(original), _tempDir, CancellationToken.None);
+
+        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: 0, limit: 50);
+
+        Assert.That(result.Success, Is.True);
+        var text = (string)result.Data!.GetType().GetProperty("text")!.GetValue(result.Data)!;
+        Assert.That(text.Length, Is.EqualTo(50), "A limit smaller than OffloadThresholdBytes should be honored as the window size, not ignored.");
+        Assert.That(result.HasMorePages, Is.True);
     }
 }
