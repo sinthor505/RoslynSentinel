@@ -417,7 +417,7 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, method, indexer, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, method, indexer, cancellationToken)
         };
     }
 
@@ -513,7 +513,7 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, newRoot, currentClass, newClass, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentClass, newClass, cancellationToken)
         };
     }
 
@@ -661,7 +661,7 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, newRoot, currentMethod, updatedMethod, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentMethod, updatedMethod, cancellationToken)
         };
     }
 
@@ -789,7 +789,7 @@ public class GranularRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Local variable introduced.",
-            UpdatedText = await ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
         };
     }
 

@@ -47,7 +47,7 @@ public class InstrumentationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Try/catch added to method.",
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, methodNode, newMethodNode, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, methodNode, newMethodNode, cancellationToken)
         };
     }
 

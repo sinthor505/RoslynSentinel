@@ -1,8 +1,9 @@
 ﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Common;
 
-internal class FormattingHelper
+public static class FormattingHelper
 {
     // Added by AddTopLevelType (expected - used for diagnostics)
     /// <summary>
@@ -46,7 +47,7 @@ internal class FormattingHelper
     /// <paramref name = "newNode"/>'s leading trivia on purpose (e.g. stripping a doc comment) — then
     /// <paramref name = "newNode"/>'s leading trivia wins unconditionally, even if it looks empty.
     /// </summary>
-    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
+    public static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
     {
         var annotation = new SyntaxAnnotation();
 
@@ -70,7 +71,7 @@ internal class FormattingHelper
     /// avoids the whole-container/whole-sibling formatting this helper used previously, which
     /// normalized untouched members' internal spacing as a side effect.
     /// </summary>
-    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, CancellationToken cancellationToken = default)
+    public static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, CancellationToken cancellationToken = default)
     {
         var tokenBefore = nodeToRemove.GetFirstToken().GetPreviousToken();
         var tokenAfter = nodeToRemove.GetLastToken().GetNextToken();

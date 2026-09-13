@@ -603,7 +603,7 @@ public class AnalysisEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = await ReplaceNodeFormattedAsync(document, root, classNode, newClassForBlock, cancellationToken),
+                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, classNode, newClassForBlock, cancellationToken),
                 FilePath = filePath
             };
         }
@@ -621,7 +621,7 @@ public class AnalysisEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, classNode, newClass, cancellationToken),
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, classNode, newClass, cancellationToken),
             FilePath = filePath
         };
     }

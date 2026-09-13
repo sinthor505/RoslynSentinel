@@ -210,7 +210,7 @@ public class SyntaxUpgradeEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await ReplaceNodeFormattedAsync(document, root!, node, nameofExpr, cancellationToken)
+                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, node, nameofExpr, cancellationToken)
             };
         }
         return new DocumentEditResult
@@ -284,7 +284,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, switchStmt, newReturn, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, switchStmt, newReturn, cancellationToken)
         };
     }
 
@@ -779,7 +779,7 @@ public class SyntaxUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Class converted to primary constructor.",
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, classNode, newClassNode, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, classNode, newClassNode, cancellationToken)
         };
     }
 
@@ -843,7 +843,7 @@ public class SyntaxUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Converted to file-scoped namespace.",
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, nsDecl, fileScopedNs, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, nsDecl, fileScopedNs, cancellationToken)
         };
     }
 

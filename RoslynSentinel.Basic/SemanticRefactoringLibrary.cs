@@ -224,7 +224,7 @@ public class SemanticRefactoringLibrary
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
 
         var newClass = classNode.ReplaceNode(propNode, new MemberDeclarationSyntax[] { field, getter, setter });
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -271,7 +271,7 @@ public class SemanticRefactoringLibrary
 
         var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await ReplaceNodeFormattedAsync(document, root!, parentBlock, newBlock, cancellationToken), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, parentBlock, newBlock, cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -342,7 +342,7 @@ public class SemanticRefactoringLibrary
 
             var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
 
-            return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await ReplaceNodeFormattedAsync(document, root, parentBlock, newBlock, cancellationToken), FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, parentBlock, newBlock, cancellationToken), FilePath = filePath };
         }
         catch (ToolException ex)
         {

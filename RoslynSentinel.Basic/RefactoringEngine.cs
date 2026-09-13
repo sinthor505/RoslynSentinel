@@ -939,7 +939,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Indexer converted to method.",
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, indexer, getter, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, indexer, getter, cancellationToken)
         };
     }
 
@@ -988,7 +988,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Params keyword toggled.",
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, lastParam, newParam, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, lastParam, newParam, cancellationToken)
         };
     }
 
@@ -1059,7 +1059,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member replaced.",
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken)
         };
     }
 
@@ -1154,7 +1154,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member added.",
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -1242,7 +1242,7 @@ public class RefactoringEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = "// Top-level type added.",
-                UpdatedText = await ReplaceNodeFormattedAsync(document, root, targetNamespace, newNamespace, cancellationToken)
+                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, targetNamespace, newNamespace, cancellationToken)
             };
         }
 
@@ -1337,7 +1337,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member removed.",
-            UpdatedText = await RemoveNodeFormattedAsync(document, root, member, cancellationToken)
+            UpdatedText = await FormattingHelper.RemoveNodeFormattedAsync(document, root, member, cancellationToken)
         };
     }
 
@@ -1397,7 +1397,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Class converted to primary constructor.",
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
         };
     }
 
@@ -1630,7 +1630,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, trackedRoot, currentType, newType, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, trackedRoot, currentType, newType, cancellationToken)
         };
     }
 
@@ -1826,7 +1826,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
         };
     }
 
@@ -2099,7 +2099,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RemoveNodeFormattedAsync(document, root, existing, cancellationToken)
+            UpdatedText = await FormattingHelper.RemoveNodeFormattedAsync(document, root, existing, cancellationToken)
         };
     }
 
@@ -2289,7 +2289,7 @@ public class RefactoringEngine
         }
 
         var newEnumNode = enumDecl.WithMembers(SyntaxFactory.SeparatedList(newMembers));
-        var updatedText = await ReplaceNodeFormattedAsync(document, root!, enumDecl, newEnumNode, cancellationToken);
+        var updatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, enumDecl, newEnumNode, cancellationToken);
         var summary = new List<string>();
         if (added.Count > 0)
         {
@@ -2508,7 +2508,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
             };
         }
 
@@ -2598,7 +2598,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
             };
         }
 
@@ -2706,7 +2706,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, targetNode, newNode, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, targetNode, newNode, cancellationToken)
         };
     }
 
@@ -2779,7 +2779,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -2873,7 +2873,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, oldAttr, newAttr, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, oldAttr, newAttr, cancellationToken)
         };
     }
 
@@ -2951,7 +2951,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, memberTarget, newMember, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, memberTarget, newMember, cancellationToken)
         };
     }
 
@@ -3022,7 +3022,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -3097,7 +3097,7 @@ public class RefactoringEngine
         var remaining = target.Modifiers.Where(m => !accessModifierKinds.Contains(m.Kind())).ToList();
         var newTokens = newKinds.Select(k => SyntaxFactory.Token(k).WithTrailingTrivia(SyntaxFactory.Space));
         var newModifiers = SyntaxFactory.TokenList(newTokens.Concat(remaining));
-        var updatedText = await ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken);
+        var updatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -3180,7 +3180,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
         };
     }
 
@@ -3257,7 +3257,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
         };
     }
 
@@ -3511,7 +3511,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), cancellationToken, TriviaEditIntent.ReplaceLeading)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), cancellationToken, FormattingHelper.TriviaEditIntent.ReplaceLeading)
         };
     }
 
@@ -3633,7 +3633,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -3722,7 +3722,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
         };
     }
 
@@ -3834,7 +3834,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
+                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
             };
         }
         catch (ToolException ex)
@@ -3964,7 +3964,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
             Message = $"// paramName='{paramName}', fieldName='{derivedFieldName}'"
         };
     }
@@ -4104,7 +4104,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
             Message = fieldDecl != null ? $"// paramName='{paramName}', fieldName='{candidateFieldName}', fieldRemoved='{newMembers.All(m => m != fieldDecl)}'" : $"// paramName='{paramName}'"
         };
     }
@@ -4314,7 +4314,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken),
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken),
             Message = $"// paramName='{paramName}'"
         };
     }
@@ -4409,7 +4409,7 @@ public class RefactoringEngine
         var newMethodDecl = methodDecl.WithParameterList(newParams);
         var pendingChanges = new Dictionary<FilePathWrapper, string>
         {
-            [filePath] = await ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken)
+            [filePath] = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken)
         };
 
         var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
@@ -5229,7 +5229,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = updatedPath,
-                UpdatedText = "// Updated file: " + updatedPath + "\n" + await ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
+                UpdatedText = "// Updated file: " + updatedPath + "\n" + await FormattingHelper.ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
             };
         }
 
@@ -5237,7 +5237,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = interfaceDocument.FilePath ?? interfaceDocument.Name,
-            UpdatedText = await ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
+            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
         };
     }
 

@@ -56,7 +56,7 @@ public class StandardRefactoringEngine
                 {
                     Outcome = EditOutcome.Modified,
                     FilePath = filePath,
-                    UpdatedText = await ReplaceNodeFormattedAsync(document, root!, methodNode, propertyNode, cancellationToken)
+                    UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, methodNode, propertyNode, cancellationToken)
                 };
             }
         }
@@ -130,7 +130,7 @@ public class StandardRefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await ReplaceNodeFormattedAsync(document, root!, methodNode, newMethodNode, cancellationToken)
+                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, methodNode, newMethodNode, cancellationToken)
             };
         }
 

@@ -93,7 +93,7 @@ public class CodeFlowEngine
                     return new DocumentEditResult
                     {
                         Outcome = EditOutcome.Modified,
-                        UpdatedText = await ReplaceNodeFormattedAsync(document, root, methodNode, newMethodNode, cancellationToken),
+                        UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, methodNode, newMethodNode, cancellationToken),
                         FilePath = filePath
                     };
                 }
