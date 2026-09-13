@@ -658,7 +658,11 @@ public class SentinelRefactoringTools
                 return guardResult;
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var apply = await ValidateAndApplyAsync(changes, $"{opName} using {namespaceName}.", "UsingDirective", dryRun, returnDiff, cancellationToken: cancellationToken);
+            // returnDiff is forced to true here regardless of the caller's own returnDiff flag:
+            // the add path below needs the real before/after diff to populate ChangedContent, not
+            // just to decide whether to include a preview Diff in the summary.
+            var needsDiff = returnDiff || operation == AddRemoveViewAction.add;
+            var apply = await ValidateAndApplyAsync(changes, $"{opName} using {namespaceName}.", "UsingDirective", dryRun, needsDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
             var description = operation == AddRemoveViewAction.add
@@ -666,18 +670,20 @@ public class SentinelRefactoringTools
                 : $"Removes 'using {namespaceName};' from {Path.GetFileName(filePathResolved)}.";
             if (operation != AddRemoveViewAction.add)
             {
-                return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+                return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, returnDiff ? apply.Diff : null, _workspaceManager.WorkspaceVersion) };
             }
 
-            // namespaceName is caller-supplied verbatim (including any "static " prefix); the
-            // emitted directive text is trivially reconstructed from it rather than re-derived
-            // from the engine's inserted syntax node.
-            var addedUsing = $"using {namespaceName};";
+            // ChangedContent is derived from the actual before/after document diff (apply.Diff,
+            // built by ValidateAndApplyHelper.BuildDiffFromPreImages) rather than reconstructed
+            // from the caller's namespaceName argument. A hardcoded "using {namespaceName};" could
+            // never reveal any other change bundled into the same write (formatting drift,
+            // accessibility changes, whitespace normalization, etc.) — the caller had no way to
+            // know from this tool's own result whether something unexpected also changed.
             return await ToolResult<object>.ForPossiblyLargeDataAsync(
                 new MemberChangedContentResult
                 {
-                    Summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion),
-                    ChangedContent = addedUsing
+                    Summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, returnDiff ? apply.Diff : null, _workspaceManager.WorkspaceVersion),
+                    ChangedContent = apply.Diff ?? ""
                 },
                 _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
                 workspaceVersion: _workspaceManager.WorkspaceVersion);

@@ -1806,7 +1806,6 @@ public class SentinelWorkspaceTools
         [ToolOptionAttribute(ToolOptionTag.Offset)] int offset = 0, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
         => _readNav.GetOperationDetail(reason, changeId, filter, maxItems, offset, cancellationToken);
-
     [McpServerTool(Name = "UndoLastApply")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: ApplyDiff, refactoring-tool writes, and batch-first tools.")]
@@ -1878,6 +1877,7 @@ public class SentinelWorkspaceTools
             }
 
             var reverted = new List<string>();
+            var noOpFiles = new List<string>();
             if (revertChanges.Count > 0)
             {
                 // Route through the shared chokepoint (ApplyProposedChangesAsync) rather than
@@ -1886,7 +1886,25 @@ public class SentinelWorkspaceTools
                 // this previously looked like an external edit to the watcher.
                 var revertResult = await _workspaceManager.ApplyProposedChangesAsync(
                     revertChanges, rollbackOnPartialFailure: true, cancellationToken: cancellationToken);
-                reverted.AddRange(revertResult.SucceededFiles);
+                // ApplyProposedChangesAsync reports a no-op write (pre-apply content already
+                // matched what we're reverting to, byte-for-byte or after whitespace
+                // normalization) as succeeded, since nothing needed to change — but that is
+                // indistinguishable to a caller from a real write unless NoOpFiles is checked
+                // separately. Without this, "Reverted N files" was reported even when the revert
+                // never touched disk, which was observed this session to cause real confusion: a
+                // file believed reverted was provably unchanged.
+                var noOpSet = new HashSet<string>(revertResult.NoOpFiles ?? [], StringComparer.OrdinalIgnoreCase);
+                foreach (var path in revertResult.SucceededFiles)
+                {
+                    if (noOpSet.Contains(path))
+                    {
+                        noOpFiles.Add(path);
+                    }
+                    else
+                    {
+                        reverted.Add(path);
+                    }
+                }
                 foreach (var (path, error) in revertResult.FailedFiles)
                 {
                     failed.Add($"{path}: {error}");
@@ -1894,10 +1912,13 @@ public class SentinelWorkspaceTools
             }
 
             var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
+            var noOpPart = noOpFiles.Count > 0
+                ? $" ({noOpFiles.Count} already matched pre-apply state — no change needed: {string.Join(", ", noOpFiles)})"
+                : "";
             return new ToolResult<object>()
             {
                 Success = true,
-                Data = $"Reverted {reverted.Count} files. Files: {string.Join(", ", reverted)}{failedPart}"
+                Data = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{failedPart}"
             };
         }
         catch (Exception ex)

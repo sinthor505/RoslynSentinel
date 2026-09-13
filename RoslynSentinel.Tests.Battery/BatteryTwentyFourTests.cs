@@ -290,7 +290,30 @@ public enum Status { Active = 1, Pending = 2 }
         var result = await _tools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq", autoStage: false);
         Assert.That(result, Is.Not.Null);
     }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task UsingDirective_Add_ChangedContentReflectsActualDiffNotFabricatedString()
+    {
+        // The engine's AddUsingDirectiveAsync reformats the whole document (Formatter.FormatAsync)
+        // after inserting the new using, so a file with a pre-existing formatting quirk elsewhere
+        // picks up an unrelated whitespace fix in the same write as the using insertion. A
+        // fabricated "using {namespaceName};" string could never reveal that second, bundled
+        // change; the real diff must.
+        const string misindentedSource =
+            "namespace TestProj;\n\npublic class Order\n{\n  public int OrderId { get; set; }\n}\n";
+        SetSource(misindentedSource, "Order.cs");
 
+        var result = await _tools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
+
+        Assert.That(result.Success, Is.True);
+        var memberChangedContent = (MemberChangedContentResult)result.Data!;
+
+        // The added using line must be present in the diff...
+        Assert.That(memberChangedContent.ChangedContent, Does.Contain("using System.Linq;"));
+        // ...and so must the unrelated formatting change the fabricated string could never show.
+        Assert.That(memberChangedContent.ChangedContent, Does.Contain("public int OrderId"));
+        Assert.That(memberChangedContent.ChangedContent, Is.Not.EqualTo("using System.Linq;"));
+    }
     // --- ModifyEnum ---
 
     [Test]

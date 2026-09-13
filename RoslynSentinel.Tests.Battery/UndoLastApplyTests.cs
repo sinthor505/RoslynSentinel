@@ -193,4 +193,52 @@ public class UndoLastApplyTests
         Assert.That((string)result.Data!, Does.Contain("Reverted 1 files"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent));
     }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task UndoLastApply_NoOpRevert_ReportsDistinctlyFromRealRevertAsync()
+    {
+        // BeforeSource in the blob is identical to the file's current on-disk content, so
+        // ApplyProposedChangesAsync's no-op skip path (PersistentWorkspaceManager.cs, "Skipping
+        // no-op write") fires: the file lands in SucceededFiles but nothing is actually written.
+        // Before this fix, UndoLastApply reported this the same as a real revert ("Reverted 1
+        // files"), which is exactly the confusion observed this session — a file believed
+        // reverted was provably unchanged.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var currentContent = await File.ReadAllTextAsync(targetFile);
+
+        var changeId = "change-noop-revert";
+        var dir = Path.Combine(fixture.SolutionDirectory, ".roslynsentinel", "operations");
+        Directory.CreateDirectory(dir);
+        var payload = new
+        {
+            toolName = "apply_diff",
+            changeId,
+            generatedUtc = DateTime.UtcNow.ToString("O"),
+            itemCount = 1,
+            items = new[]
+            {
+                // BeforeSource matches the file's CURRENT content exactly, so reverting to it is
+                // a no-op write, not a real one.
+                new { FilePath = targetFile, Outcome = ItemRecordOutcome.Succeeded, BeforeSource = currentContent },
+            },
+        };
+        await File.WriteAllTextAsync(
+            Path.Combine(dir, $"apply_diff_20260101T000000Z_{changeId}.json"),
+            JsonSerializer.Serialize(payload, PrettyJson));
+
+        workspaceManager.ClearExternalFileChanges();
+
+        var result = await workspaceTools.UndoLastApply(reason: "test message", changeId: changeId);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That((string)result.Data!, Does.Contain("Reverted 0 files"));
+        Assert.That((string)result.Data!, Does.Contain("already matched pre-apply state"));
+        Assert.That((string)result.Data!, Does.Contain(targetFile));
+        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(currentContent));
+    }
 }

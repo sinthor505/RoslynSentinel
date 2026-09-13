@@ -29,7 +29,10 @@ trivia (where the doc comment lives). It is not obvious from static reading alon
 `Count > 0` branch fires away from `oldNode` in the accessibility-change case.
 
 **Do not write the fix (Part B below) until Part A's live repro gives you a confirmed mechanism,
-not a plausible-sounding guess.**
+not a plausible-sounding guess.** If a verification step you attempt turns out to be unreachable
+with the tools actually available to you, do not silently fall back to source-only reasoning and
+proceed — stop and report the specific gap before continuing. (Part A.4 below already accounts for
+the two known-unreachable methods; this instruction is for any *other* dead end you hit.)
 
 **Files this step touches:**
 - `RoslynSentinel.Basic/RefactoringEngine.cs` (`ReplaceNodeFormattedAsync` ~lines 62-81, and
@@ -71,10 +74,28 @@ Reproduce the bug live, using the RoslynSentinel MCP tools against a scratch fil
    branch the code's shape suggests.
 4. Determine the actual mechanism: which branch of the `Count > 0` heuristic fires, and why
    `newNode`'s trivia ends up non-empty in this case even though nothing obviously sets leading
-   trivia. Use whatever inspection method actually answers this — a debugger attached to the MCP
-   server process, or a small standalone unit test that calls `ReplaceNodeFormattedAsync`
-   directly and inspects intermediate trivia — rather than continuing to reason from source
-   alone once the static reading has been inconclusive.
+   trivia. **Do not rely on a debugger or a direct unit test against `ReplaceNodeFormattedAsync`
+   — neither is reachable from this environment** (the method is `private static` with no
+   `InternalsVisibleTo` to any test project, and no MCP tool attaches a debugger). Instead, use
+   the tool-reachable probe pattern that has already confirmed this bug's root cause twice:
+   - Add a small temporary diagnostic test (e.g. `ZZZ_TEMP_WithModifiers_TriviaProbe`) to an
+     existing test project via the `Member` tool, calling the same Roslyn APIs the suspect code
+     path uses in isolation (e.g. `SyntaxFactory.Token(kind)`, then inspect
+     `.LeadingTrivia.Count`/`.ToFullString()` directly) or exercising the real call site and
+     asserting on intermediate state. Run it with `RunTest`, read the assertion failure/output as
+     your evidence, then delete the temporary test once the mechanism is confirmed — it is scratch
+     scaffolding, not a permanent addition.
+   - Alternatively (or in addition), the plain `ReadFile`-before/`ReadFile`-after pattern from
+     step A.1-A.3 is itself sufficient to confirm *whether* the bug reproduces and under which
+     modifier/ordering variation, even without inspecting intermediate trivia counts directly —
+     use it iteratively (vary inputs, re-run, re-read) rather than treating a single non-repro as
+     inconclusive.
+   Confirmed precedent: this exact probe-test approach (temporary test via `Member` + `RunTest`,
+   then removed) previously proved that `SyntaxFactory.Token(kind)` attaches a zero-width elastic
+   trivia marker by default — so `newNodeLeadingTrivia.Count` is always ≥1 even when the trivia is
+   semantically empty, which is why the `Count > 0` heuristic always wins toward `newNode` and
+   discards the doc comment. Use this as a model for the investigation technique, not as the
+   answer to copy — confirm it yourself against current source rather than citing it secondhand.
 5. Determine whether this same mechanism independently affects `AddModifierAsync` and
    `RemoveModifierAsync`, or only `ChangeAccessibilityAsync`. This determines whether Part B's
    fix (an explicit intent signal, defaulting to old-trivia-preserved) is sufficient on its own,
