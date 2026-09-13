@@ -15,20 +15,6 @@ public class GranularRefactoringEngine
     }
 
     /// <summary>
-    /// Replaces <paramref name = "oldNode"/> with <paramref name = "newNode"/> and formats only the
-    /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
-    /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
-    /// </summary>
-    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
-    {
-        var annotation = new SyntaxAnnotation();
-        var annotatedNewNode = newNode.WithAdditionalAnnotations(annotation);
-        var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
-        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-    }
-
-    /// <summary>
     /// Removes <paramref name = "nodeToRemove"/> and formats only its former container (the nearest
     /// ancestor whose node identity survives the removal), instead of the whole file.
     /// </summary>
