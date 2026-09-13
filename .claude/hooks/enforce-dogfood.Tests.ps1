@@ -50,6 +50,28 @@ $cases = @(
     @{ n = 'git commit after cd'; want = 'DENY'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cd /c/r; git commit -m x' } } }
 
+    # --- git status/log/diff on a path outside this repo: allow, MCP Git tool can't reach it ---
+    @{ n = 'git -C <out-of-repo temp dir> status'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "git -C `"$env:TEMP`" status --short" } } }
+    @{ n = 'git -C <out-of-repo temp dir> log'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "git -C `"$env:TEMP`" log --oneline -5" } } }
+    @{ n = 'git -C <out-of-repo temp dir> diff'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "git -C `"$env:TEMP`" diff" } } }
+    @{ n = 'git -C <out-of-repo temp dir> commit stays covered'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "git -C `"$env:TEMP`" commit -m x" } } }
+    @{ n = 'git -C <in-repo path> status stays covered'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "git -C `"$PSScriptRoot`" status" } } }
+    @{ n = 'git -C <nonexistent path> status stays covered (fail-safe)'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git -C /no/such/path/at/all status' } } }
+    @{ n = 'git -C <sibling dir sharing repo-name prefix> status allowed (not a substring match)'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "git -C `"$((Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\','/'))-TestRuns`" status" } } }
+    @{ n = 'cd <out-of-repo temp dir> && git log (no -C flag)'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "cd `"$env:TEMP`" && git log --oneline -5 somebranch" } } }
+    @{ n = 'cd <out-of-repo temp dir> && git commit stays covered'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "cd `"$env:TEMP`" && git commit -m x" } } }
+    @{ n = 'cd <in-repo path> && git status stays covered'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "cd `"$PSScriptRoot`" && git status" } } }
+
     # --- git operations with no MCP equivalent: allow, or the caller is stranded ---
     @{ n = 'git reset && status (mixed)'; want = 'allow'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git reset -q && git status' } } }

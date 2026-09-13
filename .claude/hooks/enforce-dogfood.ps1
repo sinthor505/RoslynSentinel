@@ -83,6 +83,48 @@ and end the turn. Do not route around this hook.
         $command = [string]$toolInput.command
         if (-not $command) { exit 0 }
 
+        # The MCP Git tool only ever operates on whichever solution is currently
+        # loaded into the server - it has no parameter to target any other repo or
+        # worktree. That makes it structurally unable to cover git status/log/diff
+        # for a path outside this repo (e.g. a PlanStepRunner harness worktree under
+        # */Worktree/, which is its own separate git working tree). Blocking those
+        # calls here would strand the task on a read with no compliant route at all,
+        # which is worse than the drift-detection this hook exists to protect - so an
+        # explicit `git -C <path>` (or `git --git-dir=...`) pointed outside this repo's
+        # root is exempt for the read-only operations. Mutating operations (add/commit/
+        # revert) stay covered even out-of-repo, since those are exactly the ones this
+        # policy most needs to chokepoint; only status/log/diff get the pass.
+        $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\', '/')
+        function Test-OutOfRepo([string]$path) {
+            if (-not $path) { return $false }
+            $path = $path.Trim('"', "'")
+            try { $resolved = (Resolve-Path -LiteralPath $path -ErrorAction Stop).Path.TrimEnd('\', '/') }
+            catch { return $false }
+            # Path-boundary match, not a raw string prefix: "...\RoslynSentinel-TestRuns" must
+            # not be mistaken for inside "...\RoslynSentinel" just because the text starts the
+            # same way.
+            return -not ($resolved -eq $repoRoot -or $resolved.StartsWith("$repoRoot\", [StringComparison]::OrdinalIgnoreCase) -or $resolved.StartsWith("$repoRoot/", [StringComparison]::OrdinalIgnoreCase))
+        }
+        if ($command -match "git\s+(?:-C\s+(?<path>""[^""]+""|'[^']+'|\S+)\s+)?.*--git-dir=(?<gd>""[^""]+""|'[^']+'|\S+)") {
+            if (Test-OutOfRepo $Matches['gd']) {
+                if ($command -match "\b(status|log|diff)\b") { exit 0 }
+            }
+        }
+        if ($command -match "git\s+-C\s+(?<path>""[^""]+""|'[^']+'|\S+)") {
+            if (Test-OutOfRepo $Matches['path']) {
+                if ($command -match "\b(status|log|diff)\b") { exit 0 }
+            }
+        }
+        # Same out-of-repo exemption, but for `cd <path> && git ...` / `cd <path>; git ...`
+        # instead of `git -C <path> ...` - the path context comes from a preceding shell
+        # builtin rather than a git flag, but it's functionally identical: the git command
+        # that follows operates on whatever repo `<path>` is in, not this one.
+        if ($command -match "(^|[;&|]\s*)cd\s+(?<path>""[^""]+""|'[^']+'|\S+)\s*[;&]") {
+            if (Test-OutOfRepo $Matches['path']) {
+                if ($command -match "\b(status|log|diff)\b") { exit 0 }
+            }
+        }
+
         # Only the operations the MCP Git tool actually implements. Everything else
         # (branch, push, checkout, worktree, rebase, stash...) has no MCP equivalent,
         # so denying it would strand the task with nowhere to go.
