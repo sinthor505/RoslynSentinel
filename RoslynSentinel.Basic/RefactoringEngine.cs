@@ -47,32 +47,29 @@ public class RefactoringEngine
         _workspaceManager = workspaceManager;
         _config = config;
     }
-
     /// <summary>
     /// Replaces <paramref name = "oldNode"/> with <paramref name = "newNode"/> and formats only the
     /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
     /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
     /// <paramref name = "oldNode"/>'s leading and trailing trivia (blank lines, doc comments, etc.
-    /// anchored to its position in the file) is transplanted onto <paramref name = "newNode"/> first,
-    /// since a freshly parsed replacement (e.g. via SyntaxFactory.ParseMemberDeclaration) has no
-    /// knowledge of the blank lines that separated the original node from its neighboring siblings.
-    /// However, if <paramref name = "newNode"/> already has custom trivia explicitly set (e.g., to
-    /// remove doc comments), that trivia is preserved and not overwritten with <paramref name = "oldNode"/>'s trivia.
+    /// anchored to its position in the file) is transplanted onto <paramref name = "newNode"/> by
+    /// default (<paramref name = "triviaIntent"/> = <see cref="TriviaEditIntent.PreserveOld"/>), since
+    /// a freshly synthesized replacement (e.g. via <c>WithModifiers</c> on a brand-new token list, or
+    /// SyntaxFactory.ParseMemberDeclaration) has no knowledge of the blank lines or doc comment that
+    /// belonged to the original node — and a freshly-built token's own "empty" leading trivia (even a
+    /// single zero-width elastic marker) must never be mistaken for a deliberate replacement; a
+    /// trivia-count/shape heuristic previously used here to detect "custom trivia" was exactly this
+    /// mistake; see docs/current/CLOSED.md and RunTest ChangeAccessibility_PreservesLeadingDocComment.
+    /// Pass <see cref="TriviaEditIntent.ReplaceLeading"/> when the caller deliberately rewrote
+    /// <paramref name = "newNode"/>'s leading trivia on purpose (e.g. stripping a doc comment) — then
+    /// <paramref name = "newNode"/>'s leading trivia wins unconditionally, even if it looks empty.
     /// </summary>
-    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
+    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
     {
         var annotation = new SyntaxAnnotation();
 
-        // Only apply oldNode's trivia to newNode if newNode doesn't already have custom trivia.
-        // This preserves intentional trivia modifications (e.g., stripping doc comments in RemoveSummaryCommentAsync).
-        // We detect "custom trivia" by checking if newNode's trivia list is non-empty AND different from oldNode's.
-        var newNodeLeadingTrivia = newNode.GetLeadingTrivia();
-        var newNodeTrailingTrivia = newNode.GetTrailingTrivia();
-        var oldNodeLeadingTrivia = oldNode.GetLeadingTrivia();
-        var oldNodeTrailingTrivia = oldNode.GetTrailingTrivia();
-
-        var leadingTrivia = newNodeLeadingTrivia.Count > 0 ? newNodeLeadingTrivia : oldNodeLeadingTrivia;
-        var trailingTrivia = newNodeTrailingTrivia.Count > 0 ? newNodeTrailingTrivia : oldNodeTrailingTrivia;
+        var leadingTrivia = triviaIntent == TriviaEditIntent.ReplaceLeading ? newNode.GetLeadingTrivia() : oldNode.GetLeadingTrivia();
+        var trailingTrivia = oldNode.GetTrailingTrivia();
 
         var annotatedNewNode = newNode.WithLeadingTrivia(leadingTrivia).WithTrailingTrivia(trailingTrivia).WithAdditionalAnnotations(annotation);
         var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
@@ -3591,7 +3588,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), cancellationToken)
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), cancellationToken, TriviaEditIntent.ReplaceLeading)
         };
     }
 
@@ -5536,4 +5533,27 @@ public class RefactoringEngine
 
         return hunks;
     }
+}// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Controls which side wins when <see cref="RefactoringEngine"/>'s shared "replace a node, then
+/// format" helper decides whose leading trivia (blank lines, doc comments, etc.) to keep on the
+/// replacement node.
+/// </summary>
+public enum TriviaEditIntent
+{
+    /// <summary>
+    /// Default: the original node's leading trivia always wins. Use this whenever the replacement
+    /// node was synthesized fresh (e.g. via <c>WithModifiers</c> on a brand-new token list) and
+    /// never carried the original doc comment/blank-line trivia in the first place — a freshly
+    /// built token's own leading trivia (even a single zero-width elastic marker) must never be
+    /// mistaken for a deliberate, caller-authored replacement.
+    /// </summary>
+    PreserveOld,
+
+    /// <summary>
+    /// The replacement node's leading trivia always wins, even if it looks empty or minimal. Use
+    /// this only when the caller deliberately rewrote the node's leading trivia on purpose (e.g.
+    /// <see cref="RefactoringEngine.RemoveSummaryCommentAsync"/> stripping a doc comment).
+    /// </summary>
+    ReplaceLeading,
 }

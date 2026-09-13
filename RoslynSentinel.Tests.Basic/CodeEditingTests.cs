@@ -952,8 +952,26 @@ public class Base
             .Or.Contain("public int Subtract(int a, int b) => a - b;\n\n\n    public int Multiply"),
             "Blank lines between untouched members below the edit must survive unchanged — a whole-file reformat would collapse them.");
     }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task ChangeAccessibility_PreservesLeadingDocComment()
+    {
+        SetSource(@"
+public class Calc
+{
+    /// <summary>
+    /// Does a thing.
+    /// </summary>
+    private void DoThing() { }
+}
+", "Calc.cs");
 
-    // ══════════════════════════════════════════════════════════════
+        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "DoThing", AccessibilityLevel.@internal);
+
+        Assert.That(result.UpdatedText, Does.Contain("/// <summary>"), "Doc comment must survive an accessibility change.");
+        Assert.That(result.UpdatedText, Does.Contain("/// Does a thing."));
+        Assert.That(result.UpdatedText, Does.Contain("internal void DoThing"));
+    }
     // AddModifierAsync / RemoveModifierAsync
     // ══════════════════════════════════════════════════════════════
 
