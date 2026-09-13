@@ -212,7 +212,9 @@ if ($ExistingRun) {
     }
 }
 else {
-    $runTimestamp = Get-Date -AsUTC -Format 'yyyyMMdd-HHmmss-fff'
+    # -AsUTC is PowerShell 7.1+ only; ToUniversalTime() works on both Windows PowerShell 5.1 and
+    # pwsh, since this script is routinely invoked via either depending on the caller's shell.
+    $runTimestamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss-fff')
     $runDir = Join-Path $testRunsRoot $runTimestamp
 }
 
