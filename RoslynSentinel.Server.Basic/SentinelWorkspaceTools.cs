@@ -1318,7 +1318,6 @@ public class SentinelWorkspaceTools
             };
         }
     }
-
     [McpServerTool(Name = "Build")]
     [Produces(DataTag.Report)]
     [Description("Compiles the loaded solution and reports errors/warnings. level=quickBuild uses in-memory Roslyn diagnostics (fast, same check GetDiagnostics does). level=fullBuild shells out to `dotnet build` (slower, catches MSBuild-only failures — NuGet restore, resource copy, post-build events — that quickBuild can't see). Returns BuildSucceeded, ExitCode, ErrorCount/WarningCount, capped Errors/Warnings lists, ErrorSummary/WarningSummary (grouped by diagnostic Id, uncapped, for spotting one cause behind many errors), Duration.")]
@@ -1339,7 +1338,7 @@ public class SentinelWorkspaceTools
             }
 
             var result = level == BuildVerifyLevel.fullBuild
-                ? await _buildEngine.RunFullBuildAsync(cancellationToken)
+                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails)
                 : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
 
             if (!result.TryGetData(out var buildResult))
@@ -1347,7 +1346,9 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.BuildFailed, result.Error?.Message ?? "Build failed unexpectedly.") };
             }
 
-            return new ToolResult<object>() { Success = true, Data = buildResult, WorkspaceVersion = _workspaceManager.WorkspaceVersion };
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                buildResult, _workspaceManager.GetSolutionRoot(), "BuildResult", ResultWrapperType.Raw,
+                workspaceVersion: _workspaceManager.WorkspaceVersion, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {

@@ -110,7 +110,6 @@ public static class RoslynSentinelServiceExtensionsBasic
         // services.AddSingleton<AsyncBatchEngine>();
         return services;
     }
-
     /// <summary>
     /// Registers all MCP tool classes (mode-conditional, with optional per-class
     /// <paramref name="includeTools"/>/<paramref name="excludeTools"/> overrides — see
@@ -376,12 +375,18 @@ public static class RoslynSentinelServiceExtensionsBasic
                     return result;
                 }));
 
-            // Cheap large-result logging: sums the length of text content blocks in the response
-            // (no JSON serialization) and logs a warning above LargeResultHelper.OffloadThresholdBytes.
-            // This is deliberately shape-agnostic — it exists because most tool result types
-            // aren't individually wired into LargeResultInfo (see RoslynSentinel.Common.LargeResultHelper),
-            // so this is the only signal for "this tool call returned a lot of data" for those tools.
-            // Grep the log for "Large tool result" to review offenders without parsing full payloads.
+            // Generic large-result offload backstop (see
+            // docs/current/proposal_centralized_large_result_filter.md): sums the length of text
+            // content blocks in the response (no JSON re-serialization) and, above
+            // LargeResultHelper.OffloadThresholdBytes, writes the raw response text verbatim to disk
+            // via LargeResultHelper.StoreRawJsonAsync and replaces the response with a small pointer
+            // (resultId) instead of just logging. This is deliberately shape-agnostic — it exists
+            // because most tool result types aren't individually wired into the typed
+            // ForPossiblyLargeDataAsync/LargeResultInfo path, so this is the only offload available
+            // for those tools. It coexists with, and does not replace, that typed per-caller path:
+            // a tool already offloaded via ForPossiblyLargeDataAsync has a small response by the
+            // time it reaches here and this filter is a no-op for it. Grep the log for "Large tool
+            // result" to review offenders without parsing full payloads.
             filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
                 ModelContextProtocol.Protocol.CallToolRequestParams,
                 ModelContextProtocol.Protocol.CallToolResult>(
@@ -391,29 +396,51 @@ public static class RoslynSentinelServiceExtensionsBasic
 
                     try
                     {
-                        long sizeChars = 0;
-                        if (result.Content is not null)
+                        if (result.Content is null)
                         {
-                            foreach (var block in result.Content)
-                            {
-                                if (block is ModelContextProtocol.Protocol.TextContentBlock textBlock)
-                                {
-                                    sizeChars += textBlock.Text?.Length ?? 0;
-                                }
-                            }
+                            return result;
                         }
 
-                        if (sizeChars > RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes)
+                        foreach (var block in result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().ToList())
                         {
+                            var text = block.Text;
+                            if (string.IsNullOrEmpty(text) ||
+                                text.Length <= RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes)
+                            {
+                                continue;
+                            }
+
                             var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
                             logger?.LogWarning(
                                 "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {OffloadThresholdBytes})",
-                                context.Params?.Name, sizeChars, RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes);
+                                context.Params?.Name, text.Length, RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes);
+
+                            var workspaceManager = context.Server.Services?.GetService<PersistentWorkspaceManager>();
+                            var solutionRoot = workspaceManager?.GetSolutionRoot();
+                            var stored = await RoslynSentinel.Common.LargeResultHelper.StoreRawJsonAsync(text, solutionRoot, cancellationToken);
+                            if (!stored.offloaded)
+                            {
+                                // No solution loaded, or the write failed to qualify — fail closed to
+                                // pass-through rather than blocking the call on a guardrail defect.
+                                continue;
+                            }
+
+                            result.Content = [new ModelContextProtocol.Protocol.TextContentBlock
+                            {
+                                Text = System.Text.Json.JsonSerializer.Serialize(new
+                                {
+                                    offloaded = true,
+                                    resultId = stored.resultId,
+                                    sizeBytes = text.Length,
+                                    message = $"Result is {text.Length} bytes (threshold: {RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes}). Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."
+                                })
+                            }];
+                            break;
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Large result logging filter failed: {ex}");
+                        Debug.WriteLine($"Large result offload filter failed: {ex}");
                     }
 
                     return result;

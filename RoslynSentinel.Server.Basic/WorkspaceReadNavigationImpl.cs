@@ -756,7 +756,6 @@ public class WorkspaceReadNavigationImpl
     }
 
     private static List<MethodAttributeInfo> ExtractAttributes(BaseMethodDeclarationSyntax method) => method.AttributeLists.SelectMany(al => al.Attributes).Select(a => new MethodAttributeInfo { Name = a.Name.ToString(), Arguments = a.ArgumentList?.Arguments.ToString() ?? "", }).ToList();
-
     public async Task<ToolResult<object>> GetLargeResult(
         ToolCallReason reason,
         string? resultId = null,
@@ -823,6 +822,46 @@ public class WorkspaceReadNavigationImpl
                 {
                     Success = false,
                     Error = new ResultError("Exception", "Result file has no Data payload — it may be corrupt.")
+                };
+            }
+
+            // Raw (the generic MCP request-filter offload backstop, see
+            // docs/current/proposal_centralized_large_result_filter.md) has no known element shape —
+            // the filter that wrote it only ever saw opaque serialized text, never a typed value — so
+            // the list-shaped Skip(offset).Take(limit) paging every other case below uses does not
+            // apply. Instead this pages over the stored raw text itself as a byte/char window, sized
+            // and offset by the caller's limit/offset (reinterpreted as a character count and
+            // position for this case only), capped so a single response can never itself exceed
+            // OffloadThresholdBytes. Without this cap, returning the whole stored payload here would
+            // let the very filter that offloaded it catch this response on the way back out and
+            // re-offload it under a new resultId — an unbounded fetch/still-too-big/re-offload loop.
+            if (all.Type == ResultWrapperType.Raw)
+            {
+                var rawText = all.Data.ToString();
+                var windowSize = limit > 0 && limit < LargeResultHelper.OffloadThresholdBytes
+                    ? limit
+                    : LargeResultHelper.OffloadThresholdBytes;
+                var start = Math.Clamp(offset, 0, rawText.Length);
+                var length = Math.Min(windowSize, rawText.Length - start);
+                var slice = rawText.Substring(start, length);
+                var nextOffset = start + length;
+                var hasMoreRaw = nextOffset < rawText.Length;
+
+                return new ToolResult<object>
+                {
+                    Success = true,
+                    Data = new
+                    {
+                        text = slice,
+                        offset = start,
+                        nextOffset = hasMoreRaw ? nextOffset : (int?)null,
+                        totalChars = rawText.Length
+                    },
+                    TotalRecords = rawText.Length,
+                    HasMorePages = hasMoreRaw,
+                    Warning = hasMoreRaw
+                        ? $"Raw result truncated to a {length}-char window. Call GetLargeResult(resultId, offset: {nextOffset}) to continue reading."
+                        : null
                 };
             }
 

@@ -49,6 +49,39 @@ public static class LargeResultHelper
         await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
         return (true, new FilePathWrapper(filePathString, solutionRoot, validated: true), resultId, jsonBytes);
     }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Writes already-serialized JSON text verbatim to a <see cref="ResultWrapperType.Raw"/> file,
+    /// for callers that only have a final serialized response body — not a typed value — such as the
+    /// generic MCP request-filter backstop. Unlike <see cref="StoreLargeResultAsync{T}"/>, this never
+    /// re-serializes: <paramref name="json"/> is parsed once into a <see cref="JsonNode"/> and wrapped
+    /// as-is. Mirrors the same <c>.roslynsentinel/largeresults/largeresult_&lt;timestamp&gt;_&lt;resultId&gt;.json</c>
+    /// naming convention so <c>GetLargeResult</c>'s existing file-resolution logic finds it unchanged.
+    /// Fails closed: if no solution root is available, returns <c>offloaded: false</c> rather than
+    /// throwing, so a guardrail can never itself break the call it's guarding.
+    /// </summary>
+    public static async Task<(bool offloaded, FilePathWrapper filePath, string? resultId)> StoreRawJsonAsync(
+        string json, string? solutionRoot, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(solutionRoot) || string.IsNullOrEmpty(json))
+        {
+            return (false, default, null);
+        }
+
+        var wrapper = new ResultWrapper
+        {
+            Type = ResultWrapperType.Raw,
+            Data = JsonNode.Parse(json)
+        };
+
+        var resultId = Guid.NewGuid().ToString("N");
+        var dir = Path.Combine(solutionRoot, ".roslynsentinel", "largeresults");
+        Directory.CreateDirectory(dir);
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
+        var filePathString = Path.Combine(dir, $"largeresult_{timestamp}_{resultId}.json");
+        await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
+        return (true, new FilePathWrapper(filePathString, solutionRoot, validated: true), resultId);
+    }
 }
 
 public record ResultWrapper
@@ -80,7 +113,8 @@ public enum ResultWrapperType
     SolutionSymbolEntryList,
     SolutionItemsAllResult,
     SymbolRelationshipResultList,
-    BroadenedSymbolRelationshipResults
+    BroadenedSymbolRelationshipResults,
+    Raw
 }
 
 /// <summary>Offloaded payload shape for a whole-file ReadFile result too large to inline (mirrors the anonymous shape ReadFile returns inline for the non-offloaded case).</summary>

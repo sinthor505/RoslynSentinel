@@ -79,8 +79,7 @@ public class BuildEngine
     private static readonly Regex DiagnosticLineRegex = new(
         @"^(?<path>.+?)\((?<line>\d+),(?<col>\d+)\):\s*(?<severity>error|warning)\s+(?<id>[A-Za-z0-9]+):\s*(?<message>.+?)\s*\[.+\]$",
         RegexOptions.Compiled | RegexOptions.Multiline);
-
-    public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default)
+    public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50)
     {
         var start = DateTime.UtcNow;
         var solutionPath = _workspaceManager.CurrentSolution?.FilePath ?? _workspaceManager.SolutionPath;
@@ -190,8 +189,13 @@ public class BuildEngine
             ExitCode: process.ExitCode,
             ErrorCount: errors.Count,
             WarningCount: warnings.Count,
-            Errors: errors,
-            Warnings: warnings,
+            // Capped by maxDetails, same as RunQuickBuildAsync — the raw per-diagnostic lists
+            // previously shipped uncapped regardless of the caller's maxDetails value (a confirmed
+            // 2,160-error / ~880KB response, since Build's own maxDetails parameter was never
+            // forwarded to this method at all). ErrorSummary/WarningSummary below remain the
+            // uncapped grouped-by-Id view for spotting one cause behind many errors.
+            Errors: errors.Take(maxDetails).ToList(),
+            Warnings: warnings.Take(maxDetails).ToList(),
             ErrorSummary: errors.GroupBySeverity(SummaryTopN),
             WarningSummary: warnings.GroupBySeverity(SummaryTopN),
             StdoutTail: Tail(stdoutText),
