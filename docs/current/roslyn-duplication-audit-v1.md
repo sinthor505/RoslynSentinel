@@ -52,6 +52,16 @@ investigation** (couldn't classify confidently in a brief pass; needs a deeper l
 | 13 | PullUpMember | StructuralRefinementEngine.cs:351 | **Bug, not duplication** | **todo** | `PullUpMemberAsync` is an unimplemented stub (body is a comment + empty-dict return) but is wired to a fully-described, user-facing MCP tool that always fails with a misleading "not found" error. Logged as a real bug in `docs/TODO.md` (separate from this audit's duplication tracking). Sibling `PushMembersDownAsync` (line 360) has the same stub shape but isn't exposed to any tool — lower priority. |
 | 14 | SyncInterface | RefactoringEngine.cs:4249 | Needs investigation | keep | Not read this pass; "sync interface to implementation" sounds Unique (no direct Roslyn equivalent) but unverified. |
 
+| 15 | ConvertOutParamsToValueTuple | OutParamRefactoringEngine.cs:30-307 | **Duplicate (avoidable)** | **todo** | Composition (`DocumentEditor`, `SymbolFinder.FindReferencesAsync`) is correct public-API usage, but every node it produces — tuple return type (lines 94-114), all three call-site rewrite branches (lines 224-254), and the `ReturnRewriter`'s return statement (lines 343-370) — is built by string-interpolating C# source and re-parsing via `SyntaxFactory.ParseTypeName`/`ParseStatement` instead of constructing `TupleTypeSyntax`/`TupleExpressionSyntax` nodes directly. Unlike #2-8/14, there is no internal-API wall here — public `SyntaxFactory` node constructors cover this directly. Concrete bug found, not just style: line ~112's `originalReturn.Replace("Task<", "").TrimEnd('>')` corrupts nested generics (`Task<List<int>>` → `List<int`). Full writeup and fix sketch: `docs/current/proposal_outparam_tuple_construction_syntaxfactory.md`. |
+| 16 | ParamToPropertyRewriter (helper inside a param-to-property refactor) | GranularRefactoringEngine.cs:1186-1204 | Duplicate (avoidable), minor | keep | `VisitIdentifierName` does `SyntaxFactory.ParseExpression(replacement).WithTriviaFrom(node)` where `replacement` is a plain string from a `Dictionary<string,string>` substitution map — reparses a string for what's a simple identifier/member-access swap instead of building the replacement node directly (`SyntaxFactory.IdentifierName`/`SyntaxGenerator.MemberAccessExpression`). Low severity, no known correctness bug; not written up as a separate proposal. |
+| 17 | LogLevel expression construction | ModernLoggingEngine.cs:72 | Duplicate (avoidable), cosmetic | keep | `SyntaxFactory.ParseExpression($"LogLevel.{levelStr}")` instead of `SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("LogLevel"), SyntaxFactory.IdentifierName(levelStr))`. Trivial one-liner; not written up separately. |
+
+**Checked and confirmed clean** (proper tree-based `CSharpSyntaxRewriter` usage, no string-reparse
+smell despite matching search terms): `AsyncBatchEngine.cs:1474` (`BridgeCallRewriter`),
+`AdvancedLogicEngine.cs:603` (`IndexedAccessRewriter`), `SyntaxUpgradeEngine.cs:1001`
+(`BracesRewriter`). No instances found of manual brace/offset span-math, reimplemented
+`SymbolFinder`-style text search, or hand-built modifier lists duplicating `DeclarationModifiers`.
+
 ## Candidates not yet reviewed
 
 MoveType, MoveAllTypesToFiles, ConvertAnonymousToNamed, WrapRange, Introduce (generate variants),

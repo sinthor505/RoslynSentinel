@@ -239,7 +239,7 @@ public class RefactoringEngineTests
         _workspaceManager.SetTestSolution(solution);
 
         // Swap parameters: new order [1, 0] means b comes first
-        var result = await _engine.ChangeSignatureAsync("Calc.cs", "Add", [1, 0]);
+        var result = await _engine.ChangeSignatureAsync("Calc.cs", "Add", new SignatureParameterSpec[] { new ExistingParameterSpec(1), new ExistingParameterSpec(0) });
         var changes = result.Changes;
 
         Assert.That(changes, Is.Not.Empty, "Should return pending changes dict");

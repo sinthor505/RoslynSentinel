@@ -145,7 +145,7 @@ public class Svc { public void Foo() {} }";
         SetSource(source, "Calculator.cs");
 
         // Reorder [a, b, c] → [c, a, b] using index permutation [2, 0, 1]
-        var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new[] { 2, 0, 1 });
+        var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new SignatureParameterSpec[] { new ExistingParameterSpec(2), new ExistingParameterSpec(0), new ExistingParameterSpec(1) });
 
         Assert.That(result.Changes, Is.Not.Empty, "Should return changed files");
         Assert.That(result.SkippedCallSites, Is.Empty, "No call sites should be skipped for this signature");
@@ -164,37 +164,46 @@ public class Svc { public void Foo() {} }";
         const string source = "public class C { public void M(int a, int b) {} }";
         SetSource(source, "C.cs");
 
-        // Wrong length
-        var result = await _refactoringEngine.ChangeSignatureAsync("C.cs", "M", new[] { 0 });
-        Assert.That(result.Changes, Is.Empty, "Invalid order length should return empty dict");
+        // Invalid: originalIndex 5 is out of range for a 2-parameter method.
+        var result = await _refactoringEngine.ChangeSignatureAsync("C.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(5) });
+        Assert.That(result.Changes, Is.Empty, "Out-of-range originalIndex should return empty dict");
     }
 
     [Test]
-    public async Task ChangeSignature_CallSiteWithNamedArgument_IsReportedAsSkipped()
+    public async Task ChangeSignature_CallSiteWithNamedArgument_IsHandledCorrectly()
     {
         SetMultipleFiles(
             ("Calculator.cs", "public class Calculator { public int Add(int a, int b, int c) => a + b + c; }"),
             ("Caller.cs", "public class Caller { public int Run(Calculator calc) => calc.Add(1, c: 3, b: 2); }"));
 
-        var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new[] { 2, 0, 1 });
+        // Reorder [a, b, c] -> [c, a, b]. The call site uses named arguments for b/c, which are
+        // order-independent — the semantic-model-driven resolution must correctly bind each named
+        // argument to its original parameter and rewrite the call site, not skip it.
+        var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new SignatureParameterSpec[] { new ExistingParameterSpec(2), new ExistingParameterSpec(0), new ExistingParameterSpec(1) });
 
-        Assert.That(result.Changes.Keys.Select(k => k.ToString()), Has.Some.Contains("Calculator.cs"), "Declaration should still be reordered");
-        Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1), "Named-argument call site should be reported as skipped, not silently left stale");
-        Assert.That(result.SkippedCallSites[0].FilePath.ToString(), Does.Contain("Caller.cs"));
+        Assert.That(result.Changes.Keys.Select(k => k.ToString()), Has.Some.Contains("Calculator.cs"), "Declaration should be reordered");
+        Assert.That(result.SkippedCallSites, Is.Empty, "Named-argument call site should be correctly resolved via the semantic model, not skipped");
+        Assert.That(result.Changes.Keys.Select(k => k.ToString()), Has.Some.Contains("Caller.cs"), "Caller.cs should be included in the changes");
     }
 
     [Test]
-    public async Task ChangeSignature_CallSiteWithFewerArgsThanParameters_IsReportedAsSkipped()
+    public async Task ChangeSignature_CallSiteWithFewerArgsThanParameters_IsHandledCorrectly()
     {
         SetMultipleFiles(
             ("Calculator.cs", "public class Calculator { public int Add(int a, int b, int c = 0) => a + b + c; }"),
             ("Caller.cs", "public class Caller { public int Run(Calculator calc) => calc.Add(1, 2); }"));
 
-        var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new[] { 2, 0, 1 });
+        // Reorder [a, b, c] -> [c, a, b]. The call site omits the optional trailing 'c' argument —
+        // recognized via the semantic model as "no argument to move for that parameter", not a
+        // reason to skip the whole call site. Since c moves to the front here, its omitted value
+        // must be materialized (using the parameter's own default, 0) so the call keeps compiling.
+        var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new SignatureParameterSpec[] { new ExistingParameterSpec(2), new ExistingParameterSpec(0), new ExistingParameterSpec(1) });
 
-        Assert.That(result.Changes.Keys.Select(k => k.ToString()), Has.Some.Contains("Calculator.cs"), "Declaration should still be reordered");
-        Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1), "Call site omitting the optional argument should be reported as skipped");
-        Assert.That(result.SkippedCallSites[0].FilePath.ToString(), Does.Contain("Caller.cs"));
+        Assert.That(result.Changes.Keys.Select(k => k.ToString()), Has.Some.Contains("Calculator.cs"), "Declaration should be reordered");
+        Assert.That(result.SkippedCallSites, Is.Empty, "Omitted optional argument should be correctly handled, not skipped");
+        Assert.That(result.Changes.Keys.Select(k => k.ToString()), Has.Some.Contains("Caller.cs"), "Caller.cs should be included in the changes");
+        var callerContent = result.Changes.First(kvp => kvp.Key.ToString().Contains("Caller.cs")).Value;
+        Assert.That(callerContent, Does.Contain("Add(0, 1, 2)"), "Omitted 'c' must be materialized as its default (0) since it moved to a non-trailing position");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -674,7 +683,7 @@ public class Service
         SetSource(code, "Service.cs");
 
         // Reorder: [name, age, active] -> [active, name, age]
-        var result = await _refactoringEngine.ChangeSignatureAsync("Service.cs", "Process", new[] { 2, 0, 1 });
+        var result = await _refactoringEngine.ChangeSignatureAsync("Service.cs", "Process", new SignatureParameterSpec[] { new ExistingParameterSpec(2), new ExistingParameterSpec(0), new ExistingParameterSpec(1) });
 
         Assert.That(result.Changes.Count, Is.GreaterThan(0), "Should return changed files");
         var content = string.Concat(result.Changes.Values);

@@ -186,7 +186,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ChangeSignature_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ChangeSignature(reason: "test message", "Order.cs", "Order", [1, 0]);
+        var result = await _advTools.ChangeSignature(reason: "test message", "Order.cs", "Order", new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0) });
         Assert.That(result, Is.Not.Null);
     }
 

@@ -7,6 +7,21 @@ using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Advanced;
 
+/// <summary>
+/// Wire-shape input for one entry in <c>ChangeSignature</c>'s <c>parameters</c> array. Flat and
+/// nullable-field-based (rather than a polymorphic/discriminated-union shape) so the emitted MCP
+/// JSON schema stays a plain object schema an agent can construct directly: pass
+/// <paramref name="originalIndex"/> alone to keep an existing parameter at this new position, or
+/// omit it and pass <paramref name="name"/>/<paramref name="type"/>/<paramref name="defaultValue"/>
+/// to insert a brand-new parameter here (its default value is also the literal fill-in argument
+/// inserted at every existing call site).
+/// </summary>
+public sealed record ChangeSignatureParameterInput(
+    int? originalIndex = null,
+    string? name = null,
+    string? type = null,
+    string? defaultValue = null);
+
 [McpServerToolType]
 public class SentinelAdvancedRefactoringTools
 {
@@ -130,13 +145,13 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "ChangeSignature")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Reorders method parameters and updates all call sites across the solution.")]
+    [Description("Reorders, adds, and removes method parameters and updates all call sites across the solution (including named-argument and omitted-optional-argument call sites). To add a parameter, supply name/type/defaultValue instead of originalIndex; the literal default value is also inserted at every existing call site. To remove a parameter, simply omit its originalIndex from the list.")]
     public async Task<ToolResult<object>> ChangeSignature(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
-        [Description("Zero-based index array specifying the new parameter order, e.g. [1,0,2] to swap the first two parameters.")]
-        [ExternalInputRequired(DataTag.Order, required: true)] int[] newParameterOrder,
+        [Description("The desired end-state parameter list, in order. Each entry is either {originalIndex: N} to keep the parameter originally at 0-based index N, or {name, type, defaultValue} to insert a brand-new parameter (defaultValue is literal C# source text, e.g. \"TimeSpan.FromSeconds(30)\", used both as the declaration's default and as the fill-in argument at existing call sites). A parameter is removed by leaving its originalIndex out of the list entirely. Example: [{\"originalIndex\":1},{\"originalIndex\":0},{\"name\":\"timeout\",\"type\":\"TimeSpan\",\"defaultValue\":\"TimeSpan.FromSeconds(30)\"}].")]
+        [ExternalInputRequired(DataTag.Order, required: true)] ChangeSignatureParameterInput[] parameters,
         [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -147,7 +162,24 @@ public class SentinelAdvancedRefactoringTools
 
         try
         {
-            var result = await _refactoringEngine.ChangeSignatureAsync(filePath, methodName, newParameterOrder);
+            var specs = new List<SignatureParameterSpec>();
+            foreach (var p in parameters)
+            {
+                if (p.originalIndex is int idx)
+                {
+                    specs.Add(new ExistingParameterSpec(idx));
+                }
+                else if (!string.IsNullOrEmpty(p.name) && !string.IsNullOrEmpty(p.type) && !string.IsNullOrEmpty(p.defaultValue))
+                {
+                    specs.Add(new NewParameterSpec(p.name, p.type, p.defaultValue));
+                }
+                else
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Each parameters entry must set either originalIndex (to keep an existing parameter), or all of name/type/defaultValue (to insert a new one).") };
+                }
+            }
+
+            var result = await _refactoringEngine.ChangeSignatureAsync(filePath, methodName, specs);
             var changes = result.Changes;
             if (!autoStage)
                 return new ToolResult<object>() { Success = true, Data = new { Changes = changes, result.SkippedCallSites } };

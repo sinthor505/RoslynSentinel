@@ -10,6 +10,7 @@ using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
+using Microsoft.CodeAnalysis.Editing;
 
 namespace RoslynSentinel.Basic;
 
@@ -87,61 +88,73 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, int[] newParameterOrder, CancellationToken cancellationToken = default)
+    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, IReadOnlyList<SignatureParameterSpec> parameters, CancellationToken cancellationToken = default)
     {
+        var emptyResult = new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
+
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
+            return emptyResult;
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (root == null || semanticModel == null)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
+            return emptyResult;
         }
 
         var methodDecl = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodDecl == null)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
+            return emptyResult;
         }
 
-        var parameters = methodDecl.ParameterList.Parameters.ToList();
-        if (parameters.Count == 0)
+        var originalParams = methodDecl.ParameterList.Parameters.ToList();
+        if (originalParams.Count == 0 || parameters.Count == 0)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
+            return emptyResult;
         }
 
-        // Validate order array
-        if (newParameterOrder.Length != parameters.Count)
+        // Validate: every ExistingParameterSpec.OriginalIndex must be in range and referenced at most once.
+        var existingIndexes = parameters.OfType<ExistingParameterSpec>().Select(e => e.OriginalIndex).ToList();
+        if (existingIndexes.Any(i => i < 0 || i >= originalParams.Count) || existingIndexes.Distinct().Count() != existingIndexes.Count)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
+            return emptyResult;
         }
 
-        if (newParameterOrder.Any(i => i < 0 || i >= parameters.Count))
+        var generator = SyntaxGenerator.GetGenerator(document);
+
+        // Build the new parameter list (declaration side) and, in parallel, a per-call-site rewrite plan:
+        // for each new-position slot, either "carry over the bound argument for original index N" or
+        // "insert this literal default value expression" (for a NewParameterSpec).
+        var newParameterSyntaxes = new List<ParameterSyntax>();
+        foreach (var spec in parameters)
         {
-            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
+            switch (spec)
+            {
+                case ExistingParameterSpec existing:
+                    newParameterSyntaxes.Add(originalParams[existing.OriginalIndex].WithoutTrivia());
+                    break;
+                case NewParameterSpec added:
+                    var defaultExpr = SyntaxFactory.ParseExpression(added.DefaultValueExpression);
+                    var generated = (ParameterSyntax)generator.ParameterDeclaration(added.Name, SyntaxFactory.ParseTypeName(added.Type), defaultExpr);
+                    newParameterSyntaxes.Add(generated);
+                    break;
+            }
         }
 
-        if (newParameterOrder.Distinct().Count() != parameters.Count)
-        {
-            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
-        }
+        var newParameterList = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(newParameterSyntaxes));
 
-        var reorderedParams = newParameterOrder.Select(i => parameters[i]).ToList();
-        var newParamList = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(reorderedParams));
-        var updatedMethodDecl = methodDecl.WithParameterList(newParamList);
-        var updatedRoot = root.ReplaceNode(methodDecl, updatedMethodDecl);
-        var updatedDoc = document.WithSyntaxRoot(updatedRoot);
-        var pendingChanges = new Dictionary<FilePathWrapper, string>
-        {
-            [filePath] = (await updatedDoc.GetTextAsync(cancellationToken)).ToString()
-        };
-        // Reorder arguments at all call sites
+        var declarationEditor = await DocumentEditor.CreateAsync(document, cancellationToken);
+        declarationEditor.ReplaceNode(methodDecl.ParameterList, newParameterList);
+        var updatedDeclarationDoc = declarationEditor.GetChangedDocument();
+
+        var pendingDocs = new Dictionary<FilePathWrapper, Document> { [filePath] = updatedDeclarationDoc };
         var skippedCallSites = new List<SkippedCallSite>();
+
         var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (symbol != null)
         {
@@ -156,8 +169,10 @@ public class RefactoringEngine
                     }
 
                     var refDoc = location.Document;
+                    var refDocPath = (FilePathWrapper)refDoc.FilePath!;
                     var refRoot = await refDoc.GetSyntaxRootAsync(cancellationToken);
-                    if (refRoot == null)
+                    var refSemanticModel = await refDoc.GetSemanticModelAsync(cancellationToken);
+                    if (refRoot == null || refSemanticModel == null)
                     {
                         continue;
                     }
@@ -168,55 +183,140 @@ public class RefactoringEngine
                     var invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
                     if (invocation == null)
                     {
-                        skippedCallSites.Add(new SkippedCallSite(refDoc.FilePath!, refLineNumber, "Reference is not a simple invocation expression (e.g. method group or delegate conversion)."));
+                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Reference is not a simple invocation expression (e.g. method group or delegate conversion)."));
                         continue;
                     }
 
-                    var args = invocation.ArgumentList.Arguments.ToList();
-                    if (args.Any(a => a.NameColon != null))
+                    var boundMethod = refSemanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
+                    if (boundMethod == null)
                     {
-                        skippedCallSites.Add(new SkippedCallSite(refDoc.FilePath!, refLineNumber, "Call site uses named arguments; automatic reordering was skipped to avoid corrupting the call."));
+                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Could not resolve the bound overload for this call site via the semantic model."));
                         continue;
                     }
 
-                    if (args.Count != parameters.Count)
+                    // Map original parameter ordinal -> the argument syntax actually supplied at this call
+                    // site (null if the argument was omitted, relying on the parameter's own default).
+                    var argsByOriginalIndex = new ArgumentSyntax?[originalParams.Count];
+                    var arguments = invocation.ArgumentList.Arguments;
+                    for (int i = 0; i < arguments.Count; i++)
                     {
-                        skippedCallSites.Add(new SkippedCallSite(refDoc.FilePath!, refLineNumber, $"Call site passes {args.Count} argument(s) but the declaration has {parameters.Count} parameter(s) (optional argument omitted or params expansion); automatic reordering was skipped."));
-                        continue;
+                        var arg = arguments[i];
+                        int originalIndex;
+                        if (arg.NameColon != null)
+                        {
+                            var namedParam = boundMethod.Parameters.FirstOrDefault(p => p.Name == arg.NameColon.Name.Identifier.Text);
+                            if (namedParam == null || namedParam.Ordinal >= originalParams.Count)
+                            {
+                                continue;
+                            }
+                            originalIndex = namedParam.Ordinal;
+                        }
+                        else
+                        {
+                            // Positional argument: bound parameter ordinal handles params-array expansion too
+                            // (each expanded element binds to the same trailing params parameter).
+                            if (i >= boundMethod.Parameters.Length)
+                            {
+                                continue;
+                            }
+                            var boundParam = boundMethod.Parameters[i];
+                            if (boundParam.Ordinal >= originalParams.Count)
+                            {
+                                continue;
+                            }
+                            originalIndex = boundParam.Ordinal;
+                        }
+                        argsByOriginalIndex[originalIndex] = arg;
                     }
 
-                    var docPath = refDoc.FilePath!;
-                    // Work from the already-pending content if we've updated this doc
-                    string currentContent = pendingChanges.TryGetValue(docPath, out var prev) ? prev : (await refDoc.GetTextAsync(cancellationToken)).ToString();
-                    var currentRoot = SyntaxFactory.ParseCompilationUnit(currentContent);
-                    var targetInv = currentRoot.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(inv => inv.Span == invocation.Span);
-                    if (targetInv == null)
+                    // Build the new argument list in new-parameter order. A kept parameter whose argument
+                    // was omitted at this call site only stays omitted if every slot after it is also
+                    // omitted-or-newly-added-with-default (i.e. it's still a valid trailing-optional gap);
+                    // otherwise its original default value expression is materialized explicitly so the
+                    // call keeps compiling positionally.
+                    var slotHasExplicitArg = new bool[parameters.Count];
+                    var slotArgExpr = new ArgumentSyntax?[parameters.Count];
+                    for (int slot = 0; slot < parameters.Count; slot++)
+                    {
+                        if (parameters[slot] is ExistingParameterSpec existing)
+                        {
+                            var boundArg = argsByOriginalIndex[existing.OriginalIndex];
+                            if (boundArg != null)
+                            {
+                                slotHasExplicitArg[slot] = true;
+                                slotArgExpr[slot] = SyntaxFactory.Argument(boundArg.Expression);
+                            }
+                        }
+                        else if (parameters[slot] is NewParameterSpec added)
+                        {
+                            // Always fill in the literal default value at existing call sites when a
+                            // parameter is added (decided: no per-call flag).
+                            slotHasExplicitArg[slot] = true;
+                            slotArgExpr[slot] = SyntaxFactory.Argument(SyntaxFactory.ParseExpression(added.DefaultValueExpression));
+                        }
+                    }
+
+                    // Walk from the end: once we've seen an explicit arg, every earlier omitted slot must
+                    // also be materialized (can't leave a positional gap before a later real argument).
+                    bool sawExplicitFromEnd = false;
+                    bool unresolvableGap = false;
+                    for (int slot = parameters.Count - 1; slot >= 0; slot--)
+                    {
+                        if (slotHasExplicitArg[slot])
+                        {
+                            sawExplicitFromEnd = true;
+                            continue;
+                        }
+                        if (!sawExplicitFromEnd)
+                        {
+                            continue; // trailing omitted slot: still fine to omit
+                        }
+                        if (parameters[slot] is ExistingParameterSpec existing)
+                        {
+                            var originalDefault = originalParams[existing.OriginalIndex].Default?.Value;
+                            if (originalDefault == null)
+                            {
+                                skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Call site omits a required argument for a parameter that must be materialized in its new position, and the original parameter has no default value to fall back on."));
+                                unresolvableGap = true;
+                                break;
+                            }
+                            slotArgExpr[slot] = SyntaxFactory.Argument(originalDefault);
+                        }
+                    }
+                    if (unresolvableGap)
                     {
                         continue;
                     }
 
-                    var reorderedArgs = newParameterOrder.Select(i => args[i]).ToList();
-                    var newArgList = invocation.ArgumentList.WithArguments(SyntaxFactory.SeparatedList(reorderedArgs));
-                    var updatedInv = targetInv.WithArgumentList(newArgList);
-                    pendingChanges[docPath] = currentRoot.ReplaceNode(targetInv, updatedInv).ToFullString();
+                    var newArguments = SyntaxFactory.SeparatedList(slotArgExpr.Where(a => a != null).Select(a => a!));
+                    var newArgList = invocation.ArgumentList.WithArguments(newArguments);
+
+                    if (!pendingDocs.TryGetValue(refDocPath, out var pendingRefDoc))
+                    {
+                        pendingRefDoc = refDoc;
+                    }
+
+                    var pendingRoot = await pendingRefDoc.GetSyntaxRootAsync(cancellationToken);
+                    var targetInvocation = pendingRoot?.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(inv => inv.Span == invocation.Span);
+                    if (targetInvocation == null)
+                    {
+                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Could not re-locate this call site in the pending document after an earlier edit."));
+                        continue;
+                    }
+
+                    var callSiteEditor = await DocumentEditor.CreateAsync(pendingRefDoc, cancellationToken);
+                    callSiteEditor.ReplaceNode(targetInvocation, targetInvocation.WithArgumentList(newArgList));
+                    pendingDocs[refDocPath] = callSiteEditor.GetChangedDocument();
                 }
             }
         }
 
-        // Format all changed files
+        // Format all changed documents.
         var result = new Dictionary<FilePathWrapper, string>();
-        foreach (var kvp in pendingChanges)
+        foreach (var kvp in pendingDocs)
         {
-            var doc = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.FilePath == kvp.Key);
-            if (doc != null)
-            {
-                var formatted = await Formatter.FormatAsync(doc.WithSyntaxRoot(SyntaxFactory.ParseCompilationUnit(kvp.Value)), null, cancellationToken);
-                result[kvp.Key] = (await formatted.GetTextAsync(cancellationToken)).ToString();
-            }
-            else
-            {
-                result[kvp.Key] = kvp.Value;
-            }
+            var formatted = await Formatter.FormatAsync(kvp.Value, null, cancellationToken);
+            result[kvp.Key] = (await formatted.GetTextAsync(cancellationToken)).ToString();
         }
 
         return new ChangeSignatureResult(result, skippedCallSites);
@@ -5456,4 +5556,19 @@ public class RefactoringEngine
 
         return hunks;
     }
-}
+}// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// One entry in the desired end-state parameter list for <see cref="RefactoringEngine.ChangeSignatureAsync"/>.
+/// The list's position expresses the new order; an original parameter simply omitted from the list is a removal.
+/// </summary>
+public abstract record SignatureParameterSpec;
+
+/// <summary>Keep the parameter that was originally at <paramref name="OriginalIndex"/> (0-based), at this new position.</summary>
+public sealed record ExistingParameterSpec(int OriginalIndex) : SignatureParameterSpec;
+
+/// <summary>
+/// Insert a brand-new parameter at this position. <paramref name="DefaultValueExpression"/> is literal C# source
+/// text (e.g. "TimeSpan.FromSeconds(30)"), parsed via SyntaxFactory.ParseExpression, used both as the
+/// declaration's default value and as the literal fill-in argument inserted at every existing call site.
+/// </summary>
+public sealed record NewParameterSpec(string Name, string Type, string DefaultValueExpression) : SignatureParameterSpec;
