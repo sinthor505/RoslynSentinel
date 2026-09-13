@@ -238,10 +238,19 @@ solution to "a tool call did too much work."
 
 ## Status
 
-Proposed by the user (andrewalmond86@gmail.com's session) on 2026-09-12, superseding the
-per-caller-only default described as the status quo in `project_offload_helper_partial_wiring`
-(memory) — that memory's "wire it in as each tool comes up" plan continues for the tools it already
-covers, but is no longer the only path to safety for a tool with no wiring at all. Design only; no
-`.cs` changes made as part of this document. Two implementation-affecting questions are left open
-above (raw-text storage overload's exact signature; whether/how paging applies to `Raw`) and should
-be resolved before or during implementation, not assumed.
+**Implemented** by the user (andrewalmond86@gmail.com's session) on 2026-09-12, commit `047fe430`.
+Supersedes the per-caller-only default described as the status quo in
+`project_offload_helper_partial_wiring` (memory) — that memory's "wire it in as each tool comes up"
+plan continues for the tools it already covers, but is no longer the only path to safety for a tool
+with no wiring at all.
+
+Both implementation-affecting questions raised above are resolved (see the "Resolved" note under
+`ResultWrapperType.Raw` above): `StoreRawJsonAsync` (`LargeResultHelper.cs`) is the raw-text storage
+path, and `Raw` paging in `GetLargeResult` is mandatory byte-window slicing, not list-shaped
+skip/take. The `Build` tool's two related defects (see above) were fixed in the same commit:
+`RunFullBuildAsync` now caps `Errors`/`Warnings` via `maxDetails`, and `Build`'s return path now goes
+through `ForPossiblyLargeDataAsync` (using `ResultWrapperType.Raw`, since `BuildResult` has no
+dedicated typed case and the generic backstop already covers it).
+
+Build verified green (0 errors) before commit. Not yet done: the Verification section's round-trip/
+regression/coexistence tests were not added as automated tests in this pass.
