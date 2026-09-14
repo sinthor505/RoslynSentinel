@@ -1,5 +1,23 @@
 # Blocking error: `Git` MCP tool's `commit`/`status`/`diff` operations silently misreport a loaded worktree's true state
 
+## Resolution (2026-09-14, Phase 0 of manual-selfrun-20260914-remediation-v1)
+
+Root cause confirmed at `RoslynSentinel.Server.Basic/SentinelGitTools.cs`, method `TryGetGitRoot`
+(lines 172-209 pre-fix): the priority order tried `AppContext.BaseDirectory` and
+`Directory.GetCurrentDirectory()` — both fixed at server process launch, inside whichever repo the
+server binary was built/started from — **before** `_workspaceManager.GetSolutionRoot()` (the
+loaded solution's directory, the only candidate that reflects a `LoadSolution` call into a
+worktree). Since the server's base directory is almost always inside a git repo (it's built inside
+this repo), step 1 succeeded first every time, so the worktree-aware fallback never ran.
+
+Fix: reordered `TryGetGitRoot` to try the loaded solution root first, falling back to base
+directory then working directory only when no solution is loaded. Single chokepoint — confirmed via
+`FindReferences` that only `Git()`'s dispatch method calls `TryGetGitRoot`, so this fixes
+status/diff/commit/stage/etc. uniformly. Verified live: `Git(status)` output now matches shell
+`git status --short` exactly in the loaded-solution's repo. A live worktree wasn't available this
+run to re-run the original 6x repro directly; re-verify against a real worktree next time one is
+created via PlanStepRunner.
+
 ## Symptom
 
 Inside the step-08 PlanStepRunner worktree

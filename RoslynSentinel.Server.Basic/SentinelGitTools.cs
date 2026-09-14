@@ -163,33 +163,21 @@ public class SentinelGitTools
     }
     /// <summary>
     /// Finds the git repository root. Git operations read the working tree, not the Roslyn
-    /// compilation, so this deliberately does NOT require a loaded solution: it walks up from the
-    /// server's own base directory first and only falls back to the loaded solution's directory if
-    /// that finds nothing. Previously this returned "No solution path configured" for every
-    /// operation — coupling status/log/diff to state they never used, and failing the very first
-    /// Git call an agent makes.
+    /// compilation, so this deliberately does NOT require a loaded solution: it falls back to
+    /// walking up from the server's own base/working directory when nothing is loaded. When a
+    /// solution IS loaded, its directory is tried FIRST — a loaded solution reflects the
+    /// worktree/repo the caller most recently pointed the server at via LoadSolution, whereas the
+    /// server's base directory and process working directory are fixed at process launch and
+    /// never change afterward. Trying those first meant that once LoadSolution pointed the
+    /// workspace at a git worktree, status/diff/commit still silently resolved against whatever
+    /// repo the server binary happened to be launched from/inside (almost always the primary
+    /// checkout) instead of the worktree — a plausible, well-formed, wrong answer with no error.
+    /// See docs/current/blockers/blocking_error_git_tool_commit_reports_clean_tree_worktree.md.
     /// </summary>
     private string? TryGetGitRoot(out string error)
     {
-        // 1. Walk up from the server's base directory. This is the common case: the server runs
-        //    from a bin/ folder inside the repo it is operating on.
-        var fromBaseDirectory = FindRepositoryRoot(AppContext.BaseDirectory);
-        if (fromBaseDirectory is not null)
-        {
-            error = "";
-            return fromBaseDirectory;
-        }
-
-        // 2. Walk up from the current working directory — covers a server whose binaries are
-        //    deployed outside the repo but which was launched from inside it.
-        var fromCurrentDirectory = FindRepositoryRoot(Directory.GetCurrentDirectory());
-        if (fromCurrentDirectory is not null)
-        {
-            error = "";
-            return fromCurrentDirectory;
-        }
-
-        // 3. Last resort: the loaded solution's directory, if there is one.
+        // 1. The loaded solution's directory, if there is one. This is the caller's most recent
+        //    explicit signal of which repo/worktree they mean, via LoadSolution.
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         if (solutionRoot is not null)
         {
@@ -199,8 +187,29 @@ public class SentinelGitTools
                 error = "";
                 return fromSolution;
             }
+        }
 
-            error = $"No git repository found. Searched upward from the server's base directory and from the loaded solution's directory ('{solutionRoot}') without finding a .git entry. Git operations need a git working tree, not a loaded solution.";
+        // 2. Walk up from the server's base directory. Common case when no solution is loaded
+        //    yet: the server runs from a bin/ folder inside the repo it is operating on.
+        var fromBaseDirectory = FindRepositoryRoot(AppContext.BaseDirectory);
+        if (fromBaseDirectory is not null)
+        {
+            error = "";
+            return fromBaseDirectory;
+        }
+
+        // 3. Walk up from the current working directory — covers a server whose binaries are
+        //    deployed outside the repo but which was launched from inside it.
+        var fromCurrentDirectory = FindRepositoryRoot(Directory.GetCurrentDirectory());
+        if (fromCurrentDirectory is not null)
+        {
+            error = "";
+            return fromCurrentDirectory;
+        }
+
+        if (solutionRoot is not null)
+        {
+            error = $"No git repository found. Searched upward from the loaded solution's directory ('{solutionRoot}'), the server's base directory, and the working directory without finding a .git entry. Git operations need a git working tree, not a loaded solution.";
             return null;
         }
 
