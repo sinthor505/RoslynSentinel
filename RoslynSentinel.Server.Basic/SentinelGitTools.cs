@@ -374,7 +374,7 @@ public class SentinelGitTools
         int count = 20,
         [Description("diff: \"working\" (unstaged), \"staged\", or a commit hash.")]
         string target = "working",
-        [Description("diff: comma-separated repo-relative paths to restrict the diff to.")]
+        [Description("diff: repo-relative paths to restrict the diff to, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array — call once per file if you need per-file results.")]
         string? paths = null,
         [Description("diff: byte cap on the returned diff (max 524288).")]
         int maxBytes = 65536,
@@ -383,7 +383,7 @@ public class SentinelGitTools
         string? message = null,
         [Description("stage/commit: which files to stage. \"tracked\" (default) stages modifications and deletions of already-tracked files only (git add -u) and does NOT stage new files. \"all\" stages everything in the working tree including untracked files (git add -A). \"listed\" stages exactly the paths you name in files/paths, untracked ones included — use this whenever you know which files you want. Naming files alongside a scope other than \"listed\" is rejected, so a file list can never be silently overridden.")]
         GitStageScope scope = GitStageScope.tracked,
-        [Description("stage/commit: comma-separated repo-relative paths to stage. Requires scope=\"listed\". Alias of paths for these operations — pass one or the other, not both.")]
+        [Description("stage/commit: repo-relative paths to stage, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array — call once per file if you need per-file results. Requires scope=\"listed\". Alias of paths for these operations — pass one or the other, not both.")]
         string? files = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is required when operation=revert, unused otherwise.
         [Description("revert: the commit to revert (full or short hash, from log). Required for operation=revert.")]

@@ -6,22 +6,22 @@ public static class ToolArgumentValidator
 {
     // Added by AddMember (expected - used for diagnostics)
     /// <summary>
-    /// Cache of tool name → (all declared parameter names, required parameter names), read from
-    /// each tool's emitted JSON input schema. Cached because the schema is fixed for the process
-    /// lifetime and this runs on every single tool call.
+    /// Cache of tool name → (all declared parameter names, required parameter names, and each
+    /// declared parameter's own schema node for type/enum checks). Cached because the schema is
+    /// fixed for the process lifetime and this runs on every single tool call.
     /// </summary>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required)> SchemaCache = new(StringComparer.Ordinal);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties)> SchemaCache = new(StringComparer.Ordinal);
     // Added by AddMember (expected - used for diagnostics)
     /// <summary>
-    /// Reads the declared and required parameter names for <paramref name="toolName"/> out of the
-    /// tool's emitted JSON input schema. Reads the schema that is actually emitted to clients
-    /// rather than reflecting over the C# signature, because this repo has a history of the two
-    /// disagreeing — validating against the signature would reject calls that match what the model
-    /// was actually shown, which is the exact failure mode this validator exists to prevent.
-    /// Returns <see langword="null"/> when the tool or its schema cannot be resolved, in which case
-    /// the caller must skip validation rather than guess.
+    /// Reads the declared and required parameter names, plus each declared parameter's own schema
+    /// node (for type/enum checks), out of the tool's emitted JSON input schema. Reads the schema
+    /// that is actually emitted to clients rather than reflecting over the C# signature, because
+    /// this repo has a history of the two disagreeing — validating against the signature would
+    /// reject calls that match what the model was actually shown, which is the exact failure mode
+    /// this validator exists to prevent. Returns <see langword="null"/> when the tool or its
+    /// schema cannot be resolved, in which case the caller must skip validation rather than guess.
     /// </summary>
-    private static (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required)? TryGetSchemaParameters(
+    private static (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties)? TryGetSchemaParameters(
         ModelContextProtocol.Server.McpServer? server, string? toolName)
     {
         if (server is null || string.IsNullOrEmpty(toolName))
@@ -54,11 +54,15 @@ public static class ToolArgumentValidator
                 return null;
 
             var all = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+            var propertySchemas = new System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
             if (schema.TryGetProperty("properties", out var properties) &&
                 properties.ValueKind == System.Text.Json.JsonValueKind.Object)
             {
                 foreach (var property in properties.EnumerateObject())
+                {
                     all.Add(property.Name);
+                    propertySchemas[property.Name] = property.Value;
+                }
             }
 
             var required = new System.Collections.Generic.List<string>();
@@ -82,7 +86,7 @@ public static class ToolArgumentValidator
             if (all.Count == 0)
                 return null;
 
-            var result = (All: all, Required: required);
+            var result = (All: all, Required: required, Properties: propertySchemas);
             SchemaCache[toolName] = result;
             return result;
         }
@@ -183,7 +187,7 @@ public static class ToolArgumentValidator
     /// returns an actionable error message when the call cannot succeed as written — or
     /// <see langword="null"/> to let the call proceed.
     /// <para>
-    /// Two dispatch-layer defects make this necessary, and neither is fixable per-tool:
+    /// Three dispatch-layer defects make this necessary, and none is fixable per-tool:
     /// </para>
     /// <list type="bullet">
     /// <item><description>
@@ -203,11 +207,21 @@ public static class ToolArgumentValidator
     /// internal data structure the caller never sees, with no example value and no route to a real
     /// one, in violation of the never-leak-raw-exceptions convention in CLAUDE.md.
     /// </description></item>
+    /// <item><description>
+    /// A <b>type-mismatched or invalid-enum argument throws a raw <c>JsonException</c>.</b> Passing
+    /// an array where the schema declares a scalar <c>string</c> (e.g. <c>Git(operation:"stage",
+    /// files:["a","b"])</c> — the plural parameter name invites this), or a string that isn't one of
+    /// the schema's declared <c>enum</c> members (e.g. <c>Git(operation:"show")</c>, not a real
+    /// <c>GitOperation</c>), both crash during framework-level deserialization before the tool
+    /// method body ever runs — no tool-level try/catch can intercept it. Confirmed live for both
+    /// shapes; see docs/current/finding_git_tool_array_param_and_invalid_operation_crash.md.
+    /// </description></item>
     /// </list>
     /// <para>
-    /// Both are caught here rather than in each tool because the fault is in the shared dispatch
-    /// path: a per-tool fix would have to be repeated on every tool and re-applied to every tool
-    /// added later, which is precisely the forgotten-call-site failure mode this repo keeps hitting.
+    /// All three are caught here rather than in each tool because the fault is in the shared
+    /// dispatch path: a per-tool fix would have to be repeated on every tool and re-applied to
+    /// every tool added later, which is precisely the forgotten-call-site failure mode this repo
+    /// keeps hitting.
     /// </para>
     /// </summary>
     /// <returns>An error message to return to the caller, or null when the arguments are valid.</returns>
@@ -220,7 +234,7 @@ public static class ToolArgumentValidator
         if (schema is null)
             return null;
 
-        var (declared, required) = schema.Value;
+        var (declared, required, propertySchemas) = schema.Value;
 
         // 1. Unknown arguments. Reported first and in full: if the caller both misspelled a
         //    parameter and omitted a required one, the misspelling is usually the cause of both.
@@ -281,6 +295,85 @@ public static class ToolArgumentValidator
 
             builder.Append("Nothing was executed.");
             return builder.ToString();
+        }
+
+        // 3. Type-mismatched or invalid-enum arguments — the two shapes that otherwise crash with a
+        //    raw JsonException during framework-level deserialization, before the tool method body
+        //    ever runs (so no per-tool try/catch can intercept them).
+        if (arguments is not null && arguments.Count > 0)
+        {
+            foreach (var argument in arguments)
+            {
+                if (!propertySchemas.TryGetValue(argument.Key, out var propertySchema))
+                    continue;
+
+                var actualKind = argument.Value.ValueKind;
+
+                // 3a. Declared scalar type (string/number/boolean/integer, alone or nullable via a
+                //     ["type", "null"] union) but the caller passed an array or object.
+                if ((actualKind == System.Text.Json.JsonValueKind.Array ||
+                     actualKind == System.Text.Json.JsonValueKind.Object) &&
+                    propertySchema.TryGetProperty("type", out var typeNode))
+                {
+                    var declaredTypes = new System.Collections.Generic.List<string>();
+                    if (typeNode.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var t = typeNode.GetString();
+                        if (t is not null)
+                            declaredTypes.Add(t);
+                    }
+                    else if (typeNode.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var entry in typeNode.EnumerateArray())
+                        {
+                            if (entry.ValueKind == System.Text.Json.JsonValueKind.String)
+                            {
+                                var t = entry.GetString();
+                                if (t is not null)
+                                    declaredTypes.Add(t);
+                            }
+                        }
+                    }
+
+                    var actualTypeWord = actualKind == System.Text.Json.JsonValueKind.Array ? "array" : "object";
+                    var declaresScalarOnly = declaredTypes.Count > 0 &&
+                        declaredTypes.All(t => t is "string" or "number" or "integer" or "boolean");
+
+                    if (declaresScalarOnly)
+                    {
+                        return $"Parameter '{argument.Key}' for tool '{toolName}' takes a single {string.Join(" or ", declaredTypes)} value, not an {actualTypeWord}. " +
+                               $"Call this tool once per value instead of passing a {actualTypeWord} — e.g. if you have several files, call the tool separately for each one. Nothing was executed.";
+                    }
+                }
+
+                // 3b. Declared enum but the caller's string value isn't one of the members.
+                if (actualKind == System.Text.Json.JsonValueKind.String &&
+                    propertySchema.TryGetProperty("enum", out var enumNode) &&
+                    enumNode.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    var members = new System.Collections.Generic.List<string>();
+                    var matched = false;
+                    var actualValue = argument.Value.GetString() ?? "";
+                    foreach (var entry in enumNode.EnumerateArray())
+                    {
+                        if (entry.ValueKind != System.Text.Json.JsonValueKind.String)
+                            continue;
+                        var member = entry.GetString();
+                        if (member is null)
+                            continue;
+                        members.Add(member);
+                        if (string.Equals(member, actualValue, StringComparison.Ordinal))
+                            matched = true;
+                    }
+
+                    if (!matched && members.Count > 0)
+                    {
+                        var suggestion = SuggestClosest(actualValue, members);
+                        var suggestionText = suggestion is not null ? $" Did you mean '{suggestion}'?" : "";
+                        return $"'{actualValue}' is not a valid value for parameter '{argument.Key}' of tool '{toolName}'.{suggestionText} Valid values are: {string.Join(", ", members)}. Nothing was executed.";
+                    }
+                }
+            }
         }
 
         return null;
