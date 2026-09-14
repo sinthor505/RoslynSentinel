@@ -99,12 +99,7 @@ public class DiffEngine
         var endings = sourceText.Lines
             .Select(l => sourceText.GetSubText(TextSpan.FromBounds(l.End, l.EndIncludingLineBreak)).ToString())
             .ToList();
-        var dominantEnding = endings
-            .Where(e => e.Length > 0)
-            .GroupBy(e => e)
-            .OrderByDescending(g => g.Count())
-            .Select(g => g.Key)
-            .FirstOrDefault() ?? Environment.NewLine;
+        var dominantEnding = EolUtilities.DetectDominantEol(sourceText);
 
         var diffLines = unifiedDiff.Split(separatorArray, StringSplitOptions.None);
 

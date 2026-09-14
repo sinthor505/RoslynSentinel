@@ -1,5 +1,6 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Common;
 
@@ -47,8 +48,11 @@ public static class FormattingHelper
     /// <paramref name = "newNode"/>'s leading trivia on purpose (e.g. stripping a doc comment) — then
     /// <paramref name = "newNode"/>'s leading trivia wins unconditionally, even if it looks empty.
     /// </summary>
-    public static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
+    public static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld, ILogger? logger = null)
     {
+        var originalSourceText = await document.GetTextAsync(cancellationToken);
+        var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
+
         var annotation = new SyntaxAnnotation();
 
         var leadingTrivia = triviaIntent == TriviaEditIntent.ReplaceLeading ? newNode.GetLeadingTrivia() : oldNode.GetLeadingTrivia();
@@ -57,9 +61,44 @@ public static class FormattingHelper
         var annotatedNewNode = newNode.WithLeadingTrivia(leadingTrivia).WithTrailingTrivia(trailingTrivia).WithAdditionalAnnotations(annotation);
         var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
         var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
-        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-    }
+        var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+        var normalizedText = EolUtilities.NormalizeEol(formattedText, dominantEol);
 
+        // TODO(Phase 3): wire these into the real Finding channel once it exists instead of ILogger.
+        if (logger != null)
+        {
+            var problems = CheckPostWriteInvariants(normalizedText, triviaIntent, oldNode);
+            foreach (var problem in problems)
+            {
+                logger.LogWarning("ReplaceNodeFormattedAsync post-write invariant violation: {Problem}", problem);
+            }
+        }
+
+        return normalizedText;
+    }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    public static List<string> CheckPostWriteInvariants(string afterText, TriviaEditIntent triviaIntent, SyntaxNode? oldNode)
+    {
+        var problems = new List<string>();
+
+        var hasCr = afterText.Contains('\r');
+        var hasLfOnly = afterText.Replace("\r\n", "").Contains('\n');
+        if (hasCr && hasLfOnly)
+        {
+            problems.Add("Result text mixes CRLF and bare LF line endings after EOL normalization.");
+        }
+
+        if (triviaIntent == TriviaEditIntent.PreserveOld && oldNode != null)
+        {
+            var oldLeadingTrivia = oldNode.GetLeadingTrivia().ToFullString();
+            if (!string.IsNullOrWhiteSpace(oldLeadingTrivia) && !afterText.Contains(oldLeadingTrivia.Trim()))
+            {
+                problems.Add("triviaIntent was PreserveOld and the original node had non-whitespace leading trivia, but that trivia is not present in the result.");
+            }
+        }
+
+        return problems;
+    }
     /// <summary>
     /// Removes <paramref name = "nodeToRemove"/> without reformatting any sibling's interior.
     /// KeepExteriorTrivia splices the removed node's leading trivia onto the token immediately
@@ -71,8 +110,11 @@ public static class FormattingHelper
     /// avoids the whole-container/whole-sibling formatting this helper used previously, which
     /// normalized untouched members' internal spacing as a side effect.
     /// </summary>
-    public static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, CancellationToken cancellationToken = default)
+    public static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, CancellationToken cancellationToken = default, ILogger? logger = null)
     {
+        var originalSourceText = await document.GetTextAsync(cancellationToken);
+        var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
+
         var tokenBefore = nodeToRemove.GetFirstToken().GetPreviousToken();
         var tokenAfter = nodeToRemove.GetLastToken().GetNextToken();
         var hasTokenBefore = tokenBefore != default;
@@ -105,6 +147,19 @@ public static class FormattingHelper
             newRoot = newRoot.ReplaceToken(trackedTokenAfter, trackedTokenAfter.WithLeadingTrivia(originalLeadingTrivia).WithoutAnnotations(afterAnnotation));
         }
 
-        return (await document.WithSyntaxRoot(newRoot).GetTextAsync(cancellationToken)).ToString();
+        var resultText = (await document.WithSyntaxRoot(newRoot).GetTextAsync(cancellationToken)).ToString();
+        var normalizedText = EolUtilities.NormalizeEol(resultText, dominantEol);
+
+        // TODO(Phase 3): wire these into the real Finding channel once it exists instead of ILogger.
+        if (logger != null)
+        {
+            var problems = CheckPostWriteInvariants(normalizedText, TriviaEditIntent.PreserveOld, null);
+            foreach (var problem in problems)
+            {
+                logger.LogWarning("RemoveNodeFormattedAsync post-write invariant violation: {Problem}", problem);
+            }
+        }
+
+        return normalizedText;
     }
 }
