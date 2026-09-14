@@ -94,7 +94,9 @@ public record BatchResultSummary : EngineResultBase
     public string Severity { get; init; } = "ok";
     public string Directive { get; init; } = "";
     // Added by InsertMemberAfter (expected - used for diagnostics)
-    public DirectiveKind DirectiveKind { get; init; } = DirectiveKind.Proceed; public bool BreakerOpen
+    public DirectiveKind DirectiveKind { get; init; } = DirectiveKind.Proceed;
+
+    public bool BreakerOpen
     {
         get; init;
     }

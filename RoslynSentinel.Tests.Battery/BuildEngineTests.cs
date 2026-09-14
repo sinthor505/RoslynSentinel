@@ -28,4 +28,22 @@ public class BuildEngineTests
 
         workspaceManager.Dispose();
     }
+    // Added by AddMember (expected - used for diagnostics)
+    [Test]
+    public async Task RunFullBuildAsync_ZeroProjectSolution_ReturnsInvalidInputWithBuildNotRunAsync()
+    {
+        var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
+        workspaceManager.SolutionPath = "C:/fake/EmptySolution.slnx";
+        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var buildEngine = new BuildEngine(workspaceManager, diagnosticEngine);
+
+        var result = await buildEngine.RunFullBuildAsync(CancellationToken.None, maxDetails: 50);
+
+        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.InvalidInput));
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.Code, Is.EqualTo(EngineErrorCode.BuildNotRun));
+
+        workspaceManager.Dispose();
+    }
 }

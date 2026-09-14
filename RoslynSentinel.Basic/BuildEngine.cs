@@ -116,6 +116,16 @@ public class BuildEngine
                 error: new EngineError("No solution is loaded. Call LoadSolution before running a full build."));
         }
 
+        var projectNames = _workspaceManager.CurrentSolution?.Projects.Select(p => p.Name).ToList() ?? [];
+        if (projectNames.Count == 0)
+        {
+            return EngineResultWrapper<BuildResult>.Failure(
+                EngineOutcome.InvalidInput,
+                new EngineError(
+                    EngineErrorCode.BuildNotRun,
+                    "Full build compiled zero projects. The loaded solution contains no projects -- no compile verdict is available. Call LoadSolution with a populated .slnx/.sln, or ListAll(kind: \"all\") to inspect the current workspace."));
+        }
+
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
@@ -213,7 +223,7 @@ public class BuildEngine
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
             Outcome: process.ExitCode == 0 ? BuildOutcome.Succeeded : BuildOutcome.Failed,
             Level: BuildVerifyLevel.fullBuild,
-            ProjectsCompiled: _workspaceManager.CurrentSolution?.Projects.Select(p => p.Name).ToList() ?? [],
+            ProjectsCompiled: projectNames,
             DiagnosticsComplete: true,
             ExitCode: process.ExitCode,
             ErrorCount: errors.Count,
