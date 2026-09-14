@@ -13,12 +13,21 @@ public static class ServerBuildInfo
 {
     public static readonly string Version;
     public static readonly DateTime BuildTimeUtc;
-
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Full path to the running server's entry assembly (.dll) on disk. Lets a caller compare the
+    /// binary's actual location against the repo/worktree path it's editing — resolving both which
+    /// server instance it's talking to (multi-instance ambiguity) and whether that instance is even
+    /// in the right repo, without a watcher, restart, or new failure mode. Empty when the entry
+    /// assembly has no on-disk location (e.g. single-file publish).
+    /// </summary>
+    public static readonly string BinaryPath;
     static ServerBuildInfo()
     {
         var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
         Version = assembly.GetName().Version?.ToString() ?? "Unknown";
         BuildTimeUtc = File.Exists(assembly.Location) ? File.GetLastWriteTimeUtc(assembly.Location) : default;
+        BinaryPath = assembly.Location;
     }
 }
 
@@ -73,6 +82,16 @@ public record ToolResult<T>
 
     /// <summary>Build timestamp (UTC) of the running server binary. See <see cref="ServerVersion"/>.</summary>
     public DateTime ServerBuildTimeUtc { get; init; } = ServerBuildInfo.BuildTimeUtc;
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Full path to the running server's binary (.dll) on disk. Not settable — every
+    /// <see cref="ToolResult{T}"/> carries the same value, computed once in <see cref="ServerBuildInfo"/>.
+    /// Lets a caller compare the binary's actual location against the repo/worktree path it's
+    /// editing — resolving both which server instance it's talking to (multi-instance ambiguity)
+    /// and whether that instance is even in the right repo. See <see cref="ServerVersion"/> and
+    /// docs/current/feedback_stale_server_before_rebuild.md.
+    /// </summary>
+    public string ServerBinaryPath { get; init; } = ServerBuildInfo.BinaryPath;
 
     /// <summary>True when the operation completed without error.</summary>
     public bool Success
