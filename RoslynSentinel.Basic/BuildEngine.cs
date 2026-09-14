@@ -79,7 +79,7 @@ public class BuildEngine
                 EngineOutcome.InvalidInput,
                 new EngineError(
                     EngineErrorCode.BuildNotRun,
-                    $"Quick build compiled zero projects. Scope \u0027{scope}\u0027 with scopeName \u0027{scopeName}\u0027 resolved to nothing \u2014 no compile verdict is available. Call ListAll(kind: \"all\") to see valid project/file names."));
+                    $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available. Call ListAll(kind: \"all\") to see valid project/file names."));
         }
 
         var errors = summary!.Details.Where(d => d.Severity == "Error").ToList();
