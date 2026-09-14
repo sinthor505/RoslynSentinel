@@ -1,6 +1,8 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.Extensions.Logging;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynSentinel.Common;
 
@@ -161,5 +163,111 @@ public static class FormattingHelper
         }
 
         return normalizedText;
+    }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Inserts <paramref name = "newMember"/> into <paramref name = "container"/>'s member list at
+    /// <paramref name = "insertIndex"/> (the position it should occupy in the resulting list — i.e.
+    /// pass the old index of the following member, or <c>container.Members.Count</c> to append) and
+    /// formats only the newly inserted member, instead of the whole container. Prevents
+    /// AddMember/InsertMemberAfter/InsertMemberBefore from reformatting sibling members' interior
+    /// spacing as a side effect of formatting the whole container span — see
+    /// docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md
+    /// and the earlier 2026-09-07 finding of the same class (unrelated method signatures re-spaced).
+    /// <paramref name = "newMember"/> is given an explicit blank-line separator (matching this repo's
+    /// established one-blank-line-between-members convention) before itself when there is a preceding
+    /// sibling, and before the following sibling (if any) when that sibling didn't already carry one —
+    /// this is computed explicitly rather than left to <see cref="Formatter"/>, because a
+    /// freshly-parsed member's "empty" leading trivia is otherwise indistinguishable from a deliberate
+    /// zero-blank-line request, and formatting the whole container to resolve that ambiguity is exactly
+    /// what caused both symptoms this helper exists to avoid.
+    /// </summary>
+    public static async Task<string> InsertMemberFormattedAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, MemberDeclarationSyntax newMember, CancellationToken cancellationToken = default)
+    {
+        var originalSourceText = await document.GetTextAsync(cancellationToken);
+        var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
+
+        var members = container.Members;
+        var precedingMember = insertIndex > 0 ? members[insertIndex - 1] : null;
+        var followingMember = insertIndex < members.Count ? members[insertIndex] : null;
+
+        var indentTrivia = (precedingMember ?? followingMember)?.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia)) ?? default;
+        var indentText = indentTrivia != default ? indentTrivia.ToFullString() : "    ";
+
+        var blankLineBefore = precedingMember != null
+            ? new[] { SyntaxFactory.CarriageReturnLineFeed, SyntaxFactory.CarriageReturnLineFeed, SyntaxFactory.Whitespace(indentText) }
+            : new[] { SyntaxFactory.Whitespace(indentText) };
+        var newMemberWithTrivia = newMember
+            .WithLeadingTrivia(blankLineBefore.Concat(newMember.GetLeadingTrivia()))
+            .WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed);
+
+        var annotation = new SyntaxAnnotation();
+        var annotatedNewMember = newMemberWithTrivia.WithAdditionalAnnotations(annotation);
+
+        var newMembersList = members.Insert(insertIndex, annotatedNewMember);
+
+        // If a following sibling exists but its own leading trivia has no blank line (e.g. it used to
+        // be the first member, right after the container's opening brace), give it one now — the new
+        // member is being inserted immediately before it, so it needs the same separator every other
+        // pair of siblings in this container already has.
+        if (followingMember != null)
+        {
+            var followingLeadingTrivia = followingMember.GetLeadingTrivia();
+            var hasBlankLine = followingLeadingTrivia.Count(t => t.IsKind(SyntaxKind.EndOfLineTrivia)) >= 2;
+            if (!hasBlankLine)
+            {
+                var followingIndentTrivia = followingLeadingTrivia.LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
+                var followingIndentText = followingIndentTrivia != default ? followingIndentTrivia.ToFullString() : indentText;
+                var nonWhitespaceLeading = followingLeadingTrivia.Where(t => !t.IsKind(SyntaxKind.WhitespaceTrivia) && !t.IsKind(SyntaxKind.EndOfLineTrivia));
+                var newFollowingLeading = new SyntaxTriviaList(SyntaxFactory.CarriageReturnLineFeed, SyntaxFactory.CarriageReturnLineFeed)
+                    .AddRange(nonWhitespaceLeading)
+                    .Add(SyntaxFactory.Whitespace(followingIndentText));
+                var updatedFollowingMember = followingMember.WithLeadingTrivia(newFollowingLeading);
+                newMembersList = newMembersList.Replace(newMembersList[insertIndex + 1], updatedFollowingMember);
+            }
+        }
+
+        var newContainer = container.WithMembers(newMembersList);
+        var newRoot = root.ReplaceNode(container, newContainer);
+
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+        return EolUtilities.NormalizeEol(formattedText, dominantEol);
+    }
+    // Added by AddMember (expected - used for diagnostics)
+    /// <summary>
+    /// Pure pass-through to <see cref="SyntaxNodeExtensions.NormalizeWhitespace{TNode}"/> (via
+    /// <see cref="SyntaxNode.NormalizeWhitespace"/>) with identical arguments and identical
+    /// behavior — this method exists purely as a single, greppable chokepoint for the whole-subtree
+    /// form of whitespace normalization, not as a safety fix.
+    /// <para>
+    /// Unlike <see cref="ReplaceNodeFormattedAsync"/>, <see cref="RemoveNodeFormattedAsync"/>, and
+    /// <see cref="InsertMemberFormattedAsync"/> — which are narrowly scoped to just the node being
+    /// edited via a tracking annotation, and are safe by construction regardless of what the caller
+    /// passes — this method's safety depends entirely on what <paramref name="node"/> is:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>Safe: a freshly synthesized node with no pre-existing siblings, e.g.
+    /// <c>SyntaxFactory.MethodDeclaration(...).NormalizeWhitespace()</c> — there is no untouched
+    /// sibling content to disturb.</item>
+    /// <item>Risky: an existing tree root or container (e.g. a whole file's <c>root</c>/<c>newRoot</c>
+    /// or a <c>CompilationUnitSyntax</c>) that already contains untouched code — normalizing it
+    /// reformats every sibling's whitespace as a side effect, which is exactly the bug class fixed in
+    /// <c>RefactoringEngine.Member(add)</c> by introducing <see cref="InsertMemberFormattedAsync"/>
+    /// (see docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md).</item>
+    /// </list>
+    /// <para>
+    /// For an edit-then-format use case on an existing tree, prefer
+    /// <see cref="InsertMemberFormattedAsync"/>/<see cref="ReplaceNodeFormattedAsync"/>/
+    /// <see cref="RemoveNodeFormattedAsync"/> instead of this method — they scope the formatting
+    /// annotation to just the changed node so siblings are left untouched. Reach for this method only
+    /// when the node truly has no siblings to protect (a synthesized standalone node), or as a
+    /// mechanical drop-in during centralization, per docs/current/proposal_batch_replacesnippet.md-adjacent
+    /// audit work — auditing/fixing individual call sites' scope is deliberately out of scope here.
+    /// </para>
+    /// </summary>
+    public static SyntaxNode NormalizeWholeSubtreeWhitespace(SyntaxNode node, string indentation = "    ", string eol = "\n", bool elasticTrivia = true)
+    {
+        return node.NormalizeWhitespace(indentation, eol, elasticTrivia);
     }
 }

@@ -86,7 +86,41 @@ public class Animal
 
         Assert.That(result.UpdatedText, Does.Contain("Speak"), "Method should be added to class.");
     }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task AddMember_AppendsWithBlankLineAndDoesNotReformatSiblings()
+    {
+        const string source = """
 
+        public class Calc
+        {
+            public int First() => 1;
+
+            public int Second() => 2;
+        }
+
+        """;
+        SetSource(source, "Calc.cs");
+
+        var result = await _engine.AddMemberAsync("Calc.cs", "Calc", "public int Third() => 3;");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public int Third() => 3;"));
+
+        Assert.That(result.UpdatedText, Does.Contain("public int First() => 1;\r\n\r\n    public int Second")
+            .Or.Contain("public int First() => 1;\n\n    public int Second"),
+            "Blank line between untouched siblings First and Second must survive unchanged — appending a " +
+            "new member must not reformat the whole container.");
+
+        var secondIdx = result.UpdatedText!.IndexOf("public int Second()", StringComparison.Ordinal);
+        var thirdIdx = result.UpdatedText.IndexOf("public int Third()", StringComparison.Ordinal);
+        Assert.That(thirdIdx, Is.GreaterThan(secondIdx));
+
+        var betweenSecondAndThird = result.UpdatedText.Substring(secondIdx, thirdIdx - secondIdx);
+        Assert.That(betweenSecondAndThird, Does.Contain("\n\n").Or.Contain("\r\n\r\n"),
+            "A blank line must separate the newly appended member from the preceding sibling (Second) — " +
+            "this is the exact defect from docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md.");
+    }
     [Test]
     public async Task AddMember_ToEnum_RejectsInsteadOfSilentNoOp()
     {
@@ -586,7 +620,52 @@ public enum ToolScope
             "must reject rather than silently no-op (see docs/current/issue_member_add_silent_persistence.md).");
         Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task InsertMemberAfter_PreservesBlankLineAndSiblingMembers()
+    {
+        const string source = """
 
+        public class Calc
+        {
+            public int First() => 1;
+
+            public int Second() => 2;
+
+            public int Third() => 3;
+        }
+
+        """;
+        SetSource(source, "Calc.cs");
+
+        var result = await _engine.InsertMemberAfterAsync("Calc.cs", "Calc", "First", "public int OneAndAHalf() => 1;");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public int OneAndAHalf() => 1;"), "New member should be inserted.");
+
+        var firstIdx = result.UpdatedText!.IndexOf("public int First()", StringComparison.Ordinal);
+        var newIdx = result.UpdatedText.IndexOf("public int OneAndAHalf()", StringComparison.Ordinal);
+        var secondIdx = result.UpdatedText.IndexOf("public int Second()", StringComparison.Ordinal);
+        var thirdIdx = result.UpdatedText.IndexOf("public int Third()", StringComparison.Ordinal);
+
+        Assert.That(newIdx, Is.GreaterThan(firstIdx));
+        Assert.That(secondIdx, Is.GreaterThan(newIdx));
+        Assert.That(thirdIdx, Is.GreaterThan(secondIdx), "Third should remain after Second.");
+
+        var betweenFirstAndNew = result.UpdatedText.Substring(firstIdx, newIdx - firstIdx);
+        Assert.That(betweenFirstAndNew, Does.Contain("\n\n").Or.Contain("\r\n\r\n"),
+            "A blank line must separate the newly inserted member from the preceding sibling (First).");
+
+        var betweenNewAndSecond = result.UpdatedText.Substring(newIdx, secondIdx - newIdx);
+        Assert.That(betweenNewAndSecond, Does.Contain("\n\n").Or.Contain("\r\n\r\n"),
+            "A blank line must separate the newly inserted member from the following sibling (Second) — " +
+            "this is the exact defect from docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md.");
+
+        Assert.That(result.UpdatedText, Does.Contain("public int Second() => 2;\r\n\r\n    public int Third")
+            .Or.Contain("public int Second() => 2;\n\n    public int Third"),
+            "Blank line between untouched siblings Second and Third must survive unchanged — a whole-container " +
+            "reformat would collapse or alter it, matching the 2026-09-07 unrelated-method-respacing symptom.");
+    }
     // ══════════════════════════════════════════════════════════════
     // InsertMemberBeforeAsync
     // ══════════════════════════════════════════════════════════════
@@ -1067,6 +1146,43 @@ public class Calc
 
         Assert.That(blankLinesBetween1and2, Is.GreaterThanOrEqualTo(1), "Blank line between First and Second must survive.");
         Assert.That(blankLinesBetween2and3, Is.GreaterThanOrEqualTo(1), "Blank line between Second and Third must survive.");
+    }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task RemoveMember_DoesNotReformatUnrelatedSiblingSpacingOrBlankLines()
+    {
+        SetSource(@"
+public class Calc
+{
+    public string UnrelatedMethodBefore(int    x , int y)
+    {
+        return (x + y).ToString();
+    }
+
+    public int ToBeRemoved() => 0;
+
+    public int UnrelatedMethodAfter() => 1;
+}
+", "Calc.cs");
+
+        var result = await _engine.RemoveMemberAsync("Calc.cs", "ToBeRemoved");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Not.Contain("ToBeRemoved"));
+
+        Assert.That(result.UpdatedText, Does.Contain("public string UnrelatedMethodBefore(int    x , int y)"),
+            "RemoveMember must not reformat an unrelated sibling's interior spacing — this is the exact " +
+            "'(int    x , int y)' -> '(int x, int y)' respacing symptom from the 2026-09-07 memory " +
+            "(project_member_replace_drops_leading_blank_line_and_verify_gap.md, run 5).");
+
+        var beforeIdx = result.UpdatedText!.IndexOf("UnrelatedMethodBefore", StringComparison.Ordinal);
+        var afterIdx = result.UpdatedText.IndexOf("UnrelatedMethodAfter", StringComparison.Ordinal);
+        Assert.That(afterIdx, Is.GreaterThan(beforeIdx));
+
+        var between = result.UpdatedText.Substring(beforeIdx, afterIdx - beforeIdx);
+        Assert.That(between, Does.Contain("\n\n").Or.Contain("\r\n\r\n"),
+            "A blank line must still separate UnrelatedMethodBefore from UnrelatedMethodAfter after the " +
+            "removal — the untouched sibling on the far side of the removed member must not be respaced.");
     }
     [Test]
     public async Task AddModifier_PreservesLeadingDocComment()

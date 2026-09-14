@@ -473,7 +473,7 @@ public class RefactoringEngine
             modifiers.Add(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
         }
 
-        var extractedMethod = SyntaxFactory.MethodDeclaration(returnType, newMethodName).WithModifiers(SyntaxFactory.TokenList(modifiers)).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(paramSyntax))).WithBody(SyntaxFactory.Block(bodyStmts)).NormalizeWhitespace();
+        var extractedMethod = (MethodDeclarationSyntax)FormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(returnType, newMethodName).WithModifiers(SyntaxFactory.TokenList(modifiers)).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(paramSyntax))).WithBody(SyntaxFactory.Block(bodyStmts)));
         // Build call site — include ref/out/in keywords for parameter symbols
         var argList = parameters.Select(sym =>
         {
@@ -537,7 +537,7 @@ public class RefactoringEngine
         var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), null, cancellationToken);
         var updatedContent = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
         var beforeSnippet = string.Concat(selectedStatements.Select(s => s.ToFullString())).Trim();
-        var callSiteText = callStatement.NormalizeWhitespace().ToFullString().Trim();
+        var callSiteText = FormattingHelper.NormalizeWholeSubtreeWhitespace(callStatement).ToFullString().Trim();
         var extractedMethodText = extractedMethod.ToFullString().Trim();
         return new ExtractMethodResult(true, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
     }
@@ -815,7 +815,7 @@ public class RefactoringEngine
         var ifacePath = Path.Combine(Path.GetDirectoryName(filePath) ?? "", $"{interfaceName}.cs");
         // Format the interface file using NormalizeWhitespace for reliable member separation.
         // Formatter.FormatAsync with null workspace options can flatten all members onto one line.
-        var ifaceContent = ifaceCompUnit.NormalizeWhitespace(elasticTrivia: false).ToFullString();
+        var ifaceContent = FormattingHelper.NormalizeWholeSubtreeWhitespace(ifaceCompUnit, elasticTrivia: false).ToFullString();
         // Format the original file
         var origDoc = document.WithSyntaxRoot(updatedOrig);
         var formattedOrigDoc = await Formatter.FormatAsync(origDoc, null, cancellationToken);
@@ -1226,6 +1226,14 @@ public class RefactoringEngine
             };
         }
 
+        if (container is not TypeDeclarationSyntax typeContainer)
+        {
+            throw new NotSupportedException(
+                $"AddMemberAsync: unhandled container type {container.GetType().Name} for \"{containerName}\". " +
+                "This is a bug — every BaseTypeDeclarationSyntax subtype must resolve to a TypeDeclarationSyntax here; " +
+                "silently returning the container unchanged would falsely report success.");
+        }
+
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
         if (newMember == null)
         {
@@ -1238,23 +1246,12 @@ public class RefactoringEngine
         }
 
         newMember = newMember.WithAddedByComment("AddMember");
-        var newContainer = container switch
-        {
-            ClassDeclarationSyntax c => (BaseTypeDeclarationSyntax)c.AddMembers(newMember),
-            InterfaceDeclarationSyntax i => (BaseTypeDeclarationSyntax)i.AddMembers(newMember),
-            RecordDeclarationSyntax r => (BaseTypeDeclarationSyntax)r.AddMembers(newMember),
-            StructDeclarationSyntax s => (BaseTypeDeclarationSyntax)s.AddMembers(newMember),
-            _ => throw new NotSupportedException(
-                $"AddMemberAsync: unhandled container type {container.GetType().Name} for \"{containerName}\". " +
-                "This is a bug — every BaseTypeDeclarationSyntax subtype must have an explicit case here; " +
-                "silently returning the container unchanged would falsely report success.")
-        };
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member added.",
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await FormattingHelper.InsertMemberFormattedAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, cancellationToken)
         };
     }
 
@@ -1624,7 +1621,7 @@ public class RefactoringEngine
             }
         }
 
-        var newRoot = root.ReplaceNode(target, newTarget.NormalizeWhitespace());
+        var newRoot = root.ReplaceNode(target, FormattingHelper.NormalizeWholeSubtreeWhitespace(newTarget));
         var doc = document.WithSyntaxRoot(newRoot);
         var formatted = await Formatter.FormatAsync(doc, null, cancellationToken);
         return new DocumentEditResult
@@ -2593,22 +2590,13 @@ public class RefactoringEngine
         {
             var membersList = typeDecl.Members.ToList();
             var idx = membersList.FindIndex(m => GetMemberName(m) == afterMemberName);
-            SyntaxList<MemberDeclarationSyntax> newMembers;
-            if (idx < 0)
-            {
-                newMembers = typeDecl.Members.Add(newMember);
-            }
-            else
-            {
-                newMembers = SyntaxFactory.List(membersList.Take(idx + 1).Append(newMember).Concat(membersList.Skip(idx + 1)));
-            }
+            var insertIndex = idx < 0 ? membersList.Count : idx + 1;
 
-            var newContainer = typeDecl.WithMembers(newMembers);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+                UpdatedText = await FormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
             };
         }
 
@@ -2683,22 +2671,13 @@ public class RefactoringEngine
         {
             var membersList = typeDecl.Members.ToList();
             var idx = membersList.FindIndex(m => GetMemberName(m) == beforeMemberName);
-            SyntaxList<MemberDeclarationSyntax> newMembers;
-            if (idx < 0)
-            {
-                newMembers = typeDecl.Members.Add(newMember);
-            }
-            else
-            {
-                newMembers = SyntaxFactory.List(membersList.Take(idx).Append(newMember).Concat(membersList.Skip(idx)));
-            }
+            var insertIndex = idx < 0 ? membersList.Count : idx;
 
-            var newContainer = typeDecl.WithMembers(newMembers);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+                UpdatedText = await FormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
             };
         }
 
@@ -5275,7 +5254,7 @@ public class RefactoringEngine
             }
 
             // Build interface method: return type + name + params, no body
-            var ifaceMethod = SyntaxFactory.MethodDeclaration(method.ReturnType, method.Identifier).WithParameterList(method.ParameterList).WithTypeParameterList(method.TypeParameterList).WithConstraintClauses(method.ConstraintClauses).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()).NormalizeWhitespace();
+            var ifaceMethod = (MemberDeclarationSyntax)FormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(method.ReturnType, method.Identifier).WithParameterList(method.ParameterList).WithTypeParameterList(method.TypeParameterList).WithConstraintClauses(method.ConstraintClauses).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()));
             newMembers.Add(ifaceMethod);
         }
 
@@ -5306,7 +5285,7 @@ public class RefactoringEngine
                 accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
             }
 
-            var ifaceProp = SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()).NormalizeWhitespace();
+            var ifaceProp = (MemberDeclarationSyntax)FormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()));
             newMembers.Add(ifaceProp);
         }
 
