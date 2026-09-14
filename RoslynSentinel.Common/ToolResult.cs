@@ -22,12 +22,20 @@ public static class ServerBuildInfo
     /// assembly has no on-disk location (e.g. single-file publish).
     /// </summary>
     public static readonly string BinaryPath;
-    static ServerBuildInfo()
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Process ID of the running server. Lets a caller that has already compared <see cref="BinaryPath"/>
+    /// across multiple running instances (multi-instance ambiguity, see <see cref="BinaryPath"/>'s remarks)
+    /// kill the exact stale process by PID, rather than correlating binary path back to a live process by
+    /// hand. Read from <see cref="Environment.ProcessId"/> — a static property, no I/O, cannot fail.
+    /// </summary>
+    public static readonly int Pid; static ServerBuildInfo()
     {
         var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
         Version = assembly.GetName().Version?.ToString() ?? "Unknown";
         BuildTimeUtc = File.Exists(assembly.Location) ? File.GetLastWriteTimeUtc(assembly.Location) : default;
         BinaryPath = assembly.Location;
+        Pid = Environment.ProcessId;
     }
 }
 
@@ -92,7 +100,15 @@ public record ToolResult<T>
     /// docs/current/feedback_stale_server_before_rebuild.md.
     /// </summary>
     public string ServerBinaryPath { get; init; } = ServerBuildInfo.BinaryPath;
-
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Process ID of the running server. Not settable — every <see cref="ToolResult{T}"/> carries the
+    /// same value, computed once in <see cref="ServerBuildInfo"/>. Lets a caller that has already
+    /// compared <see cref="ServerBinaryPath"/> across multiple running instances (multi-instance
+    /// ambiguity) kill the exact stale process by PID, rather than correlating binary path back to a
+    /// live process by hand. See <see cref="ServerVersion"/> and <see cref="ServerBinaryPath"/>.
+    /// </summary>
+    public int ServerPid { get; init; } = ServerBuildInfo.Pid;
     /// <summary>True when the operation completed without error.</summary>
     public bool Success
     {

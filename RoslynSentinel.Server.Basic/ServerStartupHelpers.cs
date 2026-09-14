@@ -550,12 +550,13 @@ public static class ServerStartupHelpers
             // testing-mode server reading production docs — or the reverse — is otherwise only
             // detectable by noticing that ProjectDoc returned the wrong file.
             logger.LogInformation(
-                "Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg}) | IncludeTools: {IncludeTools} | ExcludeTools: {ExcludeTools} | OperatingMode: {OperatingMode} (ProjectDoc root: {DocRoot})",
+                "Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg}) | IncludeTools: {IncludeTools} | ExcludeTools: {ExcludeTools} | OperatingMode: {OperatingMode} (ProjectDoc root: {DocRoot}) | Binary: {BinaryPath} (PID {Pid})",
                 string.Join(", ", activeModes), modeArg,
                 includeTools is { Count: > 0 } ? string.Join(", ", includeTools) : "(none)",
                 excludeTools is { Count: > 0 } ? string.Join(", ", excludeTools) : "(none)",
                 operatingMode,
-                operatingMode == OperatingMode.Testing ? "docs/testing/" : "docs/");
+                operatingMode == OperatingMode.Testing ? "docs/testing/" : "docs/",
+                RoslynSentinel.Common.ServerBuildInfo.BinaryPath, RoslynSentinel.Common.ServerBuildInfo.Pid);
         }
 
         Debug.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");
