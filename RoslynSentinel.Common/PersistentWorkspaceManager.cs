@@ -2040,6 +2040,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 Open: _breakerOpen,
                 Severity: severity,
                 Directive: directive,
+                DirectiveKind: _breakerOpen ? DirectiveKind.ReviewRequired : DirectiveKind.Proceed,
                 ConsecutiveFailureStreak: _consecutiveFailureStreak,
                 TotalAttempts: _totalAttempts,
                 TotalFailures: _totalFailures,
