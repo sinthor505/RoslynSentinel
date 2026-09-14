@@ -53,6 +53,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     // _internalChanges/_externalChanges are an intentional future-removal candidate once the
     // hash-based gate has proven itself in production, not a bug to "clean up" reflexively.
     private readonly ConcurrentDictionary<string, (DateTime Timestamp, string Content)> _internalChanges = new();
+    // Disabled 2026-09-14: the AST-normalization no-op check below (see its own comment) was
+    // blocking legitimate formatting-only edits — a model asking to fix indentation/spacing got
+    // silently no-op'd whenever its fix and the original both normalized to the same canonical
+    // form under NormalizeWhitespace(), even though the requested bytes genuinely differed from
+    // what was on disk. Left as a toggle rather than deleted per direct instruction, in case the
+    // original engine-reformatting-regression protection it existed for needs to come back.
+    private const bool EnableAstNormalizationNoOpCheck = false;
     // Content-hash baseline: path (normalized via FilePathWrapper's own case-insensitive, separator-
     // canonicalized equality/hashing) → SHA-256 of the last content RoslynSentinel itself wrote or
     // loaded for that file. Populated wholesale on LoadSolutionAsync, updated per-file on a
@@ -1391,7 +1398,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 // normalization — e.g. NormalizeWhitespace() adding blank lines between methods
                 // that were already present in the original. Parsing both sides and comparing
                 // their normalized forms catches any engine that forgot to preserve formatting.
-                if (preImage != null &&
+                if (EnableAstNormalizationNoOpCheck && preImage != null &&
                     string.Equals(Path.GetExtension(filePath), ".cs", StringComparison.OrdinalIgnoreCase))
                 {
                     try
