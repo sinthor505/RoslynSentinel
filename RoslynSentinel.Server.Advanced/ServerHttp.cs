@@ -11,12 +11,12 @@ namespace RoslynSentinel.Server.Advanced;
 
 public class ServerHttp
 {
-    // All modes available in the Advanced variant. Asyncify is Advanced-only.
+    // All modes available in the Advanced variant, derived from ToolClassRegistry's own map so
+    // "--mode=all" can never drift from what AdvancedModeToToolClasses actually registers (it
+    // previously omitted Admin/WholeFileWrite because this was a separately hand-maintained
+    // literal list).
     private static readonly HashSet<string> AllModes =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation", "Asyncify",
-        };
+        new(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
 
     public static async Task Startup(string[] args)
     {

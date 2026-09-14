@@ -9,12 +9,12 @@ namespace RoslynSentinel.Server.Basic;
 
 public static class ServerHttp
 {
-    // All modes available in the Basic variant.
+    // All modes available in the Basic variant, derived from ToolClassRegistry's own map so
+    // "--mode=all" can never drift from what BasicModeToToolClasses actually registers (it
+    // previously omitted Admin/WholeFileWrite because this was a separately hand-maintained
+    // literal list).
     private static readonly HashSet<string> AllModes =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation",
-        };
+        new(ToolClassRegistry.BasicModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
 
     public static async Task Startup(string[] args)
     {

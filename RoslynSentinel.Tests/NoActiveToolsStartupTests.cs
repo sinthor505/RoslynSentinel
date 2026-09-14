@@ -125,6 +125,36 @@ public class NoActiveToolsStartupTests
 
         Assert.That(failure, Is.Null);
     }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public void ModeAll_ResolvesToEveryRegisteredToolClass_IncludingAdminAndWholeFileWrite()
+    {
+        // Regression test for the "--mode=all" drift bug: each of the 4 server entry points used
+        // to hardcode its own AllModes literal, none of which included "Admin" or
+        // "WholeFileWrite" even though both are real modes in ToolClassRegistry. Since the fix
+        // makes each entry point's AllModes field *equal to* ToolClassRegistry's own Keys, the
+        // meaningful regression check is that "all" (i.e. every key in the registry) resolves to
+        // a tool-class set containing SentinelAdminTools/SentinelWholeFileWriteTools for both
+        // variants — this fails again if either map ever grows a mode a hardcoded list wouldn't
+        // have picked up.
+        var basicAllModes = new HashSet<string>(
+            ToolClassRegistry.BasicModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var basicResolved = ServerStartupHelpers.ResolveActiveToolClasses(
+            basicAllModes, ToolClassRegistry.BasicModeToToolClasses, Names(), Names());
+
+        var advancedAllModes = new HashSet<string>(
+            ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
+        var advancedResolved = ServerStartupHelpers.ResolveActiveToolClasses(
+            advancedAllModes, ToolClassRegistry.AdvancedModeToToolClasses, Names(), Names());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(basicResolved, Does.Contain("SentinelAdminTools"));
+            Assert.That(basicResolved, Does.Contain("SentinelWholeFileWriteTools"));
+            Assert.That(advancedResolved, Does.Contain("SentinelAdminTools"));
+            Assert.That(advancedResolved, Does.Contain("SentinelWholeFileWriteTools"));
+        });
+    }
 
     [Test]
     public void SmokeResolve_SkipsTypesTheRunDidNotActivate()
