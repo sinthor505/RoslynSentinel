@@ -5,6 +5,7 @@ public record BreakerStatusReport(
     bool Open,
     string Severity,
     string Directive,
+    DirectiveKind DirectiveKind,
     int ConsecutiveFailureStreak,
     int TotalAttempts,
     int TotalFailures,

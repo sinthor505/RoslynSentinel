@@ -82,7 +82,7 @@ public class OrientationBreakerFilterTests
     private async Task<CallToolResult> SearchForGuaranteedNoMatchAsync(string pattern) =>
         await _client.CallToolAsync(
             "SearchSolutionText",
-            new Dictionary<string, object?> { ["reason"] = "test message", ["pattern"] = pattern, ["searchMode"] = "literal" }!,
+            new Dictionary<string, object?> { ["reason"] = "test message", ["pattern"] = pattern }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
     [Test]
@@ -115,7 +115,30 @@ public class OrientationBreakerFilterTests
         var text = string.Join(" ", blocked.Content.OfType<TextContentBlock>().Select(b => b.Text));
         Assert.That(text, Does.Contain("SearchSolutionText is DISABLED"));
     }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task ThirdZeroMatchSearch_OwnResultCarriesOrientationBreakerFinding_NotFourthCall()
+    {
+        CallToolResult? thirdResult = null;
+        for (int i = 0; i < 3; i++)
+        {
+            thirdResult = await SearchForGuaranteedNoMatchAsync($"ZzzNoSuchTokenAnywhereInTheSolution{i}Zzz");
+        }
 
+        Assert.That(thirdResult, Is.Not.Null);
+        Assert.That(thirdResult!.IsError, Is.True, "The 3rd consecutive zero-match call should itself surface as an error.");
+
+        var text = string.Join(" ", thirdResult.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        using var doc = JsonDocument.Parse(text);
+        Assert.That(doc.RootElement.TryGetProperty("findings", out var findingsProp), Is.True,
+            "The triggering call's own result should carry a findings array, not just a bare error.");
+        Assert.That(findingsProp.GetArrayLength(), Is.GreaterThan(0),
+            "The 3rd call is the one that trips the breaker, so it should carry a non-empty findings array — not a 4th call.");
+
+        var firstFinding = findingsProp[0];
+        Assert.That(firstFinding.GetProperty("source").GetString(), Is.EqualTo("OrientationBreaker"));
+        Assert.That(firstFinding.GetProperty("message").GetString(), Does.Contain("ListAll"));
+    }
     [Test]
     public async Task TrippedBreaker_AllowlistedToolStillReachesRealTool_AndResetsBreaker()
     {
@@ -148,7 +171,7 @@ public class OrientationBreakerFilterTests
         // A pattern virtually certain to exist in the sample solution's own source.
         var matchResult = await _client.CallToolAsync(
             "SearchSolutionText",
-            new Dictionary<string, object?> { ["reason"] = "test message", ["pattern"] = "class", ["searchMode"] = "literal" }!,
+            new Dictionary<string, object?> { ["reason"] = "test message", ["pattern"] = "class" }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
         Assert.That(matchResult.IsError, Is.Not.True);
 

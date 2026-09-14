@@ -90,6 +90,13 @@ public sealed class NoSearchMatchesException : ToolException
 {
     public override string ErrorCode => ToolErrorCode.NoMatches;
 
+    /// <summary>
+    /// True when this exact call's RecordSearchOutcome invocation is what flipped the
+    /// orientation breaker open — lets the catch site attach a one-time Finding to the
+    /// triggering call's own result instead of only a pre-check on the next call.
+    /// </summary>
+    public bool JustTrippedBreaker { get; init; }
+
     public NoSearchMatchesException(string message) : base(message)
     {
     }

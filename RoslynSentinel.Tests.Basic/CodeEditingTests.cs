@@ -972,6 +972,155 @@ public class Calc
         Assert.That(result.UpdatedText, Does.Contain("/// Does a thing."));
         Assert.That(result.UpdatedText, Does.Contain("internal void DoThing"));
     }
+    [Test]
+    public async Task RemoveConstructorParameter_UnusedParam_RemovesParamAndField_PreservesOtherMembers()
+    {
+        SetSource(@"
+public class Widget
+{
+    private readonly string _name;
+    private readonly int _size;
+
+    public Widget(string name, int size)
+    {
+        _name = name;
+        _size = size;
+    }
+
+    public string Describe() => $""{_name}"";
+}
+", "Widget.cs");
+
+        var result = await _engine.RemoveConstructorParameterAsync("Widget.cs", "Widget", "size");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Not.Contain("int size"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("_size = size"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("_size;"));
+        Assert.That(result.UpdatedText, Does.Contain("_name = name"));
+        Assert.That(result.UpdatedText, Does.Contain("public string Describe()"));
+    }
+
+    [Test]
+    public async Task RemoveUsingDirective_RemovesDirective_PreservesOthersAndTrivia()
+    {
+        SetSource(@"
+using System;
+using System.Linq;
+using System.Text;
+
+namespace Demo;
+
+public class Foo
+{
+    public void Bar() { }
+}
+", "Foo.cs");
+
+        var result = await _engine.RemoveUsingDirectiveAsync("Foo.cs", "System.Linq");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Not.Contain("System.Linq"));
+        Assert.That(result.UpdatedText, Does.Contain("using System;"));
+        Assert.That(result.UpdatedText, Does.Contain("using System.Text;"));
+        Assert.That(result.UpdatedText, Does.Contain("public void Bar() { }"));
+    }
+    [Test]
+    public async Task ReplaceMember_PreservesBlankLinesAndSiblingMembers()
+    {
+        SetSource(@"
+public class Calc
+{
+    public int First() => 1;
+
+    public int Second() => 2;
+
+    public int Third() => 3;
+}
+", "Calc.cs");
+
+        var result = await _engine.ReplaceMemberAsync("Calc.cs", "Second", "public int Second() => 22;");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public int First() => 1;"));
+        Assert.That(result.UpdatedText, Does.Contain("public int Second() => 22;"));
+        Assert.That(result.UpdatedText, Does.Contain("public int Third() => 3;"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("public int Second() => 2;"));
+
+        var firstIndex = result.UpdatedText!.IndexOf("public int First()", StringComparison.Ordinal);
+        var secondIndex = result.UpdatedText.IndexOf("public int Second()", StringComparison.Ordinal);
+        var thirdIndex = result.UpdatedText.IndexOf("public int Third()", StringComparison.Ordinal);
+        var between1and2 = result.UpdatedText.Substring(firstIndex, secondIndex - firstIndex);
+        var between2and3 = result.UpdatedText.Substring(secondIndex, thirdIndex - secondIndex);
+
+        var blankLinesBetween1and2 = 0;
+        foreach (var line in between1and2.Split('\n'))
+        {
+            if (line.Trim().Length == 0) blankLinesBetween1and2++;
+        }
+
+        var blankLinesBetween2and3 = 0;
+        foreach (var line in between2and3.Split('\n'))
+        {
+            if (line.Trim().Length == 0) blankLinesBetween2and3++;
+        }
+
+        Assert.That(blankLinesBetween1and2, Is.GreaterThanOrEqualTo(1), "Blank line between First and Second must survive.");
+        Assert.That(blankLinesBetween2and3, Is.GreaterThanOrEqualTo(1), "Blank line between Second and Third must survive.");
+    }
+    [Test]
+    public async Task AddModifier_PreservesLeadingDocComment()
+    {
+        SetSource(@"
+public class Calc
+{
+    /// <summary>
+    /// Does a thing.
+    /// </summary>
+    public void DoThing() { }
+}
+", "Calc.cs");
+
+        var result = await _engine.AddModifierAsync("Calc.cs", "DoThing", "virtual");
+
+        Assert.That(result.UpdatedText, Does.Contain("/// <summary>"), "Doc comment must survive adding a modifier.");
+        Assert.That(result.UpdatedText, Does.Contain("/// Does a thing."));
+        Assert.That(result.UpdatedText, Does.Contain("virtual void DoThing"));
+    }
+    [Test]
+    public async Task ChangeAccessibility_CrlfDominantFile_ProducesNoStrayLf()
+    {
+        SetSource("public class Calc\r\n{\r\n    private void DoThing() { }\r\n}\r\n", "Calc.cs");
+
+        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "DoThing", AccessibilityLevel.@internal);
+
+        Assert.That(result.UpdatedText, Does.Contain("internal void DoThing"));
+
+        var text = result.UpdatedText!;
+        var bareLfCount = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\n' && (i == 0 || text[i - 1] != '\r')) bareLfCount++;
+        }
+
+        Assert.That(bareLfCount, Is.EqualTo(0), "A CRLF-dominant file must not gain any stray bare LF line endings.");
+    }
+
+    [Test]
+    public async Task ChangeAccessibility_LfDominantFile_ProducesNoStrayCrlf()
+    {
+        SetSource("public class Calc\n{\n    private void DoThing() { }\n}\n", "Calc.cs");
+
+        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "DoThing", AccessibilityLevel.@internal);
+
+        Assert.That(result.UpdatedText, Does.Contain("internal void DoThing"));
+
+        var text = result.UpdatedText!;
+        Assert.That(text, Does.Not.Contain("\r\n"), "An LF-dominant file must not gain any stray CRLF line endings.");
+    }
+
+
+
     // AddModifierAsync / RemoveModifierAsync
     // ══════════════════════════════════════════════════════════════
 

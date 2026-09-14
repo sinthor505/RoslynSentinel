@@ -1,9 +1,12 @@
 namespace RoslynSentinel.Common;
 
+public enum BuildOutcome { Succeeded, Failed, NotRun }
+
 public record BuildResult(
-    bool BuildSucceeded,
+    BuildOutcome Outcome,
     BuildVerifyLevel Level,
-    int ExitCode,
+    List<string> ProjectsCompiled,
+    bool DiagnosticsComplete,
     int ErrorCount,
     int WarningCount,
     List<DiagnosticInfo> Errors,
@@ -13,5 +16,5 @@ public record BuildResult(
     string? StdoutTail,
     string? StderrTail,
     TimeSpan Duration,
-    string? Detail = null
-);
+    int? ExitCode = null,
+    string? Detail = null);

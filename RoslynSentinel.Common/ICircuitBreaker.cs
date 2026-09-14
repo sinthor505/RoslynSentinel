@@ -52,8 +52,13 @@ public interface IAutomaticCircuitBreaker : ICircuitBreaker
     new string? StateMessage();
     /// <summary>Resets this breaker to its initial, untripped state.</summary>
     void Reset();
-    /// <summary>Records a SearchSolutionText outcome. matchCount is the tool's totalRecords.</summary>
-    void RecordSearchOutcome(int matchCount);
+    /// <summary>
+    /// Records a SearchSolutionText outcome. matchCount is the tool's totalRecords. Returns true
+    /// only on the exact call that flips the breaker from untripped to tripped, so a caller can
+    /// attach a one-time Finding to that call's own result instead of relying on a separate
+    /// pre-check on the next call.
+    /// </summary>
+    bool RecordSearchOutcome(int matchCount);
 }
 
 /// <summary>

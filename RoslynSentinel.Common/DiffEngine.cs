@@ -50,8 +50,11 @@ public class DiffEngine
     /// instead of requiring the kind of manual line-by-line archaeology that root-caused the
     /// original bug this analyzer exists to catch automatically (see docs/current/blockers).
     /// </remarks>
-    public SourceText ApplyDiff(SourceText sourceText, string unifiedDiff)
-        => ApplyDiff(sourceText, unifiedDiff, out _);
+    public DiffApplyResult ApplyDiff(SourceText sourceText, string unifiedDiff)
+    {
+        var text = ApplyDiff(sourceText, unifiedDiff, out var diffReport);
+        return new DiffApplyResult(text, diffReport);
+    }
 
     /// <summary>
     /// Same as <see cref="ApplyDiff(SourceText, string)"/>, but also returns the
@@ -99,12 +102,7 @@ public class DiffEngine
         var endings = sourceText.Lines
             .Select(l => sourceText.GetSubText(TextSpan.FromBounds(l.End, l.EndIncludingLineBreak)).ToString())
             .ToList();
-        var dominantEnding = endings
-            .Where(e => e.Length > 0)
-            .GroupBy(e => e)
-            .OrderByDescending(g => g.Count())
-            .Select(g => g.Key)
-            .FirstOrDefault() ?? Environment.NewLine;
+        var dominantEnding = EolUtilities.DetectDominantEol(sourceText);
 
         var diffLines = unifiedDiff.Split(separatorArray, StringSplitOptions.None);
 
@@ -436,3 +434,10 @@ public class DiffEngine
         return sb.ToString();
     }
 }
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// The updated text from <see cref="DiffEngine.ApplyDiff(SourceText, string)"/>, paired with the
+/// <see cref="DiffHunkAnalyzer"/> report generated for the same call — so a caller can surface
+/// header/body mismatches and other findings without needing the out-parameter overload.
+/// </summary>
+public sealed record DiffApplyResult(SourceText Text, DiffHunkAnalyzer.DiffReport Report);

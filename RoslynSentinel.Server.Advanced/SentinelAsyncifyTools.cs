@@ -372,6 +372,7 @@ public class SentinelAsyncifyTools
                     Severity = "ok",
                     Directive = $"scope=\"targets\" requires flagTargets to be non-empty — no methods were flagged. " +
                                 $"Provide a flagTargets list, or omit scope to use autonomous project-wide discovery (default minScore={DefaultMinScore}).",
+                    DirectiveKind = DirectiveKind.ReviewRequired,
                 }
             };
 
@@ -496,6 +497,10 @@ public class SentinelAsyncifyTools
                     Attempted = engineResult.TotalRemoved,
                     Severity = "ok",
                     Directive = directive,
+                    DirectiveKind = BatchResultSummary.DeriveDirectiveKind(
+                        succeeded: dryRun ? 0 : engineResult.TotalRemoved,
+                        failed: 0,
+                        skipped: dryRun ? engineResult.TotalRemoved : 0),
                     BreakerOpen = false,
                 }
             };
@@ -548,7 +553,7 @@ public class SentinelAsyncifyTools
                 Success = true,
                 Data = new BridgeAsyncMethodsResult
                 {
-                    Summary = new BatchResultSummary { Directive = "targets was empty — no methods processed. Call scan_migration_candidates(summarize: true) first to discover and flag candidates." },
+                    Summary = new BatchResultSummary { Directive = "targets was empty — no methods processed. Call scan_migration_candidates(summarize: true) first to discover and flag candidates.", DirectiveKind = DirectiveKind.ReviewRequired },
                     SuggestedUpliftTargets = new List<UpliftTarget>()
                 }
             };
@@ -617,7 +622,7 @@ public class SentinelAsyncifyTools
                 Success = true,
                 Data = new UpliftCallersResult
                 {
-                    Summary = new BatchResultSummary { Directive = "targets was empty — no callers uplifted. Pass SuggestedUpliftTargets from BridgeAsyncMethods as targets, or use the asyncify macro." },
+                    Summary = new BatchResultSummary { Directive = "targets was empty — no callers uplifted. Pass SuggestedUpliftTargets from BridgeAsyncMethods as targets, or use the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired },
                     SuggestedPropagateTargets = new List<BatchTarget>()
                 }
             };
@@ -688,7 +693,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = true,
-                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Pass SuggestedPropagateTargets from UpliftCallers as targets, or specify files explicitly. Prefer the asyncify macro." }
+                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Pass SuggestedPropagateTargets from UpliftCallers as targets, or specify files explicitly. Prefer the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired }
             };
 
         try
@@ -743,7 +748,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = true,
-                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Specify the files (FilePathWrapper) where CancellationToken parameters should be added. Prefer the asyncify macro." }
+                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Specify the files (FilePathWrapper) where CancellationToken parameters should be added. Prefer the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired }
             };
 
         try
@@ -795,7 +800,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = true,
-                Data = new BatchResultSummary { Directive = "targets was empty — no handlers extracted. Call scan_migration_candidates(pattern: \"HandlerExtractCandidate\") to find candidates, then pass them as targets. Prefer the asyncify macro for auto-extraction." }
+                Data = new BatchResultSummary { Directive = "targets was empty — no handlers extracted. Call scan_migration_candidates(pattern: \"HandlerExtractCandidate\") to find candidates, then pass them as targets. Prefer the asyncify macro for auto-extraction.", DirectiveKind = DirectiveKind.ReviewRequired }
             };
 
         try
@@ -1233,6 +1238,7 @@ public class SentinelAsyncifyTools
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = WriteStatusNote(input.DryRun, succeeded) + status.Directive,
+            DirectiveKind = BatchResultSummary.DeriveDirectiveKind(succeeded, failed, skipped),
             BreakerOpen = status.Open,
         };
     }
@@ -1468,6 +1474,7 @@ public class SentinelAsyncifyTools
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = WriteStatusNote(input.DryRun, succeeded) + status.Directive,
+            DirectiveKind = BatchResultSummary.DeriveDirectiveKind(succeeded, failed, skipped: 0),
             BreakerOpen = status.Open,
         };
 
@@ -1621,6 +1628,7 @@ public class SentinelAsyncifyTools
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = WriteStatusNote(input.DryRun, succeeded) + status.Directive,
+            DirectiveKind = BatchResultSummary.DeriveDirectiveKind(succeeded, failed, skipped),
             BreakerOpen = status.Open,
         };
     }
@@ -2126,6 +2134,7 @@ public class SentinelAsyncifyTools
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = flagDirective,
+            DirectiveKind = BatchResultSummary.DeriveDirectiveKind(succeeded, failed, skipped),
             BreakerOpen = status.Open,
             MinCandidateScore = minCandidateScore,
         };
@@ -3230,6 +3239,7 @@ public class SentinelAsyncifyTools
             FailuresByReason = state.Failed > 10 ? state.Failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status2.Severity,
             Directive = directive,
+            DirectiveKind = BatchResultSummary.DeriveDirectiveKind(state.Succeeded, state.Failed, state.Skipped),
             BreakerOpen = status2.Open,
             MinCandidateScore = state.BridgeMinScore,
             Suggestions = AsyncMigrationDiagnostic.Analyse(state.Succeeded, state.Failed, changeId, state.Items),
@@ -3404,6 +3414,7 @@ public class SentinelAsyncifyTools
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = WriteStatusNote(dryRun, succeeded) + status.Directive,
+            DirectiveKind = BatchResultSummary.DeriveDirectiveKind(succeeded, failed, overLimit),
             BreakerOpen = status.Open,
         };
     }
@@ -3619,6 +3630,7 @@ public class SentinelAsyncifyTools
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = WriteStatusNote(dryRun, succeeded) + status.Directive,
+            DirectiveKind = BatchResultSummary.DeriveDirectiveKind(succeeded, failed, skipped: 0),
             BreakerOpen = status.Open,
         };
     }

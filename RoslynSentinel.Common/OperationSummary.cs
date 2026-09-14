@@ -9,27 +9,58 @@ public sealed class OperationSummary
     public string BlobName { get; init; } = "";
     public string ChangeId { get; init; } = "";
 
-    public int Succeeded { get; init; }
-    public int AlreadySatisfied { get; init; }
-    public int Skipped { get; init; }
-    public int Failed { get; init; }
-    public int Blocked { get; init; }
-    public int Attempted { get; init; }
+    public int Succeeded
+    {
+        get; init;
+    }
+    public int AlreadySatisfied
+    {
+        get; init;
+    }
+    public int Skipped
+    {
+        get; init;
+    }
+    public int Failed
+    {
+        get; init;
+    }
+    public int Blocked
+    {
+        get; init;
+    }
+    public int Attempted
+    {
+        get; init;
+    }
 
     /// <summary>Substrate-derived verdict — never infer this from Severity or prose scanning.</summary>
-    public OperationOutcome Outcome { get; init; }
+    public OperationOutcome Outcome
+    {
+        get; init;
+    }
 
     /// <summary>
     /// Short substrate-authored sentence stating the verdict and the single most useful next move.
     /// Must not claim completion when <see cref="Outcome"/> is <see cref="OperationOutcome.PartialProgress"/> or <see cref="OperationOutcome.NoProgress"/>.
     /// </summary>
     public string Directive { get; init; } = "";
-
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    public DirectiveKind DirectiveKind
+    {
+        get; init;
+    }
     /// <summary>Only <see cref="ItemOutcome.Failed"/> and <see cref="ItemOutcome.Blocked"/> items. AlreadySatisfied/Skipped/Succeeded never appear here.</summary>
     public IReadOnlyList<ItemFailure> Actionable { get; init; } = Array.Empty<ItemFailure>();
-    public bool ActionableTruncated { get; init; }
+    public bool ActionableTruncated
+    {
+        get; init;
+    }
 
-    public bool BreakerOpen { get; init; }
+    public bool BreakerOpen
+    {
+        get; init;
+    }
 
     // ── Derivation ─────────────────────────────────────────────────────────────
 
@@ -95,6 +126,13 @@ public sealed class OperationSummary
     {
         OperationOutcome outcome = DeriveOutcome(succeeded, alreadySatisfied, skipped, failed, blocked, attempted);
 
+        DirectiveKind directiveKind = outcome switch
+        {
+            OperationOutcome.CompletedFully => DirectiveKind.Proceed,
+            OperationOutcome.CompletedWithNoOps => DirectiveKind.Proceed,
+            _ => DirectiveKind.ReviewRequired,
+        };
+
         return new OperationSummary
         {
             BlobName = blobName,
@@ -107,6 +145,7 @@ public sealed class OperationSummary
             Attempted = attempted,
             Outcome = outcome,
             Directive = directive,
+            DirectiveKind = directiveKind,
             Actionable = actionable,
             ActionableTruncated = actionableTruncated,
             BreakerOpen = breakerOpen,

@@ -81,12 +81,21 @@ public record BatchResultSummary : EngineResultBase
     /// <summary>Inline failures, capped at 10. When Failed>10, this is a sample; check FailuresByReason for the full breakdown.</summary>
     public List<FailureDetail> Failures { get; init; } = new();
     /// <summary>True when Failed>10 and Failures is a partial sample rather than the full list.</summary>
-    public bool FailuresTruncated { get; init; }
+    public bool FailuresTruncated
+    {
+        get; init;
+    }
     /// <summary>Populated when FailuresTruncated=true. Reason→count over the captured sample (first 10 failures).</summary>
-    public Dictionary<string, int>? FailuresByReason { get; init; }
+    public Dictionary<string, int>? FailuresByReason
+    {
+        get; init;
+    }
     /// <summary>"ok" | "caution" | "halt" — keyed field, never infer from prose.</summary>
     public string Severity { get; init; } = "ok";
     public string Directive { get; init; } = "";
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    public DirectiveKind DirectiveKind { get; init; } = DirectiveKind.Proceed;
+
     public bool BreakerOpen
     {
         get; init;
@@ -99,19 +108,36 @@ public record BatchResultSummary : EngineResultBase
     /// below scoreThreshold — lower scoreThreshold to this value to include the best one.
     /// Null when no candidates were scored or the operation used scope="targets".
     /// </summary>
-    public int? MinCandidateScore { get; init; }
+    public int? MinCandidateScore
+    {
+        get; init;
+    }
     /// <summary>
     /// Actionable diagnostic suggestions, populated automatically when <c>succeeded==0</c> or
     /// <c>failed&gt;0</c>. Each entry is a self-contained sentence describing a detected pattern
     /// and the recommended next step. Null when everything succeeded or no patterns were detected.
     /// </summary>
-    public List<string>? Suggestions { get; init; }
+    public List<string>? Suggestions
+    {
+        get; init;
+    }
     /// <summary>
     /// Per-phase operation counts. Only populated by Asyncify; null for all other tools.
     /// Breaks down the aggregate <see cref="Succeeded"/> total by phase so callers can distinguish
     /// bridge conversions (Phase 2) from uplift call-site updates (Phase 3).
     /// </summary>
-    public AsyncifyPhaseBreakdown? PhaseBreakdown { get; init; }
+    public AsyncifyPhaseBreakdown? PhaseBreakdown
+    {
+        get; init;
+    }
+    // Added by AddMember (expected - used for diagnostics)
+    /// <summary>
+    /// Derives <see cref="DirectiveKind"/> from this batch's own outcome counts, mirroring
+    /// <see cref="OperationSummary.DeriveOutcome"/>'s reasoning: any real failure, or a run that
+    /// did nothing at all (no successes and no skips), needs review before the caller proceeds.
+    /// </summary>
+    public static DirectiveKind DeriveDirectiveKind(int succeeded, int failed, int skipped) =>
+        failed > 0 || (succeeded == 0 && skipped == 0) ? DirectiveKind.ReviewRequired : DirectiveKind.Proceed;
 }
 
 /// <summary>Return type for <c>AsyncifyLoop</c> — aggregates per-iteration Asyncify results.</summary>

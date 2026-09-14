@@ -27,7 +27,7 @@ public class DiffEngineTests
         var oldText = SourceText.From("line1" + nl + "line2" + nl + "line3");
         var diff = "@@ -1,3 +1,4 @@\n line1\n+added\n line2\n line3";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Is.EqualTo("line1" + Environment.NewLine + "added" + Environment.NewLine + "line2" + Environment.NewLine + "line3"));
     }
@@ -42,7 +42,7 @@ public class DiffEngineTests
         var oldText = SourceText.From("line1\nline2\nline3\nline4");
         var diff = "@@ -2,1 +2,2 @@\n line2\n+added\n line3";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Is.EqualTo("line1\nline2\nadded\nline3\nline4"));
     }
@@ -56,7 +56,7 @@ public class DiffEngineTests
         var oldText = SourceText.From("line1\r\nline2\nline3\r\nline4");
         var diff = "@@ -2,1 +2,2 @@\n line2\n+added\n line3";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         // line1's own \r\n, line2's own \n, "added" gets the dominant ending (\r\n — 2 vs 1), then
         // line3's own \r\n, then line4 (last line, originally no trailing newline) stays bare.
@@ -72,7 +72,7 @@ public class DiffEngineTests
         var oldText = SourceText.From("line1\nline2");
         var diff = "@@ -2,1 +2,2 @@\n line2\n+added";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Is.EqualTo("line1\nline2\nadded"));
     }
@@ -85,7 +85,7 @@ public class DiffEngineTests
         // Hunk 1 starts at 1, Hunk 2 starts at 4 (relative to original)
         var diff = "@@ -1,3 +1,4 @@\n line1\n+added1\n line2\n line3\n@@ -4,2 +5,3 @@\n line4\n+added2\n line5";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         var expected = string.Join(Environment.NewLine, new[] { "line1", "added1", "line2", "line3", "line4", "added2", "line5" });
         Assert.That(newText, Is.EqualTo(expected));
@@ -113,7 +113,7 @@ public class DiffEngineTests
         var diff = "@@ -1,1 +1,3 @@\n line1\n+ins1\n+ins2\n" +
                     "@@ -11,3 +13,3 @@\n target1\n target2\n-target3\n+target3-changed\n";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Does.Contain("target3-changed"));
         Assert.That(newText, Does.Not.Contain("target3\nafter1"));
@@ -128,7 +128,7 @@ public class DiffEngineTests
         var oldText = SourceText.From("line1\nline2\nline3\n\nline5\n");
         var diff = "@@ -2,3 +2,4 @@\n line2\n+added\n line3\n \n";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Is.EqualTo("line1\nline2\nadded\nline3\n\nline5\n"));
     }
@@ -214,7 +214,7 @@ public class DiffEngineTests
             "-        return ReformatWholeFile(rewritten);\n" +
             "+        return ReplaceBlockFormatted(fileText, oldHeader, newHeader);\n";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Does.Contain("private static string ReplaceBlockFormatted"));
         Assert.That(newText, Does.Contain("return ReplaceBlockFormatted(fileText, oldHeader, newHeader);"));
@@ -282,7 +282,7 @@ public class DiffEngineTests
         // Diff was authored believing "line2" was at line 2; it's actually at line 4.
         var diff = "@@ -2,1 +2,2 @@\n line2\n+added\n line3";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Is.EqualTo(string.Join(nl,
             "// unexpected extra line 1", "// unexpected extra line 2", "line1", "line2", "added", "line3")));
@@ -299,7 +299,7 @@ public class DiffEngineTests
         // Diff was authored believing "line2" was at line 5; it's actually at line 2.
         var diff = "@@ -5,1 +5,2 @@\n line2\n+added\n line3";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Is.EqualTo(string.Join(nl, "line1", "line2", "added", "line3")));
     }
@@ -337,7 +337,7 @@ public class DiffEngineTests
         // AFTER it ("existing member") — both sides must be checked at the same shifted position.
         var diff = "@@ -1,3 +1,10 @@\n     while (x) { }\n }\n \n+    public void NewMember()\n+    {\n+    }\n+\n existing member";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Is.EqualTo(string.Join(nl,
             "// extra 1", "// extra 2", "// extra 3", "// extra 4", "// extra 5",
@@ -376,7 +376,7 @@ public class DiffEngineTests
         var oldText = SourceText.From("line1" + nl + "line2" + nl + "line3");
         var diff = "@@ -1,3 +1,4 @@\n line1\n+added\n line2\n line3";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Is.EqualTo("line1" + nl + "added" + nl + "line2" + nl + "line3"));
     }
@@ -408,7 +408,7 @@ public class DiffEngineTests
         // blank line before "SetSource(...)" — the exact malformation that triggered the bug.
         var diff = "@@ -2,4 +2,4 @@\n\n            SetSource(code, \"Service.cs\");\n\n-            var result = await _refactoringEngine.SafeDeleteSymbolAsync(\n+            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(";
 
-        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+        var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
         Assert.That(newText, Does.Contain("var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("));
         Assert.That(newText, Does.Not.Contain("var result = await _refactoringEngine.SafeDeleteSymbolAsync("));
@@ -437,5 +437,37 @@ public class DiffEngineTests
 
         var ex = Assert.Throws<DiffApplyException>(() => _diffEngine.ApplyDiff(oldText, diff));
         Assert.That(ex!.Message, Does.Contain("Malformed hunk header"));
+    }
+
+    [Test]
+    public void ApplyDiff_CleanDiff_ReportHasNoFindings()
+    {
+        var nl = Environment.NewLine;
+        var oldText = SourceText.From("line1" + nl + "line2" + nl + "line3");
+        var diff = "@@ -1,3 +1,4 @@\n line1\n+added\n line2\n line3";
+
+        var result = _diffEngine.ApplyDiff(oldText, diff);
+
+        Assert.That(result.Report.HasFindings, Is.False);
+    }
+
+    [Test]
+    public void ApplyDiff_HunkBodyHasUnmarkedNonBlankLine_ReportHasFindingsButApplyStillSucceeds()
+    {
+        // A hunk-body line with no "+"/"-"/" " marker and non-empty content is not tolerated as an
+        // implicit blank context line (that tolerance is limited to zero-length lines -- see
+        // IsContextOrRemovalLine) -- ApplyDiffCore's if/else-if chain simply has no branch for it, so
+        // the apply still succeeds structurally, but DiffHunkAnalyzer.Analyze flags it via
+        // MalformedLines, which is exactly the drift ApplyUnifiedDiff's ReviewRequired directive
+        // exists to surface even though Success stays true.
+        var nl = Environment.NewLine;
+        var oldText = SourceText.From("line1" + nl + "line2" + nl + "line3");
+        var diff = "@@ -1,3 +1,4 @@\n line1\nunmarked\n line2\n line3";
+
+        var result = _diffEngine.ApplyDiff(oldText, diff);
+
+        Assert.That(result.Report.HasFindings, Is.True);
+        Assert.That(result.Report.MalformedLines, Has.Count.EqualTo(1));
+        Assert.That(result.Report.Describe(), Does.Contain("unmarked"));
     }
 }

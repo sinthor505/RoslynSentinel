@@ -2040,6 +2040,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 Open: _breakerOpen,
                 Severity: severity,
                 Directive: directive,
+                DirectiveKind: _breakerOpen ? DirectiveKind.ReviewRequired : DirectiveKind.Proceed,
                 ConsecutiveFailureStreak: _consecutiveFailureStreak,
                 TotalAttempts: _totalAttempts,
                 TotalFailures: _totalFailures,
@@ -2055,15 +2056,18 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     // ── Orientation breaker public API ────────────────────────────────────────
 
-    /// <summary>Records a SearchSolutionText outcome; trips after OrientationBreakerTripThreshold consecutive zero-match calls.</summary>
-    public void RecordSearchOutcome(int matchCount)
+    /// <summary>
+    /// Records a SearchSolutionText outcome; trips after OrientationBreakerTripThreshold
+    /// consecutive zero-match calls. Returns true only on the call that flips the breaker open.
+    /// </summary>
+    public bool RecordSearchOutcome(int matchCount)
     {
         lock (_orientationBreakerLock)
         {
             if (matchCount > 0)
             {
                 _consecutiveZeroMatchSearches = 0;
-                return;
+                return false;
             }
 
             _consecutiveZeroMatchSearches++;
@@ -2073,7 +2077,10 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 _logger.LogWarning(
                     "Orientation breaker TRIPPED after {Count} consecutive zero-match SearchSolutionText calls.",
                     _consecutiveZeroMatchSearches);
+                return true;
             }
+
+            return false;
         }
     }
 

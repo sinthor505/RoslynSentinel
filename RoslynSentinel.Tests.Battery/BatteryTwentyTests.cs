@@ -629,9 +629,9 @@ public class Order
 
         Assert.That(result.Success, Is.True);
         var data = (BuildResult)result.Data!;
-        Assert.That(data.BuildSucceeded, Is.True);
+        Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Succeeded));
         Assert.That(data.ErrorCount, Is.EqualTo(0));
-        Assert.That(data.ExitCode, Is.EqualTo(-1), "quickBuild does not run a subprocess.");
+        Assert.That(data.ExitCode, Is.Null, "quickBuild does not run a subprocess.");
     }
 
     [Test]
@@ -640,9 +640,9 @@ public class Order
         SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(result.Success, Is.True, "The tool call itself succeeds; the build outcome is carried in Data.BuildSucceeded.");
+        Assert.That(result.Success, Is.True, "The tool call itself succeeds; the build outcome is carried in Data.Outcome.");
         var data = (BuildResult)result.Data!;
-        Assert.That(data.BuildSucceeded, Is.False);
+        Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Failed));
         Assert.That(data.ErrorCount, Is.GreaterThan(0));
     }
 
@@ -662,7 +662,7 @@ public class Order
 
         Assert.That(result.Success, Is.True);
         var data = (BuildResult)result.Data!;
-        Assert.That(data.BuildSucceeded, Is.False);
+        Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Failed));
         Assert.That(data.ErrorCount, Is.EqualTo(3), "one CS0246 (undeclared type) per file.");
         Assert.That(data.ErrorSummary, Is.Not.Empty);
         var group = data.ErrorSummary.Single(g => g.DiagnosticId == "CS0246");
@@ -680,7 +680,7 @@ public class Order
         Assert.That(result.Success, Is.True);
         var data = (DiagnosticSummary)result.Data!;
         Assert.That(data.BuildVerification, Is.Not.Null);
-        Assert.That(data.BuildVerification!.BuildSucceeded, Is.True);
+        Assert.That(data.BuildVerification!.Outcome, Is.EqualTo(BuildOutcome.Succeeded));
     }
 
     [Test]
@@ -693,7 +693,57 @@ public class Order
         var data = (WorkspaceHealthReport)result.Data!;
         Assert.That(data.BuildVerification, Is.Not.Null);
     }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task Build_QuickBuild_ZeroProjectScope_ReturnsStructuredErrorReferencingListAll()
+    {
+        _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
+        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.Message, Does.Contain("ListAll"));
+    }
+
+    [Test]
+    public async Task Build_QuickBuild_CleanSolution_ReturnsSucceededWithProjectsCompiled()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
+
+        Assert.That(result.Success, Is.True);
+        var data = (BuildResult)result.Data!;
+        Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Succeeded));
+        Assert.That(data.ProjectsCompiled, Is.Not.Empty);
+        Assert.That(data.ExitCode, Is.Null);
+    }
+
+    [Test]
+    public async Task Build_QuickBuild_GenuineCompileError_ProjectsCompiledStillNonEmpty()
+    {
+        SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
+        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
+
+        Assert.That(result.Success, Is.True);
+        var data = (BuildResult)result.Data!;
+        Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Failed));
+        Assert.That(data.ErrorCount, Is.GreaterThan(0));
+        Assert.That(data.ProjectsCompiled, Is.Not.Empty, "it compiled and had errors -- must not collapse into NotRun.");
+    }
+
+    [Test]
+    public async Task Build_FullBuild_NoRealSolutionOnDisk_ReturnsStructuredErrorNotCrashAsync()
+    {
+        // TestSolutionBuilder's in-memory solution has no on-disk FilePath, so RunFullBuildAsync
+        // (which always shells out to "dotnet build" against a real path) cannot run here. This
+        // guards that the fixture-only case fails cleanly rather than crashing -- a real ExitCode/
+        // Outcome regression check needs an on-disk solution and belongs in an integration test.
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.fullBuild);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+    }
     // --- SplitProjectByFolder ---
 
     [Test]

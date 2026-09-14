@@ -20,6 +20,7 @@ public class BuildEngine
     {
         var start = DateTime.UtcNow;
         DiagnosticSummary? summary;
+        List<string> projectsCompiled;
 
         if (scope == ToolScope.file)
         {
@@ -33,6 +34,10 @@ public class BuildEngine
             {
                 return new EngineResultWrapper<BuildResult>(fileResult.Outcome, error: fileResult.Error);
             }
+            var solutionForFile = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var documentId = solutionForFile.GetDocumentIdsWithFilePath(scopeName).FirstOrDefault();
+            var owningProject = documentId is null ? null : solutionForFile.GetProject(documentId.ProjectId);
+            projectsCompiled = owningProject is null ? [] : [owningProject.Name];
         }
         else if (scope == ToolScope.project)
         {
@@ -46,6 +51,8 @@ public class BuildEngine
             {
                 return new EngineResultWrapper<BuildResult>(projectResult.Outcome, error: projectResult.Error);
             }
+            var solutionForProject = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            projectsCompiled = solutionForProject.Projects.Any(p => p.Name == scopeName) ? [scopeName] : [];
         }
         else
         {
@@ -54,6 +61,25 @@ public class BuildEngine
             {
                 return new EngineResultWrapper<BuildResult>(solutionResult.Outcome, error: solutionResult.Error);
             }
+            var solutionForAll = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var compiledProjects = new List<string>();
+            foreach (var project in solutionForAll.Projects)
+            {
+                if (await project.GetCompilationAsync(cancellationToken) is not null)
+                {
+                    compiledProjects.Add(project.Name);
+                }
+            }
+            projectsCompiled = compiledProjects;
+        }
+
+        if (projectsCompiled.Count == 0)
+        {
+            return EngineResultWrapper<BuildResult>.Failure(
+                EngineOutcome.InvalidInput,
+                new EngineError(
+                    EngineErrorCode.BuildNotRun,
+                    $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available. Call ListAll(kind: \"all\") to see valid project/file names."));
         }
 
         var errors = summary!.Details.Where(d => d.Severity == "Error").ToList();
@@ -61,9 +87,10 @@ public class BuildEngine
         const int SummaryTopN = 50;
 
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
-            BuildSucceeded: summary.Errors == 0,
+            Outcome: summary.Errors == 0 ? BuildOutcome.Succeeded : BuildOutcome.Failed,
             Level: BuildVerifyLevel.quickBuild,
-            ExitCode: -1,
+            ProjectsCompiled: projectsCompiled,
+            DiagnosticsComplete: true,
             ErrorCount: summary.Errors,
             WarningCount: summary.Warnings,
             Errors: errors,
@@ -87,6 +114,16 @@ public class BuildEngine
         {
             return new EngineResultWrapper<BuildResult>(EngineOutcome.InvalidInput,
                 error: new EngineError("No solution is loaded. Call LoadSolution before running a full build."));
+        }
+
+        var projectNames = _workspaceManager.CurrentSolution?.Projects.Select(p => p.Name).ToList() ?? [];
+        if (projectNames.Count == 0)
+        {
+            return EngineResultWrapper<BuildResult>.Failure(
+                EngineOutcome.InvalidInput,
+                new EngineError(
+                    EngineErrorCode.BuildNotRun,
+                    "Full build compiled zero projects. The loaded solution contains no projects -- no compile verdict is available. Call LoadSolution with a populated .slnx/.sln, or ListAll(kind: \"all\") to inspect the current workspace."));
         }
 
         using var process = new Process();
@@ -184,8 +221,10 @@ public class BuildEngine
 
         const int SummaryTopN = 50;
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
-            BuildSucceeded: process.ExitCode == 0,
+            Outcome: process.ExitCode == 0 ? BuildOutcome.Succeeded : BuildOutcome.Failed,
             Level: BuildVerifyLevel.fullBuild,
+            ProjectsCompiled: projectNames,
+            DiagnosticsComplete: true,
             ExitCode: process.ExitCode,
             ErrorCount: errors.Count,
             WarningCount: warnings.Count,
