@@ -1296,7 +1296,8 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = true,
-                    Data = result.Data with { BuildVerification = buildVerification }
+                    Data = result.Data with { BuildVerification = buildVerification },
+                    Findings = result.Findings
                 };
             }
 
@@ -1305,7 +1306,8 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = true,
-                Data = new DiagnosticsSummaryResult(TotalIssues: relevant.Count, Errors: summary.Errors, Warnings: summary.Warnings, TopIssues: groups, BuildVerification: buildVerification)
+                Data = new DiagnosticsSummaryResult(TotalIssues: relevant.Count, Errors: summary.Errors, Warnings: summary.Warnings, TopIssues: groups, BuildVerification: buildVerification),
+                Findings = result.Findings
             };
         }
         catch (Exception ex)
@@ -1343,12 +1345,13 @@ public class SentinelWorkspaceTools
 
             if (!result.TryGetData(out var buildResult))
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.BuildFailed, result.Error?.Message ?? "Build failed unexpectedly.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.BuildFailed, result.Error?.Message ?? "Build failed unexpectedly."), Findings = result.Findings };
             }
 
-            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+            var buildToolResult = await ToolResult<object>.ForPossiblyLargeDataAsync(
                 buildResult, _workspaceManager.GetSolutionRoot(), "BuildResult", ResultWrapperType.Raw,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, cancellationToken: cancellationToken);
+            return buildToolResult with { Findings = result.Findings };
         }
         catch (Exception ex)
         {
@@ -1383,15 +1386,15 @@ public class SentinelWorkspaceTools
 
             if (!result.TryGetData(out var testRunResult))
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? "Test run failed unexpectedly.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? "Test run failed unexpectedly."), Findings = result.Findings };
             }
 
             if (!testRunResult.RunCompleted)
             {
-                return new ToolResult<object>() { Success = false, Data = testRunResult, Error = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), WorkspaceVersion = _workspaceManager.WorkspaceVersion };
+                return new ToolResult<object>() { Success = false, Data = testRunResult, Error = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
             }
 
-            return new ToolResult<object>() { Success = true, Data = testRunResult, WorkspaceVersion = _workspaceManager.WorkspaceVersion };
+            return new ToolResult<object>() { Success = true, Data = testRunResult, WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
         }
         catch (Exception ex)
         {

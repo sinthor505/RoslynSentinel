@@ -131,6 +131,12 @@ public record ToolResult<T>
         get; init;
     }
 
+    /// <summary>Non-fatal observations surfaced alongside the result. Empty when there are none.</summary>
+    public IReadOnlyList<Finding> Findings { get; init; } = [];
+
+    /// <summary>Machine-readable directive paired with any free-form directive prose this result carries.</summary>
+    public DirectiveKind DirectiveKind { get; init; } = DirectiveKind.Proceed;
+
     /// <summary>
     /// Present when the result exceeded the inline-size threshold and was written to disk.
     /// Use <c>get_large_result</c> with <see cref="LargeResultInfo.ResultId"/> to page through it.

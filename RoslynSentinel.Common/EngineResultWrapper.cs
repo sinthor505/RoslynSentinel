@@ -22,6 +22,8 @@ public sealed class EngineResultWrapper<T>
         get;
     }
 
+    public IReadOnlyList<Finding> Findings { get; init; } = [];
+
     private readonly T? _data;
 
     public bool TryGetData([NotNullWhen(true)] out T? data)

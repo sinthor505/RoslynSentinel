@@ -1,4 +1,4 @@
-﻿namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Common;
 
 public enum DataTag
 {
@@ -67,4 +67,5 @@ public enum DataTag
     ChangeseFormat,
     ProjectType,
     CancellationTokenSlot,
+    SearchPattern
 }
