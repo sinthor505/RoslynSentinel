@@ -314,14 +314,14 @@ public class SentinelRefactoringTools
         // required unless typedKind+typedName+typedType is supplied instead (exactly one of the two
         // forms is required, not both); unused for remove/view. Also doubles as the full top-level
         // type declaration when adding a brand-new type with containerName omitted.
-        [Description("replace: the full replacement member source (signature + body). add: either the full raw member source (with containerName), or a brand-new top-level type declaration (enum/class/record/struct/interface) with containerName omitted — mutually exclusive with typedKind.")]
+        [Description("replace: the full replacement member source (signature + body). add: either the full raw member source (with containerName), or a brand-new top-level type declaration (enum/class/record/struct/interface) with containerName omitted — mutually exclusive with typedKind. This is also the correct path for adding a whole new method, class, record, struct, or interface as a member/nested type: omit typedKind/typedName entirely, pass the full member source here, and use position (\"after:MemberName\"/\"before:MemberName\"/\"end\") to place it.")]
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
         [Description("add only: where to insert — null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\". Ignored for a brand-new top-level type.")]
         [ExternalInputRequired(DataTag.Position)] string? position = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: alternative to newMemberSource for operation=add — set
         // this (with typedName+typedType) to generate a typed property/field instead of supplying
         // raw source. Mutually exclusive with newMemberSource; unused for remove/view/replace.
-        [Description("add only, alternative to newMemberSource: generates a typed property or field. Requires typedName+typedType alongside it.")]
+        [Description("add only, alternative to newMemberSource: generates a typed property or field — this is the ONLY two kinds typedKind supports (valid values: \"property\", \"field\"). Requires typedName+typedType alongside it. To add a whole new method, class, record, struct, or interface via Member(add) instead, do NOT use typedKind/typedName — omit them and pass the full source via newMemberSource together with containerName (or containerName: \"\" for a brand-new top-level type) and position (e.g. \"after:TypeName\").")]
         [ExternalInputRequired(DataTag.SymbolKind, required: false)] TypedMemberKind? typedKind = null,
         [Description("Required when typedKind is set: the generated member's name.")]
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? typedName = null,
