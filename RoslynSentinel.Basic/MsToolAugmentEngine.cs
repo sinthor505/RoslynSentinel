@@ -6,6 +6,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Basic;
 
 // ── Result Types ──────────────────────────────────────────────────────────────
@@ -1125,7 +1127,7 @@ public class MsToolAugmentEngine
             newContainingType.Members.Insert(0, constDecl));
 
         var finalRoot = replacedRoot.ReplaceNode(newContainingType, updatedType);
-        return MsAugmentResult.Ok(finalRoot.NormalizeWhitespace().ToFullString());
+        return MsAugmentResult.Ok(FormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString());
     }
 
     private static string DetermineNumericType(SyntaxToken token)
@@ -1288,7 +1290,7 @@ public class MsToolAugmentEngine
 
         var newTypeDecl = typeDecl.AddMembers(method);
         var newRoot = root.ReplaceNode(typeDecl, newTypeDecl);
-        return MsAugmentResult.Ok(newRoot.NormalizeWhitespace().ToFullString());
+        return MsAugmentResult.Ok(FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString());
     }
 
     // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────

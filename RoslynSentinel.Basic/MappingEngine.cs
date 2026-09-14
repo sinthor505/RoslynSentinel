@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Basic;
 
 public class MappingEngine
@@ -86,7 +88,7 @@ public class MappingEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Mapping method generated for {fromSymbol.Name} to {toSymbol.Name}",
-            UpdatedText = mappingMethod.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(mappingMethod).ToFullString()
         };
     }
 

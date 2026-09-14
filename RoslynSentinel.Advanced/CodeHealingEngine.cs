@@ -2,6 +2,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public class CodeHealingEngine
@@ -51,7 +53,7 @@ public class CodeHealingEngine
         }
 
         var rewriter = new ThreadSleepRewriter();
-        var newRoot = rewriter.Visit(root).NormalizeWhitespace();
+        var newRoot = FormattingHelper.NormalizeWholeSubtreeWhitespace(rewriter.Visit(root));
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -163,7 +165,7 @@ public class CodeHealingEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = f,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -196,7 +198,7 @@ public class CodeHealingEngine
                 var newExceptionName = target.NewExceptionName;
                 var newOce = oce.WithType(SyntaxFactory.ParseTypeName(newExceptionName));
                 var newRoot = root!.ReplaceNode(oce, newOce);
-                changes[target.FilePath] = newRoot.NormalizeWhitespace().ToFullString();
+                changes[target.FilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
 
                 // Generate the new exception class
                 var nsDeclaration = string.IsNullOrEmpty(ns) ? "" : $"namespace {ns};\n";

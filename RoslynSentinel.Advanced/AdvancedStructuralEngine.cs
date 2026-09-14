@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites);
@@ -46,7 +48,7 @@ public class AdvancedStructuralEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+                UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
                 FilePath = filePath
             };
         }
@@ -91,7 +93,7 @@ public class AdvancedStructuralEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+                UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
                 FilePath = filePath
             };
         }
@@ -142,7 +144,7 @@ public class AdvancedStructuralEngine
             baseUnit = baseUnit.AddMembers(baseClassNode);
         }
 
-        changes[Path.Combine(Path.GetDirectoryName(firstFile)!, $"{newBaseClassName}.cs")] = baseUnit.NormalizeWhitespace().ToFullString();
+        changes[Path.Combine(Path.GetDirectoryName(firstFile)!, $"{newBaseClassName}.cs")] = FormattingHelper.NormalizeWholeSubtreeWhitespace(baseUnit).ToFullString();
         return changes;
     }
 
@@ -379,7 +381,7 @@ public class AdvancedStructuralEngine
 
             return new MoveMemberResult(new Dictionary<FilePathWrapper, string>
             {
-                { filePath, finalRoot.NormalizeWhitespace().ToFullString() }
+                { filePath, FormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString() }
             }, new List<SkippedCallSite>());
         }
 
@@ -400,8 +402,8 @@ public class AdvancedStructuralEngine
 
         return new MoveMemberResult(new Dictionary<FilePathWrapper, string>
         {
-            { filePath, newDerivedRoot.NormalizeWhitespace().ToFullString() },
-            { baseFile, newBaseRoot.NormalizeWhitespace().ToFullString() }
+            { filePath, FormattingHelper.NormalizeWholeSubtreeWhitespace(newDerivedRoot).ToFullString() },
+            { baseFile, FormattingHelper.NormalizeWholeSubtreeWhitespace(newBaseRoot).ToFullString() }
         }, new List<SkippedCallSite>());
     }
 
@@ -456,7 +458,7 @@ public class AdvancedStructuralEngine
             var finalRoot = targetAfterSourceEdit != null
                 ? afterSourceEdit.ReplaceNode(targetAfterSourceEdit, targetAfterSourceEdit.AddMembers(membersToMove.ToArray()))
                 : afterSourceEdit;
-            result[filePath] = finalRoot.NormalizeWhitespace().ToFullString();
+            result[filePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString();
         }
         else
         {
@@ -464,8 +466,8 @@ public class AdvancedStructuralEngine
             var targetRoot = await targetDocument.GetSyntaxRootAsync(cancellationToken);
             var newTargetRoot = targetRoot!.ReplaceNode(targetClassNode, newTargetClassNode);
 
-            result[filePath] = root.ReplaceNode(classNode, updatedSourceClass).NormalizeWhitespace().ToFullString();
-            result[targetFilePath] = newTargetRoot.NormalizeWhitespace().ToFullString();
+            result[filePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(root.ReplaceNode(classNode, updatedSourceClass)).ToFullString();
+            result[targetFilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(newTargetRoot).ToFullString();
         }
 
         // Cross-file call sites: ClassA.Foo() → TargetClassName.Foo() — unambiguous since Foo is static.
@@ -504,7 +506,7 @@ public class AdvancedStructuralEngine
 
                 var updatedDocRoot = docRoot.ReplaceNodes(memberAccesses, (original, _) =>
                     original.WithExpression(SyntaxFactory.IdentifierName(targetClassName)));
-                result[doc.FilePath] = updatedDocRoot.NormalizeWhitespace().ToFullString();
+                result[doc.FilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot).ToFullString();
             }
         }
 
@@ -568,8 +570,8 @@ public class AdvancedStructuralEngine
 
         var result = new Dictionary<FilePathWrapper, string>
         {
-            { newFilePath, newFileRoot.NormalizeWhitespace().ToFullString() },
-            { filePath, updatedRoot.NormalizeWhitespace().ToFullString() }
+            { newFilePath, FormattingHelper.NormalizeWholeSubtreeWhitespace(newFileRoot).ToFullString() },
+            { filePath, FormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString() }
         };
 
         // Cross-file call sites: ClassA.Foo() → NewClassName.Foo() — unambiguous since Foo is static.
@@ -608,7 +610,7 @@ public class AdvancedStructuralEngine
 
                 var updatedDocRoot = docRoot.ReplaceNodes(memberAccesses, (original, _) =>
                     original.WithExpression(SyntaxFactory.IdentifierName(newClassName)));
-                result[doc.FilePath] = updatedDocRoot.NormalizeWhitespace().ToFullString();
+                result[doc.FilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot).ToFullString();
             }
         }
 
@@ -690,7 +692,7 @@ public class AdvancedStructuralEngine
                 ? (CompilationUnitSyntax)intermediate.RemoveNode(classToRemove, SyntaxRemoveOptions.KeepExteriorTrivia)!
                 : intermediate;
 
-            result[sourceFilePath] = newRoot.NormalizeWhitespace().ToFullString();
+            result[sourceFilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
 
             // Update type references in all other files
             if (classSymbol != null)
@@ -729,8 +731,8 @@ public class AdvancedStructuralEngine
             var newTargetRoot = (CompilationUnitSyntax)targetRoot!.ReplaceNode(targetClass, expandedTarget);
             var newSourceRoot = (CompilationUnitSyntax)sourceRoot.RemoveNode(sourceClass, SyntaxRemoveOptions.KeepExteriorTrivia)!;
 
-            result[targetFilePath] = newTargetRoot.NormalizeWhitespace().ToFullString();
-            result[sourceFilePath] = newSourceRoot.NormalizeWhitespace().ToFullString();
+            result[targetFilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(newTargetRoot).ToFullString();
+            result[sourceFilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(newSourceRoot).ToFullString();
 
             // Update type references in all other files
             if (classSymbol != null)
@@ -798,7 +800,7 @@ public class AdvancedStructuralEngine
                 return original;
             });
 
-            result[doc.FilePath] = updatedRoot.NormalizeWhitespace().ToFullString();
+            result[doc.FilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString();
         }
     }
 }

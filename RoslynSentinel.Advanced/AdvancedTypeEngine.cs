@@ -2,6 +2,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public class AdvancedTypeEngine
@@ -66,8 +68,8 @@ public class AdvancedTypeEngine
 
         return new Dictionary<FilePathWrapper, string>
         {
-            { filePath, updatedRoot.NormalizeWhitespace().ToFullString() },
-            { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), classRoot.NormalizeWhitespace().ToFullString() }
+            { filePath, FormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString() },
+            { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), FormattingHelper.NormalizeWholeSubtreeWhitespace(classRoot).ToFullString() }
         };
     }
 
@@ -122,7 +124,7 @@ public class AdvancedTypeEngine
                 .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
                 .AddMembers(properties.ToArray());
 
-            return new Dictionary<FilePathWrapper, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), newClass.NormalizeWhitespace().ToFullString() } };
+            return new Dictionary<FilePathWrapper, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), FormattingHelper.NormalizeWholeSubtreeWhitespace(newClass).ToFullString() } };
         }
 
         throw new InvalidOperationException("Anonymous type not found.");

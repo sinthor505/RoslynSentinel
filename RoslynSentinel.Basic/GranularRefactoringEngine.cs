@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Basic;
 
 public class GranularRefactoringEngine
@@ -82,7 +84,7 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot?.NormalizeWhitespace().ToFullString() ?? root.NormalizeWhitespace().ToFullString()
+            UpdatedText = (newRoot is null ? null : FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? FormattingHelper.NormalizeWholeSubtreeWhitespace(root).ToFullString()
         };
     }
 
@@ -956,7 +958,7 @@ public class GranularRefactoringEngine
             }
 
             // Format with proper newlines
-            var formattedCode = newCompilationUnit.NormalizeWhitespace().ToFullString();
+            var formattedCode = FormattingHelper.NormalizeWholeSubtreeWhitespace(newCompilationUnit).ToFullString();
             // Ensure proper spacing after usings before namespace
             if (usings.Count != 0 && !string.IsNullOrEmpty(namespaceName))
             {

@@ -2,6 +2,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public class AdvancedRefactoringEngine
@@ -88,7 +90,7 @@ public class AdvancedRefactoringEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
             FilePath = filePath
         };
     }
@@ -288,7 +290,7 @@ public class AdvancedRefactoringEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
             FilePath = filePath
         };
     }
@@ -351,7 +353,7 @@ public class AdvancedRefactoringEngine
         return new Dictionary<FilePathWrapper, string>
         {
             { filePath, updatedRoot.ToFullString() },
-            { Path.Combine(Path.GetDirectoryName(filePath)!, $"{serviceName}.cs"), serviceRoot.NormalizeWhitespace().ToFullString() }
+            { Path.Combine(Path.GetDirectoryName(filePath)!, $"{serviceName}.cs"), FormattingHelper.NormalizeWholeSubtreeWhitespace(serviceRoot).ToFullString() }
         };
     }
 }

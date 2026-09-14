@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Basic;
 
 public record GenerationResult(FilePathWrapper filePath, string Content);
@@ -954,11 +956,10 @@ public partial class CodeGenerationEngine
                         SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("NotImplementedException"))
                             .WithArgumentList(SyntaxFactory.ArgumentList())));
 
-                var methodDecl = SyntaxFactory.MethodDeclaration(returnType, method.Name)
+                var methodDecl = (MemberDeclarationSyntax)FormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(returnType, method.Name)
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                     .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(methodParams)))
-                    .WithBody(body)
-                    .NormalizeWhitespace();
+                    .WithBody(body));
                 newMembers.Add(methodDecl);
             }
             else if (member is IPropertySymbol prop)
@@ -980,10 +981,9 @@ public partial class CodeGenerationEngine
                     accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithBody(throwBody));
                 }
 
-                var propDecl = SyntaxFactory.PropertyDeclaration(propType, prop.Name)
+                var propDecl = (MemberDeclarationSyntax)FormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.PropertyDeclaration(propType, prop.Name)
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)))
-                    .NormalizeWhitespace();
+                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))));
                 newMembers.Add(propDecl);
             }
         }

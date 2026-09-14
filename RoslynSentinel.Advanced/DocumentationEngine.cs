@@ -2,6 +2,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public class DocumentationEngine
@@ -64,7 +66,7 @@ public class DocumentationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -125,7 +127,7 @@ public class DocumentationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 }

@@ -2,6 +2,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public class ModernLoggingEngine
@@ -128,7 +130,7 @@ public class ModernLoggingEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Logging methods generated.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 }

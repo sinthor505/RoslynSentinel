@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Diagnostics.CodeAnalysis;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public class LogicOptimizationEngine
@@ -49,7 +51,7 @@ public class LogicOptimizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Boolean expressions simplified.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -113,7 +115,7 @@ public class LogicOptimizationEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = "// Guard clauses added.",
-                UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+                UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
             };
         }
 
@@ -122,7 +124,7 @@ public class LogicOptimizationEngine
             Outcome = EditOutcome.NoChange,
             FilePath = filePath,
             Message = "// No reference type parameters found.",
-            UpdatedText = root!.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(root!).ToFullString()
         };
     }
 
@@ -163,7 +165,7 @@ public class LogicOptimizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null coalescing operators applied.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -212,7 +214,7 @@ public class LogicOptimizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Switch statements converted.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 

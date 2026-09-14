@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Basic;
 
 public class IDEStyleEngine
@@ -92,7 +94,7 @@ public class IDEStyleEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Object initializers applied.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -225,7 +227,7 @@ public class IDEStyleEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null-propagation applied.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 

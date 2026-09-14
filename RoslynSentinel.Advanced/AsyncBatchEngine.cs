@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1118,7 +1120,7 @@ public class AsyncBatchEngine
         newMethod = (MethodDeclarationSyntax)new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newMethod)!;
         var newRoot = root.ReplaceNode(callerAsyncMethod, newMethod);
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1456,7 +1458,7 @@ public class AsyncBatchEngine
         var newRoot = (SyntaxNode)annotatedRoot.ReplaceNode(annotatedMethod, rewrittenMethod);
         newRoot = new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newRoot)!;
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
     }
 
     // ──────────────────────────────────────────────────────────────────────────

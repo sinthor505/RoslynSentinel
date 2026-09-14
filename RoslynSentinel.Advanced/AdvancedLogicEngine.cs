@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Advanced;
 
@@ -133,7 +134,7 @@ public class AdvancedLogicEngine
             SyntaxFactory.ParseExpression(condVar),
             SyntaxFactory.SeparatedList(arms));
         var newRoot = root.ReplaceNode(ifStmt, SyntaxFactory.ReturnStatement(switchExpr));
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
 
     public async Task<DocumentEditResult> ConvertIfToSwitchStatementAsync(string filepath, string methodName, CancellationToken cancellationToken = default)
@@ -187,7 +188,7 @@ public class AdvancedLogicEngine
         var switchStmt = SyntaxFactory.SwitchStatement(SyntaxFactory.ParseExpression(condVar))
             .WithSections(SyntaxFactory.List(sections));
         var newRoot = root.ReplaceNode(ifStmt, switchStmt);
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
 
     public async Task<DocumentEditResult> ExtensionToStaticAsync(string filepath, string methodName, CancellationToken cancellationToken = default)
@@ -209,7 +210,7 @@ public class AdvancedLogicEngine
             {
                 var newParam = firstParam.WithModifiers(firstParam.Modifiers.Remove(firstParam.Modifiers.First(m => m.IsKind(SyntaxKind.ThisKeyword))));
                 var newMethod = methodNode.WithParameterList(methodNode.ParameterList.WithParameters(methodNode.ParameterList.Parameters.Replace(firstParam, newParam)));
-                return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = root!.ReplaceNode(methodNode, newMethod).NormalizeWhitespace().ToFullString(), FilePath = filePath };
+                return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(root!.ReplaceNode(methodNode, newMethod)).ToFullString(), FilePath = filePath };
             }
         }
         return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root?.ToFullString() ?? "", FilePath = filePath };
@@ -246,7 +247,7 @@ public class AdvancedLogicEngine
                     updatedRoot = updatedRoot.ReplaceNode(classNode, newClass);
                 }
 
-                return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = updatedRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
+                return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString(), FilePath = filePath };
             }
         }
         return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root?.ToFullString() ?? "", FilePath = filePath };
@@ -375,7 +376,7 @@ public class AdvancedLogicEngine
             newBody);
 
         var newRoot = root.ReplaceNode(forEach, forStatement);
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
 
     public async Task<DocumentEditResult> ConvertForToForEachAsync(string filepath, int line, CancellationToken cancellationToken = default)
@@ -429,7 +430,7 @@ public class AdvancedLogicEngine
             newBody);
 
         var newRoot = root.ReplaceNode(forStmt, forEach);
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
 
     public async Task<DocumentEditResult> ConvertWhileToForAsync(string filepath, int line, CancellationToken cancellationToken = default)
@@ -528,7 +529,7 @@ public class AdvancedLogicEngine
         }
         var newStatements = SyntaxFactory.List<StatementSyntax>(newStmtList);
         var newRoot = root.ReplaceNode(parentBlock, parentBlock.WithStatements(newStatements));
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
 
     private record IfBranch(ExpressionSyntax Pattern, ExpressionSyntax Result);

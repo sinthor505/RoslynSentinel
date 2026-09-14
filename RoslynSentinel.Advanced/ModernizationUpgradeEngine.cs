@@ -2,6 +2,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public class ModernizationUpgradeEngine
@@ -75,7 +77,7 @@ public class ModernizationUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// String parsing upgraded to use Span<char>.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -146,7 +148,7 @@ public class ModernizationUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Pattern matching upgraded.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -190,7 +192,7 @@ public class ModernizationUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null coalescing throw expressions applied.",
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
