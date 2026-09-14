@@ -18,7 +18,7 @@ public class SentinelServerStatusTools
         _activeToolSurface = activeToolSurface;
     }
 
-    [McpServerTool(Name = "McpServerStatus")]
+    [McpServerTool(Name = "McpServerStatus", UseStructuredContent = true, OutputSchemaType = typeof(McpServerStatusResult))]
     [Produces(DataTag.ResultOnly)]
     [Description("Always-available diagnostic snapshot: session-halt state, circuit breaker status, the loaded workspace, and today's active --mode/--include-tools/--exclude-tools resolution. Call this first when another tool is missing, a call fails unexpectedly, or the session seems stuck. No parameters.")]
     public object McpServerStatus(CancellationToken cancellationToken = default)
@@ -37,9 +37,21 @@ public class SentinelServerStatusTools
             workspaceVersion = _workspaceManager.WorkspaceVersion,
             breakers = new
             {
-                manual = new { tripped = manual.IsTripped(), message = manual.StateMessage() },
-                automatic = new { tripped = automatic.IsTripped(), message = automatic.StateMessage() },
-                unrecoverable = new { tripped = unrecoverable.IsTripped(), message = unrecoverable.StateMessage() },
+                manual = new
+                {
+                    tripped = manual.IsTripped(),
+                    message = manual.StateMessage()
+                },
+                automatic = new
+                {
+                    tripped = automatic.IsTripped(),
+                    message = automatic.StateMessage()
+                },
+                unrecoverable = new
+                {
+                    tripped = unrecoverable.IsTripped(),
+                    message = unrecoverable.StateMessage()
+                },
             },
             toolSurface = new
             {
@@ -51,4 +63,37 @@ public class SentinelServerStatusTools
                 activeToolClasses = _activeToolSurface.ActiveToolClasses,
             },
         };
-    }}
+    }
+}
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>A single circuit breaker's tripped state and message, as reported by McpServerStatus.</summary>
+public sealed record McpServerStatusBreakerState(bool Tripped, string? Message);
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>Circuit breaker states reported by <see cref="McpServerStatusResult"/>.</summary>
+public sealed record McpServerStatusBreakers(
+    McpServerStatusBreakerState Manual,
+    McpServerStatusBreakerState Automatic,
+    McpServerStatusBreakerState Unrecoverable);
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>Active --mode/--include-tools/--exclude-tools resolution, as reported by McpServerStatus.</summary>
+public sealed record McpServerStatusToolSurface(
+    string ModeArg,
+    IReadOnlyCollection<string> ActiveModes,
+    IReadOnlyCollection<string> IncludeTools,
+    IReadOnlyCollection<string> ExcludeTools,
+    int ActiveToolClassCount,
+    IReadOnlyCollection<string> ActiveToolClasses);
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Named shape mirroring <see cref="SentinelServerStatusTools.McpServerStatus"/>'s anonymous return
+/// object, used only as <c>OutputSchemaType</c> so the tool can advertise a real MCP
+/// <c>outputSchema</c>/<c>StructuredContent</c> shape (2026-07-28 protocol) without changing the
+/// method's actual return type.
+/// </summary>
+public sealed record McpServerStatusResult(
+    bool SessionHalted,
+    string? SolutionPath,
+    int ProjectCount,
+    int WorkspaceVersion,
+    McpServerStatusBreakers Breakers,
+    McpServerStatusToolSurface ToolSurface);
