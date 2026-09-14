@@ -1062,7 +1062,7 @@ public class SentinelWorkspaceTools
                         }
 
                         var oldText = await document.GetTextAsync();
-                        var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+                        var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).Text.ToString();
                         var targetPath = document.FilePathWrapper ?? filePath;
                         var diffChanges = new Dictionary<FilePathWrapper, string>
                         {

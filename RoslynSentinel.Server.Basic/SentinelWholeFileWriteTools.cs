@@ -633,7 +633,11 @@ public class SentinelWholeFileWriteTools
                     return new ToolResult<object>()
                     {
                         Success = true,
-                        Data = diffResponseData
+                        Data = diffResponseData,
+                        Findings = diffReport.HasFindings
+                            ? new[] { new Finding("DiffHunkAnalyzer", diffReport.Describe(), FindingSeverity.Warning) }
+                            : Array.Empty<Finding>(),
+                        DirectiveKind = diffReport.HasFindings ? DirectiveKind.ReviewRequired : DirectiveKind.Proceed
                     };
                 }
                 catch (Exception ex)

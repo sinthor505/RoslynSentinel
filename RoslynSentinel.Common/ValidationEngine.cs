@@ -37,7 +37,7 @@ public class ValidationEngine
 
         try
         {
-            var newText = _diffEngine.ApplyDiff(oldText, unifiedDiff);
+            var newText = _diffEngine.ApplyDiff(oldText, unifiedDiff).Text;
             return await ValidateChangesAsync(solution, new Dictionary<FilePathWrapper, string> { { filePath, newText.ToString() } }, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
