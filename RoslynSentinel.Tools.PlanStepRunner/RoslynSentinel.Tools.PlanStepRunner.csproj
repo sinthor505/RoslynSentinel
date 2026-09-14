@@ -11,6 +11,7 @@
          both OutputType=Exe with their own Main — StartupObject pins which one is this exe's entry
          point instead of failing the build with CS0017 (multiple entry points). -->
     <StartupObject>RoslynSentinel.Tools.PlanStepRunner.Program</StartupObject>
+    <Configurations>Debug;Release;DebugVisualStudio</Configurations>
   </PropertyGroup>
 
   <ItemGroup>

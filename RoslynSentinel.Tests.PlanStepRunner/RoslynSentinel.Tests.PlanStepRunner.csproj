@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <Configurations>Debug;Release;DebugVisualStudio</Configurations>
     <!-- No StartupObject here, deliberately. The referenced projects are OutputType=Exe, but their
          Main methods live in *referenced assemblies*, not this compilation, so they can't collide
          with anything and there is no entry point to disambiguate. (Setting StartupObject to the
