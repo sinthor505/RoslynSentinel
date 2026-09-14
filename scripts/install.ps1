@@ -11,14 +11,14 @@ Write-Host "Stopping any running RoslynSentinel.Server processes..."
 
 # 2. Build and Publish
 Write-Host "Building and publishing server to $publishDir..."
-dotnet publish "$repoRoot\RoslynSentinel.Server\RoslynSentinel.Server.csproj" -c Release -o "$publishDir"
+dotnet publish "$repoRoot\RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj" -c Release -o "$publishDir"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Build failed. Ensure .NET 10 SDK is installed."
     exit $LASTEXITCODE
 }
 
-$dllPath = "$publishDir\RoslynSentinel.Server.dll"
+$dllPath = "$publishDir\RoslynSentinel.Server.Advanced.dll"
 # Normalize path for JSON
 $normalizedPath = $dllPath.Replace("\", "/")
 
