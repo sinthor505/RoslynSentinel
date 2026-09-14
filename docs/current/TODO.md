@@ -4,36 +4,37 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
-## `Git` tool missing branch/push/checkout/worktree/stash — forces a shell fallback — not started
+## `Git` tool missing worktree/stash/tag/single-commit-show/arbitrary-ref-diff — forces a shell fallback — partially started
 
 Raised 2026-09-12 while wiring the dog-fooding enforcement hook
-(`.claude/hooks/enforce-dogfood.ps1`).
+(`.claude/hooks/enforce-dogfood.ps1`). **Re-verified against source 2026-09-14 (Phase 5 of
+manual-selfrun-20260914-remediation-v1)** — this entry's title and body were stale: `branch`,
+`checkout`, `push`, `fetch`, `pull` were implemented in the interim without this entry being
+updated. See `CLOSED.md` for what shipped. Re-audit any TODO entry against
+`GetFileOutline`/`GetMethodSource` on the actual tool before trusting its text, per CLAUDE.md's
+root-cause discipline — this file drifted from source for at least one prior session.
 
-`Git` currently implements `status`, `log`, `diff`, `stage`/`add`, `commit`, `revert`. The hook
-therefore blocks only those six via shell and has to **let everything else through**, because
-denying an operation with no MCP equivalent would strand the task with nowhere to go.
+`Git` currently implements `status`, `log`, `diff`, `stage`/`add`, `unstage`, `commit`, `revert`,
+`branch`, `checkout`, `push`, `fetch`, `pull`.
 
-Missing, in rough priority order:
+Still missing, in rough priority order:
 
-- **`branch`** (list / create / delete / show current) and **`checkout`**/`switch` — needed for any
-  branch-per-change workflow, and CLAUDE.md's own convention is to branch before committing off the
-  default branch.
-- **`push`** / **`fetch`** / **`pull`** — remote operations; `push` at minimum, since it's the one
-  step that currently always escapes the chokepoint.
 - **`worktree`** (add / list / remove) — PlanStepRunner drives worktrees directly, so this is the
   gap with the most existing in-repo usage, and the one place where a wrong path silently produces
-  the `Worktree/` diff trap that CLAUDE.md warns about.
-- **`stash`** (push / pop / list) and **`tag`** — lower priority, occasional use.
+  the `Worktree/` diff trap that CLAUDE.md warns about. **Design fork, needs human judgment before
+  implementing:** `worktree remove`/`worktree add` are comparatively hard to reverse (a bad `remove`
+  can delete uncommitted work in that worktree; a bad `add` path can collide with or shadow an
+  existing directory) and the right API shape (explicit path param? confirm flag? auto-detect
+  existing worktrees to avoid collision?) isn't specified anywhere yet — do not guess the shape.
+- **`stash`** (push / pop / list) and **`tag`** — lower priority, occasional use. Also undesigned
+  API shape (e.g. does `stash pop` need a conflict-handling story analogous to `revert`'s
+  `noCommit`?) — same "don't guess" caution as worktree, lower urgency.
 - **`show`** for a single commit, and `diff` between two arbitrary refs (today `target` takes
-  `working`/`staged`/a single hash).
+  `working`/`staged`/a single hash, not `refA..refB`).
 
 Why it matters beyond convenience: each uncovered operation is a permanent, sanctioned hole in the
 dog-fooding chokepoint, so those code paths never get exercised and never surface the bugs that
-dog-fooding exists to find. It is also the reason the hook's deny list has to be an allow-list of
-six strings rather than a blanket `git` match — expanding the tool lets the hook get stricter.
-
-Note the existing open blocker `blockers/blocking_error_git_stage_ignores_untracked_files.md`
-against the current `stage` implementation; worth fixing in the same pass.
+dog-fooding exists to find.
 
 ## `docCommentId` parameter audit across all tools — not started
 

@@ -5,6 +5,25 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## `Git` tool: branch/checkout/push/fetch/pull implemented; stage untracked-files/silent-alias bugs fixed — closed (2026-09-14)
+
+Split off the stale `Git` TODO entry (see current `TODO.md`'s rewritten version for what's still
+open — worktree/stash/tag/single-commit-show/arbitrary-ref-diff). Re-verified against source
+during Phase 5 of `manual-selfrun-20260914-remediation-v1`:
+
+- `branch` (list/create/delete), `checkout` (incl. `createBranch`), `push` (incl. `setUpstream`),
+  `fetch`, `pull` — all implemented in `RoslynSentinel.Server.Basic/SentinelGitTools.cs`
+  (`BranchAsync`, `CheckoutAsync`, `PushAsync`, `FetchAsync`, `PullAsync`) and wired into `Git`'s
+  dispatch switch. No longer missing; the TODO entry's title/body had gone stale after this
+  shipped without the entry being updated — caught only by re-checking source directly instead of
+  trusting the doc.
+- `blockers/blocking_error_git_stage_ignores_untracked_files.md` — both defects named in its own
+  2026-09-12 amendment (silently-ignored unknown `paths:` param on `stage`; `stageAll:true`
+  silently overriding an explicit file list) are fixed: `stageAll` boolean removed entirely,
+  replaced by `GitStageScope { tracked, all, listed }` with explicit scope/path-list mismatch
+  rejection, and `files`/`paths` are documented aliases with a hard rejection if both are passed.
+  Moved to `blockers/resolved/`.
+
 ## Blockers from the MCP tool description/param/enum/optionality revision pass — closed (2026-09-10)
 
 From `finding_mcp_tool_desc_revision_blockers.md` (deleted, superseded by this entry and by

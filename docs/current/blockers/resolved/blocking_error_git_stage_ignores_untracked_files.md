@@ -1,5 +1,17 @@
 # Blocking error — `Git(operation: "stage")` silently ignores untracked files
 
+**Status:** RESOLVED (2026-09-14, Phase 5 of manual-selfrun-20260914-remediation-v1). Both
+defects named in the 2026-09-12 amendment below are fixed in current source — re-verified against
+`RoslynSentinel.Server.Basic/SentinelGitTools.cs`'s `StageAsync` (~line 615) and `Git`'s dispatch
+signature (~line 366), and `RoslynSentinel.Common/ToolEnums.cs`'s `GitStageScope` enum. (1) An
+unknown/wrong parameter no longer silently no-ops: `Git`'s `files`/`paths` are documented aliases
+of each other, and passing both is a hard rejection, not a silent pick. (2) `stageAll: bool` no
+longer exists at all — replaced by `GitStageScope { tracked, all, listed }`, where `scope=listed`
+requires an explicit file list and runs `git add -- <paths>` (stages untracked paths correctly),
+`scope=tracked`/`all` without a list run `-u`/`-A`, and naming `files` together with any scope
+other than `listed` is refused up front with an explicit message naming the conflict — exactly
+the fix this doc's amendment asked for. No code change needed this run; moved to `resolved/`.
+
 **Status:** OPEN, but **the diagnosis below is wrong** — see the 2026-09-12 amendment first.
 
 ## Amendment 2026-09-12 — could not reproduce; the real defect is different
