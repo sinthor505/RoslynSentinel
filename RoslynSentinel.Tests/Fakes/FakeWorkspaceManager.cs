@@ -78,7 +78,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     void IManualCircuitBreaker.Reset() => throw new NotImplementedException();
     bool IManualCircuitBreaker.IsTripped() => throw new NotImplementedException();
     string? IManualCircuitBreaker.StateMessage() => throw new NotImplementedException();
-    void IAutomaticCircuitBreaker.RecordSearchOutcome(int matchCount) => throw new NotImplementedException();
+    bool IAutomaticCircuitBreaker.RecordSearchOutcome(int matchCount) => throw new NotImplementedException();
     bool IAutomaticCircuitBreaker.IsTripped() => throw new NotImplementedException();
     string? IAutomaticCircuitBreaker.StateMessage() => throw new NotImplementedException();
     void IAutomaticCircuitBreaker.Reset() => throw new NotImplementedException();

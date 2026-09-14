@@ -505,13 +505,17 @@ public class WorkspaceReadNavigationImpl
                 warnings.Add(
                     $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. " +
                     "If you were searching for a known symbol by name, use LocateSymbol instead (semantic lookup, not text matching). " +
-                    "Use ProjectDoc to read plan/handoff/documentation files directly or use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
-                throw new NoSearchMatchesException(string.Join(" ", warnings));
+                    "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
+                    "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
+                var justTripped = _workspaceManager.RecordSearchOutcome(0);
+                throw new NoSearchMatchesException(string.Join(" ", warnings)) { JustTrippedBreaker = justTripped };
             }
             else if (results.Count >= maxResults)
             {
                 warnings.Add($"{results.Count} matches found — returning first ({maxResults}) matches scanned — Narrow fileGlob/pattern or increase maxResults to see more.");
             }
+
+            _workspaceManager.RecordSearchOutcome(literalResults.Count + regexResults.Count);
 
             string? warning = warnings.Count > 0 ? string.Join(" ", warnings) : null;
             var payload = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid);
@@ -524,6 +528,18 @@ public class WorkspaceReadNavigationImpl
                 workspaceVersion: _workspaceManager.WorkspaceVersion,
                 cancellationToken: cancellationToken);
             return searchResult with { Warning = warning };
+        }
+        catch (NoSearchMatchesException ex)
+        {
+            var findings = ex.JustTrippedBreaker
+                ? new[] { new Finding("OrientationBreaker", ex.Message, FindingSeverity.Warning) }
+                : Array.Empty<Finding>();
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SearchSolutionText"),
+                Findings = findings
+            };
         }
         catch (Exception ex)
         {

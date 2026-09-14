@@ -485,37 +485,11 @@ public static class RoslynSentinelServiceExtensionsBasic
                     {
                         if (automaticBreaker is not null)
                         {
-                            if (toolName == "SearchSolutionText")
-                            {
-                                int totalRecords = 0;
-                                if (result.Content is not null)
-                                {
-                                    foreach (var block in result.Content)
-                                    {
-                                        if (block is ModelContextProtocol.Protocol.TextContentBlock textBlock &&
-                                            !string.IsNullOrEmpty(textBlock.Text))
-                                        {
-                                            try
-                                            {
-                                                using var doc = System.Text.Json.JsonDocument.Parse(textBlock.Text);
-                                                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
-                                                    doc.RootElement.TryGetProperty("totalRecords", out var totalRecordsProp) &&
-                                                    totalRecordsProp.ValueKind == System.Text.Json.JsonValueKind.Number)
-                                                {
-                                                    totalRecords = totalRecordsProp.GetInt32();
-                                                }
-                                            }
-                                            catch (System.Text.Json.JsonException)
-                                            {
-                                                // Response text isn't JSON — leave totalRecords at 0 (treated as a zero-match outcome).
-                                            }
-                                        }
-                                    }
-                                }
-
-                                automaticBreaker.RecordSearchOutcome(totalRecords);
-                            }
-                            else if (automaticBreaker.IsTripped() && result.IsError != true)
+                            // SearchSolutionText's own outcome is now recorded inline, from inside
+                            // WorkspaceReadNavigationImpl.SearchSolutionText itself, immediately after
+                            // the match count is known — not here. Recording it a second time here
+                            // would double-count every call against the trip threshold.
+                            if (toolName != "SearchSolutionText" && automaticBreaker.IsTripped() && result.IsError != true)
                             {
                                 automaticBreaker.Reset();
                             }
