@@ -45,7 +45,7 @@ public class EolUtilitiesTests
         var solution = workspace.CurrentSolution
             .AddProject(projectId, "Test", "Test", Microsoft.CodeAnalysis.LanguageNames.CSharp)
             .AddMetadataReference(projectId, Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(typeof(object).Assembly.Location))
-            .AddAnalyzerConfigDocument(Microsoft.CodeAnalysis.DocumentId.CreateNewId(Microsoft.CodeAnalysis.ProjectId.CreateNewId()), ".editorconfig", Microsoft.CodeAnalysis.Text.SourceText.From("root = true\n[*.cs]\nend_of_line = crlf\n"), filePath: "C:/fake/.editorconfig");
+            .AddAnalyzerConfigDocument(Microsoft.CodeAnalysis.DocumentId.CreateNewId(projectId), ".editorconfig", Microsoft.CodeAnalysis.Text.SourceText.From("root = true\n[*.cs]\nend_of_line = crlf\n"), filePath: "C:/fake/.editorconfig");
         var documentId = Microsoft.CodeAnalysis.DocumentId.CreateNewId(projectId);
         solution = solution.AddDocument(documentId, "ScratchCrlf3.cs", lfContent, filePath: "C:/fake/ScratchCrlf3.cs");
         var document = solution.GetDocument(documentId)!;
