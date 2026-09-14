@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace RoslynSentinel.Common;
@@ -8,6 +8,7 @@ public enum EngineErrorCode
     General,
     StaleSession,
     SymbolNotResolved,
+    BuildNotRun,
 }
 
 public sealed class EngineResultWrapper<T>
@@ -47,6 +48,8 @@ public sealed class EngineResultWrapper<T>
         _data = data;
         Error = error;
     }
+    // Added by AddMember (expected - used for diagnostics)
+    public static EngineResultWrapper<T> Failure(EngineOutcome outcome, EngineError error) => new(outcome, default, error);
 }
 
 public enum EngineOutcome
