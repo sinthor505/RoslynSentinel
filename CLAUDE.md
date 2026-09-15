@@ -123,3 +123,11 @@ source before constructing an explanation for it.
 - `docs/current/TODO.md` is open-items-only; resolved entries move to `docs/current/CLOSED.md`.
 - `*/Worktree/` folders under a PlanStepRunner run are harness clones — exclude from diffs,
   searches, and reviews. Never run git commands inside one and treat the output as authoritative.
+- Use ASCII-only punctuation in any comment, doc, commit message, or prompt text you write —
+  `-`/`--` instead of en/em dashes, straight quotes instead of curly ones, `<=`/`>=` instead of the
+  single-character Unicode comparison-operator glyphs. Non-ASCII punctuation is exactly the content that turns into mojibake
+  (e.g. `Γçö`) when it crosses an encoding mismatch somewhere in a serialize/deserialize chain
+  (file -> server -> MCP tool -> harness -> MCP tool -> server -> file). ASCII bytes are identical
+  under every encoding in play, so this class of corruption is structurally impossible for them.
+  This does not apply to non-ASCII characters that are the actual subject of a task (e.g. test
+  fixture content intentionally containing accented characters).

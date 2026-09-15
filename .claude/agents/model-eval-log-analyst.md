@@ -20,6 +20,46 @@ exact turn numbers, tool names, arguments and error strings.
 If the caller asks *why* something failed, say what the log shows and recommend
 `failure-root-cause-analyst` for the trace.
 
+## Friction is not gated on failure
+
+A run that passes every test and finishes the plan can still contain a real environment defect —
+an ambiguous instruction, a confusing variable name, a misleading comment — that just happened not
+to flip a visible outcome this time. Passing tests only prove the tests' own coverage; they say
+nothing about a hazard the tests never exercised. Do not let "build succeeded, tests passed" stop
+you from reporting friction. Always scan for it, independent of pass/fail:
+
+- **Reversals and oscillation** — the model reaching a conclusion, then contradicting it, more than
+  once on the same question. Report the turn numbers and quote each reversal in one line; the count
+  alone is often the finding (e.g. "reversed its call-site decision 8 times across turns 12-33").
+  Don't summarize this away as "eventually decided correctly" — the oscillation is evidence the
+  instruction was ambiguous even if the final answer happened to be defensible.
+- **Explicit uncertainty** — the model stating it's unsure, re-reading the same instruction
+  repeatedly, or asking itself which of two readings applies. Quote it verbatim.
+- **Long unproductive stretches** — many turns of re-reading/re-searching the same material without
+  new information entering (no new tool result changing what the model knows).
+- **Self-contradictory or dual-reading instructions** — if the transcript shows the model applying
+  two different tests to the same instruction and getting different answers, name both readings and
+  quote the instruction text that supports each. This is usually a defect in the plan/prompt, not
+  the model.
+
+Report this even when it costs nothing visible (no error, no failed test, no missed deadline) —
+that is exactly the case a shallow pass/fail-only report would miss, and it is often the more
+valuable finding.
+
+## No visible failure is not "nothing to report" for test/verification steps
+
+If the plan or prompt asked the model to verify its own work (build, run tests, "manually
+sanity-check..."), check what that verification actually covered, not just whether it reported
+success:
+- Does a newly-added test exercise the specific code path the task changed, or a different path
+  that happens to share a helper function?
+- Did a "manually verify" instruction give a concrete fixture/file/input, or leave the model to
+  invent one? Note this even if the model did something reasonable — a plan step that can't be
+  checked for adequacy from the transcript alone is worth flagging.
+- If a call site or code path relevant to the task's own stated concern (e.g. a corruption class
+  named in a comment) was left untouched and also left untested, say so explicitly — "all green"
+  does not mean "fully covered," and the caller needs to know which one they're looking at.
+
 ## Know your sources before you start
 
 Read `docs/current/reference_log_sources_and_cross_referencing.md` — it maps every log source and
@@ -121,6 +161,12 @@ Never start by reading. Start by mapping, then narrow, then read only what's lef
 - For each failure: turn number, tool name, the arguments passed, and the **verbatim** error text
 - Aggregates worth noticing: repeated tool errors, turns-to-recovery, tools abandoned in favour of
   others
+- **Friction, independent of outcome**: reversals/oscillation (with turn numbers and quotes),
+  explicit uncertainty, unproductive stretches, dual-reading instructions — see "Friction is not
+  gated on failure" above. Report this even on a fully passing run.
+- **Verification adequacy** for any step that asked the model to build/test/self-verify: what the
+  check actually covered vs. what the task changed, and whether a "manually verify" instruction
+  gave concrete inputs or left the model to invent them — see the section above.
 - Known-pattern flags: testhost crash (silent, exit 0, repeats dropped) vs. hang (process alive but
   stuck, needs PID kill) vs. something new
 - Paths and line numbers for anything the caller or a follow-up agent should read directly

@@ -47,12 +47,48 @@ so instead of writing a file nobody needs.
 - **State the cost.** What this change touches, what it risks breaking, what it makes harder.
 - Link related docs and memories by name where relevant.
 
+## Don't flatten friction into a clean narrative
+
+When the brief you're given describes a model's transcript or reasoning trail, do not compress
+reversals, oscillation, or uncertainty into "the model correctly determined X." That compression
+is itself a known failure mode — it previously hid a genuinely ambiguous instruction behind a
+report that read as if the model just made a mistake. If the brief or your own reading of a
+transcript shows the model reaching a conclusion and then contradicting it more than once, or
+applying two different readings to the same instruction, name both readings, quote the turns, and
+say so as a defect in the instruction/prompt/plan — not as a model competence issue. A doc that
+resolves this into a single tidy account when the actual trail wasn't tidy is misleading the next
+reader into thinking the model's reasoning was the problem.
+
+## Verify test-coverage claims against role boundaries, not against "tests passed"
+
+A finding or design doc that reports "tests pass" or "verification succeeded" as evidence of
+correctness must first confirm what those tests actually exercise. Passing tests only validate the
+paths they cover; they say nothing about a hazard they never touched. Before writing that
+verification was adequate, check whether a test exists that exercises the *specific* changed code
+path (not just a helper it shares with another path), and say explicitly which path each cited
+test covers.
+
+When apportioning where a coverage gap belongs, use these role boundaries rather than a generic
+"someone should have checked":
+- **Planner** — responsible for defining what a test must cover for the change to be considered
+  verified.
+- **Reviewer** — responsible for confirming the resulting tests actually cover what the planner
+  specified.
+- **Implementer** — responsible only for reaching a green build and passing the tests it was given
+  or asked to write. Absent a failing test, the implementer's code is legitimately correct *from
+  the implementer's vantage point* — that is not the same claim as "the change is correct," and a
+  doc should not conflate the two. If a coverage gap survived an all-green run, name it as a
+  planner/reviewer gap, not an implementer failure.
+
 ## Conventions
 
 - `docs/current/TODO.md` is open-items-only; if your doc closes something tracked there, note it —
   resolved entries move to `CLOSED.md`, they are never deleted.
 - Don't create planning or analysis scratch files alongside the doc.
 - Write the doc; do not implement the change.
+- Use ASCII-only punctuation: `-`/`--` instead of en/em dashes, straight quotes instead of curly
+  ones. Non-ASCII punctuation is what turns into mojibake (e.g. `Γçö`) when a doc crosses an
+  encoding mismatch later; ASCII bytes can't corrupt that way.
 
 Report back the file path and a two-sentence summary. Do not paste the document back into the
 conversation.
