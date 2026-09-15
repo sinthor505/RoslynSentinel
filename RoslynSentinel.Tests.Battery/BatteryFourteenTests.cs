@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Battery #14 — AdvancedLogicEngine, AdvancedRefactoringEngine,
+// Battery #14 -> AdvancedLogicEngine, AdvancedRefactoringEngine,
 //               AdvancedStructuralEngine, AntiPatternEngine
 // ────────────────────────────────────────────────────────────────────────────
 

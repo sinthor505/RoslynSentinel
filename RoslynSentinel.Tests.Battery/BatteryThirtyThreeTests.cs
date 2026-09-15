@@ -1,4 +1,4 @@
-// Battery #33 — Regression tests for:
+// Battery #33 -> Regression tests for:
 //   Bug #1: CheckForUnusedEventSubscriptions false positives on sql += / numeric +=
 //   Bug #2: DetectMismatchedAwait false positives on new ValueTask<T>(asyncMethod(...)) patterns
 //
@@ -9,8 +9,8 @@
 // Bug #2 root cause: the skip condition for "invocation is the lambda body" only matched when
 //   the invocation's direct parent was the lambda expression. For the pattern
 //     ct => new ValueTask<T>(FetchAsync(id, ct))
-//   the invocation's parent chain is InvocationExpression → ArgumentSyntax →
-//   ArgumentListSyntax → ObjectCreationExpressionSyntax → Lambda, so the direct parent is
+//   the invocation's parent chain is InvocationExpression → ArgumentSyntax ->
+//   ArgumentListSyntax → ObjectCreationExpressionSyntax -> Lambda, so the direct parent is
 //   ArgumentSyntax, not the lambda. Fix: also skip when invocation.Parent is ArgumentSyntax
 //   inside an ObjectCreationExpressionSyntax whose type contains "ValueTask".
 
@@ -130,7 +130,7 @@ public class BatteryThirtyThreeTests
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    //  BUG #1 — CheckForUnusedEventSubscriptions false positives
+    //  BUG #1 -> CheckForUnusedEventSubscriptions false positives
     // ═══════════════════════════════════════════════════════════════════════════
 
     // Mirrors the real ProductRepository.cs pattern that triggered the bug:
@@ -228,7 +228,7 @@ public class SubscriberService
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    //  BUG #2 — DetectMismatchedAwait false positives
+    //  BUG #2 -> DetectMismatchedAwait false positives
     // ═══════════════════════════════════════════════════════════════════════════
 
     // Mirrors the real ProductRepository.cs pattern that triggered the bug:
@@ -274,7 +274,7 @@ public class FireForgetService
     private Task DoBackgroundWorkAsync() => Task.CompletedTask;
 }";
 
-    // Three separate ValueTask<T> wrapper calls — all must be clean after the fix
+    // Three separate ValueTask<T> wrapper calls -> all must be clean after the fix
     private const string MultipleValueTaskWrappersSource = @"
 using System;
 using System.Threading;

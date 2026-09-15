@@ -15,7 +15,7 @@ public enum OperatingMode
 
     /// <summary>
     /// An automated evaluation run (e.g. PlanStepRunner) executing against a worktree of a real
-    /// repository. Only <c>ProjectDoc</c> branches on this — it reads out of <c>docs/testing/</c>
+    /// repository. Only <c>ProjectDoc</c> branches on this -> it reads out of <c>docs/testing/</c>
     /// instead of <c>docs/</c> so a test fixture and the production doc it mirrors can share a
     /// filename without one silently resolving to the other.
     /// </summary>
@@ -27,9 +27,9 @@ public enum OperatingMode
 /// and aren't refactoring-feature toggles (<see cref="SentinelConfiguration"/>).
 /// </summary>
 /// <remarks>
-/// Carried through DI rather than as a static. A static would in fact be safe at runtime — a
+/// Carried through DI rather than as a static. A static would in fact be safe at runtime -> a
 /// server process only ever has one solution loaded, and the HTTP host registers everything as
-/// singletons so concurrent /mcp clients share it — but the test assemblies run with
+/// singletons so concurrent /mcp clients share it -> but the test assemblies run with
 /// <c>[assembly: Parallelizable(ParallelScope.Fixtures)]</c>, and a mutable global read by one
 /// fixture while another sets it produces order-dependent failures that only reproduce in full
 /// runs. Injecting makes "production" and "testing" two objects instead of two writes to one

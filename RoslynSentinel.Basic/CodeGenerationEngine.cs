@@ -319,7 +319,7 @@ public partial class CodeGenerationEngine
                       m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword)));
         if (alreadyOverrides)
         {
-            return new GenerateToStringResult(root!.ToFullString(), [], [], "ToString() override already exists — nothing changed.");
+            return new GenerateToStringResult(root!.ToFullString(), [], [], "ToString() override already exists - nothing changed.");
         }
 
         var allPublicProps = classNode.Members
@@ -330,7 +330,7 @@ public partial class CodeGenerationEngine
 
         if (allPublicProps.Count == 0)
         {
-            return new GenerateToStringResult(root!.ToFullString(), [], [], "No public properties found — nothing generated.");
+            return new GenerateToStringResult(root!.ToFullString(), [], [], "No public properties found - nothing generated.");
         }
 
         var userExcluded = excludeProperties ?? [];
@@ -403,7 +403,7 @@ public partial class CodeGenerationEngine
                 continue;
             }
 
-            // Pattern 1: config["Key"] — only when receiver is IConfiguration
+            // Pattern 1: config["Key"] -> only when receiver is IConfiguration
             foreach (var access in root.DescendantNodes().OfType<ElementAccessExpressionSyntax>())
             {
                 if (access.ArgumentList.Arguments.Count != 1)
@@ -466,7 +466,7 @@ public partial class CodeGenerationEngine
             }
         }
 
-        // Build nested JSON hierarchy: "Kroger:ClientId" → { "Kroger": { "ClientId": "TODO" } }
+        // Build nested JSON hierarchy: "Kroger:ClientId" -> { "Kroger": { "ClientId": "TODO" } }
         var root2 = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var key in collectedKeys)
         {
@@ -631,7 +631,7 @@ public partial class CodeGenerationEngine
         // Collect properties: explicit body properties + primary constructor parameters (records)
         var properties = new List<(string Name, string Type)>();
 
-        // Primary constructor parameters (records) — become positional init properties
+        // Primary constructor parameters (records) -> become positional init properties
         if (typeNode is RecordDeclarationSyntax recordNode && recordNode.ParameterList != null)
         {
             foreach (var param in recordNode.ParameterList.Parameters)
@@ -772,7 +772,7 @@ public partial class CodeGenerationEngine
             ? null : interfaceSymbol.ContainingNamespace?.ToDisplayString();
 
         // Strip the leading 'I' from interface name only when it follows the IXxx interface naming convention
-        // Use Substring(1) not TrimStart('I') to avoid stripping multiple I chars (IInventory → nventory)
+        // Use Substring(1) not TrimStart('I') to avoid stripping multiple I chars (IInventory -> nventory)
         var baseName = interfaceName.Length > 1 && interfaceName[0] == 'I' && char.IsUpper(interfaceName[1])
             ? interfaceName.Substring(1)
             : interfaceName;

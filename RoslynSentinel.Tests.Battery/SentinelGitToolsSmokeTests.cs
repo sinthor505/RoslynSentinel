@@ -1,5 +1,5 @@
 // Smoke coverage for the Git tool's read-only operations (status/log/diff). Not a repro attempt for
-// the unreproduced one-off "Git(operation: status) hung indefinitely" TODO entry — the 30s
+// the unreproduced one-off "Git(operation: status) hung indefinitely" TODO entry -> the 30s
 // GitProcessTimeout added for that entry already gives it a bounded failure mode. The goal here is
 // just confirming each operation responds well within that bound against a real git repo, so a
 // regression that made every Git call slow/hang would fail fast in CI instead of only surfacing
@@ -15,7 +15,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class SentinelGitToolsSmokeTests
 {
-    // Generous relative to GitProcessTimeout's 30s — this isn't testing the timeout boundary
+    // Generous relative to GitProcessTimeout's 30s -> this isn't testing the timeout boundary
     // itself, just that a normal call on a tiny repo comes back promptly, not near the ceiling.
     private static readonly TimeSpan ResponseBound = TimeSpan.FromSeconds(10);
 

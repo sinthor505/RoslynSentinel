@@ -1,11 +1,11 @@
-// Battery #28 — Deeper Edge-Case Tests for the 4 Session Bugs
+// Battery #28 -> Deeper Edge-Case Tests for the 4 Session Bugs
 //
 // Each bug found in the Battery-27 session gets additional coverage:
 //
-//   B02-extra — ImmutabilityEngine: readonly token whitespace across more field shapes
-//   B04-extra — AntiPatternEngine: zero-param CT check via ValueTask, private, interface
-//   B16-extra — SecurityAndSafetyEngine: chained ?. , nested, multiple params
-//   WF-extra  — AdvancedLogicEngine.ConvertWhileToForAsync: richer loop bodies
+//   B02-extra -> ImmutabilityEngine: readonly token whitespace across more field shapes
+//   B04-extra -> AntiPatternEngine: zero-param CT check via ValueTask, private, interface
+//   B16-extra -> SecurityAndSafetyEngine: chained ?. , nested, multiple params
+//   WF-extra  -> AdvancedLogicEngine.ConvertWhileToForAsync: richer loop bodies
 //
 // The real-solution smoke test that used to live here (RealSolution_SmokeTests_Battery28)
 // moved to RoslynSentinel.Tests.Integration/IntegrationTwentyNineTests.cs.
@@ -17,7 +17,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B02-extra — ImmutabilityEngine: readonly modifier spacing in more scenarios
+// B02-extra -> ImmutabilityEngine: readonly modifier spacing in more scenarios
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B02extra_Immutability_ReadonlySpacing
@@ -60,7 +60,7 @@ public class B02extra_Immutability_ReadonlySpacing
     [Test]
     public async Task MakeFieldReadonly_StringField_HasSpaceBeforeType()
     {
-        // String reference type — same spacing requirement
+        // String reference type -> same spacing requirement
         const string source = """
             public class Greeter {
                 private string _greeting = "Hello";
@@ -95,7 +95,7 @@ public class B02extra_Immutability_ReadonlySpacing
         var result = await _engine.MakeClassImmutableAsync("Box.cs", "Box");
 
         Assert.That(result.UpdatedText, Does.Not.Contain("readonlyint"),
-            "No field should produce 'readonlyint' — all must have space.");
+            "No field should produce 'readonlyint' - all must have space.");
         var readonlyCount = result.UpdatedText!.Split("readonly int").Length - 1;
         Assert.That(readonlyCount, Is.EqualTo(2),
             "Both fields should get 'readonly int' with correct spacing.");
@@ -142,7 +142,7 @@ public class B02extra_Immutability_ReadonlySpacing
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B04-extra — AntiPatternEngine zero-param: ValueTask, private, interface shapes
+// B04-extra -> AntiPatternEngine zero-param: ValueTask, private, interface shapes
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B04extra_AntiPattern_ZeroParamCancellationToken
@@ -187,7 +187,7 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
     [Test]
     public async Task DetectAntiPatterns_ZeroParam_AbstractMethod_NotFlagged()
     {
-        // Abstract methods have no body — cannot receive CancellationToken enforcement
+        // Abstract methods have no body -> cannot receive CancellationToken enforcement
         const string source = """
             using System.Threading.Tasks;
             public abstract class Base {
@@ -208,7 +208,7 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
     [Test]
     public async Task DetectAntiPatterns_OneParam_OtherParam_ZeroParamFlagged()
     {
-        // Overloads: one has CT (good), one is zero-param (bad) — only the bad one flagged
+        // Overloads: one has CT (good), one is zero-param (bad) -> only the bad one flagged
         const string source = """
             using System.Threading;
             using System.Threading.Tasks;
@@ -235,7 +235,7 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B16-extra — SecurityAndSafetyEngine: chained ?., multi-param, block-body shapes
+// B16-extra -> SecurityAndSafetyEngine: chained ?., multi-param, block-body shapes
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B16extra_SecuritySafety_NullConditionalGuards
@@ -256,7 +256,7 @@ public class B16extra_SecuritySafety_NullConditionalGuards
     [Test]
     public async Task DetectMissingNullChecks_ExprBody_ChainedNullConditional_NotFlagged()
     {
-        // s?.Trim()?.ToUpperInvariant() — chained ?. starting on the param → still null-safe
+        // s?.Trim()?.ToUpperInvariant() -> chained ?. starting on the param -> still null-safe
         const string source = """
             public class Fmt {
                 public string? Format(string s) => s?.Trim()?.ToUpperInvariant();
@@ -274,7 +274,7 @@ public class B16extra_SecuritySafety_NullConditionalGuards
     [Test]
     public async Task DetectMissingNullChecks_ExprBody_TwoParams_OneGuarded_OtherFlagged()
     {
-        // One param uses ?., the other doesn't — only the unsafe one is flagged
+        // One param uses ?., the other doesn't -> only the unsafe one is flagged
         const string source = """
             public class Merger {
                 public string? Merge(string a, string b) => a?.ToUpperInvariant() + b.ToLowerInvariant();
@@ -294,7 +294,7 @@ public class B16extra_SecuritySafety_NullConditionalGuards
     [Test]
     public async Task DetectMissingNullChecks_BlockBody_NullCheckInBody_NotFlagged()
     {
-        // Block-bodied method with explicit null check in body — not flagged
+        // Block-bodied method with explicit null check in body -> not flagged
         const string source = """
             public class Validator {
                 public int GetLen(string s) {
@@ -332,7 +332,7 @@ public class B16extra_SecuritySafety_NullConditionalGuards
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WF-extra — AdvancedLogicEngine.ConvertWhileToForAsync: edge-case loop bodies
+// WF-extra -> AdvancedLogicEngine.ConvertWhileToForAsync: edge-case loop bodies
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class WFextra_AdvancedLogic_WhileToFor
@@ -405,7 +405,7 @@ public class Processor {
     [Test]
     public async Task ConvertWhileToFor_InvalidLine_ReturnsUnchanged()
     {
-        // Line with no while statement → returns original source unchanged
+        // Line with no while statement -> returns original source unchanged
         const string source = @"
 public class Safe {
     public void Run() {
@@ -425,7 +425,7 @@ public class Safe {
     [Test]
     public async Task ConvertWhileToFor_NoInitDeclaration_ReturnsUnchanged()
     {
-        // While loop without a preceding counter declaration → cannot convert safely
+        // While loop without a preceding counter declaration -> cannot convert safely
         const string source = @"
 public class Streamer {
     public void Run(int start) {

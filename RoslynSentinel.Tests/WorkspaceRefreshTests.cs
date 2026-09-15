@@ -113,7 +113,7 @@ public class WorkspaceRefreshTests
                 csprojFile,
                 []);
             _manager.SetTestSolution(solution);
-            // SolutionPath is null — no background MSBuild reload will be fired.
+            // SolutionPath is null -> no background MSBuild reload will be fired.
 
             const string updatedCsproj = "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>";
 
@@ -131,7 +131,7 @@ public class WorkspaceRefreshTests
             sw.Stop();
 
             Assert.That(completed, Is.SameAs(branchedTask),
-                "GetCurrentSolutionAsync should complete promptly — lock must not be held after ApplyProposedChangesAsync returns");
+                "GetCurrentSolutionAsync should complete promptly - lock must not be held after ApplyProposedChangesAsync returns");
             Assert.That(sw.ElapsedMilliseconds, Is.LessThan(1000));
         }
         finally

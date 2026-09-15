@@ -6,7 +6,7 @@ namespace RoslynSentinel.Common;
 /// <summary>
 /// Why a <see cref="FilePathWrapper"/> failed to validate. <c>Validated == false</c> can mean either
 /// the path argument itself was empty/invalid, or no solution was loaded at all (no root to resolve
-/// against) — callers need to tell these apart instead of assuming "path is invalid" when the real
+/// against) -> callers need to tell these apart instead of assuming "path is invalid" when the real
 /// problem is "load a solution first."
 /// </summary>
 public enum FilePathFailureReason
@@ -45,7 +45,7 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
     // Models frequently submit forward-slash paths (e.g. "C:/Users/.../Foo.cs") regardless of
     // platform. FileSystemWatcher's e.FullPath always reports backslashes on Windows, so an
     // uncanonicalized forward-slash FilePathWrapper used as a dictionary key (e.g. _internalChanges in
-    // PersistentWorkspaceManager) can never match the watcher's own-write-suppression lookup —
+    // PersistentWorkspaceManager) can never match the watcher's own-write-suppression lookup ->
     // a deterministic miss, not a race. Canonicalize here so every construction path (bare
     // constructor, FromWire, JSON converter) agrees on separators. UNC prefix (\\) is preserved.
     private static string CanonicalizeSeparators(string path)
@@ -74,7 +74,7 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
         // loaded, or the loaded solution is in-memory and has no file path. Tools call FromWire
         // before their own try/catch, so combining against a null root threw a raw
         // ArgumentNullException straight out of the MCP boundary. Keep the caller's relative
-        // path instead — resolving it against the process working directory would silently
+        // path instead -> resolving it against the process working directory would silently
         // produce a path that points nowhere near the solution.
         if (string.IsNullOrWhiteSpace(solutionRoot))
         {
@@ -90,7 +90,7 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
     // resolved path (and cause File.Exists/Directory.Exists to fail on an otherwise-valid path).
     private static readonly char[] PathWrapChars = ['\'', '"', '‘', '’', '“', '”', ' ', '\t', '\r', '\n'];
 
-    // Collapse repeated backslashes introduced by JSON double-encoding (e.g. c:\\\\foo → c:\foo),
+    // Collapse repeated backslashes introduced by JSON double-encoding (e.g. c:\\\\foo -> c:\foo),
     // and strip stray wrapping quotes/whitespace. Preserves the leading \\ of UNC paths.
     public static string NormalizeWirePath(string path)
     {

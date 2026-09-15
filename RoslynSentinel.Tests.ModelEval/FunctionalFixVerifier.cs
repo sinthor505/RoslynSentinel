@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// Builds the fixture's ContosoOrders.Core project after a model's edit and reflection-invokes
 /// <c>BlockConverter.ConvertAbstractClassToInterface</c> directly, so a test can assert on the
 /// actual returned string instead of only text-scanning the edited source file. Exists because a
-/// text scan can pass on code that compiles but is functionally broken — see
+/// text scan can pass on code that compiles but is functionally broken -> see
 /// project_planimplementverify_5run_result_postfix_verify.md's run 3, where a model replaced the
 /// entire file with every line commented out; that "fix" compiled with 0 errors and satisfied a
 /// substring check for the wrong reason, and was only caught by the model's own separate
@@ -21,8 +21,8 @@ internal static class FunctionalFixVerifier
     /// assembly into a collectible <see cref="AssemblyLoadContext"/>, and invokes
     /// <c>ContosoOrders.Core.FixtureHelpers.BlockConverter.ConvertAbstractClassToInterface</c>
     /// with <paramref name="fileText"/>/<paramref name="className"/>. Throws with a diagnostic
-    /// message (including captured dotnet build output) on any failure — build failure, missing
-    /// type/method, or an invocation exception — rather than returning a sentinel, since every
+    /// message (including captured dotnet build output) on any failure -> build failure, missing
+    /// type/method, or an invocation exception -> rather than returning a sentinel, since every
     /// failure path here already means the fix is broken and the caller wants a hard assertion
     /// failure either way.
     /// </summary>
@@ -48,7 +48,7 @@ internal static class FunctionalFixVerifier
         string result;
         var loadContextRef = InvokeInCollectibleContext(assemblyPath, fileText, className, out result);
 
-        // AssemblyLoadContext.Unload() only requests collection — it does not synchronously
+        // AssemblyLoadContext.Unload() only requests collection -> it does not synchronously
         // release the mmap'd file handle on the .dll. The caller's TearDown deletes this same
         // fixture directory moments later, and without waiting here that delete can lose the
         // race and throw UnauthorizedAccessException on the still-locked file (observed
@@ -74,11 +74,11 @@ internal static class FunctionalFixVerifier
             var converterType = assembly.GetType("ContosoOrders.Core.FixtureHelpers.BlockConverter")
                 ?? throw new InvalidOperationException(
                     "FunctionalFixVerifier: type 'ContosoOrders.Core.FixtureHelpers.BlockConverter' " +
-                    "not found in the built assembly — the model's edit may have renamed or removed it.");
+                    "not found in the built assembly - the model's edit may have renamed or removed it.");
             var method = converterType.GetMethod("ConvertAbstractClassToInterface", [typeof(string), typeof(string)])
                 ?? throw new InvalidOperationException(
                     "FunctionalFixVerifier: method 'ConvertAbstractClassToInterface(string, string)' not found " +
-                    "on BlockConverter — the model's edit may have changed its signature.");
+                    "on BlockConverter - the model's edit may have changed its signature.");
             var instance = Activator.CreateInstance(converterType)
                 ?? throw new InvalidOperationException("FunctionalFixVerifier: could not construct BlockConverter.");
 
@@ -104,7 +104,7 @@ internal static class FunctionalFixVerifier
     /// <summary>
     /// Builds the fixture's ContosoOrders.Core project after a model's refactor and
     /// reflection-invokes <c>OrderPricingCalculator.CalculateDiscountedTotal</c> (the renamed form
-    /// of <c>CalcDisc</c> — see <c>RoslynSentinel.Tests.ModelEval.Fixtures.OrderPricingRefactorReproducer</c>) once per branch
+    /// of <c>CalcDisc</c> -> see <c>RoslynSentinel.Tests.ModelEval.Fixtures.OrderPricingRefactorReproducer</c>) once per branch
     /// (preferred/standard customer), so a test can assert both real returned values instead of
     /// only text-scanning the edited source. Looked up by name directly (rather than by declared
     /// parameter types, which the model isn't asked to change) since the method's accessibility is
@@ -151,14 +151,14 @@ internal static class FunctionalFixVerifier
             var calculatorType = assembly.GetType("ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator")
                 ?? throw new InvalidOperationException(
                     "FunctionalFixVerifier: type 'ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator' " +
-                    "not found in the built assembly — the model's edit may have renamed or removed it.");
+                    "not found in the built assembly - the model's edit may have renamed or removed it.");
             var method = calculatorType.GetMethod(
                     "CalculateDiscountedTotal",
                     BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
                     [typeof(decimal), typeof(decimal), typeof(bool)])
                 ?? throw new InvalidOperationException(
                     "FunctionalFixVerifier: method 'CalculateDiscountedTotal(decimal, decimal, bool)' not " +
-                    "found on OrderPricingCalculator — the rename or signature may be wrong.");
+                    "found on OrderPricingCalculator - the rename or signature may be wrong.");
             var instance = Activator.CreateInstance(calculatorType)
                 ?? throw new InvalidOperationException("FunctionalFixVerifier: could not construct OrderPricingCalculator.");
 
@@ -237,14 +237,14 @@ internal static class FunctionalFixVerifier
             var calculatorType = assembly.GetType("ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator")
                 ?? throw new InvalidOperationException(
                     "FunctionalFixVerifier: type 'ContosoOrders.Core.FixtureHelpers.OrderPricingCalculator' " +
-                    "not found in the built assembly — the model's edit may have renamed or removed it.");
+                    "not found in the built assembly - the model's edit may have renamed or removed it.");
             var method = calculatorType.GetMethod(
                     "CalculateDiscountedTotal",
                     BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
                     [typeof(decimal), typeof(decimal), typeof(bool)])
                 ?? throw new InvalidOperationException(
                     "FunctionalFixVerifier: method 'CalculateDiscountedTotal(decimal, decimal, bool)' not " +
-                    "found on OrderPricingCalculator — the rename or signature may be wrong.");
+                    "found on OrderPricingCalculator - the rename or signature may be wrong.");
             var instance = Activator.CreateInstance(calculatorType)
                 ?? throw new InvalidOperationException("FunctionalFixVerifier: could not construct OrderPricingCalculator.");
 

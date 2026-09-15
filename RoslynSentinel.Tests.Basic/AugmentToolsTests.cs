@@ -10,14 +10,14 @@ namespace RoslynSentinel.Tests.Basic;
 /// <summary>
 /// Regression tests for Bug #11 (GenerateToStringSafe) and Bug #12 (ExtractMethodSafe).
 ///
-/// Bug #11 — MS generate_tostring produces unescaped literal braces in the interpolated
+/// Bug #11 -> MS generate_tostring produces unescaped literal braces in the interpolated
 /// string format section, e.g.:
 ///     $"AuthUser { Id = {Id}, Email = {Email} }"
-/// The outer `{ Id =` is parsed as an interpolation hole → CS8086 compiler error.
+/// The outer `{ Id =` is parsed as an interpolation hole -> CS8086 compiler error.
 /// Fix: emit {{ and }} for literal braces:
 ///     $"AuthUser {{ Id = {Id}, Email = {Email} }}"
 ///
-/// Bug #12 — MS extract_method generates `private void MethodName(...)` when the
+/// Bug #12 -> MS extract_method generates `private void MethodName(...)` when the
 /// selected block ends with `return <expression>`, producing a compile error because
 /// the extracted method has the wrong (void) return type.
 /// Fix: use SemanticModel.GetTypeInfo() on the return expression.
@@ -47,7 +47,7 @@ public class AugmentToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // Bug #11 — GenerateToStringSafe
+    // Bug #11 -> GenerateToStringSafe
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -79,9 +79,9 @@ public class AuthUser
         Assert.That(result.UpdatedContent, Does.Contain("{IsActive}"),
             "IsActive interpolation must be present");
         // The correct escaped pattern must appear (NOT the single-brace MS bug pattern).
-        // We check for the escaped form positively: "{{ Id =" — double braces mean literal brace.
+        // We check for the escaped form positively: "{{ Id =" -> double braces mean literal brace.
         Assert.That(result.UpdatedContent, Does.Contain("{{ Id ="),
-            "Must use {{ (escaped) before member list — single { Id = triggers CS8086");
+            "Must use {{ (escaped) before member list - single { Id = triggers CS8086");
     }
 
     [Test]
@@ -101,7 +101,7 @@ public class MyModel
         Assert.That(result.Success, Is.True, result.Error);
 
         // Verify the generated file compiles without errors
-        // Must specify DynamicallyLinkedLibrary — the file is a class, not a console app.
+        // Must specify DynamicallyLinkedLibrary -> the file is a class, not a console app.
         var tree = CSharpSyntaxTree.ParseText(result.UpdatedContent!);
         var compilation = CSharpCompilation.Create("TestCompile",
             syntaxTrees: [tree],
@@ -271,7 +271,7 @@ public record OrderItem
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // Bug #12 — ExtractMethodSafe
+    // Bug #12 -> ExtractMethodSafe
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -488,7 +488,7 @@ public class Counter
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // Regression Guards — Specific failure modes discovered during live
+    // Regression Guards -> Specific failure modes discovered during live
     // 36-tool battery test against ExpressRecipe (session d717a42b, 2026-04)
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -500,7 +500,7 @@ public class Counter
                  + "exist, causing FileNotFoundException. Fix: check CurrentSolution first.")]
     public async Task GenerateToStringSafe_WorkspaceFirstRead_NoDiskFileRequired()
     {
-        // File exists only in the in-memory workspace — no physical .cs file on disk.
+        // File exists only in the in-memory workspace -> no physical .cs file on disk.
         // If the engine regresses to disk-only reading, this test catches it immediately.
         const string source = @"
 public class WorkspaceOnlyModel
@@ -524,7 +524,7 @@ public class WorkspaceOnlyModel
     [Test]
     [Description("Regression guard: CS8086 must not be generated. "
                  + "The brace preceding the member list must be DOUBLED ({{ not {). "
-                 + "Single { in an interpolated string starts an interpolation hole — if the "
+                 + "Single { in an interpolated string starts an interpolation hole - if the "
                  + "hole is not a valid expression, C# emits CS8086. This test compiles the output "
                  + "and specifically checks for CS8086 (not just any error).")]
     public async Task GenerateToStringSafe_GeneratedCode_NoCS8086()
@@ -676,7 +676,7 @@ public class BigModel
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ExtractMethodSafe — additional regression guards
+    // ExtractMethodSafe -> additional regression guards
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -793,7 +793,7 @@ public class AuthResult
         Assert.That(result.Success, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Not.Contain("void CreateAuthResult("),
             "Must NOT be void for an object-returning extraction inside an if block "
-            + "(exact pattern from AuthRepository ExpressRecipe live test — Bug #12 regression)");
+            + "(exact pattern from AuthRepository ExpressRecipe live test - Bug #12 regression)");
         Assert.That(result.UpdatedContent, Does.Contain("AuthResult CreateAuthResult("),
             "Must have AuthResult return type");
     }
@@ -830,7 +830,7 @@ public class OrderLine
     [Test]
     [Description("Regression (ContosoOrders live agent run): a contextSnippet naming a whole "
                  + "multi-statement block (declarations + the foreach that consumes them) must "
-                 + "extract that entire block, including the loop itself, as a single call — not "
+                 + "extract that entire block, including the loop itself, as a single call - not "
                  + "a per-iteration call.")]
     public async Task ExtractMethodSafe_WholeBlockSnippetSpanningForeach_ExtractsEntireBlockAsOneCall()
     {
@@ -846,15 +846,15 @@ public class OrderLine
         Assert.That(result.UpdatedContent, Does.Contain("totalUnits"),
             "ComputeTotals must account for totalUnits, not silently drop it");
         Assert.That(result.UpdatedContent, Does.Not.Contain("ComputeTotals(runningTotal, line)"),
-            "Must not degrade into a per-line call inside the original loop — the whole block " +
+            "Must not degrade into a per-line call inside the original loop - the whole block " +
             "including the loop itself must move into the new method");
     }
 
     [Test]
     [Description("Regression (ContosoOrders live agent run): a contextSnippet that matches only "
-                 + "ONE statement inside a loop body — while a sibling statement in that same body "
+                 + "ONE statement inside a loop body - while a sibling statement in that same body "
                  + "is left out, and the statement depends on state declared outside the loop (an "
-                 + "accumulator pattern) — must be refused rather than silently extracted. The prior "
+                 + "accumulator pattern) - must be refused rather than silently extracted. The prior "
                  + "behavior extracted just that one statement into a method called once per "
                  + "iteration, silently dropping the sibling statement and the loop from the "
                  + "extraction while still reporting Success=true.")]
@@ -933,7 +933,7 @@ public class OrderLine
                  + "generated parameter must NOT be nullable. The prior bug copied Roslyn's "
                  + "flow-state NullableAnnotation verbatim into the synthesized parameter type, "
                  + "producing 'StringBuilder? sb' for a variable that is unconditionally constructed "
-                 + "and never reassigned — and the generated body dereferenced it with no null check, "
+                 + "and never reassigned - and the generated body dereferenced it with no null check, "
                  + "producing a live CS8602 warning that did not exist before extraction.")]
     public async Task ExtractMethodSafe_SelectionUsesEarlierDeclaredReferenceType_ParameterIsNotNullable()
     {
@@ -945,7 +945,7 @@ public class OrderLine
 
         Assert.That(result.Success, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Not.Contain("StringBuilder? sb"),
-            "The synthesized 'sb' parameter must not be nullable — 'sb' is never null at this point, " +
+            "The synthesized 'sb' parameter must not be nullable - 'sb' is never null at this point, " +
             "the '?' came from flow-state analysis, not the variable's real declared nullability");
         Assert.That(result.UpdatedContent, Does.Contain("StringBuilder sb"),
             "The synthesized parameter should still be typed StringBuilder, just not nullable");

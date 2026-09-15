@@ -74,7 +74,7 @@ public record MigrationScanSummary(
     /// </summary>
     int? MinScore = null,
     /// <summary>
-    /// Populated when <c>autoFlag=true</c> — the result of the internal flag phase that ran
+    /// Populated when <c>autoFlag=true</c> -> the result of the internal flag phase that ran
     /// before the scan. Null when <c>autoFlag=false</c>.
     /// </summary>
     BatchResultSummary? FlagPhase = null

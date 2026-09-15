@@ -108,7 +108,7 @@ public class InstrumentationEngine
         }
 
         // Shared annotation for every node introduced below (the added using directive, if any, and
-        // the rewritten method) — lets the final Formatter.FormatAsync pass reformat just these
+        // the rewritten method) -> lets the final Formatter.FormatAsync pass reformat just these
         // edited spans instead of reflowing the whole file.
         var annotation = new SyntaxAnnotation();
 

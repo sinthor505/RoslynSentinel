@@ -1,14 +1,14 @@
-// IUnrecoverableBreaker — the halt that no agent action can clear.
+// IUnrecoverableBreaker -> the halt that no agent action can clear.
 //
 // A warning alone was judged insufficient for a failed operation-blob write: agents routinely read
 // one and carry on, which run 20260910-013550-398 demonstrates over 60 turns. A failed blob write
 // is a *server* bug, so work must not continue on an unundoable footing and the agent must have no
 // lever to clear it. IManualCircuitBreaker was rejected as the carrier precisely because
-// ResetMutationBreaker is an exposed tool that clears it — see IUnrecoverableBreaker's remarks.
+// ResetMutationBreaker is an exposed tool that clears it -> see IUnrecoverableBreaker's remarks.
 //
 // The most valuable test here is ResetMutationBreaker_DoesNotClearTheUnrecoverableHalt: it proves
 // the halt is out of the agent's reach. Note the no-Reset() design makes "the agent clears it"
-// largely unrepresentable in test code at all, which is the point — the interface has no such
+// largely unrepresentable in test code at all, which is the point -> the interface has no such
 // member to call, so these tests guard the tool/write surface rather than the interface.
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -81,7 +81,7 @@ public class UnrecoverableBreakerTests
     public async Task Tripped_RefusesEveryWriteAtTheChokepointAsync()
     {
         // Enforced in ApplyProposedChangesAsync rather than from a list of mutating tool names:
-        // every .cs write routes through there, so no tool — including one added later — can slip
+        // every .cs write routes through there, so no tool -> including one added later -> can slip
         // past. That is the whole reason the chokepoint was chosen over a filter deny-list.
         var targetFile = Directory
             .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
@@ -106,7 +106,7 @@ public class UnrecoverableBreakerTests
     [Test]
     public async Task NotTripped_WritesStillSucceedAsync()
     {
-        // Guards against the halt being on by default or tripping spuriously — a false positive
+        // Guards against the halt being on by default or tripping spuriously -> a false positive
         // here would disable every mutating tool on a healthy server.
         var targetFile = Directory
             .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
@@ -133,7 +133,7 @@ public class UnrecoverableBreakerTests
         ((IManualCircuitBreaker)_workspaceManager).Reset();
 
         Assert.That(Breaker.IsTripped(), Is.True,
-            "the unrecoverable halt must survive a mutation-breaker reset — it is not part of " +
+            "the unrecoverable halt must survive a mutation-breaker reset - it is not part of " +
             "IManualCircuitBreaker, so ResetMutationBreaker cannot reach it");
     }
 
@@ -141,7 +141,7 @@ public class UnrecoverableBreakerTests
     public void OrientationBreakerReset_DoesNotClearTheUnrecoverableHalt()
     {
         // The orientation breaker auto-resets on any successful allowlisted call, so it resets far
-        // more often than the manual one — an accidental shared slot here would be cleared almost
+        // more often than the manual one -> an accidental shared slot here would be cleared almost
         // immediately and the halt would look like it simply didn't work.
         Breaker.Trip("ExtractMembers_interface", "ccc33333", "blob write failed");
 
@@ -168,7 +168,7 @@ public class UnrecoverableBreakerTests
     {
         // Unresettability is a compile-time guarantee, not a convention: ICircuitBreaker no longer
         // declares Reset(), so IUnrecoverableBreaker cannot inherit one. Asserted reflectively
-        // because the corresponding negative — calling Reset() — is not expressible in C# here,
+        // because the corresponding negative -> calling Reset() -> is not expressible in C# here,
         // which is exactly the property being claimed.
         var members = typeof(IUnrecoverableBreaker).GetMembers().Select(m => m.Name).ToList();
 

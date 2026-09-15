@@ -285,7 +285,7 @@ public class MetricsEngine
                     {
                         var fieldsPart = compFields.Count > 0
                             ? $" with fields [{string.Join(", ", compFields)}]"
-                            : " (no shared fields — extract as static helper class)";
+                            : " (no shared fields - extract as static helper class)";
                         suggestedSplits.Add(
                             $"Extract '{suggestedName}': [{string.Join(", ", methodNames)}]{fieldsPart}");
                     }
@@ -293,8 +293,8 @@ public class MetricsEngine
                     {
                         var onlyMethod = methodNames[0];
                         var fieldsPart = compFields.Count > 0
-                            ? $"uses [{string.Join(", ", compFields)}] exclusively — move with the field(s)"
-                            : "uses no instance fields — extract as static method or move to a helper class";
+                            ? $"uses [{string.Join(", ", compFields)}] exclusively - move with the field(s)"
+                            : "uses no instance fields - extract as static method or move to a helper class";
                         suggestedSplits.Add($"Isolated: '{onlyMethod}' {fieldsPart}");
                     }
                     splitIdx++;
@@ -320,7 +320,7 @@ public class MetricsEngine
 
     private static string SuggestExtractedClassName(string originalName, List<string> methodNames, int index)
     {
-        // Look for a common leading word across all method names (e.g. all start with "Parse" → "Parser")
+        // Look for a common leading word across all method names (e.g. all start with "Parse" -> "Parser")
         static string FirstWord(string name)
         {
             var sb = new System.Text.StringBuilder();
@@ -343,7 +343,7 @@ public class MetricsEngine
 
         if (dominant != null && dominant.Count() == methodNames.Count)
         {
-            // All methods share the same leading verb — suggest a nominal form
+            // All methods share the same leading verb -> suggest a nominal form
             var verb = dominant.Key;
             var nominal = verb.EndsWith("e") ? verb + "r" : verb + "er"; // Parse→Parser, Validate→Validator
             return $"{nominal}";

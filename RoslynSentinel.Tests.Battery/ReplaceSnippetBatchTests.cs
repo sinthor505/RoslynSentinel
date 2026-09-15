@@ -46,7 +46,7 @@ public class ReplaceSnippetBatchTests
         var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderStatus.cs");
         var originalContent = await File.ReadAllTextAsync(targetFile);
         var lines = originalContent.Split('\n');
-        // Two distinct, non-adjacent anchor lines in the same file — both resolved against the
+        // Two distinct, non-adjacent anchor lines in the same file -> both resolved against the
         // one original snapshot, not against each other's output.
         var firstAnchor = lines[0].TrimEnd('\r');
         var lastNonEmptyLine = lines.Reverse().First(l => !string.IsNullOrWhiteSpace(l)).TrimEnd('\r');
@@ -108,7 +108,7 @@ public class ReplaceSnippetBatchTests
         var originalContent = await File.ReadAllTextAsync(targetFile);
         var firstLine = originalContent.Split('\n')[0].TrimEnd('\r');
         // Second edit's oldContent is a substring of the first edit's oldContent, in the same file
-        // — the two matched spans necessarily overlap.
+        // -> the two matched spans necessarily overlap.
         var overlappingFragment = firstLine.Length > 4 ? firstLine[..^2] : firstLine;
 
         var result = await tools.ReplaceSnippet(

@@ -405,7 +405,7 @@ public class ArchitecturalEngine
         int Line
     );
 
-    // Standard layered architecture rule set (namespace segment → layer rank, lower = higher-level)
+    // Standard layered architecture rule set (namespace segment -> layer rank, lower = higher-level)
     private static readonly Dictionary<string, int> LayerRank = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Controllers", 0 },
@@ -442,7 +442,7 @@ public class ArchitecturalEngine
 
     /// <summary>
     /// Detects namespace-level layer violations (e.g. Controllers referencing Repositories directly,
-    /// domain models importing data-layer types). Operates on using directives — no compilation needed.
+    /// domain models importing data-layer types). Operates on using directives -> no compilation needed.
     /// </summary>
     public async Task<List<LayerViolation>> DetectLayerViolationsAsync(
         string? projectName = null,

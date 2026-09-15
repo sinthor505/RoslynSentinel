@@ -37,7 +37,7 @@ public class DiffEngineTests
     {
         // Regression for docs/TODO.md's "ApplyDiff reflows far more of the file" entry: a file
         // that's all-LF except this fix's own machinery must stay all-LF after a small, targeted
-        // hunk — not have every untouched line forced to CRLF just because the join separator was
+        // hunk -> not have every untouched line forced to CRLF just because the join separator was
         // previously chosen once for the whole file based on whether "\r\n" appeared anywhere.
         var oldText = SourceText.From("line1\nline2\nline3\nline4");
         var diff = "@@ -2,1 +2,2 @@\n line2\n+added\n line3";
@@ -58,7 +58,7 @@ public class DiffEngineTests
 
         var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
 
-        // line1's own \r\n, line2's own \n, "added" gets the dominant ending (\r\n — 2 vs 1), then
+        // line1's own \r\n, line2's own \n, "added" gets the dominant ending (\r\n -> 2 vs 1), then
         // line3's own \r\n, then line4 (last line, originally no trailing newline) stays bare.
         Assert.That(newText, Is.EqualTo("line1\r\nline2\nadded\r\nline3\r\nline4"));
     }
@@ -68,7 +68,7 @@ public class DiffEngineTests
     {
         // The original last line has no trailing newline (common for a file saved without one). If
         // a hunk appends a new line after it, the formerly-last line needs a real separator now
-        // that it's no longer last — otherwise the two lines would run together with no break.
+        // that it's no longer last -> otherwise the two lines would run together with no break.
         var oldText = SourceText.From("line1\nline2");
         var diff = "@@ -2,1 +2,2 @@\n line2\n+added";
 
@@ -99,7 +99,7 @@ public class DiffEngineTests
         // the diff text's own trailing newline after the final hunk's last body line was being
         // read by ReadHunkBody as one more (empty) body line, which IsContextOrRemovalLine then
         // treated as an implicit blank context line. ReanchorHunk then required a blank line
-        // immediately after "line5" that the real file doesn't have there — defeating an
+        // immediately after "line5" that the real file doesn't have there -> defeating an
         // otherwise-exact reanchor match at every position in the search window, even though
         // hunk 1 was purely additive and hunk 2's real content sat exactly where the shifted
         // offset predicted.
@@ -108,7 +108,7 @@ public class DiffEngineTests
             "target1\ntarget2\ntarget3\nafter1\n");
         // Hunk 1 inserts 2 lines after line1 (purely additive). Hunk 2's declared old-start (11)
         // is stale by exactly the 2-line shift hunk 1 introduces, so the exact match at the
-        // recomputed declared line should succeed — the phantom trailing "" must not be
+        // recomputed declared line should succeed -> the phantom trailing "" must not be
         // included as a 4th anchor line requiring a blank line after "target3" that isn't there.
         var diff = "@@ -1,1 +1,3 @@\n line1\n+ins1\n+ins2\n" +
                     "@@ -11,3 +13,3 @@\n target1\n target2\n-target3\n+target3-changed\n";
@@ -123,7 +123,7 @@ public class DiffEngineTests
     public void ApplyDiff_LastHunk_GenuineBlankContextLineAtEnd_StillMatches()
     {
         // A hunk whose real last body line is an intentional blank context line (marked with a
-        // leading space, the normal encoding) must still anchor correctly — the fix for the
+        // leading space, the normal encoding) must still anchor correctly -> the fix for the
         // phantom-trailing-newline case above must not eat a genuine blank context line.
         var oldText = SourceText.From("line1\nline2\nline3\n\nline5\n");
         var diff = "@@ -2,3 +2,4 @@\n line2\n+added\n line3\n \n";
@@ -306,7 +306,7 @@ public class DiffEngineTests
 
     [Test]
     [Description("A hunk whose content genuinely does not exist anywhere near its declared position "
-                 + "must fail with a clear, actionable message — not silently corrupt an unrelated "
+                 + "must fail with a clear, actionable message - not silently corrupt an unrelated "
                  + "line, and not a bare out-of-bounds exception with no context.")]
     public void ApplyDiff_HunkContentNotFoundAnywhereNearby_ThrowsWithActionableMessage()
     {
@@ -321,7 +321,7 @@ public class DiffEngineTests
     [Test]
     [Description("A hunk whose context lines span BOTH sides of a +-only insertion block must reanchor "
                  + "successfully when every anchor line (leading and trailing) is valid at the shifted "
-                 + "position — not just the leading ones. Regression for a live DiffApplyFailed hit during "
+                 + "position - not just the leading ones. Regression for a live DiffApplyFailed hit during "
                  + "the 2026-09-01 external-drift-hard-blocker session: see docs/current/blockers.")]
     public void ApplyDiff_ContextSpansBothSidesOfInsertionBlock_ReanchorsUsingAllAnchorLines()
     {
@@ -334,7 +334,7 @@ public class DiffEngineTests
 
         // Diff was authored believing "while (x) { }" was at line 1; it's actually at line 6.
         // Context lines appear both BEFORE the +-only insertion block ("while...", "}", blank) and
-        // AFTER it ("existing member") — both sides must be checked at the same shifted position.
+        // AFTER it ("existing member") -> both sides must be checked at the same shifted position.
         var diff = "@@ -1,3 +1,10 @@\n     while (x) { }\n }\n \n+    public void NewMember()\n+    {\n+    }\n+\n existing member";
 
         var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
@@ -347,8 +347,8 @@ public class DiffEngineTests
     }
 
     [Test]
-    [Description("When a hunk's trailing context (after a +-only insertion block) is stale — e.g. copied "
-                 + "from a different part of the file — the error must name the actual divergence point, "
+    [Description("When a hunk's trailing context (after a +-only insertion block) is stale - e.g. copied "
+                 + "from a different part of the file - the error must name the actual divergence point, "
                  + "not just the hunk's first anchor line, which would misleadingly suggest the start "
                  + "position itself is wrong when it's actually correct.")]
     public void ApplyDiff_TrailingContextAfterInsertionIsStale_ErrorNamesActualDivergencePoint()
@@ -358,7 +358,7 @@ public class DiffEngineTests
             "    while (x) { }", "}", "", "existing member", "// unrelated trailer"));
 
         // Leading context ("while...", "}", blank) is correct, but the trailing context line after
-        // the +-only block is stale — "wrong trailer" doesn't exist anywhere in the file.
+        // the +-only block is stale -> "wrong trailer" doesn't exist anywhere in the file.
         var diff = "@@ -1,3 +1,10 @@\n     while (x) { }\n }\n \n+    public void NewMember()\n+    {\n+    }\n+\n wrong trailer";
 
         var ex = Assert.Throws<DiffApplyException>(() => _diffEngine.ApplyDiff(oldText, diff));
@@ -388,7 +388,7 @@ public class DiffEngineTests
                  + "marker on an otherwise-blank context line; treating that line as absent (rather than "
                  + "an implicit blank context line) desynchronizes the anchor search from the declared "
                  + "line number and produces a spurious 'content not found nearby' failure even though "
-                 + "the content is exactly where declared — this reproduces a real failure hit live "
+                 + "the content is exactly where declared - this reproduces a real failure hit live "
                  + "against RoslynSentinel.Tests.Advanced/BugFixTests.cs (see docs/TODO.md).")]
     public void ApplyDiff_HunkWithUnmarkedBlankContextLine_StillAnchorsCorrectly()
     {
@@ -405,7 +405,7 @@ public class DiffEngineTests
             "                lineAfter: null);"));
 
         // Hunk body's first line is a bare empty string (no leading space marker) representing the
-        // blank line before "SetSource(...)" — the exact malformation that triggered the bug.
+        // blank line before "SetSource(...)" -> the exact malformation that triggered the bug.
         var diff = "@@ -2,4 +2,4 @@\n\n            SetSource(code, \"Service.cs\");\n\n-            var result = await _refactoringEngine.SafeDeleteSymbolAsync(\n+            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(";
 
         var newText = _diffEngine.ApplyDiff(oldText, diff).Text.ToString();
@@ -417,7 +417,7 @@ public class DiffEngineTests
     [Test(Description =
         "Reproduces the silent-no-op-with-false-success bug: a hunk header of bare \"@@\" (no " +
         "-oldStart,oldCount +newStart,newCount numbers) matched none of the header regexes, so the " +
-        "entire hunk — including every \"+\" line — was skipped as ordinary body text with no error " +
+        "entire hunk - including every \"+\" line - was skipped as ordinary body text with no error " +
         "and no content changed. The caller (ApplyProposedChangesAsync) then saw newContent == " +
         "preImage and reported a clean no-op success, even though the requested insertion never " +
         "happened. See docs/current/blockers/blocking_error_applydiff_silent_noop_false_success.md.")]

@@ -5,11 +5,11 @@ namespace RoslynSentinel.Tests.Battery;
 
 /// <summary>
 /// Tests for the four improvements shipped in this sprint:
-///  1. FindUnawaitedFireAndForget — filePath now optional; projectName scope added.
-///  2. FindHardcodedPaths — project/solution scope added.
-///  3. CheckForSqlInjection — project/solution scope added.
-///  4. FindSequentialIndependentAwaits — consecutive block grouped into one finding.
-///  5. ProjectStructureEngine NAME_MISMATCH — AppHost projects suppressed.
+///  1. FindUnawaitedFireAndForget -> filePath now optional; projectName scope added.
+///  2. FindHardcodedPaths -> project/solution scope added.
+///  3. CheckForSqlInjection -> project/solution scope added.
+///  4. FindSequentialIndependentAwaits -> consecutive block grouped into one finding.
+///  5. ProjectStructureEngine NAME_MISMATCH -> AppHost projects suppressed.
 /// </summary>
 [TestFixture]
 public class BatteryThirtySixTests
@@ -75,7 +75,7 @@ public class BatteryThirtySixTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 1 — FindUnawaitedFireAndForget: solution-wide scan (filePath = null)
+    // 1 -> FindUnawaitedFireAndForget: solution-wide scan (filePath = null)
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -113,7 +113,7 @@ class C {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 2 — FindHardcodedPaths: solution-wide and project scope
+    // 2 -> FindHardcodedPaths: solution-wide and project scope
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -160,7 +160,7 @@ class C { string p = ""C:\\Logs\\app.log""; }")]);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 3 — CheckForSqlInjection: solution-wide and project scope
+    // 3 -> CheckForSqlInjection: solution-wide and project scope
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -216,13 +216,13 @@ class Repo {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 4 — FindSequentialIndependentAwaits: block grouping
+    // 4 -> FindSequentialIndependentAwaits: block grouping
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     public async Task FindSequentialIndependentAwaits_ThreeIndependent_OneGroupedFinding()
     {
-        // 3 sequential independent awaits → must produce exactly ONE finding (not 2)
+        // 3 sequential independent awaits -> must produce exactly ONE finding (not 2)
         SetSingleFile(@"
 using System.Threading.Tasks;
 class C {
@@ -244,7 +244,7 @@ class C {
     [Test]
     public async Task FindSequentialIndependentAwaits_FiveIndependent_OneGroupedFinding()
     {
-        // 5 independent sequential awaits → 1 finding (old code would give 4)
+        // 5 independent sequential awaits -> 1 finding (old code would give 4)
         SetSingleFile(@"
 using System.Threading.Tasks;
 class C {
@@ -266,7 +266,7 @@ class C {
     [Test]
     public async Task FindSequentialIndependentAwaits_DependentPair_NotReported()
     {
-        // Second await uses result of first → NOT parallelisable
+        // Second await uses result of first -> NOT parallelisable
         SetSingleFile(@"
 using System.Threading.Tasks;
 class C {
@@ -290,7 +290,7 @@ class C {
     async Task M() {
         var a = await Task.FromResult(1);
         var b = await Task.FromResult(2);
-        var c = await Task.FromResult(b + 1);  // depends on b — breaks the block
+        var c = await Task.FromResult(b + 1);  // depends on b - breaks the block
         var d = await Task.FromResult(10);
         var e = await Task.FromResult(11);
     }
@@ -302,13 +302,13 @@ class C {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 5 — NAME_MISMATCH: AppHost projects suppressed
+    // 5 -> NAME_MISMATCH: AppHost projects suppressed
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     public async Task NameMismatch_AppHostProject_Suppressed()
     {
-        // File "Resources.cs" with a type named "ServiceNames" — classic Aspire AppHost pattern
+        // File "Resources.cs" with a type named "ServiceNames" -> classic Aspire AppHost pattern
         var solution = TestSolutionBuilder.CreateSolutionWithProject(
             "MyApp.AppHost",
             [("Resources.cs", "public static class ServiceNames { public const string Api = \"api\"; }")]);
@@ -324,7 +324,7 @@ class C {
     [Test]
     public async Task NameMismatch_NonAppHostProject_StillReported()
     {
-        // File "Foo.cs" with a type named "Bar" — genuine mismatch in a normal project
+        // File "Foo.cs" with a type named "Bar" -> genuine mismatch in a normal project
         var solution = TestSolutionBuilder.CreateSolutionWithProject(
             "MyApp.Service",
             [("Foo.cs", "public class Bar { }")]);
@@ -340,7 +340,7 @@ class C {
     [Test]
     public async Task NameMismatch_AppHostDotNew_AlsoSuppressed()
     {
-        // ".AppHost.New" suffix — the ExpressRecipe pattern
+        // ".AppHost.New" suffix -> the ExpressRecipe pattern
         var solution = TestSolutionBuilder.CreateSolutionWithProject(
             "ExpressRecipe.AppHost.New",
             [("Constants.cs", "public static class ResourceNames { }")]);

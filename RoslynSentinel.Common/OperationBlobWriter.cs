@@ -14,7 +14,7 @@ namespace RoslynSentinel.Common;
 /// <param name="FileName">The blob's filename when <paramref name="Written"/>; otherwise null.</param>
 /// <param name="Diagnostic">Why no blob was written. Null when one was.</param>
 /// <param name="Required">
-/// True when a blob was owed — i.e. files were written. False for the no-op case, which lets
+/// True when a blob was owed -> i.e. files were written. False for the no-op case, which lets
 /// callers treat only <c>Required &amp;&amp; !Written</c> as a fault.
 /// </param>
 public sealed record BlobWriteResult(bool Written, string? FileName, string? Diagnostic, bool Required)
@@ -25,13 +25,13 @@ public sealed record BlobWriteResult(bool Written, string? FileName, string? Dia
 
     public static BlobWriteResult NotNeeded(string diagnostic) => new(false, null, diagnostic, false);
 
-    /// <summary>True when a blob was owed but is absent — the change applied but cannot be undone.</summary>
+    /// <summary>True when a blob was owed but is absent -> the change applied but cannot be undone.</summary>
     public bool IsIntegrityFailure => Required && !Written;
 }
 
 /// <summary>
 /// Writes forensic operation blobs to .roslynsentinel/operations/ under the solution root.
-/// Bypasses DocPathGuard and the agent-facing write rate limit — the filename is
+/// Bypasses DocPathGuard and the agent-facing write rate limit -> the filename is
 /// server-controlled (trusted code, not agent-supplied input), so those guards do not apply.
 /// </summary>
 public static class OperationBlobWriter
@@ -40,7 +40,7 @@ public static class OperationBlobWriter
 
     /// <summary>
     /// Characters that must not reach a blob filename. <see cref="Path.GetInvalidFileNameChars"/>
-    /// omits the directory separators on some platforms, so both are added explicitly — a slashed
+    /// omits the directory separators on some platforms, so both are added explicitly -> a slashed
     /// operation name was the root cause of the A3 defect (see <see cref="SanitizeToolName"/>).
     /// </summary>
     private static readonly char[] InvalidFileNameChars =
@@ -89,10 +89,10 @@ public static class OperationBlobWriter
         if (string.IsNullOrEmpty(solutionRoot))
         {
             // NotNeeded, not Failed: with no solution root there is nowhere a blob could live and
-            // no undo semantics to speak of — this is the in-memory/test-solution case, not a
+            // no undo semantics to speak of -> this is the in-memory/test-solution case, not a
             // server fault. Classifying it as a failure tripped the unrecoverable breaker on the
             // first apply of every SetTestSolution-based fixture and refused all subsequent ones.
-            return BlobWriteResult.NotNeeded("no solution root — blob not applicable");
+            return BlobWriteResult.NotNeeded("no solution root - blob not applicable");
         }
 
         try
@@ -132,7 +132,7 @@ public static class OperationBlobWriter
             // entirely, which is why the DirectoryNotFoundException behind the A3 defect never
             // appeared anywhere at all.
             logger?.LogError(ex,
-                "Operation blob write failed for {ToolName}/{ChangeId} — the change is not reversible via UndoLastApply.",
+                "Operation blob write failed for {ToolName}/{ChangeId} - the change is not reversible via UndoLastApply.",
                 toolName, changeId);
             return BlobWriteResult.Failed($"blob write failed: {ex.GetType().Name}: {ex.Message}");
         }
@@ -150,7 +150,7 @@ public static class OperationBlobWriter
     {
         if (string.IsNullOrEmpty(solutionRoot))
         {
-            return "(no solution root — validation blob not written)";
+            return "(no solution root - validation blob not written)";
         }
 
         try
@@ -201,7 +201,7 @@ public static class OperationBlobWriter
         {
             // Not a failure: nothing was written, so there is nothing to reverse and no blob is
             // owed. Distinguished from a real write failure by NotNeeded, so callers don't warn.
-            return BlobWriteResult.NotNeeded("no files written — blob not needed");
+            return BlobWriteResult.NotNeeded("no files written - blob not needed");
         }
 
         var items = result.SucceededFiles.Select(f =>
@@ -230,7 +230,7 @@ public static class OperationBlobWriter
     /// previously assigned <see cref="WriteAsync"/>'s return value straight into that field and
     /// never checked it, so a failed write surfaced to the agent as a plausible-looking blob name
     /// beginning with '(' alongside a changeId <c>UndoLastApply</c> could not resolve. Centralized
-    /// so the trip cannot be forgotten at a call site — the omission mode this whole change fixes.
+    /// so the trip cannot be forgotten at a call site -> the omission mode this whole change fixes.
     /// The <see cref="ValidateAndApplyHelper"/> path does the equivalent for the write-through
     /// refactoring tools.
     /// </remarks>

@@ -1,4 +1,4 @@
-// CreateFile/DeleteFile — SentinelWorkspaceTools. New tools that route through the same
+// CreateFile/DeleteFile -> SentinelWorkspaceTools. New tools that route through the same
 // ApplyProposedChangesAsync chokepoint as every other mutating tool (drift-checked, undo-tracked),
 // extended with a deletePaths parameter for DeleteFile. Requires a real disk-backed solution
 // (PersistentWorkspaceManager + TestSolutionFixture) since these tools do real File.Exists/
@@ -94,7 +94,7 @@ public class CreateFileDeleteFileTests
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var replacementContent = "public class Replaced { }";
 
-        // validateOnApply: false — the fixture's other files may reference the original type in
+        // validateOnApply: false -> the fixture's other files may reference the original type in
         // existingFile, so a delta-compile of an unrelated replacement would fail; this test only
         // exercises the ReplaceFile exists-check + overwrite plumbing, not compilation validity.
         var result = await wholeFileWriteTools.WriteFile(reason: "test message", WriteFileOperation.ReplaceFile, existingFile, replacementContent, validateOnApply: false);
@@ -229,7 +229,7 @@ public class CreateFileDeleteFileTests
         Assert.That(deleteResult.Success, Is.True);
         Assert.That(File.Exists(newFile), Is.False);
 
-        // changeId isn't exposed on ApplyChangesResult directly — recover it from the blob
+        // changeId isn't exposed on ApplyChangesResult directly -> recover it from the blob
         // filename ({toolName}_{timestamp}_{changeId}.json), same as UndoLastApplyTests does.
         var blobDir = Path.Combine(fixture.SolutionDirectory, ".roslynsentinel", "operations");
         var blobFile = Directory.EnumerateFiles(blobDir, "delete_file_*").OrderByDescending(f => f).First();
@@ -260,7 +260,7 @@ public class CreateFileDeleteFileTests
 
         // ApplyProposedChangesAsync's drift check (GetExternalFileChanges()) reads a set populated
         // asynchronously by a FileSystemWatcher callback (OnFileSystemChanged), not synchronously by
-        // the write above — under heavy concurrent disk I/O from other test assemblies in a full
+        // the write above -> under heavy concurrent disk I/O from other test assemblies in a full
         // parallel run, the watcher event can lag past the point where DeleteFile below checks it,
         // making the delete wrongly succeed (root-caused 2026-09-06, was previously a documented
         // flake here). Poll for the watcher to actually report the drift before proceeding, instead
@@ -277,11 +277,11 @@ public class CreateFileDeleteFileTests
         Assert.That(File.Exists(targetFile), Is.True);
     }
 
-    // CreateFile (the MCP tool, SentinelWorkspaceTools.CreateFile) — distinct from
+    // CreateFile (the MCP tool, SentinelWorkspaceTools.CreateFile) -> distinct from
     // WriteFile(operation=CreateFile) exercised above; the two share a name coincidentally (tool
     // name vs WriteFileOperation enum member). This tool never accepts free-form content: for .cs
     // files, namespaceName + typeKind + typeName are all mandatory, seeding a namespace plus one
-    // empty top-level type skeleton in a single call — deliberately not optional, so a model can't
+    // empty top-level type skeleton in a single call -> deliberately not optional, so a model can't
     // forget typeKind/typeName and have to make a second Member(add) round-trip just to reach a
     // populatable type.
 
@@ -403,7 +403,7 @@ public class CreateFileDeleteFileTests
         // an already-existing Document, so a brand-new file could never be populated before
         // CreateFile existed. Confirms CreateFile's seeded type is a valid target for Member(add)
         // to populate members into, AND that a second top-level type can be added afterward via
-        // Member(add, containerName: null, ...) — the mandatory-typeKind design only seeds the
+        // Member(add, containerName: null, ...) -> the mandatory-typeKind design only seeds the
         // FIRST type; anything beyond that is deliberately a follow-up Member(add) call.
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -434,7 +434,7 @@ public class CreateFileDeleteFileTests
         var createResult = await workspaceTools.CreateFile(reason: "test message", newFile, namespaceName: "MyApp.Populated", typeKind: NewTypeKind.@class, typeName: "Foo");
         Assert.That(createResult.Success, Is.True, createResult.Error?.Message);
 
-        // The new file isn't part of the loaded Roslyn solution until reloaded from disk — CreateFile
+        // The new file isn't part of the loaded Roslyn solution until reloaded from disk -> CreateFile
         // (like WriteFile) writes through disk, it doesn't add a Document to the in-memory workspace itself.
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
@@ -447,7 +447,7 @@ public class CreateFileDeleteFileTests
             newMemberSource: "public int Value { get; set; }");
         Assert.That(populateResult.Success, Is.True, populateResult.Error?.Message);
 
-        // Add a second top-level type — CreateFile only seeds the first.
+        // Add a second top-level type -> CreateFile only seeds the first.
         var secondTypeResult = await refactoringTools.Member(
             reason: "test message",
             operation: MemberAction.add,

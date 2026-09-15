@@ -20,7 +20,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <see cref="WholeFileRewriteReproducer"/> fixture, replacing the manual copy/paste-into-LM-Studio
 /// workflow previously used for plan-9b-model-test-step2.md. Requires an LM Studio server reachable
 /// at ROSLYNSENTINEL_LLM_BASE_URL (default http://localhost:1234/v1) with ROSLYNSENTINEL_LLM_MODEL
-/// set to a loaded, tool-calling-capable model — tests are skipped (not failed) if LM Studio isn't
+/// set to a loaded, tool-calling-capable model -> tests are skipped (not failed) if LM Studio isn't
 /// reachable, since this project exercises a real external model, not a mocked one.
 /// </summary>
 [TestFixture]
@@ -30,7 +30,7 @@ public class WholeFileRewriteAgentTests
         # Task: Fix a whole-file-rewrite bug in FixtureHelpers/BlockConverter.cs (level 2)
 
         This gives you less detail than a fully-scripted plan. You are told *what* to do and
-        *which tool* to use, but not the exact parameters or exact code — work those out yourself
+        *which tool* to use, but not the exact parameters or exact code - work those out yourself
         from what the tools return. If a tool call fails, stop and report the exact error message
         rather than guessing around it.
 
@@ -38,11 +38,11 @@ public class WholeFileRewriteAgentTests
 
         `{0}/FixtureHelpers/BlockConverter.cs` has a bug: `ConvertAbstractClassToInterface` builds
         its replacement text and then calls a private `ReformatWholeFile` helper that rewrites the
-        ENTIRE file's text — not just the part that changed. This silently reformats unrelated code
+        ENTIRE file's text - not just the part that changed. This silently reformats unrelated code
         in the same file.
 
         This exact bug was already fixed, using the same fix pattern, in the sibling file
-        `{0}/FixtureHelpers/BlockEditHelpers.cs` — but the helper there is private, so
+        `{0}/FixtureHelpers/BlockEditHelpers.cs` - but the helper there is private, so
         `BlockConverter.cs` can't call it directly yet. Your job is to apply that same fix pattern
         to `ConvertAbstractClassToInterface` in `BlockConverter.cs` by reusing the existing helper,
         not by writing a second copy of it.
@@ -53,13 +53,13 @@ public class WholeFileRewriteAgentTests
            Identify the exact call responsible for the whole-file-rewrite bug described above.
 
         2. Find the existing fix pattern already used elsewhere in this codebase for this same bug.
-           Look at `{0}/FixtureHelpers/BlockEditHelpers.cs` — there is a private helper method
+           Look at `{0}/FixtureHelpers/BlockEditHelpers.cs` - there is a private helper method
            there that solves exactly this problem by rewriting only the changed block instead of
            the whole file. Locate it and read its full source.
 
         3. Apply the same fix to `ConvertAbstractClassToInterface`:
            - Raise `ReplaceBlockFormatted`'s accessibility in `BlockEditHelpers.cs` (e.g. to
-             `internal`) so `BlockConverter.cs` can call it directly — don't copy its body.
+             `internal`) so `BlockConverter.cs` can call it directly - don't copy its body.
            - Add whatever `using` directive the call site needs to compile.
            - Update `ConvertAbstractClassToInterface` so it calls the shared helper instead of
              `ReformatWholeFile`, producing the same edit (still renaming
@@ -76,21 +76,21 @@ public class WholeFileRewriteAgentTests
 
         ## Constraints
 
-        - Don't modify `UnrelatedMethodBefore` or `UnrelatedMethodAfter` in the file — they are
+        - Don't modify `UnrelatedMethodBefore` or `UnrelatedMethodAfter` in the file - they are
           explicitly out of scope for this task.
         - Don't invent a new helper method or a different fix approach, and don't duplicate
-          `ReplaceBlockFormatted`'s body into `BlockConverter.cs` — call the existing method as-is;
+          `ReplaceBlockFormatted`'s body into `BlockConverter.cs` - call the existing method as-is;
           don't rename it or change its behavior.
         - Don't change anything in `BlockEditHelpers.cs` other than `ReplaceBlockFormatted`'s
           accessibility modifier.
-        - Preserve the original method's behavior (same inputs/outputs) — only the rewrite
+        - Preserve the original method's behavior (same inputs/outputs) - only the rewrite
           mechanism should change.
         """;
 
-    // Level 3: no method/file names, no fix mechanism, no step list — just the observable symptom.
+    // Level 3: no method/file names, no fix mechanism, no step list -> just the observable symptom.
     // The model has to locate the bug by reading BlockConverter.cs, discover BlockEditHelpers.cs's
     // existing fix pattern itself (e.g. via SearchSolutionText/ListSolutionItems), and decide how to
-    // reuse it. Reuses the same fixture and AssertFixApplied as the level-2 test above — only the
+    // reuse it. Reuses the same fixture and AssertFixApplied as the level-2 test above -> only the
     // prompt differs, so a pass/fail delta between the two tests isolates how much the scripted
     // guidance in the level-2 prompt was doing versus the model's own reasoning.
     private const string MinimalGuidanceUserPromptTemplate = """
@@ -101,7 +101,7 @@ public class WholeFileRewriteAgentTests
         one class to be converted.
 
         Investigate `BlockConverter.cs`, find the root cause, and fix it. A similar bug was
-        already fixed elsewhere in this codebase using a reusable pattern — look for it and reuse
+        already fixed elsewhere in this codebase using a reusable pattern - look for it and reuse
         that same approach rather than inventing a new one.
 
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
@@ -111,16 +111,16 @@ public class WholeFileRewriteAgentTests
 
         ## Before you report done
 
-        Re-read the current, actual contents of every file you touched — do not rely on your memory
+        Re-read the current, actual contents of every file you touched - do not rely on your memory
         of the edit you intended to make. Check each of these against the real code on disk and
         answer yourself honestly before writing your summary:
 
         1. Is the whole-file-rewrite call actually gone from the method you fixed, with the shared
-           helper being called in its place — not still present alongside the new call, and not
+           helper being called in its place - not still present alongside the new call, and not
            replaced by a second, newly-written copy of the helper's logic?
         2. If you raised a helper's accessibility to call it cross-file, is that the ONLY change you
-           made to the file that helper lives in — no unrelated reformatting or edits there?
-        3. Is every other method in the file you fixed — including any that look unused — still
+           made to the file that helper lives in - no unrelated reformatting or edits there?
+        3. Is every other method in the file you fixed - including any that look unused - still
            present with its original logic, unchanged?
 
         If re-reading the code reveals any of the above isn't true, fix it now before reporting —
@@ -135,30 +135,30 @@ public class WholeFileRewriteAgentTests
     // was a major fork between pass and fail under the ORIGINAL (since-flipped) assertion: "reuse
     // that same approach" says nothing about *how* to reuse a private method, and the model's own
     // next thought decides everything. That original analysis scored "call it directly, raising
-    // its accessibility" as a failure — but per the real-world precedent this fixture is modeled
+    // its accessibility" as a failure -> but per the real-world precedent this fixture is modeled
     // on (commit 8a8963d: consolidate 52 duplicate call sites onto one shared helper, not grow more
     // copies), calling the shared helper directly is actually the correct fix, and AssertFixApplied
     // was flipped to match. This variant's disambiguating sentence now points at that same correct
-    // outcome instead of away from it — see AssertFixApplied's comment for the full rationale.
+    // outcome instead of away from it -> see AssertFixApplied's comment for the full rationale.
     //
     // Plan-before-edit paragraph added 2026-09-02 (see docs/current/project_own_copy_helper_dominant_failure.md
     // and docs/current/model_eval_pattern_analysis_2026_09_02.md §4.4): a 165-run excavation found
     // this exact disambiguating text, on its own, did NOT reduce the dominant failure (the model
     // finds BlockEditHelpers.cs but still pastes a second copy of the method's body instead of
-    // calling it — 45-55% of runs) — wording alone wasn't the lever. PlanThenExecute uses this
+    // calling it -> 45-55% of runs) -> wording alone wasn't the lever. PlanThenExecute uses this
     // identical disambiguating text plus only one added instruction (state a complete plan before
     // any edit tool call) and reaches 80% mechanical correctness on the same ambiguity. Porting
     // that instruction here directly, rather than trying yet another wording of the ambiguity
     // itself, since that's the variable the excavation found actually correlates with success.
     //
     // Updated 2026-09-05 to match PlanImplementVerifyAgentTests' wording/structure in two ways
-    // proven out there: (1) the "solution is already loaded" orientation line — PIV's own live
+    // proven out there: (1) the "solution is already loaded" orientation line -> PIV's own live
     // transcripts showed the model calling ListWorkspaceSolutions("/")/LoadSolution on turn 1 of
     // EVERY phase despite the harness's [SetUp]/RunPhaseAsync having already called
     // LoadSolutionAsync before the model's first turn in each case; the pre-load was never visible
     // to the model without being told, so the fix is about informing the model of harness state,
     // not a difference in the underlying pre-load mechanism. This fixture's single [SetUp] does
-    // the identical pre-load before its one model call, so the same gap applies here — re-added
+    // the identical pre-load before its one model call, so the same gap applies here -> re-added
     // after an initial revert based on a since-superseded assumption that the two fixtures'
     // lifecycles genuinely differed (see [[feedback_verify_per_fixture_workspace_lifecycle_before_porting_prompt_lines]]
     // for that mistaken revert and why "verify via live transcript" is the right bar, which this
@@ -167,15 +167,15 @@ public class WholeFileRewriteAgentTests
     // about the old method, one at the end about unrelated code generally) into
     // PlanImplementVerifyAgentTests.ImplementUserPromptTemplate's single affirmative sentence
     // ("Do not modify any method, field, or class that is not directly involved in this fix, even
-    // ones that look unused or unrelated — leave everything else exactly as you found it."),
+    // ones that look unused or unrelated -> leave everything else exactly as you found it."),
     // placed once, right before the build-verification step. Deliberately NOT porting PIV's
     // separate DeadCodeCleanupGuidance fragment (the "{2}" splice in ImplementUserPromptTemplate)
-    // — that's tracked there as its own exploratory, not-yet-assertion-backed change and is
+    // -> that's tracked there as its own exploratory, not-yet-assertion-backed change and is
     // intentionally kept isolated to that fixture.
     private const string DisambiguatedMinimalGuidanceUserPromptTemplate = """
         # Task: Fix a bug in FixtureHelpers/BlockConverter.cs
 
-        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
         straight to ReadFile/SearchSolutionText/ListAll on the path below.
 
         Users report that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs` sometimes
@@ -183,11 +183,11 @@ public class WholeFileRewriteAgentTests
         one class to be converted.
 
         Investigate `BlockConverter.cs`, find the root cause, and fix it. A similar bug was
-        already fixed elsewhere in this codebase using a reusable pattern — look for it and reuse
+        already fixed elsewhere in this codebase using a reusable pattern - look for it and reuse
         that same approach rather than inventing a new one.
 
         If the existing fix lives in a private method in another file, call it directly rather
-        than copying its body into your own fix — raise its accessibility (e.g. to `internal`) so
+        than copying its body into your own fix - raise its accessibility (e.g. to `internal`) so
         it can be called cross-file, but don't duplicate its logic, and don't modify anything else
         in that file. Once you switch the buggy method's call site to the shared method, delete
         that one now-unused old method (the one the bug report is about) instead of leaving it
@@ -196,35 +196,35 @@ public class WholeFileRewriteAgentTests
         If the reusable pattern is a "find and replace a block, re-indenting only that block"
         helper: locate that helper and call it directly, exactly once, passing it the original,
         unmodified text plus the old and new block content. Leave the input text itself unmodified
-        before calling the helper — the helper is the only thing that should ever change it. It
+        before calling the helper - the helper is the only thing that should ever change it. It
         needs the old block content to still be present in the text you pass it, so it can find
         and replace it.
 
         Before making any tool call that edits a file, first write out your complete plan as plain
         text: the root cause, exactly which method(s)/file(s) you will modify, and the specific
         content you will place in `BlockConverter.cs`. Only after stating that plan in full should
-        you begin making edit tool calls — do not interleave planning and editing.
+        you begin making edit tool calls - do not interleave planning and editing.
 
         Do not modify any method, field, or class that is not directly involved in this fix, even
-        ones that look unused or unrelated — leave everything else exactly as you found it.
+        ones that look unused or unrelated - leave everything else exactly as you found it.
 
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
 
         ## Before you report done
 
-        Re-read the current, actual contents of every file you touched — do not rely on your memory
+        Re-read the current, actual contents of every file you touched - do not rely on your memory
         of the edit you intended to make. Check each of these against the real code on disk and
         answer yourself honestly before writing your summary:
 
         1. Is the whole-file-rewrite call actually gone from the method you fixed, with the shared
-           helper being called in its place — not still present alongside the new call, and not
+           helper being called in its place - not still present alongside the new call, and not
            replaced by a second, newly-written copy of the helper's logic?
         2. If you raised a helper's accessibility to call it cross-file, is that the ONLY change you
-           made to the file that helper lives in — no unrelated reformatting or edits there?
+           made to the file that helper lives in - no unrelated reformatting or edits there?
         3. If the old, now-unused buggy method was supposed to be deleted, is it actually gone from
            the file, not just unused?
-        4. Is every other method in the file you fixed — including any that look unused — still
+        4. Is every other method in the file you fixed - including any that look unused - still
            present with its original logic, unchanged?
 
         If re-reading the code reveals any of the above isn't true, fix it now before reporting —
@@ -235,7 +235,7 @@ public class WholeFileRewriteAgentTests
 
     // Scripted-plan variant: same symptom-only framing as DisambiguatedMinimalGuidanceUserPromptTemplate,
     // but instead of asking the model to locate the bug and derive a plan itself, the plan is handed
-    // to it verbatim — lifted from a real model's own successful PlanThenExecute run (transcript
+    // to it verbatim -> lifted from a real model's own successful PlanThenExecute run (transcript
     // 20260901-005448-159, see project_seed_investigation_result's sibling analysis memories) so the
     // steps are exactly what a 9B model already proved it can conceive on its own. This isolates
     // execution fidelity from planning/bug-location: if pass rate here is much higher than
@@ -259,7 +259,7 @@ public class WholeFileRewriteAgentTests
         3. Delete the now-unused `ReformatWholeFile` method from `BlockConverter.cs` entirely.
 
         Do not modify any other method, field, or class in either file, even ones that look
-        unused or unrelated — leave everything else exactly as you found it.
+        unused or unrelated - leave everything else exactly as you found it.
 
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
@@ -268,7 +268,7 @@ public class WholeFileRewriteAgentTests
         """;
 
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
-    // AddRoslynSentinelToolsBasic checks — these two together register everything the prompts in
+    // AddRoslynSentinelToolsBasic checks -> these two together register everything the prompts in
     // this file need (ApplyDiff, Build, ReadFile, SearchSolutionText, ListSolutionItems via
     // SentinelWorkspaceTools; SentinelRefactoringTools for edits) without
     // pulling in Advanced's much larger scanner/analyzer/asyncify tool catalog, which only adds
@@ -292,7 +292,7 @@ public class WholeFileRewriteAgentTests
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
             Assert.Ignore(
-                "ROSLYNSENTINEL_LLM_MODEL is not set — model-eval tests require a real LM Studio " +
+                "ROSLYNSENTINEL_LLM_MODEL is not set - model-eval tests require a real LM Studio " +
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
@@ -322,7 +322,7 @@ public class WholeFileRewriteAgentTests
         {
             client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
             // A slow local GPU (e.g. a GTX 1080) can take several minutes per completion on
-            // larger prompts/diffs — floor well above LlmOptions.TimeoutSeconds's default-30s*4
+            // larger prompts/diffs -> floor well above LlmOptions.TimeoutSeconds's default-30s*4
             // so per-turn latency alone never trips the HTTP timeout ahead of the runner's own
             // wall-clock cap.
             client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
@@ -333,7 +333,7 @@ public class WholeFileRewriteAgentTests
         }
 
         // dotnet test's console logger block-buffers stdout when it's redirected to a file, so
-        // ModelAgentRunner's per-turn logging is invisible until the whole test process exits —
+        // ModelAgentRunner's per-turn logging is invisible until the whole test process exits ->
         // this file sink writes+flushes independently so a run can be tailed live.
         hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
 
@@ -384,7 +384,7 @@ public class WholeFileRewriteAgentTests
     public async Task TearDown()
     {
         // SetUp calls Assert.Ignore (throwing) before these are assigned when LM Studio isn't
-        // configured — TearDown still runs in that case, so guard rather than NRE.
+        // configured -> TearDown still runs in that case, so guard rather than NRE.
         if (_mcpClient is not null)
         {
             await _mcpClient.DisposeAsync();
@@ -417,7 +417,7 @@ public class WholeFileRewriteAgentTests
 
     /// <summary>
     /// Harder variant of <see cref="Model_FixesWholeFileRewriteBug_UsingExistingHelperPattern"/>:
-    /// same bug, same fixture, same assertions, but the prompt gives only the observable symptom —
+    /// same bug, same fixture, same assertions, but the prompt gives only the observable symptom ->
     /// no method name, no sibling-file pointer, no step list. The model must locate the bug and
     /// discover the existing BlockEditHelpers.cs fix pattern on its own.
     /// </summary>
@@ -434,7 +434,7 @@ public class WholeFileRewriteAgentTests
 
     /// <summary>
     /// Same as <see cref="Model_FixesWholeFileRewriteBug_MinimalGuidance"/> but with the
-    /// disambiguated prompt (see <see cref="DisambiguatedMinimalGuidanceUserPromptTemplate"/>) —
+    /// disambiguated prompt (see <see cref="DisambiguatedMinimalGuidanceUserPromptTemplate"/>) ->
     /// compare pass rates between the two over N repeats to check whether closing the "reuse the
     /// approach" ambiguity actually raises the pass rate, per
     /// project_minimalguidance_reasoning_pattern_analysis's finding that this ambiguity is the
@@ -456,7 +456,7 @@ public class WholeFileRewriteAgentTests
     /// but the prompt hands the model an exact, already-correct plan (see
     /// <see cref="ScriptedPlanUserPromptTemplate"/>) instead of asking it to find the bug and derive
     /// one. Isolates whether failures on the disambiguated prompt come from planning/bug-location or
-    /// from mechanical execution — a model that still fails here despite a scripted correct plan
+    /// from mechanical execution -> a model that still fails here despite a scripted correct plan
     /// points at execution fidelity, not reasoning, as the bottleneck.
     /// </summary>
     [Test]
@@ -472,7 +472,7 @@ public class WholeFileRewriteAgentTests
 
     /// <summary>
     /// Runs the same prompt N times against a fresh fixture each time to check how consistently the
-    /// model reproduces a correct fix — the "loop for consistency" use case the harness exists for.
+    /// model reproduces a correct fix -> the "loop for consistency" use case the harness exists for.
     /// Reports a pass-rate summary; do not assert 100% since small local models are not fully
     /// deterministic even at low temperature.
     /// </summary>
@@ -505,14 +505,14 @@ public class WholeFileRewriteAgentTests
                 catch (Exception ex) when (ex is AssertionException or InvalidOperationException or IOException)
                 {
                     // Text-check failure (AssertionException) or a functional-check failure from
-                    // FunctionalFixVerifier (build/reflection failure) — both mean this run failed;
+                    // FunctionalFixVerifier (build/reflection failure) -> both mean this run failed;
                     // counted as a failed run below, transcript already on disk for inspection.
                 }
             }
         }
 
         TestContext.Out.WriteLine($"Pass rate: {passCount}/{runs}. Turn counts: [{string.Join(", ", turnCounts)}]");
-        Assert.That(passCount, Is.GreaterThan(0), $"Model never succeeded across {runs} runs — see per-run transcripts under {_runDirectory}/../");
+        Assert.That(passCount, Is.GreaterThan(0), $"Model never succeeded across {runs} runs - see per-run transcripts under {_runDirectory}/../");
     }
 
     private async Task<AgentRunResult> RunOnceAsync(string userPromptTemplate, CancellationToken cancellationToken)
@@ -523,7 +523,7 @@ public class WholeFileRewriteAgentTests
         // either converge or fail on its own rather than on an artificial clock.
         var runner = new ModelAgentRunner(
             // repeatedFailureLimit is set well above this fixture's own AssertWithinBudget cap of 2
-            // failures per tool, so the breaker can never change an eval result — a run that would
+            // failures per tool, so the breaker can never change an eval result -> a run that would
             // trip it has already failed its assertion. It's stated explicitly (not defaulted) so
             // the knob is visible here if a future fixture wants to tune it.
             _agentClient, _mcpClient, repeatedFailureLimit: 10, turnCap: 40, wallClockCap: TimeSpan.FromMinutes(30),
@@ -536,7 +536,7 @@ public class WholeFileRewriteAgentTests
 
     /// <summary>
     /// Shared with <see cref="PlanImplementVerifyAgentTests"/>, which runs this same fixture/bug
-    /// through its own separate <see cref="RoslynSentinel.Tests.TestSolutionFixture"/> instance —
+    /// through its own separate <see cref="RoslynSentinel.Tests.TestSolutionFixture"/> instance ->
     /// static + explicit fixture parameter instead of an instance method so both test classes can
     /// call it without one depending on the other's private state. <paramref name="testBaseline"/>
     /// is the caller's pre-agent-run <c>dotnet test</c> result for ContosoOrders.Tests, captured in
@@ -550,7 +550,7 @@ public class WholeFileRewriteAgentTests
 
         var fixedText = File.ReadAllText(fixedPath);
 
-        // Only the *call* to ReformatWholeFile needs to be gone — the prompt never asks the
+        // Only the *call* to ReformatWholeFile needs to be gone -> the prompt never asks the
         // model to delete the now-unused method definition (matching plan-9b-step2.md step 4,
         // which only asks to stop calling the whole-file rewrite), so leaving
         // "private static string ReformatWholeFile(...)" as dead code is a valid fix, not a
@@ -559,15 +559,15 @@ public class WholeFileRewriteAgentTests
         Assert.That(fixedText, Does.Not.Contain("return ReformatWholeFile("),
             $"ConvertAbstractClassToInterface should no longer call ReformatWholeFile. Transcript: {result.TranscriptPath}");
         Assert.That(fixedText, Does.Contain("ReplaceBlockFormatted"),
-            $"The fix should call ReplaceBlockFormatted (directly or qualified) — bringing it into " +
+            $"The fix should call ReplaceBlockFormatted (directly or qualified) - bringing it into " +
             $"scope, not duplicating its body. Transcript: {result.TranscriptPath}");
 
         // The real-world incident this fixture is modeled on (commit 8a8963d, "Fix
         // NormalizeWhitespace whole-file reflow bug") was 52 call sites each reimplementing the
-        // same fix independently — the actual fix was to consolidate onto ONE shared helper, not
+        // same fix independently -> the actual fix was to consolidate onto ONE shared helper, not
         // to keep growing copies of it. So the correct model behavior here is to expose
         // ReplaceBlockFormatted (raise its accessibility) and call the existing method from
-        // BlockConverter.cs — leaving it private and duplicating its body into BlockConverter.cs
+        // BlockConverter.cs -> leaving it private and duplicating its body into BlockConverter.cs
         // is the failure mode this assertion now catches, matching the precedent instead of
         // fighting it.
         var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "FixtureHelpers", "BlockEditHelpers.cs");
@@ -579,7 +579,7 @@ public class WholeFileRewriteAgentTests
             $"BlockConverter.cs should call the shared ReplaceBlockFormatted, not define its own " +
             $"copy of it. Transcript: {result.TranscriptPath}");
 
-        // Unrelated code must still BEHAVE correctly — checked by running the fixture's own real
+        // Unrelated code must still BEHAVE correctly -> checked by running the fixture's own real
         // test project (ContosoOrders.Tests) rather than scanning for byte-for-byte-unchanged
         // formatting, which previously false-failed legitimate fixes that happened to reformat
         // whitespace (see docs/current/modeleval_fixture_test_suite_redesign.md). Asserting the
@@ -593,7 +593,7 @@ public class WholeFileRewriteAgentTests
             $"Transcript: {result.TranscriptPath}\n{postRunTestResult.RawOutput}");
         Assert.That(postRunTestResult.Total, Is.EqualTo(testBaseline.Total),
             $"ContosoOrders.Tests' total test count should be unchanged (baseline: {testBaseline.Total}, " +
-            $"after: {postRunTestResult.Total}) — a dropped count means a test was deleted or disabled " +
+            $"after: {postRunTestResult.Total}) - a dropped count means a test was deleted or disabled " +
             $"instead of the underlying code being fixed. Transcript: {result.TranscriptPath}");
 
         // Total cap raised 2 -> 8 (2026-09-02, see docs/current/project_modifymodifier_accessibility_footgun.md):
@@ -611,7 +611,7 @@ public class WholeFileRewriteAgentTests
         // 4 still catches true thrashing (5+ retries on one unresolved root cause).
         AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8, maxPerTool: 4);
 
-        // Text-scan checks above only prove the edited source LOOKS right — they can't catch
+        // Text-scan checks above only prove the edited source LOOKS right -> they can't catch
         // code that compiles but is functionally broken (e.g. the whole file replaced with every
         // line commented out, which still builds with 0 errors and can coincidentally satisfy
         // substring checks). Actually build the project and invoke the real method to confirm the
@@ -624,7 +624,7 @@ public class WholeFileRewriteAgentTests
 
         Assert.That(convertedOutput, Does.Contain("public interface IShape"),
             $"ConvertAbstractClassToInterface should still convert 'public abstract class Shape' to " +
-            $"'public interface IShape' after the fix — the code compiles but produced the wrong " +
+            $"'public interface IShape' after the fix - the code compiles but produced the wrong " +
             $"output. Transcript: {result.TranscriptPath}");
         Assert.That(convertedOutput, Does.Not.Contain("public abstract class Shape"),
             $"The original abstract class declaration should be gone from the real converted output. " +

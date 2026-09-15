@@ -71,10 +71,10 @@ public sealed class TestSolutionFixture : IDisposable
     /// <summary>
     /// Writes a new file directly to disk (relative to <see cref="SolutionDirectory"/>), then, by
     /// default, reloads the solution and acknowledges the resulting external-change entry. Bypasses
-    /// <c>ApplyProposedChangesAsync</c> on purpose — for tests that need a file present before a
+    /// <c>ApplyProposedChangesAsync</c> on purpose -> for tests that need a file present before a
     /// tool call without going through the normal propose/apply path (e.g. seeding a fixture's
     /// starting state, or reproducing a scenario the workspace didn't itself write). Pass
-    /// <paramref name="reloadSolution"/> = false to defer the reload/drift-clear — e.g. when the
+    /// <paramref name="reloadSolution"/> = false to defer the reload/drift-clear -> e.g. when the
     /// caller has more out-of-band writes to make first and will reload/clear once at the end.
     /// </summary>
     public async Task AddFileToSolution(IWorkspaceManager workspaceManager, string relativePath, string content, bool reloadSolution = true, CancellationToken cancellationToken = default)

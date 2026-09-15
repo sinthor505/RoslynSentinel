@@ -41,14 +41,14 @@ public class AsyncSafetyEngine
             foreach (var method in methods)
             {
                 // Event handler exclusion: (object sender, *EventArgs* e) is the conventional
-                // async void pattern for UI events — flag with advisory rather than crash warning.
+                // async void pattern for UI events -> flag with advisory rather than crash warning.
                 if (IsEventHandlerSignature(method))
                 {
                     reports.Add(new AsyncSafetyReport(
                         document.FilePath ?? document.Name,
                         method.Identifier.Text,
                         "Async void event handler: this is the only acceptable use of async void. " +
-                        "Exceptions still crash the process — wrap the body in try/catch if exceptions are possible."));
+                        "Exceptions still crash the process - wrap the body in try/catch if exceptions are possible."));
                 }
                 else
                 {
@@ -95,7 +95,7 @@ public class AsyncSafetyEngine
                 reports.Add(new AsyncSafetyReport(
                     document.FilePath ?? document.Name,
                     method?.Identifier.Text ?? "<unknown>",
-                    $"Line {lineSpan.StartLinePosition.Line + 1}: 'Task.Yield()' forces an async context switch — verify it is intentional and not a workaround."
+                    $"Line {lineSpan.StartLinePosition.Line + 1}: 'Task.Yield()' forces an async context switch - verify it is intentional and not a workaround."
                 ));
             }
         }
@@ -360,7 +360,7 @@ public class AsyncSafetyEngine
                 reports.Add(new AsyncSafetyReport(
                     document.FilePath ?? document.Name,
                     method?.Identifier.Text ?? "<unknown>",
-                    $"Line {lineSpan.StartLinePosition.Line + 1}: Await missing .ConfigureAwait(false) — add for library code or remove for ASP.NET app code."));
+                    $"Line {lineSpan.StartLinePosition.Line + 1}: Await missing .ConfigureAwait(false) - add for library code or remove for ASP.NET app code."));
             }
         }
         return reports;
@@ -401,7 +401,7 @@ public class AsyncSafetyEngine
                     {
                         var lineSpan = inv.GetLocation().GetLineSpan();
                         reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name, method.Identifier.Text,
-                            $"Line {lineSpan.StartLinePosition.Line + 1}: Thread.Sleep() in async method — use 'await Task.Delay()' instead."));
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: Thread.Sleep() in async method - use 'await Task.Delay()' instead."));
                     }
 
                     if (inv.Expression is MemberAccessExpressionSyntax maGetResult &&
@@ -412,7 +412,7 @@ public class AsyncSafetyEngine
                     {
                         var lineSpan = inv.GetLocation().GetLineSpan();
                         reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name, method.Identifier.Text,
-                            $"Line {lineSpan.StartLinePosition.Line + 1}: .GetAwaiter().GetResult() in async method — use 'await' instead."));
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: .GetAwaiter().GetResult() in async method - use 'await' instead."));
                     }
 
                     if (inv.Expression is MemberAccessExpressionSyntax maWait &&
@@ -420,7 +420,7 @@ public class AsyncSafetyEngine
                     {
                         var lineSpan = inv.GetLocation().GetLineSpan();
                         reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name, method.Identifier.Text,
-                            $"Line {lineSpan.StartLinePosition.Line + 1}: .Wait() in async method — use 'await' instead."));
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: .Wait() in async method - use 'await' instead."));
                     }
                 }
 
@@ -432,7 +432,7 @@ public class AsyncSafetyEngine
                     {
                         var lineSpan = memberAccess.GetLocation().GetLineSpan();
                         reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name, method.Identifier.Text,
-                            $"Line {lineSpan.StartLinePosition.Line + 1}: .Result accessed in async method — use 'await' instead."));
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: .Result accessed in async method - use 'await' instead."));
                     }
                 }
             }
@@ -475,7 +475,7 @@ public class AsyncSafetyEngine
                 {
                     var lineSpan = ctor.GetLocation().GetLineSpan();
                     reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name, className,
-                        $"Line {lineSpan.StartLinePosition.Line + 1}: Constructor invokes async code — use factory method pattern or AsyncHelper."));
+                        $"Line {lineSpan.StartLinePosition.Line + 1}: Constructor invokes async code - use factory method pattern or AsyncHelper."));
                     continue;
                 }
 
@@ -489,7 +489,7 @@ public class AsyncSafetyEngine
                     {
                         var lineSpan = invExpr.GetLocation().GetLineSpan();
                         reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name, className,
-                            $"Line {lineSpan.StartLinePosition.Line + 1}: Constructor invokes async code — use factory method pattern or AsyncHelper."));
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: Constructor invokes async code - use factory method pattern or AsyncHelper."));
                         break;
                     }
                 }
@@ -666,7 +666,7 @@ public class AsyncSafetyEngine
                     var lineSpan = outerIf.GetLocation().GetLineSpan();
                     reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name,
                         containingType.Identifier.Text,
-                        $"Line {lineSpan.StartLinePosition.Line + 1}: Double-checked locking without volatile — field may be partially initialized. Use Lazy<T> or volatile."));
+                        $"Line {lineSpan.StartLinePosition.Line + 1}: Double-checked locking without volatile - field may be partially initialized. Use Lazy<T> or volatile."));
                 }
             }
 
@@ -716,7 +716,7 @@ public class AsyncSafetyEngine
                     var lineSpan = ifStmt.GetLocation().GetLineSpan();
                     reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name,
                         containingType.Identifier.Text,
-                        $"Line {lineSpan.StartLinePosition.Line + 1}: Double-checked locking without volatile — field may be partially initialized. Use Lazy<T> or volatile."));
+                        $"Line {lineSpan.StartLinePosition.Line + 1}: Double-checked locking without volatile - field may be partially initialized. Use Lazy<T> or volatile."));
                 }
             }
         }
@@ -877,7 +877,7 @@ public class AsyncSafetyEngine
                         {
                             var lineNo = stmt.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                             reports.Add(new AsyncSafetyReport(docPath, methodName,
-                                $"Line {lineNo}: ValueTask '{varName}' stored and awaited deferred (with intervening statements). ValueTask may be consumed — use Task/await directly or .AsTask()."));
+                                $"Line {lineNo}: ValueTask '{varName}' stored and awaited deferred (with intervening statements). ValueTask may be consumed - use Task/await directly or .AsTask()."));
                             break;
                         }
                     }
@@ -910,7 +910,7 @@ public class AsyncSafetyEngine
                             {
                                 var lineNo = invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                                 reports.Add(new AsyncSafetyReport(docPath, methodName,
-                                    $"Line {lineNo}: ValueTask passed to Task.WhenAll(). ValueTask is not a Task — call .AsTask() first."));
+                                    $"Line {lineNo}: ValueTask passed to Task.WhenAll(). ValueTask is not a Task - call .AsTask() first."));
                             }
                         }
                     }
@@ -940,7 +940,7 @@ public class AsyncSafetyEngine
                     {
                         var lineNo = memberAccess.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                         reports.Add(new AsyncSafetyReport(docPath, methodName,
-                            $"Line {lineNo}: .Result accessed on ValueTask. This is undefined behavior if the ValueTask is not yet completed — await it instead."));
+                            $"Line {lineNo}: .Result accessed on ValueTask. This is undefined behavior if the ValueTask is not yet completed - await it instead."));
                     }
                 }
             }
@@ -988,7 +988,7 @@ public class AsyncSafetyEngine
                     reports.Add(new AsyncSafetyReport(
                         document.FilePath ?? document.Name,
                         method.Identifier.Text,
-                        $"Line {lineSpan.StartLinePosition.Line + 1}: async method contains no await — remove async keyword and return Task.FromResult()/Task.CompletedTask directly."));
+                        $"Line {lineSpan.StartLinePosition.Line + 1}: async method contains no await - remove async keyword and return Task.FromResult()/Task.CompletedTask directly."));
                     continue;
                 }
 
@@ -1019,7 +1019,7 @@ public class AsyncSafetyEngine
                     reports.Add(new AsyncSafetyReport(
                         document.FilePath ?? document.Name,
                         method.Identifier.Text,
-                        $"Line {lineSpan.StartLinePosition.Line + 1}: async method only awaits Task.FromResult/Task.CompletedTask — remove async keyword and return directly."));
+                        $"Line {lineSpan.StartLinePosition.Line + 1}: async method only awaits Task.FromResult/Task.CompletedTask - remove async keyword and return directly."));
                 }
             }
         }
@@ -1061,7 +1061,7 @@ public class AsyncSafetyEngine
 
             var fp = doc.FilePath ?? doc.Name;
 
-            // Get semantic model for this doc (optional — fall back to syntax heuristics if unavailable)
+            // Get semantic model for this doc (optional -> fall back to syntax heuristics if unavailable)
             SemanticModel? model = null;
             try { model = await doc.GetSemanticModelAsync(cancellationToken); } catch { }
 
@@ -1227,7 +1227,7 @@ public class AsyncSafetyEngine
 
             foreach (var exprStmt in root.DescendantNodes().OfType<ExpressionStatementSyntax>())
             {
-                // Pattern A: Raw invocation without await — RunAsync();
+                // Pattern A: Raw invocation without await -> RunAsync();
                 if (exprStmt.Expression is InvocationExpressionSyntax inv)
                 {
                     if (exprStmt.Expression is AwaitExpressionSyntax)
@@ -1255,12 +1255,12 @@ public class AsyncSafetyEngine
                         reports.Add(new AsyncSafetyReport(
                             document.FilePath ?? document.Name,
                             containingMethod?.Identifier.Text ?? "<unknown>",
-                            $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName ?? "<unknown>"}' called without await — exceptions will be swallowed silently."));
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName ?? "<unknown>"}' called without await - exceptions will be swallowed silently."));
                     }
                     continue;
                 }
 
-                // Pattern B: Discard-assignment — _ = RunAsync();  OR  _ = _obj.RunAsync();
+                // Pattern B: Discard-assignment -> _ = RunAsync();  OR  _ = _obj.RunAsync();
                 if (exprStmt.Expression is AssignmentExpressionSyntax assign &&
                     assign.Left is IdentifierNameSyntax discardId &&
                     discardId.Identifier.Text == "_")
@@ -1289,15 +1289,15 @@ public class AsyncSafetyEngine
 
                         semanticResult = IsTaskReturningSemantic(semanticModel, discardInv, cancellationToken);
                     }
-                    // B2: right side is a null-conditional call — _ = _obj?.RunAsync()
+                    // B2: right side is a null-conditional call -> _ = _obj?.RunAsync()
                     // or chained: _ = _obj?._svc?.RunAsync()
                     else if (assign.Right is ConditionalAccessExpressionSyntax cae)
                     {
                         methodName = ExtractTerminalAsyncMethodName(cae.WhenNotNull);
-                        // Null-conditional returns T? — check the overall expression type (unwrap nullable)
+                        // Null-conditional returns T? -> check the overall expression type (unwrap nullable)
                         semanticResult = IsTaskReturningSemantic(semanticModel, cae, cancellationToken);
                     }
-                    // B3: right side is a ternary expression — _ = condition ? DoAAsync() : DoBAsync()
+                    // B3: right side is a ternary expression -> _ = condition ? DoAAsync() : DoBAsync()
                     else if (assign.Right is ConditionalExpressionSyntax condExpr)
                     {
                         var thenName = ExtractDirectMethodName(condExpr.WhenTrue);
@@ -1325,7 +1325,7 @@ public class AsyncSafetyEngine
                         reports.Add(new AsyncSafetyReport(
                             document.FilePath ?? document.Name,
                             containingMethod?.Identifier.Text ?? "<unknown>",
-                            $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName ?? "<unknown>"}' fire-and-forgot via discard ('_ = ...') — exceptions will be swallowed silently. Use proper fire-and-forget with error logging instead."));
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName ?? "<unknown>"}' fire-and-forgot via discard ('_ = ...') - exceptions will be swallowed silently. Use proper fire-and-forget with error logging instead."));
                     }
                 }
             }
@@ -1344,13 +1344,13 @@ public class AsyncSafetyEngine
         var type = model.GetTypeInfo(expr, cancellationToken).Type;
         if (type == null)
         {
-            return null; // unresolvable — let caller fall back to heuristic
+            return null; // unresolvable - let caller fall back to heuristic
         }
 
         return SemanticTypeHelper.IsTaskOrValueTask(type);
     }
 
-    // Extracts a method name from a direct invocation or null-conditional call — used for B1/B3.
+    // Extracts a method name from a direct invocation or null-conditional call -> used for B1/B3.
     private static string? ExtractDirectMethodName(ExpressionSyntax expr)
     {
         if (expr is InvocationExpressionSyntax inv)
@@ -1377,14 +1377,14 @@ public class AsyncSafetyEngine
     // Handles: _obj?.RunAsync()  and chained: _obj?._svc?.RunAsync()
     private static string? ExtractTerminalAsyncMethodName(ExpressionSyntax whenNotNull)
     {
-        // Terminal case: ?.RunAsync() — the WhenNotNull is an invocation via member binding
+        // Terminal case: ?.RunAsync() -> the WhenNotNull is an invocation via member binding
         if (whenNotNull is InvocationExpressionSyntax termInv &&
             termInv.Expression is MemberBindingExpressionSyntax termMb)
         {
             return termMb.Name.Identifier.Text;
         }
 
-        // Chained case: ?._svc?.RunAsync() — WhenNotNull is another conditional access
+        // Chained case: ?._svc?.RunAsync() -> WhenNotNull is another conditional access
         if (whenNotNull is ConditionalAccessExpressionSyntax innerCae)
         {
             return ExtractTerminalAsyncMethodName(innerCae.WhenNotNull);
@@ -1397,7 +1397,7 @@ public class AsyncSafetyEngine
 
     /// <summary>
     /// Detects sequences of two or more consecutive awaited calls whose result variables
-    /// are independent (neither uses the other's variable) — missed parallelism opportunity.
+    /// are independent (neither uses the other's variable) -> missed parallelism opportunity.
     ///
     /// Example:  var x = await FetchAsync();   // could be parallel
     ///           var y = await GetAsync();      // neither uses x
@@ -1504,7 +1504,7 @@ public class AsyncSafetyEngine
                         reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
                             $"Line {line}: {varList} are awaited sequentially but are independent. " +
                             $"Consider 'await Task.WhenAll(...)' to run all {blockVars.Count} concurrently."));
-                        stmtIdx = next; // skip the entire block — already reported as one finding
+                        stmtIdx = next; // skip the entire block - already reported as one finding
                     }
                     else
                     {
@@ -1549,7 +1549,7 @@ public class AsyncSafetyEngine
     /// <summary>
     /// Detects async void methods (typically event handlers) whose entire body is not
     /// wrapped in a top-level try/catch. Unhandled exceptions inside async void crash
-    /// the process on the thread-pool — there is no caller to propagate to.
+    /// the process on the thread-pool -> there is no caller to propagate to.
     /// </summary>
     public async Task<List<AsyncSafetyReport>> FindAsyncVoidWithoutTryCatchAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
@@ -1698,7 +1698,7 @@ public class AsyncSafetyEngine
                         : "synchronous method";
                     reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
                         $"Line {line}: DisposeAsync() called in {context} without await. " +
-                        "The ValueTask returned is discarded — async cleanup runs after the method returns, " +
+                        "The ValueTask returned is discarded - async cleanup runs after the method returns, " +
                         "leaving resources dangling. Use 'await obj.DisposeAsync()' or implement IAsyncDisposable."));
                 }
             }
@@ -1708,7 +1708,7 @@ public class AsyncSafetyEngine
 
     // ── UnobservedTaskInField ─────────────────────────────────────────────────
     // Assigning a Task/ValueTask to a field or property (rather than awaiting it)
-    // means any exception thrown by that task is never observed — it silently fails
+    // means any exception thrown by that task is never observed -> it silently fails
     // and can eventually crash the process via UnobservedTaskException.
 
     /// <summary>
@@ -1781,7 +1781,7 @@ public class AsyncSafetyEngine
                             continue;
                         }
 
-                        // RHS must be an invocation — not already awaited
+                        // RHS must be an invocation -> not already awaited
                         ExpressionSyntax rhs = assignment.Right;
                         if (rhs is AwaitExpressionSyntax)
                         {
@@ -1825,7 +1825,7 @@ public class AsyncSafetyEngine
                         var line = assignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                         reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
                             $"Line {line}: Task/ValueTask from '{rhsInv}' stored in field '{targetName}' without await. " +
-                            "Exceptions thrown by the task are never observed — the task silently fails. " +
+                            "Exceptions thrown by the task are never observed - the task silently fails. " +
                             "Await the result directly or use a fire-and-forget helper that logs exceptions."));
                     }
                 }

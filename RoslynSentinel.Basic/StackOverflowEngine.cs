@@ -39,14 +39,14 @@ public sealed class StackOverflowEngine
 
         var findings = new List<StackOverflowFinding>();
 
-        // Syntactic checks — semantic model used when available for overload disambiguation
+        // Syntactic checks -> semantic model used when available for overload disambiguation
         findings.AddRange(DetectDirectRecursion(root, filePath, model));
         findings.AddRange(DetectPropertySelfReference(root, filePath));
         findings.AddRange(DetectOverrideCallingSelf(root, filePath));
         findings.AddRange(DetectInFileInheritanceCycles(root, filePath));
         findings.AddRange(DetectCallGraphCycles(root, filePath));
 
-        // Semantic enhancement — higher accuracy for cross-file cases
+        // Semantic enhancement -> higher accuracy for cross-file cases
         if (model != null)
         {
             findings.AddRange(DetectArgumentNotDecreasing(root, model, filePath));
@@ -114,7 +114,7 @@ public sealed class StackOverflowEngine
 
                 // Heuristic 1: call has MORE positional args than this method has parameters.
                 // Delegation inserts extra defaults (e.g., timeout, CancellationToken) that
-                // only exist on the target overload — this is a chain call, not recursion.
+                // only exist on the target overload -> this is a chain call, not recursion.
                 if (call.ArgumentList.Arguments.Count > method.ParameterList.Parameters.Count)
                 {
                     continue;
@@ -133,7 +133,7 @@ public sealed class StackOverflowEngine
                 // ── Semantic overload check (when model available) ────────────────────────
                 // Resolves the call to its exact symbol and skips calls to a different overload,
                 // catching cases the syntactic heuristics can't distinguish (same arg count,
-                // no named args, but different parameter types — e.g., adapter lambdas).
+                // no named args, but different parameter types -> e.g., adapter lambdas).
                 if (containingSymbol != null)
                 {
                     var info = model!.GetSymbolInfo(call);
@@ -154,8 +154,8 @@ public sealed class StackOverflowEngine
                     LineNumber: line,
                     ContainingMember: name,
                     Description: guarded
-                        ? $"'{name}' calls itself conditionally — verify all paths have a reachable non-recursive exit"
-                        : $"'{name}' calls itself unconditionally — guaranteed StackOverflowException",
+                        ? $"'{name}' calls itself conditionally - verify all paths have a reachable non-recursive exit"
+                        : $"'{name}' calls itself unconditionally - guaranteed StackOverflowException",
                     Recommendation: guarded
                         ? "Confirm the base-case guard is always reached before the recursive call"
                         : "Add a non-recursive base case, or rewrite iteratively with an explicit stack"));
@@ -182,7 +182,7 @@ public sealed class StackOverflowEngine
                 {
                     findings.Add(PropertyFinding("PropertySelfRead", filePath,
                         id.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
-                        name, $"Property '{name}' reads itself in expression body — likely missing backing field"));
+                        name, $"Property '{name}' reads itself in expression body - likely missing backing field"));
                 }
             }
 
@@ -205,7 +205,7 @@ public sealed class StackOverflowEngine
                     {
                         findings.Add(PropertyFinding("PropertySelfRead", filePath,
                             id.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
-                            $"{name}.get", $"Property '{name}' getter reads itself — likely missing backing field"));
+                            $"{name}.get", $"Property '{name}' getter reads itself - likely missing backing field"));
                     }
                 }
                 else if (accessor.IsKind(SyntaxKind.SetAccessorDeclaration) ||
@@ -217,7 +217,7 @@ public sealed class StackOverflowEngine
                     {
                         findings.Add(PropertyFinding("PropertySelfWrite", filePath,
                             assign.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
-                            $"{name}.set", $"Property '{name}' setter assigns to itself — guaranteed StackOverflowException"));
+                            $"{name}.set", $"Property '{name}' setter assigns to itself - guaranteed StackOverflowException"));
                     }
                 }
             }
@@ -256,7 +256,7 @@ public sealed class StackOverflowEngine
                     FilePath: filePath,
                     LineNumber: line,
                     ContainingMember: name,
-                    Description: $"Override '{name}' calls itself via virtual dispatch — did you mean 'base.{name}()'?",
+                    Description: $"Override '{name}' calls itself via virtual dispatch - did you mean 'base.{name}()'?",
                     Recommendation: $"Use 'base.{name}(...)' to delegate to the base implementation, or add a guard to prevent infinite recursion"));
             }
         }
@@ -266,10 +266,10 @@ public sealed class StackOverflowEngine
 
     // ── In-file inheritance dispatch cycles ───────────────────────────────────
     //
-    // Catches: DerivedClass.Override → BaseClass.Method (call/prop access) →
-    //          BaseClass.Virtual (dispatch) → DerivedClass.VirtualOverride → loops
+    // Catches: DerivedClass.Override → BaseClass.Method (call/prop access) ->
+    //          BaseClass.Virtual (dispatch) → DerivedClass.VirtualOverride -> loops
     //
-    // Works purely syntactically — both classes must be in the same file.
+    // Works purely syntactically -> both classes must be in the same file.
 
     private static List<StackOverflowFinding> DetectInFileInheritanceCycles(SyntaxNode root, FilePathWrapper filePath)
     {
@@ -364,7 +364,7 @@ public sealed class StackOverflowEngine
 
                     foreach (var virtualDispatch in baseCalls.Where(derivedOverrideNames.Contains))
                     {
-                        // Loop: overrideName → calledName (base) → virtualDispatch (virtual) → derived override
+                        // Loop: overrideName → calledName (base) → virtualDispatch (virtual) -> derived override
                         var isDirectLoop = virtualDispatch == overrideName;
 
                         var dispatchedOverride = derivedOverrides
@@ -408,7 +408,7 @@ public sealed class StackOverflowEngine
                             ContainingMember: $"{derivedName}.{overrideName}",
                             Description: $"Inheritance dispatch cycle: {derivedName}.{overrideName} → {baseClassName}.{calledName} → virtual {virtualDispatch} → {derivedName}.{virtualDispatch}",
                             CyclePath: cyclePath,
-                            Recommendation: $"Verify '{virtualDispatch}' override does not call '{overrideName}' or '{calledName}' — this creates an infinite dispatch loop through the base class"));
+                            Recommendation: $"Verify '{virtualDispatch}' override does not call '{overrideName}' or '{calledName}' - this creates an infinite dispatch loop through the base class"));
                     }
                 }
             }
@@ -433,7 +433,7 @@ public sealed class StackOverflowEngine
                 continue;
             }
 
-            // Skip classes whose base is declared in the same file — already handled above
+            // Skip classes whose base is declared in the same file -> already handled above
             if (classSymbol.BaseType.Locations.Any(l => l.SourceTree == root.SyntaxTree))
             {
                 continue;
@@ -511,7 +511,7 @@ public sealed class StackOverflowEngine
                         ContainingMember: $"{classDecl.Identifier.Text}.{overrideName}",
                         Description: $"Cross-file inheritance dispatch cycle: {classDecl.Identifier.Text}.{overrideName} → base.{overrideName} → virtual {calledName} → {classDecl.Identifier.Text}.{calledName}",
                         CyclePath: cyclePath,
-                        Recommendation: $"Verify '{calledName}' override does not call '{overrideName}' — infinite dispatch loop via the base class"));
+                        Recommendation: $"Verify '{calledName}' override does not call '{overrideName}' - infinite dispatch loop via the base class"));
                 }
             }
         }
@@ -592,7 +592,7 @@ public sealed class StackOverflowEngine
                             FilePath: filePath,
                             LineNumber: call.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
                             ContainingMember: name,
-                            Description: $"'{name}' passes '{param}' unchanged to itself — recursion will not terminate",
+                            Description: $"'{name}' passes '{param}' unchanged to itself - recursion will not terminate",
                             Recommendation: $"Reduce '{param}' in the recursive call (e.g. '{param} - 1') to guarantee termination"));
                         break;
                     }
@@ -605,7 +605,7 @@ public sealed class StackOverflowEngine
                             FilePath: filePath,
                             LineNumber: call.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
                             ContainingMember: name,
-                            Description: $"'{name}' passes '{argText}' — '{param}' grows with each call, recursion will not terminate",
+                            Description: $"'{name}' passes '{argText}' - '{param}' grows with each call, recursion will not terminate",
                             Recommendation: $"The termination condition must bound the growth of '{param}'"));
                         break;
                     }
@@ -630,7 +630,7 @@ public sealed class StackOverflowEngine
             return [];
         }
 
-        // Merge overloads — combine calls from all same-named methods
+        // Merge overloads -> combine calls from all same-named methods
         var callMap = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         var firstSyntax = new Dictionary<string, MethodDeclarationSyntax>(StringComparer.Ordinal);
         foreach (var method in methods)
@@ -758,7 +758,7 @@ public sealed class StackOverflowEngine
 
             if (computing.Contains(name))
             {
-                return 0; // cycle — stop
+                return 0; // cycle - stop
             }
 
             computing.Add(name);
@@ -779,7 +779,7 @@ public sealed class StackOverflowEngine
                     FilePath: filePath,
                     LineNumber: method.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
                     ContainingMember: name,
-                    Description: $"'{name}' is at least {depth} call levels deep — contributes to deep call stacks",
+                    Description: $"'{name}' is at least {depth} call levels deep - contributes to deep call stacks",
                     Recommendation: "Consider flattening or rewriting iteratively if this chain is reachable from recursive code"));
             }
         }
@@ -789,9 +789,9 @@ public sealed class StackOverflowEngine
 
     // ── Overload chain validation ─────────────────────────────────────────────
     // Detects three distinct failure modes in same-named overload families:
-    //   ChainMissingParameter — a source param is absent from the forwarding call
-    //   ChainArgumentOrder    — source params appear in inverted order in the call
-    //   OverloadCycle         — two overloads delegate to each other (mutual recursion)
+    //   ChainMissingParameter -> a source param is absent from the forwarding call
+    //   ChainArgumentOrder    -> source params appear in inverted order in the call
+    //   OverloadCycle         -> two overloads delegate to each other (mutual recursion)
 
     internal static List<StackOverflowFinding> DetectMisboundOverloadChains(
         SyntaxNode root, SemanticModel model, FilePathWrapper filePath)
@@ -807,7 +807,7 @@ public sealed class StackOverflowEngine
 
         foreach (var (methodName, overloads) in methodsByName)
         {
-            // Build symbol → syntax map for cycle lookup
+            // Build symbol -> syntax map for cycle lookup
             var symbolToSyntax = new Dictionary<IMethodSymbol, MethodDeclarationSyntax>(
                 SymbolEqualityComparer.Default);
             foreach (var overload in overloads)
@@ -877,7 +877,7 @@ public sealed class StackOverflowEngine
                             LineNumber: line,
                             ContainingMember: methodName,
                             Description: $"Overload chain '{methodName}': parameter(s) [{string.Join(", ", missing)}] are " +
-                                "not forwarded to the target overload — callers of this overload lose those values silently",
+                                "not forwarded to the target overload - callers of this overload lose those values silently",
                             Recommendation: $"Forward [{string.Join(", ", missing)}] in the delegating call; " +
                                 "if the omission is intentional, document why with a comment"));
                     }
@@ -914,7 +914,7 @@ public sealed class StackOverflowEngine
                                     LineNumber: line,
                                     ContainingMember: methodName,
                                     Description: $"Overload chain '{methodName}': '{callingParams[i]}' appears after " +
-                                        $"'{callingParams[j]}' in the forwarding call — inverted relative to the source " +
+                                        $"'{callingParams[j]}' in the forwarding call - inverted relative to the source " +
                                         "parameter order; the call may bind to the wrong overload or semantics may be wrong",
                                     Recommendation: "Verify the target overload's parameter order and reorder the arguments accordingly"));
                                 orderFlagged = true;
@@ -947,7 +947,7 @@ public sealed class StackOverflowEngine
                                     LineNumber: line,
                                     ContainingMember: methodName,
                                     Description: $"Overload cycle: '{methodName}' delegates to a sibling overload that " +
-                                        "delegates back — mutual recursion between overloads causes StackOverflowException",
+                                        "delegates back - mutual recursion between overloads causes StackOverflowException",
                                     Recommendation: "Designate one overload as the canonical implementation; all others " +
                                         "must delegate to it in one direction without a return call"));
                             }
@@ -1028,7 +1028,7 @@ public sealed class StackOverflowEngine
 
             if (stmt is IfStatementSyntax ifStmt && IfBodyAlwaysExits(ifStmt))
             {
-                return true; // if-with-exit before call — call is conditional on its inverse
+                return true; // if-with-exit before call - call is conditional on its inverse
             }
         }
         return false;
@@ -1079,7 +1079,7 @@ public sealed class StackOverflowEngine
             .Cast<string>()
             .ToHashSet(StringComparer.Ordinal);
 
-    // Broader than CollectInvocationNames — includes PascalCase member/property accesses,
+    // Broader than CollectInvocationNames -> includes PascalCase member/property accesses,
     // needed for inheritance cycle detection where base calls a property that derived overrides.
     private static HashSet<string> CollectReferencedMemberNames(SyntaxNode body)
     {

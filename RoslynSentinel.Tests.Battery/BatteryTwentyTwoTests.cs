@@ -1,4 +1,4 @@
-// Battery #22 — SentinelIntelligenceTools
+// Battery #22 -> SentinelIntelligenceTools
 // Tests all 45 public methods of SentinelIntelligenceTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -336,7 +336,7 @@ public class OrderService : IOrderService
 
     // --- CheckPackageInconsistency (via DependencyEngine) ---
     // Reads project.FilePathWrapper directly off disk (regexes <PackageReference> out of the raw
-    // .csproj XML — Roslyn's in-memory Project model has no NuGet-version API), so unlike the
+    // .csproj XML -> Roslyn's in-memory Project model has no NuGet-version API), so unlike the
     // rest of this battery it can't run against TestSolutionBuilder's in-memory fake project
     // path. Uses a real on-disk solution via TestSolutionFixture instead.
 
@@ -671,7 +671,7 @@ public class OrderService : IOrderService
     public async Task QuerySymbolRelationships_EmptyTargetedKind_BroadensAndFindsUnderAnotherKind()
     {
         SetSource(RichSource, "Test.cs");
-        // "IOrderService" has zero attribute usages, but a real implementor exists (OrderService) —
+        // "IOrderService" has zero attribute usages, but a real implementor exists (OrderService) ->
         // broaden-on-empty should surface that under 'implementorsOf' instead of just returning [].
         var result = await _symbolTools.QuerySymbolRelationships(reason: "test message", "IOrderService", FindUsagesSearchKind.attributeUsages);
 

@@ -1,4 +1,4 @@
-// Battery #13 — AnalysisEngine / CodeGenerationEngine / ControlFlowEngine / SymbolNavigationEngine
+// Battery #13 -> AnalysisEngine / CodeGenerationEngine / ControlFlowEngine / SymbolNavigationEngine
 // CodeGenerationEngine is sync/JSON-only (no workspace needed for its primary methods).
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -35,7 +35,7 @@ public class AnalysisEngineTests
             [("Service.cs", "public class Tiny { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        // A single-line class has 0 lines span — cannot exceed default 500 limit
+        // A single-line class has 0 lines span -> cannot exceed default 500 limit
         var reports = await _engine.FindLargeTypesAsync(maxLines: 500);
 
         Assert.That(reports, Is.Empty, "A tiny class should not exceed the line limit");
@@ -112,7 +112,7 @@ public class CodeGenerationEngineTests
     [Test]
     public void GenerateClassesFromJson_NumberProperty_GeneratesDoubleProp()
     {
-        // The engine maps JsonValueKind.Number → "double" for all numeric JSON values
+        // The engine maps JsonValueKind.Number -> "double" for all numeric JSON values
         var json = """{"age": 30}""";
 
         var result = _engine.GenerateClassesFromJson(json, "PersonDto", "MyApp.Dtos");

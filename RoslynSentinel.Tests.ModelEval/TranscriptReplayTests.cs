@@ -19,7 +19,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// Replays a previously-recorded <see cref="AgentTranscript"/> (transcript.json, written by
 /// <see cref="ModelAgentRunner"/>) against a freshly-built <see cref="SizeGraduatedReproducer"/>
 /// fixture of the matching size, calling each tool with its recorded <c>ArgumentsJson</c> verbatim
-/// via the real in-memory MCP client/server — no LLM involved. This turns "the model produced a
+/// via the real in-memory MCP client/server -> no LLM involved. This turns "the model produced a
 /// confusing failure three turns deep in an overnight sweep" into a single deterministic re-run:
 /// point ROSLYNSENTINEL_MODELEVAL_REPLAY_TRANSCRIPT at the saved transcript.json and rerun.
 ///
@@ -109,7 +109,7 @@ public class TranscriptReplayTests
         if (string.IsNullOrWhiteSpace(transcriptPath))
         {
             Assert.Ignore(
-                "ROSLYNSENTINEL_MODELEVAL_REPLAY_TRANSCRIPT is not set — point it at a saved " +
+                "ROSLYNSENTINEL_MODELEVAL_REPLAY_TRANSCRIPT is not set - point it at a saved " +
                 "transcript.json to replay it deterministically against a fresh fixture.");
         }
 
@@ -156,12 +156,12 @@ public class TranscriptReplayTests
         var originalDirectory = FindOriginalSolutionDirectory(transcript);
         TestContext.Out.WriteLine(
             originalDirectory is null
-                ? "No original solution directory detected in the transcript's arguments — replaying paths verbatim."
+                ? "No original solution directory detected in the transcript's arguments - replaying paths verbatim."
                 : $"Rewriting original solution directory '{originalDirectory}' -> '{_fixture.SolutionDirectory}'.");
 
         // ArgumentsJson is itself JSON text (it gets re-parsed by ReplayToolCallAsync below), so a
         // Windows path inside it is backslash-escaped (e.g. "C:\\Users\\..."). originalDirectory was
-        // captured directly from that raw text, so it's ALREADY in escaped form — only the
+        // captured directly from that raw text, so it's ALREADY in escaped form -> only the
         // replacement (a real path with single backslashes, from _fixture.SolutionDirectory) needs
         // JsonEncode. Escaping originalDirectory again here would double-escape it and never match.
         var replacementDirectoryEscaped = originalDirectory is null ? null : JsonEncode(_fixture.SolutionDirectory);
@@ -208,7 +208,7 @@ public class TranscriptReplayTests
         TestContext.Out.WriteLine(
             mismatchCount == 0
                 ? $"Replayed {callIndex} tool call(s) across {transcript.Turns.Count} turn(s); all IsError flags matched the recording."
-                : $"Replayed {callIndex} tool call(s); {mismatchCount} call(s) had an IsError flag that diverged from the recording — see above.");
+                : $"Replayed {callIndex} tool call(s); {mismatchCount} call(s) had an IsError flag that diverged from the recording - see above.");
     }
 
     private async Task<(string ResultText, bool IsError)> ReplayToolCallAsync(
@@ -322,7 +322,7 @@ public class TranscriptReplayTests
     }
 
     // AgentTranscript's own Turns property is get-only ({ get; } = []) so System.Text.Json can't
-    // bind a deserialized array into it — it silently leaves the default empty list instead of
+    // bind a deserialized array into it -> it silently leaves the default empty list instead of
     // throwing. Mirror only the fields replay actually needs with plain settable properties so
     // reading a transcript.json written by ModelAgentRunner works without touching that shared type.
     private sealed class ReplayTranscriptDto

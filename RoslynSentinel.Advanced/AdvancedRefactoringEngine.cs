@@ -29,7 +29,7 @@ public class AdvancedRefactoringEngine
             };
         }
 
-        // Find top-level string concat chains — not a child of another string-concat-with-literal
+        // Find top-level string concat chains -> not a child of another string-concat-with-literal
         var topLevelConcats = root.DescendantNodes()
             .OfType<BinaryExpressionSyntax>()
             .Where(b => b.IsKind(SyntaxKind.AddExpression) && ContainsStringLiteral(b))
@@ -55,7 +55,7 @@ public class AdvancedRefactoringEngine
                 if (seg is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
                 {
                     var tokenText = lit.Token.Text;
-                    // Verbatim/raw strings have different escape semantics — wrap as interpolation hole
+                    // Verbatim/raw strings have different escape semantics -> wrap as interpolation hole
                     if (tokenText.StartsWith("@") || tokenText.StartsWith("\"\"\""))
                     {
                         contents.Add(SyntaxFactory.Interpolation(seg.WithoutTrivia()));

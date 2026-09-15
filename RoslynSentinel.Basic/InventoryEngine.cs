@@ -34,7 +34,7 @@ public class InventoryEngine
             throw new FileNotFoundException(
                 $"File not found in solution: {normalizedPath} " +
                 $"(existsOnDisk={existsOnDisk}, projectsLoaded={projectCount}). " +
-                "The owning project may have failed to load — check workspace load errors.");
+                "The owning project may have failed to load - check workspace load errors.");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken)
@@ -69,7 +69,7 @@ public class InventoryEngine
             throw new FileNotFoundException(
                 $"File not found in solution: {normalizedPath} " +
                 $"(existsOnDisk={existsOnDisk}, projectsLoaded={projectCount}). " +
-                "The owning project may have failed to load — check workspace load errors.");
+                "The owning project may have failed to load - check workspace load errors.");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken)

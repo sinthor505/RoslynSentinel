@@ -23,7 +23,7 @@ public record RenameSymbolResult(string OldName, string NewName, Dictionary<File
 {
     public string ToToolResponse()
     {
-        return System.Text.Json.JsonSerializer.Serialize(new { success = Error is null, oldName = OldName, newName = NewName, filesChanged = PendingChanges.Count, updatedHandle = UpdatedHandle is SymbolHandle h ? new { h.SessionId, h.ProjectName, h.DocCommentId } : null, note = UpdatedHandle is null ? "updatedHandle is null — re-run LocateSymbol before further operations on this symbol." : null });
+        return System.Text.Json.JsonSerializer.Serialize(new { success = Error is null, oldName = OldName, newName = NewName, filesChanged = PendingChanges.Count, updatedHandle = UpdatedHandle is SymbolHandle h ? new { h.SessionId, h.ProjectName, h.DocCommentId } : null, note = UpdatedHandle is null ? "updatedHandle is null - re-run LocateSymbol before further operations on this symbol." : null });
     }
 }
 
@@ -54,7 +54,7 @@ public class RefactoringEngine
     /// nullable annotation that came from flow-state analysis rather than the variable's actual
     /// declared nullability. A type obtained from a data-flow-analysis symbol (e.g. via
     /// <c>SemanticModel.AnalyzeDataFlow</c>) can carry <see cref = "NullableAnnotation.Annotated"/>
-    /// purely because the compiler's flow analysis is conservative at the region boundary — not
+    /// purely because the compiler's flow analysis is conservative at the region boundary -> not
     /// because the variable was ever actually assignable to null. Blindly copying that annotation
     /// into a generated signature produces a spurious <c>?</c> and a live CS8602 warning on every
     /// unguarded use inside the generated body, for a variable that's really always non-null.
@@ -395,20 +395,20 @@ public class RefactoringEngine
             return new ExtractMethodResult(false, $"Data flow analysis failed: {ex.Message}", null, null, null, null);
         }
 
-        // Parameters: symbols flowing in — local vars and non-this method parameters only
+        // Parameters: symbols flowing in -> local vars and non-this method parameters only
         var parameters = dataFlow.DataFlowsIn.Where(s => s.Kind == SymbolKind.Local || (s.Kind == SymbolKind.Parameter && s is IParameterSymbol p && !p.IsThis)).OrderBy(s => s.Name).ToList();
-        // Fail early if any ref/out parameter flows out — we can't safely return it
+        // Fail early if any ref/out parameter flows out -> we can't safely return it
         var refOutFlowOut = dataFlow.DataFlowsOut.OfType<IParameterSymbol>().Where(p => p.RefKind != RefKind.None && !p.IsThis).ToList();
         if (refOutFlowOut.Count > 0)
         {
-            return new ExtractMethodResult(false, $"Cannot extract: ref/out parameter(s) '{string.Join(", ", refOutFlowOut.Select(p => p.Name))}' are " + "written inside the selection and read after it. This case cannot be auto-extracted — refactor manually.", null, null, null, null);
+            return new ExtractMethodResult(false, $"Cannot extract: ref/out parameter(s) '{string.Join(", ", refOutFlowOut.Select(p => p.Name))}' are " + "written inside the selection and read after it. This case cannot be auto-extracted - refactor manually.", null, null, null, null);
         }
 
         // Return value: local variables assigned inside that are used after the region
         var flowsOut = dataFlow.DataFlowsOut.Where(s => s.Kind == SymbolKind.Local).ToList();
         if (flowsOut.Count > 1)
         {
-            return new ExtractMethodResult(false, $"Multiple variables flow out ({string.Join(", ", flowsOut.Select(s => s.Name))}). " + "Cannot auto-determine return type — narrow the selection or handle manually.", null, null, null, null);
+            return new ExtractMethodResult(false, $"Multiple variables flow out ({string.Join(", ", flowsOut.Select(s => s.Name))}). " + "Cannot auto-determine return type - narrow the selection or handle manually.", null, null, null, null);
         }
 
         ILocalSymbol? returnVar = flowsOut.Count == 1 ? (ILocalSymbol)flowsOut[0] : null;
@@ -422,7 +422,7 @@ public class RefactoringEngine
             (null, true) => SyntaxFactory.ParseTypeName("Task"),
             _ => SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))
         };
-        // Build parameter list — include ref/out/in modifiers for parameter symbols
+        // Build parameter list -> include ref/out/in modifiers for parameter symbols
         var paramSyntax = parameters.Select(sym =>
         {
             string typeName;
@@ -474,7 +474,7 @@ public class RefactoringEngine
         }
 
         var extractedMethod = (MethodDeclarationSyntax)FormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(returnType, newMethodName).WithModifiers(SyntaxFactory.TokenList(modifiers)).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(paramSyntax))).WithBody(SyntaxFactory.Block(bodyStmts)));
-        // Build call site — include ref/out/in keywords for parameter symbols
+        // Build call site -> include ref/out/in keywords for parameter symbols
         var argList = parameters.Select(sym =>
         {
             var arg = SyntaxFactory.Argument(SyntaxFactory.IdentifierName(sym.Name));
@@ -577,7 +577,7 @@ public class RefactoringEngine
 
         var sourceDirectory = Path.GetDirectoryName(document.FilePath ?? filePath);
         var newPath = string.IsNullOrEmpty(sourceDirectory) ? $"{typeName}.cs" : Path.Combine(sourceDirectory, $"{typeName}.cs");
-        // Guard: if the type's name already matches the source file name, it's already in its own file — nothing to move
+        // Guard: if the type's name already matches the source file name, it's already in its own file -> nothing to move
         if (string.Equals(typeName, Path.GetFileNameWithoutExtension(document.Name), StringComparison.OrdinalIgnoreCase))
         {
             return new Dictionary<FilePathWrapper, string>();
@@ -657,13 +657,13 @@ public class RefactoringEngine
     }
 
     // Builds the compilation unit for a type being split into its own file, handling:
-    // - extern alias declarations (not in root.Usings — must be copied separately)
+    // - extern alias declarations (not in root.Usings -> must be copied separately)
     // - global using aliases filtered out (project-scoped; duplicating them causes CS1537)
     // - file-scoped types promoted to internal (file modifier = visible only in declaring file)
     private static (CompilationUnitSyntax newRoot, BaseTypeDeclarationSyntax cleanNode) BuildSplitFileRoot(CompilationUnitSyntax root, BaseTypeDeclarationSyntax typeNode)
     {
         var cleanNode = typeNode.WithoutLeadingTrivia().WithLeadingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
-        // Promote `file` modifier to `internal` — the type is now in its own file and must be accessible
+        // Promote `file` modifier to `internal` -> the type is now in its own file and must be accessible
         if (cleanNode.Modifiers.Any(m => m.IsKind(SyntaxKind.FileKeyword)))
         {
             var fileToken = cleanNode.Modifiers.First(m => m.IsKind(SyntaxKind.FileKeyword));
@@ -673,7 +673,7 @@ public class RefactoringEngine
         }
 
         var cleanExterns = SyntaxFactory.List(root.Externs.Select(e => e.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
-        // Exclude global using aliases — they are project-scoped; duplicating them across split files causes CS1537
+        // Exclude global using aliases -> they are project-scoped; duplicating them across split files causes CS1537
         var cleanUsings = SyntaxFactory.List(root.Usings.Where(u => u.GlobalKeyword.IsKind(SyntaxKind.None)).Select(u => u.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
         var newRoot = SyntaxFactory.CompilationUnit().WithExterns(cleanExterns).WithUsings(cleanUsings);
         return (newRoot, cleanNode);
@@ -865,7 +865,7 @@ public class RefactoringEngine
             }
         }
 
-        // Per-file diffs are not computed here — the caller (SentinelRefactoringTools.RenameSymbol)
+        // Per-file diffs are not computed here -> the caller (SentinelRefactoringTools.RenameSymbol)
         // gets them from ValidateAndApplyAsync's returnDiff option, which builds them via the
         // canonical DiffEngine.CreateDiff. This used to duplicate that with a second, weaker
         // lockstep diff (ComputeRenameHunks); removed as part of the diff-logic consistency fix
@@ -877,7 +877,7 @@ public class RefactoringEngine
 
     /// <summary>
     /// Whole-word scan of the post-rename solution for leftover mentions of <paramref name="oldName"/>
-    /// that Roslyn's rename couldn't reach — e.g. the old name embedded as a substring of an unrelated
+    /// that Roslyn's rename couldn't reach -> e.g. the old name embedded as a substring of an unrelated
     /// identifier (like a test method named ...OldNameDoesNotBlock), or occurrences in non-source files
     /// (docs, config) that aren't part of any project's compilation and so were never visited by the
     /// rename engine even with RenameInComments/RenameInStrings enabled.
@@ -1230,7 +1230,7 @@ public class RefactoringEngine
         {
             throw new NotSupportedException(
                 $"AddMemberAsync: unhandled container type {container.GetType().Name} for \"{containerName}\". " +
-                "This is a bug — every BaseTypeDeclarationSyntax subtype must resolve to a TypeDeclarationSyntax here; " +
+                "This is a bug - every BaseTypeDeclarationSyntax subtype must resolve to a TypeDeclarationSyntax here; " +
                 "silently returning the container unchanged would falsely report success.");
         }
 
@@ -1343,7 +1343,7 @@ public class RefactoringEngine
             };
         }
 
-        // No namespace in the file at all — append directly to the compilation unit.
+        // No namespace in the file at all -> append directly to the compilation unit.
         // ReplaceNodeFormattedAsync needs oldNode to be a strict descendant of the tracked root,
         // which the root itself never is, so format the freshly-built root directly instead.
         var newRoot = root.AddMembers(newType);
@@ -1423,7 +1423,7 @@ public class RefactoringEngine
                     {
                         Outcome = EditOutcome.CannotRemove,
                         FilePath = filePath,
-                        Message = $"// ERROR: Cannot remove member '{memberName}' — it has {usageCount} usages in the solution.\n{root!.ToFullString()}"
+                        Message = $"// ERROR: Cannot remove member '{memberName}' - it has {usageCount} usages in the solution.\n{root!.ToFullString()}"
                     };
                 }
             }
@@ -1761,10 +1761,10 @@ public class RefactoringEngine
         if (pos < 0)
         {
             // ContextHelper's message ("contextSnippet not found"/"ambiguous (N matches)") is
-            // necessarily generic — ContextHelper only sees raw text offsets, it has no symbolName
+            // necessarily generic -> ContextHelper only sees raw text offsets, it has no symbolName
             // or declaration list to enumerate the way ResolveMemberByNameOrSnippet's NearMissList
             // hint does, and this tool has no name argument at all (it targets an expression by its
-            // literal text, not a named declaration) — so there is no candidate set to report here
+            // literal text, not a named declaration) -> so there is no candidate set to report here
             // the way there is for the member/type resolvers. Point the caller at the tools that
             // would show it real file content instead of leaving a bare message with nothing to act on.
             return new DocumentEditResult
@@ -1779,21 +1779,21 @@ public class RefactoringEngine
         // Comparison is whitespace-collapsed (not raw-trimmed) so a caller who reproduces the exact
         // expression but with different internal spacing (e.g. around operators) still hits this exact
         // path instead of silently falling through to the ambiguous nearest-enclosing-expression guess
-        // below — that fallback exists for a genuinely partial contextSnippet, not a whitespace variant
+        // below -> that fallback exists for a genuinely partial contextSnippet, not a whitespace variant
         // of a complete one.
         var normalizedSnippet = System.Text.RegularExpressions.Regex.Replace(contextSnippet.Trim(), @"\s+", " ");
         var exactMatch = root.DescendantNodes().OfType<ExpressionSyntax>().Where(e => e.SpanStart == pos && System.Text.RegularExpressions.Regex.Replace(e.ToString().Trim(), @"\s+", " ") == normalizedSnippet).FirstOrDefault();
-        // Fallback: contextSnippet didn't match a whole expression's text at this position — walk from
+        // Fallback: contextSnippet didn't match a whole expression's text at this position -> walk from
         // the token at the position up to the nearest enclosing expression instead. This is inherently
         // ambiguous (a partial/short contextSnippet can resolve to a larger expression than the caller
         // intended), so it only ever kicks in when the exact match above fails, and never overrides it.
         var expression = exactMatch ?? root.FindToken(pos).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            // The snippet DID resolve to a text position (pos, above) — the failure is that no
+            // The snippet DID resolve to a text position (pos, above) -> the failure is that no
             // ExpressionSyntax boundary aligns with it (e.g. the snippet spans a statement, a
             // keyword, or crosses an expression boundary). Report where it landed instead of a
-            // bare "not found", since that position is real, already-available information — a
+            // bare "not found", since that position is real, already-available information -> a
             // caller reading only "expression not found" has no way to tell its snippet was even
             // located at all versus silently mismatched.
             var landedLine = text.Lines.GetLineFromPosition(pos).LineNumber + 1;
@@ -1848,7 +1848,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.NoChange,
                 FilePath = filePath,
-                Message = $"// '{existingName}' is already a local variable — nothing to extract."
+                Message = $"// '{existingName}' is already a local variable - nothing to extract."
             };
         }
 
@@ -2078,7 +2078,7 @@ public class RefactoringEngine
         var writtenOnly = flow.WrittenInside.Except(flow.ReadInside).ToList();
         foreach (var v in writtenOnly)
         {
-            warnings.Add($"'{v.Name}' is written but never read — possible dead assignment.");
+            warnings.Add($"'{v.Name}' is written but never read - possible dead assignment.");
         }
 
         return new DataFlowSummary(methodName, flow.ReadOutside.Select(s => s.Name).ToList(), flow.WrittenInside.Select(s => s.Name).ToList(), flow.ReadInside.Select(s => s.Name).ToList(), flow.WrittenOutside.Select(s => s.Name).ToList(), flow.Captured.Select(s => s.Name).ToList(), warnings);
@@ -2139,7 +2139,7 @@ public class RefactoringEngine
         if (simplifyExisting)
         {
             // Semantic-safe shortening of now-redundant fully-qualified names, via Roslyn's own
-            // Simplifier (not text find/replace) — it consults the semantic model per-node, so it
+            // Simplifier (not text find/replace) -> it consults the semantic model per-node, so it
             // only reduces a qualified name when doing so introduces no ambiguity in this file.
             formattedDoc = await Simplifier.ReduceAsync(formattedDoc, Simplifier.Annotation, cancellationToken: cancellationToken);
             var simplifiedRoot = await formattedDoc.GetSyntaxRootAsync(cancellationToken);
@@ -2219,7 +2219,7 @@ public class RefactoringEngine
     }
 
     /// <summary>
-    /// Sets an enum's complete member list in one pass — covers add, remove, and reorder.
+    /// Sets an enum's complete member list in one pass -> covers add, remove, and reorder.
     /// <paramref name = "values"/> is a comma-separated "Name[=IntValue]" list in the desired final
     /// order. Members whose name is retained keep their existing explicit value unless the caller
     /// supplies an override; members omitted from <paramref name = "values"/> are removed; names not
@@ -2227,8 +2227,8 @@ public class RefactoringEngine
     /// summarizes what was added/removed/reordered so callers can verify the diff matched intent.
     /// Members that were already explicit in the source keep their literal value regardless of new
     /// position (same as a hand-edit would); members that were implicit take the next ordinal from
-    /// their predecessor in the NEW order — same renumbering behavior as manually retyping the enum
-    /// body — so a mid-list insert or removal can shift a retained implicit member's underlying
+    /// their predecessor in the NEW order -> same renumbering behavior as manually retyping the enum
+    /// body -> so a mid-list insert or removal can shift a retained implicit member's underlying
     /// value. Pass "=N" explicitly for any member whose numeric value must not move. 
     /// </summary>
     public async Task<DocumentEditResult> ModifyEnumAsync(FilePathWrapper filePath, string enumName, string values, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
@@ -2362,7 +2362,7 @@ public class RefactoringEngine
             newMembers.Add(member);
         }
 
-        // Detect duplicate effective values — e.g. inserting a new implicit member ahead of an
+        // Detect duplicate effective values -> e.g. inserting a new implicit member ahead of an
         // already-explicit one shifts the implicit member's auto-numbered value into a collision
         // that C# permits silently. Fail loudly instead of producing a duplicate-valued enum.
         var effectiveValues = new List<(string Name, int Value)>();
@@ -2414,11 +2414,11 @@ public class RefactoringEngine
     }
 
     /// <summary>
-    /// Enum equivalent of AddMemberAsync/InsertMemberAfterAsync/InsertMemberBeforeAsync — enums can't
+    /// Enum equivalent of AddMemberAsync/InsertMemberAfterAsync/InsertMemberBeforeAsync -> enums can't
     /// use those (EnumMemberDeclarationSyntax isn't a MemberDeclarationSyntax, and enum bodies use
     /// comma-separated syntax, not the member grammar SyntaxFactory.ParseMemberDeclaration expects).
     /// <paramref name="newMemberToken"/> is a single "Name" or "Name=IntValue" token, matching one
-    /// entry of ModifyEnumAsync's values list — not a full member declaration. Internally reads the
+    /// entry of ModifyEnumAsync's values list -> not a full member declaration. Internally reads the
     /// enum's current members, splices the new token at the position implied by
     /// afterMemberName/beforeMemberName (append to the end when both are null), and delegates the
     /// actual edit to ModifyEnumAsync so renumbering/collision-detection logic isn't duplicated.
@@ -3161,7 +3161,7 @@ public class RefactoringEngine
         }
 
         // Same-node collision check: two edits resolving to the identical declaration is the node-identity
-        // equivalent of ReplaceSnippet batch's span-overlap rejection — reject before building any replacement.
+        // equivalent of ReplaceSnippet batch's span-overlap rejection -> reject before building any replacement.
         var seen = new Dictionary<MemberDeclarationSyntax, int>();
         foreach (var kvp in resolvedTargets)
         {
@@ -3228,7 +3228,7 @@ public class RefactoringEngine
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Batch form of <see cref="AddAttributeAsync"/>/<see cref="ReplaceAttributeAsync"/>/
-    /// <see cref="RemoveAttributeAsync"/>: same execution model as <see cref="ApplyModifierBatchAsync"/> —
+    /// <see cref="RemoveAttributeAsync"/>: same execution model as <see cref="ApplyModifierBatchAsync"/> ->
     /// resolve every edit's target against ONE original root, reject same-node collisions, fold all
     /// replacements into one <see cref="FormattingHelper.ReplaceNodesFormattedAsync"/> call.
     /// </summary>
@@ -3377,7 +3377,7 @@ public class RefactoringEngine
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Batch form of <see cref="AddBaseTypeAsync"/>/<see cref="RemoveBaseTypeAsync"/>: same execution
-    /// model as <see cref="ApplyModifierBatchAsync"/> — resolve every edit's type target against ONE
+    /// model as <see cref="ApplyModifierBatchAsync"/> -> resolve every edit's type target against ONE
     /// original root, reject same-node collisions, fold all replacements into one
     /// <see cref="FormattingHelper.ReplaceNodesFormattedAsync"/> call.
     /// </summary>
@@ -3779,7 +3779,7 @@ public class RefactoringEngine
         }
 
         // baseIndent is derived first because docText bakes it into every line of the synthetic doc
-        // comment (ParseMemberDeclaration has no notion of "the target's real indent" — whatever
+        // comment (ParseMemberDeclaration has no notion of "the target's real indent" -> whatever
         // whitespace is in the string is exactly what ends up in the parsed trivia).
         var baseIndent = target.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
         var indentText = baseIndent != default ? baseIndent.ToFullString() : "";
@@ -3788,9 +3788,9 @@ public class RefactoringEngine
         var parsedMember = SyntaxFactory.ParseMemberDeclaration(docText);
         var docTrivia = parsedMember!.GetLeadingTrivia().Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).ToList();
 
-        // Keep the target's own real leading trivia that isn't the doc comment itself — blank-line
+        // Keep the target's own real leading trivia that isn't the doc comment itself -> blank-line
         // separators from the previous member and any pre-existing "// planted scenario" line
-        // comments — in their original relative order and indentation, then splice the freshly
+        // comments -> in their original relative order and indentation, then splice the freshly
         // indented doc comment in immediately before the target's own base indent. A pre-existing
         // XML doc comment is dropped here deliberately: this is an Add operation and replaces
         // whatever summary was already present.
@@ -3805,10 +3805,10 @@ public class RefactoringEngine
         }
 
         // newTrivia's indentation is already correct by construction (derived from the target's own
-        // base indent) — do NOT run NormalizeWhitespace() on the result: it re-indents the whole tree
+        // base indent) -> do NOT run NormalizeWhitespace() on the result: it re-indents the whole tree
         // and, when a SingleLineDocumentationCommentTrivia is immediately followed by a plain
         // SingleLineCommentTrivia at the same level, inserts a spurious extra leading space before
-        // the plain comment. Confirmed via a debug dump comparing pre/post-normalize output — the
+        // the plain comment. Confirmed via a debug dump comparing pre/post-normalize output -> the
         // trivia list built above renders correctly before that call and only gets corrupted by it.
         var newTrivia = SyntaxFactory.TriviaList(rebuiltTrivia);
         var newRoot = root.ReplaceNode(target, target.WithLeadingTrivia(newTrivia));
@@ -3822,9 +3822,9 @@ public class RefactoringEngine
 
     // Mirrors VS/Roslyn's native "///" auto-generate scaffold: <param>/<typeparam> per declared
     // parameter/type-parameter and <returns> when the member has a non-void return type, same as
-    // typing "///" above the member would produce — just with the tag bodies left empty rather than
+    // typing "///" above the member would produce -> just with the tag bodies left empty rather than
     // filled in by hand, exactly like the native feature does (see docs history: GitHub Copilot,
-    // not base VS, is what fills tag bodies with real prose — base VS only emits the empty shape).
+    // not base VS, is what fills tag bodies with real prose -> base VS only emits the empty shape).
     // Only MethodDeclarationSyntax/ConstructorDeclarationSyntax carry a ParameterList; other taggable
     // member kinds (property, enum, enum member) fall through to a bare <summary>, same as before.
     private static string BuildDocCommentText(SyntaxNode target, string indentText, string normalizedSummary)
@@ -3856,7 +3856,7 @@ public class RefactoringEngine
             }
         }
 
-        // "void"/"Task" (no result) get no <returns> — matches VS's own native behavior, which only
+        // "void"/"Task" (no result) get no <returns> -> matches VS's own native behavior, which only
         // emits <returns> for a genuinely non-void, non-plain-Task return type.
         if (returnType != null && returnType is not PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.VoidKeyword }
             && returnType is not IdentifierNameSyntax { Identifier.Text: "Task" })
@@ -4356,7 +4356,7 @@ public class RefactoringEngine
         var classDecl = (ClassDeclarationSyntax)classNode;
         // Derive the backing field name, disambiguating from paramName so the generated
         // assignment can never degenerate into a no-op self-assignment (e.g. `stopwatch = stopwatch;`
-        // instead of assigning the parameter into a distinct field — confirmed regression:
+        // instead of assigning the parameter into a distinct field -> confirmed regression:
         // ContosoOrders OrderService, caller passed fieldName == paramName == "stopwatch"). A
         // caller-supplied fieldName that collides with paramName, with or without a leading
         // underscore, is treated the same as omitting fieldName: it falls back to the default
@@ -4378,7 +4378,7 @@ public class RefactoringEngine
             }
             else
             {
-                // expression body → convert to block
+                // expression body -> convert to block
                 var exprStatement = SyntaxFactory.ExpressionStatement(ctor.ExpressionBody!.Expression);
                 body = SyntaxFactory.Block(exprStatement, assignmentStatement);
             }
@@ -4426,7 +4426,7 @@ public class RefactoringEngine
     /// <summary>
     /// Removes a DI constructor parameter and its assignment statement. The backing field is only
     /// deleted when a solution-wide reference check (SymbolFinder.FindReferencesAsync) confirms
-    /// nothing outside the removed assignment reads or writes it — otherwise the field is left in
+    /// nothing outside the removed assignment reads or writes it -> otherwise the field is left in
     /// place so removal never silently breaks code that still depends on it.
     /// </summary>
     public async Task<DocumentEditResult> RemoveConstructorParameterAsync(FilePathWrapper filePath, string className, string paramName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
@@ -4523,7 +4523,7 @@ public class RefactoringEngine
                             continue;
                         }
 
-                        // The assignment statement we're removing is itself a reference to the field —
+                        // The assignment statement we're removing is itself a reference to the field ->
                         // don't let it count against "still used elsewhere".
                         if (assignment != null && location.Document.FilePath == filePath && assignment.Span.Contains(location.Location.SourceSpan))
                         {
@@ -4542,7 +4542,7 @@ public class RefactoringEngine
             }
             else
             {
-                // No semantic model / symbol available — can't prove the field is unused, so err
+                // No semantic model / symbol available -> can't prove the field is unused, so err
                 // conservative and leave it in place rather than risk deleting something still live.
                 fieldStillUsedElsewhere = true;
             }
@@ -4567,7 +4567,7 @@ public class RefactoringEngine
     /// <summary>
     /// Lists a class's primary constructor parameters alongside their best-guess backing field,
     /// inferred from a `<field> = <paramName>;` (or `this.<field> = <paramName>;`) assignment
-    /// statement in the constructor body — the same convention AddConstructorParameterAsync writes.
+    /// statement in the constructor body -> the same convention AddConstructorParameterAsync writes.
     /// </summary>
     public async Task<(EditOutcome Outcome, string? Message, List<ConstructorParameterInfo> Parameters)> GetConstructorParametersAsync(FilePathWrapper filePath, string className, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
@@ -4667,7 +4667,7 @@ public class RefactoringEngine
     }
 
     /// <summary>
-    /// Appends a parameter to a method's parameter list. The new parameter always goes last —
+    /// Appends a parameter to a method's parameter list. The new parameter always goes last ->
     /// this keeps every existing positional call site valid without rewriting it, so unlike
     /// RemoveMethodParameterAsync there is no call-site safety analysis to do: an added parameter
     /// with no default is required at every call site (an intentional break the caller opted
@@ -4675,7 +4675,7 @@ public class RefactoringEngine
     /// backward-compatible with zero call-site changes.
     ///
     /// nullDefault bypasses defaultValue entirely and forces the default straight to a null
-    /// literal — see anthropics/claude-code#81911: some MCP clients serialize the literal string
+    /// literal -> see anthropics/claude-code#81911: some MCP clients serialize the literal string
     /// "null" as an actual JSON null before it ever reaches this method, so defaultValue:"null"
     /// can silently arrive here as a C# null (the same as "no default"), producing a required
     /// parameter instead of one defaulted to null. nullDefault:true sidesteps that entirely since
@@ -4689,7 +4689,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Cannot edit: nullDefault and defaultValue are mutually exclusive — pass only one."
+                Message = "// Cannot edit: nullDefault and defaultValue are mutually exclusive - pass only one."
             };
         }
 
@@ -4780,7 +4780,7 @@ public class RefactoringEngine
     /// validation only recompiles files present in the changeset). Restricted to the last
     /// parameter deliberately: removing any other position would require reordering every
     /// remaining positional argument at every call site, which reintroduces the same
-    /// named-argument/params-expansion ambiguity ChangeSignatureAsync already has to skip around —
+    /// named-argument/params-expansion ambiguity ChangeSignatureAsync already has to skip around ->
     /// here a skip can't be tolerated (see above), so those cases are refused outright instead of
     /// silently left broken.
     /// </summary>
@@ -4854,7 +4854,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.CannotRemove,
                 FilePath = filePath,
-                Message = $"// Cannot remove '{paramName}': MethodSignature(remove) only supports the last parameter (currently '{lastParam.Identifier.Text}') — removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely."
+                Message = $"// Cannot remove '{paramName}': MethodSignature(remove) only supports the last parameter (currently '{lastParam.Identifier.Text}') - removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely."
             };
         }
 
@@ -4896,7 +4896,7 @@ public class RefactoringEngine
                         {
                             Outcome = EditOutcome.CannotRemove,
                             FilePath = filePath,
-                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} is not a simple invocation expression (e.g. method group or delegate conversion) — cannot safely update it."
+                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} is not a simple invocation expression (e.g. method group or delegate conversion) - cannot safely update it."
                         };
                     }
 
@@ -4907,14 +4907,14 @@ public class RefactoringEngine
                         {
                             Outcome = EditOutcome.CannotRemove,
                             FilePath = filePath,
-                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} uses named arguments — cannot safely update it."
+                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} uses named arguments - cannot safely update it."
                         };
                     }
 
                     if (args.Count != targetParamCount)
                     {
                         // Caller already omits this parameter (relying on its default) or the
-                        // invocation doesn't reach it (e.g. params expansion) — either way there's
+                        // invocation doesn't reach it (e.g. params expansion) -> either way there's
                         // no trailing argument here that corresponds to the removed parameter, so
                         // this call site needs no edit and stays valid as-is.
                         continue;
@@ -4930,7 +4930,7 @@ public class RefactoringEngine
                         {
                             Outcome = EditOutcome.CannotRemove,
                             FilePath = filePath,
-                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} could not be re-located after an earlier edit to the same file — cannot safely update it."
+                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} could not be re-located after an earlier edit to the same file - cannot safely update it."
                         };
                     }
 
@@ -5089,7 +5089,7 @@ public class RefactoringEngine
             ConstructorDeclarationSyntax ctor => ctor.Identifier.Text,
             // EnumDeclarationSyntax/RecordDeclarationSyntax/StructDeclarationSyntax are all
             // MemberDeclarationSyntax (via BaseTypeDeclarationSyntax) and so are already collected
-            // as candidates by ResolveMemberByNameOrSnippet's DescendantNodes().OfType<...>() scan —
+            // as candidates by ResolveMemberByNameOrSnippet's DescendantNodes().OfType<...>() scan ->
             // omitting them here didn't exclude them, it silently made GetMemberName return null for
             // them, so the `GetMemberName(m) == memberName` filter dropped them regardless of what
             // name was searched for. Confirmed: AddSummaryCommentAsync("OrderStatus", ...) against a
@@ -5103,7 +5103,7 @@ public class RefactoringEngine
 
     // Task I evaluation (docs/plan-tool-disambiguation-remediation-v1.md, addendum under Task I):
     // NearMissList won over NearestSnippet/CorrectedCoordinates because it's the only strategy that
-    // shows an agent every real candidate instead of just the first one — on a genuinely ambiguous
+    // shows an agent every real candidate instead of just the first one -> on a genuinely ambiguous
     // snippet (2+ real matches), the other two strategies only ever surfaced candidate #1, which is
     // actively misleading (an agent can't tell there were other matches worth choosing between, let
     // alone which one it meant). NearMissList's per-candidate line + declaration preview is also the
@@ -5123,7 +5123,7 @@ public class RefactoringEngine
         // ConstructorDeclarationSyntax.Identifier), so "OrderService" matches both the class
         // declaration and its constructor here. None of these tools operate on whole type
         // declarations (ReplaceMember/ChangeAccessibility/etc. target "a method, property, or
-        // field"), so when a constructor shares the name, prefer it over the enclosing type —
+        // field"), so when a constructor shares the name, prefer it over the enclosing type ->
         // otherwise the type declaration (found first, being the ancestor node) silently wins
         // and callers asking for "the OrderService member" get the whole class back.
         if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
@@ -5133,12 +5133,12 @@ public class RefactoringEngine
 
         if (contextSnippet == null || candidates.Count <= 1)
         {
-            // memberName alone already resolves unambiguously (zero or one candidate) — a
+            // memberName alone already resolves unambiguously (zero or one candidate) -> a
             // contextSnippet exists only to disambiguate between multiple same-named candidates,
             // so there's nothing for it to do here. A caller that includes one defensively (or
             // whose snippet has a whitespace/formatting mismatch against the file, unrelated to
             // *which* member is meant) should not have the whole call fail over a match that was
-            // never actually needed — confirmed regression: ContosoOrders ApplyDiscount (a single,
+            // never actually needed -> confirmed regression: ContosoOrders ApplyDiscount (a single,
             // non-overloaded method) failed ReplaceMember twice on contextSnippet mismatches that
             // had no bearing on which member was targeted, before the caller gave up and switched
             // tools entirely.
@@ -5160,7 +5160,7 @@ public class RefactoringEngine
                 return matchedMember;
             }
 
-            // Snippet matched but didn't align to a candidate member — treat as ambiguous
+            // Snippet matched but didn't align to a candidate member -> treat as ambiguous
             throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "ambiguous"));
         }
 
@@ -5176,7 +5176,7 @@ public class RefactoringEngine
     // enum type itself resolves fine. SummaryComment's three operations only ever call SyntaxNode-
     // level trivia APIs (GetLeadingTrivia/WithLeadingTrivia) on the resolved target, never anything
     // MemberDeclarationSyntax-specific, so this dedicated resolver returns the broader SyntaxNode
-    // and is used only by those three methods — other tools (ReplaceMember, ModifyModifier, etc.)
+    // and is used only by those three methods -> other tools (ReplaceMember, ModifyModifier, etc.)
     // keep using ResolveMemberByNameOrSnippet as-is, since they need MemberDeclarationSyntax-only
     // APIs (e.g. .Modifiers) that an enum member does not have.
     private SyntaxNode? ResolveMemberOrEnumMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName = null)
@@ -5192,7 +5192,7 @@ public class RefactoringEngine
 
         // Sibling types can declare members with byte-identical text (e.g. two records each with
         // "public string Name { get; set; } = "";"), which no line-based contextSnippet can tell
-        // apart — narrowing by the member's own containing type first resolves that case without
+        // apart -> narrowing by the member's own containing type first resolves that case without
         // ever reaching snippet matching. Applied whenever the hint is given and actually narrows
         // the set (never to an empty result, in case the caller's hint doesn't match reality).
         if (containingTypeName != null && candidates.Count > 1)
@@ -5235,9 +5235,9 @@ public class RefactoringEngine
     /// Cheap pre-check so callers (e.g. Member's dispatch for remove/replace, which only take a bare
     /// memberName) can detect that the named member is actually an enum member and route to
     /// RemoveEnumMemberAsync/ReplaceEnumMemberAsync instead of RemoveMemberAsync/ReplaceMemberAsync
-    /// (whose resolver, ResolveMemberByNameOrSnippet, can never match an EnumMemberDeclarationSyntax —
+    /// (whose resolver, ResolveMemberByNameOrSnippet, can never match an EnumMemberDeclarationSyntax ->
     /// it isn't a MemberDeclarationSyntax). Returns null if memberName doesn't resolve to an enum
-    /// member at all (including "not found" and "ambiguous") — callers should let the normal
+    /// member at all (including "not found" and "ambiguous") -> callers should let the normal
     /// resolution path in whichever method they call next surface the real error in that case.
     /// </summary>
     public async Task<string?> TryGetEnumMemberContainerNameAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
@@ -5271,7 +5271,7 @@ public class RefactoringEngine
     /// Cheap pre-check so callers (e.g. Member's dispatch) can route to the enum-specific
     /// Add/Remove/ReplaceEnumMemberAsync methods instead of the class/struct/interface/record-only
     /// AddMemberAsync/RemoveMemberAsync/ReplaceMemberAsync/InsertMemberAfterAsync/InsertMemberBeforeAsync
-    /// family. Returns false (not an error) if the container isn't found at all — callers should let
+    /// family. Returns false (not an error) if the container isn't found at all -> callers should let
     /// the normal resolution path in whichever method they call next surface the real "not found"
     /// error, rather than this pre-check swallowing it.
     /// </summary>
@@ -5304,7 +5304,7 @@ public class RefactoringEngine
     public record ContainerMemberInfo(string? Name, string Kind, string Signature, int StartLine, int EndLine);
     /// <summary>
     /// Lists the direct members of one container (class/struct/interface/record) in one file,
-    /// syntax-scoped rather than symbol-scoped — unlike GetTypeInfo/GetTypeMembersDetailAsync
+    /// syntax-scoped rather than symbol-scoped -> unlike GetTypeInfo/GetTypeMembersDetailAsync
     /// (which resolve by type name across the whole solution's compilation and include inherited
     /// members), this only looks at the exact container the caller is about to edit, so its
     /// output lines up with what RemoveMember/ReplaceMember need: an exact memberName plus enough
@@ -5400,7 +5400,7 @@ public class RefactoringEngine
             return name[..backtick];
         }
 
-        // Only a trailing argument list is stripped — an angle bracket anywhere else isn't arity
+        // Only a trailing argument list is stripped -> an angle bracket anywhere else isn't arity
         // (a caller passing a whole declaration line, say), and truncating there would silently
         // resolve to the wrong type rather than reporting a miss.
         var open = name.IndexOf('<');
@@ -5423,7 +5423,7 @@ public class RefactoringEngine
         var candidates = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => NormalizeTypeName(t.Identifier.Text) == normalizedRequest).Where(t => extraFilter == null || extraFilter(t)).ToList();
         if (contextSnippet == null || candidates.Count <= 1)
         {
-            // typeName alone already resolves unambiguously — see the identical guard and
+            // typeName alone already resolves unambiguously -> see the identical guard and
             // rationale in ResolveMemberByNameOrSnippet above.
             return candidates.FirstOrDefault();
         }
@@ -5478,7 +5478,7 @@ public class RefactoringEngine
     /// </summary>
     /// <remarks>
     /// Replaces three identical <c>"// Container not found."</c> literals, which said nothing
-    /// actionable and — being prefixed with <c>//</c> — read as commented-out code rather than an
+    /// actionable and -> being prefixed with <c>//</c> -> read as commented-out code rather than an
     /// error. Listing the available names is the single most useful thing to return here: the
     /// caller's next move is always to pick one, and it also reveals a wrong-file mistake
     /// immediately. Generic spellings resolve, so a listed name can be given back verbatim; see
@@ -5494,14 +5494,14 @@ public class RefactoringEngine
 
         if (declared.Count == 0)
         {
-            return $"No type named '{requestedName}' was found — this file declares no types at all. " +
+            return $"No type named '{requestedName}' was found - this file declares no types at all. " +
                    "Check the filePath.";
         }
 
         var shown = declared.Take(10).ToList();
         var suffix = declared.Count > shown.Count ? $" (+{declared.Count - shown.Count} more)" : "";
         return $"No type named '{requestedName}' was found in this file. Types declared here: " +
-               $"{string.Join(", ", shown)}{suffix}. Pass one of those as containerName — a type " +
+               $"{string.Join(", ", shown)}{suffix}. Pass one of those as containerName - a type " +
                "argument list is optional, so both 'Foo' and 'Foo<T>' resolve.";
     }
 
@@ -5568,7 +5568,7 @@ public class RefactoringEngine
         // Collect public non-static non-override methods and properties from the class
         var publicMethods = classNode.Members.OfType<MethodDeclarationSyntax>().Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)) && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword))).ToList();
         var publicProperties = classNode.Members.OfType<PropertyDeclarationSyntax>().Where(p => p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) && !p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)) && !p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword))).ToList();
-        // Find the interface — first in same file, then in other documents
+        // Find the interface -> first in same file, then in other documents
         Document? interfaceDocument = null;
         InterfaceDeclarationSyntax? interfaceNode = null;
         SyntaxNode? interfaceRoot = null;
@@ -5761,7 +5761,7 @@ public class RefactoringEngine
             };
         }
 
-        // XML doc exists — update it
+        // XML doc exists -> update it
         var xmlDoc = xmlTrivia.GetStructure() as Microsoft.CodeAnalysis.CSharp.Syntax.DocumentationCommentTriviaSyntax;
         if (xmlDoc == null)
         {
@@ -5856,7 +5856,7 @@ public class RefactoringEngine
     // lines into merged ranges with leading/trailing context on each side, a shape CreateDiff's
     // flat per-line unified-diff string doesn't produce and existing tests assert on directly
     // (RegressionTests/NewToolTests/BugFixTests). See docs/current/codebase-consistency-audit-v1.md
-    // #3 — consolidating this would need a real reshape of FormatHunk/FormatPreviewResult and its
+    // #3 -> consolidating this would need a real reshape of FormatHunk/FormatPreviewResult and its
     // consumers, not just a call-site swap, so it's left as its own diff implementation for now.
     private static List<FormatHunk> ComputeFormatHunks(string[] original, string[] formatted, int contextLines)
     {

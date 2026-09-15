@@ -139,7 +139,7 @@ public class Service
 
         var result = await _engine.OptimizeToValueTaskAsync("Service.cs", "GetValueAsync");
 
-        // Should return source unchanged (not Task return type → no conversion)
+        // Should return source unchanged (not Task return type -> no conversion)
         Assert.That(result.UpdatedText, Does.Contain("ValueTask<int>"),
             "Already-ValueTask method should be returned as-is.");
         Assert.That(result.UpdatedText!, Does.Not.StartWith("// WARNING:"),

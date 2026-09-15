@@ -76,7 +76,7 @@ public sealed class LmStudioClient : ILlmClient
     }
 
     // Fails fast on the client before an oversized request reaches LM Studio and burns time on a
-    // 400 round-trip (llama.cpp's engine rejects the whole request rather than truncating it — see
+    // 400 round-trip (llama.cpp's engine rejects the whole request rather than truncating it -> see
     // "exceed_context_size_error"). Token counts are estimated, not exact (see PromptTokenEstimator),
     // so this is a best-effort guard, not a guarantee; LM Studio's own check remains authoritative.
     private async Task EnsureFitsContextAsync(string systemPrompt, string userPrompt, int maxTokens, CancellationToken cancellationToken)

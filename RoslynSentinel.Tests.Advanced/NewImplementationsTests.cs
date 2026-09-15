@@ -69,7 +69,7 @@ public class MyClass
 
         Assert.That(results, Is.Not.Null);
         Assert.That(results.Any(r => r.SymbolName == "UnusedHelper"), Is.True,
-            "UnusedHelper is not called anywhere — should be flagged.");
+            "UnusedHelper is not called anywhere - should be flagged.");
         Assert.That(results.All(r => r.SymbolName != "Run"), Is.True,
             "Public method Run should not appear in the results.");
     }
@@ -103,7 +103,7 @@ public class Config
         var results = await _deadCodeEngine.FindUnusedPrivateMembersAsync("Config.cs", "Config");
 
         Assert.That(results.Any(r => r.SymbolName == "CacheSize"), Is.True,
-            "CacheSize is never read or written from outside its declaration — should be flagged.");
+            "CacheSize is never read or written from outside its declaration - should be flagged.");
     }
 
     [Test]
@@ -321,7 +321,7 @@ public class Dashboard
         var results = await _analysisEngine.DetectMemoryLeaksAsync("Dashboard.cs");
 
         Assert.That(results.Any(r => r.Contains("Dashboard") && r.Contains("Tick")), Is.True,
-            "Dashboard subscribes to _clock.Tick without IDisposable — potential memory leak.");
+            "Dashboard subscribes to _clock.Tick without IDisposable - potential memory leak.");
     }
 
     [Test]
@@ -341,7 +341,7 @@ public class Form : System.IDisposable
         var results = await _analysisEngine.DetectMemoryLeaksAsync("Form.cs");
 
         Assert.That(results.All(r => !r.Contains("Form") || !r.Contains("Click")), Is.True,
-            "Form implements IDisposable with proper unsubscription — should not be flagged.");
+            "Form implements IDisposable with proper unsubscription - should not be flagged.");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -561,7 +561,7 @@ public class Marker { }", "Marker.cs");
         var result = await _analysisEngine.GenerateEqualityOverridesAsync("Marker.cs", "Marker");
 
         Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
-            "A class with no fields or properties cannot generate equality overrides — "
+            "A class with no fields or properties cannot generate equality overrides - "
             + "that is reported through Outcome, not thrown.");
     }
 
@@ -684,7 +684,7 @@ public class Repo
 {
     public void Query(string name, System.Data.IDbConnection conn)
     {
-        // Direct call — interpolated string as the SQL argument
+        // Direct call -> interpolated string as the SQL argument
         Execute($""SELECT * FROM Users WHERE Name = '{name}'"");
     }
     private void Execute(string sql) { }
@@ -759,7 +759,7 @@ public class Logger
         var results = await _securityEngine.CheckForSqlInjectionAsync("Logger.cs");
 
         Assert.That(results, Is.Empty,
-            "Log() is not a SQL method — interpolated string here is fine.");
+            "Log() is not a SQL method - interpolated string here is fine.");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -832,7 +832,7 @@ public class Busy
 
         var results = await _asyncSafetyEngine.FindTaskDelayUsageAsync("Busy.cs");
 
-        Assert.That(results, Is.Empty, "Task.FromResult is not a Delay — should produce no report.");
+        Assert.That(results, Is.Empty, "Task.FromResult is not a Delay - should produce no report.");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -852,7 +852,7 @@ public class Yielder
         var results = await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync("Yielder.cs");
 
         Assert.That(results, Is.Not.Empty,
-            "Task.Delay(0) is a suboptimal yield pattern — should be reported as a Task.Yield() candidate.");
+            "Task.Delay(0) is a suboptimal yield pattern - should be reported as a Task.Yield() candidate.");
         Assert.That(results.Any(r => r.MethodName == "YieldAsync"), Is.True);
     }
 
@@ -926,7 +926,7 @@ public class Simple
 
         var results = await _asyncSafetyEngine.FindTaskWhenAllUsageAsync("Simple.cs");
 
-        Assert.That(results, Is.Empty, "A single await cannot be parallelized — nothing to flag.");
+        Assert.That(results, Is.Empty, "A single await cannot be parallelized - nothing to flag.");
     }
 
     [Test]
@@ -967,7 +967,7 @@ public class Greeter
     [Test]
     public async Task ReplaceStringConcat_DoesNotChange_PureLiteralConcat()
     {
-        // Two string literals concatenated — Roslyn folds these at compile time; no variable to interpolate
+        // Two string literals concatenated -> Roslyn folds these at compile time; no variable to interpolate
         SetSource(@"
 public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
 
@@ -984,7 +984,7 @@ public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
 
         var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("C.cs");
 
-        // No concat found means the engine reports TargetNotFound and leaves UpdatedText unset —
+        // No concat found means the engine reports TargetNotFound and leaves UpdatedText unset ->
         // no interpolation is introduced because there is nothing to rewrite.
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
         Assert.That(result.UpdatedText, Is.Null);
@@ -1122,7 +1122,7 @@ public class C
         const string source = "public class C { public void M() { } }";
         SetSource(source, "C.cs");
 
-        // Snippet points to class declaration — no expression there; graceful fallback returns original
+        // Snippet points to class declaration -> no expression there; graceful fallback returns original
         var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", "public class C", "_f");
 
         // Should return the original source unchanged (graceful fallback)

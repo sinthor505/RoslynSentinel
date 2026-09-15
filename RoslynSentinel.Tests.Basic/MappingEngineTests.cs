@@ -154,7 +154,7 @@ public class TargetModel
     }
 }", "NoOp.cs");
 
-        // Lines 5-5 contain "return a + b;" — no assignment expressions
+        // Lines 5-5 contain "return a + b;" -> no assignment expressions
         var result = await _engine.InvertAssignmentsAsync("NoOp.cs", 5, 5);
 
         Assert.That(result.UpdatedText, Does.Contain("return a + b"),

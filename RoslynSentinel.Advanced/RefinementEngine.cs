@@ -19,7 +19,7 @@ public class RefinementEngine
     /// <summary>
     /// Inlines a simple method (expression-body or single-return-statement) by replacing ALL call sites
     /// solution-wide with the method's expression, then removing the method declaration.
-    /// Returns a dictionary of filePath→updatedContent for every affected file.
+    /// Returns a dictionary of filePath->updatedContent for every affected file.
     /// </summary>
     public async Task<Dictionary<FilePathWrapper, string>> InlineMethodAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {

@@ -76,7 +76,7 @@ public class MsToolAugmentEngine
 
     // ── 1. EncapsulateFieldSafe ───────────────────────────────────────────────
     // MS Bug: encapsulate_field generates `private int SuccessCount` + property
-    // `get { return SuccessCount; }` — same name → infinite recursion / compile error.
+    // `get { return SuccessCount; }` -> same name -> infinite recursion / compile error.
     // Fix: back field is always renamed to `_camelCase`.
 
     /// <summary>
@@ -134,7 +134,7 @@ public class MsToolAugmentEngine
         var varDecl = field.Declaration.Variables.First(v => v.Identifier.Text == fieldName);
         var initializer = varDecl.Initializer;
 
-        // ── Step 1: rename all usages of fieldName → backingName in the tree
+        // ── Step 1: rename all usages of fieldName -> backingName in the tree
         //    (excluding the field declaration itself)
         var trackedRoot = root.TrackNodes(field);
         var usages = trackedRoot.DescendantNodes()
@@ -294,7 +294,7 @@ public class MsToolAugmentEngine
     /// <summary>
     /// Converts a switch statement to a switch expression. Unlike the standard
     /// <c>convert_to_pattern_matching</c> tool, this version rejects switch statements
-    /// where cases assign to multiple variables — preventing silent data loss.
+    /// where cases assign to multiple variables -> preventing silent data loss.
     /// </summary>
     public async Task<MsAugmentResult> ConvertSwitchToPatternSafeAsync(
         FilePathWrapper filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
@@ -343,7 +343,7 @@ public class MsToolAugmentEngine
             {
                 isReturnSwitch = false;
             }
-            else if (stmts.Count == 0) { /* empty case — fall-through */ }
+            else if (stmts.Count == 0) { /* empty case - fall-through */ }
             else
             {
                 return MsAugmentResult.Fail(
@@ -377,7 +377,7 @@ public class MsToolAugmentEngine
                 }
                 else
                 {
-                    continue; // empty/fall-through — skip
+                    continue; // empty/fall-through - skip
                 }
 
                 PatternSyntax pattern = label is DefaultSwitchLabelSyntax
@@ -601,7 +601,7 @@ public class MsToolAugmentEngine
         var annotation = new SyntaxAnnotation();
         var newUsings = SyntaxFactory.List(sorted.Select((u, idx) =>
         {
-            // Clean up trivia — each using on its own line, no extra blanks
+            // Clean up trivia -> each using on its own line, no extra blanks
             var clean = u.WithLeadingTrivia(SyntaxFactory.TriviaList())
                          .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.CarriageReturnLineFeed))
                          .WithAdditionalAnnotations(annotation);
@@ -648,11 +648,11 @@ public class MsToolAugmentEngine
     /// nullable annotation that came from flow-state analysis rather than the variable's actual
     /// declared nullability. <c>ILocalSymbol.Type</c> obtained via <c>SemanticModel.AnalyzeDataFlow</c>
     /// can carry <see cref="NullableAnnotation.Annotated"/> purely because the compiler's flow
-    /// analysis is conservative at the region boundary (e.g. after a loop or multiple branches) —
+    /// analysis is conservative at the region boundary (e.g. after a loop or multiple branches) ->
     /// not because the variable was ever actually assignable to null. A generated parameter that
     /// blindly copies that annotation ends up typed <c>Foo?</c> for a variable that's really always
     /// non-null (e.g. <c>var sb = new StringBuilder();</c>, never reassigned), and the generated
-    /// method body then dereferences it without a null check — producing a live CS8602 warning
+    /// method body then dereferences it without a null check -> producing a live CS8602 warning
     /// that didn't exist before extraction. Only a type explicitly declared/initialized as nullable
     /// (value types' <c>Nullable&lt;T&gt;</c>, or a reference type whose declared type is itself
     /// nullable) should keep the <c>?</c> here; this strips a flow-state-only annotation.
@@ -667,7 +667,7 @@ public class MsToolAugmentEngine
 
     // ── 6. FormatDocumentSafe ─────────────────────────────────────────────────
     // MS Bug: roslyn-format_document always applies changes immediately.
-    // There is NO preview mode — preview: true is not even a parameter in the MS tool.
+    // There is NO preview mode -> preview: true is not even a parameter in the MS tool.
     // Fix: Use Roslyn's Formatter.Format() to compute formatted content without writing.
     // preview=true (default) returns formatted content WITHOUT writing to disk.
     // preview=false writes to disk AND updates the in-memory workspace.
@@ -687,7 +687,7 @@ public class MsToolAugmentEngine
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
 
-        // Use an AdhocWorkspace for formatting options — no project or solution needed
+        // Use an AdhocWorkspace for formatting options -> no project or solution needed
         using var workspace = new AdhocWorkspace();
         var formattedRoot = Formatter.Format(root, workspace, cancellationToken: cancellationToken);
         var formatted = formattedRoot.ToFullString();
@@ -697,7 +697,7 @@ public class MsToolAugmentEngine
             var currentSolution = _workspaceManager.CurrentSolution;
             if (currentSolution != null && currentSolution.GetDocumentIdsWithFilePath(filePath).Any())
             {
-                // Solution is loaded — route through the shared chokepoint so this write gets
+                // Solution is loaded -> route through the shared chokepoint so this write gets
                 // drift detection, pre-image capture, and workspace resync like every other tool.
                 var result = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { [filePath] = formatted },
@@ -709,7 +709,7 @@ public class MsToolAugmentEngine
             }
             else
             {
-                // No solution loaded — the chokepoint requires CurrentSolution, so fall back to a
+                // No solution loaded -> the chokepoint requires CurrentSolution, so fall back to a
                 // direct write. Same fallback the previous code silently relied on via its try/catch.
                 try { await File.WriteAllTextAsync(filePath, formatted, cancellationToken); }
                 catch (Exception ex) { return MsAugmentResult.Fail($"Could not write file '{filePath}': {ex.Message}"); }
@@ -723,12 +723,12 @@ public class MsToolAugmentEngine
     // MS Bug: roslyn-convert_foreach_linq silently overwrites the collection variable
     // with `new List<T>()`, discarding any elements added before the foreach.
     // Example: results.Add("header"); foreach (...) { results.Add(...); }
-    //          → standard tool drops "header" entirely, silently producing wrong code.
+    //          -> standard tool drops "header" entirely, silently producing wrong code.
     // Fix: Pre-flight analysis that detects unsafe modifications before the foreach.
 
     /// <summary>
     /// Pre-flight safety analysis for the standard <c>convert_foreach_linq</c> tool.
-    /// Detects the case where the collection is modified before the foreach — which the
+    /// Detects the case where the collection is modified before the foreach -> which the
     /// standard tool silently destroys by re-initializing the collection variable.
     /// </summary>
     public async Task<ForeachLinqAnalysis> AnalyzeForeachForLinqConversionAsync(
@@ -774,8 +774,8 @@ public class MsToolAugmentEngine
         if (addCalls.Count == 0)
         {
             return new ForeachLinqAnalysis(false, "", 0,
-                "No .Add() calls found in foreach body — not a LINQ Select/ToList() candidate.",
-                "Manual analysis required — this foreach may not be convertible to LINQ.");
+                "No .Add() calls found in foreach body - not a LINQ Select/ToList() candidate.",
+                "Manual analysis required - this foreach may not be convertible to LINQ.");
         }
 
         // All Add() calls must target the same collection
@@ -845,7 +845,7 @@ public class MsToolAugmentEngine
                     string.Join("; ", examples) +
                     ". The standard convert_foreach_linq tool would silently discard these modifications " +
                     "by re-initializing the variable with 'new List<T>()'.",
-                Recommendation: "Manual conversion required — preserve pre-foreach modifications.");
+                Recommendation: "Manual conversion required - preserve pre-foreach modifications.");
         }
 
         return new ForeachLinqAnalysis(
@@ -853,12 +853,12 @@ public class MsToolAugmentEngine
             CollectionVariableName: collectionName,
             StatementsBeforeForeach: 0,
             BlockingReason: null,
-            Recommendation: "Use standard convert_foreach_linq tool — collection has no modifications before the foreach.");
+            Recommendation: "Use standard convert_foreach_linq tool - collection has no modifications before the foreach.");
     }
 
     // ── 9. PreviewAddMissingUsings ────────────────────────────────────────────
     // MS Bug: roslyn-add_missing_usings with preview:true silently APPLIES changes
-    // to the file on disk anyway — preview is completely ignored. This was confirmed
+    // to the file on disk anyway -> preview is completely ignored. This was confirmed
     // in testing: the file IS modified even when preview:true is specified.
     // Fix: compute what usings WOULD be added using diagnostics + semantic search,
     // without ever touching the file.
@@ -871,7 +871,7 @@ public class MsToolAugmentEngine
     public async Task<AddUsingsPreview> PreviewAddMissingUsingsAsync(
         FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        // Solution must be loaded — this tool requires semantic analysis
+        // Solution must be loaded -> this tool requires semantic analysis
         var currentSolution = _workspaceManager.CurrentSolution;
         if (currentSolution == null)
         {
@@ -1069,11 +1069,11 @@ public class MsToolAugmentEngine
                 "Only string, numeric, char, and bool literals can be extracted to constants.");
         }
 
-        // Find the containing type — needed to place the constant declaration
+        // Find the containing type -> needed to place the constant declaration
         var containingType = literal.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         if (containingType == null)
         {
-            return MsAugmentResult.Fail("No containing type found — cannot place the constant declaration.");
+            return MsAugmentResult.Fail("No containing type found - cannot place the constant declaration.");
         }
 
         // Determine the C# type keyword for the constant
@@ -1249,7 +1249,7 @@ public class MsToolAugmentEngine
 
         // Build the interpolated string: $"TypeName {{ Prop1 = {Prop1}, Prop2 = {Prop2} }}"
         // Using {{ and }} to produce literal braces in C# interpolated strings (no CS8086).
-        // NOTE: do NOT use a C# interpolated string here — $"{typeName} {{ " would evaluate
+        // NOTE: do NOT use a C# interpolated string here -> $"{typeName} {{ " would evaluate
         // {{ to a single { at runtime, defeating the escape. Use concatenation instead.
         var contents = new List<InterpolatedStringContentSyntax>
         {
@@ -1300,13 +1300,13 @@ public class MsToolAugmentEngine
     // Fix: use SemanticModel.GetTypeInfo() on the return expression, and
     // DataFlowAnalysis.DataFlowsIn to determine the correct parameter list.
     //
-    // ── Known issue / fix history — read this before touching anything below ──
+    // ── Known issue / fix history -> read this before touching anything below ──
     // This tool has repeatedly shipped "technically succeeded, semantically wrong"
     // bugs: it returns Success=true, compiles clean, and passes existing tests,
     // while quietly producing the wrong extraction. Every case so far was found by
     // a live agent run, not by the existing test suite, because the sample/test
     // code never exercised the exact resulting shape. Treat a green build/test run
-    // as necessary, not sufficient, when changing this method — re-derive expected
+    // as necessary, not sufficient, when changing this method -> re-derive expected
     // output by hand for any new contextSnippet shape you touch.
     //
     // 1. (fixed) Nullable over-annotation on synthesized parameters/return types.
@@ -1331,7 +1331,7 @@ public class MsToolAugmentEngine
     //    statement checks DataFlowsIn for a local not declared by the loop itself;
     //    if found, refuse rather than guess.
     //
-    // 3. (fixed) Single-statement selection BEFORE a loop in the same block —
+    // 3. (fixed) Single-statement selection BEFORE a loop in the same block ->
     //    same ambiguity, different shape, and the guard from #2 did NOT catch it.
     //    contextSnippet matching only an accumulator's *initializer* (e.g.
     //    `decimal runningTotal = 0m;`), with the loop that actually accumulates
@@ -1339,27 +1339,27 @@ public class MsToolAugmentEngine
     //    the loop), was extracted alone. The result: a method that always returns
     //    the initializer's value (e.g. `return 0m;`), with the foreach/its other
     //    local (`totalUnits`) silently stranded in the caller. #2's guard never
-    //    fired because it only checks `block.Parent is <LoopType>` — here
+    //    fired because it only checks `block.Parent is <LoopType>` -> here
     //    block.Parent is the method declaration, not a loop. Guarded below by
     //    scanning forward from the matched statement's index, within the SAME
     //    block, for a later loop statement; if found, AnalyzeDataFlow on both the
     //    matched statement (VariablesDeclared ∪ WrittenInside) and the loop
     //    (DataFlowsIn ∪ ReadInside ∪ WrittenInside) checks for a shared name.
     //    ⚠ This still only looks one block deep and only forward in the same
-    //    block's direct statement list — a variant where the loop is nested inside
+    //    block's direct statement list -> a variant where the loop is nested inside
     //    an intervening `if`/`using`/nested block rather than a direct sibling
     //    statement would NOT be caught by either guard. If you find that shape
-    //    failing silently, it's the same bug class, not a new one — generalize the
+    //    failing silently, it's the same bug class, not a new one -> generalize the
     //    forward-scan to walk into intervening non-loop block-containing
     //    statements' descendants, not just block.Statements directly.
     //
     // General lesson from all three: this tool's failure mode is never a thrown
-    // exception or a compile error — it's a *plausible-looking, compiling, silently
+    // exception or a compile error -> it's a *plausible-looking, compiling, silently
     // incomplete* extraction. When adding new heuristics/guards, prefer refusing
     // with a specific, actionable error (naming the ambiguity and what a wider
     // contextSnippet should cover) over guessing a narrower scope than the caller
     // likely intended. When diagnosing a NEW report of "ExtractMethodSafe did
-    // something weird," reproduce with a real dotnet build first — GetDiagnostics'
+    // something weird," reproduce with a real dotnet build first -> GetDiagnostics'
     // error *count* is not enough, and neither is the tool's own Success flag.
 
     /// <summary>
@@ -1488,10 +1488,10 @@ public class MsToolAugmentEngine
 
             // A selection that resolves to exactly one statement, inside a loop body that has
             // sibling statements left out of the selection, is a red flag when that statement
-            // depends on state declared outside the loop — e.g. an accumulator pattern like
+            // depends on state declared outside the loop -> e.g. an accumulator pattern like
             // `runningTotal += x` inside `foreach { runningTotal += x; totalUnits += y; }`.
             // Extracting just that one statement produces a method called once per iteration
-            // that silently drops the sibling statement and the loop itself from the extraction —
+            // that silently drops the sibling statement and the loop itself from the extraction ->
             // exactly the kind of "technically did something, semantically wrong" result a caller
             // has no way to detect from a success response. Refuse and point at the ambiguity
             // instead of guessing a narrower scope than the caller likely intended (confirmed
@@ -1527,22 +1527,22 @@ public class MsToolAugmentEngine
                         "Extracting just this statement would run the new method once per iteration and " +
                         "silently leave the sibling statement(s) behind. If you meant to extract the whole " +
                         "loop (and anything around it), widen contextSnippet to cover that whole span " +
-                        "verbatim — e.g. from the first line before the loop through the loop's closing " +
+                        "verbatim - e.g. from the first line before the loop through the loop's closing " +
                         "brace. If you really do mean just this one statement, use lineBefore/lineAfter " +
                         "naming its immediate neighbors to confirm the narrower selection.");
                 }
             }
 
             // Same ambiguity, different shape: a single matched statement that sits BEFORE a loop
-            // later in the same block (not inside it — possibly with other non-loop statements
+            // later in the same block (not inside it -> possibly with other non-loop statements
             // in between, e.g. another unrelated declaration), where the statement declares/assigns
             // a local that the loop then reads or mutates. Extracting just this statement strands
-            // the loop and produces a method whose only job — initializing state the loop depends
-            // on — looks complete but silently detaches from the accumulation that follows
+            // the loop and produces a method whose only job -> initializing state the loop depends
+            // on -> looks complete but silently detaches from the accumulation that follows
             // (confirmed regression: ContosoOrders BuildOrderSummary/ComputeTotals, where
             // `decimal runningTotal = 0m;` alone was matched and extracted, leaving the `foreach`
-            // that actually accumulates into `runningTotal` — two statements later in the same
-            // block — behind in the caller).
+            // that actually accumulates into `runningTotal` -> two statements later in the same
+            // block -> behind in the caller).
             if (stmtsInSelection.Count == 1
                 && block.Statements.Count > 1
                 && block.Parent is not (ForEachStatementSyntax or ForStatementSyntax
@@ -1608,14 +1608,14 @@ public class MsToolAugmentEngine
             }
         }
 
-        // Find variables that flow into the Selection — these become parameters. Locals that
+        // Find variables that flow into the Selection -> these become parameters. Locals that
         // ALSO flow out (mutated inside the Selection, then read afterward) need their final
-        // value reported back to the caller too — tracked in outVarNames and handled below.
+        // value reported back to the caller too -> tracked in outVarNames and handled below.
         var parameters = new List<(string Name, string TypeStr)>();
         var outVarNames = new HashSet<string>();
-        // Locals declared FRESH inside the Selection (so they never appear in DataFlowsIn —
+        // Locals declared FRESH inside the Selection (so they never appear in DataFlowsIn ->
         // nothing flows in, there's no pre-existing value) but read afterward. These must also
-        // be reported back to the caller, but as an additional return value only — NOT as a
+        // be reported back to the caller, but as an additional return value only -> NOT as a
         // parameter, since there's nothing for the caller to pass in.
         var declaredOutVars = new List<(string Name, string TypeStr)>();
         try
@@ -1638,7 +1638,7 @@ public class MsToolAugmentEngine
                     }
                     else if (sym.Kind == SymbolKind.Parameter && sym is IParameterSymbol param && !param.IsThis)
                     {
-                        // IsThis excludes the implicit 'this' — DataFlowsIn reports it whenever
+                        // IsThis excludes the implicit 'this' -> DataFlowsIn reports it whenever
                         // the Selection touches an instance member (e.g. a field), but it is
                         // already implicitly available to a non-static extracted method and is
                         // not valid syntax as an explicit parameter.
@@ -1659,12 +1659,12 @@ public class MsToolAugmentEngine
                 }
             }
         }
-        catch { /* best-effort — proceed without parameters if analysis fails */ }
+        catch { /* best-effort - proceed without parameters if analysis fails */ }
 
         var outVars = parameters.Where(p => outVarNames.Contains(p.Name)).Concat(declaredOutVars).ToList();
 
         // No explicit return statement in the Selection, but pre-existing locals are mutated
-        // and read afterward — return their final value(s) so the caller sees the update.
+        // and read afterward -> return their final value(s) so the caller sees the update.
         // Parameters are passed by value; without this the extraction would silently drop it.
         bool returnsOutVars = false;
         if (!returnsValue && outVars.Count > 0)
@@ -1689,7 +1689,7 @@ public class MsToolAugmentEngine
         if (containingType == null)
         {
             return MsAugmentResult.Fail(
-                "No containing type found — cannot place extracted method.");
+                "No containing type found - cannot place extracted method.");
         }
 
         // Build the extracted method source text
@@ -1735,7 +1735,7 @@ public class MsToolAugmentEngine
         else if (returnsOutVars)
         {
             // outVars declared fresh inside the Selection (declaredOutVars) have no counterpart
-            // in the caller's scope — the call site must declare them (`var name`), not assign to
+            // in the caller's scope -> the call site must declare them (`var name`), not assign to
             // them. outVars that already existed before the Selection (flowed in AND out) must be
             // assigned, not re-declared. Per-element `var` correctly expresses a mix of both in a
             // single deconstruction (e.g. `(existing, var fresh) = Method();`).

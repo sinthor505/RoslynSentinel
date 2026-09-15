@@ -29,7 +29,7 @@ public static partial class SentinelConsoleMode
     /// as a live server entry point would, then extracting the resulting <see cref="McpServerTool"/>
     /// instances. This is the same mechanism <see cref="WriteStartupDump"/> uses against a real
     /// host's <see cref="IServiceProvider"/>, so <c>--list-tools</c> can never drift from what a
-    /// running server actually serves — replacing a previous implementation
+    /// running server actually serves -> replacing a previous implementation
     /// (<c>DiscoverTools</c>) that re-derived the tool surface via a separate, hardcoded
     /// single-assembly reflection pass and reported snake_case names the server never serves. See
     /// docs/current/blockers/blocking_error_list_tools_misreports_tool_surface.md.
@@ -51,7 +51,7 @@ public static partial class SentinelConsoleMode
     /// Reads <see cref="McpServerTool.ProtocolTool"/> from every registered DI instance. Falls back
     /// to constructing tools directly via <see cref="McpServerTool.Create"/> over all loaded
     /// RoslynSentinel.Server.* assemblies when DI registration returns zero (e.g. singleton factory
-    /// delay or scope mismatch at startup time) — mirrors what <c>WithToolsFixed&lt;T&gt;()</c> does.
+    /// delay or scope mismatch at startup time) -> mirrors what <c>WithToolsFixed&lt;T&gt;()</c> does.
     /// Shared by <see cref="BuildToolManifestFor"/> and <see cref="WriteStartupDump"/> so the two
     /// can never independently drift.
     /// </summary>
@@ -195,7 +195,7 @@ public static partial class SentinelConsoleMode
                 var node = JsonNode.Parse(line);
                 if (node?["id"] is null)
                 {
-                    continue;  // notification — ignore
+                    continue;  // notification - ignore
                 }
 
                 if (node["id"]!.GetValue<int>() == expectedId)
@@ -203,7 +203,7 @@ public static partial class SentinelConsoleMode
                     return node;
                 }
             }
-            catch (JsonException) { /* malformed line — skip */ }
+            catch (JsonException) { /* malformed line - skip */ }
         }
 
         return null;
@@ -265,7 +265,7 @@ public static partial class SentinelConsoleMode
             var initResp = await ReadResponseAsync(reader, initId, linkedInit.Token).ConfigureAwait(false);
             if (initResp?["result"] is null)
             {
-                Console.Error.WriteLine("[interactive] Handshake failed — no result from server.");
+                Console.Error.WriteLine("[interactive] Handshake failed - no result from server.");
                 return;
             }
 
@@ -279,10 +279,10 @@ public static partial class SentinelConsoleMode
         }
 
         Console.Error.WriteLine("[interactive] Ready.  Commands:");
-        Console.Error.WriteLine("  <tool_name> [{json_args}]   — call a tool");
-        Console.Error.WriteLine("  ? [filter]                  — list tools (optional name filter)");
-        Console.Error.WriteLine("  describe <tool_name>        — show parameters");
-        Console.Error.WriteLine("  exit                        — quit");
+        Console.Error.WriteLine("  <tool_name> [{json_args}]   - call a tool");
+        Console.Error.WriteLine("  ? [filter]                  - list tools (optional name filter)");
+        Console.Error.WriteLine("  describe <tool_name>        - show parameters");
+        Console.Error.WriteLine("  exit                        - quit");
 
         // ── REPL loop ──────────────────────────────────────────────────────
         while (!cts.IsCancellationRequested)
@@ -353,7 +353,7 @@ public static partial class SentinelConsoleMode
             }
             catch (JsonException)
             {
-                Console.WriteLine("[error] Invalid JSON arguments — expected an object like {\"param\": \"value\"}");
+                Console.WriteLine("[error] Invalid JSON arguments - expected an object like {\"param\": \"value\"}");
                 continue;
             }
 
@@ -486,7 +486,7 @@ public static partial class SentinelConsoleMode
 
     /// <summary>
     /// Describes one tool by querying the live server's own <c>tools/list</c> over the REPL's
-    /// JSON-RPC connection, rather than a locally-cached reflection pass — so the description can
+    /// JSON-RPC connection, rather than a locally-cached reflection pass -> so the description can
     /// never disagree with what <c>tools/call</c> on the same connection would actually accept.
     /// </summary>
     private static async Task DescribeToolViaReplAsync(
@@ -560,9 +560,9 @@ public static partial class SentinelConsoleMode
     /// <summary>
     /// Writes tool_list.json (full MCP payload) and tool_list_simple.json (names only)
     /// to <paramref name="outputDir"/> on every server startup. Delegates extraction to
-    /// <see cref="ExtractToolManifest"/> — the same routine <see cref="ListTools"/> uses — so the
+    /// <see cref="ExtractToolManifest"/> -> the same routine <see cref="ListTools"/> uses -> so the
     /// two can never independently drift.
-    /// NOT an [McpServerTool] — internal diagnostic output only.
+    /// NOT an [McpServerTool] -> internal diagnostic output only.
     /// </summary>
     public static void WriteStartupDump(IServiceProvider services, string outputDir, string modeArg)
     {
@@ -578,7 +578,7 @@ public static partial class SentinelConsoleMode
             string generatedUtc = DateTime.UtcNow.ToString("O");
             int totalChars = tools.Sum(t => t.Name.Length + (t.Description?.Length ?? 0));
 
-            // ── tool_list.json — full payload: name + description + inputSchema ──
+            // ── tool_list.json -> full payload: name + description + inputSchema ──
             var fullPayload = new
             {
                 _metadata = new
@@ -600,7 +600,7 @@ public static partial class SentinelConsoleMode
                 JsonSerializer.Serialize(fullPayload, PrettyJson),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-            // ── tool_list_simple.json — names only for human readability ────────
+            // ── tool_list_simple.json -> names only for human readability ────────
             var simplePayload = new
             {
                 _metadata = new
@@ -628,8 +628,8 @@ public static partial class SentinelConsoleMode
     /// Writes <c>all_methods.csv</c> and <c>engine_methods.json</c> to the solution root
     /// on every server startup, replacing any hand-maintained copies.
     /// Reflects over every concrete class in the assembly to produce an up-to-date
-    /// inventory of public instance methods — no manual editing required.
-    /// NOT an [McpServerTool] — internal diagnostic output only.
+    /// inventory of public instance methods -> no manual editing required.
+    /// NOT an [McpServerTool] -> internal diagnostic output only.
     /// </summary>
     public static void WriteMethodInventory(string outputDir, string modeArg)
     {

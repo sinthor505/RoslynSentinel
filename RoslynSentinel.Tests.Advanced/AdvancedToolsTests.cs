@@ -207,7 +207,7 @@ public interface IRepo {
 
         // Parameter should be added
         Assert.That(result.UpdatedText, Does.Contain("CancellationToken cancellationToken"));
-        // Semantic model finds CT overload on IRepo → should propagate
+        // Semantic model finds CT overload on IRepo -> should propagate
         Assert.That(result.UpdatedText, Does.Contain("GetAllAsync(cancellationToken)"));
     }
 
@@ -241,7 +241,7 @@ public class Service : IService {
 
         var result = await _refactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
 
-        // No new members should have been added — both already present
+        // No new members should have been added -> both already present
         // Count occurrences of DoB in interface section
         Assert.That(result.UpdatedText, Does.Not.Contain("// Interface not found"));
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);

@@ -14,7 +14,7 @@ public class OperationItemRecord
     {
         get; set;
     }
-    /// <summary>Full source text before the operation — enables undo_last_apply.</summary>
+    /// <summary>Full source text before the operation -> enables undo_last_apply.</summary>
     public string? BeforeSource
     {
         get; set;

@@ -8,10 +8,10 @@ namespace RoslynSentinel.Tests.Battery;
 /// <summary>
 /// Tests for accuracy fixes shipped in this sprint:
 ///  1. AntiPatternFinding.Pattern serializes as "patternType" in JSON (MCP wire format).
-///  2. DetectAntiPatternsAsync — solution-wide scan excludes .Tests / .Benchmarks projects.
-///  3. FindMissingCancellationTokensAsync — solution-wide scan excludes .Tests / .Benchmarks projects.
-///  4. TIME_ABSTRACTION — skips static classes and *Helper/*Extensions/*Base classes.
-///  5. NAME_MISMATCH / MULTI_TYPE — skips Roslyn source-generator output (.g.cs files).
+///  2. DetectAntiPatternsAsync -> solution-wide scan excludes .Tests / .Benchmarks projects.
+///  3. FindMissingCancellationTokensAsync -> solution-wide scan excludes .Tests / .Benchmarks projects.
+///  4. TIME_ABSTRACTION -> skips static classes and *Helper/*Extensions/*Base classes.
+///  5. NAME_MISMATCH / MULTI_TYPE -> skips Roslyn source-generator output (.g.cs files).
 /// </summary>
 [TestFixture]
 public class BatteryThirtySevenTests
@@ -38,7 +38,7 @@ public class BatteryThirtySevenTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 1 — AntiPatternFinding JSON serialization
+    // 1 -> AntiPatternFinding JSON serialization
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -50,7 +50,7 @@ public class BatteryThirtySevenTests
         Assert.That(json, Does.Contain("\"patternType\""),
             "JSON must use 'patternType' key so MCP clients can filter by pattern");
         Assert.That(json, Does.Not.Contain("\"pattern\":"),
-            "'pattern' (lowercase) must not appear — it was the broken wire name");
+            "'pattern' (lowercase) must not appear - it was the broken wire name");
     }
 
     [Test]
@@ -65,7 +65,7 @@ public class BatteryThirtySevenTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 2 — DetectAntiPatternsAsync excludes test projects
+    // 2 -> DetectAntiPatternsAsync excludes test projects
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -132,7 +132,7 @@ class Fixture {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 3 — FindMissingCancellationTokensAsync excludes test projects
+    // 3 -> FindMissingCancellationTokensAsync excludes test projects
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -146,7 +146,7 @@ class Tests {
 
         var results = await _antiPatternEngine.FindMissingCancellationTokensAsync();
         Assert.That(results, Is.Empty,
-            "Missing-CT scan must exclude .Tests projects — xUnit test methods generate 85%+ false positives");
+            "Missing-CT scan must exclude .Tests projects - xUnit test methods generate 85%+ false positives");
     }
 
     [Test]
@@ -166,7 +166,7 @@ class MyService {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 4 — TIME_ABSTRACTION skips static classes and utility classes
+    // 4 -> TIME_ABSTRACTION skips static classes and utility classes
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -181,7 +181,7 @@ public static class DateHelper {
         var results = await _structureEngine.FindStructuralSmellsAsync(
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Empty,
-            "Static helper classes must not be flagged for TIME_ABSTRACTION — injecting TimeProvider is not applicable");
+            "Static helper classes must not be flagged for TIME_ABSTRACTION - injecting TimeProvider is not applicable");
     }
 
     [Test]
@@ -197,7 +197,7 @@ public class SqlHelper {
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Not.Empty, "Helper classes must still be reported");
         Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
-            "Helper classes must use LOW severity — injection is possible but these are utilities, not DI-injectable services");
+            "Helper classes must use LOW severity - injection is possible but these are utilities, not DI-injectable services");
     }
 
     [Test]
@@ -230,7 +230,7 @@ public class NotificationRepository {
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Not.Empty, "Repository classes must still be reported");
         Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
-            "Repository findings must use LOW severity — injection is possible but rarely high-value here");
+            "Repository findings must use LOW severity - injection is possible but rarely high-value here");
     }
 
     [Test]
@@ -300,7 +300,7 @@ public class OrderService {
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Not.Empty, "Service class must be reported");
         Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION]") && !r.Contains(":LOW")), Is.True,
-            "Service class findings must use HIGH (default) severity — date-driven logic commonly needs mocking in tests");
+            "Service class findings must use HIGH (default) severity - date-driven logic commonly needs mocking in tests");
     }
 
     [Test]
@@ -315,17 +315,17 @@ public class MyTests {
         var results = await _structureEngine.FindStructuralSmellsAsync(
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Empty,
-            "Test projects must be excluded — injecting TimeProvider into test fixtures is not applicable");
+            "Test projects must be excluded - injecting TimeProvider into test fixtures is not applicable");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 5 — NAME_MISMATCH and MULTI_TYPE skip .g.cs files
+    // 5 -> NAME_MISMATCH and MULTI_TYPE skip .g.cs files
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     public async Task NameMismatch_GeneratedFile_Suppressed()
     {
-        // "Foo.g.cs" containing class "ServiceMetadata" — a classic Roslyn source-gen pattern
+        // "Foo.g.cs" containing class "ServiceMetadata" -> a classic Roslyn source-gen pattern
         var solution = TestSolutionBuilder.CreateSolutionWithProject(
             "MyApp.Service",
             [("Foo.g.cs", "public static class ServiceMetadata { public const string Name = \"svc\"; }")]);
@@ -348,7 +348,7 @@ public class MyTests {
         var results = await _structureEngine.FindStructuralSmellsAsync(
             typeFilter: ProjectStructureEngine.StructuralSmellType.MultiType);
         Assert.That(results, Is.Empty,
-            "MULTI_TYPE must be suppressed for .g.cs files — generators routinely emit multiple types per file");
+            "MULTI_TYPE must be suppressed for .g.cs files - generators routinely emit multiple types per file");
     }
 
     [Test]

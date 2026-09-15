@@ -40,7 +40,7 @@ public class LargeResultOffloadFilterTests
         // replace" note), so by the time their response reaches the generic filter under test here
         // it has already been shrunk to a small pointer and can never exercise this filter. Instead
         // seed a target method plus many tiny distinct callers of it, so FindReferences(kind:
-        // callers) — which is NOT individually wired into ForPossiblyLargeDataAsync — returns a
+        // callers) -> which is NOT individually wired into ForPossiblyLargeDataAsync -> returns a
         // flat CallerInfo list long enough to exceed OffloadThresholdBytes on its own.
         var callers = Enumerable.Range(0, CallerCount)
             .Select(i => $"    public void {CallerMethodPrefix}{i}() {{ Target(); }}");
@@ -90,7 +90,7 @@ public class LargeResultOffloadFilterTests
             "LoadSolution",
             new Dictionary<string, object?> { ["reason"] = "test message", ["solutionPath"] = _fixture.SolutionPath }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
-        Assert.That(loadResult.IsError, Is.Not.True, "Fixture solution failed to load — cannot exercise the filter without a loaded solution.");
+        Assert.That(loadResult.IsError, Is.Not.True, "Fixture solution failed to load - cannot exercise the filter without a loaded solution.");
     }
     // Added by InsertMemberAfter (expected - used for diagnostics)
 
@@ -125,12 +125,12 @@ public class LargeResultOffloadFilterTests
 
         // Round-trip: GetLargeResult must be able to read the offloaded payload back, and the
         // reassembled text (paged, since Raw pages by byte-window) must contain the real caller
-        // list the filter swapped out — not just replay the pointer. Each page is requested with
+        // list the filter swapped out -> not just replay the pointer. Each page is requested with
         // limit == OffloadThresholdBytes (the value the tool's own "continue reading" warning
         // suggests) to confirm the fix in WorkspaceReadNavigationImpl.GetLargeResult's Raw branch:
         // the effective window is capped below OffloadThresholdBytes to reserve headroom for the
         // JSON envelope, so a full page can never itself be large enough to be re-offloaded by this
-        // same filter — if it were, this loop would see an "offloaded" pointer instead of a "data"
+        // same filter -> if it were, this loop would see an "offloaded" pointer instead of a "data"
         // page and fail below.
         var reassembled = new System.Text.StringBuilder();
         int? offset = 0;
@@ -176,6 +176,6 @@ public class LargeResultOffloadFilterTests
 
         var text = string.Join(" ", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
         Assert.That(text, Does.Not.Contain("\"offloaded\":true"),
-            "A response under threshold must pass through unmodified — the filter must stay a pure pass-through for small tool results.");
+            "A response under threshold must pass through unmodified - the filter must stay a pure pass-through for small tool results.");
     }
 }

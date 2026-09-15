@@ -27,7 +27,7 @@ public static class DiagnosticReportExtensions
     /// <summary>
     /// Groups diagnostics by <see cref="DiagnosticInfo.Id"/>, sorted by group size descending and
     /// capped to the top <paramref name="topN"/> groups. Shared by GetDiagnostics' summarize=true
-    /// path and Build's ErrorSummary/WarningSummary — call this on the full, uncapped diagnostic
+    /// path and Build's ErrorSummary/WarningSummary -> call this on the full, uncapped diagnostic
     /// list (before any maxDetails truncation) so the summary reflects the whole run.
     /// </summary>
     public static List<DiagnosticGroupSummary> GroupBySeverity(this IEnumerable<DiagnosticInfo> diagnostics, int topN)

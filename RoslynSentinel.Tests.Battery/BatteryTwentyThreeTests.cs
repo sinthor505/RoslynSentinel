@@ -1,4 +1,4 @@
-// Battery #23 — SentinelQualityTools
+// Battery #23 -> SentinelQualityTools
 // Tests all 46 public methods of SentinelQualityTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;

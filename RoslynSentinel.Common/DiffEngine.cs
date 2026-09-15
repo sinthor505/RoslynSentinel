@@ -25,7 +25,7 @@ public class DiffEngine
     /// <summary>
     /// How far (in lines, either direction) a hunk's declared line number may drift from its
     /// actual position before <see cref="ApplyDiff"/> gives up re-anchoring it. Line numbers in a
-    /// caller-authored diff routinely go stale after any earlier edit to the same file — the
+    /// caller-authored diff routinely go stale after any earlier edit to the same file -> the
     /// window trades a bounded amount of false-positive risk for tolerating that drift instead of
     /// failing (or silently corrupting the file) on every offset mismatch.
     /// </summary>
@@ -37,7 +37,7 @@ public class DiffEngine
     /// not ground truth: if the hunk's own content (its first context/removal line) isn't found
     /// there, this searches a window around the declared position and re-anchors to the real
     /// match. This is what makes the tool tolerant of stale line numbers from an earlier edit to
-    /// the same file — the single largest cause of diff-apply failures in practice. If no anchor
+    /// the same file -> the single largest cause of diff-apply failures in practice. If no anchor
     /// can be found within the window, this throws rather than guessing and silently corrupting
     /// unrelated lines.
     /// </summary>
@@ -46,7 +46,7 @@ public class DiffEngine
     /// <see cref="ILogger{TCategoryName}"/>: as a warning on success if the analyzer found
     /// something worth flagging (e.g. a header whose declared counts don't match its actual body,
     /// even though the apply itself tolerated it structurally), or always on a
-    /// <see cref="DiffApplyException"/> — so a failure comes with a ready-made per-hunk breakdown
+    /// <see cref="DiffApplyException"/> -> so a failure comes with a ready-made per-hunk breakdown
     /// instead of requiring the kind of manual line-by-line archaeology that root-caused the
     /// original bug this analyzer exists to catch automatically (see docs/current/blockers).
     /// </remarks>
@@ -59,7 +59,7 @@ public class DiffEngine
     /// <summary>
     /// Same as <see cref="ApplyDiff(SourceText, string)"/>, but also returns the
     /// <see cref="DiffHunkAnalyzer"/> report so a caller can surface header/body mismatches (and
-    /// other findings) to the caller even on a successful apply — previously these were only
+    /// other findings) to the caller even on a successful apply -> previously these were only
     /// logged server-side (see <see cref="DiffHunkAnalyzer.DiffReport.HasFindings"/>), which meant
     /// a model whose hunk header understated its own body size (the root cause of the
     /// phantom-insertion bug documented in
@@ -95,7 +95,7 @@ public class DiffEngine
         // TextLine excludes the break from ToString(), so it's read separately here via the span
         // between End and EndIncludingLineBreak. A file with mixed endings (routine after a partial
         // manual edit, or a merge) previously got every line forced to whichever ending merely
-        // *appeared* anywhere in the file — see docs/TODO.md's "ApplyDiff reflows far more of the
+        // *appeared* anywhere in the file -> see docs/TODO.md's "ApplyDiff reflows far more of the
         // file" entry, root-caused to this. Lines inserted by this diff get the file's dominant
         // ending unless they land as the new last line, matching what an original last line with
         // no ending of its own would get (see the reassembly loop's promotion logic below).
@@ -118,8 +118,8 @@ public class DiffEngine
             {
                 // A line starting with "@@" that doesn't match the full "@@ -N,M +N,M @@" header
                 // format (e.g. a bare "@@" with no line numbers) must not be silently treated as
-                // inert body text: falling through would skip the entire hunk — including every
-                // "+"/"-" line that follows, up to the next real header or end of diff — with no
+                // inert body text: falling through would skip the entire hunk -> including every
+                // "+"/"-" line that follows, up to the next real header or end of diff -> with no
                 // error and no lines changed, exactly as if the whole hunk had never been submitted.
                 // See docs/current/blockers/blocking_error_applydiff_silent_noop_false_success.md.
                 throw new DiffApplyException(
@@ -142,7 +142,7 @@ public class DiffEngine
                 {
                     var diffLine = diffLines[i];
                     // A blank line right before the next hunk header, or right at the end of the
-                    // diff text, isn't a real blank context line from the file — it's a split
+                    // diff text, isn't a real blank context line from the file -> it's a split
                     // artifact from the diff's own trailing newline (or the blank separator line
                     // conventionally placed between hunks). See ReadHunkBody's comment.
                     var isTrailingArtifact = i == diffLines.Length - 1
@@ -177,7 +177,7 @@ public class DiffEngine
                             throw new DiffApplyException(
                                 $"hunk '{match.Value}' expected to remove \"{expected}\" " +
                                 $"at line {currentLine + 1}, but found \"{actual}\". The hunk's line numbers may be " +
-                                "stale relative to hunks applied earlier in this same diff — regenerate the diff " +
+                                "stale relative to hunks applied earlier in this same diff - regenerate the diff " +
                                 "against the file's current content, or use a whole-member/whole-file replacement " +
                                 "tool instead.");
                         }
@@ -188,7 +188,7 @@ public class DiffEngine
                     else if (diffLine.StartsWith(" ") || diffLine.Length == 0)
                     {
                         // Context line - validate it matches. A zero-length line (no leading space
-                        // marker at all) is tolerated as an implicit blank context line — see
+                        // marker at all) is tolerated as an implicit blank context line -> see
                         // IsContextOrRemovalLine's doc comment for why some diffs omit the marker
                         // on otherwise-blank lines, and why silently dropping it here would
                         // desynchronize currentLine from the anchor ReanchorHunk already matched.
@@ -204,7 +204,7 @@ public class DiffEngine
                             throw new DiffApplyException(
                                 $"hunk '{match.Value}' expected context \"{expected}\" " +
                                 $"at line {currentLine + 1}, but found \"{actual}\". The hunk's line numbers may be " +
-                                "stale relative to hunks applied earlier in this same diff — regenerate the diff " +
+                                "stale relative to hunks applied earlier in this same diff - regenerate the diff " +
                                 "against the file's current content, or use a whole-member/whole-file replacement " +
                                 "tool instead.");
                         }
@@ -218,7 +218,7 @@ public class DiffEngine
 
         // Reassemble using each surviving/inserted line's own ending rather than one convention for
         // the whole file. An empty ending is only valid on the actual last line (a file with no
-        // trailing newline) — if an earlier line ended up with one (e.g. a line was inserted after
+        // trailing newline) -> if an earlier line ended up with one (e.g. a line was inserted after
         // what used to be the last line), it needs a real separator or the two lines would run
         // together with no break at all.
         var sb = new StringBuilder();
@@ -237,10 +237,10 @@ public class DiffEngine
 
     /// <summary>
     /// Collects a hunk's raw lines (context/+/-) up to the next hunk header or diff end. The
-    /// hunk header's own declared old/new counts are not used as the boundary — a model-generated
+    /// hunk header's own declared old/new counts are not used as the boundary -> a model-generated
     /// diff routinely gets them wrong even when its line content is otherwise fine (see
     /// docs/current/blockers for a real transcript whose header claimed 7 old-side lines when the
-    /// body only had 3) — so this scans structurally instead: everything up to the next "@@" or
+    /// body only had 3) -> so this scans structurally instead: everything up to the next "@@" or
     /// end of input belongs to this hunk.
     /// </summary>
     private static List<string> ReadHunkBody(string[] diffLines, int start)
@@ -250,7 +250,7 @@ public class DiffEngine
         for (int i = start; i < diffLines.Length && !hunkHeaderRegex.IsMatch(diffLines[i]); i++)
         {
             // A blank line right before the next hunk header, or right at the end of the diff
-            // text, isn't a real blank context line from the file — it's a split artifact from
+            // text, isn't a real blank context line from the file -> it's a split artifact from
             // the diff's own trailing newline (or the blank separator line conventionally placed
             // between hunks). Including it in the body would make ReanchorHunk require a blank
             // line the file doesn't actually have there, defeating an otherwise-correct match at
@@ -268,12 +268,12 @@ public class DiffEngine
 
     /// <summary>
     /// True for a hunk-body line that represents a context/removal line the file must already
-    /// contain: explicitly-marked (" "/"-") lines, plus a bare blank line with no marker at all —
+    /// contain: explicitly-marked (" "/"-") lines, plus a bare blank line with no marker at all ->
     /// tolerated as an implicit blank context line, since diff producers routinely emit an
     /// unprefixed empty line for a blank line in the file rather than a single trailing space.
     /// Without this, such a line is silently dropped from the anchor, desynchronizing the anchor
     /// list from the declared line number by exactly one line and causing the re-anchor search to
-    /// look in the wrong place — a real defect this class had (see docs/TODO.md's entry on
+    /// look in the wrong place -> a real defect this class had (see docs/TODO.md's entry on
     /// ApplyDiff's misleading anchor-failure message, root-caused to this).
     /// </summary>
     private static bool IsContextOrRemovalLine(string line) => line.StartsWith(" ") || line.StartsWith("-") || line.Length == 0;
@@ -287,7 +287,7 @@ public class DiffEngine
     /// Throws if the declared position doesn't match and no nearby match can be found either.
     /// </summary>
     // If a DiffApplyFailed error from this method is confusing, use DiffHunkAnalyzer to check the
-    // hunk's header-declared counts against its actual body first — it catches a different, cheaper
+    // hunk's header-declared counts against its actual body first -> it catches a different, cheaper
     // class of malformed-hunk bug than the anchor-mismatch diagnosis produced here. For a worked
     // example of reproducing a failure by replaying a recorded diff against known file content, see
     // DiffEngineTests.ApplyDiff_Size60ModelEvalTranscript_ReplaysRecordedFailingDiff.
@@ -300,16 +300,16 @@ public class DiffEngine
 
         if (anchorLines.Count == 0)
         {
-            return declaredLine; // Nothing to anchor on (pure insertion) — trust the declared offset.
+            return declaredLine; // Nothing to anchor on (pure insertion) - trust the declared offset.
         }
 
         // Track the best (most leading anchor lines matched) candidate seen across the whole
-        // search, not just whether any position fully matched — this is what makes the failure
+        // search, not just whether any position fully matched -> this is what makes the failure
         // message below point at the actual point of divergence instead of always blaming
         // anchorLines[0]. A hunk whose first few anchor lines are correct but whose LATER context
         // (e.g. stale content copied from an earlier read, describing what's actually further
-        // down the file) doesn't match anywhere is a real, observed failure mode — see
-        // docs/current/blockers — and "First expected line: anchorLines[0]" is actively misleading
+        // down the file) doesn't match anywhere is a real, observed failure mode -> see
+        // docs/current/blockers -> and "First expected line: anchorLines[0]" is actively misleading
         // for it, since line 0 matched fine at the best candidate position.
         var best = (Position: declaredLine, MatchedCount: 0);
 
@@ -343,7 +343,7 @@ public class DiffEngine
         }
 
         // Report the line that actually diverged at the closest-matching position found, not
-        // just anchorLines[0] — e.g. "matched the first 3 anchor line(s) at line 269, but then
+        // just anchorLines[0] -> e.g. "matched the first 3 anchor line(s) at line 269, but then
         // expected ... at line 272". If nothing matched at all (best.MatchedCount == 0), this
         // degrades to the original "first expected line" framing, which is still the right
         // message for that case.
@@ -351,10 +351,10 @@ public class DiffEngine
         var mismatchDetail = best.MatchedCount == 0
             ? $"First expected line: \"{anchorLines[0]}\"."
             : $"Matched the first {best.MatchedCount} anchor line(s) starting at line {best.Position + 1}, " +
-              $"but then expected \"{anchorLines[best.MatchedCount]}\" at line {mismatchLineNumber} — found " +
+              $"but then expected \"{anchorLines[best.MatchedCount]}\" at line {mismatchLineNumber} - found " +
               $"\"{(best.Position + best.MatchedCount < lines.Count ? lines[best.Position + best.MatchedCount].Trim() : "<end of file>")}\" " +
-              "instead. This usually means a context/removal line partway through the hunk is stale — e.g. copied " +
-              "from a different part of the file during an earlier read — rather than the hunk's start position " +
+              "instead. This usually means a context/removal line partway through the hunk is stale - e.g. copied " +
+              "from a different part of the file during an earlier read - rather than the hunk's start position " +
               "being wrong.";
 
         throw new DiffApplyException(
@@ -366,7 +366,7 @@ public class DiffEngine
 
     /// <summary>
     /// Returns how many leading <paramref name="anchorLines"/> match the file starting at
-    /// <paramref name="start"/> before the first divergence (or the file/list boundary) —
+    /// <paramref name="start"/> before the first divergence (or the file/list boundary) ->
     /// <c>anchorLines.Count</c> means a full match. Used both to decide whether a candidate
     /// position is the real anchor (full match) and, when no candidate fully matches, to find the
     /// closest near-miss for a more precise error message.
@@ -437,7 +437,7 @@ public class DiffEngine
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// The updated text from <see cref="DiffEngine.ApplyDiff(SourceText, string)"/>, paired with the
-/// <see cref="DiffHunkAnalyzer"/> report generated for the same call — so a caller can surface
+/// <see cref="DiffHunkAnalyzer"/> report generated for the same call -> so a caller can surface
 /// header/body mismatches and other findings without needing the out-parameter overload.
 /// </summary>
 public sealed record DiffApplyResult(SourceText Text, DiffHunkAnalyzer.DiffReport Report);

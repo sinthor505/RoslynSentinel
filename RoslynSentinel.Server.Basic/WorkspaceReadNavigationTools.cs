@@ -12,11 +12,11 @@ namespace RoslynSentinel.Server.Basic;
 ///
 /// This class is a trial slice of that plan's DI split, landed ahead of the rest: today it is
 /// registered in DI only as a plain singleton consumed internally by <c>SentinelWorkspaceTools</c>
-/// (field <c>_readNav</c>) — the plan's Decision 4 mode strings ("WorkspaceReadNav"/"WorkspaceFileIO")
+/// (field <c>_readNav</c>) -> the plan's Decision 4 mode strings ("WorkspaceReadNav"/"WorkspaceFileIO")
 /// that would call <c>mcpBuilder.WithTools&lt;WorkspaceReadNavigationTools&gt;()</c> and make the
 /// [McpServerTool] attributes below live have not been added to
 /// ServiceRegistrationExtensionsBasic.cs yet. So GetMethodSource/GetFileOutline/GetLargeResult here
-/// are currently NOT reachable over MCP — the real, registered versions of those three tool names
+/// are currently NOT reachable over MCP -> the real, registered versions of those three tool names
 /// are the ones in SentinelWorkspaceTools.cs, which is what MCP clients actually call. This is not
 /// dead code or an accidental duplicate; it is the intended shape once Decision 4/Decision 7 step 4
 /// finish wiring the fine-grained mode strings.
@@ -43,7 +43,7 @@ public class WorkspaceReadNavigationTools
 
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
-    [Description("Returns a structural outline of a file — namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
+    [Description("Returns a structural outline of a file - namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
     public Task<ToolResult<object>> GetFileOutline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,

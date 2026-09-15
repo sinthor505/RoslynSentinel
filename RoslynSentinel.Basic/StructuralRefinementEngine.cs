@@ -152,7 +152,7 @@ public class StructuralRefinementEngine
 
     /// <summary>
     /// Safe deletes a symbol only if it has no usages in the entire solution (contextSnippet-based
-    /// resolution — an agent-friendly alternative to the line/column overload above, which requires
+    /// resolution -> an agent-friendly alternative to the line/column overload above, which requires
     /// a column that a caller who only knows a line number has no cheap way to obtain).
     /// </summary>
     public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePathWrapper filePath, string symbolName, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
@@ -189,7 +189,7 @@ public class StructuralRefinementEngine
         SyntaxNode? target;
         if (contextSnippet == null || candidates.Count <= 1)
         {
-            // symbolName alone already resolves unambiguously — see the identical guard and
+            // symbolName alone already resolves unambiguously -> see the identical guard and
             // rationale in RefactoringEngine.ResolveMemberByNameOrSnippet.
             target = candidates.FirstOrDefault();
         }
@@ -247,8 +247,8 @@ public class StructuralRefinementEngine
 
     /// <summary>
     /// Scans every document in the solution for a string literal matching <paramref name="symbol"/>'s
-    /// name — a likely sign of reflection/<c>nameof</c>-adjacent dynamic usage that <see cref="SymbolFinder"/>
-    /// would not catch (ported from the dead <c>RefactoringEngine.SafeDeleteSymbolAsync</c> copy — see
+    /// name -> a likely sign of reflection/<c>nameof</c>-adjacent dynamic usage that <see cref="SymbolFinder"/>
+    /// would not catch (ported from the dead <c>RefactoringEngine.SafeDeleteSymbolAsync</c> copy -> see
     /// docs/TODO.md's "Duplicate/dead SafeDeleteSymbolAsync" entry). Returns a blocking
     /// <see cref="DocumentEditResult"/> if a match is found anywhere, otherwise null.
     /// </summary>
@@ -267,7 +267,7 @@ public class StructuralRefinementEngine
                     {
                         Outcome = EditOutcome.CannotEdit,
                         FilePath = filePath,
-                        Message = $"// Potential reflection risk: symbol '{symbol.Name}' is referenced by a string literal in {doc.Name} — possible reflection/dynamic usage. Delete manually after verifying."
+                        Message = $"// Potential reflection risk: symbol '{symbol.Name}' is referenced by a string literal in {doc.Name} - possible reflection/dynamic usage. Delete manually after verifying."
                     };
                 }
             }

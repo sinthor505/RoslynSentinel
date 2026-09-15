@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Battery #16 — DependencyInjectionEngine,
+// Battery #16 -> DependencyInjectionEngine,
 //               GranularRefactoringEngine, HealthOrchestrationEngine
 // ────────────────────────────────────────────────────────────────────────────
 

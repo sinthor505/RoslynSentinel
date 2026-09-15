@@ -13,8 +13,8 @@ namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
 /// Proves the in-memory client/server harness pattern for testing the MCP Tasks extension end to
-/// end (real JSON-RPC over paired streams, not direct tool-class calls) against <c>Features</c> —
-/// a trivial, dependency-free tool with a test-only <c>delaySeconds</c> knob — before extending
+/// end (real JSON-RPC over paired streams, not direct tool-class calls) against <c>Features</c> ->
+/// a trivial, dependency-free tool with a test-only <c>delaySeconds</c> knob -> before extending
 /// coverage to task-eligible tools with real work (BulkComment, Asyncify, AsyncifyLoop).
 /// </summary>
 /// <remarks>

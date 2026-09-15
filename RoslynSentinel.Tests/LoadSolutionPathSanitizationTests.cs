@@ -1,4 +1,4 @@
-// LoadSolution path sanitization — agents sometimes pass solutionPath/baseRepoDir wrapped in
+// LoadSolution path sanitization -> agents sometimes pass solutionPath/baseRepoDir wrapped in
 // stray quotes or whitespace (e.g. copied from a shell-quoted example). ResolveSolutionPath must
 // strip those before checking File.Exists / combining with base directories, otherwise resolution
 // fails with a ToolNotFoundException that embeds the literal quote characters in every candidate.
@@ -83,7 +83,7 @@ public class LoadSolutionPathSanitizationTests
                  + "argument as the tool description recommends for relative paths. The prior "
                  + "behavior silently dropped that candidate and fell through to the server-wide "
                  + "BaseRepoDirectory default, which happened to also resolve the same relative "
-                 + "solutionPath — but to an unintended sibling directory, with no error raised to "
+                 + "solutionPath - but to an unintended sibling directory, with no error raised to "
                  + "signal the mismatch. A nonexistent baseRepoDir must fail fast and say so, not "
                  + "be silently discarded.")]
     public async Task LoadSolutionAsync_BaseRepoDirDoesNotExist_ThrowsArgumentExceptionInsteadOfSilentlyFallingThroughAsync()
@@ -106,7 +106,7 @@ public class LoadSolutionPathSanitizationTests
         // (i.e. the quotes must be stripped, not treated as part of the filename), so loading
         // proceeds to MSBuild instead of failing fast with ToolNotFoundException from
         // ResolveSolutionPath. The temp file has no real projects, so MSBuild itself finds
-        // nothing to load — that failure is distinguishable by its message (which names the
+        // nothing to load -> that failure is distinguishable by its message (which names the
         // resolved, unquoted path) from a path-resolution failure (which says "Tried: ...").
         var tempFile = Path.Combine(Path.GetTempPath(), $"RoslynSentinelTests_{Guid.NewGuid()}.sln");
         await File.WriteAllTextAsync(tempFile, "Microsoft Visual Studio Solution File, Format Version 12.00");

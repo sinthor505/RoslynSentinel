@@ -4,12 +4,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 /// <summary>
-/// Battery #8 — Tests for five engines at 5-6 mention coverage:
-///   A. InventoryEngine              (2 tests) — GetCodeInventory
-///   B. ModernizationUpgradeEngine   (3 tests) — UseSpan stub, UpgradePatternMatching, UseThrowExpressions stub
-///   C. DependencyEngine             (3 tests) — GetProjectDependencies, unknown project throws, FindUnusedRefs
-///   D. ModernLoggingEngine          (3 tests) — ConvertToSourceGeneratedLogging (real, no calls, unknown class)
-///   E. IDEStyleEngine               (3 tests) — SimplifyMemberAccess, UseObjectInitializers, UseNullPropagation stub
+/// Battery #8 -> Tests for five engines at 5-6 mention coverage:
+///   A. InventoryEngine              (2 tests) -> GetCodeInventory
+///   B. ModernizationUpgradeEngine   (3 tests) -> UseSpan stub, UpgradePatternMatching, UseThrowExpressions stub
+///   C. DependencyEngine             (3 tests) -> GetProjectDependencies, unknown project throws, FindUnusedRefs
+///   D. ModernLoggingEngine          (3 tests) -> ConvertToSourceGeneratedLogging (real, no calls, unknown class)
+///   E. IDEStyleEngine               (3 tests) -> SimplifyMemberAccess, UseObjectInitializers, UseNullPropagation stub
 ///
 /// Total: 14 tests.
 /// </summary>
@@ -105,7 +105,7 @@ public class ModernizationUpgradeEngineTests
     [Test]
     public async Task UseSpanForParsing_MethodFound_TransformsSubstring()
     {
-        // UseSpanForParsing is fully implemented — replaces Substring with AsSpan().ToString()
+        // UseSpanForParsing is fully implemented -> replaces Substring with AsSpan().ToString()
         SetSource(@"
 public class Parser
 {
@@ -120,7 +120,7 @@ public class Parser
     [Test]
     public async Task UpgradePatternMatching_OldStyleIsPattern_ReturnsNonNullString()
     {
-        // PatternMatchingRewriter runs on any file — this is a smoke test confirming
+        // PatternMatchingRewriter runs on any file -> this is a smoke test confirming
         // the method completes without throwing regardless of match/no-match
         SetSource(@"
 public class Processor
@@ -144,7 +144,7 @@ public class Processor
     [Test]
     public async Task UseThrowExpressions_AnyInput_ReturnsRootUnchanged()
     {
-        // ThrowExpressionRewriter is a stub — null-check detection implemented but
+        // ThrowExpressionRewriter is a stub -> null-check detection implemented but
         // the conversion is not applied (returns base.VisitIfStatement unchanged)
         SetSource(@"
 public class Guard
@@ -209,7 +209,7 @@ public class DependencyEngineTests
     public async Task FindUnusedReferences_InMemoryProject_ReturnsEmpty()
     {
         // AdhocWorkspace compilation has no CompilationReference typed references (metadata only)
-        // — FindUnusedReferences returns empty because the cast check for CompilationReference fails
+        // -> FindUnusedReferences returns empty because the cast check for CompilationReference fails
         var solution = TestSolutionBuilder.CreateSolutionWithProject("PriceService",
             [("Price.cs", "public class Price { public decimal Amount { get; set; } }")]);
         _workspaceManager.SetTestSolution(solution);
@@ -278,7 +278,7 @@ public class UserService
         var result = await _engine.ConvertToSourceGeneratedLoggingAsync("UserService.cs", "UserService");
 
         Assert.That(result.UpdatedText, Does.Contain("GetName"), "Method should be unchanged");
-        Assert.That(result.UpdatedText, Does.Not.Contain("partial"), "No logging calls — class should not be made partial");
+        Assert.That(result.UpdatedText, Does.Not.Contain("partial"), "No logging calls - class should not be made partial");
         Assert.That(result.UpdatedText, Does.Not.Contain("LoggerMessage"), "Should not generate LoggerMessage attribute");
     }
 
@@ -352,7 +352,7 @@ public class Product { public string Name { get; set; } public decimal Price { g
 
         Assert.That(result.UpdatedText, Does.Contain("Name"), "Property Name should be in initializer");
         Assert.That(result.UpdatedText, Does.Contain("Price"), "Property Price should be in initializer");
-        // Both assignments should be collapsed into object initializer — no separate assignment statements
+        // Both assignments should be collapsed into object initializer -> no separate assignment statements
         Assert.That(result.UpdatedText!, Does.Not.Match(@"p\.Name\s*="), "Separate p.Name assignment should be removed");
         Assert.That(result.UpdatedText!, Does.Not.Match(@"p\.Price\s*="), "Separate p.Price assignment should be removed");
     }
@@ -360,7 +360,7 @@ public class Product { public string Name { get; set; } public decimal Price { g
     [Test]
     public async Task UseNullPropagation_AnyInput_ReturnsNonEmptySource()
     {
-        // UseNullPropagationAsync is a stub — returns root unchanged
+        // UseNullPropagationAsync is a stub -> returns root unchanged
         SetSource(@"
 public class Checker
 {

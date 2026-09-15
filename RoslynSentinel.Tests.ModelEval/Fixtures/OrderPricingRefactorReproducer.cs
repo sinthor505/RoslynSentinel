@@ -1,7 +1,7 @@
 namespace RoslynSentinel.Tests.ModelEval.Fixtures;
 
 /// <summary>
-/// Multi-step refactoring fixture — unlike <see cref="WholeFileRewriteReproducer"/> and
+/// Multi-step refactoring fixture -> unlike <see cref="WholeFileRewriteReproducer"/> and
 /// <see cref="SizeGraduatedReproducer"/> (both single-bug-fix scenarios at varying prompt-guidance
 /// levels), this exercises a chain of three independent, ordinary refactoring operations against
 /// one small class: extract a duplicated expression into a new method, rename an existing method
@@ -17,11 +17,11 @@ public static class OrderPricingRefactorReproducer
     /// <summary>
     /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/OrderPricingCalculator.cs. Padded
     /// with unrelated members before and after the target method, used to detect an accidental
-    /// whole-file/whole-class logic touch (reformatting them is fine — only a change to their
+    /// whole-file/whole-class logic touch (reformatting them is fine -> only a change to their
     /// signature or behavior counts as a violation; see <c>OrderPricingRefactorAgentTests</c>'s
     /// semantic, whitespace-insensitive comparison). <c>CalcDisc</c> computes the same
-    /// "amount * rate" discount expression twice (once per branch) — the duplication the model is
-    /// asked to extract into a new method — and is itself the method the model is asked to rename.
+    /// "amount * rate" discount expression twice (once per branch) -> the duplication the model is
+    /// asked to extract into a new method -> and is itself the method the model is asked to rename.
     /// </summary>
     public const string StartingCalculatorFileContent = """
         namespace ContosoOrders.Core.FixtureHelpers;
@@ -38,7 +38,7 @@ public static class OrderPricingRefactorReproducer
             /// <summary>
             /// Computes the final total for an order after discount. BUG-FREE but duplicated: both
             /// branches independently multiply the raw order amount by the discount rate instead
-            /// of sharing one expression — the model is asked to extract that shared calculation
+            /// of sharing one expression -> the model is asked to extract that shared calculation
             /// into its own method. Deliberately worded without the literal expression text so a
             /// model that leaves this comment untouched (it isn't asked to update comments) can't
             /// be mistaken for one that left the duplicated code in place.
@@ -68,7 +68,7 @@ public static class OrderPricingRefactorReproducer
         """;
 
     /// <summary>
-    /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/OrderCheckout.cs — a second,
+    /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/OrderCheckout.cs -> a second,
     /// unrelated-looking file with one real call site into <c>CalcDisc</c>, standing in for the
     /// "rename missed a call site in another file" failure mode a same-file-only rename could hide.
     /// A correct rename must update this call along with any others; a rename tool used correctly
@@ -90,12 +90,12 @@ public static class OrderPricingRefactorReproducer
         """;
 
     /// <summary>
-    /// Goes in the fixture at ContosoOrders.Tests/ModelEvalGenerated/OrderCheckoutTests.cs — a real
+    /// Goes in the fixture at ContosoOrders.Tests/ModelEvalGenerated/OrderCheckoutTests.cs -> a real
     /// xunit test against <c>OrderCheckout.GetFinalPrice</c>, the "front door" per
     /// docs/current/modeleval_fixture_test_suite_redesign.md: <c>GetFinalPrice</c>'s own name/shape
     /// is never touched by this fixture's refactor steps, only its callee
     /// (<c>CalcDisc</c> -> <c>CalculateDiscountedTotal</c>) is, so a test written against it pre-fix
-    /// still compiles and is meaningful after a correct rename/extraction — unlike a test that named
+    /// still compiles and is meaningful after a correct rename/extraction -> unlike a test that named
     /// <c>CalcDisc</c> directly, which would fail to COMPILE post-rename. Replaces the old
     /// CollapseWhitespace substring checks: proving GetFinalPrice's behavior survived proves the
     /// renamed/extracted logic underneath it still works, without caring what it's now called or how

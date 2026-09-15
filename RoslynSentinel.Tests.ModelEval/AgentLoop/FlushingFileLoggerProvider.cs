@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.ModelEval.AgentLoop;
 /// Minimal <see cref="ILoggerProvider"/> that writes every log entry to a file and flushes after
 /// each write. Exists because dotnet test's console logger block-buffers stdout when redirected to
 /// a file (e.g. `dotnet test ... > out.txt`), so log lines written during a long-running model-eval
-/// turn are invisible until the whole test process exits or a large internal buffer fills — this
+/// turn are invisible until the whole test process exits or a large internal buffer fills -> this
 /// sink bypasses that entirely by writing straight to disk with FileShare.ReadWrite so the file can
 /// be tailed live while the test is still running.
 /// </summary>

@@ -7,7 +7,7 @@ using RoslynSentinel.Common;
 namespace RoslynSentinel.Tests;
 
 /// <summary>
-/// Battery #2 — Tests using realistic code patterns from a real .NET microservices project
+/// Battery #2 -> Tests using realistic code patterns from a real .NET microservices project
 /// across 4 services (InventoryService, ShoppingService, RecipeService, MealPlanningService).
 ///
 /// Files targeted:
@@ -53,7 +53,7 @@ public class RealProjectPatternTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 1. SortAndDeduplicateUsingsAsync — Pattern from LowStockMonitorWorker.cs
+    // 1. SortAndDeduplicateUsingsAsync -> Pattern from LowStockMonitorWorker.cs
     //    Real bug: `using ExpressRecipe.InventoryService.Data;` appears TWICE
     //    at lines 1–2. The standard sort_usings only sorts, remove_unused_usings
     //    won't remove a "used" duplicate. SortAndDeduplicateUsingsAsync fixes both.
@@ -63,7 +63,7 @@ public class RealProjectPatternTests
     [Description("Pattern from LowStockMonitorWorker.cs: duplicate using directive must be removed")]
     public async Task SortAndDeduplicate_DuplicateUsingFromLowStockWorker_RemovesDuplicate()
     {
-        // Exact pattern from LowStockMonitorWorker.cs — two identical using directives
+        // Exact pattern from LowStockMonitorWorker.cs -> two identical using directives
         const string source = @"using ExpressRecipe.InventoryService.Data;
 using ExpressRecipe.InventoryService.Data;
 using ExpressRecipe.InventoryService.Models;
@@ -136,7 +136,7 @@ public class C { }";
         var result = await _engine.SortAndDeduplicateUsingsAsync("Clean.cs");
 
         Assert.That(result.RemovedDuplicates, Is.EqualTo(0),
-            "No duplicates — nothing to remove");
+            "No duplicates - nothing to remove");
     }
 
     [Test]
@@ -158,7 +158,7 @@ public class C { }";
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 2. GenerateToStringSafeAsync — Pattern from NutritionEstimateDto
+    // 2. GenerateToStringSafeAsync -> Pattern from NutritionEstimateDto
     //    Real class: sealed, all properties are `init`, has a static factory Empty.
     //    Must correctly generate ToString for sealed class with init-only properties.
     // ══════════════════════════════════════════════════════════════════════════
@@ -196,7 +196,7 @@ public sealed class NutritionEstimateDto
     [Description("Pattern from MealSuggestionService ScoringWeights: internal static class with constants only")]
     public async Task GenerateToStringSafe_InternalStaticClassWithConstants_ReturnsFail()
     {
-        // ScoringWeights is internal static — no instance properties to serialize
+        // ScoringWeights is internal static -> no instance properties to serialize
         const string source = @"
 internal static class ScoringWeights
 {
@@ -207,16 +207,16 @@ internal static class ScoringWeights
 }";
         SetSource(source, "ScoringWeights.cs");
 
-        // Static class cannot have ToString() override — engine should fail gracefully
+        // Static class cannot have ToString() override -> engine should fail gracefully
         var result = await _engine.GenerateToStringSafeAsync("ScoringWeights.cs", "ScoringWeights");
 
         // We expect either Fail (because static class can't have instance ToString)
-        // OR the engine generates ToString for the constants — accept either as long as no crash
+        // OR the engine generates ToString for the constants -> accept either as long as no crash
         Assert.That(result, Is.Not.Null, "Engine must return a result, not throw");
     }
 
     [Test]
-    [Description("Pattern from AllergenDetectionService: class with Dictionary field — Dict field shouldn't break ToString")]
+    [Description("Pattern from AllergenDetectionService: class with Dictionary field - Dict field shouldn't break ToString")]
     public async Task GenerateToStringSafe_ClassWithDictionaryField_Success()
     {
         const string source = @"
@@ -268,13 +268,13 @@ public sealed class NutritionEstimateDto
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 3. EncapsulateFieldSafeAsync — Public field → private backing + property
+    // 3. EncapsulateFieldSafeAsync -> Public field -> private backing + property
     //    Pattern: services use private readonly fields, but some older code has
     //    public fields that need encapsulation without self-referential recursion.
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
-    [Description("Standard service field encapsulation — public field becomes private + property")]
+    [Description("Standard service field encapsulation - public field becomes private + property")]
     public async Task EncapsulateField_PublicField_GeneratesPropertyWithBackingField()
     {
         const string source = @"
@@ -333,16 +333,16 @@ public class Service
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 4. AnalyzeForeachForLinqConversionAsync — Patterns from AllergenDetectionService
+    // 4. AnalyzeForeachForLinqConversionAsync -> Patterns from AllergenDetectionService
     //    and ShoppingOptimizationService
     //    Real pattern: foreach + .Add() into a pre-initialized list
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
-    [Description("Pattern from ShoppingOptimizationService.cs: foreach with storeDetails[k]=v — .Add not present")]
+    [Description("Pattern from ShoppingOptimizationService.cs: foreach with storeDetails[k]=v - .Add not present")]
     public async Task AnalyzeForeach_DictionaryIndexAssignmentInForEach_ReportsNoAddCalls()
     {
-        // Pattern from OptimizeAsync method — not a List.Add() pattern
+        // Pattern from OptimizeAsync method -> not a List.Add() pattern
         const string source = @"
 using System;
 using System.Collections.Generic;
@@ -371,7 +371,7 @@ public class ShoppingOpt
 
             // No .Add() calls means it can't be auto-converted
             Assert.That(result.IsSafeToConvert, Is.False,
-                "Dictionary assignment in foreach has no .Add() — not a LINQ candidate");
+                "Dictionary assignment in foreach has no .Add() - not a LINQ candidate");
             Assert.That(result.BlockingReason, Does.Contain("No .Add()").Or.Contain("Add"),
                 "Should explain the absence of .Add() calls");
         }
@@ -382,10 +382,10 @@ public class ShoppingOpt
     }
 
     [Test]
-    [Description("Pattern from AllergenDetectionService: simple foreach + .Add — safe to convert")]
+    [Description("Pattern from AllergenDetectionService: simple foreach + .Add - safe to convert")]
     public async Task AnalyzeForeach_SimpleForEachWithAdd_SafeToConvert()
     {
-        // Simple pattern: declare list, foreach, add — no modifications between decl and foreach
+        // Simple pattern: declare list, foreach, add -> no modifications between decl and foreach
         const string source = @"
 using System.Collections.Generic;
 public class AllergenService
@@ -419,11 +419,11 @@ public class AllergenService
     }
 
     [Test]
-    [Description("Unsafe pattern: collection modified before foreach — standard tool would silently drop pre-modifications")]
+    [Description("Unsafe pattern: collection modified before foreach - standard tool would silently drop pre-modifications")]
     public async Task AnalyzeForeach_CollectionModifiedBeforeForeach_NotSafeToConvert()
     {
         // This is the CRITICAL BUG the analyzer prevents:
-        // pre-adding "header" before the foreach — standard tool drops it silently
+        // pre-adding "header" before the foreach -> standard tool drops it silently
         const string source = @"
 using System.Collections.Generic;
 public class ReportBuilder
@@ -447,7 +447,7 @@ public class ReportBuilder
                 tempFile, "foreach (var item in items)");
 
             Assert.That(result.IsSafeToConvert, Is.False,
-                "CRITICAL: Collection modified before foreach — standard tool drops 'HEADER' silently");
+                "CRITICAL: Collection modified before foreach - standard tool drops 'HEADER' silently");
             Assert.That(result.StatementsBeforeForeach, Is.GreaterThan(0),
                 "Should count the pre-foreach modification statement(s)");
             Assert.That(result.BlockingReason, Does.Contain("HEADER").Or.Contain("lines"),
@@ -460,7 +460,7 @@ public class ReportBuilder
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 5. ExtractConstantSafeAsync — Patterns from InventoryItemService.cs
+    // 5. ExtractConstantSafeAsync -> Patterns from InventoryItemService.cs
     //    Real pattern: `TimeSpan.FromMinutes(5)` used twice, good extract candidate
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -522,7 +522,7 @@ public class ShoppingService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 6. ExtractMethodSafeAsync — Patterns from ShoppingOptimizationService.cs
+    // 6. ExtractMethodSafeAsync -> Patterns from ShoppingOptimizationService.cs
     //    and InventoryItemService.cs
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -530,7 +530,7 @@ public class ShoppingService
     [Description("Pattern from ShoppingOptimizationService: extract validation block with early return")]
     public async Task ExtractMethodSafe_ValidationWithEarlyReturn_ExtractsCorrectly()
     {
-        // Pattern: guard clause / early return — common in service methods
+        // Pattern: guard clause / early return -> common in service methods
         const string source = @"
 using System.Collections.Generic;
 public class Optimizer
@@ -549,7 +549,7 @@ public class Optimizer
         var result = await _engine.ExtractMethodSafeAsync(
             "Optimizer.cs", "ValidateItems", "if (items.Count == 0)");
 
-        // Guard clauses often can't be extracted cleanly — accept either success or descriptive failure
+        // Guard clauses often can't be extracted cleanly -> accept either success or descriptive failure
         Assert.That(result, Is.Not.Null, "Must return a result without throwing");
         if (!result.Success)
         {
@@ -613,7 +613,7 @@ public class MealScorer
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 7. GetWorkspaceHealthAsync — Workspace health reporting
+    // 7. GetWorkspaceHealthAsync -> Workspace health reporting
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -639,7 +639,7 @@ public class InventoryRepository { }";
     [Description("Workspace health with no solution loaded: operational=true (workspace is up) but HasLoadedSolution=false")]
     public async Task GetWorkspaceHealth_NoSolutionLoaded_ReportsNoSolutionButOperational()
     {
-        // Fresh workspace manager with no solution set — workspace itself is operational,
+        // Fresh workspace manager with no solution set -> workspace itself is operational,
         // but no solution is loaded yet. The health check correctly distinguishes these.
         using var fresh = new PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
@@ -660,11 +660,11 @@ public class InventoryRepository { }";
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 8. SortAndDeduplicateUsingsAsync — Additional edge cases
+    // 8. SortAndDeduplicateUsingsAsync -> Additional edge cases
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
-    [Description("File with no usings at all — must return success with OriginalCount=0")]
+    [Description("File with no usings at all - must return success with OriginalCount=0")]
     public async Task SortAndDeduplicate_NoUsings_SucceedsWithZeroCount()
     {
         const string source = @"namespace Test;
@@ -679,7 +679,7 @@ public class C { }";
     }
 
     [Test]
-    [Description("Multiple namespace groups: System.*, Microsoft.*, then domain usings — sorted correctly")]
+    [Description("Multiple namespace groups: System.*, Microsoft.*, then domain usings - sorted correctly")]
     public async Task SortAndDeduplicate_ThreeNamespaceGroups_SortedSystemFirst()
     {
         // Common pattern: ExpressRecipe services have all 3 groups
@@ -708,11 +708,11 @@ namespace Test; public class C { }";
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 9. GenerateToStringSafeAsync — Additional ExpressRecipe class patterns
+    // 9. GenerateToStringSafeAsync -> Additional ExpressRecipe class patterns
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
-    [Description("Pattern from InventoryRepository: partial class — engine must handle partial keyword")]
+    [Description("Pattern from InventoryRepository: partial class - engine must handle partial keyword")]
     public async Task GenerateToStringSafe_PartialClass_HandledGracefullyOrSucceeds()
     {
         const string source = @"
@@ -793,13 +793,13 @@ public class ShoppingOptimizationService : IShoppingOptimizationService
 
         Assert.That(result.Success, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{Strategy}"),
-            "Strategy must appear — correct class was targeted");
+            "Strategy must appear - correct class was targeted");
         Assert.That(result.UpdatedContent, Does.Contain("{MinSavings}"),
-            "MinSavings must appear — correct class was targeted");
+            "MinSavings must appear - correct class was targeted");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 10. ExtractMethodSafe — Additional realistic patterns from ExpressRecipe
+    // 10. ExtractMethodSafe -> Additional realistic patterns from ExpressRecipe
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -852,7 +852,7 @@ public class NutritionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 11. Regression guards — Specific patterns that caused failures in Battery #1
+    // 11. Regression guards -> Specific patterns that caused failures in Battery #1
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -866,7 +866,7 @@ using System.Threading;
 namespace Test; public class Worker { }";
         SetSource(source, "WorkspaceWorker.cs");
 
-        // This must succeed — the workspace has the file even though it's not on disk
+        // This must succeed -> the workspace has the file even though it's not on disk
         var result = await _engine.SortAndDeduplicateUsingsAsync("WorkspaceWorker.cs");
 
         Assert.That(result.RemovedDuplicates, Is.EqualTo(1),
@@ -875,7 +875,7 @@ namespace Test; public class Worker { }";
     }
 
     [Test]
-    [Description("Regression: EncapsulateField self-reference guard — generated getter must not call property by same name")]
+    [Description("Regression: EncapsulateField self-reference guard - generated getter must not call property by same name")]
     public async Task EncapsulateField_NoSelfReferentialGetter_Bug1Guard()
     {
         const string source = @"
@@ -888,7 +888,7 @@ public class Stats
         var result = await _engine.EncapsulateFieldSafeAsync("Stats.cs", "SuccessCount");
 
         Assert.That(result.Success, Is.True, result.Error);
-        // Critical: getter must NOT return SuccessCount (the property itself) — infinite recursion
+        // Critical: getter must NOT return SuccessCount (the property itself) -> infinite recursion
         // It should return _successCount (the backing field)
         Assert.That(result.UpdatedContent, Does.Not.Match(@"return SuccessCount;"),
             "BUG #1 REGRESSION: getter must not return the property by its own name (infinite recursion)");
@@ -923,7 +923,7 @@ public interface ILogger { }";
         var result = await _engine.GenerateToStringSafeAsync("LowStockMonitorWorker.cs", "LowStockMonitorWorker");
 
         // BackgroundService with only private fields has no public members to include
-        // Engine should fail gracefully — no crash, descriptive error
+        // Engine should fail gracefully -> no crash, descriptive error
         Assert.That(result, Is.Not.Null, "Engine must not throw for BackgroundService pattern");
         if (!result.Success)
         {

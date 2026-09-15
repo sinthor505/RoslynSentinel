@@ -64,7 +64,7 @@ public class BugFixTests
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Bug 1: GetHealthComponents — MSBuildFound should respect MSBuildLocator.IsRegistered
+    // Bug 1: GetHealthComponents -> MSBuildFound should respect MSBuildLocator.IsRegistered
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -80,7 +80,7 @@ public class BugFixTests
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Bug 2: ExtractInterface — generated file must have namespace + usings
+    // Bug 2: ExtractInterface -> generated file must have namespace + usings
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -131,7 +131,7 @@ public class Svc { public void Foo() {} }";
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Bug 3: ChangeSignatureAsync — was a stub; now reorders params & call sites
+    // Bug 3: ChangeSignatureAsync -> was a stub; now reorders params & call sites
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -144,7 +144,7 @@ public class Svc { public void Foo() {} }";
 
         SetSource(source, "Calculator.cs");
 
-        // Reorder [a, b, c] → [c, a, b] using index permutation [2, 0, 1]
+        // Reorder [a, b, c] -> [c, a, b] using index permutation [2, 0, 1]
         var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new SignatureParameterSpec[] { new ExistingParameterSpec(2), new ExistingParameterSpec(0), new ExistingParameterSpec(1) });
 
         Assert.That(result.Changes, Is.Not.Empty, "Should return changed files");
@@ -177,7 +177,7 @@ public class Svc { public void Foo() {} }";
             ("Caller.cs", "public class Caller { public int Run(Calculator calc) => calc.Add(1, c: 3, b: 2); }"));
 
         // Reorder [a, b, c] -> [c, a, b]. The call site uses named arguments for b/c, which are
-        // order-independent — the semantic-model-driven resolution must correctly bind each named
+        // order-independent -> the semantic-model-driven resolution must correctly bind each named
         // argument to its original parameter and rewrite the call site, not skip it.
         var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new SignatureParameterSpec[] { new ExistingParameterSpec(2), new ExistingParameterSpec(0), new ExistingParameterSpec(1) });
 
@@ -193,7 +193,7 @@ public class Svc { public void Foo() {} }";
             ("Calculator.cs", "public class Calculator { public int Add(int a, int b, int c = 0) => a + b + c; }"),
             ("Caller.cs", "public class Caller { public int Run(Calculator calc) => calc.Add(1, 2); }"));
 
-        // Reorder [a, b, c] -> [c, a, b]. The call site omits the optional trailing 'c' argument —
+        // Reorder [a, b, c] -> [c, a, b]. The call site omits the optional trailing 'c' argument ->
         // recognized via the semantic model as "no argument to move for that parameter", not a
         // reason to skip the whole call site. Since c moves to the front here, its omitted value
         // must be materialized (using the parameter's own default, 0) so the call keeps compiling.
@@ -207,7 +207,7 @@ public class Svc { public void Foo() {} }";
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Bug 4: ImplementInterfaceAsync — stubs must NOT have 'override' keyword
+    // Bug 4: ImplementInterfaceAsync -> stubs must NOT have 'override' keyword
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -254,7 +254,7 @@ public class Foo : IFoo
             "Should report that all members are already implemented");
     }
 
-    // ── Bug 45: GenerateMapping — Cross-Project Type Resolution ───────────────
+    // ── Bug 45: GenerateMapping -> Cross-Project Type Resolution ───────────────
 
     [Test]
     public async Task BUG_45_GenerateMapping_CrossProjectTypes_ResolvesCorrectly()
@@ -283,7 +283,7 @@ public class Destination
         Assert.That(result.UpdatedText, Does.Contain("Age"), "Should map Age property");
     }
 
-    // ── Bug 47: OptimizeIndependentAwaits — Overload Disambiguation ──────────────
+    // ── Bug 47: OptimizeIndependentAwaits -> Overload Disambiguation ──────────────
 
     [Test]
     public async Task BUG_47_OptimizeIndependentAwaits_MultipleOverloads_PicksCorrect()
@@ -314,7 +314,7 @@ public class Processor
             "Should optimize by creating task variables or using Task.WhenAll");
     }
 
-    // ── Bug 48: FindTodoFixmeComments — Exact Word Boundary Matching ──────────────
+    // ── Bug 48: FindTodoFixmeComments -> Exact Word Boundary Matching ──────────────
 
     [Test]
     public async Task BUG_48_FindTodoComments_ExactMatchOnly_NoSubstringMatching()
@@ -340,7 +340,7 @@ public class Validator
             "Should find only 1 BUG comment, not match DEBUGGING");
     }
 
-    // ── Bug 49: AnalyzePathCoverage — Empty Branches on Overloads ──────────────
+    // ── Bug 49: AnalyzePathCoverage -> Empty Branches on Overloads ──────────────
 
     [Test]
     public async Task BUG_49_AnalyzePathCoverage_Overloads_AnalyzesAll()
@@ -362,7 +362,7 @@ public class Calculator
             "Should include branches from multiple overloads, not empty");
     }
 
-    // ── Bug 50: GenerateCallTree — Picks Implementation, Not Interface ──────────────
+    // ── Bug 50: GenerateCallTree -> Picks Implementation, Not Interface ──────────────
 
     [Test]
     public async Task BUG_50_GenerateCallTree_ShowsImplementation_NotInterface()
@@ -391,7 +391,7 @@ public class Processor : IProcessor
             "Should not show interface in call chain");
     }
 
-    // ── Bug 51: UseTimeProvider — Updates Constructor and Assignments ──────────────
+    // ── Bug 51: UseTimeProvider -> Updates Constructor and Assignments ──────────────
 
     [Test]
     public async Task BUG_51_UseTimeProvider_UpdatesConstructor_AndAssigns()
@@ -417,7 +417,7 @@ public class Logger
             "Should add TimeProvider to constructor or use _timeProvider");
     }
 
-    // ── Bug 54: AddGuardClauses — Includes String Parameters ──────────────
+    // ── Bug 54: AddGuardClauses -> Includes String Parameters ──────────────
 
     [Test]
     public async Task BUG_54_AddGuardClauses_IncludesStringParameters()
@@ -447,7 +447,7 @@ public class User { }";
             "Should add guard clause for object parameter");
     }
 
-    // ── Bug 59: UpdateXmlDocsFromSignature — Generates if Missing ──────────────
+    // ── Bug 59: UpdateXmlDocsFromSignature -> Generates if Missing ──────────────
 
     [Test]
     public async Task BUG_59_UpdateXmlDocsFromSignature_GeneratesIfMissing()
@@ -475,7 +475,7 @@ public class Calculator
             "Should generate param documentation for parameter b");
     }
 
-    // ── Bug 61: SyncTypeAndFilename — Picks Primary Type, Uses Staging ──────────────
+    // ── Bug 61: SyncTypeAndFilename -> Picks Primary Type, Uses Staging ──────────────
 
     [Test]
     public async Task BUG_61_SyncTypeAndFilename_PicksPrimaryType_UsesStaging()
@@ -499,7 +499,7 @@ namespace MyApp
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Regression Tests — 12 Critical Tool Capabilities
+    // Regression Tests -> 12 Critical Tool Capabilities
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -834,7 +834,7 @@ public class Service
             _workspaceManager.SetTestSolution(solution);
         }
 
-        // ── Bug 1: DetectMismatchedAwait — discard and WhenAll patterns ───────────
+        // ── Bug 1: DetectMismatchedAwait -> discard and WhenAll patterns ───────────
 
         [Test]
         public async Task DetectMismatchedAwait_DiscardAssignment_IsNotFlagged()
@@ -873,7 +873,7 @@ public class Svc
             Assert.That(results, Is.Empty, "Task.WhenAll pattern should not be flagged as missing await");
         }
 
-        // ── Bug 2: ExtractInterface — no duplicate base type ─────────────────────
+        // ── Bug 2: ExtractInterface -> no duplicate base type ─────────────────────
 
         [Test]
         public async Task ExtractInterface_WhenClassAlreadyImplementsInterface_NoDuplicateAdded()
@@ -890,7 +890,7 @@ public class Svc : ISvc { public void Foo() {} }";
             Assert.That(count, Is.EqualTo(1), "ISvc should appear exactly once in the base list");
         }
 
-        // ── Bug 3: GenerateTestScaffold — async Task for async methods ────────────
+        // ── Bug 3: GenerateTestScaffold -> async Task for async methods ────────────
 
         [Test]
         public async Task GenerateTestScaffold_AsyncMethod_EmitsAsyncTask()
@@ -920,7 +920,7 @@ public class Svc : ISvc { public void Foo() {} }";
                 "Should NOT emit 'public void' for async method test");
         }
 
-        // ── Bug 4: GenerateFluentBuilder — DI class error (returns error result, does NOT throw) ──
+        // ── Bug 4: GenerateFluentBuilder -> DI class error (returns error result, does NOT throw) ──
 
         [Test]
         public async Task GenerateFluentBuilder_DiClass_ReturnsErrorResult_NotException()
@@ -968,7 +968,7 @@ public class Svc : ISvc { public void Foo() {} }";
                 "Builder should have WithPrice method");
         }
 
-        // ── Bug 5: CheckForSqlInjection — const interpolation is safe ─────────────
+        // ── Bug 5: CheckForSqlInjection -> const interpolation is safe ─────────────
 
         [Test]
         public async Task CheckForSqlInjection_ConstInterpolation_IsNotFlagged()
@@ -985,7 +985,7 @@ public class Repo
 }";
             SetSource(src, "Repo.cs");
             // Note: CheckForSqlInjection scans for method invocations on SQL execution methods.
-            // The interpolation uses a const string — must not be flagged.
+            // The interpolation uses a const string -> must not be flagged.
             var results = await _securityEngine.CheckForSqlInjectionAsync("Repo.cs");
             Assert.That(results, Is.Empty,
                 "Interpolation with compile-time const string should NOT be flagged as SQL injection");
@@ -1018,11 +1018,11 @@ public class Repo
         {
             // Two lines both containing "void M()" as snippet.
             // The source lines themselves contain a string literal with real double-quotes.
-            // AI typically provides lineBefore with \" escaping — MatchLine must normalize it.
+            // AI typically provides lineBefore with \" escaping -> MatchLine must normalize it.
             const string source = "void M() { var x = \"hello\"; }\nvoid M() { var y = \"world\"; }";
             var sourceText = Microsoft.CodeAnalysis.Text.SourceText.From(source);
 
-            // lineBefore: "void M() { var x = \"hello\"; }" — \" normalized to " by MatchLine
+            // lineBefore: "void M() { var x = \"hello\"; }" -> \" normalized to " by MatchLine
             var pos = ContextHelper.FindSnippetPosition(sourceText, "void M()",
                 lineBefore: "void M() { var x = \\\"hello\\\"; }");
 
@@ -1036,7 +1036,7 @@ public class Repo
         public void ContextHelper_FindSnippetPosition_EscapedQuoteInLineBefore_Disambiguates()
         {
             // Two lines both contain "hello" (with surrounding quotes as the snippet).
-            // We want the second occurrence — supply lineBefore matching the FIRST line.
+            // We want the second occurrence -> supply lineBefore matching the FIRST line.
             // The lineBefore is provided AI-style with \" escaping.
             const string source = "var x = \"hello\";\nvar y = \"hello\";";
             var sourceText = Microsoft.CodeAnalysis.Text.SourceText.From(source);
@@ -1052,7 +1052,7 @@ public class Repo
                 "Should find the 'hello' occurrence on line 1, not line 0");
         }
 
-        // ── Bug 7: GenerateEqualityOverrides — List<T> uses SequenceEqual ─────────
+        // ── Bug 7: GenerateEqualityOverrides -> List<T> uses SequenceEqual ─────────
 
         [Test]
         public async Task GenerateEqualityOverrides_ListProperty_UsesSequenceEqual()
@@ -1085,8 +1085,8 @@ public class Product
 
     /// <summary>
     /// Bug 8 regression tests:
-    /// Bug 8a: FindStringMagicValues — Locations were empty {} due to value tuple JSON serialization
-    /// Bug 8b: DetectMismatchedAwait — false positives on Moq lambda setup chains
+    /// Bug 8a: FindStringMagicValues -> Locations were empty {} due to value tuple JSON serialization
+    /// Bug 8b: DetectMismatchedAwait -> false positives on Moq lambda setup chains
     /// </summary>
     [TestFixture]
     public class Bug8BatchRegressionTests
@@ -1113,7 +1113,7 @@ public class Product
             _workspaceManager.SetTestSolution(solution);
         }
 
-        // ── Bug 8a: FindStringMagicValues — locations must have non-empty FilePathWrapper/Line/Snippet ───
+        // ── Bug 8a: FindStringMagicValues -> locations must have non-empty FilePathWrapper/Line/Snippet ───
 
         [Test]
         public async Task FindStringMagicValues_LocationsHaveFilePath()
@@ -1164,12 +1164,12 @@ public class Product
             Assert.That(lines[2], Is.GreaterThan(lines[1]), "Third occurrence should be on a later line");
         }
 
-        // ── Bug 8b: DetectMismatchedAwait — Moq lambda setup chains should not be flagged ──
+        // ── Bug 8b: DetectMismatchedAwait -> Moq lambda setup chains should not be flagged ──
 
         [Test]
         public async Task DetectMismatchedAwait_MoqSimpleLambdaBody_IsNotFlagged()
         {
-            // Moq pattern: .Setup(s => s.FooAsync(...)) — the async invocation is the lambda body
+            // Moq pattern: .Setup(s => s.FooAsync(...)) -> the async invocation is the lambda body
             // It should NOT be flagged as an unawaited fire-and-forget call.
             const string src = @"using System.Threading.Tasks;
 using Moq;
@@ -1212,13 +1212,13 @@ public class MyTests
 
     /// <summary>
     /// Bug 9 regression tests (batch 6 grading pass):
-    /// 9a: ExtractInterface — members must be on separate lines, not all on one line
-    /// 9b: GetCallGraph — prefers class method over interface method in same file
-    /// 9c: GetReverseCallGraph — prefers class method over interface method in same file
-    /// 9d: FindCallersAsync — prefers class method when no contextSnippet given
-    /// 9e: FindServicesNotRegistered — should not flag IWebHostEnvironment, IServiceScopeFactory, etc.
-    /// 9f: UpgradeToModernGuards — returns no-op message when no patterns found
-    /// 9g: FindStringMagicValues — SQL @param tokens must not be flagged as magic values
+    /// 9a: ExtractInterface -> members must be on separate lines, not all on one line
+    /// 9b: GetCallGraph -> prefers class method over interface method in same file
+    /// 9c: GetReverseCallGraph -> prefers class method over interface method in same file
+    /// 9d: FindCallersAsync -> prefers class method when no contextSnippet given
+    /// 9e: FindServicesNotRegistered -> should not flag IWebHostEnvironment, IServiceScopeFactory, etc.
+    /// 9f: UpgradeToModernGuards -> returns no-op message when no patterns found
+    /// 9g: FindStringMagicValues -> SQL @param tokens must not be flagged as magic values
     /// </summary>
     [TestFixture]
     public class Bug9BatchRegressionTests
@@ -1258,7 +1258,7 @@ public class MyTests
             _workspaceManager.SetTestSolution(solution);
         }
 
-        // ── 9a: ExtractInterface formatting — members on separate lines ───────────
+        // ── 9a: ExtractInterface formatting -> members on separate lines ───────────
 
         [Test]
         public async Task ExtractInterface_GeneratedInterface_HasMembersOnSeparateLines()
@@ -1307,7 +1307,7 @@ public class OrderService
                 "Generated interface must include Subtract method");
         }
 
-        // ── 9b: GetCallGraph — prefers class method over interface ───────────────
+        // ── 9b: GetCallGraph -> prefers class method over interface ───────────────
 
         [Test]
         public async Task GetCallGraph_WithInterfaceAndClassInSameFile_UsesClassMethod()
@@ -1335,7 +1335,7 @@ public class Processor : IProcessor
                 "Class method body should have callees; interface method has no body");
         }
 
-        // ── 9c: GetReverseCallGraph — prefers class method over interface ─────────
+        // ── 9c: GetReverseCallGraph -> prefers class method over interface ─────────
 
         [Test]
         public async Task GetReverseCallGraph_WithInterfaceAndClassInSameFile_DoesNotReturnNull()
@@ -1361,7 +1361,7 @@ public class Controller
                 "GetReverseCallGraph must not return null when interface and class share the same method name");
         }
 
-        // ── 9d: FindCallers — no contextSnippet should prefer class declaration ───
+        // ── 9d: FindCallers -> no contextSnippet should prefer class declaration ───
 
         [Test]
         public async Task FindCallersAsync_NoContextSnippet_ClassInSameFileAsInterface_ReturnsResults()
@@ -1385,7 +1385,7 @@ public class Consumer
             Assert.That(results, Is.Not.Null, "FindCallersAsync must not throw when interface and class share same method name");
         }
 
-        // ── 9e: FindServicesNotRegistered — IWebHostEnvironment etc. not flagged ──
+        // ── 9e: FindServicesNotRegistered -> IWebHostEnvironment etc. not flagged ──
 
         [Test]
         public async Task FindServicesNotRegistered_IWebHostEnvironment_NotFlagged()
@@ -1456,7 +1456,7 @@ public class Startup
                 "IHttpContextAccessor is framework-provided and must not be flagged as missing registration");
         }
 
-        // ── 9f: UpgradeToModernGuards — no-op message when nothing to upgrade ─────
+        // ── 9f: UpgradeToModernGuards -> no-op message when nothing to upgrade ─────
 
         [Test]
         public async Task UpgradeToModernGuards_NoPatterns_ReturnsNoOpMessage()
@@ -1470,7 +1470,7 @@ public class Startup
 }";
             SetSource(src, "Service.cs");
             var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Service.cs");
-            // Should NOT return the full file when nothing changed — UpdatedText stays unset
+            // Should NOT return the full file when nothing changed -> UpdatedText stays unset
             Assert.That(result.UpdatedText, Is.Null,
                 "Should not return full file when no guard patterns are found");
             Assert.That(result.Message, Does.Contain("No"),
@@ -1497,7 +1497,7 @@ public class Startup
                 "Should return the full modified file when changes are made");
         }
 
-        // ── 9g: FindStringMagicValues — SQL @params not flagged ──────────────────
+        // ── 9g: FindStringMagicValues -> SQL @params not flagged ──────────────────
 
         [Test]
         public async Task FindStringMagicValues_SqlParamTokens_AreNotFlagged()
@@ -1797,7 +1797,7 @@ public class TargetDto
                 "Int property should have [Range(0, int.MaxValue)]");
         }
 
-        // --- Bug: inline_field — must error when field has no initializer ---
+        // --- Bug: inline_field -> must error when field has no initializer ---
 
         [Test]
         public async Task InlineField_NoInitializer_ReturnsError()
@@ -1895,7 +1895,7 @@ public class TargetDto
         }
 
         // Bug 3, original repro (crash on bad contextSnippet, fixed by returning an error string
-        // instead) used a single, non-overloaded "Name" property — but a contextSnippet only ever
+        // instead) used a single, non-overloaded "Name" property -> but a contextSnippet only ever
         // needs to disambiguate 2+ same-named candidates, so failing on a mismatched snippet here
         // was itself a bug (same class as ReplaceMember's pre-fix behavior, and
         // ConvertExpressionBodyAsync's, see docs/current/TODO.md). Fixed 2026-08-27: an
@@ -1917,7 +1917,7 @@ public class TargetDto
         }
 
         // Real ambiguous case: two sibling types each declare their own "Name" property, so
-        // contextSnippet is actually needed to disambiguate — a snippet that matches neither
+        // contextSnippet is actually needed to disambiguate -> a snippet that matches neither
         // should still fail with a clear error.
         [Test]
         public async Task ConvertPropertySafe_AmbiguousPropertyWithBadContextSnippet_ReturnsErrorString()
@@ -1939,7 +1939,7 @@ public class OtherClass
                 "Should return an error message when contextSnippet is needed to disambiguate but doesn't match");
         }
 
-        // Bug: ConvertExpressionBody with non-existent member → now returns error string
+        // Bug: ConvertExpressionBody with non-existent member -> now returns error string
         [Test]
         public async Task ConvertExpressionBody_WithNonExistentMember_ReturnsErrorString()
         {
@@ -1955,7 +1955,7 @@ public class OtherClass
                 "Should return an error message when the named member does not exist");
         }
 
-        // Bug: ConvertExpressionBody on multi-statement method → now returns error string
+        // Bug: ConvertExpressionBody on multi-statement method -> now returns error string
         [Test]
         public async Task ConvertExpressionBody_WithMultiStatementMethod_ReturnsErrorString()
         {
@@ -1975,7 +1975,7 @@ public class OtherClass
                 "Should return an error message when method has multiple statements");
         }
 
-        // Bug: ConvertExpressionBody ToBlockBody on already-block-body → now returns error string
+        // Bug: ConvertExpressionBody ToBlockBody on already-block-body -> now returns error string
         [Test]
         public async Task ConvertExpressionBody_ToBlockBody_WhenAlreadyBlockBody_ReturnsErrorString()
         {
@@ -1997,11 +1997,11 @@ public class OtherClass
         // Regression test: ConvertExpressionBodyAsync previously resolved via
         // `if (contextSnippet != null) { position-based } else { name-based }`, so any supplied
         // contextSnippet bypassed name-based resolution entirely instead of only being consulted
-        // when the name is actually ambiguous — the same bug class ReplaceMember had before being
+        // when the name is actually ambiguous -> the same bug class ReplaceMember had before being
         // fixed via ResolveMemberByNameOrSnippet's "skip if candidates.Count <= 1" guard. Fixed by
         // routing ConvertExpressionBodyAsync through that same shared helper. This test uses a
         // single, non-overloaded method (unambiguous by name alone) with a contextSnippet that
-        // does not match the file's real text at all — before the fix this failed with a
+        // does not match the file's real text at all -> before the fix this failed with a
         // snippet-not-found error even though the name alone was enough to resolve the target.
         [Test]
         public async Task ConvertExpressionBody_UnambiguousMemberWithMismatchedContextSnippet_StillSucceeds()
@@ -2116,7 +2116,7 @@ public class Processor
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-70: MoveFileToNamespaceFolderAsync — Wrong Path Computation
+        // BUG-70: MoveFileToNamespaceFolderAsync -> Wrong Path Computation
         // ──────────────────────────────────────────────────────────────────────────
 
         [Test]
@@ -2156,7 +2156,7 @@ public class ProductsController
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-71: InterpolateStringSafe — Server Crash on Named Const Format Strings
+        // BUG-71: InterpolateStringSafe -> Server Crash on Named Const Format Strings
         // ──────────────────────────────────────────────────────────────────────────
 
         [Test]
@@ -2201,7 +2201,7 @@ public class MyClass
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-72: IntroduceField — Field Initialized with Local Parameter (Uncompilable)
+        // BUG-72: IntroduceField -> Field Initialized with Local Parameter (Uncompilable)
         // ──────────────────────────────────────────────────────────────────────────
 
         [Test]
@@ -2223,7 +2223,7 @@ public class MyClass
 public class Item { public int Id { get; set; } }";
             SetSource(source, "MyClass.cs");
 
-            // "item.Id" is already unambiguous (single occurrence) — no lineBefore/lineAfter needed.
+            // "item.Id" is already unambiguous (single occurrence) -> no lineBefore/lineAfter needed.
             // (lineBefore must be the verbatim *previous source line*, not same-line prefix text;
             // "var key = " is on the same line as the snippet, so supplying it here would filter
             // out the only real match and fail with "not found" instead of exercising the bug.)
@@ -2243,7 +2243,7 @@ public class Item { public int Id { get; set; } }";
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-73: SafeDeleteSymbol — Returns ChangeId for Empty Staged Changes
+        // BUG-73: SafeDeleteSymbol -> Returns ChangeId for Empty Staged Changes
         // ──────────────────────────────────────────────────────────────────────────
 
         [Test]
@@ -2280,7 +2280,7 @@ public class MyService
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-52: ReduceBlockDepth — Server Error Crash (null root reference)
+        // BUG-52: ReduceBlockDepth -> Server Error Crash (null root reference)
         // ──────────────────────────────────────────────────────────────────────────
 
         [TestFixture]
@@ -2339,7 +2339,7 @@ public class Processor
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-53: MakeMethodThreadSafe — Server Error Crash (null root reference)
+        // BUG-53: MakeMethodThreadSafe -> Server Error Crash (null root reference)
         // ──────────────────────────────────────────────────────────────────────────
 
         [TestFixture]
@@ -2395,7 +2395,7 @@ public class Counter
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-58: ConvertToAsyncEnumerable — Server Crash (null root reference)
+        // BUG-58: ConvertToAsyncEnumerable -> Server Crash (null root reference)
         // ──────────────────────────────────────────────────────────────────────────
 
         [TestFixture]
@@ -2455,7 +2455,7 @@ public class ItemProvider
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-69: InlineMethod — Server Crash (null root reference)
+        // BUG-69: InlineMethod -> Server Crash (null root reference)
         // ──────────────────────────────────────────────────────────────────────────
 
         [TestFixture]
@@ -2530,7 +2530,7 @@ public class Math
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-77: IntroduceParameter — Server Crash (null GetCurrentNode reference)
+        // BUG-77: IntroduceParameter -> Server Crash (null GetCurrentNode reference)
         // ──────────────────────────────────────────────────────────────────────────
 
         [TestFixture]
@@ -2798,14 +2798,14 @@ public class Processor
 
     /// <summary>
     /// Regression tests for 8 Priority 2 bugs in uncompilable output:
-    /// Bug 55: OptimizeToValueTask — Interface/Implementation Mismatch
-    /// Bug 56: ConvertStaticToExtension — Missing static on Extension Class
-    /// Bug 57: IntroduceParameterObject — Interface Updated but Implementation Not
-    /// Bug 60: RemoveMember — Doesn't Check for Usages
-    /// Bug 62: ExtractMembersToPartial — Missing Namespace + Usings
-    /// Bug 64: ConvertLockToSemaphoreSlim — Doesn't Update Call Sites
-    /// Bug 75: ExtractSuperclass — Empty Base Class
-    /// Bug 78: GenerateAsyncOverload — Uncompilable Async Stub
+    /// Bug 55: OptimizeToValueTask -> Interface/Implementation Mismatch
+    /// Bug 56: ConvertStaticToExtension -> Missing static on Extension Class
+    /// Bug 57: IntroduceParameterObject -> Interface Updated but Implementation Not
+    /// Bug 60: RemoveMember -> Doesn't Check for Usages
+    /// Bug 62: ExtractMembersToPartial -> Missing Namespace + Usings
+    /// Bug 64: ConvertLockToSemaphoreSlim -> Doesn't Update Call Sites
+    /// Bug 75: ExtractSuperclass -> Empty Base Class
+    /// Bug 78: GenerateAsyncOverload -> Uncompilable Async Stub
     /// </summary>
     [TestFixture]
     public class Bug55_78BatchRegressionTests
@@ -2846,7 +2846,7 @@ public class Processor
             _workspaceManager.SetTestSolution(solution);
         }
 
-        // ── Bug 55: OptimizeToValueTask — Interface/Implementation Mismatch ───────
+        // ── Bug 55: OptimizeToValueTask -> Interface/Implementation Mismatch ───────
 
         [Test]
         public async Task BUG_55_OptimizeToValueTask_InterfaceMethod_BothUpdated()
@@ -2876,7 +2876,7 @@ public class DataService : IDataService
                 "Result should contain ValueTask<string>");
         }
 
-        // ── Bug 56: ConvertStaticToExtension — Missing static on Extension Class ──
+        // ── Bug 56: ConvertStaticToExtension -> Missing static on Extension Class ──
 
         [Test]
         public async Task BUG_56_ConvertStaticToExtension_EnsuresClassIsStatic()
@@ -2901,7 +2901,7 @@ public class StringExtensions
                 "Method should be converted to extension (this parameter)");
         }
 
-        // ── Bug 57: IntroduceParameterObject — Interface + All Implementations ────
+        // ── Bug 57: IntroduceParameterObject -> Interface + All Implementations ────
 
         [Test]
         public async Task BUG_57_IntroduceParameterObject_UpdatesInterfaceAndAllImplementations()
@@ -2933,7 +2933,7 @@ public class Processor2 : IProcessor
             Assert.That(result.UpdatedText, Does.Contain("IProcessor"), "Should contain interface");
         }
 
-        // ── Bug 60: RemoveMember — Doesn't Check for Usages ───────────────────────
+        // ── Bug 60: RemoveMember -> Doesn't Check for Usages ───────────────────────
 
         [Test]
         public async Task BUG_60_RemoveMember_ChecksUsagesBeforeRemoving()
@@ -2963,7 +2963,7 @@ public class Helper
             }
         }
 
-        // ── Bug 62: ExtractMembersToPartial — Missing Namespace + Usings ─────────
+        // ── Bug 62: ExtractMembersToPartial -> Missing Namespace + Usings ─────────
 
         [Test]
         public async Task BUG_62_ExtractMembersToPartial_IncludesNamespaceAndUsings()
@@ -3001,7 +3001,7 @@ namespace MyApp.Services
                 "Extracted partial file must contain the extracted method");
         }
 
-        // ── Bug 64: ConvertLockToSemaphoreSlim — Doesn't Update Call Sites ────────
+        // ── Bug 64: ConvertLockToSemaphoreSlim -> Doesn't Update Call Sites ────────
 
         [Test]
         public async Task BUG_64_ConvertLockToSemaphoreSlim_UpdatesAllLockStatements()
@@ -3040,7 +3040,7 @@ public class ThreadSafeCounter
                 "Result should use WaitAsync instead of lock");
         }
 
-        // ── Bug 75: ExtractSuperclass — Empty Base Class ───────────────────────────
+        // ── Bug 75: ExtractSuperclass -> Empty Base Class ───────────────────────────
 
         [Test]
         public async Task BUG_75_ExtractSuperclass_IncludesCommonMembers()
@@ -3071,7 +3071,7 @@ public class Cat
                 "Base class should include common Name property");
         }
 
-        // ── Bug 78: GenerateAsyncOverload — Uncompilable Async Stub ───────────────
+        // ── Bug 78: GenerateAsyncOverload -> Uncompilable Async Stub ───────────────
 
         [Test]
         public async Task BUG_78_GenerateAsyncOverload_CompilesAndMatches()
@@ -3106,9 +3106,9 @@ public class Processor
 
     /// <summary>
     /// Regression tests for 5 critical bugs:
-    /// BUG-72: IntroduceField — field initialized with local parameter instead of class-scoped value
-    /// BUG-73: SafeDeleteSymbol — returns changeId when symbol IS actually used
-    /// BUG-74: ExtractClass — generates empty class for file-scoped types
+    /// BUG-72: IntroduceField -> field initialized with local parameter instead of class-scoped value
+    /// BUG-73: SafeDeleteSymbol -> returns changeId when symbol IS actually used
+    /// BUG-74: ExtractClass -> generates empty class for file-scoped types
     /// inline_method bug: doesn't handle multi-statement method bodies
     /// extract_class bug: other extract_class issues
     /// </summary>
@@ -3144,7 +3144,7 @@ public class Processor
             _workspaceManager.SetTestSolution(solution);
         }
 
-        // ── BUG-72: IntroduceField — field initialized with local parameter ──
+        // ── BUG-72: IntroduceField -> field initialized with local parameter ──
 
         [Test]
         public async Task BUG_72_IntroduceField_WithClassScopedValue_InitializesCorrectly()
@@ -3212,14 +3212,14 @@ public class MyClass
             {
                 // Context disambiguation errors are acceptable if the snippet is ambiguous, or was
                 // filtered out entirely by the lineBefore disambiguation (both "myParam" occurrences
-                // get excluded here since lineBefore matches neither match's *previous* source line —
+                // get excluded here since lineBefore matches neither match's *previous* source line ->
                 // it's the same line's own prefix, not adjacent-line text).
                 Assert.That(ex.Message, Does.Contain("ambiguous") | Does.Contain("match") | Does.Contain("not found"),
                     "If it fails, should be due to ambiguous/unresolvable context, not a bug");
             }
         }
 
-        // ── BUG-73: SafeDeleteSymbol — refuses when symbol IS used ──────────
+        // ── BUG-73: SafeDeleteSymbol -> refuses when symbol IS used ──────────
 
         [Test]
         public async Task BUG_73_SafeDelete_WithUsedSymbol_ReturnsError()
@@ -3566,18 +3566,18 @@ public class AddGuardClausesNullReturnRegressionTests
         var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
 
         Assert.That(result, Is.Not.Null,
-            "Engine returns file content (not empty) when target method is not found — no changes needed");
+            "Engine returns file content (not empty) when target method is not found - no changes needed");
     }
 
     [Test]
     public async Task AddGuardClauses_Tool_MethodNotFound_DoesNotThrow()
     {
         // When the engine returns non-empty content (no changes needed), the tool
-        // returns that content rather than throwing — only file-not-found triggers IOE.
+        // returns that content rather than throwing -> only file-not-found triggers IOE.
         var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
 
         Assert.That(result, Is.Not.Null,
-            "Engine returns file content (not empty) when target method is not found — no changes needed");
+            "Engine returns file content (not empty) when target method is not found - no changes needed");
     }
 }
 
@@ -3641,22 +3641,22 @@ public class AddBenchmarkStubNullReturnRegressionTests
     public async Task AddBenchmarkStubAsync_ClassNotInFile_ReturnsOriginalContent()
     {
         // When the file exists but the class doesn't, the engine returns the original
-        // file content unchanged — "no changes needed" is not the same as "file not found".
+        // file content unchanged -> "no changes needed" is not the same as "file not found".
         var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
 
         Assert.That(result, Is.Not.Null,
-            "Engine returns file content (not empty) when target class is not found — no changes needed");
+            "Engine returns file content (not empty) when target class is not found - no changes needed");
     }
 
     [Test]
     public async Task AddBenchmarkStub_Tool_ClassNotFound_DoesNotThrow()
     {
         // When the engine returns non-empty content (no changes needed), the tool
-        // returns that content rather than throwing — only file-not-found triggers IOE.
+        // returns that content rather than throwing -> only file-not-found triggers IOE.
         var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
 
         Assert.That(result, Is.Not.Null,
-            "Engine returns file content (not empty) when target class is not found — no changes needed");
+            "Engine returns file content (not empty) when target class is not found - no changes needed");
     }
 }
 
@@ -3805,22 +3805,22 @@ public class MakeClassImmutableNullReturnRegressionTests
     public async Task MakeClassImmutableAsync_ClassNotInFile_ReturnsOriginalContent()
     {
         // When the file exists but the class doesn't, the engine returns the original
-        // file content unchanged — "no changes needed" is not the same as "file not found".
+        // file content unchanged -> "no changes needed" is not the same as "file not found".
         var result = await _engine.MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
 
         Assert.That(result, Is.Not.Null,
-            "Engine returns file content (not empty) when target class is not found — no changes needed");
+            "Engine returns file content (not empty) when target class is not found - no changes needed");
     }
 
     [Test]
     public async Task MakeClassImmutable_Tool_ClassNotFound_DoesNotThrow()
     {
         // When the engine returns non-empty content (no changes needed), the tool
-        // returns that content rather than throwing — only file-not-found triggers IOE.
+        // returns that content rather than throwing -> only file-not-found triggers IOE.
         var result = await _engine.MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
 
         Assert.That(result, Is.Not.Null,
-            "Engine returns file content (not empty) when target class is not found — no changes needed");
+            "Engine returns file content (not empty) when target class is not found - no changes needed");
     }
 }
 
@@ -3901,7 +3901,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
         var result = await _engine.SyncInterfaceToImplementationAsync("nonexistent.cs", "Ghost", "IGhost");
 
         // The engine returns content (not empty), so the file-not-found guard does NOT fire.
-        // This is correct — the engine "no-op"s gracefully rather than erroring.
+        // This is correct -> the engine "no-op"s gracefully rather than erroring.
         Assert.That(result, Is.Not.Null,
             "Engine returns content (not empty) for SyncInterface even when file is not in workspace");
     }

@@ -1,4 +1,4 @@
-// Battery 29 — Real-solution smoke tests for remaining engines
+// Battery 29 -> Real-solution smoke tests for remaining engines
 // Loads the solution configured via ROSLYN_SENTINEL_TEST_SLN env var, discovers a real .cs file, class, method, and project,
 // then exercises every engine's public async API against live code.
 // All tests are read-only (engines return new content strings; nothing is written to disk).
@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Integration;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B29 — Remaining engines exercised against the configured real solution
+// B29 -> Remaining engines exercised against the configured real solution
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("Integration")]
@@ -157,7 +157,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 3. SyntaxUpgradeEngine (5 tests) — all features enabled by default config
+    // 3. SyntaxUpgradeEngine (5 tests) -> all features enabled by default config
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -263,7 +263,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new AdvancedLogicEngine(_workspaceManager);
         string? result = null;
-        // Line 1 is likely a using directive — no foreach; method gracefully returns original
+        // Line 1 is likely a using directive -> no foreach; method gracefully returns original
         await Assert.DoesNotThrowAsync(async () =>
             result = (await engine.ConvertForEachToForAsync(_realFilePath, 1)).UpdatedText!,
             "ConvertForEachToForAsync must not throw on real solution.");
@@ -354,7 +354,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new GranularRefactoringEngine(_workspaceManager);
         string? result = null;
-        // RunMicroRefactoringAsync has real dispatch — use a known valid ID
+        // RunMicroRefactoringAsync has real dispatch -> use a known valid ID
         await Assert.DoesNotThrowAsync(async () =>
             result = (await engine.RunMicroRefactoringAsync(_realFilePath, "add-braces", 1)).UpdatedText!,
             "RunMicroRefactoringAsync must not throw on real solution with valid ID.");
@@ -380,7 +380,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new GranularRefactoringEngine(_workspaceManager);
         string? result = null;
-        // Non-existent nested type → engine returns original source or descriptive message
+        // Non-existent nested type -> engine returns original source or descriptive message
         await Assert.DoesNotThrowAsync(async () =>
             result = (await engine.MoveTypeToOuterScopeAsync(_realFilePath, "__nonExistentNestedType__")).UpdatedText!,
             "MoveTypeToOuterScopeAsync must not throw even when nested type is not found.");
@@ -533,7 +533,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new DependencyEngine(_workspaceManager);
         ProjectDependencyReport? result = null;
-        // Uses real project name discovered in SetUp — must not throw
+        // Uses real project name discovered in SetUp -> must not throw
         await Assert.DoesNotThrowAsync(async () =>
             result = await engine.GetProjectDependenciesAsync(_realProjectName, CancellationToken.None),
             "GetProjectDependenciesAsync must not throw when given a real project name.");
@@ -608,7 +608,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new MsToolAugmentEngine(_workspaceManager);
         MsAugmentResult? result = null;
-        // preview=true (default) — returns formatted content without writing to disk
+        // preview=true (default) -> returns formatted content without writing to disk
         await Assert.DoesNotThrowAsync(async () =>
             result = await engine.FormatDocumentSafeAsync(_realFilePath, preview: true),
             "FormatDocumentSafeAsync must not throw on real solution.");
@@ -627,7 +627,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             result = await engine.GenerateToStringSafeAsync(_realFilePath, _realClassName),
             "GenerateToStringSafeAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
-        // Success OR graceful failure — either way, result must carry a message
+        // Success OR graceful failure -> either way, result must carry a message
         if (!result!.Success)
         {
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
@@ -663,7 +663,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Real-solution smoke test — load a configured solution and run analysis engines
+// Real-solution smoke test -> load a configured solution and run analysis engines
 // (moved here from RoslynSentinel.Tests.Battery/BatteryTwentyEightTests.cs)
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]

@@ -1,9 +1,9 @@
-// UndoLastApply — SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap
+// UndoLastApply -> SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap
 // flagged it as the highest-priority gap: it's the recently-fixed atomicity/rollback path per
 // project_workspace_manager_deferred_gaps.md, so regressions here are the costliest to miss).
 //
 // Blob-lookup/parsing branches (blobPath == null, revertable.Count == 0, path-traversal skip) are
-// exercised against FakeWorkspaceManager with a hand-written operation blob on disk — the blob
+// exercised against FakeWorkspaceManager with a hand-written operation blob on disk -> the blob
 // schema (OperationBlobWriter.WriteAsync: {toolName, changeId, generatedUtc, itemCount, items} at
 // .roslynsentinel/operations/{toolName}_{timestamp}_{changeId}.json) doesn't require a real apply
 // to produce, just matching JSON. ItemRecordOutcome now carries JsonStringEnumConverter like its
@@ -140,7 +140,7 @@ public class UndoLastApplyTests
         var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test message", changeId: changeId);
 
         // revertChanges ends up empty (item skipped as outside solution root), so
-        // ApplyProposedChangesAsync is never called — reaches the tool's success path with 0
+        // ApplyProposedChangesAsync is never called -> reaches the tool's success path with 0
         // reverted files and a recorded failure, entirely on the fake.
         Assert.That(result.Success, Is.True);
         Assert.That((string)result.Data!, Does.Contain("Reverted 0 files"));
@@ -182,7 +182,7 @@ public class UndoLastApplyTests
         // ModifyFileInSolution already cleared drift from the target-file write above. The
         // operation-blob write just above is a second, separate out-of-band write (outside
         // ApplyProposedChangesAsync) that the FileSystemWatcher also records as external drift, so it
-        // needs its own acknowledgment here — otherwise the revert write below is refused by the drift
+        // needs its own acknowledgment here -> otherwise the revert write below is refused by the drift
         // guard in ApplyProposedChangesAsync (RoslynSentinel.Common/PersistentWorkspaceManager.cs)
         // before it ever reaches undo logic.
         workspaceManager.ClearExternalFileChanges();
@@ -201,7 +201,7 @@ public class UndoLastApplyTests
         // ApplyProposedChangesAsync's no-op skip path (PersistentWorkspaceManager.cs, "Skipping
         // no-op write") fires: the file lands in SucceededFiles but nothing is actually written.
         // Before this fix, UndoLastApply reported this the same as a real revert ("Reverted 1
-        // files"), which is exactly the confusion observed this session — a file believed
+        // files"), which is exactly the confusion observed this session -> a file believed
         // reverted was provably unchanged.
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);

@@ -167,7 +167,7 @@ public class ProjectStructureEngine
         }
         else
         {
-            // Solution-wide scan: skip test and benchmark projects — TimeProvider can't be injected
+            // Solution-wide scan: skip test and benchmark projects -> TimeProvider can't be injected
             // into test fixtures, and the findings are noise rather than actionable guidance.
             projects = projects.Where(p =>
                 !p.Name.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
@@ -190,7 +190,7 @@ public class ProjectStructureEngine
                     continue;
                 }
 
-                // Skip Roslyn source-generator output — file names are always mismatched and contain generated types
+                // Skip Roslyn source-generator output -> file names are always mismatched and contain generated types
                 bool isGeneratedFile = (document.FilePath ?? document.Name).EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase);
 
                 var types = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
@@ -205,7 +205,7 @@ public class ProjectStructureEngine
                 if (!isGeneratedFile && (typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.NameMismatch) && _config.IsFeatureEnabled("NameMismatch") && types.Count > 0)
                 {
                     // AppHost projects intentionally use Aspire resource-name constants whose file
-                    // names don't correspond to class names — skip to avoid hundreds of false positives.
+                    // names don't correspond to class names -> skip to avoid hundreds of false positives.
                     bool isAppHostProject = project.Name.EndsWith(".AppHost", StringComparison.OrdinalIgnoreCase)
                         || project.Name.Contains(".AppHost.", StringComparison.OrdinalIgnoreCase);
 
@@ -362,7 +362,7 @@ public class ProjectStructureEngine
                     // Report DateTime.Now/UtcNow/Today in all non-static, non-generated classes.
                     // Static classes genuinely cannot inject TimeProvider, so they're skipped.
                     // Infrastructure-layer classes (repositories, workers, exporters, etc.) are
-                    // flagged at LOW severity — injection is possible but these classes rarely have
+                    // flagged at LOW severity -> injection is possible but these classes rarely have
                     // date-driven business logic where controlling the clock in a test matters.
                     // Business-logic classes (services, controllers, handlers) are flagged at HIGH
                     // severity because mocking "now" is a real and common test requirement there.
@@ -390,7 +390,7 @@ public class ProjectStructureEngine
                             var line = call.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                             if (isInfra)
                             {
-                                results.Add($"[TIME_ABSTRACTION:LOW] Direct DateTime.{call.Name.Identifier.Text} in '{document.Name}' (Line {line}). TimeProvider injection is possible but typically low-value — infrastructure classes rarely have date-driven logic that needs to be controlled in tests.");
+                                results.Add($"[TIME_ABSTRACTION:LOW] Direct DateTime.{call.Name.Identifier.Text} in '{document.Name}' (Line {line}). TimeProvider injection is possible but typically low-value - infrastructure classes rarely have date-driven logic that needs to be controlled in tests.");
                             }
                             else
                             {

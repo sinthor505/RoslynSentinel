@@ -63,7 +63,7 @@ public class TestRunEngine
         if (scope == ToolScope.file)
         {
             return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
-                error: new EngineError("scope=file is not supported by RunTest — there is no per-file test-execution unit in `dotnet test`. Use scope=project or scope=solution, optionally narrowed with filter."));
+                error: new EngineError("scope=file is not supported by RunTest - there is no per-file test-execution unit in `dotnet test`. Use scope=project or scope=solution, optionally narrowed with filter."));
         }
 
         List<(string Name, string Path)> targets;
@@ -124,7 +124,7 @@ public class TestRunEngine
         // list: `dotnet test <solution>` fans out internally into one vstest invocation per test
         // project, and every one of those sub-invocations was writing to the *same* shared
         // `--logger trx;LogFileName=...` path, so only the last project to finish survived in the
-        // parsed result — every other project's counts were silently discarded. Giving each project
+        // parsed result -> every other project's counts were silently discarded. Giving each project
         // its own process and TRX file, then aggregating here, is what makes counts trustworthy for
         // scope=solution.
         var projectResults = new List<(TestRunResult Result, string ProjectName)>();
@@ -213,18 +213,18 @@ public class TestRunEngine
         ));
     }
 
-    /// <summary>"Is this a test project" — checked via the project file referencing
+    /// <summary>"Is this a test project" -> checked via the project file referencing
     /// Microsoft.NET.Test.Sdk (the SDK package that actually makes `dotnet test` runnable), not via
     /// referencing nunit.framework: a project can pull in NUnit's assertion library transitively
     /// through a ProjectReference to a real test project (e.g. a benchmark/tool project referencing
-    /// a Tests project for shared fixtures) without being a test project itself — `dotnet test`
+    /// a Tests project for shared fixtures) without being a test project itself -> `dotnet test`
     /// against such a project fails outright rather than running zero tests.</summary>
     private static bool IsTestProject(Microsoft.CodeAnalysis.Project project) =>
         project.FilePath is not null && File.Exists(project.FilePath) &&
         File.ReadAllText(project.FilePath).Contains("Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Runs `dotnet test` against a single project with its own dedicated TRX file, and
-    /// parses the result. Never throws — timeouts, missing TRX, and process failures are all
+    /// parses the result. Never throws -> timeouts, missing TRX, and process failures are all
     /// reported via <see cref="TestRunResult.RunCompleted"/> and <see cref="TestRunResult.Detail"/>
     /// so a single failing project can't take down the aggregate result for the rest.</summary>
     private static async Task<TestRunResult> RunOneProjectAsync(
@@ -290,7 +290,7 @@ public class TestRunEngine
                 }
                 catch
                 {
-                    // Best-effort — process may have already exited between the timeout firing and the kill.
+                    // Best-effort -> process may have already exited between the timeout firing and the kill.
                 }
                 timeoutDetail = $"Test run exceeded {timeoutSeconds}s and was terminated.";
             }
@@ -302,7 +302,7 @@ public class TestRunEngine
             if (stderrText.Contains("MSB3027") || stdoutText.Contains("MSB3027") ||
                 stderrText.Contains("MSB3021") || stdoutText.Contains("MSB3021"))
             {
-                lockDetail = "Build failed to copy the output file — it is likely locked by a running process (e.g. this MCP server or an IDE holding the binary). Close the process holding the file and retry.";
+                lockDetail = "Build failed to copy the output file - it is likely locked by a running process (e.g. this MCP server or an IDE holding the binary). Close the process holding the file and retry.";
             }
 
             if (timeoutDetail is not null)
@@ -326,7 +326,7 @@ public class TestRunEngine
 
             if (!File.Exists(trxPath))
             {
-                var noTrxDetail = lockDetail ?? "No TRX result file was produced — the run failed before any test adapter reported results.";
+                var noTrxDetail = lockDetail ?? "No TRX result file was produced - the run failed before any test adapter reported results.";
                 return new TestRunResult(
                     RunSucceeded: false,
                     ExitCode: process.ExitCode,
@@ -392,7 +392,7 @@ public class TestRunEngine
             }
             catch
             {
-                // Best-effort cleanup — a leftover temp file is not worth failing the call over.
+                // Best-effort cleanup -> a leftover temp file is not worth failing the call over.
             }
         }
     }

@@ -89,7 +89,7 @@ public class LogicOptimizationEngine
         var guards = new List<StatementSyntax>();
         foreach (var parameter in method.ParameterList.Parameters)
         {
-            // Skip explicitly nullable reference types (string?, IService?) — null is valid for them
+            // Skip explicitly nullable reference types (string?, IService?) -> null is valid for them
             if (parameter.Type is NullableTypeSyntax)
             {
                 continue;

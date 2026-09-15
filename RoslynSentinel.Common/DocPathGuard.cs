@@ -44,7 +44,7 @@ public static class DocPathGuard
             return (false, "", "Empty filename.");
         }
 
-        // 1. Reject rooted paths (drive letters, UNC, leading slash) up front —
+        // 1. Reject rooted paths (drive letters, UNC, leading slash) up front ->
         //    Path.IsPathRooted also catches "\subdir\notes.md" and "/subdir/notes.md".
         if (Path.IsPathRooted(filename))
         {
@@ -81,8 +81,8 @@ public static class DocPathGuard
             return (false, "", $"'{nameNoExt}' is a reserved Windows filename.");
         }
 
-        // 4. Extension ALLOWLIST — closed set, matched exactly via Path.GetExtension.
-        //    NEVER use substring matching (e.g. Contains(".cs")) — it over-matches and is gameable.
+        // 4. Extension ALLOWLIST -> closed set, matched exactly via Path.GetExtension.
+        //    NEVER use substring matching (e.g. Contains(".cs")) -> it over-matches and is gameable.
         string ext = Path.GetExtension(bareName).ToLowerInvariant();
         if (!AllowedExtensions.Contains(ext))
         {

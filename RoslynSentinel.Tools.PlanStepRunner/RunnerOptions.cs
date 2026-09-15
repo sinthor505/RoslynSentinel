@@ -1,7 +1,7 @@
 namespace RoslynSentinel.Tools.PlanStepRunner;
 
 /// <summary>
-/// How each step's worktree branch relates to the others — see <see cref="IStepBranchStrategy"/>
+/// How each step's worktree branch relates to the others -> see <see cref="IStepBranchStrategy"/>
 /// for what each mode actually does.
 /// </summary>
 public enum BranchMode
@@ -64,18 +64,18 @@ public sealed class RunnerOptions
     public static RunnerOptions Parse(string[] args)
     {
         var planDir = GetArg(args, "--plan-dir")
-            ?? throw new ArgumentException("--plan-dir is required (path to plan-eval-defect-remediation-v2-steps-runner — " +
+            ?? throw new ArgumentException("--plan-dir is required (path to plan-eval-defect-remediation-v2-steps-runner - " +
                 "the runner-specific copy whose prompts omit the load-solution step the runner already does itself).");
         var sourceRepo = GetArg(args, "--repo")
             ?? throw new ArgumentException("--repo is required (the git repo to branch/worktree from, e.g. the RoslynSentinel checkout).");
 
-        // Defaults to a sibling of sourceRepo rather than nesting under it — a worktree left under
+        // Defaults to a sibling of sourceRepo rather than nesting under it -> a worktree left under
         // the repo shows up in `git status`/diffs/searches as a spurious branched copy of the repo.
         var runDir = GetArg(args, "--run-dir")
             ?? Path.Combine(sourceRepo, "..", "RoslynSentinel-TestRuns", "PlanStepRunner", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
         // Defaults to a per-run branch (named after the run folder's own timestamp) rather than
-        // one fixed shared name — git only allows one worktree to have a given branch checked out
+        // one fixed shared name -> git only allows one worktree to have a given branch checked out
         // at a time, so two runs (or an old halted run left over from a previous invocation)
         // sharing a branch would contend for it even though their run folders are otherwise fully
         // independent. Deriving the default from RunDir's own leaf name means -ExistingRun (which

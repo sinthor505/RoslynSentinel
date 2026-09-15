@@ -346,7 +346,7 @@ public class ModernizationEngine
         {
             newCondition = null;
 
-            // Pattern 1: x == null → x is null
+            // Pattern 1: x == null -> x is null
             if (condition is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.EqualsExpression))
             {
                 if (binary.Right.IsKind(SyntaxKind.NullLiteralExpression))
@@ -366,7 +366,7 @@ public class ModernizationEngine
                 }
             }
 
-            // Pattern 2: x != null → x is not null
+            // Pattern 2: x != null -> x is not null
             if (condition is BinaryExpressionSyntax notEqual && notEqual.IsKind(SyntaxKind.NotEqualsExpression))
             {
                 if (notEqual.Right.IsKind(SyntaxKind.NullLiteralExpression))
@@ -385,7 +385,7 @@ public class ModernizationEngine
             }
 
             // Pattern 3: Combined patterns with logical AND
-            // obj != null && obj.Property > 0 → simplified to keep readable
+            // obj != null && obj.Property > 0 -> simplified to keep readable
             if (condition is BinaryExpressionSyntax andExpr && andExpr.IsKind(SyntaxKind.LogicalAndExpression))
             {
                 // For now, skip complex property patterns as they require more advanced Roslyn API

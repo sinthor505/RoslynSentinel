@@ -82,7 +82,7 @@ public class ContextHelperTests
     [Test]
     public void AdvanceToLastIdentifier_GenericReturnType_ReturnsMethodNameNotTypeArg()
     {
-        // Snippet: "public Task<string> GetNameAsync" — last identifier is GetNameAsync, not string
+        // Snippet: "public Task<string> GetNameAsync" -> last identifier is GetNameAsync, not string
         var source = "public class Svc { public Task<string> GetNameAsync() => Task.FromResult(\"\"); }";
         var tree = CSharpSyntaxTree.ParseText(source);
         var root = tree.GetRoot();
@@ -101,7 +101,7 @@ public class ContextHelperTests
     // from memory with flattened indentation (0 spaces on the outer lines, 4 in the loop body)
     // instead of copying it verbatim. An LLM reliably reproduces tokens but not incidental
     // whitespace, so a multi-line snippet whose indentation doesn't match the source is the
-    // common case, not an edge case — this must resolve, not throw "contextSnippet not found".
+    // common case, not an edge case -> this must resolve, not throw "contextSnippet not found".
 
     private const string OrderProcessorLikeSource =
         "namespace ContosoOrders.Core;\r\n" +
@@ -134,7 +134,7 @@ public class ContextHelperTests
     public void FindSnippetPosition_MultilineSnippetWithFlattenedIndentation_ResolvesViaWindowFallback()
     {
         // Exact snippet shape from the live agent transcript: \n-joined, 0 spaces on the
-        // outer lines, 4 spaces inside the loop body — the file itself uses 8/12 spaces.
+        // outer lines, 4 spaces inside the loop body -> the file itself uses 8/12 spaces.
         var snippet =
             "decimal runningTotal = 0m;\n" +
             "int totalUnits = 0;\n" +
@@ -147,7 +147,7 @@ public class ContextHelperTests
         var pos = ContextHelper.FindSnippetPosition(OrderProcessorLikeSource, snippet);
 
         // The window fallback resolves to the start of the matched source *line* (including its
-        // real leading whitespace), not the start of the trimmed statement text within it — same
+        // real leading whitespace), not the start of the trimmed statement text within it -> same
         // convention as the existing single-line collapsed-whitespace fallback just above it.
         var lineStart = OrderProcessorLikeSource.LastIndexOf(
             '\n', OrderProcessorLikeSource.IndexOf("decimal runningTotal = 0m;", StringComparison.Ordinal)) + 1;
@@ -176,11 +176,11 @@ public class ContextHelperTests
     [Test]
     [Description("The single-line collapsed-whitespace fallback must resolve to the exact offset " +
                  "where the (whitespace-collapsed) snippet begins within the line, not just the " +
-                 "start of the line as a whole — otherwise a sub-line snippet resolves to whatever " +
+                 "start of the line as a whole - otherwise a sub-line snippet resolves to whatever " +
                  "token happens to start the line (e.g. 'return' instead of the operand), which " +
                  "breaks any caller needing expression-level precision (ExtractLocalVariableAsync). " +
                  "Triggered here by an extra space around '+' in the source that the caller's snippet " +
-                 "doesn't reproduce — a real formatting difference the collapse fallback is meant to " +
+                 "doesn't reproduce - a real formatting difference the collapse fallback is meant to " +
                  "tolerate, but only the whitespace-RUN-length differs; the caller can't get here by " +
                  "adding whitespace the source never had (see the MultiSpaceRunInSource test below for " +
                  "the mirror case). See docs/TODO.md for the original finding.")]
@@ -199,7 +199,7 @@ public class ContextHelperTests
 
     [Test]
     [Description("Mirror of the above: the source has single spaces and the caller's snippet has a " +
-                 "double space (e.g. retyped from memory) — the raw offset must skip the entire " +
+                 "double space (e.g. retyped from memory) - the raw offset must skip the entire " +
                  "matched whitespace run in the SOURCE, not land partway through it.")]
     public void FindAllSnippetMatches_MultiSpaceRunInSnippet_ResolvesPastEntireSourceRun()
     {
@@ -218,7 +218,7 @@ public class ContextHelperTests
     // that removes/replaces a span of raw text (ReplaceSnippet) assumed the matched span was
     // exactly contextSnippet.Length characters long. That assumption is false whenever a
     // whitespace-collapsing fallback path fires (the raw source text can be longer or shorter
-    // than the literal snippet) — a real eval run hit this and ReplaceSnippet spliced garbage
+    // than the literal snippet) -> a real eval run hit this and ReplaceSnippet spliced garbage
     // into BuildResult.cs (`int ErrorCount,nt,`, `int WarningCount,,`). These tests pin down the
     // real match length so a length-aware caller can compute a correct removal span, and confirm
     // the new strict (non-whitespace-tolerant) API used by ReplaceSnippet never has this problem.
@@ -236,7 +236,7 @@ public class ContextHelperTests
         Assert.That(matches[0].Start, Is.EqualTo(expectedOffset));
         Assert.That(matches[0].Length, Is.EqualTo("a  +  b".Length),
             "The real source span ('a  +  b', double-spaced) is longer than the 5-char snippet " +
-            "('a + b') that matched it — Length must reflect the source, not the snippet.");
+            "('a + b') that matched it - Length must reflect the source, not the snippet.");
     }
 
     [Test]
@@ -252,7 +252,7 @@ public class ContextHelperTests
         Assert.That(matches[0].Start, Is.EqualTo(expectedOffset));
         Assert.That(matches[0].Length, Is.EqualTo("a + b".Length),
             "The real source span ('a + b', single-spaced) is shorter than the 7-char snippet " +
-            "('a  +  b') that matched it — Length must reflect the source, not the snippet.");
+            "('a  +  b') that matched it - Length must reflect the source, not the snippet.");
     }
 
     [Test]
@@ -284,7 +284,7 @@ public class ContextHelperTests
     public void FindAllExactSnippetMatches_ApproximateIndentation_DoesNotFallBackAndFindsNothing()
     {
         // The whitespace-collapsing fallback that FindAllSnippetMatches uses is exactly what let
-        // ReplaceSnippet silently mismatch. The strict/exact variant must never take that path —
+        // ReplaceSnippet silently mismatch. The strict/exact variant must never take that path ->
         // an approximate (differently-spaced) snippet should report zero matches, not a fuzzy one.
         var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
         var matches = ContextHelper.FindAllExactSnippetMatches(SourceText.From(source), "a + b");
@@ -346,7 +346,7 @@ public class ContextHelperTests
         var result = source.Remove(match.Start, match.Length).Insert(match.Start, newContent);
 
         Assert.That(result, Does.Contain("int ErrorCount,\n    int WarningCount,"),
-            "ErrorCount and WarningCount lines must remain clean — no 'nt,' fragment, no doubled comma.");
+            "ErrorCount and WarningCount lines must remain clean - no 'nt,' fragment, no doubled comma.");
         Assert.That(result, Does.Not.Contain("ErrorCount,nt,"));
         Assert.That(result, Does.Not.Contain("WarningCount,,"));
     }
@@ -356,7 +356,7 @@ public class ContextHelperTests
                  + "contextSnippet ending in a trailing newline (e.g. copying a statement plus its "
                  + "closing brace with a trailing '\\n') produced a phantom empty line via "
                  + "Split('\\n'), inflating the sliding window's size by one and forcing it to "
-                 + "compare against one extra, unrelated real source line — so a snippet like "
+                 + "compare against one extra, unrelated real source line - so a snippet like "
                  + "'return foo;\\n}\\n' never matched even though 'return foo;\\n}' (no trailing "
                  + "newline) matched fine. Trailing (and leading) blank lines in the snippet must "
                  + "not affect the window size.")]
@@ -380,7 +380,7 @@ public class ContextHelperTests
     // Pulled verbatim from 5 recorded ContosoOrders agent-run transcripts (attempts 1-4 and 7,
     // covering both the original Qwen3.5-9b run and every subsequent RoslynSentinel-tool-surface
     // revision). Each entry reproduces a REAL wire-level contextSnippet argument an agent sent for
-    // a REAL target that exists in the sample source, so these are not synthetic edge cases —
+    // a REAL target that exists in the sample source, so these are not synthetic edge cases ->
     // they're exactly what tools receive in practice. A tool description that says "distinctive
     // substring" invites free-form fragments; this corpus is what "free-form" looks like from an
     // actual 7B-9B model, and every one of these should resolve, since each targets real, existing
@@ -389,7 +389,7 @@ public class ContextHelperTests
 
     // An earlier revision of the sample's BuildOrderSummary had a blank line between the loop's
     // closing brace and the following sb.AppendLine call (confirmed against the raw transcript's
-    // own GetMethodSource tool result, which echoed "}\r\n\r\n        sb.AppendLine..." verbatim) —
+    // own GetMethodSource tool result, which echoed "}\r\n\r\n        sb.AppendLine..." verbatim) ->
     // later attempts' PLAN.md/source revisions removed that blank line, but the agent's snippet
     // was captured against THIS shape and copied it faithfully. Kept as its own constant (rather
     // than editing the shared OrderProcessorLikeSource used by the tests above) since it's a
@@ -460,7 +460,7 @@ public class ContextHelperTests
         // ── ExtractMethodSafe on BuildOrderSummary's totals block, every shape actually sent ──
         // The 3 entries below cross the loop's closing brace into the following sb.AppendLine
         // calls, which the transcript's own GetMethodSource result confirms had a blank line
-        // between them at the time — hence OrderProcessorLikeSourceWithBlankLineBeforeFooter,
+        // between them at the time -> hence OrderProcessorLikeSourceWithBlankLineBeforeFooter,
         // not the later (blank-line-removed) OrderProcessorLikeSource.
         ("attempt1_wholeBlockPlusFooter",
             OrderProcessorLikeSourceWithBlankLineBeforeFooter,
@@ -494,7 +494,7 @@ public class ContextHelperTests
         // ── SafeDeleteUnusedSymbol on BuildInternalDebugLabel, actually sent (attempt 2) ──
         // Note: the agent's own reconstruction subtly differs from the real source (see
         // FindSnippetPosition_SafeDelete_AgentFabricatedInterpolation_StillFailsToMatch below for
-        // the case where that difference is real, not just whitespace) — this entry uses the
+        // the case where that difference is real, not just whitespace) -> this entry uses the
         // agent's snippet reproduced verbatim against a source shape it DOES match structurally.
         ("attempt2_safeDelete_commentPlusSignature",
             ApplyDiscountLikeSource,
@@ -524,9 +524,9 @@ public class ContextHelperTests
                  + "contextSnippet reconstructed the method body from memory instead of copying it "
                  + "verbatim, and introduced a genuine CONTENT difference, not just whitespace: it wrote "
                  + "return $\"{_customerId}\" + \" \" + {_lines.Count} + \" line(s)\"; (string concatenation, "
-                 + "and not even valid C# — {_lines.Count} outside an interpolated string) where the real "
+                 + "and not even valid C# - {_lines.Count} outside an interpolated string) where the real "
                  + "source has return $\"[{_customerId}] {_lines.Count} line(s)\"; (a single interpolated "
-                 + "string). This must keep failing to match — it is not a formatting difference the "
+                 + "string). This must keep failing to match - it is not a formatting difference the "
                  + "whitespace-tolerant fallback should paper over, and conflating the two would let a "
                  + "tool silently act on the wrong text.")]
     public void FindSnippetPosition_SafeDelete_AgentFabricatedInterpolation_StillFailsToMatch()

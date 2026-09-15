@@ -10,7 +10,7 @@ namespace RoslynSentinel.Tests;
 
 /// <summary>
 /// Regression coverage for <see cref="CompilerErrorLookupHelper"/>'s CS0122 branch.
-/// See docs/current/project_cs0122_lookup_helper_proposal.md — this guards against the
+/// See docs/current/project_cs0122_lookup_helper_proposal.md -> this guards against the
 /// member-vs-container accessibility confusion traced in PlanImplementVerify run 1, where a
 /// model raised a class from internal to public while leaving the actually-inaccessible method
 /// private, then reverted the class without ever touching the method.
@@ -83,7 +83,7 @@ public class CompilerErrorLookupHelperTests
 
     /// <summary>
     /// Regression coverage for the CS0101/CS0111 branch. See
-    /// docs/current/project_readfile_createfile_path_inconsistency_bug.md — a model that guesses a
+    /// docs/current/project_readfile_createfile_path_inconsistency_bug.md -> a model that guesses a
     /// wrong-but-plausible path for an existing file gets a CS0101/CS0111 "already contains a
     /// definition" collision with no pointer to the real file, and (per that doc's transcript) can
     /// burn its whole turn budget unable to tell a genuine duplicate apart from a wrong path.

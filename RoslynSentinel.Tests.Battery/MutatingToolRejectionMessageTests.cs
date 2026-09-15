@@ -1,9 +1,9 @@
 // Regression coverage for the write-path chokepoint (ApplyProposedChangesAsync, shared by
-// WriteFile/ApplyDiff/ApplyUnifiedDiff — see docs/current/project_write_path_chokepoint_unified.md):
+// WriteFile/ApplyDiff/ApplyUnifiedDiff -> see docs/current/project_write_path_chokepoint_unified.md):
 // when a pre-apply compile check rejects a change, the returned error message must go through
 // CompilerErrorLookupHelper, not leak the raw ValidationResult.Diagnostics.ToJson() blob. WriteFile
 // shipped with the raw-JSON message for a while (fixed 2026-09-05, commit 3a4c521) because nothing
-// asserted on rejection-message *content* — CompilerErrorLookupHelperTests.cs unit-tests the helper
+// asserted on rejection-message *content* -> CompilerErrorLookupHelperTests.cs unit-tests the helper
 // itself but never calls a tool, and CreateFileDeleteFileTests.cs calls WriteFile but every
 // validation-adjacent case there uses validateOnApply:false or only asserts on ErrorCode. This file
 // closes that gap for all three mutating tools sharing the chokepoint.

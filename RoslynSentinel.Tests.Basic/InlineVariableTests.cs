@@ -20,7 +20,7 @@ namespace RoslynSentinel.Tests.Basic;
 /// 4. Method call inlining (var x = GetValue())
 /// 5. Multiple usages (same variable used 2-3 times)
 /// 6. No usage (remove unused variable)
-/// 7. Parenthesis handling (var x = a + b, then x * 2 → (a + b) * 2)
+/// 7. Parenthesis handling (var x = a + b, then x * 2 -> (a + b) * 2)
 /// 8. Nested expressions (var x = func(y))
 /// </summary>
 [TestFixture]

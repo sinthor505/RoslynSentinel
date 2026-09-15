@@ -1,4 +1,4 @@
-// Battery #31 — Regression tests for inline_class and convert_method_to_indexer
+// Battery #31 -> Regression tests for inline_class and convert_method_to_indexer
 // Covers the two bugs fixed in this battery:
 //   1. inline_class was an unimplemented stub (InvalidOperationException)
 //   2. convert_method_to_indexer had silent no-op on method-not-found / wrong param count
@@ -86,7 +86,7 @@ public class BatteryThirtyOneTests
     }
 
     // ======================================================================
-    // inline_class — Bug Fix: Was throwing InvalidOperationException (stub)
+    // inline_class -> Bug Fix: Was throwing InvalidOperationException (stub)
     // ======================================================================
 
     [Test]
@@ -209,7 +209,7 @@ public class Target {}";
         SetSource(src, "Lone.cs");
         var result = await _advancedStructuralEngine.InlineClassAsync("Lone.cs", "Lone.cs", "LoneClass");
 
-        Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return error — no target class to inline into");
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return error - no target class to inline into");
     }
 
     [Test]
@@ -221,7 +221,7 @@ public class Recipient { public int Existing; }";
         SetSource(src, "F.cs");
         var result = await _advancedStructuralEngine.InlineClassAsync("F.cs", "F.cs", "Empty");
 
-        // Empty class inlined — should succeed, Recipient should still exist, Empty removed
+        // Empty class inlined -> should succeed, Recipient should still exist, Empty removed
         Assert.That(result, Does.ContainKey(new FilePathWrapper("F.cs")));
         var updatedContent = result["F.cs"];
         Assert.That(updatedContent, Does.Contain("class Recipient"));
@@ -229,7 +229,7 @@ public class Recipient { public int Existing; }";
     }
 
     // ======================================================================
-    // inline_class — Cross-file type reference updates (⭐⭐⭐⭐⭐)
+    // inline_class -> Cross-file type reference updates (⭐⭐⭐⭐⭐)
     // ======================================================================
 
     [Test]
@@ -248,14 +248,14 @@ public class Recipient { public int Existing; }";
         Assert.That(result, Does.ContainKey(new FilePathWrapper("Owner.cs")), "Target file should be in result");
         Assert.That(result["Owner.cs"], Does.Contain("Value"), "Owner should contain inlined member");
 
-        // Third file should also be updated: 'Helper' → 'Owner'
+        // Third file should also be updated: 'Helper' -> 'Owner'
         Assert.That(result, Does.ContainKey(new FilePathWrapper("Consumer.cs")), "Third file with type reference should also be updated");
         Assert.That(result["Consumer.cs"], Does.Not.Contain("Helper"), "Old class name should be gone");
         Assert.That(result["Consumer.cs"], Does.Contain("Owner"), "New class name should appear");
     }
 
     // ======================================================================
-    // convert_method_to_indexer — Bug Fix: Silent no-op on error conditions
+    // convert_method_to_indexer -> Bug Fix: Silent no-op on error conditions
     // ======================================================================
 
     [Test]

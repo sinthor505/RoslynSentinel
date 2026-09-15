@@ -5,7 +5,7 @@ namespace RoslynSentinel.Tests;
 /// <summary>
 /// Guards the one invariant that matters here: advice never names a tool the server didn't
 /// register. Run 20260910-013550-398 livelocked for 24 turns on a size error whose only stated
-/// escape hatch was WriteFile, which that run had gated off — the advice was unfollowable.
+/// escape hatch was WriteFile, which that run had gated off -> the advice was unfollowable.
 /// </summary>
 /// <remarks>
 /// Plain unit tests with no server bootstrap: <see cref="WriteToolAdviceHelper"/> takes its tool
@@ -21,7 +21,7 @@ public class WriteToolAdviceHelperTests
     [Test]
     public void IsExposed_UnknownToolName_ReturnsFalse()
     {
-        // A name the map doesn't cover can't be vouched for, so it must not be advertised —
+        // A name the map doesn't cover can't be vouched for, so it must not be advertised ->
         // even when every class this server has is active.
         var helper = new WriteToolAdviceHelper([WholeFileWriteClass, RefactoringClass]);
 

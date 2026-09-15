@@ -4,7 +4,7 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Routes a <see cref="FailureReason"/> to a pre-filled <see cref="ToolHint"/> via <see cref="ToolGraph"/> (spec §4).
-/// A null return from <see cref="Route"/> is a loud diagnostic signal — it means the reason has no
+/// A null return from <see cref="Route"/> is a loud diagnostic signal -> it means the reason has no
 /// registered producer, manifesting the <c>[RequiresExternalInput]</c> debt rather than swallowing the gap.
 /// </summary>
 public sealed class FailureRouter
@@ -22,7 +22,7 @@ public sealed class FailureRouter
     ///   <item>the reason maps to no <see cref="DataTag"/>, or</item>
     ///   <item>no tool in the graph produces that tag.</item>
     /// </list>
-    /// Null is intentionally loud — callers must surface it in <see cref="ItemFailure.SuggestedTool"/>.
+    /// Null is intentionally loud -> callers must surface it in <see cref="ItemFailure.SuggestedTool"/>.
     /// </summary>
     public ToolHint? Route(FailureReason reason, ItemContext ctx)
     {
@@ -84,7 +84,7 @@ public sealed class FailureRouter
         }
     }
 
-    // ── Producer selection — deterministic across restarts (spec §4.1) ─────────
+    // ── Producer selection -> deterministic across restarts (spec §4.1) ─────────
 
     private static ToolDescriptor SelectPreferred(IReadOnlyList<ToolDescriptor> producers)
     {
@@ -105,7 +105,7 @@ public sealed class FailureRouter
         return best;
     }
 
-    // ── Argument pre-fill — spec §4.2 ─────────────────────────────────────────
+    // ── Argument pre-fill -> spec §4.2 ─────────────────────────────────────────
 
     private static Dictionary<string, string> BuildPrefilled(ToolDescriptor target, ItemContext ctx)
     {

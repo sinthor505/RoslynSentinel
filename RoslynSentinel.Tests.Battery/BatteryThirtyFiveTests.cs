@@ -1,4 +1,4 @@
-// Battery #35 — New features: extract_class internal caller rewriting, upgrade_to_file_scoped_namespace,
+// Battery #35 -> New features: extract_class internal caller rewriting, upgrade_to_file_scoped_namespace,
 // trace_variable_lifetime, get_type_hierarchy, find_cancellation_token_not_forwarded.
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -157,7 +157,7 @@ public class Looper
         var report = await _symbolNavigationEngine.TraceVariableLifetimeAsync("Looper.cs", "x", 9);
 
         Assert.That(report.Error, Is.Null, $"Should not error: {report.Error}");
-        // Declaration of x is inside foreach — IsInLoop should be true
+        // Declaration of x is inside foreach -> IsInLoop should be true
         var decl = report.Accesses.FirstOrDefault(a => a.AccessKind == "Declaration");
         if (decl != null)
         {

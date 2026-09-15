@@ -15,10 +15,10 @@ namespace RoslynSentinel.Common;
 /// <param name="StopReason">
 /// Why the batch ended:
 /// <list type="bullet">
-///   <item><c>batch_complete</c> — all eligible candidates were processed.</item>
-///   <item><c>budget_exhausted</c> — <c>maxBridges</c> limit reached before all candidates processed.</item>
-///   <item><c>no_candidates</c> — no <c>[MigrationCandidate("AsyncBridgeCandidate")]</c> methods found.</item>
-///   <item><c>dry_run</c> — dry-run mode; no files written.</item>
+///   <item><c>batch_complete</c> -> all eligible candidates were processed.</item>
+///   <item><c>budget_exhausted</c> -> <c>maxBridges</c> limit reached before all candidates processed.</item>
+///   <item><c>no_candidates</c> -> no <c>[MigrationCandidate("AsyncBridgeCandidate")]</c> methods found.</item>
+///   <item><c>dry_run</c> -> dry-run mode; no files written.</item>
 /// </list>
 /// </param>
 public sealed record BridgeBatchResult : EngineResultBase

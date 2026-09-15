@@ -171,7 +171,7 @@ public class SentinelGenerationTools
     internal static ToolOptionsResult GenerateOptions() => new()
     {
         Description = """
-            generate — valid kind values:
+            generate - valid kind values:
               add_benchmark_stub           Adds a BenchmarkDotNet stub class for a method.
                                            Requires filePath, className, methodName.
                                            Returns SourceTransformResult.
@@ -205,11 +205,11 @@ public class SentinelGenerationTools
               filePath: required for all kinds except generate_decorator_class.
               className: target class name; for generate_decorator_class pass the interface name.
               methodName: required for add_benchmark_stub and generate_path_driven_tests.
-              members: for generate_to_string_safe — optional comma-separated member list.
+              members: for generate_to_string_safe - optional comma-separated member list.
               decoratorPrefix: for generate_decorator_class (default "Logging").
-              projectName: for generate_decorator_class — optional project scope.
-              framework: for generate_path_driven_tests — "NUnit" (default), "xunit", or "mstest".
-              disambiguateLine: for generate_path_driven_tests — disambiguates overloaded methods.
+              projectName: for generate_decorator_class - optional project scope.
+              framework: for generate_path_driven_tests - "NUnit" (default), "xunit", or "mstest".
+              disambiguateLine: for generate_path_driven_tests - disambiguates overloaded methods.
             """,
         StructuredOptions = new Dictionary<string, object>
         {

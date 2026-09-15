@@ -1,5 +1,3 @@
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
@@ -8,7 +6,7 @@ namespace RoslynSentinel.Server.Advanced;
 /// agents receive actionable guidance without having to reason over raw counts themselves.
 ///
 /// Design: all batch tools write phase-prefixed Reason strings to their items list
-/// ("phase:flag — …", "phase:bridge — …", "phase:uplift — …", "phase:propagate_ct — …").
+/// ("phase:flag - …", "phase:bridge -> …", "phase:uplift -> …", "phase:propagate_ct -> …").
 /// The analyser uses these prefixes to route items to phase-specific checks, making the same
 /// method safe to call from any tool regardless of which phases ran.
 /// </summary>
@@ -21,7 +19,7 @@ internal static class AsyncMigrationDiagnostic
     /// <param name="succeeded">Succeeded count from the tool run.</param>
     /// <param name="failed">Failed count from the tool run.</param>
     /// <param name="changeId">ChangeId for the operation blob (embedded in suggestions).</param>
-    /// <param name="items">Full item list written to the blob — may be large, scanning is cheap.</param>
+    /// <param name="items">Full item list written to the blob -> may be large, scanning is cheap.</param>
     internal static List<string>? Analyse(
         int succeeded,
         int failed,
@@ -68,7 +66,7 @@ internal static class AsyncMigrationDiagnostic
         if (belowThreshold > 0 && alreadyFlagged == 0)
         {
             suggestions.Add(
-                $"{belowThreshold} method(s) were scanned but scored below the minScore threshold — " +
+                $"{belowThreshold} method(s) were scanned but scored below the minScore threshold - " +
                 "they were not flagged. Lower minScore or run ScanAsyncMigrationCandidates with a " +
                 "higher minScore to find additional candidates.");
         }
@@ -92,7 +90,7 @@ internal static class AsyncMigrationDiagnostic
 
         if (bridgeItems.Count == 0) return;
 
-        // Already bridged — async overload with CT exists, sync wrapper is stale.
+        // Already bridged -> async overload with CT exists, sync wrapper is stale.
         var alreadyBridged = bridgeItems
             .Where(i => i.Reason!.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -104,14 +102,14 @@ internal static class AsyncMigrationDiagnostic
                      && !i.Reason!.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        // Methods newly flagged NeedsManualReview this run — bridge or body-rewrite produced compiler errors.
+        // Methods newly flagged NeedsManualReview this run -> bridge or body-rewrite produced compiler errors.
         var newCompilerErrors = bridgeItems
             .Where(i => (i.Outcome == ItemRecordOutcome.Skipped || i.Outcome == ItemRecordOutcome.NeedsManualReview)
                      && (i.Reason!.Contains("Validation produced", StringComparison.OrdinalIgnoreCase)
                       || i.Reason!.Contains("Body-rewrite validation failed", StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
-        // Event handlers — structurally cannot be auto-converted.
+        // Event handlers -> structurally cannot be auto-converted.
         var eventHandlers = bridgeItems
             .Where(i => i.Reason!.Contains("event handler", StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -124,7 +122,7 @@ internal static class AsyncMigrationDiagnostic
         if (alreadyBridged.Count > 0)
         {
             suggestions.Add(
-                $"{alreadyBridged.Count} method(s) skipped — async overload already exists with CancellationToken. " +
+                $"{alreadyBridged.Count} method(s) skipped - async overload already exists with CancellationToken. " +
                 "These sync wrappers have already been bridged and the [MigrationCandidate(\"AsyncBridgeCandidate\")] " +
                 "attribute is stale. Run ScanAsyncMigrationCandidates to refresh the candidate list.");
         }
@@ -133,7 +131,7 @@ internal static class AsyncMigrationDiagnostic
         {
             var sample = MethodSample(priorManualReview);
             suggestions.Add(
-                $"{priorManualReview.Count} method(s) were previously marked NeedsManualReview — " +
+                $"{priorManualReview.Count} method(s) were previously marked NeedsManualReview - " +
                 "a prior Asyncify run attempted bridging but encountered compiler errors, meaning no " +
                 $"async API equivalent was found. Sample: {sample}. " +
                 "Use GetMethodSource on these methods to review the synchronous calls that block " +
@@ -144,7 +142,7 @@ internal static class AsyncMigrationDiagnostic
         {
             var sample = MethodSample(newCompilerErrors);
             suggestions.Add(
-                $"{newCompilerErrors.Count} method(s) flagged NeedsManualReview this run — " +
+                $"{newCompilerErrors.Count} method(s) flagged NeedsManualReview this run - " +
                 "the bridge produced compiler errors (likely no async API equivalent for the sync " +
                 $"calls they make). Sample: {sample}. " +
                 $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"manual_review\") for the full " +
@@ -154,7 +152,7 @@ internal static class AsyncMigrationDiagnostic
         if (eventHandlers.Count > 0)
         {
             suggestions.Add(
-                $"{eventHandlers.Count} event handler(s) skipped — event handlers cannot be converted " +
+                $"{eventHandlers.Count} event handler(s) skipped - event handlers cannot be converted " +
                 "automatically because their signature is fixed by the delegate contract. " +
                 "Use ExtractEventHandlers to separate the business logic into an async method, " +
                 "then bridge that method instead.");
@@ -194,7 +192,7 @@ internal static class AsyncMigrationDiagnostic
         {
             var sample = MethodSample(upliftErrors);
             suggestions.Add(
-                $"{upliftErrors.Count} caller(s) could not be uplifted — compiler errors during " +
+                $"{upliftErrors.Count} caller(s) could not be uplifted - compiler errors during " +
                 $"caller async conversion. Sample: {sample}. " +
                 $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"manual_review\") for compiler diagnostics.");
         }
@@ -202,7 +200,7 @@ internal static class AsyncMigrationDiagnostic
         if (noCallSites.Count > 0)
         {
             suggestions.Add(
-                $"{noCallSites.Count} file(s) had no eligible call sites for uplift — the bridged " +
+                $"{noCallSites.Count} file(s) had no eligible call sites for uplift - the bridged " +
                 "method may not be called from these files, or the callers are already async.");
         }
     }

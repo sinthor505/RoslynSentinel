@@ -144,11 +144,11 @@ public class SymbolNavigationEngine
     /// Locates all declaration sites for a symbol by name without requiring a file path.
     /// Returns structured SymbolLocation records whose FilePathWrapper and ContextSnippet fields
     /// can be passed directly to inspect_symbol, find_references, get_call_graph, rename_symbol,
-    /// and all other filePath-gated tools — eliminating the search_solution_text bootstrap step.
+    /// and all other filePath-gated tools -> eliminating the search_solution_text bootstrap step.
     ///
     /// symbolName: simple or fully-qualified name (e.g. "GetById" or "Acme.Data.Repo.GetById").
-    /// symbolKind: optional filter — "type", "method", "property", "field", "event", or "any" (default).
-    /// projectName: optional — restricts the search to a single project.
+    /// symbolKind: optional filter -> "type", "method", "property", "field", "event", or "any" (default).
+    /// projectName: optional -> restricts the search to a single project.
     /// exactMatch: true (default) for exact name match; false for prefix/contains (discovery mode).
     ///
     /// Returns all matches. Overloads appear as separate entries distinguishable by Signature.
@@ -232,7 +232,7 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
-                // Emit SymbolHandle once per symbol — it's the same regardless of location.
+                // Emit SymbolHandle once per symbol -> it's the same regardless of location.
                 // Null for symbols that don't support it (e.g. locals, labels).
                 var docCommentId = symbol.GetDocumentationCommentId();
 
@@ -257,7 +257,7 @@ public class SymbolNavigationEngine
                         continue;
                     }
 
-                    // Build ContextSnippet from the source text — the exact declaration line.
+                    // Build ContextSnippet from the source text -> the exact declaration line.
                     string? contextSnippet = null;
                     try
                     {
@@ -322,7 +322,7 @@ public class SymbolNavigationEngine
             "property" => symbol is IPropertySymbol,
             "field" => symbol is IFieldSymbol,
             "event" => symbol is IEventSymbol,
-            _ => true   // "any" or unrecognised — include everything
+            _ => true   // "any" or unrecognised - include everything
         };
     }
 
@@ -336,7 +336,7 @@ public class SymbolNavigationEngine
             return ErrorHoverInfo($"File not found: '{filePath}'");
         }
 
-        // Primary: use GetDeclaredSymbol/GetSymbolInfo (declaration-based — more reliable for class/method/property lookups)
+        // Primary: use GetDeclaredSymbol/GetSymbolInfo (declaration-based -> more reliable for class/method/property lookups)
         ISymbol? symbol = null;
         try
         {
@@ -659,7 +659,7 @@ public class SymbolNavigationEngine
         var results = new List<TypeMemberDetail>();
         var seen = new HashSet<string>();
 
-        // Enums never benefit from the inherited chain — it's always System.Enum/System.ValueType
+        // Enums never benefit from the inherited chain -> it's always System.Enum/System.ValueType
         // boilerplate (Parse, GetValues, ToString, ...) that drowns out the handful of values
         // callers actually asked about, so it's excluded regardless of includeInherited.
         var isEnum = typeSymbol.TypeKind == TypeKind.Enum;
@@ -685,7 +685,7 @@ public class SymbolNavigationEngine
                 }
 
                 // Enum members are IFieldSymbols whose default signature (just "Type.Name") hides
-                // the one thing callers usually want — the ordinal/explicit value — so surface it.
+                // the one thing callers usually want -> the ordinal/explicit value -> so surface it.
                 var sig = isEnum && member is IFieldSymbol { HasConstantValue: true } enumField
                     ? $"{type.Name}.{member.Name} = {enumField.ConstantValue}"
                     : member.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
@@ -992,7 +992,7 @@ public class SymbolNavigationEngine
     }
 
     /// <summary>
-    /// Returns the namespaces already in scope in a file without qualification — its own declared
+    /// Returns the namespaces already in scope in a file without qualification -> its own declared
     /// namespace plus every `using` directive local to the file and every `global using` anywhere
     /// in the containing project. Intended for CS0103 triage: a candidate symbol whose namespace is
     /// already in this set cannot be fixed by adding a `using`, so the real problem is a missing
@@ -1405,7 +1405,7 @@ public class SymbolNavigationEngine
         ISymbol? symbol = null;
 
         // The MCP tool layer resolves an omitted `filepath` to FilePathWrapper's empty-string default
-        // (via SetFilePath), not a C# null — so checking `filePath != null` alone always took this
+        // (via SetFilePath), not a C# null -> so checking `filePath != null` alone always took this
         // branch, even when no filepath was actually supplied, silently bypassing the by-name
         // fallback below. Treat blank the same as null.
         if (!string.IsNullOrWhiteSpace(filePath))
@@ -1416,14 +1416,14 @@ public class SymbolNavigationEngine
                     $"FindCallers: filePath '{filePath}' was not found in the loaded solution. " +
                     "Verify the path against ListSolutionItems/GetFileOutline, or omit filePath to " +
                     "resolve by symbolName across the whole solution instead. This is NOT a confirmed " +
-                    "zero-references result — the lookup never ran.");
+                    "zero-references result - the lookup never ran.");
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             var model = await document.GetSemanticModelAsync(cancellationToken);
             if (root == null || model == null)
             {
                 throw new InvalidOperationException(
                     $"FindCallers: could not obtain a syntax tree/semantic model for '{filePath}'. " +
-                    "This is NOT a confirmed zero-references result — the lookup never ran.");
+                    "This is NOT a confirmed zero-references result - the lookup never ran.");
             }
 
             // Shared by both branches below so the contextSnippet-failure message (immediately
@@ -1442,7 +1442,7 @@ public class SymbolNavigationEngine
             {
                 symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken) ?? throw new InvalidOperationException(
                         $"FindCallers: contextSnippet did not resolve to a symbol in '{filePath}'. " +
-                        $"This is NOT a confirmed zero-references result for '{symbolName}' — the lookup " +
+                        $"This is NOT a confirmed zero-references result for '{symbolName}' - the lookup " +
                         "never ran. " + DescribeNameOnlyCandidates(decls, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output, " +
                         "or omit contextSnippet if the symbolName is unambiguous in this file.");
@@ -1455,7 +1455,7 @@ public class SymbolNavigationEngine
                 {
                     // GetDeclaredSymbol returns null directly on a FieldDeclarationSyntax (it can
                     // declare multiple variables, so the declared symbol lives on the matching
-                    // VariableDeclaratorSyntax child instead) — fall back to that child so a field
+                    // VariableDeclaratorSyntax child instead) -> fall back to that child so a field
                     // match in `decls` doesn't spuriously read as "not found declared" below.
                     symbol = model.GetDeclaredSymbol(decl, cancellationToken)
                         ?? (decl as FieldDeclarationSyntax)?.Declaration.Variables
@@ -1468,14 +1468,14 @@ public class SymbolNavigationEngine
                 {
                     throw new InvalidOperationException(
                         $"FindCallers: symbolName '{symbolName}' was not found declared in '{filePath}'. " +
-                        "This is NOT a confirmed zero-references result — the lookup never ran. Verify the " +
+                        "This is NOT a confirmed zero-references result - the lookup never ran. Verify the " +
                         "name against GetFileOutline, or omit filePath to search by name across the solution.");
                 }
             }
         }
         else
         {
-            // Defect-3 fix: no filePath supplied — resolve by name across the solution.
+            // Defect-3 fix: no filePath supplied -> resolve by name across the solution.
             // When multiple overloads exist, contextSnippet is used to pick one if supplied;
             // otherwise all matching symbols are searched (union of references).
             symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, cancellationToken);
@@ -1486,7 +1486,7 @@ public class SymbolNavigationEngine
             throw new InvalidOperationException(
                 $"FindCallers: symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
-                "This is NOT a confirmed zero-references result — the lookup never ran. Verify the name via " +
+                "This is NOT a confirmed zero-references result - the lookup never ran. Verify the name via " +
                 "LocateSymbol/GetFileOutline before treating this as evidence the symbol is unused.");
         }
 
@@ -1577,13 +1577,13 @@ public class SymbolNavigationEngine
 
         ISymbol? symbol = null;
         // Non-null only when the filePath/contextSnippet-scoped lookup ran but definitively failed
-        // to resolve (as opposed to "no filePath was supplied, use the by-name paths below") — used
+        // to resolve (as opposed to "no filePath was supplied, use the by-name paths below") -> used
         // to build an actionable error if every fallback is exhausted, instead of silently returning
         // an empty list that reads identically to a confirmed zero-implementations result.
         string? scopedResolutionFailure = null;
 
         // The MCP tool layer resolves an omitted `filepath` to FilePathWrapper's empty-string default
-        // (via SetFilePath), not a C# null — so checking `filePath != null` alone always took this
+        // (via SetFilePath), not a C# null -> so checking `filePath != null` alone always took this
         // branch, even when no filepath was actually supplied, silently bypassing the by-name
         // fallback below. Treat blank the same as null.
         if (!string.IsNullOrWhiteSpace(filePath))
@@ -1609,7 +1609,7 @@ public class SymbolNavigationEngine
                     if (symbol == null)
                     {
                         // Same name-only lookup as the no-snippet branch below, used purely to
-                        // enrich this message with "symbolName WAS found at line N" when possible —
+                        // enrich this message with "symbolName WAS found at line N" when possible ->
                         // does not change resolution/matching behavior, only what the error reports.
                         var nameOnlyCandidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
                             .Where(m => m switch
@@ -1645,7 +1645,7 @@ public class SymbolNavigationEngine
         }
         else
         {
-            // Defect-3 fix: no filePath — resolve by name across the solution.
+            // Defect-3 fix: no filePath -> resolve by name across the solution.
             symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, cancellationToken);
         }
 
@@ -1677,7 +1677,7 @@ public class SymbolNavigationEngine
                 "FindImplementations: " + (scopedResolutionFailure ??
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                     (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".")) +
-                " This is NOT a confirmed zero-implementations result — the lookup never ran. Verify " +
+                " This is NOT a confirmed zero-implementations result - the lookup never ran. Verify " +
                 "the name via LocateSymbol/GetFileOutline before treating this as evidence of no implementations.");
         }
 
@@ -1925,7 +1925,7 @@ public class SymbolNavigationEngine
             return "Return";
         }
 
-        // assignment — LHS?
+        // assignment -> LHS?
         var assignment = node.Ancestors().OfType<AssignmentExpressionSyntax>().FirstOrDefault();
         if (assignment != null)
         {
@@ -2097,13 +2097,13 @@ public class SymbolNavigationEngine
                         }
                         catch (ToolException)
                         {
-                            // snippet not found in this document — continue
+                            // snippet not found in this document -> continue
                         }
                     }
                 }
             }
 
-            // No contextSnippet or snippet resolution failed — prefer class members over interface members.
+            // No contextSnippet or snippet resolution failed -> prefer class members over interface members.
             var preferred = candidates.FirstOrDefault(s =>
                 s.ContainingType?.TypeKind == TypeKind.Class) ?? candidates.FirstOrDefault();
 

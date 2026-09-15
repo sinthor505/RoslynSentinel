@@ -7,8 +7,6 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Advanced;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -67,10 +65,10 @@ public record UpliftSkippedInfo(
 /// <param name="StopReason">
 /// Why the batch ended:
 /// <list type="bullet">
-///   <item><c>batch_complete</c> — all discovered callers were processed.</item>
-///   <item><c>budget_exhausted</c> — <c>maxCallers</c> limit reached before all callers processed.</item>
-///   <item><c>no_callers</c> — no callers of the bridged method found.</item>
-///   <item><c>dry_run</c> — dry-run mode; no files written.</item>
+///   <item><c>batch_complete</c> -> all discovered callers were processed.</item>
+///   <item><c>budget_exhausted</c> -> <c>maxCallers</c> limit reached before all callers processed.</item>
+///   <item><c>no_callers</c> -> no callers of the bridged method found.</item>
+///   <item><c>dry_run</c> -> dry-run mode; no files written.</item>
 /// </list>
 /// </param>
 public record UpliftBatchResult(
@@ -301,13 +299,13 @@ public class PropagateCtBatchResult
 
 /// <summary>
 /// Orchestrates batch async-migration operations using in-memory Roslyn compilation for
-/// validation — no MSBuild round-trips required.
+/// validation -> no MSBuild round-trips required.
 /// <list type="bullet">
-///   <item><see cref="RunBridgeBatchAsync"/> — applies the Asyncify-bridge transform to a
+///   <item><see cref="RunBridgeBatchAsync"/> -> applies the Asyncify-bridge transform to a
 ///         batch of methods flagged with <c>[MigrationCandidate("AsyncBridgeCandidate")]</c>,
 ///         validates each in-memory, writes successes to disk, and flags failures for manual
 ///         review.</item>
-///   <item><see cref="RunUpliftBatchAsync"/> — finds callers of a previously bridged method,
+///   <item><see cref="RunUpliftBatchAsync"/> -> finds callers of a previously bridged method,
 ///         bridges each caller, rewrites the caller's new async body to replace the obsolete
 ///         sync call with an awaited async call, validates in-memory, and writes successes to
 ///         disk.</item>
@@ -455,10 +453,10 @@ public class AsyncBatchEngine
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
             {
-                // The async overload already exists — try adding CT to it instead of failing
+                // The async overload already exists -> try adding CT to it instead of failing
                 var asyncMethodName = candidate.MethodName + "Async";
                 _logger.LogInformation(
-                    "Async overload '{AsyncMethod}' already exists — attempting CT add fallback",
+                    "Async overload '{AsyncMethod}' already exists - attempting CT add fallback",
                     asyncMethodName);
                 bool fallbackHandled = false;
                 try
@@ -496,7 +494,7 @@ public class AsyncBatchEngine
                     {
                         // Async overload already has CT. Before giving up, check whether its body
                         // still calls [Obsolete("Asyncify-bridge: ...")] sync wrappers that need
-                        // rewriting to await calls — e.g. GetExpensesAsync body still calling
+                        // rewriting to await calls -> e.g. GetExpensesAsync body still calling
                         // CommonSearch.search(sql) instead of await CommonSearch.searchAsync(sql, cancellationToken).
                         var bodyRewrite = await _asyncOptimizationEngine.RewriteObsoleteCallsInAsyncMethodAsync(
                             candidate.FilePath, asyncMethodName,
@@ -544,7 +542,7 @@ public class AsyncBatchEngine
                             // Body is already correct (no sync bridge calls), or method not found.
                             // Strip the stale AsyncBridgeCandidate flag.
                             _logger.LogDebug(
-                                "RunBridgeBatch: stale-flag skip — '{Method}': '{AsyncMethod}' already has CancellationToken and body is correct (stripping flag)",
+                                "RunBridgeBatch: stale-flag skip - '{Method}': '{AsyncMethod}' already has CancellationToken and body is correct (stripping flag)",
                                 candidate.MethodName, asyncMethodName);
                             _ledger.Record(candidate.FilePath, candidate.MethodName, "BridgeStaleSkip");
 
@@ -563,7 +561,7 @@ public class AsyncBatchEngine
                             catch (Exception stripEx)
                             {
                                 _logger.LogWarning(stripEx,
-                                    "Could not strip stale AsyncBridgeCandidate from '{Method}' — continuing",
+                                    "Could not strip stale AsyncBridgeCandidate from '{Method}' - continuing",
                                     candidate.MethodName);
                             }
                             skipped.Add(new BridgeSkippedInfo(
@@ -616,7 +614,7 @@ public class AsyncBatchEngine
             }
             catch (Exception ex)
             {
-                // Unexpected error — also flag NeedsManualReview to prevent infinite retries.
+                // Unexpected error -> also flag NeedsManualReview to prevent infinite retries.
                 _logger.LogError(ex,
                     "Unexpected error in ConvertToAsyncBridge for {Method}", candidate.MethodName);
                 try
@@ -659,7 +657,7 @@ public class AsyncBatchEngine
                     catch (Exception propEx)
                     {
                         _logger.LogWarning(propEx,
-                            "CT propagation failed for '{Method}' — continuing with unpropagated source",
+                            "CT propagation failed for '{Method}' - continuing with unpropagated source",
                             asyncMethodNameForProp);
                         // Fall through with original bridge source
                     }
@@ -682,12 +680,12 @@ public class AsyncBatchEngine
                 catch (Exception rewriteEx)
                 {
                     _logger.LogWarning(rewriteEx,
-                        "Bridge body rewrite failed for '{Method}' — continuing with unrewritten source",
+                        "Bridge body rewrite failed for '{Method}' - continuing with unrewritten source",
                         asyncMethodNameForProp);
                 }
             }
 
-            // Step C: validate in-memory — no MSBuild required.
+            // Step C: validate in-memory -> no MSBuild required.
             Debug.WriteLine($"Validating in-memory for {candidate.MethodName} in {candidate.FilePath}...");
             var validation = await _validationEngine.ValidateChangesAsync(
                 new Dictionary<FilePathWrapper, string> { { candidate.FilePath, sourceToValidate } },
@@ -700,7 +698,7 @@ public class AsyncBatchEngine
                     candidate.MethodName, validation.Diagnostics.Count,
                     validation.Diagnostics.Count > 0 ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}" : "");
 
-                // Flag the method for manual review — best effort, do not abort batch on failure.
+                // Flag the method for manual review -> best effort, do not abort batch on failure.
                 try
                 {
                     var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
@@ -714,7 +712,7 @@ public class AsyncBatchEngine
                 catch (Exception flagEx)
                 {
                     _logger.LogWarning(flagEx,
-                        "Could not flag {Method} as NeedsManualReview — continuing",
+                        "Could not flag {Method} as NeedsManualReview - continuing",
                         candidate.MethodName);
                 }
 
@@ -773,8 +771,8 @@ public class AsyncBatchEngine
     // ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Scans the solution (or a specific project) for sync bridge-wrapper methods — those marked
-    /// <c>[Obsolete("Asyncify-bridge: call XAsync instead.", …)]</c> — and returns their names.
+    /// Scans the solution (or a specific project) for sync bridge-wrapper methods -> those marked
+    /// <c>[Obsolete("Asyncify-bridge: call XAsync instead.", …)]</c> -> and returns their names.
     /// <para>
     /// Used to build a global uplift target list that covers methods bridged in prior runs whose
     /// <c>[AsyncBridgeCandidate]</c> flags were already stripped, making them invisible to the
@@ -850,7 +848,7 @@ public class AsyncBatchEngine
     ///   <item>Applies <c>ConvertToAsyncBridgeAsync</c> to the caller, creating a
     ///         <c>callerAsync(CancellationToken)</c> overload with the original body.</item>
     ///   <item>Rewrites the <c>callerAsync</c> body to replace
-    ///         <c>bridgedMethod(args)</c> → <c>await bridgedMethodAsync(args, cancellationToken)</c>.</item>
+    ///         <c>bridgedMethod(args)</c> -> <c>await bridgedMethodAsync(args, cancellationToken)</c>.</item>
     ///   <item>Validates the combined transform in-memory using Roslyn compilation.</item>
     ///   <item>On success: writes the file to disk and refreshes the workspace.</item>
     ///   <item>On error: flags the caller with <c>[MigrationCandidate("NeedsManualReview")]</c>
@@ -931,7 +929,7 @@ public class AsyncBatchEngine
         }
 
         // 3. Process callers grouped by file, one caller at a time: transform, validate,
-        //    write to disk. Write-through — no speculative in-memory-only accumulation across
+        //    write to disk. Write-through -> no speculative in-memory-only accumulation across
         //    callers, so the workspace and disk never diverge mid-batch. A later caller in the
         //    same file sees the previous caller's applied change via the workspace, because
         //    ApplyProposedChangesAsync refreshes CurrentSolution immediately after every write.
@@ -966,7 +964,7 @@ public class AsyncBatchEngine
             }
 
             _logger.LogDebug(
-                "RunUpliftBatch: file '{File}' — {Count} caller(s)",
+                "RunUpliftBatch: file '{File}' - {Count} caller(s)",
                 callerFilePath, callersInFile.Count);
 
             foreach (var (_, callerMethodName) in callersInFile)
@@ -981,7 +979,7 @@ public class AsyncBatchEngine
                     callerIndex + 1, callerPairs.Count, callerMethodName, callerFilePath);
                 callerIndex++;
 
-                // Read current state — picks up each preceding caller's applied write.
+                // Read current state -> picks up each preceding caller's applied write.
                 string currentSource;
                 {
                     var sol = _workspaceManager.CurrentSolution;
@@ -1003,7 +1001,7 @@ public class AsyncBatchEngine
                 {
                     _ledger.Record(callerFilePath, callerMethodName, "UpliftIdempotentSkip");
                     skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                        "already uplifted — no change produced", new List<DiagnosticInfo>()));
+                        "already uplifted - no change produced", new List<DiagnosticInfo>()));
                     continue;
                 }
 
@@ -1101,7 +1099,7 @@ public class AsyncBatchEngine
 
         if (callerAsyncMethod == null)
         {
-            // Nothing to rewrite — the method was not found (should not normally happen).
+            // Nothing to rewrite -> the method was not found (should not normally happen).
             return source;
         }
 
@@ -1155,11 +1153,11 @@ public class AsyncBatchEngine
         if (callerMethodNode == null && (callerMethodName.Contains('(') || callerMethodName.StartsWith('<')))
         {
             _logger.LogInformation(
-                "TryTransformCaller: '{Method}' in {File} is not a regular method — flagging for manual review",
+                "TryTransformCaller: '{Method}' in {File} is not a regular method - flagging for manual review",
                 callerMethodName, callerFilePath);
             return (null, null, new UpliftSkippedInfo(
                 callerFilePath, callerMethodName,
-                $"Not a regular method — manual uplift required: replace the sync bridge call in '{callerMethodName}'.",
+                $"Not a regular method - manual uplift required: replace the sync bridge call in '{callerMethodName}'.",
                 new List<DiagnosticInfo>(), NeedsManualReview: true));
         }
 
@@ -1176,7 +1174,7 @@ public class AsyncBatchEngine
         if (callerIsAsync)
         {
             _logger.LogInformation(
-                "TryTransformCaller: '{Method}' is already async — rewriting body in-place (semantic)",
+                "TryTransformCaller: '{Method}' is already async - rewriting body in-place (semantic)",
                 callerMethodName);
             bridgedCallerSource = preCheckSource;
             callerAsyncNameOverride = callerMethodName;
@@ -1190,7 +1188,7 @@ public class AsyncBatchEngine
         else if (asyncOverloadExists)
         {
             _logger.LogInformation(
-                "TryTransformCaller: '{Method}' has existing async overload — rewriting body directly (semantic)",
+                "TryTransformCaller: '{Method}' has existing async overload - rewriting body directly (semantic)",
                 callerMethodName);
             bridgedCallerSource = preCheckSource;
             var asyncOverloadNode = preCheckMethods.FirstOrDefault(m => m.Identifier.Text == callerMethodName + "Async");
@@ -1214,7 +1212,7 @@ public class AsyncBatchEngine
             catch (InvalidOperationException ex) when (ex.Message.Contains("event handler"))
             {
                 _logger.LogInformation(
-                    "TryTransformCaller: '{Method}' is an event handler — attempting in-place async void conversion",
+                    "TryTransformCaller: '{Method}' is an event handler - attempting in-place async void conversion",
                     callerMethodName);
                 try
                 {
@@ -1303,7 +1301,7 @@ public class AsyncBatchEngine
         }
 
         // ── Step C: CT propagation ──────────────────────────────────────────────
-        // PropagateCancellationTokenInSourceAsync is pure source-in/source-out — no workspace read.
+        // PropagateCancellationTokenInSourceAsync is pure source-in/source-out -> no workspace read.
         bool skipCtPropagation = isEventHandlerInPlace || semanticCtExpression == null;
         string sourceResult = rewrittenSource;
         if (propagateCancellationTokens && !skipCtPropagation)
@@ -1319,7 +1317,7 @@ public class AsyncBatchEngine
             catch (Exception propEx)
             {
                 _logger.LogWarning(propEx,
-                    "CT propagation failed for '{Method}' — using unrewritten source",
+                    "CT propagation failed for '{Method}' - using unrewritten source",
                     callerAsyncNameOverride ?? (callerMethodName + "Async"));
             }
         }
@@ -1341,7 +1339,7 @@ public class AsyncBatchEngine
     /// same-named methods on unrelated types are never rewritten.
     /// </summary>
     /// <param name="cancellationTokenExpression">
-    /// Expression to inject as the final CT argument. <c>null</c> omits CT entirely —
+    /// Expression to inject as the final CT argument. <c>null</c> omits CT entirely ->
     /// used for <c>async void</c> event handlers whose signatures cannot carry a CT parameter.
     /// </param>
     /// <returns>Rewritten source, or <c>null</c> when the document is not in the workspace.</returns>
@@ -1462,13 +1460,13 @@ public class AsyncBatchEngine
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // BridgeCallRewriter — inner CSharpSyntaxRewriter
+    // BridgeCallRewriter -> inner CSharpSyntaxRewriter
     // ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// A <see cref="CSharpSyntaxRewriter"/> that rewrites calls to a specific sync bridge method
     /// as awaited calls to its async counterpart:
-    /// <code>bridgedMethod(args) → await bridgedMethodAsync(args, cancellationToken)</code>
+    /// <code>bridgedMethod(args) -> await bridgedMethodAsync(args, cancellationToken)</code>
     /// Handles both unqualified calls (<c>method()</c>) and member-access calls
     /// (<c>this.method()</c> or <c>obj.method()</c>). Skips invocations that are already wrapped
     /// in an <c>await</c> expression to prevent double-wrapping.
@@ -1526,16 +1524,16 @@ public class AsyncBatchEngine
                     break;
 
                 default:
-                    // Not targeting the bridged method — leave unchanged.
+                    // Not targeting the bridged method -> leave unchanged.
                     return visited;
             }
 
             _ = calledName; // suppress unused-variable warning
 
-            // Use node.Parent (original, tree-rooted) for parent context — visited may be detached.
+            // Use node.Parent (original, tree-rooted) for parent context -> visited may be detached.
 
             // If the invocation is already the direct operand of an await expression,
-            // only rename the method — don't add another await or another cancellationToken arg.
+            // only rename the method -> don't add another await or another cancellationToken arg.
             if (node.Parent is AwaitExpressionSyntax)
             {
                 return visited.WithExpression(newExpression);
@@ -1543,7 +1541,7 @@ public class AsyncBatchEngine
 
             // Append the cancellation-token expression as the final positional argument.
             // Expression is either an identifier (e.g. "cancellationToken") or a member access
-            // (e.g. "CancellationToken.None") — ParseExpression handles both forms.
+            // (e.g. "CancellationToken.None") -> ParseExpression handles both forms.
             var ctArg = SyntaxFactory.Argument(SyntaxFactory.ParseExpression(_cancellationTokenExpression));
             var newArgList = visited.ArgumentList.AddArguments(ctArg);
 
@@ -1552,9 +1550,9 @@ public class AsyncBatchEngine
                 .WithArgumentList(newArgList)
                 .WithoutLeadingTrivia();
 
-            // When the bridge call is chained — Foo().Rows, Foo().AsDataView(), Foo()[i] — the
+            // When the bridge call is chained -> Foo().Rows, Foo().AsDataView(), Foo()[i] -> the
             // await must be parenthesised so that member/element access binds to the awaited value,
-            // not to the Task:  Foo().Rows → (await FooAsync(cancellationToken)).Rows
+            // not to the Task:  Foo().Rows -> (await FooAsync(cancellationToken)).Rows
             // Without parens, `await FooAsync(cancellationToken).Rows` is parsed as `await (FooAsync(cancellationToken).Rows)`,
             // which fails to compile because Task<T> has no such member.
             bool needsParens = node.Parent is MemberAccessExpressionSyntax
@@ -1837,7 +1835,7 @@ public class AsyncBatchEngine
 
     /// <summary>
     /// Formats the first <paramref name="n"/> diagnostics into a compact inline summary for
-    /// inclusion in Reason strings — e.g. " — [CS7036] No arg for 'cancellationToken' (+1 more)".
+    /// inclusion in Reason strings -> e.g. " -> [CS7036] No arg for 'cancellationToken' (+1 more)".
     /// Returns an empty string when <paramref name="diags"/> is empty.
     /// </summary>
     private static string DiagSummary(List<DiagnosticInfo> diags, int n = 2)
@@ -1848,7 +1846,7 @@ public class AsyncBatchEngine
         }
 
         var top = string.Join("; ", diags.Take(n).Select(d => $"[{d.Id}] {d.Message}"));
-        return diags.Count > n ? $" — {top} (+{diags.Count - n} more)" : $" — {top}";
+        return diags.Count > n ? $" - {top} (+{diags.Count - n} more)" : $" - {top}";
     }
 }
 

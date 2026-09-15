@@ -765,7 +765,7 @@ public class SentinelCodemodTools
     /// <summary>
     /// Builds the "filePath is required for {kind}" error for a codemod switch case, distinguishing
     /// "no solution is loaded" (a precondition failure independent of what filepath was passed) from
-    /// "the filepath argument itself was invalid" — see FilePathWrapper.FailureReason.
+    /// "the filepath argument itself was invalid" -> see FilePathWrapper.FailureReason.
     /// </summary>
     private static ResultError BuildFilePathRequiredError(FilePathWrapper filePath, string kind)
     {
@@ -1132,7 +1132,7 @@ public class SentinelCodemodTools
     [McpServerTool(Name = "Generate")]
     [Produces(DataTag.ResultOnly)]
     [Description("Generates new code for a type or method. Call DescribeAdvancedToolOptions(\"generate\") for the list of kind values, their required parameters, and return types.")]
-    // CONDITIONAL-PARAM-REVIEW-REQUIRED: filepath is required for every kind except generate_decorator_class. className/methodName/members/disambiguateLine requirements vary per kind — see DescribeAdvancedToolOptions("generate"). Enforced at runtime, not by the schema.
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: filepath is required for every kind except generate_decorator_class. className/methodName/members/disambiguateLine requirements vary per kind -> see DescribeAdvancedToolOptions("generate"). Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> Generate(
         [Description("The kind of code to generate. See DescribeAdvancedToolOptions(\"generate\") for valid values.")]
         CodemodKind kind,
@@ -1361,7 +1361,7 @@ public class SentinelCodemodTools
     internal static ToolOptionsResult ApplyFileCodemodOptions() => new()
     {
         Description = """
-            apply_file_codemod — valid transform values:
+            apply_file_codemod - valid transform values:
               add_braces                        Adds braces to all brace-less control statements.
               cleanup_implicit_spans            Removes redundant implicit Span<T>→Span<byte> casts.
               convert_to_null_coalescing        Replaces null-conditional chains with ?? operators.
@@ -1391,8 +1391,8 @@ public class SentinelCodemodTools
               use_time_provider                 Replaces DateTime.Now/UtcNow with ITimeProvider calls.
 
             Additional parameters:
-              libraryMode: for add_configure_await_false — true (default) adds .ConfigureAwait(false) to all awaits.
-              preview: for format_document_safe and sort_and_deduplicate_usings — false (default) writes to disk.
+              libraryMode: for add_configure_await_false - true (default) adds .ConfigureAwait(false) to all awaits.
+              preview: for format_document_safe and sort_and_deduplicate_usings - false (default) writes to disk.
             """,
         StructuredOptions = new Dictionary<string, object>
         {
@@ -1412,7 +1412,7 @@ public class SentinelCodemodTools
     internal static ToolOptionsResult ApplyMethodCodemodOptions() => new()
     {
         Description = """
-            apply_method_codemod — valid transform values:
+            apply_method_codemod - valid transform values:
               add_guard_clauses              Adds ArgumentNullException.ThrowIfNull guards for reference params.
                                              Returns SourceTransformResult.
               convert_expression_body        Converts between block body and expression body.
@@ -1442,9 +1442,9 @@ public class SentinelCodemodTools
                                              ArgumentNullException.ThrowIfNull(x), etc.
 
             Additional parameters:
-              direction: required for convert_expression_body — "ToExpression" or "ToBlock".
+              direction: required for convert_expression_body - "ToExpression" or "ToBlock".
               contextSnippet/lineBefore/lineAfter: for convert_expression_body disambiguation.
-              lockFieldName: for make_method_thread_safe — name for the lock field (default "_lock").
+              lockFieldName: for make_method_thread_safe - name for the lock field (default "_lock").
             """,
         StructuredOptions = new Dictionary<string, object>
         {
@@ -1462,7 +1462,7 @@ public class SentinelCodemodTools
     internal static ToolOptionsResult ApplyClassCodemodOptions() => new()
     {
         Description = """
-            apply_class_codemod — valid transform values:
+            apply_class_codemod - valid transform values:
               add_validation_to_poco          Adds [Required] and [StringLength(100)] to all string properties.
               class_to_record                 Converts a class to a record type.
               convert_abstract_to_interface   Converts an abstract class to an interface.
@@ -1483,7 +1483,7 @@ public class SentinelCodemodTools
 
             Additional parameters:
               propertyName: for convert_property_safe and convert_property_to_methods.
-              direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty".
+              direction: required for convert_property_safe - "ToFullProperty" or "ToAutoProperty".
               contextSnippet/lineBefore/lineAfter: for convert_property_safe disambiguation.
             """,
         StructuredOptions = new Dictionary<string, object>

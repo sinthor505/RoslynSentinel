@@ -3,7 +3,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// <summary>
 /// Copies a finished run's directory (transcripts, agent.log) into the repo's
 /// <c>ModelTestingResults\&lt;host-suffix&gt;\&lt;relative-path-under-model-eval&gt;\</c> tree, so
-/// every run is archived regardless of how the test was launched — previously this only happened
+/// every run is archived regardless of how the test was launched -> previously this only happened
 /// when a run went through <c>roslynsentinel-modeleval.ps1</c>'s own post-run copy step
 /// (Copy-NewRunDirectories), so a run launched directly via `dotnet test`/the VS Code test
 /// explorer left its transcript stranded under the scratch build's own bin/obj output, never
@@ -15,7 +15,7 @@ internal static class ModelTestingResultsArchiver
     /// Call from a model-eval test fixture's TearDown with its own <c>_runDirectory</c> (the
     /// leaf directory <see cref="AgentLoop.ModelAgentRunner.RunAsync"/> wrote the transcript
     /// into). No-ops quietly (logging via <see cref="TestContext"/> rather than throwing) if the
-    /// directory doesn't exist — e.g. SetUp's Assert.Ignore fired before any run happened — since
+    /// directory doesn't exist -> e.g. SetUp's Assert.Ignore fired before any run happened -> since
     /// a failed archive copy should never mask or replace the test's own pass/fail outcome.
     /// </summary>
     public static void ArchiveRunDirectory(string runDirectory)
@@ -59,7 +59,7 @@ internal static class ModelTestingResultsArchiver
 
     // TestContext.CurrentContext.Result is already populated by the time TearDown runs (NUnit
     // fills in Outcome/Message/StackTrace before TearDown, even on failure) but nothing was ever
-    // capturing it — the archived run directory had the agent's own transcript/log but not the
+    // capturing it -> the archived run directory had the agent's own transcript/log but not the
     // test framework's verdict on it, so a failing run couldn't be told apart from a passing one,
     // and the actual failed-assertion text/stack trace was only ever visible in the live test
     // runner's own output, never preserved alongside the transcript that explains it.
@@ -91,7 +91,7 @@ internal static class ModelTestingResultsArchiver
 
     // Mirrors roslynsentinel-modeleval.ps1's $knownHosts alias table + its fallback
     // sanitize-the-URL-into-a-suffix logic, so a test-driven archive lands in the exact same
-    // ModelTestingResults\<suffix>\ tree the script has always used — existing runs (e.g.
+    // ModelTestingResults\<suffix>\ tree the script has always used -> existing runs (e.g.
     // ModelTestingResults\113\...) and newly-archived ones merge into one history per host.
     private static string DeriveHostSuffix(string baseUrl)
     {

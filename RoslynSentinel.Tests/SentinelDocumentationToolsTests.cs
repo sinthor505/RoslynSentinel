@@ -24,7 +24,7 @@ public class SentinelDocumentationToolsTests
     /// <summary>
     /// Builds a tool instance for <paramref name="operatingMode"/> against the same temp solution
     /// root. Because OperatingMode is injected rather than static, both modes can be exercised from
-    /// this one fixture with no [NonParallelizable] — see SentinelHostOptions' remarks.
+    /// this one fixture with no [NonParallelizable] -> see SentinelHostOptions' remarks.
     /// </summary>
     private SentinelDocumentationTools BuildTools(OperatingMode operatingMode)
     {
@@ -69,7 +69,7 @@ public class SentinelDocumentationToolsTests
     [Test]
     public void Read_NoCurrentDir_FallsBackToDocsPlansDirectly()
     {
-        // No docs/current/ at all — only docs/plans/ directly, matching the original assumed layout.
+        // No docs/current/ at all -> only docs/plans/ directly, matching the original assumed layout.
         WriteDoc(Path.Combine("plans", "01-baseline.md"), "flat layout content");
 
         var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
@@ -140,7 +140,7 @@ public class SentinelDocumentationToolsTests
     public void Read_ExactPathOutsideDocTypeSubdir_FallsBackToFullDocsTree()
     {
         // Mirrors a real layout: a plan file that lives under docs/current/tests/... instead
-        // of docs/current/plans/... — action:list would still surface it, so read must reach it.
+        // of docs/current/plans/... -> action:list would still surface it, so read must reach it.
         WriteDoc(Path.Combine("current", "tests", "plan-x-steps-runner", "02-step.md"), "runner step content");
 
         var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,

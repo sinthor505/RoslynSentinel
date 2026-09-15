@@ -18,7 +18,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// Runs the same whole-file-rewrite fix task as <see cref="WholeFileRewriteAgentTests"/> against
 /// <see cref="SizeGraduatedReproducer"/> variants of increasing padding-method count, to find where a
 /// local model's <c>ApplyDiff</c> success rate drops off as the target file (and thus the diff
-/// payload the model must reproduce correctly) grows. Not run by default — sizes and per-size repeat
+/// payload the model must reproduce correctly) grows. Not run by default -> sizes and per-size repeat
 /// count are read from ROSLYNSENTINEL_MODELEVAL_SIZES / ROSLYNSENTINEL_MODELEVAL_REPEATS so an
 /// overnight/background run can sweep a wide range without recompiling. Every run's transcript and a
 /// running CSV summary are written to disk so results survive independently of the test's own
@@ -32,7 +32,7 @@ public class SizeThresholdAgentTests
         # Task: Fix a whole-file-rewrite bug in FixtureHelpers/BlockConverter.cs (level 2)
 
         This gives you less detail than a fully-scripted plan. You are told *what* to do and
-        *which tool* to use, but not the exact parameters or exact code — work those out yourself
+        *which tool* to use, but not the exact parameters or exact code - work those out yourself
         from what the tools return. If a tool call fails, stop and report the exact error message
         rather than guessing around it.
 
@@ -40,11 +40,11 @@ public class SizeThresholdAgentTests
 
         `{0}/FixtureHelpers/BlockConverter.cs` has a bug: `ConvertAbstractClassToInterface` builds
         its replacement text and then calls a private `ReformatWholeFile` helper that rewrites the
-        ENTIRE file's text — not just the part that changed. This silently reformats unrelated code
+        ENTIRE file's text - not just the part that changed. This silently reformats unrelated code
         in the same file.
 
         This exact bug was already fixed, using the same fix pattern, in the sibling file
-        `{0}/FixtureHelpers/BlockEditHelpers.cs` — but the helper there is private, so
+        `{0}/FixtureHelpers/BlockEditHelpers.cs` - but the helper there is private, so
         `BlockConverter.cs` can't call it directly. Your job is to apply that same fix pattern to
         `ConvertAbstractClassToInterface` in `BlockConverter.cs`.
 
@@ -54,12 +54,12 @@ public class SizeThresholdAgentTests
            Identify the exact call responsible for the whole-file-rewrite bug described above.
 
         2. Find the existing fix pattern already used elsewhere in this codebase for this same bug.
-           Look at `{0}/FixtureHelpers/BlockEditHelpers.cs` — there is a private helper method
+           Look at `{0}/FixtureHelpers/BlockEditHelpers.cs` - there is a private helper method
            there that solves exactly this problem by rewriting only the changed block instead of
            the whole file. Locate it and read its full source.
 
         3. Apply the same fix to `ConvertAbstractClassToInterface`:
-           - Bring the helper method (`ReplaceBlockFormatted`) into `BlockConverter.cs` — this
+           - Bring the helper method (`ReplaceBlockFormatted`) into `BlockConverter.cs` - this
              class doesn't have it yet, and the original in `BlockEditHelpers.cs` is private, so
              it can't be called cross-file.
            - Add whatever `using` directive the helper needs to compile.
@@ -78,12 +78,12 @@ public class SizeThresholdAgentTests
 
         ## Constraints
 
-        - Don't touch any `UnrelatedMethod*` method in the file — they are explicitly out of scope
+        - Don't touch any `UnrelatedMethod*` method in the file - they are explicitly out of scope
           for this task, must all remain present, and must keep their exact original formatting.
-        - Don't invent a new helper method or a different fix approach — reuse the
+        - Don't invent a new helper method or a different fix approach - reuse the
           `ReplaceBlockFormatted` logic as-is; don't rename it or change its behavior.
-        - Don't modify `BlockEditHelpers.cs` — it's reference only; leave it exactly as-is.
-        - Preserve the original method's behavior (same inputs/outputs) — only the rewrite
+        - Don't modify `BlockEditHelpers.cs` - it's reference only; leave it exactly as-is.
+        - Preserve the original method's behavior (same inputs/outputs) - only the rewrite
           mechanism should change.
         """;
 
@@ -101,7 +101,7 @@ public class SizeThresholdAgentTests
         # Task: Fix a whole-file-rewrite bug in FixtureHelpers/BlockConverter.cs (level 2)
 
         This gives you less detail than a fully-scripted plan. You are told *what* to do and
-        *which tool* to use, but not the exact parameters or exact code — work those out yourself
+        *which tool* to use, but not the exact parameters or exact code - work those out yourself
         from what the tools return. If a tool call fails, stop and report the exact error message
         rather than guessing around it.
 
@@ -109,11 +109,11 @@ public class SizeThresholdAgentTests
 
         `{0}/FixtureHelpers/BlockConverter.cs` has a bug: `ConvertAbstractClassToInterface` builds
         its replacement text and then calls a private `ReformatWholeFile` helper that rewrites the
-        ENTIRE file's text — not just the part that changed. This silently reformats unrelated code
+        ENTIRE file's text - not just the part that changed. This silently reformats unrelated code
         in the same file.
 
         This exact bug was already fixed, using the same fix pattern, in the sibling file
-        `{0}/FixtureHelpers/BlockEditHelpers.cs` — but the helper there is private, so
+        `{0}/FixtureHelpers/BlockEditHelpers.cs` - but the helper there is private, so
         `BlockConverter.cs` can't call it directly. Your job is to apply that same fix pattern to
         `ConvertAbstractClassToInterface` in `BlockConverter.cs`.
 
@@ -123,19 +123,19 @@ public class SizeThresholdAgentTests
            Identify the exact call responsible for the whole-file-rewrite bug described above.
 
         2. Find the existing fix pattern already used elsewhere in this codebase for this same bug.
-           Look at `{0}/FixtureHelpers/BlockEditHelpers.cs` — there is a private helper method
+           Look at `{0}/FixtureHelpers/BlockEditHelpers.cs` - there is a private helper method
            there that solves exactly this problem by rewriting only the changed block instead of
            the whole file. Locate it and read its full source.
 
         3. Bring the helper into `BlockConverter.cs` as its own separate edit, done BEFORE step 4.
            Do not touch `ConvertAbstractClassToInterface` yet.
-           - Copy the `ReplaceBlockFormatted` method's full source into `BlockConverter.cs` — this
+           - Copy the `ReplaceBlockFormatted` method's full source into `BlockConverter.cs` - this
              class doesn't have it yet, and the original in `BlockEditHelpers.cs` is private, so it
              can't be called cross-file; a local copy is required.
            - Add whatever `using` directive the copied method needs to compile.
            - Verify `BlockConverter.cs` compiles now, with the new method present but not yet
              called from anywhere. It's fine (and expected) for the whole-file-rewrite bug to still
-             be there at this point — you haven't fixed it yet, you've only made the helper
+             be there at this point - you haven't fixed it yet, you've only made the helper
              available locally. Don't move on to step 4 until this build succeeds.
 
         4. Only now, as a second separate edit, rewire the bug fix:
@@ -153,17 +153,17 @@ public class SizeThresholdAgentTests
 
         ## Constraints
 
-        - Don't touch any `UnrelatedMethod*` method in the file — they are explicitly out of scope
+        - Don't touch any `UnrelatedMethod*` method in the file - they are explicitly out of scope
           for this task, must all remain present, and must keep their exact original formatting.
-        - Don't invent a new helper method or a different fix approach — reuse the
+        - Don't invent a new helper method or a different fix approach - reuse the
           `ReplaceBlockFormatted` logic as-is; don't rename it or change its behavior.
-        - Don't modify `BlockEditHelpers.cs` — it's reference only; leave it exactly as-is.
-        - Preserve the original method's behavior (same inputs/outputs) — only the rewrite
+        - Don't modify `BlockEditHelpers.cs` - it's reference only; leave it exactly as-is.
+        - Preserve the original method's behavior (same inputs/outputs) - only the rewrite
           mechanism should change.
         """;
 
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
-    // AddRoslynSentinelToolsBasic checks — see WholeFileRewriteAgentTests.cs's ActiveModes comment
+    // AddRoslynSentinelToolsBasic checks -> see WholeFileRewriteAgentTests.cs's ActiveModes comment
     // for why Basic is used instead of Advanced here.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -184,7 +184,7 @@ public class SizeThresholdAgentTests
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
             Assert.Ignore(
-                "ROSLYNSENTINEL_LLM_MODEL is not set — model-eval tests require a real LM Studio " +
+                "ROSLYNSENTINEL_LLM_MODEL is not set - model-eval tests require a real LM Studio " +
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
@@ -222,7 +222,7 @@ public class SizeThresholdAgentTests
         }
 
         // dotnet test's console logger block-buffers stdout when it's redirected to a file, so
-        // ModelAgentRunner's per-turn logging is invisible until the whole test process exits —
+        // ModelAgentRunner's per-turn logging is invisible until the whole test process exits ->
         // this file sink writes+flushes independently so a run can be tailed live.
         hostBuilder.Logging.AddProvider(new FlushingFileLoggerProvider(Path.Combine(_runDirectory, "agent.log")));
 
@@ -285,7 +285,7 @@ public class SizeThresholdAgentTests
     /// <summary>
     /// Sweeps ROSLYNSENTINEL_MODELEVAL_SIZES (comma-separated unrelated-method counts, default
     /// "0,5,15,30,60") x ROSLYNSENTINEL_MODELEVAL_REPEATS (default 3) real model runs, appending one
-    /// CSV row per run to TestResults/model-eval/SizeThreshold/results.csv as it goes — so a partial
+    /// CSV row per run to TestResults/model-eval/SizeThreshold/results.csv as it goes -> so a partial
     /// overnight run still leaves usable data if interrupted. Never asserts pass/fail itself (a size
     /// where the model starts failing is the useful signal, not a test bug); only fails if every
     /// single run across every size errored out at the harness level (misconfiguration).
@@ -346,7 +346,7 @@ public class SizeThresholdAgentTests
                         }
                         catch (AssertionException)
                         {
-                            // Converged but produced a wrong/incomplete fix — recorded as fixCorrect=false below.
+                            // Converged but produced a wrong/incomplete fix -> recorded as fixCorrect=false below.
                         }
                     }
                 }
@@ -376,7 +376,7 @@ public class SizeThresholdAgentTests
         }
 
         TestContext.Progress.WriteLine($"Sweep complete: {totalRuns} runs across {sizes.Count} sizes. Results: {csvPath}");
-        Assert.That(harnessFailures, Is.LessThan(totalRuns), "Every single run failed at the harness level (not a model failure) — check LM Studio reachability/config before trusting these results.");
+        Assert.That(harnessFailures, Is.LessThan(totalRuns), "Every single run failed at the harness level (not a model failure) - check LM Studio reachability/config before trusting these results.");
     }
 
     private async Task<AgentRunResult> RunOnceAsync(string promptVariant, CancellationToken cancellationToken)
@@ -396,7 +396,7 @@ public class SizeThresholdAgentTests
 
         var fixedText = File.ReadAllText(fixedPath);
 
-        // Only the *call* to ReformatWholeFile needs to be gone — see the matching comment in
+        // Only the *call* to ReformatWholeFile needs to be gone -> see the matching comment in
         // WholeFileRewriteAgentTests.AssertFixApplied for why checking the bare substring
         // (which also matches the now-unused method's own definition) is wrong.
         Assert.That(fixedText, Does.Not.Contain("return ReformatWholeFile("),
@@ -418,15 +418,15 @@ public class SizeThresholdAgentTests
         // Deliberately NOT asserting on transcript-level tool errors here: this method measures
         // whether the FINAL file is correct, not whether the model made a mistake en route. A
         // failed ApplyDiff attempt followed by a successful self-correction (observed repeatedly
-        // at larger sizes — the model tries to call the helper before copying it in, gets a
+        // at larger sizes -> the model tries to call the helper before copying it in, gets a
         // CS0103, rereads, and fixes it) is exactly the size-correlated reliability signal this
-        // sweep exists to measure via applyDiffErrorCount in the CSV — it must not also flip
+        // sweep exists to measure via applyDiffErrorCount in the CSV -> it must not also flip
         // fixCorrect to false, or "eventually got it right" and "never made a mistake" collapse
         // into the same bucket and the threshold data becomes meaningless.
         //
         // The helperText check above is a different thing and stays: it's not about whether a
         // mistake happened, it's a final-state invariant (BlockEditHelpers.cs must be untouched).
-        // It has already caught a real failure mode distinct from the CS0103-and-recover pattern —
+        // It has already caught a real failure mode distinct from the CS0103-and-recover pattern ->
         // the model reverting the helper to `public` and calling it cross-file instead of copying
         // it in, papering over the same mistake by breaking an explicit constraint instead of
         // fixing it. See docs/current/blockers/finding_applydiff_size_threshold_local_model.md.

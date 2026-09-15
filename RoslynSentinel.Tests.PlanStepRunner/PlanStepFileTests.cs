@@ -3,11 +3,11 @@ using RoslynSentinel.Tools.PlanStepRunner;
 namespace RoslynSentinel.Tests.PlanStepRunner;
 
 /// <summary>
-/// Covers <see cref="PlanStepFile"/>'s frontmatter parsing — the source of truth for whether a plan
+/// Covers <see cref="PlanStepFile"/>'s frontmatter parsing -> the source of truth for whether a plan
 /// step is allowed to change files. These flags are enforced by the runner before it commits, so a
 /// parse that silently returns the wrong answer reintroduces exactly the failure the flags exist to
 /// prevent: run 20260910-013550-398 let a read-only step perform two later steps' work because the
-/// constraint lived only in prose. The unmarked-file case matters just as much as the marked one —
+/// constraint lived only in prose. The unmarked-file case matters just as much as the marked one ->
 /// ten of the eleven step files have no frontmatter and must keep behaving as before.
 /// </summary>
 [TestFixture]
@@ -19,7 +19,7 @@ public class PlanStepFileTests
     [Test]
     public void Parse_ReadOnlyFrontmatter_SetsFlagAndStripsBlockFromBody()
     {
-        var step = Parse("---\nreadOnly: true\n---\n# Step 0 — Baseline\n\nRun the tests.\n");
+        var step = Parse("---\nreadOnly: true\n---\n# Step 0 - Baseline\n\nRun the tests.\n");
 
         Assert.Multiple(() =>
         {
@@ -34,7 +34,7 @@ public class PlanStepFileTests
     public void Parse_NoFrontmatter_LeavesFlagsFalseAndBodyByteIdentical()
     {
         // The regression guard for the ten existing step files that were never marked up.
-        const string text = "# Step 1.1 — Reshape `BuildResult`\n\n## Task\n\nDo the thing.\n";
+        const string text = "# Step 1.1 - Reshape `BuildResult`\n\n## Task\n\nDo the thing.\n";
 
         var step = Parse(text);
 
@@ -73,10 +73,10 @@ public class PlanStepFileTests
     [Test]
     public void Parse_UnclosedFrontmatter_Throws()
     {
-        // Must not fall back to "treat it as body" — that would drop the readOnly flag silently and
+        // Must not fall back to "treat it as body" -> that would drop the readOnly flag silently and
         // run a read-only step as if it were unmarked, which is the whole failure mode being fixed.
         var ex = Assert.Throws<InvalidOperationException>(
-            () => Parse("---\nreadOnly: true\n# Step 0 — Baseline\n\nRun the tests.\n"));
+            () => Parse("---\nreadOnly: true\n# Step 0 - Baseline\n\nRun the tests.\n"));
 
         Assert.That(ex!.Message, Does.Contain("never closed"));
     }

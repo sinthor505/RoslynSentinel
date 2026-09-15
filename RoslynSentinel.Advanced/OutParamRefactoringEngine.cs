@@ -217,7 +217,7 @@ public class OutParamRefactoringEngine
                 if (statement is ExpressionStatementSyntax exprStmt && exprStmt.Expression == invocation)
                 {
                     // Standalone call: Method(arg, out x, out y)
-                    // → var (x, y) = Method(arg);  or  var (result, x, y) = Method(arg);
+                    // -> var (x, y) = Method(arg);  or  var (result, x, y) = Method(arg);
                     string tupleVars = isVoid
                         ? $"({string.Join(", ", outVarNames)})"
                         : $"(_, {string.Join(", ", outVarNames)})";
@@ -229,7 +229,7 @@ public class OutParamRefactoringEngine
                 else if (statement is LocalDeclarationStatementSyntax localDecl)
                 {
                     // bool ok = Method(arg, out x, out y)
-                    // → var (ok, x, y) = Method(arg);
+                    // -> var (ok, x, y) = Method(arg);
                     var assignedVarName = localDecl.Declaration.Variables.FirstOrDefault()?.Identifier.Text ?? "result";
                     string tupleVars = isVoid
                         ? $"({string.Join(", ", outVarNames)})"
@@ -255,11 +255,11 @@ public class OutParamRefactoringEngine
                 }
                 else
                 {
-                    // Complex usage — add a TODO comment and do a best-effort argument rewrite
+                    // Complex usage -> add a TODO comment and do a best-effort argument rewrite
                     callSiteWarnings.Add(
-                        $"TODO: manual rewrite needed at {location.Location.GetLineSpan()} — complex out-param usage");
+                        $"TODO: manual rewrite needed at {location.Location.GetLineSpan()} - complex out-param usage");
                     callEditor.ReplaceNode(invocation, newInvocation
-                        .WithLeadingTrivia(SyntaxFactory.Comment("// TODO: rewrite for ValueTuple return — "),
+                        .WithLeadingTrivia(SyntaxFactory.Comment("// TODO: rewrite for ValueTuple return - "),
                          SyntaxFactory.ElasticMarker));
                     changed = true;
                     callSitesRewritten++;
@@ -282,7 +282,7 @@ public class OutParamRefactoringEngine
         }
 
         // Materialize the changed documents as file text for the caller to route through the
-        // shared write chokepoint (ApplyDiff/ApplyProposedChangesAsync) — this engine must not
+        // shared write chokepoint (ApplyDiff/ApplyProposedChangesAsync) -> this engine must not
         // write to disk itself.
         var changes = new Dictionary<FilePathWrapper, string>();
         foreach (var pc in updatedSolution.GetChanges(solution).GetProjectChanges())

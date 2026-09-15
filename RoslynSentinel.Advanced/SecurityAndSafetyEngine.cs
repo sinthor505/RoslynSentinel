@@ -59,7 +59,7 @@ public class SecurityAndSafetyEngine
                     (NumericClrNames.Contains(sourceType.Name) || NumericKeywords.Contains(sourceType.Name));
                 if (sourceIsNumeric)
                 {
-                    continue; // e.g., (int)myDouble — safe narrowing/widening
+                    continue; // e.g., (int)myDouble - safe narrowing/widening
                 }
             }
 
@@ -86,7 +86,7 @@ public class SecurityAndSafetyEngine
 
         // Strategy: find public methods and constructors that accept non-nullable reference-type
         // parameters, use those parameters in the body, but never null-guard them.
-        // This catches the most common cause of NullReferenceException — unguarded public API entry points.
+        // This catches the most common cause of NullReferenceException -> unguarded public API entry points.
         var candidates = root.DescendantNodes()
             .Where(n => n is MethodDeclarationSyntax or ConstructorDeclarationSyntax)
             .Cast<BaseMethodDeclarationSyntax>();
@@ -114,13 +114,13 @@ public class SecurityAndSafetyEngine
                     continue;
                 }
 
-                // Skip params arrays — they are never null (just empty)
+                // Skip params arrays -> they are never null (just empty)
                 if (param.Modifiers.Any(m => m.IsKind(SyntaxKind.ParamsKeyword)))
                 {
                     continue;
                 }
 
-                // Skip explicitly nullable types (string?, IDisposable?) — nullable-by-contract
+                // Skip explicitly nullable types (string?, IDisposable?) -> nullable-by-contract
                 if (param.Type is NullableTypeSyntax)
                 {
                     continue;
@@ -144,7 +144,7 @@ public class SecurityAndSafetyEngine
 
                 // Skip if the parameter is not actually used in the body/expression
                 // (unused params can't cause a null dereference in this method)
-                // Also exclude nameof(param) — that's not a real dereference.
+                // Also exclude nameof(param) -> that's not a real dereference.
                 SyntaxNode bodyNode = body ?? (SyntaxNode)exprBody!;
                 bool isUsed = bodyNode.DescendantNodes()
                     .OfType<IdentifierNameSyntax>()
@@ -204,7 +204,7 @@ public class SecurityAndSafetyEngine
             }
         }
 
-        // Pattern 2: param ?? expr  (null-coalescing — param is checked for null and replaced)
+        // Pattern 2: param ?? expr  (null-coalescing -> param is checked for null and replaced)
         foreach (var coalesce in body.DescendantNodes().OfType<BinaryExpressionSyntax>())
         {
             if (!coalesce.IsKind(SyntaxKind.CoalesceExpression))
@@ -296,7 +296,7 @@ public class SecurityAndSafetyEngine
 
     /// <summary>
     /// Detects chained member access (a.b.c) where the intermediate step (a.b) is a reference
-    /// type that could be null — flagging the chain as a potential NullReferenceException.
+    /// type that could be null -> flagging the chain as a potential NullReferenceException.
     /// Only reports when the intermediate is not accessed via null-conditional (?.) and has no
     /// visible null guard in the containing method.
     /// </summary>
@@ -333,7 +333,7 @@ public class SecurityAndSafetyEngine
             }
 
             // Collect all intermediate member-access expressions that are themselves accessed further
-            // Pattern: X.Y.Z → flag X.Y if it could be null and isn't ?.-guarded
+            // Pattern: X.Y.Z -> flag X.Y if it could be null and isn't ?.-guarded
             foreach (var outerMa in method.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
             {
                 // We want cases where outerMa.Expression is itself a MemberAccessExpressionSyntax
@@ -415,7 +415,7 @@ public class SecurityAndSafetyEngine
 
     /// <summary>
     /// Detects integer arithmetic that references MaxValue/MinValue boundary constants
-    /// without being wrapped in a checked block — potential silent overflow.
+    /// without being wrapped in a checked block -> potential silent overflow.
     /// </summary>
     public async Task<List<SafetyIssue>> FindArithmeticOverflowRisksAsync(
         FilePathWrapper filePath,
@@ -456,7 +456,7 @@ public class SecurityAndSafetyEngine
                 continue;
             }
 
-            // If wrapped in checked { } — intentionally throws on overflow
+            // If wrapped in checked { } -> intentionally throws on overflow
             bool isChecked = binExpr.Ancestors().OfType<CheckedStatementSyntax>().Any() ||
                              binExpr.Ancestors().OfType<CheckedExpressionSyntax>().Any();
             if (isChecked)

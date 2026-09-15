@@ -138,7 +138,7 @@ public class CodeStyleEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// ERROR: '{propertyName}' must be in a class — this tool does not support interfaces or structs.\n" + (root?.ToFullString() ?? "")
+                Message = $"// ERROR: '{propertyName}' must be in a class - this tool does not support interfaces or structs.\n" + (root?.ToFullString() ?? "")
             };
         }
 

@@ -5,7 +5,7 @@ namespace RoslynSentinel.Tests.ModelEval.AgentLoop;
 /// via its shared AssertFixApplied, <see cref="PlanImplementVerifyAgentTests"/>,
 /// <see cref="PlanThenExecuteAgentTests"/>). A flat total-error-count cap can't distinguish a model
 /// that tried 3 different tools once each while exploring (probably fine) from one that hit the
-/// same tool 3 times in a row (thrashing — see the CS0103/using-directive retry loop documented in
+/// same tool 3 times in a row (thrashing -> see the CS0103/using-directive retry loop documented in
 /// docs/current/project_directive_error_messages_wiggle_room_theory.md, 6 failed calls all on the
 /// same root cause). Asserting per-tool, not just in total, makes that distinction visible directly
 /// in the failure message instead of requiring a manual transcript read.
@@ -33,7 +33,7 @@ internal static class AgentToolErrorAssertions
 
     /// <summary>
     /// Asserts both a total cap (catches broad thrashing across many tools) and a per-tool cap
-    /// (catches repeated failure on one tool — the thrashing signature a flat total misses). Both
+    /// (catches repeated failure on one tool -> the thrashing signature a flat total misses). Both
     /// default to 2, matching the "one mistake plus one guided self-correction retry" budget
     /// already established at every call site this replaces.
     /// </summary>

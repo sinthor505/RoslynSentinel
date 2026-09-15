@@ -1,4 +1,4 @@
-// Battery #19 — SentinelGenerationTools
+// Battery #19 -> SentinelGenerationTools
 // Tests all 13 public methods of SentinelGenerationTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;

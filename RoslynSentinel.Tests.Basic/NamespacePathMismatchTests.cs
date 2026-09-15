@@ -25,10 +25,10 @@ public class NamespacePathMismatchTests
     public void TearDown() => _workspaceManager?.Dispose();
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Helper — builds a solution where document file paths are ABSOLUTE, so the
+    // Helper -> builds a solution where document file paths are ABSOLUTE, so the
     // DeriveExpectedNamespace path-relative logic works correctly.
     // projectName is used as both the project name and the root namespace fallback.
-    // documents: (relPath, content) — relPath is relative to the project root.
+    // documents: (relPath, content) -> relPath is relative to the project root.
     // ─────────────────────────────────────────────────────────────────────────────
     private static Solution CreateSolutionWithAbsolutePaths(
         string projectName,
@@ -46,7 +46,7 @@ public class NamespacePathMismatchTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 1 — Clean solution: all namespaces match folder paths → IsClean = true
+    // Test 1 -> Clean solution: all namespaces match folder paths -> IsClean = true
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
     public async Task CleanSolution_AllNamespacesMatchPaths_IsClean()
@@ -67,7 +67,7 @@ public class NamespacePathMismatchTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 2 — Single NamespaceFolderMismatch warning (no duplicate type found)
+    // Test 2 -> Single NamespaceFolderMismatch warning (no duplicate type found)
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
     public async Task FolderMismatch_NoConflictingType_ProducesWarning()
@@ -92,10 +92,10 @@ public class NamespacePathMismatchTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 3 — Error: DuplicateTypeAtMismatchedPath
+    // Test 3 -> Error: DuplicateTypeAtMismatchedPath
     // FileA is in Services\ but declares TestProj.Orders and type Foo.
     // FileB is elsewhere and declares TestProj.Services with the same type Foo.
-    // → FileA should be an Error with ConflictingFiles pointing to FileB.
+    // -> FileA should be an Error with ConflictingFiles pointing to FileB.
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
     public async Task DuplicateTypeAtMismatchedPath_ProducesError()
@@ -121,7 +121,7 @@ public class NamespacePathMismatchTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 4 — Generated files skipped (*.g.cs, *.generated.cs, *.Designer.cs)
+    // Test 4 -> Generated files skipped (*.g.cs, *.generated.cs, *.Designer.cs)
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
     public async Task GeneratedFiles_AreSkipped()
@@ -139,7 +139,7 @@ public class NamespacePathMismatchTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 5 — projectName scope filter: mismatch in ProjectB is not reported when
+    // Test 5 -> projectName scope filter: mismatch in ProjectB is not reported when
     //          we scope to ProjectA
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
@@ -168,17 +168,17 @@ public class NamespacePathMismatchTests
         solution = BuildProjectInSolution(solution, "ProjectB", @"Services\Dirty.cs",
             "namespace ProjectB.Wrong { public class Dirty {} }");
 
-        // Scoped to ProjectA → ProjectB's mismatch should not appear.
+        // Scoped to ProjectA -> ProjectB's mismatch should not appear.
         var reportA = await _engine.FindNamespacePathMismatchesAsync(solution, "ProjectA");
         Assert.That(reportA.IsClean, Is.True, "ProjectA is clean; ProjectB mismatch should not appear");
 
-        // No scope → ProjectB mismatch should appear.
+        // No scope -> ProjectB mismatch should appear.
         var reportAll = await _engine.FindNamespacePathMismatchesAsync(solution, null);
         Assert.That(reportAll.Warnings, Has.Some.With.Property("ProjectName").EqualTo("ProjectB"));
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 6 — Multiple namespaces in one file → MultipleNamespacesInFile warning
+    // Test 6 -> Multiple namespaces in one file -> MultipleNamespacesInFile warning
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
     public async Task MultipleNamespacesInFile_ProducesWarning()
@@ -196,8 +196,8 @@ public class NamespacePathMismatchTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 7 — Global namespace: no namespace declaration in a project that has a
-    //          root namespace (the project name) → GlobalNamespace warning
+    // Test 7 -> Global namespace: no namespace declaration in a project that has a
+    //          root namespace (the project name) -> GlobalNamespace warning
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
     public async Task GlobalNamespace_ProducesWarning()
@@ -214,12 +214,12 @@ public class NamespacePathMismatchTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 8 — File-scoped namespace (C# 10+ syntax) is parsed correctly
+    // Test 8 -> File-scoped namespace (C# 10+ syntax) is parsed correctly
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
     public async Task FileScopedNamespace_CleanFile_IsClean()
     {
-        // File-scoped namespace that matches the folder path → no warning.
+        // File-scoped namespace that matches the folder path -> no warning.
         var source = """
             namespace TestProj.Services;
             public class OrderService {}
@@ -253,8 +253,8 @@ public class NamespacePathMismatchTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 9 — Root namespace fallback: no <RootNamespace> in csproj
-    //          (AdhocWorkspace has no real .csproj) → project name used as fallback
+    // Test 9 -> Root namespace fallback: no <RootNamespace> in csproj
+    //          (AdhocWorkspace has no real .csproj) -> project name used as fallback
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
     public async Task RootNamespaceFallback_UsesProjectName()
@@ -272,7 +272,7 @@ public class NamespacePathMismatchTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 10 — Idempotency: calling twice returns identical results
+    // Test 10 -> Idempotency: calling twice returns identical results
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
     public async Task Idempotency_TwoCallsReturnSameResults()

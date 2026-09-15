@@ -1,6 +1,6 @@
 // Unit-level coverage for the orientation breaker split off ICircuitBreaker (see
 // docs/current/plan-orientation-breaker.md): PersistentWorkspaceManager now implements two
-// independent breakers — IManualCircuitBreaker (mutating-tools breaker, unchanged behavior,
+// independent breakers -> IManualCircuitBreaker (mutating-tools breaker, unchanged behavior,
 // manual reset only) and IAutomaticCircuitBreaker (new; trips after repeated zero-match
 // SearchSolutionText calls, auto-resets via RecordSearchOutcome/Reset()). Each interface
 // redeclares IsTripped()/StateMessage()/Reset() with its own explicit-interface-implementation
@@ -76,7 +76,7 @@ public class OrientationBreakerTests
         Assert.That(automaticBreaker.IsTripped(), Is.False);
         Assert.That(automaticBreaker.StateMessage(), Is.Null);
 
-        // Confirms Reset() cleared the streak counter, not just the open flag — two more
+        // Confirms Reset() cleared the streak counter, not just the open flag -> two more
         // zero-match calls (not three) should not be enough to re-trip immediately after reset.
         automaticBreaker.RecordSearchOutcome(0);
         automaticBreaker.RecordSearchOutcome(0);

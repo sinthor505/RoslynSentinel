@@ -202,7 +202,7 @@ public class DeadCodeEngine
         foreach (var classNode in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
         {
             var constructors = classNode.Members.OfType<ConstructorDeclarationSyntax>().ToList();
-            // Skip single-constructor classes — likely registered in DI, reference count is misleading
+            // Skip single-constructor classes -> likely registered in DI, reference count is misleading
             if (constructors.Count < 2)
             {
                 continue;

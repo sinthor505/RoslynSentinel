@@ -39,7 +39,7 @@ public class SentinelCommentingTools
 
         Returns CommentingResult: TotalMembers/AlreadyCurrent/Seeded/CommentedThisCall/
         RemainingStale counts, per-file breakdown, Skipped items with reasons. This return value —
-        not agent prose — is the authoritative completion signal for the run. RemainingStale > 0
+        not agent prose - is the authoritative completion signal for the run. RemainingStale > 0
         means call BulkComment again with the same scope to continue.
         """)]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName required for scope=project, filePath required
@@ -54,7 +54,7 @@ public class SentinelCommentingTools
         string? filePath = null,
         [Description("Report planned work without calling the LLM or writing any changes.")]
         bool dryRun = false,
-        [Description("Cap on members processed (LLM + write) in this call. Re-invoke to continue — already-commented members are skipped automatically on the next call because their [ContentHash] already matches.")]
+        [Description("Cap on members processed (LLM + write) in this call. Re-invoke to continue - already-commented members are skipped automatically on the next call because their [ContentHash] already matches.")]
         int maxMembers = DefaultMaxMembers,
         [Description("Wall-clock cap in seconds on the work phase. 0 = unbounded, capped only by maxMembers.")]
         int maxRuntimeSeconds = 0,
@@ -123,8 +123,8 @@ public class SentinelCommentingTools
         var touchedFiles = new HashSet<FilePathWrapper>();
         var skipped = new List<FailureDetail>();
 
-        // Collapses per-member Skipped detail down to a reason→count dict and per-file activity down
-        // to a file count — neither a specific skip reason's file/method nor which of hundreds of
+        // Collapses per-member Skipped detail down to a reason->count dict and per-file activity down
+        // to a file count -> neither a specific skip reason's file/method nor which of hundreds of
         // files a solution-wide call touched is actionable to a caller; the counts are.
         void ApplySampling(CommentingResult result, List<FailureDetail> allSkipped)
         {
@@ -160,7 +160,7 @@ public class SentinelCommentingTools
 
                 // Abort here rather than falling through to Phase 2: the seed writes were rejected,
                 // so FindStaleMembersAsync would see the pre-seed workspace and every stale member's
-                // eventual per-file apply would hit the same validation failure again — previously
+                // eventual per-file apply would hit the same validation failure again -> previously
                 // this ran unabated until the circuit breaker tripped, having burned thousands of
                 // attempts to produce zero net comments (see docs history: "BulkComment fails to
                 // apply any comments").
@@ -191,12 +191,12 @@ public class SentinelCommentingTools
         }
 
         // ── Phase 2: find stale members. When dryRun, the seed-phase changes were never applied,
-        // so this walk sees the pre-seed workspace — every never-tagged member is (correctly)
+        // so this walk sees the pre-seed workspace -> every never-tagged member is (correctly)
         // reported as stale/planned work, same as a real run would find before seeding lands. ──
         var allStaleMembers = await _commentingEngine.FindStaleMembersAsync(scope, projectName, filePath, cancellationToken);
 
         // Members in a project whose ContentHashAttribute couldn't be injected/verified were
-        // already excluded from seedChanges above — exclude them here too, otherwise Phase 2 would
+        // already excluded from seedChanges above -> exclude them here too, otherwise Phase 2 would
         // try to comment+apply them and hit the identical validation failure per file instead of
         // the single seed-phase failure this was meant to replace.
         var unresolvedProjectSet = unresolvedProjects.ToHashSet();
@@ -220,7 +220,7 @@ public class SentinelCommentingTools
         }
 
         // Members with no [ContentHash] at all show up in both seededCount (this call's seed pass)
-        // and staleMembers (they're maximally stale) — total scope size is the union of "already
+        // and staleMembers (they're maximally stale) -> total scope size is the union of "already
         // tagged before this call" and "newly seeded this call".
         int totalMembers = alreadyTaggedAtSeedTime + seededCount;
         int alreadyCurrentCount = totalMembers - staleMembers.Count;

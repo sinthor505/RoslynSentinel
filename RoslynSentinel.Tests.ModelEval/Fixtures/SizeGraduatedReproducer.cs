@@ -6,14 +6,14 @@ namespace RoslynSentinel.Tests.ModelEval.Fixtures;
 /// Size-parameterized variant of <see cref="WholeFileRewriteReproducer"/>, built to bisect the file
 /// size / diff payload size at which a local model's <c>ApplyDiff</c> success rate drops off. Same
 /// bug shape and same required fix (copy a private helper into the buggy file, rewire one method
-/// call, leave everything else byte-for-byte alone) at every size — the only thing that changes is
+/// call, leave everything else byte-for-byte alone) at every size -> the only thing that changes is
 /// <paramref name="unrelatedMethodCount"/> padding methods before the buggy method, each numbered
 /// and distinctly bodied so a whole-file reformat (the bug) or an accidental drop/reorder (a bad
 /// diff apply) is mechanically detectable per-method, not just via a handful of anchor lines.
 /// </summary>
 public static class SizeGraduatedReproducer
 {
-    /// <summary>Same private helper as <see cref="WholeFileRewriteReproducer.HelperFileContent"/> — content is size-independent, so it is not parameterized.</summary>
+    /// <summary>Same private helper as <see cref="WholeFileRewriteReproducer.HelperFileContent"/> -> content is size-independent, so it is not parameterized.</summary>
     public const string HelperFileContent = WholeFileRewriteReproducer.HelperFileContent;
 
     /// <summary>
@@ -92,6 +92,6 @@ public static class SizeGraduatedReproducer
             """;
     }
 
-    /// <summary>Same target file as <see cref="WholeFileRewriteReproducer.TargetAbstractClassFileContent"/> — size-independent.</summary>
+    /// <summary>Same target file as <see cref="WholeFileRewriteReproducer.TargetAbstractClassFileContent"/> -> size-independent.</summary>
     public const string TargetAbstractClassFileContent = WholeFileRewriteReproducer.TargetAbstractClassFileContent;
 }

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Battery #17 — LogicOptimizationEngine,
+// Battery #17 -> LogicOptimizationEngine,
 //               MsToolAugmentEngine, ProjectStructureEngine, RefinementEngine
 // ────────────────────────────────────────────────────────────────────────────
 

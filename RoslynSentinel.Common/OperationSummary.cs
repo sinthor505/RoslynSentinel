@@ -2,7 +2,7 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Substrate-derived operation result with structured outcome classification and routed failure hints (spec §3.6).
-/// Always produced by <see cref="FromCounts"/> — never constructed at call sites.
+/// Always produced by <see cref="FromCounts"/> -> never constructed at call sites.
 /// </summary>
 public sealed class OperationSummary
 {
@@ -34,7 +34,7 @@ public sealed class OperationSummary
         get; init;
     }
 
-    /// <summary>Substrate-derived verdict — never infer this from Severity or prose scanning.</summary>
+    /// <summary>Substrate-derived verdict -> never infer this from Severity or prose scanning.</summary>
     public OperationOutcome Outcome
     {
         get; init;
@@ -66,7 +66,7 @@ public sealed class OperationSummary
 
     /// <summary>
     /// Derives the <see cref="OperationOutcome"/> from counts according to spec §3.2.
-    /// This is the single canonical derivation site — no call site may compute it independently.
+    /// This is the single canonical derivation site -> no call site may compute it independently.
     /// </summary>
     public static OperationOutcome DeriveOutcome(
         int succeeded,
@@ -107,7 +107,7 @@ public sealed class OperationSummary
     }
 
     /// <summary>
-    /// Factory — the only way to produce an <see cref="OperationSummary"/>.
+    /// Factory -> the only way to produce an <see cref="OperationSummary"/>.
     /// Derives <see cref="Outcome"/> from counts in one place; never passes it in.
     /// </summary>
     public static OperationSummary FromCounts(

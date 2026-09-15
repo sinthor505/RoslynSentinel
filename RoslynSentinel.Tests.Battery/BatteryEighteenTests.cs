@@ -1,4 +1,4 @@
-// Battery #18 — MsToolAugmentEngine
+// Battery #18 -> MsToolAugmentEngine
 // The SentinelAugmentTools MCP wrappers were removed in the Basic/Advanced server split;
 // these tests now exercise MsToolAugmentEngine directly, which is where the behaviour lives.
 

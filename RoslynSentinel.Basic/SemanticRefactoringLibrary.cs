@@ -155,7 +155,7 @@ public class SemanticRefactoringLibrary
         }
 
         // Format only the spans carrying the edit annotation (the replaced usages), unless every
-        // individual replacement above failed (e.g. all caught exceptions) — in which case nothing
+        // individual replacement above failed (e.g. all caught exceptions) -> in which case nothing
         // is annotated and Formatter.FormatAsync(document, annotation) would find no matching spans.
         if (modifiedRoot.GetAnnotatedNodes(editAnnotation).Any())
         {

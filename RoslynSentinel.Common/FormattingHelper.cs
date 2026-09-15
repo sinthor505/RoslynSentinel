@@ -19,7 +19,7 @@ public static class FormattingHelper
         /// <summary>
         /// Default: the original node's leading trivia always wins. Use this whenever the replacement
         /// node was synthesized fresh (e.g. via <c>WithModifiers</c> on a brand-new token list) and
-        /// never carried the original doc comment/blank-line trivia in the first place — a freshly
+        /// never carried the original doc comment/blank-line trivia in the first place -> a freshly
         /// built token's own leading trivia (even a single zero-width elastic marker) must never be
         /// mistaken for a deliberate, caller-authored replacement.
         /// </summary>
@@ -42,12 +42,12 @@ public static class FormattingHelper
     /// default (<paramref name = "triviaIntent"/> = <see cref="TriviaEditIntent.PreserveOld"/>), since
     /// a freshly synthesized replacement (e.g. via <c>WithModifiers</c> on a brand-new token list, or
     /// SyntaxFactory.ParseMemberDeclaration) has no knowledge of the blank lines or doc comment that
-    /// belonged to the original node — and a freshly-built token's own "empty" leading trivia (even a
+    /// belonged to the original node -> and a freshly-built token's own "empty" leading trivia (even a
     /// single zero-width elastic marker) must never be mistaken for a deliberate replacement; a
     /// trivia-count/shape heuristic previously used here to detect "custom trivia" was exactly this
     /// mistake; see docs/current/CLOSED.md and RunTest ChangeAccessibility_PreservesLeadingDocComment.
     /// Pass <see cref="TriviaEditIntent.ReplaceLeading"/> when the caller deliberately rewrote
-    /// <paramref name = "newNode"/>'s leading trivia on purpose (e.g. stripping a doc comment) — then
+    /// <paramref name = "newNode"/>'s leading trivia on purpose (e.g. stripping a doc comment) -> then
     /// <paramref name = "newNode"/>'s leading trivia wins unconditionally, even if it looks empty.
     /// </summary>
     public static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld, ILogger? logger = null)
@@ -105,10 +105,10 @@ public static class FormattingHelper
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
-    /// Batch form of <see cref="ReplaceNodeFormattedAsync"/>: replaces every old→new pair in
+    /// Batch form of <see cref="ReplaceNodeFormattedAsync"/>: replaces every old->new pair in
     /// <paramref name="replacements"/> against one evolving root and formats the whole set in a
     /// single <see cref="Formatter.FormatAsync"/> pass, instead of one call per pair. Needed because
-    /// after the first <c>ReplaceNode</c> call, every other pending old node reference is stale — the
+    /// after the first <c>ReplaceNode</c> call, every other pending old node reference is stale -> the
     /// original node objects are no longer part of the tree being edited. <see cref="SyntaxNode.TrackNodes"/>/
     /// <see cref="SyntaxNode.GetCurrentNode{TNode}"/> re-locates each tracked old node against the
     /// current root before building its replacement, the same idiom already used in
@@ -148,7 +148,7 @@ public static class FormattingHelper
     /// Removes <paramref name = "nodeToRemove"/> without reformatting any sibling's interior.
     /// KeepExteriorTrivia splices the removed node's leading trivia onto the token immediately
     /// before it (as trailing trivia) and its trailing trivia onto the token immediately after (as
-    /// leading trivia) — which may belong to a sibling member (e.g. the next method) or to the
+    /// leading trivia) -> which may belong to a sibling member (e.g. the next method) or to the
     /// container itself (e.g. its closing brace, when removing the first/last member). Both boundary
     /// tokens are restored to their exact pre-removal trivia afterwards, since the gap's own
     /// separation from whatever now precedes/follows it should be unchanged by the removal. This
@@ -210,16 +210,16 @@ public static class FormattingHelper
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Inserts <paramref name = "newMember"/> into <paramref name = "container"/>'s member list at
-    /// <paramref name = "insertIndex"/> (the position it should occupy in the resulting list — i.e.
+    /// <paramref name = "insertIndex"/> (the position it should occupy in the resulting list -> i.e.
     /// pass the old index of the following member, or <c>container.Members.Count</c> to append) and
     /// formats only the newly inserted member, instead of the whole container. Prevents
     /// AddMember/InsertMemberAfter/InsertMemberBefore from reformatting sibling members' interior
-    /// spacing as a side effect of formatting the whole container span — see
+    /// spacing as a side effect of formatting the whole container span -> see
     /// docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md
     /// and the earlier 2026-09-07 finding of the same class (unrelated method signatures re-spaced).
     /// <paramref name = "newMember"/> is given an explicit blank-line separator (matching this repo's
     /// established one-blank-line-between-members convention) before itself when there is a preceding
-    /// sibling, and before the following sibling (if any) when that sibling didn't already carry one —
+    /// sibling, and before the following sibling (if any) when that sibling didn't already carry one ->
     /// this is computed explicitly rather than left to <see cref="Formatter"/>, because a
     /// freshly-parsed member's "empty" leading trivia is otherwise indistinguishable from a deliberate
     /// zero-blank-line request, and formatting the whole container to resolve that ambiguity is exactly
@@ -250,7 +250,7 @@ public static class FormattingHelper
         var newMembersList = members.Insert(insertIndex, annotatedNewMember);
 
         // If a following sibling exists but its own leading trivia has no blank line (e.g. it used to
-        // be the first member, right after the container's opening brace), give it one now — the new
+        // be the first member, right after the container's opening brace), give it one now -> the new
         // member is being inserted immediately before it, so it needs the same separator every other
         // pair of siblings in this container already has.
         if (followingMember != null)
@@ -281,20 +281,20 @@ public static class FormattingHelper
     /// <summary>
     /// Pure pass-through to <see cref="SyntaxNodeExtensions.NormalizeWhitespace{TNode}"/> (via
     /// <see cref="SyntaxNode.NormalizeWhitespace"/>) with identical arguments and identical
-    /// behavior — this method exists purely as a single, greppable chokepoint for the whole-subtree
+    /// behavior -> this method exists purely as a single, greppable chokepoint for the whole-subtree
     /// form of whitespace normalization, not as a safety fix.
     /// <para>
     /// Unlike <see cref="ReplaceNodeFormattedAsync"/>, <see cref="RemoveNodeFormattedAsync"/>, and
-    /// <see cref="InsertMemberFormattedAsync"/> — which are narrowly scoped to just the node being
+    /// <see cref="InsertMemberFormattedAsync"/> -> which are narrowly scoped to just the node being
     /// edited via a tracking annotation, and are safe by construction regardless of what the caller
-    /// passes — this method's safety depends entirely on what <paramref name="node"/> is:
+    /// passes -> this method's safety depends entirely on what <paramref name="node"/> is:
     /// </para>
     /// <list type="bullet">
     /// <item>Safe: a freshly synthesized node with no pre-existing siblings, e.g.
-    /// <c>SyntaxFactory.MethodDeclaration(...).NormalizeWhitespace()</c> — there is no untouched
+    /// <c>SyntaxFactory.MethodDeclaration(...).NormalizeWhitespace()</c> -> there is no untouched
     /// sibling content to disturb.</item>
     /// <item>Risky: an existing tree root or container (e.g. a whole file's <c>root</c>/<c>newRoot</c>
-    /// or a <c>CompilationUnitSyntax</c>) that already contains untouched code — normalizing it
+    /// or a <c>CompilationUnitSyntax</c>) that already contains untouched code -> normalizing it
     /// reformats every sibling's whitespace as a side effect, which is exactly the bug class fixed in
     /// <c>RefactoringEngine.Member(add)</c> by introducing <see cref="InsertMemberFormattedAsync"/>
     /// (see docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md).</item>
@@ -302,11 +302,11 @@ public static class FormattingHelper
     /// <para>
     /// For an edit-then-format use case on an existing tree, prefer
     /// <see cref="InsertMemberFormattedAsync"/>/<see cref="ReplaceNodeFormattedAsync"/>/
-    /// <see cref="RemoveNodeFormattedAsync"/> instead of this method — they scope the formatting
+    /// <see cref="RemoveNodeFormattedAsync"/> instead of this method -> they scope the formatting
     /// annotation to just the changed node so siblings are left untouched. Reach for this method only
     /// when the node truly has no siblings to protect (a synthesized standalone node), or as a
     /// mechanical drop-in during centralization, per docs/current/proposal_batch_replacesnippet.md-adjacent
-    /// audit work — auditing/fixing individual call sites' scope is deliberately out of scope here.
+    /// audit work -> auditing/fixing individual call sites' scope is deliberately out of scope here.
     /// </para>
     /// </summary>
     public static SyntaxNode NormalizeWholeSubtreeWhitespace(SyntaxNode node, string indentation = "    ", string eol = "\n", bool elasticTrivia = true)

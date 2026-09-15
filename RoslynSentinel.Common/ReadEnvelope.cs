@@ -5,7 +5,7 @@ namespace RoslynSentinel.Common;
 /// whether the returned content is the whole thing or a slice. Without this, a caller that reads a
 /// truncated excerpt forms an inaccurate belief about the file's contents, then a later search hit
 /// landing outside the read range looks like a contradiction rather than an expected consequence of
-/// truncation — see docs/current/spec-read-tool-metadata-envelope-v1.md for the full rationale.
+/// truncation -> see docs/current/spec-read-tool-metadata-envelope-v1.md for the full rationale.
 /// </summary>
 public record ReadEnvelope
 {

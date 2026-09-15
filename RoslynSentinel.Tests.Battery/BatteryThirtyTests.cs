@@ -1,10 +1,10 @@
-// Battery 30 — Regression tests for the 4 bugs found during real-solution smoke testing
+// Battery 30 -> Regression tests for the 4 bugs found during real-solution smoke testing
 // + additional confirmation tests for tools exercised against ExpressRecipe.
 //
-// Bug 1: add_validation_to_poco — duplicated attributes on already-annotated properties
-// Bug 2: class_to_record — positional syntax stripping attributes and initializers
-// Bug 3: convert_lock_to_semaphore_slim — instance field emitted for static-method contexts
-// Bug 4: use_field_backed_properties — semantically inverted (expanded instead of collapsed)
+// Bug 1: add_validation_to_poco -> duplicated attributes on already-annotated properties
+// Bug 2: class_to_record -> positional syntax stripping attributes and initializers
+// Bug 3: convert_lock_to_semaphore_slim -> instance field emitted for static-method contexts
+// Bug 4: use_field_backed_properties -> semantically inverted (expanded instead of collapsed)
 //                                     + handler threw on empty result instead of returning gracefully
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -43,7 +43,7 @@ public class B30_RegressionTests
     }
 
     // =========================================================================
-    // Bug 1: add_validation_to_poco — duplicate attributes
+    // Bug 1: add_validation_to_poco -> duplicate attributes
     // =========================================================================
 
     [Test]
@@ -64,7 +64,7 @@ public class Product {
     [Test]
     public async Task AddValidationToPoco_WhenPropertyAlreadyHasRequired_DoesNotDuplicate()
     {
-        // This is the regression test for Bug 1 — running the tool on a class that already
+        // This is the regression test for Bug 1 -> running the tool on a class that already
         // has [Required] on a string property must NOT emit a second [Required].
         const string code = @"
 using System.ComponentModel.DataAnnotations;
@@ -76,10 +76,10 @@ public class Product {
         SetSource(code, "Product.cs");
         var result = await _apiEngine.AddValidationToPocoAsync("Product.cs", "Product");
 
-        // Name already had [Required] — count must still be 1
+        // Name already had [Required] -> count must still be 1
         var requiredCount = CountOccurrences(result.UpdatedText!, "[Required]");
         Assert.That(requiredCount, Is.EqualTo(2),
-            "Description should get [Required] but Name should NOT get a duplicate — total must be 2");
+            "Description should get [Required] but Name should NOT get a duplicate - total must be 2");
     }
 
     [Test]
@@ -127,14 +127,14 @@ public class Customer {
         SetSource(first.UpdatedText!, "Customer.cs");
         var second = await _apiEngine.AddValidationToPocoAsync("Customer.cs", "Customer");
 
-        // Running twice must produce the same result — no extra attributes appended
+        // Running twice must produce the same result -> no extra attributes appended
         var req1 = CountOccurrences(first.UpdatedText!, "[Required]");
         var req2 = CountOccurrences(second.UpdatedText!, "[Required]");
         Assert.That(req2, Is.EqualTo(req1), "Second run must not add duplicate attributes");
     }
 
     // =========================================================================
-    // Bug 2: class_to_record — positional syntax strips attributes / initializers
+    // Bug 2: class_to_record -> positional syntax strips attributes / initializers
     // =========================================================================
 
     [Test]
@@ -226,13 +226,13 @@ public class Address {
         SetSource(code, "Address.cs");
         var result = await _modEngine.ClassToRecordAsync("Address.cs", "Address");
 
-        // set → init for records
+        // set -> init for records
         Assert.That(result.UpdatedText!, Contains.Substring("init"), "set accessor should become init in class-body record");
         Assert.That(result.UpdatedText!, Does.Not.Contain("{ get; set; }"), "Should not have bare { get; set; }");
     }
 
     // =========================================================================
-    // Bug 3: convert_lock_to_semaphore_slim — wrong field modifier for static methods
+    // Bug 3: convert_lock_to_semaphore_slim -> wrong field modifier for static methods
     // =========================================================================
 
     [Test]
@@ -297,7 +297,7 @@ public class Cache {
     [Test]
     public async Task ConvertLockToSemaphoreSlim_StaticMethod_CompilesCorrectly()
     {
-        // Static context: `await _semaphore.WaitAsync()` must compile — field must be static.
+        // Static context: `await _semaphore.WaitAsync()` must compile -> field must be static.
         const string code = @"
 public class Counter {
     private static readonly object _lock = new();
@@ -316,7 +316,7 @@ public class Counter {
     }
 
     // =========================================================================
-    // Bug 4: use_field_backed_properties — inverted direction + empty-string crash
+    // Bug 4: use_field_backed_properties -> inverted direction + empty-string crash
     // =========================================================================
 
     [Test]
@@ -343,7 +343,7 @@ public class Simple {
         SetSource(code, "Simple.cs");
         var result = await _suEngine.UseFieldBackedPropertiesAsync("Simple.cs");
 
-        // Auto-properties with no backing field → no change, but must return full source
+        // Auto-properties with no backing field -> no change, but must return full source
         Assert.That(result.UpdatedText!, Is.Not.Null.And.Not.Empty, "Must return source, not empty string");
         Assert.That(result.UpdatedText!, Contains.Substring("public string Name"), "Original content must be preserved");
     }

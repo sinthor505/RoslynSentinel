@@ -6,10 +6,10 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Shared implementation of the validate-then-write-through pattern used by both
-/// SentinelRefactoringTools (Basic) and SentinelAdvancedRefactoringTools (Advanced) — previously
+/// SentinelRefactoringTools (Basic) and SentinelAdvancedRefactoringTools (Advanced) -> previously
 /// duplicated verbatim in each. Validates proposed changes against the current in-memory
 /// solution and, unless <paramref name="dryRun"/> is set, writes them straight to disk via
-/// <see cref="IWorkspaceManager.ApplyProposedChangesAsync"/> (write-through — no
+/// <see cref="IWorkspaceManager.ApplyProposedChangesAsync"/> (write-through -> no
 /// intermediate staging step). Rolls back any already-written files if a multi-file change
 /// partially fails, so a change never lands half-applied.
 /// </summary>
@@ -33,7 +33,7 @@ public static class ValidateAndApplyHelper
         try
         {
             // Files actually being deleted from disk also need their Document dropped from the
-            // candidate solution before compiling — same reasoning as removePaths (a rename's old
+            // candidate solution before compiling -> same reasoning as removePaths (a rename's old
             // path), just via a different route (an on-disk delete instead of a superseding write).
             var allRemovePaths = deletePaths == null
                 ? removePaths
@@ -52,7 +52,7 @@ public static class ValidateAndApplyHelper
                 ? await describeValidationFailure(validation, cancellationToken)
                 : validation.Diagnostics.ToJson();
             return new ApplyOutcome(null, new ResultError(ToolErrorCode.Exception,
-                $"{operationName}: the change was valid and matched its target(s), but introduces new compiler errors — change not applied. " +
+                $"{operationName}: the change was valid and matched its target(s), but introduces new compiler errors - change not applied. " +
                 $"Fix the issue(s) below and retry:\n{detail}"), dryRun);
         }
 
@@ -84,7 +84,7 @@ public static class ValidateAndApplyHelper
         // confident undo instruction and no blob on disk.
         //
         // Deliberately not thrown: the files are already written, and reporting a landed edit as
-        // failed would invite the model to retry it — a corruption path worse than a missing undo
+        // failed would invite the model to retry it -> a corruption path worse than a missing undo
         // record. Instead the result tells the truth (applied, not reversible) and the breaker
         // refuses every subsequent mutation.
         if (blob.IsIntegrityFailure)
@@ -97,9 +97,9 @@ public static class ValidateAndApplyHelper
         }
 
         // Nothing was written, so no changeId should be issued either. Previously one was minted
-        // unconditionally, which meant any operation producing an empty change set — most commonly
+        // unconditionally, which meant any operation producing an empty change set -> most commonly
         // one whose refactoring feature is disabled in SentinelConfiguration, e.g. ExtractInterface,
-        // which returns an empty dictionary rather than an error — reported status:"applied" and
+        // which returns an empty dictionary rather than an error -> reported status:"applied" and
         // handed back a handle UndoLastApply could never resolve. Not an integrity failure (nothing
         // landed on disk), just a no-op, so the breaker deliberately stays untripped.
         //
@@ -110,7 +110,7 @@ public static class ValidateAndApplyHelper
         {
             return new ApplyOutcome(null, null, false, appliedDiff,
                 $"{operationName} produced no file changes, so nothing was written and there is " +
-                "nothing to undo. If you expected a change, the operation matched no target — or " +
+                "nothing to undo. If you expected a change, the operation matched no target - or " +
                 "its refactoring feature is disabled on this server (see the Features tool).");
         }
 

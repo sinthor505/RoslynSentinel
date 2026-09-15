@@ -1,4 +1,4 @@
-// Battery #10 — ValidationEngine / MetricsEngine / DiagnosticEngine / SecurityEngine
+// Battery #10 -> ValidationEngine / MetricsEngine / DiagnosticEngine / SecurityEngine
 // Adds dedicated XxxEngineTests fixture classes for 4 more engine classes.
 // All tests run in-memory via AdhocWorkspace (no MSBuild/project-file loading).
 
@@ -47,7 +47,7 @@ public class ValidationEngineTests
     public async Task ValidateChanges_FileNotFound_PassesThroughWhenNoContainingProject()
     {
         // "DoesNotExist.cs" is a bare relative filename with no project directory as an
-        // ancestor, so it can't be attributed to any project in the solution — there is no
+        // ancestor, so it can't be attributed to any project in the solution -> there is no
         // compilation to validate it against. This stays pass-through by design; see
         // ValidateChanges_NewFileInKnownProject_* below for the case that IS now validated
         // (a new file whose containing project CAN be inferred).

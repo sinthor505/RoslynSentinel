@@ -1,4 +1,4 @@
-// Battery #21 — SentinelModernizationTools
+// Battery #21 -> SentinelModernizationTools
 // Tests all 26 public methods of SentinelModernizationTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;

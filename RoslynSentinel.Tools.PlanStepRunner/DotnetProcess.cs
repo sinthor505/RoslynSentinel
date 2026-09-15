@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace RoslynSentinel.Tools.PlanStepRunner;
 
 /// <summary>
-/// Builds a single project directly via `dotnet build`, deliberately NOT build.ps1 — build.ps1
+/// Builds a single project directly via `dotnet build`, deliberately NOT build.ps1 -> build.ps1
 /// unconditionally kills every *RoslynSentinel* process system-wide by name (not by path) and
 /// refreshes a shared bin-vscode\Advanced copy tied to the user's live VS Code MCP connection.
 /// Running it from inside a worktree would risk killing that live session and any other

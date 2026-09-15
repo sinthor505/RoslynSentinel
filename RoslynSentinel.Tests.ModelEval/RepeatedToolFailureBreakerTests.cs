@@ -23,14 +23,14 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// failing call: the only per-tool error budget at the time was
 /// <see cref="AgentLoop.AgentToolErrorAssertions"/>, an assertion evaluated *after* a run finished,
 /// which by construction cannot shorten one. The breaker is the in-loop counterpart, so the thing
-/// worth testing is that it actually ends the loop early — not merely that it counts.
+/// worth testing is that it actually ends the loop early -> not merely that it counts.
 /// </para>
 /// </summary>
 [TestFixture]
 public class RepeatedToolFailureBreakerTests
 {
     // "Workspace" is where LocateSymbol/GetFileOutline live (SentinelWorkspaceTools /
-    // SentinelSymbolTools) — see ToolClassRegistry.AdvancedModeToToolClasses. Not the project
+    // SentinelSymbolTools) -> see ToolClassRegistry.AdvancedModeToToolClasses. Not the project
     // names "Basic"/"Advanced", which aren't mode names at all and silently resolve to nothing.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
 
@@ -44,7 +44,7 @@ public class RepeatedToolFailureBreakerTests
         _runDirectory = Path.Combine(Path.GetTempPath(), "rs-breaker-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(_runDirectory);
 
-        // Same in-memory client/server pipe wiring as TranscriptReplayTests — a real MCP server so
+        // Same in-memory client/server pipe wiring as TranscriptReplayTests -> a real MCP server so
         // the failures the breaker counts are real tool failures, not hand-written stubs.
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
@@ -100,7 +100,7 @@ public class RepeatedToolFailureBreakerTests
     [Test]
     public async Task Breaker_TripsAndStopsTheLoop_WhenTheSameCallKeepsFailing()
     {
-        // No solution is loaded, so every LocateSymbol call fails identically — the same shape as
+        // No solution is loaded, so every LocateSymbol call fails identically -> the same shape as
         // the real livelock, where each retry differed only in content the signature ignores.
         var runner = NewRunner(repeatedFailureLimit: 3, turnCap: 30, alwaysCall: LocateSymbolCall);
 
@@ -145,7 +145,7 @@ public class RepeatedToolFailureBreakerTests
     [Test]
     public void Constructor_RejectsALimitBelowOne()
     {
-        // Guards against "disable it by passing 0" — the parameter is required precisely so every
+        // Guards against "disable it by passing 0" -> the parameter is required precisely so every
         // call site states a real tolerance; a silent no-op limit would recreate the original gap.
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new ModelAgentRunner(NewAgentClient(_ => ""), _mcpClient, repeatedFailureLimit: 0));
@@ -181,7 +181,7 @@ public class RepeatedToolFailureBreakerTests
     {
         // LlmOptions is process-global and Model has no public setter, so it's configured the same
         // way the real entry points do it: via Configure(args). Harmless to call repeatedly across
-        // tests in this fixture — every field it derives from --llm-model is deterministic.
+        // tests in this fixture -> every field it derives from --llm-model is deterministic.
         RoslynSentinel.Common.LlmOptions.Configure(["--llm-model", "breaker-test-model"]);
         var httpClient = new HttpClient(new ScriptedHandler(respond))
         {

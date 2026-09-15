@@ -66,7 +66,7 @@ public class AsyncOptimizationEngine
         }
         else if (returnTypeStr == "ValueTask" || returnTypeStr.StartsWith("ValueTask<"))
         {
-            // Already a ValueTask — nothing to optimize, and this is not an error.
+            // Already a ValueTask -> nothing to optimize, and this is not an error.
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.NoChange,
@@ -183,7 +183,7 @@ public class AsyncOptimizationEngine
 
             if (batch.Count > 1)
             {
-                // Check if all are expression statements (no var declarations) → use Task.WhenAll
+                // Check if all are expression statements (no var declarations) -> use Task.WhenAll
                 bool allExpression = batch.All(b => b.declaredVar == null);
 
                 if (allExpression)
@@ -256,7 +256,7 @@ public class AsyncOptimizationEngine
 
     /// <summary>
     /// Derives a task variable name from the result variable name or awaited expression.
-    /// e.g. varName="item" → "itemTask"; varName=null, method="GetItemAsync" → "getItemTask"
+    /// e.g. varName="item" → "itemTask"; varName=null, method="GetItemAsync" -> "getItemTask"
     /// </summary>
     private static string DeriveTaskVarName(string? varName, ExpressionSyntax awaitedExpr)
     {
@@ -373,7 +373,7 @@ public class AsyncOptimizationEngine
     ///         to the original sync method so that CS0618 warnings at call sites drive incremental
     ///         caller migration.</item>
     /// </list>
-    /// The async body is NOT further transformed — use <c>apply_cancellation_token_to_file</c>
+    /// The async body is NOT further transformed -> use <c>apply_cancellation_token_to_file</c>
     /// or <c>add_cancellation_token_to_method</c> in a follow-up step to propagate the token.
     /// </summary>
     /// <param name="filePath">Absolute path to the source file containing the method.</param>
@@ -420,19 +420,19 @@ public class AsyncOptimizationEngine
         if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
         {
             throw new InvalidOperationException(
-                $"Method '{methodName}' is already async — it cannot be converted to a bridge.");
+                $"Method '{methodName}' is already async - it cannot be converted to a bridge.");
         }
 
         if (methodName.EndsWith("Async", StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"Method '{methodName}' already ends with 'Async' — it is likely already the async overload.");
+                $"Method '{methodName}' already ends with 'Async' - it is likely already the async overload.");
         }
 
         if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword)))
         {
             throw new InvalidOperationException(
-                $"Method '{methodName}' is abstract — abstract methods have no body and cannot be bridged.");
+                $"Method '{methodName}' is abstract - abstract methods have no body and cannot be bridged.");
         }
 
         if (IsEventHandlerSignature(methodNode))
@@ -486,11 +486,11 @@ public class AsyncOptimizationEngine
 
         // Build async overload modifiers explicitly so that instance/static and virtual are
         // preserved while modifiers that are wrong on a new method are stripped:
-        //   'override' — the async overload is a new method; there is no base counterpart
+        //   'override' -> the async overload is a new method; there is no base counterpart
         //                to override, so keeping 'override' causes CS0115.
-        //   'sealed'   — meaningless on a freshly introduced method.
-        //   'static'   — kept; the async version of a static method must also be static.
-        //   'async'    — added.
+        //   'sealed'   -> meaningless on a freshly introduced method.
+        //   'static'   -> kept; the async version of a static method must also be static.
+        //   'async'    -> added.
         var asyncModifiers = SyntaxFactory.TokenList(
             methodNode.Modifiers
                 .Where(m => !m.IsKind(SyntaxKind.OverrideKeyword) &&
@@ -508,7 +508,7 @@ public class AsyncOptimizationEngine
         // downstream CT-propagation tools (which operate on block bodies) work correctly.
         if (methodNode.ExpressionBody != null && methodNode.Body == null)
         {
-            // Expression body: `=> expr` → `{ return expr; }` (or `{ expr; }` for void).
+            // Expression body: `=> expr` -> `{ return expr; }` (or `{ expr; }` for void).
             StatementSyntax convertedStmt = isVoid
                 ? SyntaxFactory.ExpressionStatement(methodNode.ExpressionBody.Expression)
                 : SyntaxFactory.ReturnStatement(methodNode.ExpressionBody.Expression);
@@ -568,7 +568,7 @@ public class AsyncOptimizationEngine
                 })));
         // ── Apply both changes to the class node ─────────────────────────────
         // Step 1: replace original method node with the bridge wrapper.
-        // Strip [MigrationCandidate] from the bridge wrapper — the method has been processed
+        // Strip [MigrationCandidate] from the bridge wrapper -> the method has been processed
         // so the candidate marker is no longer applicable. Also strip any pre-existing [Obsolete]
         // before re-adding, so repeated conversions don't accumulate duplicate attributes.
         var bridgeAttributeLists = SyntaxFactory.List(
@@ -603,7 +603,7 @@ public class AsyncOptimizationEngine
     /// Uses semantic analysis to identify calls to <c>[Obsolete("Asyncify-bridge: call … instead.")]</c>
     /// wrappers, replaces each with <c>await wrapperAsync(args)</c>, and adds the <c>async</c>
     /// modifier to the handler.
-    /// Unlike <see cref="ConvertToAsyncBridgeAsync"/>, this does NOT create a new async overload —
+    /// Unlike <see cref="ConvertToAsyncBridgeAsync"/>, this does NOT create a new async overload ->
     /// event handler delegate signatures are fixed and cannot gain a <c>CancellationToken</c>
     /// parameter. The async method is called without an explicit CT; its default-parameter value
     /// covers the common case.
@@ -635,10 +635,10 @@ public class AsyncOptimizationEngine
         if (methodNode.ReturnType.ToString() != "void")
         {
             throw new InvalidOperationException(
-                $"Method '{methodName}' does not return void — only void-returning methods can be converted to async void.");
+                $"Method '{methodName}' does not return void - only void-returning methods can be converted to async void.");
         }
 
-        // Semantic: identify the SPECIFIC bridge-call invocations — not all calls sharing the same name.
+        // Semantic: identify the SPECIFIC bridge-call invocations -> not all calls sharing the same name.
         // Collecting only the method name (e.g. "search") then rewriting every call by that name
         // incorrectly rewrites unrelated calls on types that have no async counterpart (e.g.
         // BaseService.search when only CommonSearch.search is the bridge wrapper).
@@ -680,8 +680,8 @@ public class AsyncOptimizationEngine
             .WithTrailingTrivia(SyntaxFactory.Space);
         var asyncMethod = annotatedMethodNode.WithModifiers(annotatedMethodNode.Modifiers.Add(asyncToken));
 
-        // Replace ONLY the annotated bridge-call invocations: bridgeMethod(args) → await bridgeMethodAsync(args).
-        // Calls with the same name on unrelated types are untouched. No CT — event handlers have none.
+        // Replace ONLY the annotated bridge-call invocations: bridgeMethod(args) -> await bridgeMethodAsync(args).
+        // Calls with the same name on unrelated types are untouched. No CT -> event handlers have none.
         var rewrittenMethod = asyncMethod.ReplaceNodes(
             asyncMethod.DescendantNodes()
                        .OfType<InvocationExpressionSyntax>()
@@ -705,7 +705,7 @@ public class AsyncOptimizationEngine
 
                 // When the bridge call is chained (e.g. bridge().Rows, bridge().AsDataView()),
                 // parenthesise the await so member/element access binds to the awaited value:
-                //   bridge().Rows → (await bridgeAsync()).Rows
+                //   bridge().Rows -> (await bridgeAsync()).Rows
                 bool needsParens = original.Parent is MemberAccessExpressionSyntax
                                 || original.Parent is ElementAccessExpressionSyntax
                                 || original.Parent is ConditionalAccessExpressionSyntax;
@@ -723,10 +723,10 @@ public class AsyncOptimizationEngine
             });
 
         // Any delegate/lambda that now contains await (because a bridge call was rewritten) must
-        // itself be marked async — the rewriter above adds await but not the async modifier.
+        // itself be marked async -> the rewriter above adds await but not the async modifier.
         rewrittenMethod = (MethodDeclarationSyntax)new AsyncifyAnonymousFunctionsRewriter().Visit(rewrittenMethod)!;
 
-        // Strip all [MigrationCandidate] attributes — the handler is now converted and no
+        // Strip all [MigrationCandidate] attributes -> the handler is now converted and no
         // longer needs any migration marker. Leaving them causes stale-flag failures on re-runs.
         rewrittenMethod = StripMigrationCandidateAttributes(rewrittenMethod);
 
@@ -745,7 +745,7 @@ public class AsyncOptimizationEngine
     /// replacing each with an awaited call that forwards the method's CancellationToken parameter.
     /// <para>
     /// Intended for async overloads created by <see cref="ConvertToAsyncBridgeAsync"/> whose bodies
-    /// were not rewritten at bridge time — e.g. <c>GetExpensesAsync</c> still calling
+    /// were not rewritten at bridge time -> e.g. <c>GetExpensesAsync</c> still calling
     /// <c>CommonSearch.search(sql)</c> instead of <c>await CommonSearch.searchAsync(sql, cancellationToken)</c>.
     /// </para>
     /// </summary>
@@ -753,7 +753,7 @@ public class AsyncOptimizationEngine
     /// <param name="asyncMethodName">Name of the async method whose body to rewrite (e.g. "GetExpensesAsync").</param>
     /// <param name="sourceText">
     /// Optional in-memory source text.  When non-null the method operates on this text rather than
-    /// the on-disk content in the workspace — use this for first-time bridge flows where the new
+    /// the on-disk content in the workspace -> use this for first-time bridge flows where the new
     /// overload exists only in memory.  When null the current workspace document is used.
     /// </param>
     /// <returns>
@@ -817,7 +817,7 @@ public class AsyncOptimizationEngine
         });
         var ctParamName = ctParam?.Identifier.Text ?? "cancellationToken";
 
-        // Semantically identify bridge-call invocations — annotate before any tree mutations.
+        // Semantically identify bridge-call invocations -> annotate before any tree mutations.
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
         var bridgeTargets = new Dictionary<InvocationExpressionSyntax, string>(ReferenceEqualityComparer.Instance);
         if (semanticModel != null)
@@ -1456,7 +1456,7 @@ public class AsyncOptimizationEngine
             bool returnsTask = returnType.StartsWith("Task") || returnType.StartsWith("ValueTask");
 
             // Only process async or Task/ValueTask-returning methods.
-            // Ineligible sync methods are silently ignored — they are not actionable
+            // Ineligible sync methods are silently ignored -> they are not actionable
             // and would flood SkippedMethods with noise in large files.
             if (!isAsync && !returnsTask)
             {
@@ -1474,7 +1474,7 @@ public class AsyncOptimizationEngine
                 skipped.Add(name); continue;
             }
 
-            // Skip event handlers (object sender, XxxEventArgs e) — fixed delegate signature.
+            // Skip event handlers (object sender, XxxEventArgs e) -> fixed delegate signature.
             if (IsEventHandlerSignature(method)) { skipped.Add(name); continue; }
 
             // Skip if caller requested specific methods and this one isn't in the list.
@@ -1514,7 +1514,7 @@ public class AsyncOptimizationEngine
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        // Build CancellationToken parameter — trailing space becomes whitespace trivia between
+        // Build CancellationToken parameter -> trailing space becomes whitespace trivia between
         // the type name and the parameter identifier.
         var ctParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("cancellationToken"))
             .WithType(SyntaxFactory.ParseTypeName("CancellationToken "))
@@ -1601,7 +1601,7 @@ public class AsyncOptimizationEngine
                              ma2.Name.Identifier.Text == "Delay");
             }
 
-            // Task.Delay always accepts a CancellationToken — ensure it is propagated.
+            // Task.Delay always accepts a CancellationToken -> ensure it is propagated.
             if (inv.Expression is MemberAccessExpressionSyntax maDelay &&
                 maDelay.Expression.ToString() == "Task" &&
                 maDelay.Name.Identifier.Text == "Delay")
@@ -1659,7 +1659,7 @@ public class AsyncOptimizationEngine
 
     /// <summary>Engine-internal result from <see cref="FlagMigrationCandidateAsync"/>.</summary>
     public record FlagMigrationCandidateEngineResult(
-        /// <summary>File path → updated source for every file that must be written to disk.</summary>
+        /// <summary>File path -> updated source for every file that must be written to disk.</summary>
         Dictionary<FilePathWrapper, string> Changes,
         /// <summary><c>true</c> if the method already carried a <c>[MigrationCandidate]</c> for this pattern.</summary>
         bool WasAlreadyFlagged,
@@ -1678,13 +1678,13 @@ public class AsyncOptimizationEngine
     /// </summary>
     /// <param name="ns">The namespace to emit the class into (matched from the target file).</param>
     /// <returns>Complete C# source for the attribute class file.</returns>
-    /// <param name="ns">Accepted for API compatibility but ignored — the class is emitted in the
+    /// <param name="ns">Accepted for API compatibility but ignored -> the class is emitted in the
     /// global namespace so that no <c>using</c> directive is required from any file in the
     /// assembly and there is no ambiguity when multiple subdirectories are glob-included by an
     /// SDK-style project.  Only ONE copy of this file should exist per compiled assembly.</param>
     private static string BuildMigrationCandidateAttributeSource(string ns)
     {
-        // NOTE: intentionally no 'namespace' wrapper — global namespace.
+        // NOTE: intentionally no 'namespace' wrapper -> global namespace.
         // Placing the attribute in a named namespace causes CS0104 ambiguity in SDK-style
         // projects because the compiler sees multiple copies (one per subdirectory) in scope.
         // Global namespace means the attribute is visible everywhere without a using directive.
@@ -1694,7 +1694,7 @@ public class AsyncOptimizationEngine
 
 // ── MigrationCandidateAttribute ─────────────────────────────────────────────
 // Auto-generated by RoslynSentinel flag_migration_candidate tools.
-// Global namespace — do NOT add a 'namespace' wrapper.
+// Global namespace -> do NOT add a 'namespace' wrapper.
 // Place exactly ONE copy of this file at the project root (.csproj directory)
 // so that SDK-style glob-includes find it without duplication.
 
@@ -1768,7 +1768,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// <c>[MigrationCandidate("pattern", Score = N, Reason = "...", FlaggedDate = "yyyy-MM-dd")]</c>
     /// attribute. If the <c>MigrationCandidateAttribute</c> class is not yet defined anywhere in
     /// the loaded solution, a self-contained source file is generated and included in the result so
-    /// the caller can write it alongside the method file — no project reference changes are needed.
+    /// the caller can write it alongside the method file -> no project reference changes are needed.
     /// </summary>
     /// <remarks>
     /// Re-flagging an already-flagged method with the same pattern is idempotent: the old attribute
@@ -1919,7 +1919,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
     /// <summary>
     /// Applies <see cref="FlagMigrationCandidateAsync"/> to multiple methods, grouping rewrites
-    /// by file so each source file is parsed, rewritten, and returned only once — avoiding the
+    /// by file so each source file is parsed, rewritten, and returned only once -> avoiding the
     /// line-number drift that occurs when sequential single-method calls modify the same file
     /// between calls.
     /// </summary>
@@ -2103,8 +2103,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
     /// <summary>
     /// Finds all methods in the solution (or scoped to a file/project) that carry a
-    /// <c>[MigrationCandidate]</c> attribute. Uses syntax-level analysis — no compilation
-    /// or semantic model required — so it works on files that have not been reloaded after
+    /// <c>[MigrationCandidate]</c> attribute. Uses syntax-level analysis -> no compilation
+    /// or semantic model required -> so it works on files that have not been reloaded after
     /// a recent <c>flag_migration_candidate</c> call.
     /// </summary>
     /// <param name="filePath">
@@ -2136,7 +2136,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
         }
 
-        // Normalize filePath separator once — avoids per-document allocation.
+        // Normalize filePath separator once -> avoids per-document allocation.
         var normalizedFilter = filePath?.Replace('\\', '/');
         int totalFilteredDocs = 0;
 
@@ -2269,7 +2269,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         }).ConfigureAwait(false);
 
         // Guard: if filePath filter matched zero documents across all projects, the caller
-        // supplied a path that doesn't exist in the solution — surface this as an actionable error.
+        // supplied a path that doesn't exist in the solution -> surface this as an actionable error.
         if (normalizedFilter != null && totalFilteredDocs == 0)
         {
             throw new ArgumentException(
@@ -2294,7 +2294,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     )
     {
         /// <summary>
-        /// Score breakdown parsed from <see cref="Reason"/> — one entry per signal with its point
+        /// Score breakdown parsed from <see cref="Reason"/> -> one entry per signal with its point
         /// contribution (e.g. <c>["blocking-calls:40", "service-class:15"]</c>).
         /// </summary>
         public IReadOnlyList<string> Breakdown =>
@@ -2305,7 +2305,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
     /// <summary>Engine-internal result from <see cref="FlagCandidatesInProjectAsync"/>.</summary>
     public record FlagCandidatesInProjectEngineResult(
-        /// <summary>All file paths → updated source that must be written to disk.</summary>
+        /// <summary>All file paths -> updated source that must be written to disk.</summary>
         Dictionary<FilePathWrapper, string> Changes,
         /// <summary>Details for every method that was flagged.</summary>
         IReadOnlyList<CandidateScoredItem> Flagged,
@@ -2322,19 +2322,19 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// <summary>
     /// Scans every method in <paramref name="projectName"/>, scores each against the specified
     /// <paramref name="pattern"/>, and stamps qualifying methods with a
-    /// <c>[MigrationCandidate("pattern")]</c> attribute — all in a single pass. No agent iteration
+    /// <c>[MigrationCandidate("pattern")]</c> attribute -> all in a single pass. No agent iteration
     /// required; the agent only needs to call this once per project.
     /// </summary>
     /// <remarks>
     /// Scoring heuristics for <c>AsyncBridgeCandidate</c>:
     /// <list type="bullet">
-    ///   <item>+40 — body contains blocking calls (<c>.GetAwaiter().GetResult()</c>, <c>.Result</c>, <c>.Wait()</c>)</item>
-    ///   <item>+30 — body calls <c>CommonSearch.search</c> or another known sync DB entry point</item>
-    ///   <item>+25 — body uses <c>SqlCommand</c>, <c>SqlConnection</c>, or <c>getDataContext</c></item>
-    ///   <item>+15 — class name ends with <c>Service</c></item>
-    ///   <item>+10 — method is <c>static</c> (easier to bridge in isolation)</item>
-    ///   <item>−20 — method is <c>virtual</c> or <c>override</c> (interface widening may be required)</item>
-    ///   <item>−∞ — hard disqualifiers: <c>abstract</c>, <c>extern</c>, already <c>async</c>,
+    ///   <item>+40 -> body contains blocking calls (<c>.GetAwaiter().GetResult()</c>, <c>.Result</c>, <c>.Wait()</c>)</item>
+    ///   <item>+30 -> body calls <c>CommonSearch.search</c> or another known sync DB entry point</item>
+    ///   <item>+25 -> body uses <c>SqlCommand</c>, <c>SqlConnection</c>, or <c>getDataContext</c></item>
+    ///   <item>+15 -> class name ends with <c>Service</c></item>
+    ///   <item>+10 -> method is <c>static</c> (easier to bridge in isolation)</item>
+    ///   <item>−20 -> method is <c>virtual</c> or <c>override</c> (interface widening may be required)</item>
+    ///   <item>−∞ -> hard disqualifiers: <c>abstract</c>, <c>extern</c>, already <c>async</c>,
     ///              name ends with <c>Async</c>, has <c>yield return</c>, has <c>ref</c>/<c>out</c> params,
     ///              already carries <c>[MigrationCandidate("pattern")]</c></item>
     /// </list>
@@ -2434,13 +2434,13 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 var lineNo = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
                 // When scanning for AsyncBridgeCandidate, event handlers are automatically categorised as
-                // AsyncHandlerCandidate — their migration path (async void + try/catch wrapping)
+                // AsyncHandlerCandidate -> their migration path (async void + try/catch wrapping)
                 // is distinct from service-method bridge migration.
                 var effectivePattern = (pattern == "AsyncBridgeCandidate" && IsEventHandlerSignature(method))
                     ? "AsyncHandlerCandidate"
                     : pattern;
 
-                // ── Skip methods marked NeedsManualReview — they cannot be auto-migrated ──
+                // ── Skip methods marked NeedsManualReview -> they cannot be auto-migrated ──
                 // Checking outside the forceRescan gate intentionally: NeedsManualReview is a
                 // terminal state set when automatic conversion failed (e.g. no bridge wrappers to
                 // replace). Re-scanning would just re-flag and create an oscillation cycle.
@@ -2490,14 +2490,14 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 var (score, reason) = ScoreMethodForPattern(method, className, pattern);
                 if (score < 0)
                 {
-                    return; // hard disqualifier — don't even record
+                    return; // hard disqualifier - don't even record
                 }
 
                 // ── Semantic bonus: method calls an [Obsolete]-decorated bridge wrapper ──
                 // Applies to ALL callers (service methods, helpers, UI forms, event handlers).
                 // Any caller of an [Obsolete] bridge wrapper has a clear migration obligation:
                 // replace the sync call with its async counterpart. This is the primary CS0618
-                // migration signal — widening it beyond event handlers catches initComboBox(),
+                // migration signal -> widening it beyond event handlers catches initComboBox(),
                 // initControls(), and other UI helpers that call CommonSearch.search() directly.
                 // Lazily fetch the semantic model once per document (expensive).
                 if (!docSemanticModelFetched)
@@ -2550,7 +2550,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
                 await Parallel.ForEachAsync(flaggedInThisFile, async (item, cancellationToken) =>
                 {
-                    // Line shifted after earlier rewrites — fall back to name-only match.
+                    // Line shifted after earlier rewrites -> fall back to name-only match.
                     var methodNode = rewrittenRoot.DescendantNodes()
                     .OfType<MethodDeclarationSyntax>()
                     .FirstOrDefault(m => m.Identifier.Text == item.MethodName &&
@@ -2580,7 +2580,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         ?.Expression as LiteralExpressionSyntax)?.Token.ValueText
                         ?? today;
 
-                    // Skip rewrite when score and reason are unchanged — prevents NormalizeWhitespace
+                    // Skip rewrite when score and reason are unchanged -> prevents NormalizeWhitespace
                     // from adding blank lines to files that don't actually need modification.
                     if (existingCandidateAttr != null)
                     {
@@ -2749,7 +2749,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         //   1. Asyncify-bridge sync wrappers: [Obsolete("Asyncify-bridge: call XxxAsync instead.")]
         //      Their body is purely .GetAwaiter().GetResult(), which scores +40 (blocking-calls).
         //   2. Other deprecated wrappers: [System.Obsolete("Use XxxAsync instead.")]
-        //      Same pattern — body calls async counterpart synchronously.
+        //      Same pattern -> body calls async counterpart synchronously.
         // Both are already migrated. Excluding any [Obsolete] method (regardless of message)
         // prevents false positives from either convention.
         bool isObsoleteMethod = method.AttributeLists
@@ -2779,7 +2779,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         bool hasCommonSearch = false;
         bool hasSqlAccess = false;
 
-        // Blocking calls — async leaf exists (.GetAwaiter().GetResult() means async counterpart already written)
+        // Blocking calls -> async leaf exists (.GetAwaiter().GetResult() means async counterpart already written)
         if (body.Contains(".GetAwaiter().GetResult()") ||
             body.Contains(".GetAwaiter()\r\n") ||
             body.Contains(".Wait(") ||
@@ -2788,7 +2788,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             score += 40; reasons.Append("blocking-calls:40 "); hasBlockingCalls = true;
         }
 
-        // CommonSearch entry point — the project's standard async-ready SQL wrapper.
+        // CommonSearch entry point -> the project's standard async-ready SQL wrapper.
         // Deliberately narrow: only match the class name, not generic 'search(' identifiers.
         if (body.Contains("CommonSearch"))
         {
@@ -2802,7 +2802,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             score += 25; reasons.Append("sql-access:25 "); hasSqlAccess = true;
         }
 
-        // LINQ-to-SQL disqualifier — sql-access fired but there is no async leaf in this codebase
+        // LINQ-to-SQL disqualifier -> sql-access fired but there is no async leaf in this codebase
         // for DataContext/LINQ-to-SQL queries. Without CommonSearch or a known blocking bridge,
         // this method cannot be migrated today. Skip it to avoid cluttering results.
         if (hasSqlAccess && !hasCommonSearch && !hasBlockingCalls)
@@ -2829,7 +2829,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             score -= 20; reasons.Append("virtual-override-penalty:-20 ");
         }
 
-        // Event-handler bonus — (object sender, XxxEventArgs e) signatures can be converted
+        // Event-handler bonus -> (object sender, XxxEventArgs e) signatures can be converted
         // to async void in-place without touching the calling convention or adding CancellationToken.
         // +40 base: plain handlers land at 40 (below the default 50 threshold) so they are
         // not flagged on their own. Handlers that also carry sync signals (blocking calls,
@@ -2869,7 +2869,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         var n = a.Name.ToString();
                         if (n != shortName && n != fullName)
                         {
-                            return true; // keep — unrelated attribute
+                            return true; // keep - unrelated attribute
                         }
 
                         if (patternKey == null)
@@ -3098,7 +3098,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
                 if (candidates.Count == 0)
                 {
-                    // No symbol resolution — fall through to heuristic
+                    // No symbol resolution -> fall through to heuristic
                     hasCtOverload = true;
                 }
                 else
@@ -3131,7 +3131,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             }
             else
             {
-                // No semantic model — heuristic: any *Async call can probably take CT
+                // No semantic model -> heuristic: any *Async call can probably take CT
                 hasCtOverload = true;
             }
 
@@ -3157,7 +3157,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 continue;
             }
 
-            // Check if call uses named arguments — if so, we need named CT arg too
+            // Check if call uses named arguments -> if so, we need named CT arg too
             bool hasNamedArgs = inv.ArgumentList.Arguments.Any(a => a.NameColon != null);
 
             var beforeSnippet = inv.ToString();
@@ -3451,7 +3451,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
     /// <summary>
     /// Propagates CancellationToken in a single named method within an in-memory source string.
-    /// Does not load from the workspace — uses a purely syntactic pass (no semantic model).
+    /// Does not load from the workspace -> uses a purely syntactic pass (no semantic model).
     /// Used by batch operations that have transformed source that hasn't been written to disk yet.
     /// </summary>
     /// <param name="source">Full source file text to transform.</param>
@@ -3752,7 +3752,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
     /// <summary>
     /// Adds the <c>async</c> modifier to any anonymous function (delegate, lambda) whose body
-    /// contains an <c>await</c> expression that is directly in that function's scope — i.e. not
+    /// contains an <c>await</c> expression that is directly in that function's scope -> i.e. not
     /// nested inside a further inner anonymous function or local function. This fixes the case
     /// where a bridge-call rewriter introduces <c>await</c> inside a delegate that was not
     /// previously async, producing a compile error.

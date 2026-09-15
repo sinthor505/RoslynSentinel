@@ -42,13 +42,13 @@ public class NewFeaturesTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // CloneDetectionEngine — FindDuplicateBlocksInClassAsync
+    // CloneDetectionEngine -> FindDuplicateBlocksInClassAsync
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     public async Task CloneInClass_DetectsDuplicateBlocks_AcrossMethodsInSameClass()
     {
-        // Two methods with the same 4-statement body shape — should detect one group with 2 occurrences.
+        // Two methods with the same 4-statement body shape -> should detect one group with 2 occurrences.
         SetSource(@"
 public class MyService
 {
@@ -106,7 +106,7 @@ public class MyService
     [Test]
     public async Task CloneInClass_RespectsMinStatements_DoesNotFlagSmallerBlocks()
     {
-        // Two methods with 2 identical statements — below the threshold of 4.
+        // Two methods with 2 identical statements -> below the threshold of 4.
         SetSource(@"
 public class MyService
 {
@@ -325,7 +325,7 @@ public class MyService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // CloneDetectionEngine — FindDuplicateBlocksInHierarchyAsync
+    // CloneDetectionEngine -> FindDuplicateBlocksInHierarchyAsync
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -409,7 +409,7 @@ public class Child2 : Base
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // AntiPatternEngine — FindMultipleOutParameterMethodsAsync
+    // AntiPatternEngine -> FindMultipleOutParameterMethodsAsync
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -555,7 +555,7 @@ public class MyClass
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // AntiPatternEngine — FindValueTypeMutationIntentAsync
+    // AntiPatternEngine -> FindValueTypeMutationIntentAsync
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -627,7 +627,7 @@ public class MyService
 
         var findings = await _antiPatternEngine.FindValueTypeMutationIntentAsync("MyService.cs");
 
-        Assert.That(findings, Is.Empty, "ref params are intentionally pass-by-reference — should not be flagged");
+        Assert.That(findings, Is.Empty, "ref params are intentionally pass-by-reference - should not be flagged");
     }
 
     [Test]
@@ -645,13 +645,13 @@ public class MyService
 
         var findings = await _antiPatternEngine.FindValueTypeMutationIntentAsync("MyService.cs");
 
-        Assert.That(findings, Is.Empty, "out params are intentionally pass-by-reference — should not be flagged");
+        Assert.That(findings, Is.Empty, "out params are intentionally pass-by-reference - should not be flagged");
     }
 
     [Test]
     public async Task ValueTypeMutation_DoesNotFlag_MemberAccessAssignment()
     {
-        // param.Property = value — this IS visible to the caller (mutating the object's state)
+        // param.Property = value -> this IS visible to the caller (mutating the object's state)
         SetSource(@"
 public class Dto
 {
@@ -694,7 +694,7 @@ public class MyService
     [Test]
     public async Task ValueTypeMutation_DoesNotFlag_ReferenceTypeSimpleAssignment_NonNew()
     {
-        // Assigning from another variable, not a 'new' expression — ambiguous intent, don't flag
+        // Assigning from another variable, not a 'new' expression -> ambiguous intent, don't flag
         SetSource(@"
 public class MyService
 {
@@ -756,7 +756,7 @@ public class Clean
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // OutParamRefactoringEngine — ConvertOutParamsToValueTupleAsync
+    // OutParamRefactoringEngine -> ConvertOutParamsToValueTupleAsync
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -863,7 +863,7 @@ public class C
     [Test]
     public async Task ConvertOutParams_ZeroCallSitesRewritten_WhenNoCallers()
     {
-        // Method exists but nothing calls it — call sites = 0 is expected
+        // Method exists but nothing calls it -> call sites = 0 is expected
         SetSource(@"
 public class C
 {
@@ -892,7 +892,7 @@ public class C
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // Integration: FindMultipleOutParams → ConvertOutParamsToValueTuple workflow
+    // Integration: FindMultipleOutParams -> ConvertOutParamsToValueTuple workflow
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]

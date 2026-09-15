@@ -14,9 +14,9 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   T4  – genuinely large result triggers file write (LargeResult populated, Data null).
 ///   T5  – get_large_result reads T4's file, paging works, TotalRecords matches.
 ///   T6  – full absolute filePath gives the same records as filename-only input.
-///   T7  – filePath matching nothing → Success=false, ErrorCode="InvalidArgument".
-///   T8  – get_async_migration_progress, no solution → ErrorCode="SolutionNotLoaded".
-///   T9  – get_async_migration_progress, forced exception → ErrorCode="Exception", Detail non-empty.
+///   T7  – filePath matching nothing -> Success=false, ErrorCode="InvalidArgument".
+///   T8  – get_async_migration_progress, no solution -> ErrorCode="SolutionNotLoaded".
+///   T9  – get_async_migration_progress, forced exception -> ErrorCode="Exception", Detail non-empty.
 /// </summary>
 [TestFixture]
 public class MigrationScanResultTests
@@ -189,7 +189,7 @@ public class MigrationScanResultTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T1 – summarize=true → MigrationScanSummary, all 5 bucket keys present
+    // T1 – summarize=true -> MigrationScanSummary, all 5 bucket keys present
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -254,13 +254,13 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T2 – paginated scan (page fits) → Data non-null, TotalRecords set, LargeResult null
+    // T2 – paginated scan (page fits) -> Data non-null, TotalRecords set, LargeResult null
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
     public async Task T2_PaginatedScan_SmallResult_Inline_TotalRecordsSet()
     {
-        // 10 candidates — request page of 3 starting at offset 2.
+        // 10 candidates -> request page of 3 starting at offset 2.
         SetSource(BuildManyFlaggedMethods(10));
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", limit: 3, offset: 2);
@@ -276,7 +276,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T3 – ~9 KB result (~50-60 candidates) → stays inline (threshold regression anchor)
+    // T3 – ~9 KB result (~50-60 candidates) -> stays inline (threshold regression anchor)
     //
     // If this test FAILS (LargeResult is populated), the threshold is measuring the wrong
     // thing. Fix the measurement, not this assertion.
@@ -285,7 +285,7 @@ public class Svc
     [Test, CancelAfter(15000)]
     public async Task T3_NineKbResult_StaysInline_LargeResultNull()
     {
-        // 55 candidates with the default limit of 50 → page ≈ 50 × ~200 bytes ≈ 10 KB.
+        // 55 candidates with the default limit of 50 -> page ≈ 50 × ~200 bytes ≈ 10 KB.
         // The server threshold is 256 KB. This must stay inline.
         SetSource(BuildManyFlaggedMethods(55));
 
@@ -302,7 +302,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T4 – result genuinely exceeds threshold → LargeResult.WrittenToFile=true
+    // T4 – result genuinely exceeds threshold -> LargeResult.WrittenToFile=true
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(60000)]
@@ -310,7 +310,7 @@ public class Svc
     {
         // Build ~500 methods, each with a 300-char Reason string.
         // Per finding JSON ≈ 200 (base) + 300 (Reason field) + ~350 (Summary field) ≈ 850 bytes.
-        // 500 × 850 = ~425 KB > 256 KB → must trigger the file-write path.
+        // 500 × 850 = ~425 KB > 256 KB -> must trigger the file-write path.
         var reason = new string('x', 300);
         SetSource(BuildManyFlaggedMethods(500, reason));
 
@@ -332,7 +332,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T5 – get_large_result on T4's file → structured records, paging works, TotalRecords matches
+    // T5 – get_large_result on T4's file -> structured records, paging works, TotalRecords matches
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(60000)]
@@ -365,7 +365,7 @@ public class Svc
         Assert.That(first.Pattern, Is.EqualTo("AsyncBridgeCandidate"));
         Assert.That(first.Score, Is.EqualTo(75));
 
-        // ── page 2 (limit=10, offset=10) — must be disjoint from page 1 ──────
+        // ── page 2 (limit=10, offset=10) -> must be disjoint from page 1 ──────
         var page2Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResult(reason: "test message", resultId: operationId, limit: 10, offset: 10));
         Assert.That(page2Result.Success, Is.True);
         var page1Names = page1Result.Data!.Select(f => f.MethodName).ToHashSet();
@@ -375,7 +375,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T6 – full absolute filePath → same records as filename-only input
+    // T6 – full absolute filePath -> same records as filename-only input
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -401,7 +401,7 @@ public class Svc
         Assert.That(suffixResult?.Success, Is.True, "Suffix-only filePath should succeed.");
         Assert.That(suffixResult!.Data?.Count, Is.EqualTo(1));
 
-        // Query using the full absolute path — should yield the same finding.
+        // Query using the full absolute path -> should yield the same finding.
         var rawAbs = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", filePath: AbsPath);
         var absResult = Wrap<List<MigrationCandidateFinding>>(rawAbs);
         Assert.That(absResult?.Success, Is.True, "Full absolute filePath should succeed.");
@@ -414,9 +414,9 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T7 – filePath matching nothing → Success=false, ErrorCode="InvalidArgument"
+    // T7 – filePath matching nothing -> Success=false, ErrorCode="InvalidArgument"
     //
-    // filePath only takes effect under scope=file — the tool's own docstring says scope=solution
+    // filePath only takes effect under scope=file -> the tool's own docstring says scope=solution
     // (the default) ignores filePath entirely, and FindMigrationCandidatesAsync confirms it:
     // called with scope=file it throws ArgumentException("filePath '...' matched no documents in
     // solution"), which the tool converts to InvalidArgument. The original test never set
@@ -445,7 +445,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T8 – get_async_migration_progress, no solution → ErrorCode="SolutionNotLoaded"
+    // T8 – get_async_migration_progress, no solution -> ErrorCode="SolutionNotLoaded"
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -460,7 +460,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T9 – get_async_migration_progress, forced exception → ErrorCode="Exception", Detail non-empty
+    // T9 – get_async_migration_progress, forced exception -> ErrorCode="Exception", Detail non-empty
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -484,7 +484,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T10 – summarize=true, topN=5, minScore=70 → TopCandidates ≤5, score≥70, counts populated
+    // T10 – summarize=true, topN=5, minScore=70 -> TopCandidates ≤5, score≥70, counts populated
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -526,7 +526,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T11 – summarize=true without topN/minScore → TopCandidates == null
+    // T11 – summarize=true without topN/minScore -> TopCandidates == null
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -550,13 +550,13 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T12 – get_workspace_health after load → LoadedSolutionPath non-null, ends with .sln
+    // T12 – get_workspace_health after load -> LoadedSolutionPath non-null, ends with .sln
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
     public async Task T12_GetWorkspaceHealth_AfterLoadSolution_LoadedSolutionPathNonNull()
     {
-        // SolutionPath is set in SetUp — a fake .sln path inside _tempDir.
+        // SolutionPath is set in SetUp -> a fake .sln path inside _tempDir.
         SetSource("public class Svc { }");
 
         var engine = new MsToolAugmentEngine(_workspaceManager);
@@ -570,7 +570,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T13 – get_async_migration_progress after load_solution → no exception, report fields set
+    // T13 – get_async_migration_progress after load_solution -> no exception, report fields set
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(15000)]
@@ -593,7 +593,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T14 – get_async_migration_progress(projectName) → scoped report, no exception
+    // T14 – get_async_migration_progress(projectName) -> scoped report, no exception
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(15000)]
@@ -614,7 +614,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T15 – project_doc read with no solution loaded (only SolutionPath set) → succeeds
+    // T15 – project_doc read with no solution loaded (only SolutionPath set) -> succeeds
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -684,12 +684,12 @@ public class Svc
     }
 
     // T17 removed: it asserted that the `async_migrate` string-dispatch tool rejected an
-    // unknown operation name. That dispatcher no longer exists — the operations it routed to
+    // unknown operation name. That dispatcher no longer exists -> the operations it routed to
     // are now separate tools (Asyncify, PropagateCancellationToken, …), so an invalid
     // operation name is a compile error rather than a runtime InvalidArgument.
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T18 – asyncify with no solution loaded → ErrorCode="SolutionNotLoaded"
+    // T18 – asyncify with no solution loaded -> ErrorCode="SolutionNotLoaded"
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -708,7 +708,7 @@ public class Svc
     // ══════════════════════════════════════════════════════════════════════════
 
     // Flaky under full/parallel test runs (fails intermittently in the full Asyncify suite,
-    // passes every time when run in isolation, 2026-08-25) — likely timing/threshold-sensitive
+    // passes every time when run in isolation, 2026-08-25) -> likely timing/threshold-sensitive
     // due to the large synthetic payload used to force the offload spill. Not a regression from
     // any single change; retriage if it starts failing in isolation too.
     [Test, CancelAfter(60000)]
@@ -735,13 +735,13 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T20 – summarize=true, minScore=80 → TotalCandidates = filtered count
+    // T20 – summarize=true, minScore=80 -> TotalCandidates = filtered count
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
     public async Task T20_Summarize_MinScore_TotalCandidatesReflectsFilteredCount()
     {
-        // 5 methods: scores 50, 60, 70, 80, 90. minScore=80 → only 80 and 90 qualify (count=2).
+        // 5 methods: scores 50, 60, 70, 80, 90. minScore=80 -> only 80 and 90 qualify (count=2).
         SetSource($@"
 public class Svc
 {{
@@ -784,13 +784,13 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T21 – summarize=false, minScore=85 → all records have Score>=85, TotalRecords=filtered count
+    // T21 – summarize=false, minScore=85 -> all records have Score>=85, TotalRecords=filtered count
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
     public async Task T21_Paged_MinScore_AllRecordsAboveThreshold_TotalRecordsFiltered()
     {
-        // 6 methods: scores 55, 60, 80, 85, 90, 95. minScore=85 → 3 qualify (85, 90, 95).
+        // 6 methods: scores 55, 60, 80, 85, 90, 95. minScore=85 -> 3 qualify (85, 90, 95).
         SetSource($@"
 public class Svc
 {{

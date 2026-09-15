@@ -1,8 +1,8 @@
-// ReadFile — SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap flagged
+// ReadFile -> SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap flagged
 // branches: document == null, startLine/endLine slicing, out-of-range slice, offload threshold).
 // Data is returned as an anonymous object (not a named record) for the non-offload paths. Anonymous
 // type properties are internal to the declaring assembly, so `dynamic` binding fails cross-assembly
-// here — use reflection (GetProperty) instead.
+// here -> use reflection (GetProperty) instead.
 
 using System.Reflection;
 
@@ -88,7 +88,7 @@ public class ReadFileTests
     {
         // Mirrors CreateFile writing a file that PersistentWorkspaceManager's in-memory sync
         // never turns into a Roslyn Document (any non-.cs file, or a .cs file outside every
-        // project's globs) — ReadFile must still be able to see it, matching what CreateFile wrote.
+        // project's globs) -> ReadFile must still be able to see it, matching what CreateFile wrote.
         var onDiskOnlyPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "OnDiskOnly.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(onDiskOnlyPath)!);
         var content = "not part of the solution, but present on disk";

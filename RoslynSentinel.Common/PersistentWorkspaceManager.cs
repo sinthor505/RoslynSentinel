@@ -20,7 +20,7 @@ namespace RoslynSentinel.Common;
 /// <see cref="Microsoft.CodeAnalysis.Solution"/> on disk. For tests, prefer
 /// <c>RoslynSentinel.Tests.Fakes.FakeWorkspaceManager</c> (lightweight, in-memory, throws
 /// NotImplementedException on unstubbed members) unless the test specifically needs this class's
-/// real load/write/watch behavior against actual files — in that case use
+/// real load/write/watch behavior against actual files -> in that case use
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
@@ -45,27 +45,27 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private readonly ConcurrentDictionary<FilePathWrapper, string> _failedChangesCache = new();
     // _internalChanges/_externalChanges are the older path-key + ~5s-freshness-window
     // self-write-suppression mechanism (see OnFileSystemChanged). _knownFileHashes (below) is a
-    // newer, content-based check layered IN FRONT of this one, not a replacement — deliberately,
+    // newer, content-based check layered IN FRONT of this one, not a replacement -> deliberately,
     // per docs/current/ideas/external-drift-hard-blocker.md's "Decisions" section. The hash check
     // is the authoritative signal for "did this file's content actually change"; these older
     // fields remain unreplaced behind it for now. Do not read the coexistence of both mechanisms
-    // as an unintentional half-finished migration — it is a deliberate staged rollout, and
+    // as an unintentional half-finished migration -> it is a deliberate staged rollout, and
     // _internalChanges/_externalChanges are an intentional future-removal candidate once the
     // hash-based gate has proven itself in production, not a bug to "clean up" reflexively.
     private readonly ConcurrentDictionary<string, (DateTime Timestamp, string Content)> _internalChanges = new();
     // Disabled 2026-09-14: the AST-normalization no-op check below (see its own comment) was
-    // blocking legitimate formatting-only edits — a model asking to fix indentation/spacing got
+    // blocking legitimate formatting-only edits -> a model asking to fix indentation/spacing got
     // silently no-op'd whenever its fix and the original both normalized to the same canonical
     // form under NormalizeWhitespace(), even though the requested bytes genuinely differed from
     // what was on disk. Left as a toggle rather than deleted per direct instruction, in case the
     // original engine-reformatting-regression protection it existed for needs to come back.
     private const bool EnableAstNormalizationNoOpCheck = false;
     // Content-hash baseline: path (normalized via FilePathWrapper's own case-insensitive, separator-
-    // canonicalized equality/hashing) → SHA-256 of the last content RoslynSentinel itself wrote or
+    // canonicalized equality/hashing) -> SHA-256 of the last content RoslynSentinel itself wrote or
     // loaded for that file. Populated wholesale on LoadSolutionAsync, updated per-file on a
     // successful ApplyProposedChangesAsync write, and consulted first in OnFileSystemChanged: a
     // watcher event whose on-disk hash still matches the recorded hash is provably our own echo or
-    // a no-op, regardless of path-key formatting or timing — see the hard-blocker doc for why this
+    // a no-op, regardless of path-key formatting or timing -> see the hard-blocker doc for why this
     // closes a whole class of false positive, not just today's two known bugs.
     private readonly ConcurrentDictionary<FilePathWrapper, string> _knownFileHashes = new();
 
@@ -140,12 +140,12 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         PropertyNameCaseInsensitive = true
     };
 
-    // Per-tool sliding-window rate limiter: maps tool name → timestamps of recent calls.
+    // Per-tool sliding-window rate limiter: maps tool name -> timestamps of recent calls.
     private readonly ConcurrentDictionary<string, ConcurrentQueue<long>> _rateLimitWindows = new();
     private static readonly Dictionary<string, int> DefaultRateLimits = LoadRateLimits();
 
     // ── Circuit breaker state ─────────────────────────────────────────────────
-    // Thresholds — start generous; tighten on observed session data.
+    // Thresholds -> start generous; tighten on observed session data.
     private const int BreakerStreakThreshold = 8;     // consecutive batches with zero successes
     private const int BreakerRateMinAttempts = 20;    // min attempts before rate-trip fires
     private const double BreakerRateThreshold = 0.30;  // >30% failure rate → halt
@@ -174,7 +174,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     // ── Unrecoverable breaker state ───────────────────────────────────────────
     // A server-integrity fault: a change landed on disk but its operation blob did not, so the
     // changeId returned to the agent can never be undone. Once tripped this stays tripped for the
-    // life of the process — there is deliberately no reset path (see IUnrecoverableBreaker). Its
+    // life of the process -> there is deliberately no reset path (see IUnrecoverableBreaker). Its
     // own lock rather than sharing _breakerLock: the two breakers are independent, and this one
     // must remain readable from the request filter even while a batch outcome is being recorded.
     private readonly Lock _unrecoverableBreakerLock = new();
@@ -202,8 +202,8 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
     }
 
-    // Delegates to FilePathWrapper.NormalizeWirePath — the same sanitization every other tool's path
-    // argument gets via FilePathWrapper.FromWire — so LoadSolution doesn't drift from that behavior.
+    // Delegates to FilePathWrapper.NormalizeWirePath -> the same sanitization every other tool's path
+    // argument gets via FilePathWrapper.FromWire -> so LoadSolution doesn't drift from that behavior.
     private static string? SanitizePathArgument(string? path)
     {
         return string.IsNullOrEmpty(path) ? path : FilePathWrapper.NormalizeWirePath(path);
@@ -220,7 +220,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// directory on this host. A caller-supplied override that doesn't exist is treated as a
     /// fabricated/guessed value (e.g. an agent inventing a plausible-looking path instead of
     /// omitting the argument as the tool description recommends for relative paths) rather than
-    /// silently discarded — discarding it would fall through to other candidates and could
+    /// silently discarded -> discarding it would fall through to other candidates and could
     /// resolve to an unintended solution that happens to share the same relative path under a
     /// different base directory, with no error to signal the mismatch.
     /// </exception>
@@ -243,7 +243,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         {
             throw new ArgumentException(
                 $"baseRepoDir '{baseRepoDirOverride}' does not exist on this host. If you don't know " +
-                "the exact repo root, omit baseRepoDir entirely — LoadSolution resolves a relative " +
+                "the exact repo root, omit baseRepoDir entirely - LoadSolution resolves a relative " +
                 "solutionPath against the server's configured base directory automatically. Do not " +
                 "guess or fabricate a path.", nameof(baseRepoDirOverride));
         }
@@ -302,7 +302,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// <summary>
     /// Out-of-band recovery: clears the session-wide halt latch after a human/operator has
     /// reviewed the drift that tripped it. Deliberately not reachable from the model's normal
-    /// tool surface — only via the Admin-gated SentinelAdminTools.
+    /// tool surface -> only via the Admin-gated SentinelAdminTools.
     /// </summary>
     public void ClearSessionHalt()
     {
@@ -311,9 +311,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     // SHA-256 of the given content, hex-encoded lowercase. Cheap relative to the I/O already
     // being done on both the write side (content is already in memory) and the watcher side
-    // (which already reads the file to do an equivalent content comparison — see
-    // OnFileSystemChanged). Not a security boundary — just a fast, collision-safe-enough content
-    // fingerprint — so SHA-256 is used for its BCL support and zero extra dependency, not because
+    // (which already reads the file to do an equivalent content comparison -> see
+    // OnFileSystemChanged). Not a security boundary -> just a fast, collision-safe-enough content
+    // fingerprint -> so SHA-256 is used for its BCL support and zero extra dependency, not because
     // cryptographic strength matters here.
     private static string ComputeContentHash(string content)
     {
@@ -323,7 +323,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     // Rebuilds _knownFileHashes wholesale from CurrentSolution's just-loaded documents. Must fully
     // reset (clear then repopulate), not merge, so a hash left over from a previous load can never
-    // survive a reload and be compared against unrelated new content — the same "stale state
+    // survive a reload and be compared against unrelated new content -> the same "stale state
     // survives reload" shape ClearExternalFileChanges already guards against for _externalChanges.
     // Called with _solutionLock already held (from within LoadSolutionAsync).
     private void PopulateKnownFileHashes()
@@ -348,7 +348,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             }
             catch (IOException)
             {
-                // Locked/mid-write during load — leave unhashed; the next write or watcher event
+                // Locked/mid-write during load -> leave unhashed; the next write or watcher event
                 // that touches this path will populate it then.
             }
         }
@@ -383,7 +383,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             }
             catch (IOException)
             {
-                // File locked/being written concurrently — skip rather than false-positive.
+                // File locked/being written concurrently -> skip rather than false-positive.
                 continue;
             }
 
@@ -417,7 +417,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             }
 
             _workspace?.Dispose();
-            // Suppress NuGet vulnerability audit during workspace load — this is a code-analysis
+            // Suppress NuGet vulnerability audit during workspace load -> this is a code-analysis
             // workspace, not a production build. Audit warnings (NU1901-NU1904) are MSBuild
             // design-time errors that block project loading but are irrelevant for code analysis.
             _workspace = MSBuildWorkspace.Create(new Dictionary<string, string>
@@ -465,12 +465,12 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             SetupOutOfTreeWatchers(solutionDirectory);
 
             // A full reload re-derives CurrentSolution from disk, so any drift flagged against the
-            // previous in-memory state is stale by construction — otherwise a flag raised before
+            // previous in-memory state is stale by construction -> otherwise a flag raised before
             // the reload permanently blocks writes to that file for the rest of the session, since
             // only ClearExternalFileChanges (not a reload) ever drains _externalChanges.
             ClearExternalFileChanges();
 
-            // Rebuild the content-hash baseline from what was just loaded — same "full reset, not
+            // Rebuild the content-hash baseline from what was just loaded -> same "full reset, not
             // just added-to" requirement as ClearExternalFileChanges just above, so a stale hash
             // from a previous load never survives a reload and is compared against genuinely new
             // content.
@@ -478,7 +478,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
             // OpenSolutionAsync throwing (e.g. solutionPath doesn't exist on disk) previously left
             // _workspaceLoadErrors populated but returned normally, so a bad path silently reported
-            // success with an empty CurrentSolution. Surface it as a real failure instead — the
+            // success with an empty CurrentSolution. Surface it as a real failure instead -> the
             // LoadSolution tool wrapper's catch block already turns a thrown ToolException into a
             // correct Success=false ToolResult.
             if (CurrentSolution == null || CurrentSolution.ProjectIds.Count == 0)
@@ -515,8 +515,8 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     // The main watcher only covers the solution directory's own subtree
     // (SetupWatcher(Path.GetDirectoryName(solutionPath))). A project or document referenced from
-    // outside that tree — a linked file, a shared project pulled in via a relative "..\" path, a
-    // solution folder pointing elsewhere — is invisible to it: edits there never populate
+    // outside that tree -> a linked file, a shared project pulled in via a relative "..\" path, a
+    // solution folder pointing elsewhere -> is invisible to it: edits there never populate
     // _externalChanges and the drift write-guard in ApplyProposedChangesAsync never fires for
     // them either, so reads would silently serve stale content indefinitely. This sets up one
     // extra watcher per distinct out-of-tree project directory found in the freshly loaded
@@ -547,7 +547,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // Drop any directory that is itself a subdirectory of another candidate — the parent's
+        // Drop any directory that is itself a subdirectory of another candidate -> the parent's
         // recursive watcher already covers it.
         var roots = outOfTreeDirs
             .Where(d => !outOfTreeDirs.Any(other =>
@@ -602,16 +602,16 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     // FileSystemWatcher has a fixed-size internal buffer; a burst of changes arriving faster
     // than we can drain them (bulk git checkout, a codemod touching hundreds of files, etc.)
-    // overflows it and the OS silently drops the events — Changed/Created/Deleted/Renamed
+    // overflows it and the OS silently drops the events -> Changed/Created/Deleted/Renamed
     // simply never fire for them. Without this handler that loss was invisible: CurrentSolution
     // would keep serving whatever it last had, forever, with no drift recorded and nothing to
-    // reconcile. We don't know which files were affected, so — same as a .sln change — force a
+    // reconcile. We don't know which files were affected, so -> same as a .sln change -> force a
     // full reload rather than silently continuing on stale content.
     private void OnWatcherError(object sender, ErrorEventArgs e)
     {
         if (_logger.IsEnabled(LogLevel.Error))
         {
-            _logger.LogError(e.GetException(), "FileSystemWatcher error — file change notifications may have been lost. Forcing a full solution reload.");
+            _logger.LogError(e.GetException(), "FileSystemWatcher error - file change notifications may have been lost. Forcing a full solution reload.");
         }
 
         _watcherOverflowed = true;
@@ -627,7 +627,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
 
         // ── Content-hash baseline gate (layered in FRONT of the older path-key/timestamp check
-        // below — see _knownFileHashes's declaration-site comment for why both exist) ──────────
+        // below -> see _knownFileHashes's declaration-site comment for why both exist) ──────────
         // Only meaningful for Changed/Created, which have real on-disk content to compare;
         // Renamed/Deleted fall through to the older check unchanged, same as that check already
         // treats them specially.
@@ -640,7 +640,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 {
                     if (FilePathLock.IsLocked(e.FullPath))
                     {
-                        // Write in flight for this exact path — same race the older check guards
+                        // Write in flight for this exact path -> same race the older check guards
                         // against below; skip the verification read rather than race the writer's
                         // open handle.
                         return;
@@ -657,14 +657,14 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     }
                     if (onDiskHash == recordedHash)
                     {
-                        // Hash-confirmed no-op or echo of our own write — never flag as drift,
+                        // Hash-confirmed no-op or echo of our own write -> never flag as drift,
                         // regardless of what the older path-key/timestamp check below would decide.
                         return;
                     }
                 }
                 catch (IOException)
                 {
-                    // Locked/being written concurrently — can't verify; assume it's our own write
+                    // Locked/being written concurrently -> can't verify; assume it's our own write
                     // in progress rather than false-positive an external edit, matching the older
                     // check's identical fallback below.
                     return;
@@ -672,13 +672,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             }
         }
 
-        // Ignore files written by ApplyProposedChangesAsync — they are already reflected in
+        // Ignore files written by ApplyProposedChangesAsync -> they are already reflected in
         // the in-memory workspace and a redundant reload would hold _solutionLock for tens of
         // seconds, starving every other caller. Path+timing alone isn't enough to tell our own
         // write apart from a human editing the same file within the suppression window, so we
         // also verify the on-disk content still matches what we wrote (Changed/Created events);
         // Renamed always falls through as real (no content to compare, and always someone else's
-        // action — nothing in this codebase renames a tracked file directly outside a rename-shaped
+        // action -> nothing in this codebase renames a tracked file directly outside a rename-shaped
         // multi-file apply that writes both paths' *content*, not a rename). Deleted gets its own
         // narrower check just below, for a genuine tracked delete via deletePaths.
         if (_internalChanges.TryGetValue(e.FullPath, out var recordedChange) &&
@@ -687,20 +687,20 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             if (e.ChangeType is WatcherChangeTypes.Deleted && recordedChange.Content.Length == 0 && !File.Exists(e.FullPath))
             {
                 // Our own tracked delete (ApplyProposedChangesAsync's deletePaths branch records
-                // an empty-string sentinel before deleting — see its call site). Content can't be
+                // an empty-string sentinel before deleting -> see its call site). Content can't be
                 // compared the way Changed/Created is, but "we just deleted this path ourselves,
                 // recently, and it's still gone" is unambiguous enough to suppress without a false
-                // positive risk that matters here — unlike Changed/Created, nothing else could have
+                // positive risk that matters here -> unlike Changed/Created, nothing else could have
                 // legitimately produced a content match to check against for a delete.
                 return;
             }
             else if (e.ChangeType is WatcherChangeTypes.Renamed or WatcherChangeTypes.Deleted)
             {
-                // Fall through — treat as a real external change.
+                // Fall through -> treat as a real external change.
             }
             else if (FilePathLock.IsLocked(e.FullPath))
             {
-                // A write to this exact path is still in flight — reading now would race the
+                // A write to this exact path is still in flight -> reading now would race the
                 // writer's open handle. Skip the verification read entirely rather than let it
                 // throw; this is our own write in progress, not a false-positive external edit.
                 return;
@@ -717,7 +717,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 }
                 catch (IOException)
                 {
-                    // File locked/being written concurrently — can't verify, assume it's our
+                    // File locked/being written concurrently -> can't verify, assume it's our
                     // own write in progress rather than false-positive an external edit.
                     return;
                 }
@@ -737,7 +737,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug(
-                "Flagging external drift for {PathKey} (ChangeType={ChangeType}) — hash gate found no recorded baseline or a mismatch, falling through to path-key/timestamp tracking.",
+                "Flagging external drift for {PathKey} (ChangeType={ChangeType}) - hash gate found no recorded baseline or a mismatch, falling through to path-key/timestamp tracking.",
                 e.FullPath, e.ChangeType);
         }
 
@@ -806,7 +806,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
             if (solutionNeedsReload)
             {
-                _logger.LogInformation(overflowed ? "Reloading entire solution (watcher overflow — change set unknown)..." : "Reloading entire solution...");
+                _logger.LogInformation(overflowed ? "Reloading entire solution (watcher overflow - change set unknown)..." : "Reloading entire solution...");
                 var slnPath = _workspace.CurrentSolution.FilePath;
                 if (!string.IsNullOrEmpty(slnPath))
                 {
@@ -814,7 +814,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     // OpenSolutionAsync throws partway through (e.g. the .sln transiently
                     // disappears mid-write during a concurrent git checkout), a reused workspace
                     // is left in a half-reloaded state whose projects resolve with broken
-                    // references — every subsequent build/diagnostic call then reports mass
+                    // references -> every subsequent build/diagnostic call then reports mass
                     // CS0234/CS0246 errors until the next explicit LoadSolution. Building a new
                     // instance and only swapping it in on success keeps the existing _workspace
                     // (and CurrentSolution) untouched and valid on failure.
@@ -864,7 +864,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             }
             else
             {
-                // No .csproj/.sln involved — resetting to the workspace's own CurrentSolution
+                // No .csproj/.sln involved -> resetting to the workspace's own CurrentSolution
                 // here would discard every edit accumulated in-memory since the last full
                 // load/reload (WithDocumentText/AddDocument only ever update this manager's
                 // in-memory CurrentSolution property, never the underlying _workspace). Fold just
@@ -886,7 +886,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
         catch (ObjectDisposedException)
         {
-            // Timer fired after Dispose() — semaphore or workspace already gone, safe to ignore.
+            // Timer fired after Dispose() -> semaphore or workspace already gone, safe to ignore.
         }
         catch (Exception ex)
         {
@@ -905,7 +905,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 }
                 catch (ObjectDisposedException)
                 {
-                    // Dispose() raced us between WaitAsync() returning and this Release() —
+                    // Dispose() raced us between WaitAsync() returning and this Release() ->
                     // the lock object is gone, nothing left to release into.
                 }
             }
@@ -945,8 +945,8 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// <summary>
     /// Relative paths of files attached via the .sln's Solution Folders (i.e. lines inside a
     /// <c>ProjectSection(SolutionItems)</c> block), paired with the enclosing folder's name.
-    /// MSBuildWorkspace never represents these as Roslyn Projects/Documents — <c>Solution.Projects</c>
-    /// only contains real buildable projects — so tools built on top of it (SearchSolutionText,
+    /// MSBuildWorkspace never represents these as Roslyn Projects/Documents -> <c>Solution.Projects</c>
+    /// only contains real buildable projects -> so tools built on top of it (SearchSolutionText,
     /// ListSolutionItems(kind: files)) can never see them. This reads the raw .sln text directly
     /// to surface them instead. Classic .sln format only; .slnx (XML) solutions and in-memory/test
     /// solutions (no real .sln backing) return an empty list.
@@ -1040,7 +1040,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         {
             return $"Rate limit: '{toolName}' called {count} times in {WindowSeconds}s (limit {limit}). "
                  + "This usually indicates a retry loop or thrashing. Stop, assess what is failing, "
-                 + "and either fix the root cause or — if this is legitimate high-volume work — "
+                 + "and either fix the root cause or - if this is legitimate high-volume work - "
                  + "propose a batch tool that accomplishes it in fewer calls.";
         }
 
@@ -1087,7 +1087,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 }
             }
         }
-        catch { /* best effort — bad JSON in the override file does not crash the server */ }
+        catch { /* best effort - bad JSON in the override file does not crash the server */ }
 
         return defaults;
     }
@@ -1102,7 +1102,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// <summary>
     /// Removes a document's in-memory tracking from CurrentSolution after its underlying file
     /// has been deleted from disk directly (e.g. as the old half of a file rename). Without this,
-    /// the deleted file's Document stays tracked — and if a new Document was added at a different
+    /// the deleted file's Document stays tracked -> and if a new Document was added at a different
     /// path with the same type declaration (as SyncTypeAndFilename does), the two coexist as a
     /// duplicate type in the compilation, corrupting symbol resolution for everything downstream.
     /// No-op if the path isn't currently tracked.
@@ -1214,15 +1214,15 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// Retries on IOExceptions (e.g. file locks).
     /// </summary>
     /// <remarks>
-    /// This is the shared chokepoint for writing modified source (.cs) file content to disk —
+    /// This is the shared chokepoint for writing modified source (.cs) file content to disk ->
     /// every tool/engine that persists an edit to a workspace file should route through this
     /// method (directly or via a caller that does), rather than calling File.WriteAllText*
     /// itself. Bypassing it loses external-drift refusal, pre-image capture for undo,
     /// no-op/whitespace-only-write skipping, FileSystemWatcher loop suppression, retry-on-lock,
-    /// and rollback-on-partial-failure — see docs/reference-code-file-write-paths-v1.md for the
+    /// and rollback-on-partial-failure -> see docs/reference-code-file-write-paths-v1.md for the
     /// full inventory of callers and the divergent paths found (and fixed) by bypassing this.
     /// There is no IWorkspaceManager interface enforcing this, so it is a convention, not a
-    /// compiler-checked constraint — keep it in mind when adding a new write path.
+    /// compiler-checked constraint -> keep it in mind when adding a new write path.
     /// </remarks>
     public async Task<ApplyChangesResult> ApplyProposedChangesAsync(
         Dictionary<FilePathWrapper, string> changes,
@@ -1238,7 +1238,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         // Session-wide fatal latch (see docs/current/ideas/external-drift-hard-blocker.md
         // proposal item 2): once tripped by a confirmed drift hit below, every subsequent
         // mutating call fails immediately and unconditionally, regardless of which file it
-        // targets — checked first, ahead of every other validation in this method.
+        // targets -> checked first, ahead of every other validation in this method.
         if (_sessionHalted)
         {
             throw new SessionHaltedException(
@@ -1268,7 +1268,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 Success: false,
                 SucceededFiles: [],
                 FailedFiles: overlap.ToDictionary(f => f, _ => "Path given as both a write and a delete target."),
-                Summary: $"Refused — {overlap.Count} path(s) appear in both changes and deletePaths: " +
+                Summary: $"Refused - {overlap.Count} path(s) appear in both changes and deletePaths: " +
                          $"{string.Join(", ", overlap.Select(f => Path.GetFileName(f)))}.");
         }
 
@@ -1277,7 +1277,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         // and the hash-baseline gate (OnFileSystemChanged) still flagged it as real drift, the
         // proposed content is stale and writing it would silently clobber whatever changed it
         // externally. Under the single-session/no-concurrent-actors assumption this is an
-        // anomaly, not something for the in-task model to reconcile — trip the session-wide
+        // anomaly, not something for the in-task model to reconcile -> trip the session-wide
         // latch and fail terminally rather than returning a soft, retryable result.
         var drift = new HashSet<string>(GetExternalFileChanges(), StringComparer.OrdinalIgnoreCase);
         var driftedTargets = changes.Keys.Concat(deletePaths).Where(k => drift.Contains(k)).Distinct().ToList();
@@ -1337,7 +1337,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 }
                 catch (Exception ex)
                 {
-                    // Cannot read pre-image — log and record null so the caller knows undo
+                    // Cannot read pre-image -> log and record null so the caller knows undo
                     // for this specific file is unavailable, but do not abort the whole batch.
                     preImages[key] = null;
                     if (_logger.IsEnabled(LogLevel.Warning))
@@ -1350,7 +1350,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             // ── Deletes ──────────────────────────────────────────────────────
             // Handled as their own pass, before the write loop below, so a delete failure is
             // tracked the same way a write failure is (failed/succeeded/rollback), and so a
-            // deleted path ends up in `succeeded` for ApplyInMemoryDocumentUpdatesAsync — which
+            // deleted path ends up in `succeeded` for ApplyInMemoryDocumentUpdatesAsync -> which
             // already removes the tracked Document for any affected file that no longer exists
             // on disk (originally written for the old half of a rename, but generically correct
             // here too).
@@ -1395,7 +1395,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 }
 
                 // For C# files, suppress writes where the only difference is whitespace
-                // normalization — e.g. NormalizeWhitespace() adding blank lines between methods
+                // normalization -> e.g. NormalizeWhitespace() adding blank lines between methods
                 // that were already present in the original. Parsing both sides and comparing
                 // their normalized forms catches any engine that forgot to preserve formatting.
                 if (EnableAstNormalizationNoOpCheck && preImage != null &&
@@ -1415,12 +1415,12 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     }
                     catch
                     {
-                        // Parse failure (e.g. malformed generated code) — fall through to normal write.
+                        // Parse failure (e.g. malformed generated code) -> fall through to normal write.
                     }
                 }
 
                 // Dev diagnostic only: measure how far this write's content diverges from what
-                // Roslyn's own formatter would produce, purely for observability — never mutates
+                // Roslyn's own formatter would produce, purely for observability -> never mutates
                 // newContent or affects what gets written below. See
                 // docs/reference-code-file-write-paths-v1.md ("Format-and-log diagnostic").
                 if (_logger.IsEnabled(LogLevel.Debug) &&
@@ -1440,7 +1440,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     }
                     catch
                     {
-                        // Diagnostic-only — a parse/format failure here must never block the real write.
+                        // Diagnostic-only -> a parse/format failure here must never block the real write.
                     }
                 }
 
@@ -1461,7 +1461,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         await FileIoHelper.WriteAllTextAsync(filePath, newContent, cancellationToken);
                         success = true;
                         succeeded.Add(filePath);
-                        // Update the hash baseline with what we just wrote — no extra I/O, newContent
+                        // Update the hash baseline with what we just wrote -> no extra I/O, newContent
                         // is already in memory. See _knownFileHashes's declaration-site comment.
                         _knownFileHashes[filePath] = ComputeContentHash(newContent);
                         if (_logger.IsEnabled(LogLevel.Information))
@@ -1504,7 +1504,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             // A multi-file change (e.g. a rename touching 5 files) is not atomic across the
             // per-file write loop above. If some files failed after others already succeeded,
             // restore the succeeded files to their pre-images so the change doesn't land
-            // half-applied. Best-effort: a rollback write failure is logged, not thrown — the
+            // half-applied. Best-effort: a rollback write failure is logged, not thrown -> the
             // caller already sees Success=false and can inspect Summary/FailedFiles.
             var rolledBack = new List<string>();
             if (rollbackOnPartialFailure && failed.Count > 0 && succeeded.Count > 0)
@@ -1531,7 +1531,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     {
                         if (_logger.IsEnabled(LogLevel.Error))
                         {
-                            _logger.LogError(ex, "Rollback failed for {FilePathWrapper} after partial-apply failure — file may be left in a partially-applied state.", filePath);
+                            _logger.LogError(ex, "Rollback failed for {FilePathWrapper} after partial-apply failure - file may be left in a partially-applied state.", filePath);
                         }
                     }
                 }
@@ -1565,7 +1565,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             }
 
             var summary = rolledBack.Count > 0
-                ? $"Partial write failure — {rolledBack.Count} already-written/deleted file(s) rolled back to keep the change atomic. {failed.Count} file(s) failed: {string.Join(", ", failed.Keys.Select(f => Path.GetFileName(f)))}."
+                ? $"Partial write failure - {rolledBack.Count} already-written/deleted file(s) rolled back to keep the change atomic. {failed.Count} file(s) failed: {string.Join(", ", failed.Keys.Select(f => Path.GetFileName(f)))}."
                 : $"Applied {succeeded.Count} changes successfully ({deletePaths.Count} delete(s)). {failed.Count} failures.";
             if (noOp.Count > 0)
             {
@@ -1601,7 +1601,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
     }
 
-    // Fast in-memory path — O(files), no MSBuild, no I/O beyond reading .cs file content.
+    // Fast in-memory path -> O(files), no MSBuild, no I/O beyond reading .cs file content.
     // Returns true when a structural file (.csproj / .sln) was among the affected files and a
     // full MSBuild reload is needed; the caller fires that reload after releasing the lock.
     // Guards only on CurrentSolution == null so it also works in SetTestSolution test scenarios.
@@ -1631,7 +1631,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
             if (!File.Exists(filePath))
             {
-                // File is gone (e.g. the old half of a rename) — drop its tracked Document so
+                // File is gone (e.g. the old half of a rename) -> drop its tracked Document so
                 // the type it declared doesn't keep existing twice in the compilation.
                 var deletedDocId = CurrentSolution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
                 if (deletedDocId != null)
@@ -1700,7 +1700,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         return needsFullReload;
     }
 
-    // Full MSBuild reload — runs outside the lock, re-acquires it only to swap CurrentSolution.
+    // Full MSBuild reload -> runs outside the lock, re-acquires it only to swap CurrentSolution.
     // Callers fire this on a background Task.Run after releasing the main lock.
     private async Task ReloadWorkspaceFromDiskAsync(CancellationToken cancellationToken)
     {
@@ -1818,15 +1818,15 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         // A plain _debounceTimer.Dispose() does not wait for an already-running
         // OnDebounceTimerElapsed callback to finish, so that callback's finally block can still run
         // concurrently with (or after) _solutionLock.Dispose() below. That used to throw an unguarded
-        // ObjectDisposedException from inside the finally block — fatal, since the callback is async
+        // ObjectDisposedException from inside the finally block -> fatal, since the callback is async
         // void and the exception has no caller to propagate to. Blocking here on the callback's
         // completion (via the Dispose(WaitHandle) overload) was tried as the fix, but that wait is
-        // itself unbounded on _solutionLock contention the callback is waiting on — if the lock is
+        // itself unbounded on _solutionLock contention the callback is waiting on -> if the lock is
         // held by slow, unrelated work (an LLM round-trip, a build) when Dispose() runs, this blocks
         // indefinitely instead of crashing, trading a crash for a silent hang. See
         // docs/current/project_dispose_waithandle_deadlock_found.md. The actual fix is the guard
         // directly around the throwing call, in OnDebounceTimerElapsed's finally block below (catches
-        // ObjectDisposedException from _solutionLock.Release()) — that alone closes the crash without
+        // ObjectDisposedException from _solutionLock.Release()) -> that alone closes the crash without
         // Dispose() ever needing to block on the callback.
         _debounceTimer.Dispose();
 
@@ -1864,7 +1864,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             {
                 _consecutiveFailureStreak++;
             }
-            // skips only — streak unchanged
+            // skips only -> streak unchanged
 
             if (!_breakerOpen)
             {
@@ -1917,7 +1917,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     /// <summary>
     /// Clears all circuit breaker state and re-enables mutating tools.
-    /// Manual only — never auto-reset by design.
+    /// Manual only -> never auto-reset by design.
     /// </summary>
     void IManualCircuitBreaker.Reset()
     {
@@ -1935,7 +1935,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     // This class implements three distinct breakers (IManualCircuitBreaker,
     // IAutomaticCircuitBreaker, IUnrecoverableBreaker) that each redeclare ICircuitBreaker's
-    // members with their own meaning — there is no single correct answer for "IsTripped()" on the
+    // members with their own meaning -> there is no single correct answer for "IsTripped()" on the
     // bare ICircuitBreaker view, so it isn't meant to be called through that type. Cast to the
     // specific breaker interface instead.
     private static NotSupportedException AmbiguousBreakerView() =>
@@ -2112,13 +2112,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
             return $"SearchSolutionText is DISABLED after {_consecutiveZeroMatchSearches} consecutive calls returned " +
                    "no matches. It will not run again until one of the tools below succeeds. You MUST call " +
-                   "ListAll(kind: all) or ListSolutionItems(kind: all) now — browse the returned list for what " +
+                   "ListAll(kind: all) or ListSolutionItems(kind: all) now - browse the returned list for what " +
                    "you're looking for. GetFileOutline and ReadFile are also available once you have a real path " +
                    "from that list.";
         }
     }
 
-    /// <summary>Clears the orientation breaker and its zero-match streak. Called automatically by the request filter — no manual reset tool.</summary>
+    /// <summary>Clears the orientation breaker and its zero-match streak. Called automatically by the request filter -> no manual reset tool.</summary>
     void IAutomaticCircuitBreaker.Reset()
     {
         lock (_orientationBreakerLock)
@@ -2152,7 +2152,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                       $"attempts={_totalAttempts}, " +
                       $"failureRate={failureRatePct:F1}%/{BreakerRateThreshold * 100:F0}%, " +
                       $"rollbackScore={_weightedRollbackScore}/{BreakerRollbackScoreThreshold})",
-            "caution" => $"Elevated failure indicators — proceeding but monitor for trip. " +
+            "caution" => $"Elevated failure indicators - proceeding but monitor for trip. " +
                          $"streak={_consecutiveFailureStreak}/{BreakerStreakThreshold}, " +
                          $"failureRate={failureRatePct:F1}%/{BreakerRateThreshold * 100:F0}%, " +
                          $"rollbackScore={_weightedRollbackScore}/{BreakerRollbackScoreThreshold}.",
@@ -2170,7 +2170,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         // when the actual fix is to call LoadSolution. Check CurrentSolution directly rather than
         // GetSolutionRoot(): an in-memory test solution (SetTestSolution) has CurrentSolution set
         // but no on-disk path, so GetSolutionRoot() returns null even though a solution genuinely
-        // is loaded — that case must fall through to normal path resolution, not be misreported as
+        // is loaded -> that case must fall through to normal path resolution, not be misreported as
         // "no solution loaded."
         if (CurrentSolution is null)
         {
@@ -2215,13 +2215,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     public bool IsCurrentSession(string sessionId)
     {
-        // An absent sessionId means the caller isn't tracking sessions — nothing to compare
+        // An absent sessionId means the caller isn't tracking sessions -> nothing to compare
         // against, so it can't be stale. Only a non-empty sessionId that doesn't match the
         // current workspace session counts as stale.
         return string.IsNullOrEmpty(sessionId) || sessionId == this.SessionId.ToString();
     }
 
-    // v1 — single integration point for all symbol-accepting tools
+    // v1 -> single integration point for all symbol-accepting tools
     public async Task<SymbolResolution> ResolveFromWireAsync(
         string sessionId,
         string projectName,
@@ -2249,7 +2249,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 Handle = handle,
                 Error = new EngineError(
                     EngineErrorCode.SymbolNotResolved,
-                    $"Symbol '{docCommentId}' no longer resolves — may have been renamed, moved, or removed. Re-run LocateSymbol.",
+                    $"Symbol '{docCommentId}' no longer resolves - may have been renamed, moved, or removed. Re-run LocateSymbol.",
                     DataTag.SymbolHandle)
             };
         }

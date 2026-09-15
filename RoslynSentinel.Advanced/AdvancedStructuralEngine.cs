@@ -149,17 +149,17 @@ public class AdvancedStructuralEngine
     }
 
     /// <summary>
-    /// Moves named members from a class into a target class atomically — one combined change set,
+    /// Moves named members from a class into a target class atomically -> one combined change set,
     /// so it validates and writes as a single unit instead of the remove-then-add sequence that
     /// otherwise fails the write-path chokepoint's per-write compiler check (source ends up with
     /// dangling references before the add lands).
     ///
     /// Three destination modes, chosen automatically from targetClassName:
     ///  - Existing base type of the source class: reuses PullUpMember's modifier adjustment
-    ///    (removes override, adds virtual) and skips call-site rewriting — virtual dispatch means
+    ///    (removes override, adds virtual) and skips call-site rewriting -> virtual dispatch means
     ///    existing call sites keep working unchanged. Instance OR static members are both fine here.
     ///  - Existing unrelated class: moves the declaration as-is and rewrites call sites solution-wide
-    ///    (ClassA.Foo() → ClassB.Foo()). STATIC MEMBERS ONLY — an instance member has no such
+    ///    (ClassA.Foo() -> ClassB.Foo()). STATIC MEMBERS ONLY -> an instance member has no such
     ///    unambiguous rewrite (a call site may use the same source-class variable for other members
     ///    that stay behind, so there's no single correct receiver substitution); those are rejected
     ///    up front with a ToolNotFoundException rather than attempting a partial/guessed rewrite.
@@ -223,12 +223,12 @@ public class AdvancedStructuralEngine
         }
 
         // Moving an INSTANCE member to anywhere other than an existing base class requires rewriting
-        // every call site's receiver expression — and that's not always a safe mechanical substitution.
+        // every call site's receiver expression -> and that's not always a safe mechanical substitution.
         // A local like `var x = new ClassA(); x.Foo(); x.Bar();` where only Foo moves to ClassB has no
         // single correct fix: retyping x to ClassB breaks Bar(), leaving it ClassA breaks Foo(). The real
         // fix (splitting into two variables, or adding a second reference) reshapes the caller's method
-        // body — a design decision, not something this tool can infer from the move alone. STATIC members
-        // have no such ambiguity (ClassA.Foo() → ClassB.Foo() is unambiguous everywhere), so only those
+        // body -> a design decision, not something this tool can infer from the move alone. STATIC members
+        // have no such ambiguity (ClassA.Foo() -> ClassB.Foo() is unambiguous everywhere), so only those
         // are supported for the existing-unrelated-class and new-class destinations.
         var nonStaticMembers = membersToMove.Where(m =>
         {
@@ -409,8 +409,8 @@ public class AdvancedStructuralEngine
 
     /// <summary>
     /// Moves STATIC members into an existing, unrelated class. Static-only because the call-site
-    /// rewrite is then unambiguous everywhere (ClassA.Foo() → TargetClassName.Foo(), no receiver
-    /// instance involved) — MoveMemberAsync's caller already guarantees every member here is static.
+    /// rewrite is then unambiguous everywhere (ClassA.Foo() -> TargetClassName.Foo(), no receiver
+    /// instance involved) -> MoveMemberAsync's caller already guarantees every member here is static.
     /// </summary>
     private static async Task<MoveMemberResult> MoveMembersToExistingClassAsync(
         Solution solution,
@@ -470,7 +470,7 @@ public class AdvancedStructuralEngine
             result[targetFilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(newTargetRoot).ToFullString();
         }
 
-        // Cross-file call sites: ClassA.Foo() → TargetClassName.Foo() — unambiguous since Foo is static.
+        // Cross-file call sites: ClassA.Foo() -> TargetClassName.Foo() -> unambiguous since Foo is static.
         var skipPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { filePath, targetFilePath };
         foreach (var symbol in memberSymbols)
         {
@@ -551,7 +551,7 @@ public class AdvancedStructuralEngine
                 _ => Array.Empty<string>()
             }), StringComparer.Ordinal);
 
-        // Static members only (guaranteed by MoveMemberAsync's caller) — no `this.Member()` case to
+        // Static members only (guaranteed by MoveMemberAsync's caller) -> no `this.Member()` case to
         // rewrite, and no accessor property needed; bare Member() becomes NewClassName.Member() directly.
         var updatedSourceClass = classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!;
 
@@ -574,7 +574,7 @@ public class AdvancedStructuralEngine
             { filePath, FormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString() }
         };
 
-        // Cross-file call sites: ClassA.Foo() → NewClassName.Foo() — unambiguous since Foo is static.
+        // Cross-file call sites: ClassA.Foo() -> NewClassName.Foo() -> unambiguous since Foo is static.
         var skipPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { filePath, newFilePath };
         foreach (var symbol in memberSymbols)
         {

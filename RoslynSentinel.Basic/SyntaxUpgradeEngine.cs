@@ -903,7 +903,7 @@ public class SyntaxUpgradeEngine
 
             if (typeName == "ArgumentNullException" && args.Count >= 1)
             {
-                // throw new ArgumentNullException(nameof(x)) → ArgumentNullException.ThrowIfNull(x);
+                // throw new ArgumentNullException(nameof(x)) -> ArgumentNullException.ThrowIfNull(x);
                 var nameofArg = args[0].Expression;
                 string? paramName = null;
                 if (nameofArg is InvocationExpressionSyntax nameofInv &&

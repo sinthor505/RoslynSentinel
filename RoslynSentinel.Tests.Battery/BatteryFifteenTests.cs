@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Battery #15 — ApiIntegrationEngine, AsyncOptimizationEngine,
+// Battery #15 -> ApiIntegrationEngine, AsyncOptimizationEngine,
 //               CodeFlowEngine, CodeHealingEngine
 // ────────────────────────────────────────────────────────────────────────────
 

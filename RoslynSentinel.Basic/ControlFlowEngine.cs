@@ -108,7 +108,7 @@ public class ControlFlowEngine
 
     /// <summary>
     /// Analyzes control flow for an entire method body using Roslyn's semantic analysis.
-    /// Takes the method name (not raw line ranges) — avoids the "include method signature" trap.
+    /// Takes the method name (not raw line ranges) -> avoids the "include method signature" trap.
     /// If multiple overloads exist, provide disambiguateLine (any line inside the desired overload).
     /// </summary>
     public async Task<ControlFlowAnalysisResult> AnalyzeMethodControlFlowAsync(
@@ -204,7 +204,7 @@ public class ControlFlowEngine
 
     /// <summary>
     /// Analyzes data flow for an entire method body using Roslyn's semantic analysis.
-    /// Takes the method name (not raw line ranges) — avoids the "include method signature" trap.
+    /// Takes the method name (not raw line ranges) -> avoids the "include method signature" trap.
     /// If multiple overloads exist, provide disambiguateLine (any line inside the desired overload).
     /// </summary>
     public async Task<DataFlowAnalysisResult> AnalyzeMethodDataFlowAsync(
@@ -350,7 +350,7 @@ public class ControlFlowEngine
                     continue;
                 }
 
-                // Has a default label → already handles unrecognized values
+                // Has a default label -> already handles unrecognized values
                 bool hasDefault = switchStmt.Sections
                     .SelectMany(s => s.Labels)
                     .Any(l => l is DefaultSwitchLabelSyntax);

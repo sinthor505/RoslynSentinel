@@ -1,6 +1,6 @@
 // containerName resolution for generic types (defect A5 of run 20260910-013550-398).
 //
-// Turn 19 passed containerName: "EngineResultWrapper<T>" — the type's own declared spelling — and
+// Turn 19 passed containerName: "EngineResultWrapper<T>" -> the type's own declared spelling -> and
 // was rejected; turn 20 passed the bare "EngineResultWrapper" and succeeded. The cause was a single
 // comparison in ResolveTypeByNameOrSnippet: Roslyn's Identifier.Text is already arity-stripped, so
 // it could never equal a caller's raw generic string. Third recorded instance of this class of miss
@@ -106,7 +106,7 @@ public class GenericContainerNameTests
     [Test]
     public async Task AddMember_UnknownContainer_ListsTheTypesTheFileActuallyDeclaresAsync()
     {
-        // The old message was the literal "// Container not found." — no names, and prefixed as if
+        // The old message was the literal "// Container not found." -> no names, and prefixed as if
         // it were a line of code. Listing what's available is what lets the caller correct itself
         // in one turn instead of guessing, and immediately reveals a wrong-file mistake.
         var result = await _refactoringEngine.AddMemberAsync(

@@ -9,7 +9,7 @@
   </PropertyGroup>
 
 	<ItemGroup>
-		<!-- MSBuild packages: same pattern as RoslynSentinel.Server — exclude runtime DLLs
+		<!-- MSBuild packages: same pattern as RoslynSentinel.Server - exclude runtime DLLs
          so MSBuildLocator can find the SDK-provided MSBuild at runtime instead. -->
 		<PackageReference Include="Microsoft.Build.Framework" Version="18.9.6" ExcludeAssets="runtime" PrivateAssets="all">
 			<IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

@@ -1,7 +1,7 @@
 // ReplaceSnippet's per-parameter size guard. Run 20260910-013550-398 died here: the old shared
 // 200-char cap rejected an ordinary 6-line insertion, the message named all four bounds at once so
 // the model kept guessing which it had hit, and the one escape hatch it named (WriteFile) was gated
-// off for that run. These tests pin all three fixes — the raised caps, the per-bound message naming
+// off for that run. These tests pin all three fixes -> the raised caps, the per-bound message naming
 // the actual value, and advice sourced from WriteToolAdviceHelper rather than a hardcoded name.
 //
 // A real on-disk solution (TestSolutionFixture + PersistentWorkspaceManager) is used rather than
@@ -42,7 +42,7 @@ public class ReplaceSnippetSizeGuardTests
     {
         // ~40 lines / ~1200 chars of newContent: comfortably over the old 20-line/200-char caps and
         // under the new 60-line/2000-char ones. The assertion is specifically that it isn't
-        // *size*-rejected — validation may still reject the content on its own merits.
+        // *size*-rejected -> validation may still reject the content on its own merits.
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
@@ -116,7 +116,7 @@ public class ReplaceSnippetSizeGuardTests
     public async Task ReplaceSnippet_OverCapWithWholeFileWriteGatedOff_DoesNotNameWriteFileAsync()
     {
         // The run-398 regression, stated directly: with SentinelWholeFileWriteTools gated off (the
-        // configuration that scores 26/26 — see project_wholefilewrite_gating_overnight_result_2026_09_08),
+        // configuration that scores 26/26 -> see project_wholefilewrite_gating_overnight_result_2026_09_08),
         // the size error must not send the agent to a tool it cannot call.
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);

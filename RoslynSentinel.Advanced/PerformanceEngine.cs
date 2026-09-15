@@ -57,7 +57,7 @@ public class PerformanceEngine
         CheckReflectionInLoop(root, filePath, issues);
         CheckCollectionWithoutCapacity(root, filePath, issues);
 
-        // Deduplicate by (filePath, line, issueType) — chained string concat expressions
+        // Deduplicate by (filePath, line, issueType) -> chained string concat expressions
         // produce one node per '+' operator, all pointing to adjacent lines on the same expression.
         var seen = new HashSet<(string, int, string)>();
         var deduped = new List<PerformanceIssueReport>();
@@ -72,7 +72,7 @@ public class PerformanceEngine
         return deduped;
     }
 
-    // 1. Find String Concatenations (especially in loops) — literal-based: "str" + x
+    // 1. Find String Concatenations (especially in loops) -> literal-based: "str" + x
     private static void CheckStringConcatenationInLoop(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         var stringConcats = root.DescendantNodes().OfType<BinaryExpressionSyntax>()
@@ -90,7 +90,7 @@ public class PerformanceEngine
         }
     }
 
-    // 1b. string += in loops (compound assignment) — use semantic model for type check
+    // 1b. string += in loops (compound assignment) -> use semantic model for type check
     private static void CheckStringCompoundAssignInLoop(SyntaxNode root, SemanticModel? semanticModel, FilePathWrapper filePath, List<PerformanceIssueReport> issues, CancellationToken cancellationToken)
     {
         var assignConcats = root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
@@ -140,7 +140,7 @@ public class PerformanceEngine
             {
                 var methodName = ((MemberAccessExpressionSyntax)inv.Expression).Name.Identifier.Text;
                 var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
-                issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "AllocationInLoop", $"Avoid calling .{methodName}() inside a loop — it allocates a new collection on every iteration. Move it outside the loop."));
+                issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "AllocationInLoop", $"Avoid calling .{methodName}() inside a loop - it allocates a new collection on every iteration. Move it outside the loop."));
             }
         }
     }
@@ -203,12 +203,12 @@ public class PerformanceEngine
             {
                 var loc = oc.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "HttpClientPerRequest",
-                    "HttpClient created directly in a method — use IHttpClientFactory.CreateClient() to avoid socket exhaustion."));
+                    "HttpClient created directly in a method - use IHttpClientFactory.CreateClient() to avoid socket exhaustion."));
             }
         }
     }
 
-    // 4. Detect .Result or .GetAwaiter().GetResult() — synchronous blocking on async work
+    // 4. Detect .Result or .GetAwaiter().GetResult() -> synchronous blocking on async work
     // Semantic model: exact Task/ValueTask receiver check eliminates all non-Task .Result false positives.
     // Fallback: ReceiverLooksLikeTask heuristic for unresolved projects.
     private static void CheckBlockingAsyncCall(SyntaxNode root, SemanticModel? semanticModel, FilePathWrapper filePath, List<PerformanceIssueReport> issues, CancellationToken cancellationToken)
@@ -235,7 +235,7 @@ public class PerformanceEngine
                 {
                     var loc = memberAccess.GetLocation().GetLineSpan().StartLinePosition;
                     issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "BlockingAsyncCall",
-                        ".Result accessed on a Task — synchronous blocking risks deadlocks and starves the thread pool. Use 'await' instead."));
+                        ".Result accessed on a Task - synchronous blocking risks deadlocks and starves the thread pool. Use 'await' instead."));
                 }
             }
 
@@ -246,12 +246,12 @@ public class PerformanceEngine
             {
                 var loc = memberAccess.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "BlockingAsyncCall",
-                    ".GetAwaiter().GetResult() found — synchronous blocking risks deadlocks. Use 'await' instead."));
+                    ".GetAwaiter().GetResult() found - synchronous blocking risks deadlocks. Use 'await' instead."));
             }
         }
     }
 
-    // 5. Detect .Wait() on Task — synchronous blocking
+    // 5. Detect .Wait() on Task -> synchronous blocking
     private static void CheckTaskWait(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -262,12 +262,12 @@ public class PerformanceEngine
             {
                 var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "BlockingAsyncCall",
-                    ".Wait() on a Task — synchronous blocking risks deadlocks. Use 'await' instead."));
+                    ".Wait() on a Task - synchronous blocking risks deadlocks. Use 'await' instead."));
             }
         }
     }
 
-    // 6. Detect .ToList().Count or .ToArray().Length — materializes just to get count
+    // 6. Detect .ToList().Count or .ToArray().Length -> materializes just to get count
     private static void CheckUnnecessaryMaterialization(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var memberAccess in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
@@ -285,7 +285,7 @@ public class PerformanceEngine
         }
     }
 
-    // 7. New collection allocation inside a loop — repeated heap allocation on every iteration
+    // 7. New collection allocation inside a loop -> repeated heap allocation on every iteration
     private static void CheckCollectionAllocationInLoop(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         var newCollections = root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>()
@@ -317,7 +317,7 @@ public class PerformanceEngine
         }
     }
 
-    // 8. Select().Select() — two projections can be merged into one
+    // 8. Select().Select() -> two projections can be merged into one
     private static void CheckChainedSelectProjection(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var outerSelect in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -339,12 +339,12 @@ public class PerformanceEngine
                 var loc = outerSelect.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1,
                     "ChainedSelectProjection",
-                    ".Select().Select() applies two projections separately — merge into a single .Select() to iterate the source only once."));
+                    ".Select().Select() applies two projections separately - merge into a single .Select() to iterate the source only once."));
             }
         }
     }
 
-    // 10. Thread.Sleep in async methods — blocks the thread pool; use Task.Delay instead
+    // 10. Thread.Sleep in async methods -> blocks the thread pool; use Task.Delay instead
     private static void CheckThreadSleepInAsync(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -365,7 +365,7 @@ public class PerformanceEngine
         }
     }
 
-    // 11. lock with async calls inside an async method — cannot await inside lock;
+    // 11. lock with async calls inside an async method -> cannot await inside lock;
     // if the locked region calls async methods, consider SemaphoreSlim.WaitAsync() instead.
     private static void CheckLockWithAsyncInAsyncMethod(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
@@ -390,12 +390,12 @@ public class PerformanceEngine
             {
                 var loc = lockStmt.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "LockWithAsyncInAsyncMethod",
-                    "lock statement in async method contains async calls — use SemaphoreSlim.WaitAsync() for async-compatible mutual exclusion."));
+                    "lock statement in async method contains async calls - use SemaphoreSlim.WaitAsync() for async-compatible mutual exclusion."));
             }
         }
     }
 
-    // 12. .OrderBy(...).First() or .OrderByDescending(...).First() — use MinBy/MaxBy
+    // 12. .OrderBy(...).First() or .OrderByDescending(...).First() -> use MinBy/MaxBy
     private static void CheckOrderByThenFirst(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -435,7 +435,7 @@ public class PerformanceEngine
         }
     }
 
-    // 13. Double enumeration — IEnumerable<T> variable consumed more than once
+    // 13. Double enumeration -> IEnumerable<T> variable consumed more than once
     // Each enumeration re-executes the entire LINQ chain; use .ToList()/.ToArray() to materialize once.
     private static void CheckPotentialDoubleEnumeration(SyntaxNode root, SemanticModel? semanticModel, FilePathWrapper filePath, List<PerformanceIssueReport> issues, CancellationToken cancellationToken)
     {
@@ -471,14 +471,14 @@ public class PerformanceEngine
                         var loc = declarator.GetLocation().GetLineSpan().StartLinePosition;
                         issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1,
                             "PotentialDoubleEnumeration",
-                            $"'{localSymbol.Name}' ({localSymbol.Type.Name}) is a lazy sequence used {uses} times — each use re-executes the full query. Call .ToList() or .ToArray() once and reuse."));
+                            $"'{localSymbol.Name}' ({localSymbol.Type.Name}) is a lazy sequence used {uses} times - each use re-executes the full query. Call .ToList() or .ToArray() once and reuse."));
                     }
                 }
             }
         }
     }
 
-    // 14. Inline Regex instantiation — re-compiles the pattern on every call
+    // 14. Inline Regex instantiation -> re-compiles the pattern on every call
     // Correct pattern: private static readonly Regex _re = new(pattern);
     private static void CheckInlineRegexInstantiation(SyntaxNode root, SemanticModel? semanticModel, FilePathWrapper filePath, List<PerformanceIssueReport> issues, CancellationToken cancellationToken)
     {
@@ -521,8 +521,8 @@ public class PerformanceEngine
         }
     }
 
-    // 15. String method called with single-character string literal — use char overload
-    // e.g. s.Contains("x") → s.Contains('x') — avoids string allocation, uses faster comparison
+    // 15. String method called with single-character string literal -> use char overload
+    // e.g. s.Contains("x") -> s.Contains('x') -> avoids string allocation, uses faster comparison
     private static void CheckStringMethodWithSingleCharArg(SyntaxNode root, SemanticModel? semanticModel, FilePathWrapper filePath, List<PerformanceIssueReport> issues, CancellationToken cancellationToken)
     {
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -567,12 +567,12 @@ public class PerformanceEngine
                 var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1,
                     "StringMethodWithSingleCharArg",
-                    $".{mName}(\"{ch}\") — use the char overload .{mName}('{ch}') to avoid string allocation and enable faster comparison."));
+                    $".{mName}(\"{ch}\") - use the char overload .{mName}('{ch}') to avoid string allocation and enable faster comparison."));
             }
         }
     }
 
-    // 16. Where().Where() — two filter passes when one would do
+    // 16. Where().Where() -> two filter passes when one would do
     private static void CheckChainedWhereFilters(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var outerWhere in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -599,7 +599,7 @@ public class PerformanceEngine
         }
     }
 
-    // 17. Loop invariant condition — .Count() or .Count/.Length evaluated on every for-loop iteration
+    // 17. Loop invariant condition -> .Count() or .Count/.Length evaluated on every for-loop iteration
     private static void CheckLoopInvariantCondition(SyntaxNode root, SemanticModel? semanticModel, FilePathWrapper filePath, List<PerformanceIssueReport> issues, CancellationToken cancellationToken)
     {
         foreach (var forLoop in root.DescendantNodes().OfType<ForStatementSyntax>())
@@ -609,7 +609,7 @@ public class PerformanceEngine
                 continue;
             }
 
-            // .Count() LINQ extension — O(n) per-iteration check
+            // .Count() LINQ extension -> O(n) per-iteration check
             foreach (var call in forLoop.Condition.DescendantNodesAndSelf()
                 .OfType<InvocationExpressionSyntax>()
                 .Where(inv => inv.Expression is MemberAccessExpressionSyntax cma &&
@@ -619,10 +619,10 @@ public class PerformanceEngine
                 var loc = call.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1,
                     "LoopInvariantCondition",
-                    "for loop condition calls .Count() on every iteration — O(n) per check. Cache before the loop: 'var count = source.Count();'"));
+                    "for loop condition calls .Count() on every iteration - O(n) per check. Cache before the loop: 'var count = source.Count();'"));
             }
 
-            // .Count or .Length property — skip arrays (JIT hoists array.Length automatically)
+            // .Count or .Length property -> skip arrays (JIT hoists array.Length automatically)
             foreach (var ma in forLoop.Condition.DescendantNodesAndSelf()
                 .OfType<MemberAccessExpressionSyntax>()
                 .Where(ma => ma.Name.Identifier.Text is "Count" or "Length" &&
@@ -644,7 +644,7 @@ public class PerformanceEngine
         }
     }
 
-    // 18. Use of 'dynamic' — disables compile-time type checking, forces DLR dispatch on every member access
+    // 18. Use of 'dynamic' -> disables compile-time type checking, forces DLR dispatch on every member access
     private static void CheckDynamicTypeUsage(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var id in root.DescendantNodes().OfType<IdentifierNameSyntax>()
@@ -659,7 +659,7 @@ public class PerformanceEngine
         }
     }
 
-    // 19. Local variable typed as 'object' — prefer specific type or generics to avoid boxing
+    // 19. Local variable typed as 'object' -> prefer specific type or generics to avoid boxing
     private static void CheckObjectTypeUsage(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var pts in root.DescendantNodes().OfType<PredefinedTypeSyntax>())
@@ -683,11 +683,11 @@ public class PerformanceEngine
             var loc = pts.GetLocation().GetLineSpan().StartLinePosition;
             issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1,
                 "ObjectTypeUsage",
-                $"Local variable '{varName}' is typed as 'object' — prefer a specific type or generic to avoid boxing and improve type safety."));
+                $"Local variable '{varName}' is typed as 'object' - prefer a specific type or generic to avoid boxing and improve type safety."));
         }
     }
 
-    // 20. Enum.Parse / Enum.TryParse inside a loop — re-parses string on every iteration
+    // 20. Enum.Parse / Enum.TryParse inside a loop -> re-parses string on every iteration
     private static void CheckEnumParseInLoop(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -720,7 +720,7 @@ public class PerformanceEngine
         }
     }
 
-    // 21. .Aggregate() with string concatenation in lambda — string.Join() avoids N-1 intermediate allocations
+    // 21. .Aggregate() with string concatenation in lambda -> string.Join() avoids N-1 intermediate allocations
     private static void CheckAggregateStringConcat(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -764,7 +764,7 @@ public class PerformanceEngine
         }
     }
 
-    // 22. Same method call repeated 3+ times without caching — each call re-executes the work
+    // 22. Same method call repeated 3+ times without caching -> each call re-executes the work
     private static void CheckRepeatedMethodCallNotCached(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
@@ -787,7 +787,7 @@ public class PerformanceEngine
         }
     }
 
-    // Check 23: Reflection calls inside loops — GetMethod/GetProperty/GetField/GetType are expensive
+    // Check 23: Reflection calls inside loops -> GetMethod/GetProperty/GetField/GetType are expensive
     private static void CheckReflectionInLoop(SyntaxNode root, FilePathWrapper filePath, List<PerformanceIssueReport> issues)
     {
         foreach (var loopNode in root.DescendantNodes().Where(n =>
@@ -848,7 +848,7 @@ public class PerformanceEngine
                         continue;
                     }
 
-                    // Already has a capacity argument — fine
+                    // Already has a capacity argument -> fine
                     if (oc.ArgumentList != null && oc.ArgumentList.Arguments.Count > 0)
                     {
                         continue;
@@ -1029,7 +1029,7 @@ public class PerformanceEngine
 
     /// <summary>
     /// Detects LINQ terminal operations (FirstOrDefault, ToList, Any, etc.) called inside
-    /// a loop body where the LINQ chain filters on the loop variable — the classic N+1 pattern
+    /// a loop body where the LINQ chain filters on the loop variable -> the classic N+1 pattern
     /// that fires one query per iteration instead of one batch query.
     /// </summary>
     public async Task<List<PerformanceIssueReport>> FindLinqN1PatternsAsync(
@@ -1060,7 +1060,7 @@ public class PerformanceEngine
 
             foreach (var loop in loops)
             {
-                // Get the loop variable name (foreach only — for/while iteration variable detection is harder)
+                // Get the loop variable name (foreach only -> for/while iteration variable detection is harder)
                 string? loopVar = loop is ForEachStatementSyntax fe ? fe.Identifier.Text : null;
 
                 // Find all LINQ terminal invocations inside this loop
@@ -1106,7 +1106,7 @@ public class PerformanceEngine
                     var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
                     issues.Add(new PerformanceIssueReport(fp, loc.Line + 1, loc.Character + 1,
                         "LinqN1Pattern",
-                        $"LINQ terminal '{terminalName}' called inside a loop — potential N+1: " +
+                        $"LINQ terminal '{terminalName}' called inside a loop - potential N+1: " +
                         $"one query fires per iteration. Batch with a single query outside the loop."));
                 }
             }
@@ -1209,7 +1209,7 @@ public class PerformanceEngine
     /// <summary>
     /// Detects local variables whose declared type is IEnumerable/IQueryable and that are
     /// iterated or queried more than once without a materializing call (.ToList() etc.)
-    /// in between — which can execute a DB query or expensive generator twice.
+    /// in between -> which can execute a DB query or expensive generator twice.
     /// </summary>
     public async Task<List<PerformanceIssueReport>> FindMultipleEnumerationAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
@@ -1334,7 +1334,7 @@ public class PerformanceEngine
     }
 
     // ── LinqRedundantWhere ────────────────────────────────────────────────────
-    // .Where(pred).First() allocates a filtered enumerable, then finds the first element —
+    // .Where(pred).First() allocates a filtered enumerable, then finds the first element ->
     // when .First(pred) does the same thing in a single pass with no intermediate allocation.
 
     private static readonly HashSet<string> RedundantAfterWhere = new(StringComparer.Ordinal)
@@ -1422,7 +1422,7 @@ public class PerformanceEngine
     }
 
     // ── ImplicitNullableBoxing ────────────────────────────────────────────────
-    // Casting a Nullable<T> to object boxes the value — if it is null the box contains
+    // Casting a Nullable<T> to object boxes the value -> if it is null the box contains
     // a null reference, which can cause surprising equality results and GC pressure.
 
     /// <summary>
@@ -1485,7 +1485,7 @@ public class PerformanceEngine
                 issues.Add(new PerformanceIssueReport(fp, loc.Line + 1, loc.Character + 1,
                     "ImplicitNullableBoxing",
                     $"Casting '{cast.Expression}' (Nullable<T>) to {targetType} boxes the value. " +
-                    "If the nullable is null the resulting box is null — not a null reference to a T. " +
+                    "If the nullable is null the resulting box is null - not a null reference to a T. " +
                     "Use .HasValue/.Value or null-coalescing to avoid boxing."));
             }
         }

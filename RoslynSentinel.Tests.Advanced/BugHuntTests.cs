@@ -1,10 +1,10 @@
-// BugHuntTests.cs — Deep bug hunt across RoslynSentinel engines
+// BugHuntTests.cs -> Deep bug hunt across RoslynSentinel engines
 // Each test documents a confirmed bug with:
 //   - What triggers it (false positive / false negative)
 //   - What SHOULD happen
 //   - What DOES happen (the bug)
 //
-// Tests are written to assert CORRECT behavior → they FAIL on the current code,
+// Tests are written to assert CORRECT behavior -> they FAIL on the current code,
 // confirming the bug. They will PASS once fixed.
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -45,13 +45,13 @@ public class BugHuntTests
     //                   assign && assign.Left == ma) continue;
     //             FindBlockingCallsInAsyncAsync lacks that guard entirely.
     //
-    // TRIGGERS: Any  obj.Result = value  write inside an async method — e.g.
+    // TRIGGERS: Any  obj.Result = value  write inside an async method -> e.g.
     //           ASP.NET action filters writing to context.Result, or any domain
     //           object whose property happens to be named Result.
     //
     // EXPECTED: 0 reports (it is a property set, not a Task.Result blocking read)
     // ACTUAL:   1 report ("Line N: .Result accessed in async method")
-    // SEVERITY: Major — very common in ASP.NET controller / filter code
+    // SEVERITY: Major -> very common in ASP.NET controller / filter code
     // ==========================================================================
 
     [Test]
@@ -123,7 +123,7 @@ public class BugHuntTests
     //             event handler and is incorrectly flagged as AsyncVoidMethod.
     //
     //             The fixed version in AsyncSafetyEngine.IsEventHandlerSignature
-    //             uses  .TrimEnd('?')  before comparing — that fix was never
+    //             uses  .TrimEnd('?')  before comparing -> that fix was never
     //             back-ported to AntiPatternEngine.
     //
     // TRIGGERS: Any #nullable enable project where event handlers are written as
@@ -131,7 +131,7 @@ public class BugHuntTests
     //
     // EXPECTED: 0 AsyncVoidMethod findings (it IS a valid event handler)
     // ACTUAL:   1 finding (wrongly flagged)
-    // SEVERITY: Minor-to-Major depending on project — ubiquitous in WinForms/WPF/MAUI
+    // SEVERITY: Minor-to-Major depending on project -> ubiquitous in WinForms/WPF/MAUI
     // ==========================================================================
 
     [Test]
@@ -141,7 +141,7 @@ public class BugHuntTests
         const string source = """
             class MyForm
             {
-                // Nullable-aware event handler — the only legitimate use of async void.
+                // Nullable-aware event handler -> the only legitimate use of async void.
                 // Should be excluded from the AsyncVoidMethod anti-pattern.
                 private async void OnButtonClick(object? sender, System.EventArgs e)
                 {
@@ -163,7 +163,7 @@ public class BugHuntTests
             "Fix: apply .TrimEnd('?') to firstType before the string comparison (as AsyncSafetyEngine already does).");
     }
 
-    // Control: non-nullable sender with EventArgs → NOT flagged (already works)
+    // Control: non-nullable sender with EventArgs -> NOT flagged (already works)
     [Test]
     public async Task BUG2_Control_AsyncVoidEventHandler_NonNullableSender_ShouldNotFlag()
     {
@@ -185,7 +185,7 @@ public class BugHuntTests
         Assert.That(
             result.Where(f => f.Pattern == "AsyncVoidMethod"),
             Is.Empty,
-            "async void (object sender, EventArgs e) — non-nullable — should not be flagged (control).");
+            "async void (object sender, EventArgs e) - non-nullable - should not be flagged (control).");
     }
 
     // Control: non-event async void IS flagged (still works after fix)
@@ -225,11 +225,11 @@ public class BugHuntTests
     //             the setter is restricted.
     //
     //             The description in the emitted finding even says "with a public
-    //             setter" — which is factually wrong for private/protected set.
+    //             setter" -> which is factually wrong for private/protected set.
     //
     // EXPECTED: 0 MutablePublicApi findings (private/protected set is NOT public)
     // ACTUAL:   2 findings (Name and Count both falsely flagged)
-    // SEVERITY: Major — every domain entity using the common "public get, private set"
+    // SEVERITY: Major -> every domain entity using the common "public get, private set"
     //           encapsulation pattern is incorrectly reported
     // ==========================================================================
 
@@ -240,9 +240,9 @@ public class BugHuntTests
         const string source = """
             public class UserAccount
             {
-                // private set is NOT a public setter — must not be flagged.
+                // private set is NOT a public setter -> must not be flagged.
                 public string Name { get; private set; } = "";
-                // protected set is also NOT a public setter — must not be flagged.
+                // protected set is also NOT a public setter -> must not be flagged.
                 public int LoginCount { get; protected set; }
             }
             """;
@@ -279,7 +279,7 @@ public class BugHuntTests
             "A truly public { get; set; } SHOULD be flagged as mutable public API (control).");
     }
 
-    // Edge: init-only setter must NOT be flagged (init ≠ set, already handled correctly — regression guard)
+    // Edge: init-only setter must NOT be flagged (init ≠ set, already handled correctly -> regression guard)
     [Test]
     public async Task BUG3_Control_FindMutablePublicProperties_InitSetter_ShouldNotFlag()
     {
@@ -297,7 +297,7 @@ public class BugHuntTests
         Assert.That(
             result.Where(f => f.Pattern == "MutablePublicApi"),
             Is.Empty,
-            "{ get; init; } is init-only — it should NOT be flagged as mutable public API.");
+            "{ get; init; } is init-only - it should NOT be flagged as mutable public API.");
     }
 
     // ==========================================================================
@@ -311,11 +311,11 @@ public class BugHuntTests
     //             String concatenation inside a  do { ... } while (...)  loop is
     //             therefore silently ignored.
     //             Note: AntiPatternEngine.DetectStringConcatInLoop DOES include
-    //             DoStatementSyntax — the omission is specific to PerformanceEngine.
+    //             DoStatementSyntax -> the omission is specific to PerformanceEngine.
     //
     // EXPECTED: At least 1 StringConcatenationInLoop report
     // ACTUAL:   0 reports
-    // SEVERITY: Minor — do-while loops are less common, but the inconsistency with
+    // SEVERITY: Minor -> do-while loops are less common, but the inconsistency with
     //           AntiPatternEngine is surprising and creates a gap in coverage.
     // ==========================================================================
 
@@ -332,7 +332,7 @@ public class BugHuntTests
                     int i = 0;
                     do
                     {
-                        // string + literal inside do-while — identical risk to for/foreach/while
+                        // string + literal inside do-while -> identical risk to for/foreach/while
                         result = result + "item";
                         i++;
                     } while (i < items.Length);
@@ -365,7 +365,7 @@ public class BugHuntTests
                     int i = 0;
                     do
                     {
-                        // += inside do-while — same O(n²) risk
+                        // += inside do-while -> same O(n²) risk
                         htmlStr += "item";
                         i++;
                     } while (i < items.Length);
@@ -425,7 +425,7 @@ public class BugHuntTests
     //
     // EXPECTED: At least 1 StringConcatInLoop finding
     // ACTUAL:   0 findings
-    // SEVERITY: Minor — +=  is more idiomatic in C#, but  = x + y  is a real
+    // SEVERITY: Minor -> +=  is more idiomatic in C#, but  = x + y  is a real
     //           pattern (particularly in code ported from other languages or
     //           generated by LLMs), and the inconsistency between the two forms
     //           is a genuine detection gap.
@@ -532,7 +532,7 @@ public class BugHuntTests
     //            skipped even though it has the same mutability risk.
     //
     // TYPE:     False negative
-    // SEVERITY: Minor — records with mutable state are unusual but valid.
+    // SEVERITY: Minor -> records with mutable state are unusual but valid.
     // ==========================================================================
 
     [Test]

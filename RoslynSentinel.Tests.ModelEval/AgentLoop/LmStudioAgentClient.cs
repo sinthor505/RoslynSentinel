@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.ModelEval.AgentLoop;
 
 /// <summary>
 /// Multi-turn, tool-calling LM Studio client for the model-eval harness. Distinct from
-/// <see cref="ILlmClient"/>/<c>LmStudioClient</c> (single-turn, plain text, used by BulkComment) —
+/// <see cref="ILlmClient"/>/<c>LmStudioClient</c> (single-turn, plain text, used by BulkComment) ->
 /// this client sends the full running message history plus an OpenAI-style <c>tools</c> array on
 /// every call and returns whatever the model responded with (prose, tool calls, or both), leaving
 /// all looping/dispatch to <see cref="ModelAgentRunner"/>.
@@ -47,12 +47,12 @@ public sealed class LmStudioAgentClient
 
     /// <summary>
     /// Best-effort startup check against LM Studio's native REST API (<c>/api/v1/models</c>, not the
-    /// OpenAI-compat <c>/v1/models</c> — only the native one reports which models are actually
+    /// OpenAI-compat <c>/v1/models</c> -> only the native one reports which models are actually
     /// loaded right now vs merely downloaded, see reference_lmstudio_loaded_models_endpoint) so a run
     /// against the wrong/unloaded model shows up as the first line of agent.log instead of only being
-    /// discoverable after the fact. Never throws — a failed check is logged and otherwise ignored, it
+    /// discoverable after the fact. Never throws -> a failed check is logged and otherwise ignored, it
     /// must not block or fail the run over a diagnostic nicety. Kicked off (not awaited) from the
-    /// constructor — a constructor can't be async — and awaited by <see cref="CompleteOnceAsync"/>
+    /// constructor -> a constructor can't be async -> and awaited by <see cref="CompleteOnceAsync"/>
     /// before the first real request, so it never delays DI construction but still guarantees its
     /// log line lands before anything else.
     /// </summary>
@@ -81,13 +81,13 @@ public sealed class LmStudioAgentClient
             if (match.ValueKind != JsonValueKind.Object)
             {
                 _logger.LogWarning(
-                    "Configured model {Model} was not found in LM Studio's model list at all — check ROSLYNSENTINEL_LLM_MODEL/--llm-model for a typo.",
+                    "Configured model {Model} was not found in LM Studio's model list at all - check ROSLYNSENTINEL_LLM_MODEL/--llm-model for a typo.",
                     _model);
             }
             else if (!match.TryGetProperty("loaded_instances", out var instances) || instances.GetArrayLength() == 0)
             {
                 _logger.LogWarning(
-                    "Configured model {Model} is known to LM Studio but has no loaded instance — requests will fail or LM Studio will need to load it on demand.",
+                    "Configured model {Model} is known to LM Studio but has no loaded instance - requests will fail or LM Studio will need to load it on demand.",
                     _model);
             }
             else
@@ -115,10 +115,10 @@ public sealed class LmStudioAgentClient
         {
             // One retry for transient LM Studio flakiness observed live: the SSE connection going
             // silent forever with no server-side error logged, the connection being forcibly reset
-            // by the remote host mid-stream (SocketException wrapped in IOException — confirmed live
+            // by the remote host mid-stream (SocketException wrapped in IOException -> confirmed live
             // 2026-09-08, LM Studio's own log showed the request received but never entering the
             // inference pipeline before the reset), and streaming error events (response.failed/
-            // error) that don't reliably repeat on a fresh request. Not retried again — a second
+            // error) that don't reliably repeat on a fresh request. Not retried again -> a second
             // consecutive failure is treated as a real, non-transient problem.
             _logger.LogWarning(
                 ex, "LM Studio call failed ({Reason}); retrying once before giving up.", ex.Message);
@@ -174,46 +174,46 @@ public sealed class LmStudioAgentClient
             switch (eventType)
             {
                 case "response.reasoning_text.delta":
-                {
-                    var evt = JsonSerializer.Deserialize<ReasoningTextDeltaEvent>(data, JsonOptions)!;
-                    var sb = reasoningBuilders.TryGetValue(evt.ItemId, out var existing)
-                        ? existing
-                        : reasoningBuilders[evt.ItemId] = new StringBuilder();
-                    sb.Append(evt.Delta);
-                    break;
-                }
-                case "response.output_text.delta":
-                {
-                    var evt = JsonSerializer.Deserialize<OutputTextDeltaEvent>(data, JsonOptions)!;
-                    var sb = messageBuilders.TryGetValue(evt.ItemId, out var existing)
-                        ? existing
-                        : messageBuilders[evt.ItemId] = new StringBuilder();
-                    sb.Append(evt.Delta);
-                    _logger.LogInformation("LM Studio streaming: {Delta}", evt.Delta);
-                    break;
-                }
-                case "response.output_item.done":
-                {
-                    var evt = JsonSerializer.Deserialize<OutputItemDoneEvent>(data, JsonOptions)!;
-                    if (evt.Item.Type == "function_call")
                     {
-                        _logger.LogInformation(
-                            "LM Studio streaming: tool call {Tool}({Args})", evt.Item.Name, evt.Item.Arguments);
+                        var evt = JsonSerializer.Deserialize<ReasoningTextDeltaEvent>(data, JsonOptions)!;
+                        var sb = reasoningBuilders.TryGetValue(evt.ItemId, out var existing)
+                            ? existing
+                            : reasoningBuilders[evt.ItemId] = new StringBuilder();
+                        sb.Append(evt.Delta);
+                        break;
                     }
-                    break;
-                }
+                case "response.output_text.delta":
+                    {
+                        var evt = JsonSerializer.Deserialize<OutputTextDeltaEvent>(data, JsonOptions)!;
+                        var sb = messageBuilders.TryGetValue(evt.ItemId, out var existing)
+                            ? existing
+                            : messageBuilders[evt.ItemId] = new StringBuilder();
+                        sb.Append(evt.Delta);
+                        _logger.LogInformation("LM Studio streaming: {Delta}", evt.Delta);
+                        break;
+                    }
+                case "response.output_item.done":
+                    {
+                        var evt = JsonSerializer.Deserialize<OutputItemDoneEvent>(data, JsonOptions)!;
+                        if (evt.Item.Type == "function_call")
+                        {
+                            _logger.LogInformation(
+                                "LM Studio streaming: tool call {Tool}({Args})", evt.Item.Name, evt.Item.Arguments);
+                        }
+                        break;
+                    }
                 case "response.completed":
-                {
-                    var evt = JsonSerializer.Deserialize<ResponseCompletedEvent>(data, JsonOptions)!;
-                    completedResponse = evt.Response;
-                    break;
-                }
+                    {
+                        var evt = JsonSerializer.Deserialize<ResponseCompletedEvent>(data, JsonOptions)!;
+                        completedResponse = evt.Response;
+                        break;
+                    }
                 case "response.failed":
                 case "error":
-                {
-                    _logger.LogWarning("LM Studio streaming error event: {Data}", data);
-                    throw new InvalidOperationException($"LM Studio returned a streaming error event: {data}");
-                }
+                    {
+                        _logger.LogWarning("LM Studio streaming error event: {Data}", data);
+                        throw new InvalidOperationException($"LM Studio returned a streaming error event: {data}");
+                    }
             }
         }
 
@@ -223,16 +223,16 @@ public sealed class LmStudioAgentClient
         }
 
         // LM Studio always echoes back whatever value it actually used, including its own default
-        // when the request omitted the field — so a mismatch against a value we explicitly sent
+        // when the request omitted the field -> so a mismatch against a value we explicitly sent
         // means LM Studio silently coerced or ignored it (seen for temperature/top_p with certain
-        // presets — see LM Studio bug tracker #1389), which is worth surfacing loudly rather than
+        // presets -> see LM Studio bug tracker #1389), which is worth surfacing loudly rather than
         // silently trusting the request body we sent.
         if (LlmOptions.Temperature is { } requestedTemperature &&
             completedResponse.Temperature is { } actualTemperature &&
             Math.Abs(requestedTemperature - actualTemperature) > 0.0001)
         {
             _logger.LogWarning(
-                "Requested temperature {Requested} but LM Studio reports it used {Actual} — a preset or " +
+                "Requested temperature {Requested} but LM Studio reports it used {Actual} - a preset or " +
                 "server-side override may be silently taking precedence over the request body.",
                 requestedTemperature, actualTemperature);
         }
@@ -241,7 +241,7 @@ public sealed class LmStudioAgentClient
             Math.Abs(requestedTopP - actualTopP) > 0.0001)
         {
             _logger.LogWarning(
-                "Requested top_p {Requested} but LM Studio reports it used {Actual} — a preset or " +
+                "Requested top_p {Requested} but LM Studio reports it used {Actual} - a preset or " +
                 "server-side override may be silently taking precedence over the request body.",
                 requestedTopP, actualTopP);
         }
@@ -276,7 +276,7 @@ public sealed class LmStudioAgentClient
     /// <summary>
     /// Parses a raw SSE byte stream into (event, data) pairs. LM Studio sends one "event: &lt;type&gt;"
     /// line followed by one "data: &lt;json&gt;" line per message, separated by a blank line.
-    /// Enforces <see cref="LlmOptions.StreamIdleTimeoutSeconds"/> between successive lines — once
+    /// Enforces <see cref="LlmOptions.StreamIdleTimeoutSeconds"/> between successive lines -> once
     /// headers are read for a streamed response, <c>HttpClient.Timeout</c> no longer bounds how long
     /// reading the body can take, so without this a connection that goes silent forever (observed
     /// live against LM Studio, with no error logged on either side) hangs the caller indefinitely.
@@ -362,22 +362,40 @@ public sealed class LmStudioAgentClient
     {
         public string Model { get; set; } = "";
         public List<object> Input { get; set; } = [];
-        public List<ResponsesTool>? Tools { get; set; }
+        public List<ResponsesTool>? Tools
+        {
+            get; set;
+        }
         [JsonPropertyName("tool_choice")]
-        public string? ToolChoice { get; set; }
+        public string? ToolChoice
+        {
+            get; set;
+        }
         [JsonPropertyName("max_output_tokens")]
-        public int MaxOutputTokens { get; set; }
-        public bool Stream { get; set; }
+        public int MaxOutputTokens
+        {
+            get; set;
+        }
+        public bool Stream
+        {
+            get; set;
+        }
 
-        // Both omitted (null) unless LlmOptions.Temperature/TopP is explicitly set — confirmed
+        // Both omitted (null) unless LlmOptions.Temperature/TopP is explicitly set -> confirmed
         // 2026-09-05 that LM Studio's /v1/responses echoes these back verbatim in
         // ResponseObject.Temperature/TopP when sent, unlike top_k/repeat_penalty/min_p (documented
         // for /v1/chat/completions but absent from /v1/responses' response body AND confirmed via
-        // an A/B behavioral test to have zero effect on generation there) — those three are
+        // an A/B behavioral test to have zero effect on generation there) -> those three are
         // deliberately NOT wired here; see LlmOptions.TopK's remarks.
-        public double? Temperature { get; set; }
+        public double? Temperature
+        {
+            get; set;
+        }
         [JsonPropertyName("top_p")]
-        public double? TopP { get; set; }
+        public double? TopP
+        {
+            get; set;
+        }
     }
 
     private sealed class InputMessageItem
@@ -407,8 +425,14 @@ public sealed class LmStudioAgentClient
     {
         public string Type { get; set; } = "function";
         public string Name { get; set; } = "";
-        public string? Description { get; set; }
-        public JsonElement Parameters { get; set; }
+        public string? Description
+        {
+            get; set;
+        }
+        public JsonElement Parameters
+        {
+            get; set;
+        }
     }
 
     private sealed class ReasoningTextDeltaEvent
@@ -440,21 +464,39 @@ public sealed class LmStudioAgentClient
         public List<OutputItem> Output { get; set; } = [];
 
         // Only meaningful for verifying LlmOptions.Temperature/TopP were actually honored (see
-        // CompleteAsync's post-response check) — LM Studio always echoes SOME value here (its own
+        // CompleteAsync's post-response check) -> LM Studio always echoes SOME value here (its own
         // default when the request omitted the field), not just when we sent one.
-        public double? Temperature { get; set; }
+        public double? Temperature
+        {
+            get; set;
+        }
         [JsonPropertyName("top_p")]
-        public double? TopP { get; set; }
+        public double? TopP
+        {
+            get; set;
+        }
     }
 
     private sealed class OutputItem
     {
         public string Type { get; set; } = "";
         [JsonPropertyName("call_id")]
-        public string? CallId { get; set; }
-        public string? Name { get; set; }
-        public string? Arguments { get; set; }
-        public List<OutputContentPart>? Content { get; set; }
+        public string? CallId
+        {
+            get; set;
+        }
+        public string? Name
+        {
+            get; set;
+        }
+        public string? Arguments
+        {
+            get; set;
+        }
+        public List<OutputContentPart>? Content
+        {
+            get; set;
+        }
     }
 
     private sealed class OutputContentPart
@@ -470,25 +512,55 @@ public sealed class StreamIdleTimeoutException(string message) : Exception(messa
 /// <summary>One message in the running conversation the harness maintains itself (not tied to the wire format).</summary>
 public sealed class AgentChatMessage
 {
-    public required string Role { get; init; } // "system" | "user" | "assistant" | "tool"
-    public string? Content { get; init; }
+    public required string Role
+    {
+        get; init;
+    } // "system" | "user" | "assistant" | "tool"
+    public string? Content
+    {
+        get; init;
+    }
     /// <summary>The model's reasoning/thinking text for this turn, when the backend streams it as a separate channel (e.g. Responses API's "reasoning" output item). Null for roles that never carry it (user/tool) or when the model/backend didn't produce any.</summary>
-    public string? ReasoningContent { get; init; }
-    public string? ToolCallId { get; init; } // set only on role:"tool" messages
+    public string? ReasoningContent
+    {
+        get; init;
+    }
+    public string? ToolCallId
+    {
+        get; init;
+    } // set only on role:"tool" messages
     public List<AgentToolCall> ToolCalls { get; init; } = [];
 }
 
 public sealed class AgentToolCall
 {
-    public required string Id { get; init; }
-    public required string Name { get; init; }
-    public required string ArgumentsJson { get; init; }
+    public required string Id
+    {
+        get; init;
+    }
+    public required string Name
+    {
+        get; init;
+    }
+    public required string ArgumentsJson
+    {
+        get; init;
+    }
 }
 
 /// <summary>An MCP tool translated into the shape LM Studio's OpenAI-compatible endpoint expects.</summary>
 public sealed class AgentToolDefinition
 {
-    public required string Name { get; init; }
-    public string? Description { get; init; }
-    public required JsonElement ParametersSchema { get; init; }
+    public required string Name
+    {
+        get; init;
+    }
+    public string? Description
+    {
+        get; init;
+    }
+    public required JsonElement ParametersSchema
+    {
+        get; init;
+    }
 }

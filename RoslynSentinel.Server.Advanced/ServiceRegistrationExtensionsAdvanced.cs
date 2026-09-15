@@ -19,7 +19,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
     /// <summary>
     /// Registers all Roslyn analysis engine singletons into the DI container: every engine
     /// Basic registers (via <see cref="RoslynSentinelServiceExtensionsBasic.AddRoslynSentinelEnginesBasic"/>,
-    /// the shared base — Advanced does not maintain its own separate copy of that list) plus the
+    /// the shared base -> Advanced does not maintain its own separate copy of that list) plus the
     /// additional engines only Advanced's tool classes need.
     /// </summary>
     public static IServiceCollection AddRoslynSentinelEnginesAdvanced(this IServiceCollection services)
@@ -71,7 +71,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         });
         services.AddSingleton<ILlmClient>(sp => sp.GetRequiredService<LmStudioClient>());
 
-        // ToolGraph + FailureRouter — pilot: scans SentinelAsyncifyTools for [Produces] attributes.
+        // ToolGraph + FailureRouter -> pilot: scans SentinelAsyncifyTools for [Produces] attributes.
         ToolGraph toolGraph = BuildToolGraph(new[] { typeof(SentinelAsyncifyTools) });
         services.AddSingleton(toolGraph);
         services.AddSingleton<FailureRouter>();
@@ -140,11 +140,11 @@ public static class RoslynSentinelServiceExtensionsAdvanced
 
     /// <summary>
     /// Registers all MCP tool classes (mode-conditional, with optional per-class
-    /// <paramref name="includeTools"/>/<paramref name="excludeTools"/> overrides — see
+    /// <paramref name="includeTools"/>/<paramref name="excludeTools"/> overrides -> see
     /// <see cref="ServerStartupHelpers.ResolveActiveToolClasses"/>) and the centralized error filter.
     /// Delegates the modes/tools/filters Advanced shares with Basic to
     /// <see cref="RoslynSentinelServiceExtensionsBasic.AddRoslynSentinelToolsBasic"/> (the shared
-    /// base — this used to be a fully separate hand-duplicated list, which is how it drifted out
+    /// base -> this used to be a fully separate hand-duplicated list, which is how it drifted out
     /// of sync with Basic's filter set: Basic's content-drift-check filter was missing here for a
     /// time because nothing forced the two lists to stay in sync). Only registers the additional
     /// tool classes/modes Advanced has that Basic doesn't.
@@ -162,7 +162,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         // Registers Workspace-mode tools, Refactor-mode's SentinelRefactoringTools, and both
         // request filters (including the drift-check filter).
         // Basic's own resolution only sees classes in BasicModeToToolClasses, so an
-        // Advanced-only --include-tools name (e.g. SentinelAsyncifyTools) is inert there — it's
+        // Advanced-only --include-tools name (e.g. SentinelAsyncifyTools) is inert there -> it's
         // handled below against AdvancedModeToToolClasses instead.
         mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes, resolvedIncludeTools, resolvedExcludeTools);
 

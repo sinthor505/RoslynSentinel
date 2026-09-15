@@ -125,7 +125,7 @@ class Foo { public void Go() {} }
         SetSource(source);
         var result = await _ideStyleEngine.UseNullPropagationAsync("Test.cs");
 
-        // has an else — should NOT be transformed
+        // has an else -> should NOT be transformed
         Assert.That(result.UpdatedText, Does.Contain("if (x != null) x.Go()").Or.Contain("if (x != null)"),
             "If-else patterns should remain unchanged");
     }
@@ -312,7 +312,7 @@ class C {
         SetSource(source);
         var result = await _modernizationEngine.UseThrowExpressionsAsync("Test.cs");
 
-        // Has else → should not be merged into coalescing throw
+        // Has else -> should not be merged into coalescing throw
         Assert.That(result.UpdatedText, Does.Contain("if (x == null)"),
             "if-else null checks must not be transformed");
     }
@@ -479,7 +479,7 @@ class Foo { public void Go() {} }
         var result = await _ideStyleEngine.UseNullPropagationAsync("Test.cs");
 
         Assert.That(result.UpdatedText, Does.Contain("?."),
-            "UseNullPropagationAsync is no longer a stub — must produce null-conditional syntax");
+            "UseNullPropagationAsync is no longer a stub - must produce null-conditional syntax");
     }
 
     [Test]
@@ -494,7 +494,7 @@ class C {
         var result = await _modernizationEngine.UseSpanForParsingAsync("Test.cs", "M");
 
         Assert.That(result.UpdatedText, Does.Not.Contain(before),
-            "UseSpanForParsingAsync is no longer a no-op — must actually replace Substring");
+            "UseSpanForParsingAsync is no longer a no-op - must actually replace Substring");
     }
 
     [Test]
@@ -512,7 +512,7 @@ class C {
         var result = await _modernizationEngine.UseThrowExpressionsAsync("Test.cs");
 
         Assert.That(result.UpdatedText, Does.Contain("??"),
-            "UseThrowExpressionsAsync is no longer a stub — must produce coalescing throw");
+            "UseThrowExpressionsAsync is no longer a stub - must produce coalescing throw");
     }
 
     [Test]

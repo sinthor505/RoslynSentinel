@@ -102,7 +102,7 @@ public class MassiveRefactoringTests
         var source = $"public class C{id} {{ public void OldM{id}() {{}} public void U() {{ OldM{id}(); }} }}";
         SetSource(source, $"C{id}.cs");
 
-        // RenameSymbol takes a SymbolHandle (sessionId, projectName, docCommentId) — resolve it
+        // RenameSymbol takes a SymbolHandle (sessionId, projectName, docCommentId) -> resolve it
         // via SymbolNavigationEngine first, as an agent would via LocateSymbol.
         var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var handle = (await symbolNavEngine.LocateSymbolAsync($"OldM{id}")).Single();

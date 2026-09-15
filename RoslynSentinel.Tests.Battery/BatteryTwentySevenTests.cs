@@ -1,23 +1,23 @@
-// Battery #27 — Bug-Fix Regression Tests
+// Battery #27 -> Bug-Fix Regression Tests
 // Each test proves a specific bug (catalogued in the review sessions) is fixed and
 // cannot silently regress.  Test names encode the bug ID they guard.
 //
 // Bugs covered:
-//   B08 — DeadCodeEngine: written-but-never-read variables were not detected as unused
-//   B02 — ImmutabilityEngine: const fields received readonly modifier (→ CS0106)
-//   B01 — InstrumentationEngine: throw was emitted as ExpressionStatement (invalid C#)
-//   B03 — ArchitecturalEngine: IdentifierName contained a dot (invalid identifier)
-//   B09 — AdvancedRefactoringEngine: OptimizeTaskWaitAsync rewrote all .Wait()/.Result
+//   B08 -> DeadCodeEngine: written-but-never-read variables were not detected as unused
+//   B02 -> ImmutabilityEngine: const fields received readonly modifier (-> CS0106)
+//   B01 -> InstrumentationEngine: throw was emitted as ExpressionStatement (invalid C#)
+//   B03 -> ArchitecturalEngine: IdentifierName contained a dot (invalid identifier)
+//   B09 -> AdvancedRefactoringEngine: OptimizeTaskWaitAsync rewrote all .Wait()/.Result
 //         when semantic model was null (false positives)
-//   B18 — ContextHelper: OrdinalIgnoreCase blocked valid PascalCase identifiers such as
+//   B18 -> ContextHelper: OrdinalIgnoreCase blocked valid PascalCase identifiers such as
 //         "String", "Object", "Int"
-//   B19 — TestingEngine: MSTest framework produced attributeless test methods
-//   B17 — DocumentationEngine: HasStructuredTrivia excluded methods inside #region
-//   B11 — ModernizationEngine.ClassToRecordAsync: duplicate property declarations (CS0102)
-//   B10 — ModernizationEngine.TryConvertOrChainToPattern: only last value used (chain lost)
-//   B20 — LogicOptimizationEngine.AddGuardClausesAsync: nullable params got null guards
-//   B04 — AntiPatternEngine.DetectMissingCancellationToken: zero-param async methods skipped
-//   B16 — SecurityAndSafetyEngine.DetectMissingNullChecksAsync: expression-bodied methods skipped
+//   B19 -> TestingEngine: MSTest framework produced attributeless test methods
+//   B17 -> DocumentationEngine: HasStructuredTrivia excluded methods inside #region
+//   B11 -> ModernizationEngine.ClassToRecordAsync: duplicate property declarations (CS0102)
+//   B10 -> ModernizationEngine.TryConvertOrChainToPattern: only last value used (chain lost)
+//   B20 -> LogicOptimizationEngine.AddGuardClausesAsync: nullable params got null guards
+//   B04 -> AntiPatternEngine.DetectMissingCancellationToken: zero-param async methods skipped
+//   B16 -> SecurityAndSafetyEngine.DetectMissingNullChecksAsync: expression-bodied methods skipped
 
 #pragma warning disable CS8618
 
@@ -30,7 +30,7 @@ using RoslynSentinel.Common;
 namespace RoslynSentinel.Tests.Battery;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B08 — DeadCodeEngine: written-but-never-read must be flagged as unused
+// B08 -> DeadCodeEngine: written-but-never-read must be flagged as unused
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B08_DeadCode_WrittenButNeverRead
@@ -94,7 +94,7 @@ public class B08_DeadCode_WrittenButNeverRead
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B02 — ImmutabilityEngine: const fields must not receive readonly modifier
+// B02 -> ImmutabilityEngine: const fields must not receive readonly modifier
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B02_Immutability_ConstFieldNotReadonly
@@ -140,7 +140,7 @@ public class B02_Immutability_ConstFieldNotReadonly
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B01 — InstrumentationEngine: catch block must contain a valid throw statement
+// B01 -> InstrumentationEngine: catch block must contain a valid throw statement
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B01_Instrumentation_ValidThrowStatement
@@ -163,7 +163,7 @@ public class B01_Instrumentation_ValidThrowStatement
     {
         // Before fix: ExpressionStatement(ParseExpression("throw")) produced an
         // expression-statement containing the keyword "throw" which is not a valid
-        // expression — Roslyn would emit an error node in the syntax tree.
+        // expression -> Roslyn would emit an error node in the syntax tree.
         const string source = """
             public class Service {
                 public void Process() {
@@ -208,7 +208,7 @@ public class B01_Instrumentation_ValidThrowStatement
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B03 — ArchitecturalEngine: stoppingToken.IsCancellationRequested must be a
+// B03 -> ArchitecturalEngine: stoppingToken.IsCancellationRequested must be a
 //        member access, not a dotted identifier name
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
@@ -231,7 +231,7 @@ public class B03_ArchitecturalEngine_ValidMemberAccess
     public async Task ConvertToBackgroundService_ProducesValidMemberAccess()
     {
         // Before fix: SyntaxFactory.IdentifierName("stoppingToken.IsCancellationRequested")
-        // creates an identifier whose text contains a dot — that is not valid C# and Roslyn
+        // creates an identifier whose text contains a dot -> that is not valid C# and Roslyn
         // would emit an identifier with a dot in it, which doesn't compile.
         const string source = """
             using System.Threading;
@@ -258,7 +258,7 @@ public class B03_ArchitecturalEngine_ValidMemberAccess
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B09 — AdvancedRefactoringEngine.OptimizeTaskWaitAsync: must NOT rewrite
+// B09 -> AdvancedRefactoringEngine.OptimizeTaskWaitAsync: must NOT rewrite
 //        .Wait()/.Result when semantic model is absent (prevents false positives)
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
@@ -286,7 +286,7 @@ public class B09_AdvancedRefactoring_IsTaskTypeNullGuard
             public class Service {
                 private readonly ManualResetEvent _gate = new ManualResetEvent(false);
                 public void Block() {
-                    _gate.WaitOne();   // NOT a Task.Wait — must not be rewritten
+                    _gate.WaitOne();   // NOT a Task.Wait - must not be rewritten
                 }
             }
             """;
@@ -301,7 +301,7 @@ public class B09_AdvancedRefactoring_IsTaskTypeNullGuard
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B18 — ContextHelper.GetUniqueVariableName: PascalCase identifiers like
+// B18 -> ContextHelper.GetUniqueVariableName: PascalCase identifiers like
 //        "String", "Object", "Int" must not be blocked as reserved keywords
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
@@ -312,8 +312,8 @@ public class B18_ContextHelper_CaseSensitiveKeywords
     {
         // Before fix: OrdinalIgnoreCase caused "String" to match keyword "string",
         // and "Object" to match "object", so these valid identifiers were unreachable.
-        // After camelCase conversion: "String" → "string" IS a keyword, so suffix is added.
-        // But "MyString" → "myString" is NOT a keyword and must be returned as-is.
+        // After camelCase conversion: "String" -> "string" IS a keyword, so suffix is added.
+        // But "MyString" -> "myString" is NOT a keyword and must be returned as-is.
 
         // Use a minimal scope with no declarations
         var emptyScope = Microsoft.CodeAnalysis.CSharp.SyntaxFactory.Block();
@@ -335,7 +335,7 @@ public class B18_ContextHelper_CaseSensitiveKeywords
     public void GetUniqueVariableName_ExistingNameConflict_CaseSensitive()
     {
         // Before fix: OrdinalIgnoreCase meant "myValue" conflicted with "MyValue"
-        // in C# they are different identifiers — the suffix should NOT be added.
+        // in C# they are different identifiers -> the suffix should NOT be added.
         const string source = """
             public class C {
                 public void M() {
@@ -348,10 +348,10 @@ public class B18_ContextHelper_CaseSensitiveKeywords
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>()
             .First();
 
-        // "myValue" (camelCase of "MyValue") is different from "MyValue" in C# — no conflict
+        // "myValue" (camelCase of "MyValue") is different from "MyValue" in C# -> no conflict
         var result = ContextHelper.GetUniqueVariableName(method, "myValue");
         Assert.That(result, Is.EqualTo("myValue"),
-            "'myValue' is case-sensitively distinct from existing 'MyValue' — must not add suffix.");
+            "'myValue' is case-sensitively distinct from existing 'MyValue' - must not add suffix.");
     }
 
     [Test]
@@ -377,7 +377,7 @@ public class B18_ContextHelper_CaseSensitiveKeywords
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B19 — TestingEngine.GenerateTestSkeletonAsync: MSTest framework support
+// B19 -> TestingEngine.GenerateTestSkeletonAsync: MSTest framework support
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B19_TestingEngine_MSTestSupport
@@ -465,7 +465,7 @@ public class B19_TestingEngine_MSTestSupport
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B17 — DocumentationEngine: methods inside #region must still receive XML docs
+// B17 -> DocumentationEngine: methods inside #region must still receive XML docs
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B17_DocumentationEngine_RegionMethodsGetDocs
@@ -528,7 +528,7 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B11 — ModernizationEngine.ClassToRecordAsync: no CS0102 duplicate properties
+// B11 -> ModernizationEngine.ClassToRecordAsync: no CS0102 duplicate properties
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
@@ -569,10 +569,10 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
         // There should be exactly ONE declaration of X (either as positional param or body member)
         var xCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"\bint X\b").Count;
         Assert.That(xCount, Is.EqualTo(1),
-            "Property X must appear exactly once — no duplicate declarations.");
+            "Property X must appear exactly once - no duplicate declarations.");
         var yCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"\bint Y\b").Count;
         Assert.That(yCount, Is.EqualTo(1),
-            "Property Y must appear exactly once — no duplicate declarations.");
+            "Property Y must appear exactly once - no duplicate declarations.");
     }
 
     [Test]
@@ -597,7 +597,7 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B10 — ModernizationEngine.TryConvertOrChainToPattern: full OR chain preserved
+// B10 -> ModernizationEngine.TryConvertOrChainToPattern: full OR chain preserved
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B10_ModernizationEngine_OrChainFullPattern
@@ -651,7 +651,7 @@ public class B10_ModernizationEngine_OrChainFullPattern
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B20 — LogicOptimizationEngine.AddGuardClausesAsync: nullable params skipped
+// B20 -> LogicOptimizationEngine.AddGuardClausesAsync: nullable params skipped
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B20_LogicOptimization_NullableParamNoGuard
@@ -673,7 +673,7 @@ public class B20_LogicOptimization_NullableParamNoGuard
     public async Task AddGuardClauses_NullableStringParam_DoesNotAddNullGuard()
     {
         // Before fix: AddGuardClausesAsync added ArgumentNullException.ThrowIfNull even
-        // for explicitly nullable parameters (string?) — those are nullable by contract.
+        // for explicitly nullable parameters (string?) -> those are nullable by contract.
         const string source = """
             public class Processor {
                 public void Handle(string? optionalName) {
@@ -711,7 +711,7 @@ public class B20_LogicOptimization_NullableParamNoGuard
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B04 — AntiPatternEngine.DetectMissingCancellationToken: zero-param async methods
+// B04 -> AntiPatternEngine.DetectMissingCancellationToken: zero-param async methods
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
@@ -734,8 +734,8 @@ public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
     {
         // Before fix: DetectMissingCancellationToken skipped methods with zero parameters via
         // `if (parameters.Count < 1) continue;`
-        // A public async Task method with NO parameters still cannot be cancelled — it should be flagged.
-        // NOTE: DetectAntiPatternsAsync → DetectMissingCancellationToken (the static method that was fixed).
+        // A public async Task method with NO parameters still cannot be cancelled -> it should be flagged.
+        // NOTE: DetectAntiPatternsAsync -> DetectMissingCancellationToken (the static method that was fixed).
         const string source = """
             using System.Threading.Tasks;
             public class Service {
@@ -781,7 +781,7 @@ public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B16 — SecurityAndSafetyEngine: expression-bodied methods must be checked
+// B16 -> SecurityAndSafetyEngine: expression-bodied methods must be checked
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
@@ -802,7 +802,7 @@ public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
     [Test]
     public async Task DetectMissingNullChecks_ExpressionBodiedMethod_WithReferenceParam_IsFlagged()
     {
-        // Before fix: body == null → continue skipped all expression-bodied methods,
+        // Before fix: body == null -> continue skipped all expression-bodied methods,
         // so `public string GetLength(string s) => s.Length.ToString()` was never checked.
         const string source = """
             public class Utils {
@@ -833,7 +833,7 @@ public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
         var issues = await _engine.DetectMissingNullChecksAsync("Utils.cs");
 
         Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.False,
-            "Expression-bodied method using s?. on the parameter must NOT be flagged — it is null-safe.");
+            "Expression-bodied method using s?. on the parameter must NOT be flagged - it is null-safe.");
     }
 
     [Test]

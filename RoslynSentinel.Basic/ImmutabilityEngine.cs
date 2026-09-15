@@ -47,7 +47,7 @@ public class ImmutabilityEngine
         {
             if (member is FieldDeclarationSyntax field)
             {
-                // const fields cannot have readonly — skip them
+                // const fields cannot have readonly -> skip them
                 if (field.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword)))
                 {
                     return field;

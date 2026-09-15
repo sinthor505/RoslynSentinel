@@ -152,7 +152,7 @@ public class NotificationService
 
         var result = await _engine.ConvertToAsyncBridgeAsync("NotificationService.cs", "Notify");
 
-        // void bridge: NotifyAsync(message).GetAwaiter().GetResult() — no 'return' keyword.
+        // void bridge: NotifyAsync(message).GetAwaiter().GetResult() -> no 'return' keyword.
         Assert.That(result.UpdatedText, Does.Contain("NotifyAsync"),
             "Async overload should be named NotifyAsync.");
         Assert.That(result.UpdatedText, Does.Contain("Task NotifyAsync") | Does.Contain("Task\r\nNotifyAsync") | Does.Contain("async Task"),
@@ -479,18 +479,18 @@ public class Derived : Base
         Assert.That(text, Does.Contain("public async Task DoWorkAsync"),
             "async overload must be present.");
         Assert.That(text, Does.Not.Contain("override async Task DoWorkAsync"),
-            "async overload must not carry 'override' — there is no base counterpart to override.");
+            "async overload must not carry 'override' - there is no base counterpart to override.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ConvertEventHandlerCallerToAsyncVoidAsync — delegate async modifier
+    // ConvertEventHandlerCallerToAsyncVoidAsync -> delegate async modifier
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
     public async Task ConvertEventHandlerCaller_DelegateContainingBridgeCall_DelegateGetsAsyncModifier()
     {
         // The event handler calls a bridge wrapper inside an anonymous delegate passed to
-        // BeginInvoke. The rewriter must add 'async' to that delegate — without it the
+        // BeginInvoke. The rewriter must add 'async' to that delegate -> without it the
         // produced code has 'await' in a non-async context (CS4033 / compile error).
         SetSource(@"
 using System;

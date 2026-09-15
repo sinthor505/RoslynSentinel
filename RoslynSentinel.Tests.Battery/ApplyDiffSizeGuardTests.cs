@@ -1,6 +1,6 @@
 // ApplyDiff whole-file-rewrite size guard (changesetFormat=files, action=apply): a files-format
-// apply that would shrink a file by more than 50% — either by raw line count, or by active
-// (non-comment) C# code lines — is rejected with errorCode=ConfirmationRequired instead of being
+// apply that would shrink a file by more than 50% -> either by raw line count, or by active
+// (non-comment) C# code lines -> is rejected with errorCode=ConfirmationRequired instead of being
 // applied. The raw line-count check guards against an agent submitting only a changed fragment as
 // if it were the entire file (see
 // docs/current/blockers/blocking_error_searchmode_literal_override_and_iserror_flag.md, "reported
@@ -10,17 +10,17 @@
 // no working code (see ModelTestingResults/113/Model_FixesWholeFileRewriteBug_PlanImplementVerify/
 // 20260902-062730-159, where ApplyDiff replaced BlockConverter.cs with every line prefixed "//" and
 // reported success because the line count and compile both looked fine). ApplyDiff itself no longer offers a
-// confirmationCode replay path — that mechanism reliably caused model hallucination (agents would
+// confirmationCode replay path -> that mechanism reliably caused model hallucination (agents would
 // fabricate a confirmationCode and call action=confirmationCode even when the true problem was
 // something else entirely; see docs/current/overnight-run-2026-08-30.md section 5b for the traced
 // root cause) and was never used correctly in practice. The rejected caller is expected to just
 // re-submit the complete file content. The old replay mechanism is preserved, unregistered, on
-// ApplyDiffWithConfirmationCode in case it's wanted again — the confirmationCode-specific tests
+// ApplyDiffWithConfirmationCode in case it's wanted again -> the confirmationCode-specific tests
 // below target that method directly rather than ApplyDiff.
 //
 // The percentage check reads "old content" from disk via FileIoHelper.ReadAllTextIfExistsAsync
 // (same helper ApplyProposedChangesAsync uses for pre-image capture), so these tests need a real
-// on-disk file — TestSolutionFixture + PersistentWorkspaceManager, not the in-memory
+// on-disk file -> TestSolutionFixture + PersistentWorkspaceManager, not the in-memory
 // TestSolutionBuilder path (see UndoLastApplyTests.cs for the same real-revert-path rationale).
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -92,7 +92,7 @@ public class ApplyDiffSizeGuardTests
         var originalContent = await File.ReadAllTextAsync(targetFile);
 
         // Same line count as the original (each line prefixed "// " rather than removed), so the
-        // raw line-count guard sees 0% shrink — only the active-code-line guard should catch this.
+        // raw line-count guard sees 0% shrink -> only the active-code-line guard should catch this.
         var commentedOut = string.Join('\n', originalContent.Split('\n').Select(line => "// " + line));
 
         var diffEngine = new DiffEngine();
@@ -109,11 +109,11 @@ public class ApplyDiffSizeGuardTests
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
     }
 
-    // The following confirmationCode-replay tests targeted ApplyDiffWithConfirmationCode directly —
+    // The following confirmationCode-replay tests targeted ApplyDiffWithConfirmationCode directly ->
     // that mechanism was removed from the registered ApplyDiff tool (see comment at top of file).
     // ApplyDiffWithConfirmationCode and ProposedChangeAction.confirmationCode are now both
     // block-commented out (SentinelWorkspaceTools.cs / ToolEnums.cs) rather than deleted, so these
-    // tests are commented out alongside them — un-comment all three together if the mechanism is
+    // tests are commented out alongside them -> un-comment all three together if the mechanism is
     // ever reintroduced.
     /*
     [Test]
@@ -127,10 +127,10 @@ public class ApplyDiffSizeGuardTests
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var fragment = "using System;\n";
 
-        // validateOnApply:false — this test is about the confirmation-code replay mechanism, not
+        // validateOnApply:false -> this test is about the confirmation-code replay mechanism, not
         // ValidateChangesAsync; the arbitrary "first .cs file" the fixture picks may be a type
         // other files in the solution depend on, which would otherwise fail pre-apply validation
-        // for unrelated reasons (a real compile break, correctly caught — see
+        // for unrelated reasons (a real compile break, correctly caught -> see
         // project_searchmode_literal_override_bug.md's validation-scope fix).
         var rejected = await tools.ApplyDiffWithConfirmationCode(
             ChangesetFormat.files, ProposedChangeAction.apply,

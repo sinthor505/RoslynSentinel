@@ -3,7 +3,6 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Server.Basic;
 
@@ -32,14 +31,14 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// <remarks>
     /// The commented-out lines below are engines Advanced registers instead (see
     /// <see cref="RoslynSentinel.Server.Advanced.RoslynSentinelServiceExtensionsAdvanced.AddRoslynSentinelEnginesAdvanced"/>).
-    /// Don't uncomment one here without checking whether Advanced already live-registers it —
+    /// Don't uncomment one here without checking whether Advanced already live-registers it ->
     /// doing so would register the same engine type in both, not just in Basic.
     /// </remarks>
     public static IServiceCollection AddRoslynSentinelEnginesBasic(this IServiceCollection services)
     {
         services.AddSingleton<SentinelConfiguration>();
         // Defaults to Production. TryAdd (not Add) so a host that called
-        // AddRoslynSentinelHostOptions first keeps its own value — registering unconditionally
+        // AddRoslynSentinelHostOptions first keeps its own value -> registering unconditionally
         // here would make the last-wins order depend on which extension the host called last.
         services.TryAddSingleton(new SentinelHostOptions());
         services.AddSingleton<PersistentWorkspaceManager>();
@@ -112,7 +111,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     }
     /// <summary>
     /// Registers all MCP tool classes (mode-conditional, with optional per-class
-    /// <paramref name="includeTools"/>/<paramref name="excludeTools"/> overrides — see
+    /// <paramref name="includeTools"/>/<paramref name="excludeTools"/> overrides -> see
     /// <see cref="ServerStartupHelpers.ResolveActiveToolClasses"/>) and the centralized error filter.
     /// </summary>
     public static IMcpServerBuilder AddRoslynSentinelToolsBasic(
@@ -134,7 +133,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         // name a tool this server actually exposes, and so tests can construct one with an
         // arbitrary tool set. Registering here (rather than in Advanced too) is sufficient because
         // every class declaring a tool WriteToolAdviceHelper may name is in
-        // BasicModeToToolClasses, so this resolution already sees all of them — Advanced adds no
+        // BasicModeToToolClasses, so this resolution already sees all of them -> Advanced adds no
         // whole-file-write tools. See WriteToolAdviceHelper's remarks.
         services.AddSingleton(new WriteToolAdviceHelper(activeToolClasses));
 
@@ -180,7 +179,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
         if (activeToolClasses.Contains("SentinelAdminTools"))
         {
-            // Restricted/operator-only tool — deliberately NOT included in AllModes (see
+            // Restricted/operator-only tool -> deliberately NOT included in AllModes (see
             // ServerStdio.cs/ServerHttp.cs), so --mode alone can't reach it; only an explicit
             // --mode=Admin or --include-tools=SentinelAdminTools activates it.
             services.AddSingleton<SentinelAdminTools>();
@@ -188,7 +187,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
         if (activeToolClasses.Contains("SentinelWholeFileWriteTools"))
         {
-            // Restricted/operator-only tool — deliberately NOT included in AllModes (see
+            // Restricted/operator-only tool -> deliberately NOT included in AllModes (see
             // ServerStdio.cs/ServerHttp.cs), so --mode alone can't reach it; only an explicit
             // --mode=Admin/--mode=WholeFileWrite or --include-tools=SentinelWholeFileWriteTools
             // activates it.
@@ -278,7 +277,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                         // Every tool in this codebase catches its own exceptions and returns a
                         // ToolResult with Success=false instead of throwing (see
                         // docs/current/feedback_agent_friendly_error_messages.md), so reaching here
-                        // means an exception escaped that path entirely — e.g. the MCP SDK's own
+                        // means an exception escaped that path entirely -> e.g. the MCP SDK's own
                         // argument-binding failure (a required parameter missing from the call), or
                         // a genuine bug. Either way it's a real failure, so it must surface as
                         // IsError=true rather than silently reporting success.
@@ -292,7 +291,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     }
                 }));
 
-            // Domain-failure → protocol-error sync: every tool in this codebase (by design, see
+            // Domain-failure -> protocol-error sync: every tool in this codebase (by design, see
             // docs/current/feedback_agent_friendly_error_messages.md) catches its own exceptions
             // and returns a ToolResult<T>/ApplyChangesResult/etc. with Success=false instead of
             // throwing, so the MCP SDK's own exception-based IsError detection never fires for a
@@ -331,7 +330,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     }
                     catch (System.Text.Json.JsonException)
                     {
-                        // Response text isn't JSON (or isn't a ToolResult-shaped object) — leave IsError as-is.
+                        // Response text isn't JSON (or isn't a ToolResult-shaped object) -> leave IsError as-is.
                     }
                     catch (Exception ex)
                     {
@@ -380,7 +379,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             // content blocks in the response (no JSON re-serialization) and, above
             // LargeResultHelper.OffloadThresholdBytes, writes the raw response text verbatim to disk
             // via LargeResultHelper.StoreRawJsonAsync and replaces the response with a small pointer
-            // (resultId) instead of just logging. This is deliberately shape-agnostic — it exists
+            // (resultId) instead of just logging. This is deliberately shape-agnostic -> it exists
             // because most tool result types aren't individually wired into the typed
             // ForPossiblyLargeDataAsync/LargeResultInfo path, so this is the only offload available
             // for those tools. It coexists with, and does not replace, that typed per-caller path:
@@ -420,7 +419,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                             var stored = await RoslynSentinel.Common.LargeResultHelper.StoreRawJsonAsync(text, solutionRoot, cancellationToken);
                             if (!stored.offloaded)
                             {
-                                // No solution loaded, or the write failed to qualify — fail closed to
+                                // No solution loaded, or the write failed to qualify -> fail closed to
                                 // pass-through rather than blocking the call on a guardrail defect.
                                 continue;
                             }
@@ -451,7 +450,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             // tool calls to a small orienting allowlist until one of them succeeds. Exists because
             // agents repeatedly retry SearchSolutionText with reworded guesses instead of switching to
             // ListAll/GetFileOutline, even though both the system prompt and SearchSolutionText's own
-            // zero-match response already say to do so — see docs/current/plan-orientation-breaker.md.
+            // zero-match response already say to do so -> see docs/current/plan-orientation-breaker.md.
             filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
                 ModelContextProtocol.Protocol.CallToolRequestParams,
                 ModelContextProtocol.Protocol.CallToolResult>(
@@ -487,7 +486,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                         {
                             // SearchSolutionText's own outcome is now recorded inline, from inside
                             // WorkspaceReadNavigationImpl.SearchSolutionText itself, immediately after
-                            // the match count is known — not here. Recording it a second time here
+                            // the match count is known -> not here. Recording it a second time here
                             // would double-count every call against the trip threshold.
                             if (toolName != "SearchSolutionText" && automaticBreaker.IsTripped() && result.IsError != true)
                             {
@@ -510,7 +509,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             // one above so neither can mask the other's message.
             //
             // The authoritative enforcement is in PersistentWorkspaceManager.ApplyProposedChangesAsync
-            // — the write chokepoint, which no mutating tool can bypass. This filter exists so the
+            // -> the write chokepoint, which no mutating tool can bypass. This filter exists so the
             // refusal also arrives as a protocol-level IsError carrying the specific diagnostic,
             // rather than only as a per-tool error, and so tools that would do expensive analysis
             // before their first write fail fast.
@@ -587,7 +586,7 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// Registers the argument pre-flight filter: rejects a call whose arguments cannot succeed as
     /// written, before the SDK's binder ever sees it.
     /// <para>
-    /// Covers two dispatch-layer defects that no per-tool fix can reach — an unknown parameter is
+    /// Covers two dispatch-layer defects that no per-tool fix can reach -> an unknown parameter is
     /// silently discarded (the tool then runs on its defaults and reports <c>success:true</c> with
     /// the wrong result), and a missing required parameter surfaces as a raw framework
     /// <c>ArgumentException</c> naming an internal "arguments dictionary". See

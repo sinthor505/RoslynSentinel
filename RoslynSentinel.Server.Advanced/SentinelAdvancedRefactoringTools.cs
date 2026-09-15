@@ -119,7 +119,7 @@ public class SentinelAdvancedRefactoringTools
 
     /// <summary>
     /// Validates proposed changes against the current in-memory solution and, unless
-    /// <paramref name="dryRun"/> is set, writes them straight to disk (write-through — no
+    /// <paramref name="dryRun"/> is set, writes them straight to disk (write-through -> no
     /// intermediate staging step). Rolls back any already-written files if a multi-file change
     /// partially fails, so a change never lands half-applied.
     /// </summary>
@@ -190,7 +190,7 @@ public class SentinelAdvancedRefactoringTools
 
             // Not wired into MemberChangedContentResult: this already has bespoke handling
             // (SkippedCallSites folded into the summary note below) that the generic offload
-            // mechanism doesn't add value over — there's no separate "new content" fragment,
+            // mechanism doesn't add value over -> there's no separate "new content" fragment,
             // just the reordered declaration text a caller can already see via ReturnDiff.
             var summaryNote = $"Reorders parameters of '{methodName}' in {Path.GetFileName(filePath)}.";
             if (result.SkippedCallSites.Count > 0)
@@ -226,7 +226,7 @@ public class SentinelAdvancedRefactoringTools
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ConvertAnonymousToNamed: no anonymous object found in '{filePath}'.") };
 
             // Not wired into MemberChangedContentResult: the generated class's text isn't caller-
-            // supplied or separately exposed — ConvertAnonymousToNamedAsync only returns the whole-file
+            // supplied or separately exposed -> ConvertAnonymousToNamedAsync only returns the whole-file
             // Changes dict, so showing just the new class declaration here would mean duplicating its
             // formatting logic. Revisit only if that engine method starts returning the new class's text
             // alongside the file changes.
@@ -491,7 +491,7 @@ public class SentinelAdvancedRefactoringTools
 
             // Not wired into MemberChangedContentResult: this can touch 2-3 files (source, target,
             // and any rewritten call-site files) with no single "the new text" the way Member's
-            // single-file operations do — the moved member's text is already visible in the diff.
+            // single-file operations do -> the moved member's text is already visible in the diff.
             return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, result.Changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
@@ -534,7 +534,7 @@ public class SentinelAdvancedRefactoringTools
                 };
 
             // Not wired into MemberChangedContentResult: the generated record's text isn't caller-
-            // supplied or separately exposed — IntroduceParameterObjectAsync only returns the whole-file
+            // supplied or separately exposed -> IntroduceParameterObjectAsync only returns the whole-file
             // UpdatedText, so showing just the new record here would mean duplicating its formatting
             // logic. Revisit only if that engine method starts returning the record's text alongside
             // UpdatedText.
@@ -608,7 +608,7 @@ public class SentinelAdvancedRefactoringTools
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Introduce({newType}): context snippet '{contextSnippet}' not matched in '{filePath}'.") };
 
             // Not wired into MemberChangedContentResult: the new declaration's text isn't caller-
-            // supplied or separately exposed — IntroduceVariable/Field/ParameterAsync only return
+            // supplied or separately exposed -> IntroduceVariable/Field/ParameterAsync only return
             // the whole-file UpdatedText, so showing just the new declaration here would mean
             // duplicating their formatting logic. Revisit only if those engine methods start
             // returning the introduced declaration's text alongside UpdatedText.
@@ -628,10 +628,10 @@ public class SentinelAdvancedRefactoringTools
     // Not wired into MemberChangedContentResult for any of its three branches (interface/partial/
     // superclass): each engine call (ExtractInterfaceAsync/ExtractMembersToPartialAsync/
     // ExtractSuperclassAsync) only returns whole-file Changes dicts, with no separately-exposed "just the
-    // new type's text" fragment. Wiring this needs an engine-API-extension pass, not tool-layer wiring —
+    // new type's text" fragment. Wiring this needs an engine-API-extension pass, not tool-layer wiring ->
     // revisit only if those engine methods start returning the extracted type's text alongside Changes.
     // newType=class was removed in favor of MoveMember, which supersedes it (targetClassName omitted from the
-    // solution → same new-class behavior) and additionally supports moving into an EXISTING class.
+    // solution -> same new-class behavior) and additionally supports moving into an EXISTING class.
     [McpServerTool(Name = "ExtractMembers")]
     [Produces(DataTag.ChangeId)]
     [Description("Extracts members from a class into a new interface, partial class, or superclass. For moving named members into a class (new or existing), use MoveMember instead.")]
@@ -900,7 +900,7 @@ public class SentinelAdvancedRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Wraps a line range or snippet in a try/catch, using, or #region block.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of (startLine and endLine) or contextSnippet must be supplied. name is required for wrapper=using/region; optional for wrapper=tryCatch (defaults to exception type "Exception"). None of these is individually required by the schema.
-    // TOOL-OPTION-REQUIRED-FLAG-STALE: wrapper carries a C# default ("") purely so it can stay after startLine/endLine in parameter order (existing positional call sites depend on this order); it is actually unconditionally required — the body always falls through to an "Unknown wrapper" error when it doesn't match tryCatch/using/region. The schema wrongly reports it optional.
+    // TOOL-OPTION-REQUIRED-FLAG-STALE: wrapper carries a C# default ("") purely so it can stay after startLine/endLine in parameter order (existing positional call sites depend on this order); it is actually unconditionally required -> the body always falls through to an "Unknown wrapper" error when it doesn't match tryCatch/using/region. The schema wrongly reports it optional.
     public async Task<ToolResult<object>> WrapRange(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,

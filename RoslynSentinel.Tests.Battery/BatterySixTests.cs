@@ -4,12 +4,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 /// <summary>
-/// Battery #6 — Functional tests for three engines with 4–5 test-mentions but no real coverage:
-///   A. DocumentationEngine   (4 tests) — GenerateXmlDocStubs, DocumentPocoFields
-///   B. ArchitecturalEngine   (5 tests) — ConvertToBackgroundService, FindCircularDependencies
-///   C. ApiAutomationEngine   (4 tests) — GenerateHttpClientForController, return-type mapping
+/// Battery #6 -> Functional tests for three engines with 4–5 test-mentions but no real coverage:
+///   A. DocumentationEngine   (4 tests) -> GenerateXmlDocStubs, DocumentPocoFields
+///   B. ArchitecturalEngine   (5 tests) -> ConvertToBackgroundService, FindCircularDependencies
+///   C. ApiAutomationEngine   (4 tests) -> GenerateHttpClientForController, return-type mapping
 ///
-/// SolutionManagementEngine is excluded (spawns real powershell.exe processes — integration only).
+/// SolutionManagementEngine is excluded (spawns real powershell.exe processes -> integration only).
 ///
 /// Total: 13 tests. All workspace-based (SetSource / SetMultipleFiles).
 /// </summary>
@@ -68,7 +68,7 @@ public class Auditor
 }");
         var result = await _engine.GenerateXmlDocumentationStubsAsync("Test.cs");
 
-        // Private methods are filtered out — no summary should appear
+        // Private methods are filtered out -> no summary should appear
         Assert.That(result.UpdatedText, Does.Not.Contain("/// <summary>"),
             "Private methods should not receive XML doc stubs");
     }
@@ -174,13 +174,13 @@ public class CacheWarmupWorker { public void Initialize() { } }");
 
         var cycles = await _engine.FindCircularDependenciesAsync();
 
-        Assert.That(cycles, Is.Empty, "No types in project — no circular dependencies possible");
+        Assert.That(cycles, Is.Empty, "No types in project - no circular dependencies possible");
     }
 
     [Test]
     public async Task FindCircularDependencies_TwoMutuallyDependentClasses_FindsDirectCycle()
     {
-        // A→B and B→A via field references — classic direct cycle
+        // A→B and B->A via field references -> classic direct cycle
         SetMultipleFiles(
             ("NodeA.cs", @"
 public class NodeA
@@ -263,7 +263,7 @@ public class OrdersController
 }");
         var result = await _engine.GenerateHttpClientForControllerAsync("Test.cs", "OrdersController");
 
-        // void, ActionResult, IActionResult → all become Task
+        // void, ActionResult, IActionResult -> all become Task
         Assert.That(result.UpdatedText, Does.Contain("async Task Delete"), "void return → Task");
         Assert.That(result.UpdatedText, Does.Contain("async Task Create"), "ActionResult → Task");
         Assert.That(result.UpdatedText, Does.Contain("async Task Update"), "IActionResult → Task");

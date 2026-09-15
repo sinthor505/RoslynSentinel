@@ -17,7 +17,7 @@ public class ServerStdio
         new(ToolClassRegistry.BasicModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
 
     // Basic tool types eligible for the DEBUG smoke-resolve check. SentinelAugmentTools is
-    // deliberately excluded — it declares zero [McpServerTool] methods (see its own doc comment).
+    // deliberately excluded -> it declares zero [McpServerTool] methods (see its own doc comment).
     // Types here are only resolved when the run's --mode/--include-tools actually activated them,
     // so a narrower selection no longer crashes at startup on a type it never asked for; adding a
     // conditionally-registered class to this list is now safe.
@@ -72,7 +72,7 @@ public class ServerStdio
             replReadStream = s2cPipe.Reader.AsStream();
         }
 
-        // ── Logging (file-only — stdout must stay clean for stdio transport) ─
+        // ── Logging (file-only -> stdout must stay clean for stdio transport) ─
         var logDirectory = ServerStartupHelpers.ParseLogDirectory(args);
         var runId = ServerStartupHelpers.ParseRunId(args);
         var stepId = ServerStartupHelpers.ParseStepId(args);

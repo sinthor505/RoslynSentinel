@@ -54,7 +54,7 @@ public class SentinelAsyncifyTools
         _logger = logger;
     }
 
-    // Score thresholds — used as parameter defaults and referenced in zero-result Directive messages.
+    // Score thresholds -> used as parameter defaults and referenced in zero-result Directive messages.
     private const int DefaultMinScore = 50;
     private const int DefaultScoreThreshold = 50;
 
@@ -144,7 +144,7 @@ public class SentinelAsyncifyTools
                 };
             }
 
-            // B7: apply minScore before aggregation — TotalCandidates reflects post-filter count
+            // B7: apply minScore before aggregation -> TotalCandidates reflects post-filter count
             var aggregateFindings = minScore.HasValue
                 ? summaryFindings.Where(f => f.Score >= minScore.Value).ToList()
                 : summaryFindings;
@@ -168,7 +168,7 @@ public class SentinelAsyncifyTools
             bool byClassTruncated = allByClass.Count > MaxByClass;
             var byClass = byClassTruncated ? allByClass.Take(MaxByClass).ToList() : allByClass;
 
-            // B1: TopCandidates — slim type, capped at 5, only when topN or minScore is set.
+            // B1: TopCandidates -> slim type, capped at 5, only when topN or minScore is set.
             const int MaxTopCandidates = 5;
             List<TopCandidateSummaryEntry>? topCandidates = null;
             if (topN.HasValue || minScore.HasValue)
@@ -200,7 +200,7 @@ public class SentinelAsyncifyTools
                 MinScore: CandidateScoreAnalyzer.ComputeMin(aggregateFindings.Select(f => f.Score)),
                 FlagPhase: flagPhaseResult);
 
-            // B1 Fix 4: overflow safety net — should be unreachable with slim types + caps.
+            // B1 Fix 4: overflow safety net -> should be unreachable with slim types + caps.
             var summaryJson = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(summary, _jsonOptions);
 
             if (_logger.IsEnabled(LogLevel.Information))
@@ -250,7 +250,7 @@ public class SentinelAsyncifyTools
             }
 
             // ── paginate ──────────────────────────────────────────────────────
-            // B7b: apply minScore before pagination — TotalRecords reflects post-filter count
+            // B7b: apply minScore before pagination -> TotalRecords reflects post-filter count
             if (minScore.HasValue)
                 allFindings = allFindings.Where(f => f.Score >= minScore.Value).ToList();
 
@@ -370,7 +370,7 @@ public class SentinelAsyncifyTools
                 Data = new BatchResultSummary
                 {
                     Severity = "ok",
-                    Directive = $"scope=\"targets\" requires flagTargets to be non-empty — no methods were flagged. " +
+                    Directive = $"scope=\"targets\" requires flagTargets to be non-empty - no methods were flagged. " +
                                 $"Provide a flagTargets list, or omit scope to use autonomous project-wide discovery (default minScore={DefaultMinScore}).",
                     DirectiveKind = DirectiveKind.ReviewRequired,
                 }
@@ -464,7 +464,7 @@ public class SentinelAsyncifyTools
                 FilePath = r.FilePath,
                 MethodName = r.MethodName,
                 Outcome = dryRun ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Succeeded,
-                Reason = dryRun ? $"dry_run — would remove [{r.RemovedPattern}]"
+                Reason = dryRun ? $"dry_run - would remove [{r.RemovedPattern}]"
                                 : $"removed [{r.RemovedPattern}]",
             }).ToList();
 
@@ -523,7 +523,7 @@ public class SentinelAsyncifyTools
     [Description("Step 2 of the bridge workflow: converts each named method to the Asyncify-bridge pattern (a sync wrapper delegating to an async overload). Prefer the Asyncify tool for automatic end-to-end migration; use this only for manual step-by-step control. Full workflow: ScanAsyncMigrationCandidates(summarize: true) → BridgeAsyncMethods → UpliftCallers(targets: SuggestedUpliftTargets) → PropagateCancellationToken.")]
     public async Task<ToolResult<BridgeAsyncMethodsResult>> BridgeAsyncMethods(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("{ FilePathWrapper, MethodNames } entries — MethodNames is required per entry. Must be non-empty; an empty list is a no-op.")]
+        [Description("{ FilePathWrapper, MethodNames } entries - MethodNames is required per entry. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
         [Description(ToolParams.DryRun)]
         bool dryRun = false,
@@ -553,7 +553,7 @@ public class SentinelAsyncifyTools
                 Success = true,
                 Data = new BridgeAsyncMethodsResult
                 {
-                    Summary = new BatchResultSummary { Directive = "targets was empty — no methods processed. Call scan_migration_candidates(summarize: true) first to discover and flag candidates.", DirectiveKind = DirectiveKind.ReviewRequired },
+                    Summary = new BatchResultSummary { Directive = "targets was empty - no methods processed. Call scan_migration_candidates(summarize: true) first to discover and flag candidates.", DirectiveKind = DirectiveKind.ReviewRequired },
                     SuggestedUpliftTargets = new List<UpliftTarget>()
                 }
             };
@@ -592,7 +592,7 @@ public class SentinelAsyncifyTools
     [Description("Step 3 of the bridge workflow: updates sync callers of each bridge wrapper to call the async overload directly. Pass SuggestedUpliftTargets from BridgeAsyncMethods as targets. Prefer the Asyncify tool for automatic end-to-end migration; use this only for manual step-by-step control.")]
     public async Task<ToolResult<UpliftCallersResult>> UpliftCallers(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("{ BridgedMethodName, ProjectName? } entries — pass SuggestedUpliftTargets from BridgeAsyncMethods directly. Must be non-empty; an empty list is a no-op.")]
+        [Description("{ BridgedMethodName, ProjectName? } entries - pass SuggestedUpliftTargets from BridgeAsyncMethods directly. Must be non-empty; an empty list is a no-op.")]
         List<UpliftTarget> targets,
         [Description(ToolParams.DryRun)]
         bool dryRun = false,
@@ -622,7 +622,7 @@ public class SentinelAsyncifyTools
                 Success = true,
                 Data = new UpliftCallersResult
                 {
-                    Summary = new BatchResultSummary { Directive = "targets was empty — no callers uplifted. Pass SuggestedUpliftTargets from BridgeAsyncMethods as targets, or use the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired },
+                    Summary = new BatchResultSummary { Directive = "targets was empty - no callers uplifted. Pass SuggestedUpliftTargets from BridgeAsyncMethods as targets, or use the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired },
                     SuggestedPropagateTargets = new List<BatchTarget>()
                 }
             };
@@ -667,7 +667,7 @@ public class SentinelAsyncifyTools
     [Description("Step 4 of the bridge workflow: threads CancellationToken through async call chains in the specified files. Pass SuggestedPropagateTargets from UpliftCallers as targets. Also usable standalone to clean up CT forwarding in any set of files.")]
     public async Task<ToolResult<BatchResultSummary>> PropagateCancellationToken(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("{ FilePathWrapper, MethodNames? } entries — null MethodNames means all eligible methods in the file. Pass SuggestedPropagateTargets from UpliftCallers directly. Must be non-empty; an empty list is a no-op.")]
+        [Description("{ FilePathWrapper, MethodNames? } entries - null MethodNames means all eligible methods in the file. Pass SuggestedPropagateTargets from UpliftCallers directly. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
         [Description(ToolParams.DryRun)]
         bool dryRun = false,
@@ -693,7 +693,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = true,
-                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Pass SuggestedPropagateTargets from UpliftCallers as targets, or specify files explicitly. Prefer the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired }
+                Data = new BatchResultSummary { Directive = "targets was empty - no files processed. Pass SuggestedPropagateTargets from UpliftCallers as targets, or specify files explicitly. Prefer the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired }
             };
 
         try
@@ -722,7 +722,7 @@ public class SentinelAsyncifyTools
     [Description("Adds a CancellationToken parameter to async methods that lack one, in the specified files. Independent of the bridge workflow. Differs from PropagateCancellationToken, which threads an existing CT through call chains rather than adding the parameter itself.")]
     public async Task<ToolResult<BatchResultSummary>> AddCancellationToken(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("{ FilePathWrapper, MethodNames? } entries — null MethodNames means all eligible async methods in the file. Must be non-empty; an empty list is a no-op.")]
+        [Description("{ FilePathWrapper, MethodNames? } entries - null MethodNames means all eligible async methods in the file. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
         [Description(ToolParams.DryRun)]
         bool dryRun = false,
@@ -748,7 +748,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = true,
-                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Specify the files (FilePathWrapper) where CancellationToken parameters should be added. Prefer the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired }
+                Data = new BatchResultSummary { Directive = "targets was empty - no files processed. Specify the files (FilePathWrapper) where CancellationToken parameters should be added. Prefer the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired }
             };
 
         try
@@ -773,7 +773,7 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "ExtractEventHandlers")]
     [Produces(DataTag.BatchResultSummary)]
-    [Description("Extracts a nominated code block from inside a method into a new private method, using semantic analysis to produce the correct return type. Manual alternative to Asyncify's automatic Phase 0 extraction — use this for a custom extracted method name, partial-body extraction, or a one-off targeted extraction.")]
+    [Description("Extracts a nominated code block from inside a method into a new private method, using semantic analysis to produce the correct return type. Manual alternative to Asyncify's automatic Phase 0 extraction - use this for a custom extracted method name, partial-body extraction, or a one-off targeted extraction.")]
     public async Task<ToolResult<BatchResultSummary>> ExtractEventHandlers(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("{ FilePathWrapper, NewMethodName, ContextSnippet, LineBefore?, LineAfter? } entries. NewMethodName must be a valid C# identifier; ContextSnippet must uniquely identify the code block to extract. Targets in the same file are processed sequentially. Must be non-empty; an empty list is a no-op.")]
@@ -800,7 +800,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = true,
-                Data = new BatchResultSummary { Directive = "targets was empty — no handlers extracted. Call scan_migration_candidates(pattern: \"HandlerExtractCandidate\") to find candidates, then pass them as targets. Prefer the asyncify macro for auto-extraction.", DirectiveKind = DirectiveKind.ReviewRequired }
+                Data = new BatchResultSummary { Directive = "targets was empty - no handlers extracted. Call scan_migration_candidates(pattern: \"HandlerExtractCandidate\") to find candidates, then pass them as targets. Prefer the asyncify macro for auto-extraction.", DirectiveKind = DirectiveKind.ReviewRequired }
             };
 
         try
@@ -879,7 +879,7 @@ public class SentinelAsyncifyTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Scopes the run to one project. Omit to process the entire solution.")]
         string? projectName = null,
-        [Description("Explicit (FilePathWrapper, MethodName) list — skips the flag-discovery phase.")]
+        [Description("Explicit (FilePathWrapper, MethodName) list - skips the flag-discovery phase.")]
         List<FlagCandidateTarget>? methodTargets = null,
         [Description("Method names to skip in every phase.")]
         List<string>? exclusions = null,
@@ -957,7 +957,7 @@ public class SentinelAsyncifyTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Scopes the run to one project. Omit to process the entire solution.")]
         string? projectName = null,
-        [Description("Explicit (FilePathWrapper, MethodName) list — skips the flag-discovery phase.")]
+        [Description("Explicit (FilePathWrapper, MethodName) list - skips the flag-discovery phase.")]
         List<FlagCandidateTarget>? methodTargets = null,
         [Description("Method names to skip in every phase.")]
         List<string>? exclusions = null,
@@ -1308,7 +1308,7 @@ public class SentinelAsyncifyTools
 
                     if (string.IsNullOrEmpty(updatedSource))
                     {
-                        var reason781 = $"Conversion failed: {convertResult.Outcome} — {convertResult.Message}";
+                        var reason781 = $"Conversion failed: {convertResult.Outcome} - {convertResult.Message}";
                         items.Add(new OperationItemRecord { FilePath = target.FilePath, MethodName = methodName, Outcome = ItemRecordOutcome.Failed, Reason = reason781 });
                         failures.Add(new FailureDetail { FilePath = target.FilePath, MethodName = methodName, Reason = reason781, Outcome = ItemRecordOutcome.Failed });
                         failed++;
@@ -1332,7 +1332,7 @@ public class SentinelAsyncifyTools
                     if (!bridgeValidation.Success)
                     {
                         var diagMsg = string.Join("; ", bridgeValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                        var reason782 = $"Validation: {bridgeValidation.Diagnostics.Count} error(s) — {diagMsg}";
+                        var reason782 = $"Validation: {bridgeValidation.Diagnostics.Count} error(s) - {diagMsg}";
                         items.Add(new OperationItemRecord
                         {
                             FilePath = target.FilePath,
@@ -1397,7 +1397,7 @@ public class SentinelAsyncifyTools
                                 else if (ctApplyResult.ValidationResult != null)
                                 {
                                     var diagMsg = string.Join("; ", ctApplyResult.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                                    reason = $"Validation: {ctApplyResult.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}";
+                                    reason = $"Validation: {ctApplyResult.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}";
                                     compilerDiagnostics = ctApplyResult.ValidationResult.Diagnostics;
                                 }
                             }
@@ -1554,7 +1554,7 @@ public class SentinelAsyncifyTools
                         if (!ctFileValidation.Success)
                         {
                             var diagMsg = string.Join("; ", ctFileValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                            var valReason = $"Validation: {ctFileValidation.Diagnostics.Count} error(s) — {diagMsg}";
+                            var valReason = $"Validation: {ctFileValidation.Diagnostics.Count} error(s) - {diagMsg}";
                             items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = valReason, CompilerDiagnostics = ctFileValidation.Diagnostics });
                             if (failures.Count < 10)
                                 failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = valReason, Outcome = ItemRecordOutcome.Failed, CompilerDiagnostics = ctFileValidation.Diagnostics });
@@ -1868,14 +1868,14 @@ public class SentinelAsyncifyTools
 
     private static (ItemOutcome Outcome, FailureReason Reason) ClassifyUpliftSkipReason(string reason)
     {
-        // Already in target state — not actionable, excluded from failure rate
+        // Already in target state -> not actionable, excluded from failure rate
         if (reason.Contains("already async", StringComparison.OrdinalIgnoreCase)
          || reason.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
         {
             return (ItemOutcome.AlreadySatisfied, FailureReason.AlreadyAsync);
         }
 
-        // Async overload exists but lacks CT — blocked, routable via AddCancellationToken
+        // Async overload exists but lacks CT -> blocked, routable via AddCancellationToken
         if (reason.Contains("already exists", StringComparison.OrdinalIgnoreCase))
         {
             return (ItemOutcome.Blocked, FailureReason.OverloadAlreadyExists);
@@ -1918,7 +1918,7 @@ public class SentinelAsyncifyTools
             OperationOutcome.CompletedWithNoOps =>
                 succeeded > 0
                     ? $"{succeeded} caller(s) uplifted; {alreadySatisfied} were already in the target state."
-                    : $"All {alreadySatisfied} caller(s) were already in the target state — nothing to do.",
+                    : $"All {alreadySatisfied} caller(s) were already in the target state - nothing to do.",
             OperationOutcome.PartialProgress =>
                 $"{succeeded} caller(s) uplifted; {failed + blocked} could not be completed. Review Actionable for next steps.",
             OperationOutcome.NoProgress =>
@@ -1964,7 +1964,7 @@ public class SentinelAsyncifyTools
                     var applyResult1126 = await _workspaceManager.ApplyProposedChangesAsync(
                         engineResult.Changes, validateChanges: true, cancellationToken: cancellationToken);
                     if (!applyResult1126.Success && applyResult1126.ValidationResult != null)
-                        _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes — skipping write",
+                        _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes - skipping write",
                             applyResult1126.ValidationResult.Diagnostics.Count);
 
                     foreach (var f in engineResult.Flagged)
@@ -2023,7 +2023,7 @@ public class SentinelAsyncifyTools
             }
             else
             {
-                // scope="targets" — explicit list
+                // scope="targets" -> explicit list
                 var targets = input.Targets ?? new List<FlagCandidateTarget>();
                 var tuples = targets.Select(t =>
                     (FilePath: (FilePathWrapper)t.FilePath, MethodName: t.MethodName,
@@ -2084,7 +2084,7 @@ public class SentinelAsyncifyTools
                     var applyResult1223 = await _workspaceManager.ApplyProposedChangesAsync(
                         allChanges, validateChanges: true);
                     if (!applyResult1223.Success && applyResult1223.ValidationResult != null)
-                        _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes — skipping write",
+                        _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes - skipping write",
                             applyResult1223.ValidationResult.Diagnostics.Count);
                     if (applyResult1223.PreImages != null)
                     {
@@ -2115,7 +2115,7 @@ public class SentinelAsyncifyTools
         var flagDirective = status.Open ? status.Directive
             : succeeded > 0 ? WriteStatusNote(input.DryRun, succeeded) + status.Directive
             : skipped > 0
-                ? $"No methods were flagged — {skipped} candidate(s) were skipped (scored below minScore={input.MinScore} or already flagged). " +
+                ? $"No methods were flagged - {skipped} candidate(s) were skipped (scored below minScore={input.MinScore} or already flagged). " +
                   $"Default minScore is {DefaultMinScore}. Lower minScore or use forceRescan=true to re-evaluate existing flags."
                 : $"No methods in the solution qualified for flagging at minScore={input.MinScore}. " +
                   $"Try lowering minScore (e.g., minScore=25), or run forceRescan=true to re-evaluate already-flagged methods.";
@@ -2149,7 +2149,7 @@ public class SentinelAsyncifyTools
         public readonly List<FailureDetail> Failures = new();
         public int Succeeded, Failed, Skipped;
 
-        // Per-phase shadow counters — assembled into PhaseBreakdown at the end of AsyncifyCore.
+        // Per-phase shadow counters -> assembled into PhaseBreakdown at the end of AsyncifyCore.
         public int P0Succeeded, P0Failed;                              // Phase 0: handler_extract
         public int P1Succeeded, P1Failed, P1Skipped;                   // Phase 1: flag
         public int P2Succeeded, P2Failed, P2Skipped;                   // Phase 2: bridge
@@ -2256,7 +2256,7 @@ public class SentinelAsyncifyTools
     // Event handlers flagged HandlerExtractCandidate have async-eligible business logic inline.
     // Extract the entire body into a new private method (PascalCase name derived from the handler
     // name) so Phase 3a can bridge it. ExtractEntireBody=true means the method name from the scan
-    // finding is the only input needed — no ContextSnippet. Returns true if the run should stop early.
+    // finding is the only input needed -> no ContextSnippet. Returns true if the run should stop early.
     private async Task<bool> RunHandlerExtractPhaseAsync(AsyncifyInput input, AsyncifyRunState state)
     {
         List<MigrationCandidateFinding> extractCandidates;
@@ -2268,7 +2268,7 @@ public class SentinelAsyncifyTools
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "AsyncifyCore Phase 0: HandlerExtractCandidate discovery failed — skipping");
+            _logger.LogWarning(ex, "AsyncifyCore Phase 0: HandlerExtractCandidate discovery failed - skipping");
             extractCandidates = new List<MigrationCandidateFinding>();
         }
 
@@ -2341,7 +2341,7 @@ public class SentinelAsyncifyTools
                 if (!extractValidation.Success)
                 {
                     var diagMsg = string.Join("; ", extractValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                    var valReason = $"Validation: {extractValidation.Diagnostics.Count} error(s) — {diagMsg}";
+                    var valReason = $"Validation: {extractValidation.Diagnostics.Count} error(s) - {diagMsg}";
                     state.Items.Add(new OperationItemRecord { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Outcome = ItemRecordOutcome.Failed, Reason = valReason, CompilerDiagnostics = extractValidation.Diagnostics });
                     if (state.Failures.Count < 10) state.Failures.Add(new FailureDetail { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Reason = valReason, Outcome = ItemRecordOutcome.Failed, CompilerDiagnostics = extractValidation.Diagnostics });
                     state.P0Failed++; state.Failed++;
@@ -2409,7 +2409,7 @@ public class SentinelAsyncifyTools
                 var applyResult1317 = await _workspaceManager.ApplyProposedChangesAsync(
                     flagResult.Changes, validateChanges: true);
                 if (!applyResult1317.Success && applyResult1317.ValidationResult != null)
-                    _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in flag attribute changes — skipping write",
+                    _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in flag attribute changes - skipping write",
                         applyResult1317.ValidationResult.Diagnostics.Count);
 
                 foreach (var f in flagResult.Flagged)
@@ -2474,7 +2474,7 @@ public class SentinelAsyncifyTools
                     FilePath = s.FilePath,
                     MethodName = s.MethodName,
                     Outcome = ItemRecordOutcome.Skipped,
-                    Reason = $"phase:flag — score {s.Score} below minScore {input.MinScore}",
+                    Reason = $"phase:flag - score {s.Score} below minScore {input.MinScore}",
                 });
                 state.P1Skipped++; state.Skipped++;
             }
@@ -2485,7 +2485,7 @@ public class SentinelAsyncifyTools
                     FilePath = a.FilePath,
                     MethodName = a.MethodName,
                     Outcome = ItemRecordOutcome.Skipped,
-                    Reason = "phase:flag — already flagged",
+                    Reason = "phase:flag - already flagged",
                 });
                 state.P1Skipped++; state.Skipped++;
             }
@@ -2526,7 +2526,7 @@ public class SentinelAsyncifyTools
                         FilePath = tuples[idx].FilePath,
                         MethodName = tuples[idx].MethodName,
                         Outcome = ItemRecordOutcome.Failed,
-                        Reason = $"phase:flag — {err}",
+                        Reason = $"phase:flag - {err}",
                     });
                     if (failures.Count < 10)
                     {
@@ -2545,7 +2545,7 @@ public class SentinelAsyncifyTools
                     var applyResult1421 = await _workspaceManager.ApplyProposedChangesAsync(
                         allChanges, validateChanges: true);
                     if (!applyResult1421.Success && applyResult1421.ValidationResult != null)
-                        _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in explicit-target flag changes — skipping write",
+                        _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in explicit-target flag changes - skipping write",
                             applyResult1421.ValidationResult.Diagnostics.Count);
                     if (applyResult1421.PreImages != null)
                     {
@@ -2615,7 +2615,7 @@ public class SentinelAsyncifyTools
                 Outcome = alreadyDone ? ItemRecordOutcome.Skipped
                         : requiresManualReview ? ItemRecordOutcome.NeedsManualReview
                         : ItemRecordOutcome.Failed,
-                Reason = $"phase:bridge — {s.Reason}",
+                Reason = $"phase:bridge - {s.Reason}",
                 CompilerDiagnostics = bridgeDiags,
                 AfterSource = s.AttemptedSource,
             });
@@ -2658,7 +2658,7 @@ public class SentinelAsyncifyTools
     // Uplift targets come from three sources:
     //   1. Methods applied (body-rewritten) this bridge run.
     //   2. Methods with stale AsyncBridgeCandidate flags (already had CT, body correct).
-    //   3. ALL [Obsolete("Asyncify-bridge: ...")] wrappers in the project — covers methods
+    //   3. ALL [Obsolete("Asyncify-bridge: ...")] wrappers in the project -> covers methods
     //      bridged in prior runs whose flags were stripped and are invisible to the current
     //      batch's scope. The idempotency guard in RunUpliftBatch makes this a no-op for
     //      callers already converted.
@@ -2738,7 +2738,7 @@ public class SentinelAsyncifyTools
                         FilePath = s.FilePath,
                         MethodName = s.CallerMethod,
                         Outcome = upliftOutcome,
-                        Reason = $"phase:uplift — {s.Reason}",
+                        Reason = $"phase:uplift - {s.Reason}",
                         CompilerDiagnostics = upliftDiags,
                         AfterSource = s.AttemptedSource,
                     });
@@ -2777,7 +2777,7 @@ public class SentinelAsyncifyTools
 
     // ── Phase 3a: Bridge HandlerToAsyncCandidate extracted methods ─────────────
     // Extracted event-handler bodies that have been flagged HandlerToAsyncCandidate need the same
-    // bridge conversion as AsyncBridgeCandidate — but they weren't discovered in Phase 1 (which
+    // bridge conversion as AsyncBridgeCandidate -> but they weren't discovered in Phase 1 (which
     // only flags AsyncBridgeCandidate). After bridging, their event-handler callers typically
     // become AsyncHandlerCandidate and are picked up by Phase 3b below. Returns true if the run
     // should stop early.
@@ -2796,7 +2796,7 @@ public class SentinelAsyncifyTools
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "AsyncifyCore Phase 3a: HandlerToAsyncCandidate discovery failed — skipping");
+            _logger.LogWarning(ex, "AsyncifyCore Phase 3a: HandlerToAsyncCandidate discovery failed - skipping");
             handlerToAsyncCandidates = new List<MigrationCandidateFinding>();
         }
 
@@ -2835,7 +2835,7 @@ public class SentinelAsyncifyTools
 
                 if (string.IsNullOrEmpty(updatedSource))
                 {
-                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} — {convertResult.Message}");
+                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} - {convertResult.Message}");
                 }
 
                 if (input.PropagateCancellationTokens)
@@ -2849,7 +2849,7 @@ public class SentinelAsyncifyTools
 
                 if (string.IsNullOrEmpty(updatedSource))
                 {
-                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} — {convertResult.Message}");
+                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} - {convertResult.Message}");
                 }
 
                 var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
@@ -2858,7 +2858,7 @@ public class SentinelAsyncifyTools
                 if (!applyResult3a.Success && applyResult3a.ValidationResult != null)
                 {
                     var diagMsg = string.Join("; ", applyResult3a.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                    throw new InvalidOperationException($"Validation: {applyResult3a.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}");
+                    throw new InvalidOperationException($"Validation: {applyResult3a.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}");
                 }
                 state.HandlerBridgedFiles.Add(candidate.FilePath);
 
@@ -2918,7 +2918,7 @@ public class SentinelAsyncifyTools
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "AsyncifyCore Phase 3b: candidate discovery failed — skipping handler phase");
+            _logger.LogWarning(ex, "AsyncifyCore Phase 3b: candidate discovery failed - skipping handler phase");
             handlerCandidates = new List<MigrationCandidateFinding>();
         }
 
@@ -2962,7 +2962,7 @@ public class SentinelAsyncifyTools
                     if (!applyResult3b.Success && applyResult3b.ValidationResult != null)
                     {
                         var diagMsg = string.Join("; ", applyResult3b.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                        throw new InvalidOperationException($"Validation: {applyResult3b.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}");
+                        throw new InvalidOperationException($"Validation: {applyResult3b.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}");
                     }
                     state.HandlerConvertedFiles.Add(handler.FilePath);
                 }
@@ -2978,9 +2978,9 @@ public class SentinelAsyncifyTools
             }
             catch (Exception ex) when (ex.Message.Contains("is already async"))
             {
-                // Already converted in a prior run — flag is genuinely stale. Strip only.
+                // Already converted in a prior run -> flag is genuinely stale. Strip only.
                 _logger.LogInformation(
-                    "AsyncifyCore Phase 3b: '{Method}' already async — stripping stale flag", handler.MethodName);
+                    "AsyncifyCore Phase 3b: '{Method}' already async - stripping stale flag", handler.MethodName);
                 try
                 {
                     var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
@@ -3000,7 +3000,7 @@ public class SentinelAsyncifyTools
                     FilePath = handler.FilePath,
                     MethodName = handler.MethodName,
                     Outcome = ItemRecordOutcome.Skipped,
-                    Reason = "stale-flag: already async — stripped",
+                    Reason = "stale-flag: already async - stripped",
                 });
                 state.P3bSkipped++; state.Skipped++;
             }
@@ -3008,9 +3008,9 @@ public class SentinelAsyncifyTools
             {
                 // Scored by heuristic (blocking-calls) but has no bridge wrappers to replace.
                 // Strip AsyncHandlerCandidate and add NeedsManualReview so Phase 1 does not
-                // re-flag on subsequent runs — this method requires manual async conversion.
+                // re-flag on subsequent runs -> this method requires manual async conversion.
                 _logger.LogInformation(
-                    "AsyncifyCore Phase 3b: '{Method}' has no bridge calls — flagging NeedsManualReview", handler.MethodName);
+                    "AsyncifyCore Phase 3b: '{Method}' has no bridge calls - flagging NeedsManualReview", handler.MethodName);
                 try
                 {
                     var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
@@ -3023,7 +3023,7 @@ public class SentinelAsyncifyTools
                     var neeReviewResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
                         handler.FilePath, handler.MethodName, "NeedsManualReview",
                         score: 0,
-                        reason: "Handler has blocking calls but no Asyncify-bridge wrappers — manual async conversion required",
+                        reason: "Handler has blocking calls but no Asyncify-bridge wrappers - manual async conversion required",
                         cancellationToken: state.InnerToken);
                     await _workspaceManager.ApplyProposedChangesAsync(neeReviewResult.Changes);
                 }
@@ -3037,7 +3037,7 @@ public class SentinelAsyncifyTools
                     FilePath = handler.FilePath,
                     MethodName = handler.MethodName,
                     Outcome = ItemRecordOutcome.Skipped,
-                    Reason = "stale-flag: no bridge calls — flagged NeedsManualReview",
+                    Reason = "stale-flag: no bridge calls - flagged NeedsManualReview",
                 });
                 state.P3bSkipped++; state.Skipped++;
             }
@@ -3134,7 +3134,7 @@ public class SentinelAsyncifyTools
             {
                 FilePath = a.FilePath,
                 Outcome = ItemRecordOutcome.Succeeded,
-                Reason = $"phase:propagate_ct — {a.TotalForwarded} call sites forwarded",
+                Reason = $"phase:propagate_ct - {a.TotalForwarded} call sites forwarded",
             });
             state.P4Succeeded++; state.Succeeded++;
         }
@@ -3144,7 +3144,7 @@ public class SentinelAsyncifyTools
             {
                 FilePath = f.FilePath,
                 Outcome = ItemRecordOutcome.Failed,
-                Reason = $"phase:propagate_ct — {f.Reason}",
+                Reason = $"phase:propagate_ct - {f.Reason}",
                 CompilerDiagnostics = f.Diagnostics.Count > 0 ? f.Diagnostics : null,
             });
             state.P4Failed++; state.Failed++;
@@ -3167,7 +3167,7 @@ public class SentinelAsyncifyTools
         string directive;
         if (state.StoppedEarly)
         {
-            directive = $"stopped_early — {state.StopReason}. Phases completed are in blob: {blobName2}.";
+            directive = $"stopped_early - {state.StopReason}. Phases completed are in blob: {blobName2}.";
         }
         else if (state.Succeeded == 0 && !status2.Open && !state.StoppedEarly
                  && state.BridgeStopReason == "no_candidates" && !state.BridgeMinScore.HasValue)
@@ -3197,13 +3197,13 @@ public class SentinelAsyncifyTools
         {
             if (state.BridgeBodyRewriteFailures > 0)
             {
-                directive = $"{state.BridgeBodyRewriteFailures} candidate(s) required manual review — " +
+                directive = $"{state.BridgeBodyRewriteFailures} candidate(s) required manual review - " +
                             $"the async body rewrite produced compiler errors after replacing sync bridge calls with async equivalents. " +
                             $"Call GetOperationDetail(changeId=\"{changeId}\", filter=\"manual_review\") to see per-method compiler diagnostics.";
             }
             else
             {
-                directive = $"{state.BridgeStaleFlagSkips} candidate(s) skipped — async overloads already exist with CancellationToken " +
+                directive = $"{state.BridgeStaleFlagSkips} candidate(s) skipped - async overloads already exist with CancellationToken " +
                             $"(stale [AsyncBridgeCandidate] flags from a prior Asyncify run). " +
                             $"Run ScanAsyncMigrationCandidates to refresh the candidate list, or " +
                             $"call GetOperationDetail(changeId=\"{changeId}\", filter=\"skipped\") to inspect skip reasons.";
@@ -3214,8 +3214,8 @@ public class SentinelAsyncifyTools
             var stopDesc = state.BridgeStopReason switch
             {
                 "batch_complete" => "All eligible candidates were processed in this run.",
-                "budget_exhausted" => $"Stopped after maxMethods={input.MaxMethods} limit — {state.BridgeRemainingCandidates} eligible candidate(s) remain; re-run to continue.",
-                "dry_run" => "Dry run complete — no files were written to disk.",
+                "budget_exhausted" => $"Stopped after maxMethods={input.MaxMethods} limit - {state.BridgeRemainingCandidates} eligible candidate(s) remain; re-run to continue.",
+                "dry_run" => "Dry run complete - no files were written to disk.",
                 _ when state.BridgeStopReason.Length > 0 => $"Bridge phase ended: {state.BridgeStopReason}.",
                 _ => string.Empty,
             };
@@ -3328,7 +3328,7 @@ public class SentinelAsyncifyTools
 
                 if (string.IsNullOrEmpty(updatedSource))
                 {
-                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} — {convertResult.Message}");
+                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} - {convertResult.Message}");
                 }
 
                 if (propagateCancellationTokens)
@@ -3348,7 +3348,7 @@ public class SentinelAsyncifyTools
                 if (!handlerToAsyncValidation.Success)
                 {
                     var diagMsg = string.Join("; ", handlerToAsyncValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                    throw new InvalidOperationException($"Validation: {handlerToAsyncValidation.Diagnostics.Count} error(s) — {diagMsg}");
+                    throw new InvalidOperationException($"Validation: {handlerToAsyncValidation.Diagnostics.Count} error(s) - {diagMsg}");
                 }
 
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
@@ -3638,12 +3638,12 @@ public class SentinelAsyncifyTools
     // Returns a short prefix for BatchResultSummary.Directive that tells the model whether
     // source files were actually written to disk or only computed (dry run).
     private static string WriteStatusNote(bool dryRun, int succeeded) =>
-        dryRun ? "Dry run — no files written to disk. " :
+        dryRun ? "Dry run - no files written to disk. " :
         succeeded > 0 ? $"{succeeded} change(s) written to disk. " :
         "";
 
     // Converts an event-handler name to PascalCase by splitting on '_' and capitalising each part.
-    // Example: "button1_Click" → "Button1Click", "Form_Load" → "FormLoad".
+    // Example: "button1_Click" → "Button1Click", "Form_Load" -> "FormLoad".
     private static string ToPascalCase(string name)
     {
         var parts = name.Split('_', StringSplitOptions.RemoveEmptyEntries);
@@ -3652,7 +3652,7 @@ public class SentinelAsyncifyTools
 
     // ── Mutation circuit breaker tools ──────────────────────────────────────
     // Named "Mutation" (not just "Breaker") to distinguish from the separate, auto-resetting
-    // orientation breaker (SearchSolutionText thrashing guard) — a model that trips the
+    // orientation breaker (SearchSolutionText thrashing guard) -> a model that trips the
     // orientation breaker previously reached for the identically-named ResetBreaker tool here,
     // which only ever controlled this batch-failure breaker and left the model stuck retrying
     // a tool that could never unblock it. Moved out of the base/Basic toolset into Advanced

@@ -1,20 +1,20 @@
 namespace RoslynSentinel.Tests.ModelEval.Fixtures;
 
 /// <summary>
-/// Minimal reproduction of a "whole-blob rewrite instead of scoped edit" bug pattern — the class of
+/// Minimal reproduction of a "whole-blob rewrite instead of scoped edit" bug pattern -> the class of
 /// bug plan-9b-model-test-step2.md was written against (a method rebuilds one node and then
 /// reformats/rewrites the ENTIRE file instead of just the changed part). Uses plain string
 /// manipulation rather than real Roslyn SyntaxNode APIs so it compiles inside
 /// <see cref="RoslynSentinel.Tests.TestSolutionFixture"/>'s copy of Samples/ContosoOrders, which has
-/// no NuGet packages and no restore step — the specific API surface isn't what this test exercises;
+/// no NuGet packages and no restore step -> the specific API surface isn't what this test exercises;
 /// the agent loop, tool dispatch, and transcript/assertion machinery are.
 /// </summary>
 public static class WholeFileRewriteReproducer
 {
     /// <summary>
-    /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/BlockEditHelpers.cs — the "already
+    /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/BlockEditHelpers.cs -> the "already
     /// has the fix pattern" file, standing in for a file like RefactoringEngine.cs. The scoped-edit
-    /// helper is private, so BlockConverter.cs can't call it directly — the model has to copy the
+    /// helper is private, so BlockConverter.cs can't call it directly -> the model has to copy the
     /// method's source into BlockConverter.cs itself, matching plan-9b-model-test-step2.md step 4.
     /// </summary>
     public const string HelperFileContent = """
@@ -25,7 +25,7 @@ public static class WholeFileRewriteReproducer
             /// <summary>
             /// Replaces <paramref name="oldBlock"/> with <paramref name="newBlock"/> inside
             /// <paramref name="fileText"/>, re-indenting only the replacement block to match the
-            /// surrounding indentation — everything else in fileText is returned byte-for-byte
+            /// surrounding indentation -> everything else in fileText is returned byte-for-byte
             /// unchanged.
             /// </summary>
             private static string ReplaceBlockFormatted(string fileText, string oldBlock, string newBlock)
@@ -49,7 +49,7 @@ public static class WholeFileRewriteReproducer
         """;
 
     /// <summary>
-    /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/BlockConverter.cs — the buggy file,
+    /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/BlockConverter.cs -> the buggy file,
     /// standing in for a large multi-method engine file with one method that still has the bug.
     /// Deliberately padded with unrelated members before and after the buggy method, each with
     /// idiosyncratic spacing, so a whole-file reformat is mechanically detectable: those unrelated
@@ -118,7 +118,7 @@ public static class WholeFileRewriteReproducer
         """;
 
     /// <summary>
-    /// Goes in the fixture at ContosoOrders.Tests/ModelEvalGenerated/BlockConverterTests.cs — real
+    /// Goes in the fixture at ContosoOrders.Tests/ModelEvalGenerated/BlockConverterTests.cs -> real
     /// xunit tests replacing the byte-for-byte substring checks that previously verified "unrelated
     /// code unchanged" (see docs/current/modeleval_fixture_test_suite_redesign.md). References
     /// <c>BlockConverter</c> directly rather than through a front door: none of its member names
@@ -126,7 +126,7 @@ public static class WholeFileRewriteReproducer
     /// <c>UnrelatedMethodAfter</c>) are renamed by the fix this fixture asks for, so a test written
     /// against the pre-fix shape still compiles and is meaningful after a correct fix.
     /// <c>ModifiedMemberTests</c> proves the fixed method still converts correctly;
-    /// <c>UnrelatedMemberTests</c> proves the two padding methods' BEHAVIOR survived — irrespective
+    /// <c>UnrelatedMemberTests</c> proves the two padding methods' BEHAVIOR survived -> irrespective
     /// of whether their formatting did, which is the whole point of no longer scoring formatting.
     /// </summary>
     public const string ModifiedAndUnrelatedMemberTestsFileContent = """

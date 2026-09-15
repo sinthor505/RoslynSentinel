@@ -40,7 +40,7 @@ public class FinalRegressionTests
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // BUG-61: SyncTypeAndFilename — Uses Staging Instead of Direct Write
+    // BUG-61: SyncTypeAndFilename -> Uses Staging Instead of Direct Write
     // ────────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -68,7 +68,7 @@ public class FinalRegressionTests
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // BUG-60: RemoveMember — Validates Usages Before Removal
+    // BUG-60: RemoveMember -> Validates Usages Before Removal
     // ────────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -121,7 +121,7 @@ public class FinalRegressionTests
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // BUG-57: IntroduceParameterObject — Warns About Interface Methods
+    // BUG-57: IntroduceParameterObject -> Warns About Interface Methods
     // ────────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -153,7 +153,7 @@ public class FinalRegressionTests
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // BUG-55: OptimizeToValueTask — Warns About Interface Signature Changes
+    // BUG-55: OptimizeToValueTask -> Warns About Interface Signature Changes
     // ────────────────────────────────────────────────────────────────────────────
 
     [Test]

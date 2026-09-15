@@ -101,7 +101,7 @@ public class StringTest
     // Test 3: Property Access Expression
     // ══════════════════════════════════════════════════════════════════════════
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
-    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
+    // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractLocalVariable_PropertyAccess_ExtractsCorrectly()
     {
@@ -237,7 +237,7 @@ public class Counter
     // Test 8: Skips Method Calls (Side Effects)
     // ══════════════════════════════════════════════════════════════════════════
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
-    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
+    // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractLocalVariable_SkipsMethodCallsWithSideEffects()
     {
@@ -368,13 +368,13 @@ public class Printer
     [Description("A caller-supplied expression that is the WHOLE target expression but with different "
                  + "internal spacing (e.g. around an operator) must still resolve via the exact-match "
                  + "path, not silently fall through to the ambiguous 'nearest enclosing expression at "
-                 + "this position' guess — which could resolve to a larger expression than intended if "
+                 + "this position' guess - which could resolve to a larger expression than intended if "
                  + "the position happens to fall inside one. Whitespace tolerance and exactness are not "
                  + "in conflict here: the expression is complete, just differently formatted. Uses a "
                  + "multi-line spacing difference (extra blank line inside the expression) rather than "
                  + "inter-token spacing, since ContextHelper's single-line collapsed-whitespace fallback "
                  + "resolves to the containing LINE's start (correct for member-level disambiguation, "
-                 + "not precise enough for expression-level positioning) — a same-line-but-differently-"
+                 + "not precise enough for expression-level positioning) - a same-line-but-differently-"
                  + "spaced snippet doesn't reach this method's own exact-vs-fallback branch at all, it's "
                  + "resolved (or not) one layer earlier. See docs/TODO.md for that separate, deeper gap.")]
     public async Task ExtractLocalVariable_WholeExpressionWithDifferentInternalSpacing_ResolvesExactly()
@@ -390,7 +390,7 @@ public class Printer
             "}";
         SetSource(source, "Test.cs");
 
-        // Caller's snippet spans the same two lines but re-wraps them onto one line — same
+        // Caller's snippet spans the same two lines but re-wraps them onto one line -> same
         // expression text once whitespace is collapsed, reached via the exact-ordinal-with-
         // line-ending-tolerance path (ContextHelper.cs:39-56), which preserves the real
         // in-source position rather than snapping to a line start.

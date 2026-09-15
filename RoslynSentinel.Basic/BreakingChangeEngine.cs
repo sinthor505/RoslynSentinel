@@ -90,7 +90,7 @@ public class BreakingChangeEngine
 
                 results.Add(new PublicApiMember("Type", typeName, BuildTypeSignature(typeDecl), docPath, typeLine));
 
-                // TypeDeclarationSyntax covers class/struct/interface/record — all have Members.
+                // TypeDeclarationSyntax covers class/struct/interface/record -> all have Members.
                 // EnumDeclarationSyntax is a BaseTypeDeclarationSyntax but has no named callable members.
                 if (typeDecl is not TypeDeclarationSyntax typeWithMembers)
                 {
@@ -145,7 +145,7 @@ public class BreakingChangeEngine
 
             if (currentBySignature.ContainsKey(key))
             {
-                continue; // Unchanged — good
+                continue; // Unchanged - good
             }
 
             // Member was removed or renamed. Check if the type itself still exists.
@@ -174,7 +174,7 @@ public class BreakingChangeEngine
             {
                 if (!currentTypes.Contains(baselineMember.ContainingType))
                 {
-                    // Type was removed — type-level change already reported
+                    // Type was removed -> type-level change already reported
                     continue;
                 }
 
@@ -189,7 +189,7 @@ public class BreakingChangeEngine
 
         // Also flag newly internal/private members (accessibility reduction is breaking)
         var baselineSignatures = baseline.Select(m => $"{m.ContainingType}|{m.Signature}").ToHashSet();
-        // (Access reduction can't be detected from signature alone without semantic model — covered by summary message)
+        // (Access reduction can't be detected from signature alone without semantic model -> covered by summary message)
 
         return changes.OrderBy(c => c.ChangeKind).ThenBy(c => c.AffectedMember).ToList();
     }

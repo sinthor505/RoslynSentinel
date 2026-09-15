@@ -52,7 +52,7 @@ public static class LargeResultHelper
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Writes already-serialized JSON text verbatim to a <see cref="ResultWrapperType.Raw"/> file,
-    /// for callers that only have a final serialized response body — not a typed value — such as the
+    /// for callers that only have a final serialized response body -> not a typed value -> such as the
     /// generic MCP request-filter backstop. Unlike <see cref="StoreLargeResultAsync{T}"/>, this never
     /// re-serializes: <paramref name="json"/> is parsed once into a <see cref="JsonNode"/> and wrapped
     /// as-is. Mirrors the same <c>.roslynsentinel/largeresults/largeresult_&lt;timestamp&gt;_&lt;resultId&gt;.json</c>

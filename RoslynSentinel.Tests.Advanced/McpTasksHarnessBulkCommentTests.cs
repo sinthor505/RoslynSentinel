@@ -13,7 +13,7 @@ namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
 /// Extends the harness proven in <see cref="McpTasksHarnessTests"/> (see
-/// [[project_mcp_tasks_test_harness_plan]]) to <c>BulkComment</c> — a task-eligible tool that does
+/// [[project_mcp_tasks_test_harness_plan]]) to <c>BulkComment</c> -> a task-eligible tool that does
 /// real work (LLM-generated doc comments applied to real files), rather than <c>Features</c>' pure
 /// delay. Uses <see cref="RoslynSentinel.Tests.TestSolutionFixture"/> (a temp-directory copy of
 /// Samples/ContosoOrders) loaded through a real <c>PersistentWorkspaceManager.LoadSolutionAsync</c>,
@@ -41,7 +41,7 @@ public class McpTasksHarnessBulkCommentTests
 
         var services = new ServiceCollection();
         services.AddRoslynSentinelEnginesAdvanced();
-        // Last registration wins for non-enumerable resolution — overrides the real LmStudioClient
+        // Last registration wins for non-enumerable resolution -> overrides the real LmStudioClient
         // forwarding registered a few lines above inside AddRoslynSentinelEnginesAdvanced.
         services.AddSingleton<ILlmClient>(_fakeLlmClient);
 
@@ -133,7 +133,7 @@ public class McpTasksHarnessBulkCommentTests
         // always has pre-existing unresolved-reference errors. BulkComment's line-shifting edits
         // (inserting [ContentHash] attributes/doc comments) then make ValidationEngine's diagnostic
         // delta miscount those pre-existing errors as newly introduced (its dedup key includes line
-        // number, which every edit above a diagnostic shifts) — a real latent bug in the delta
+        // number, which every edit above a diagnostic shifts) -> a real latent bug in the delta
         // comparison, but orthogonal to this harness. A real (non-dryRun) BulkComment run scoped to
         // a project that already compiles cleanly is what a realistic caller would do, and sidesteps
         // it entirely.
@@ -161,8 +161,8 @@ public class McpTasksHarnessBulkCommentTests
         // (mirroring RoslynSentinel.Common's own ContentHashAttributeGenerator.cs, which used to be
         // misnamed ContentHashAttribute.cs). The old filename-based "already has the attribute" check
         // in InjectAttributeClassIfMissing was fooled by this and skipped real injection, so every
-        // seeded [ContentHash] attribute failed to compile (CS0246) and the whole seed-phase batch —
-        // then every Phase 2 per-file apply — was rejected by validation, producing zero comments.
+        // seeded [ContentHash] attribute failed to compile (CS0246) and the whole seed-phase batch ->
+        // then every Phase 2 per-file apply -> was rejected by validation, producing zero comments.
         var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
         await _fixture.AddFileToSolution(
             workspaceManager,

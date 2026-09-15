@@ -1,4 +1,4 @@
-// Battery #24 — SentinelRefactoringTools
+// Battery #24 -> SentinelRefactoringTools
 // Tests all ~65 public methods of SentinelRefactoringTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -222,7 +222,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- RenameSymbol ---
     // RenameSymbol now takes a SymbolHandle (sessionId, projectName, docCommentId) instead of
-    // (filepath, methodName, contextSnippet) — resolve the handle via SymbolNavigationEngine
+    // (filepath, methodName, contextSnippet) -> resolve the handle via SymbolNavigationEngine
     // first, matching how an agent would call LocateSymbol before RenameSymbol.
 
     [Test]
@@ -230,7 +230,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        // "GetLabel" is declared on both Order and IService in SimpleSource — disambiguate.
+        // "GetLabel" is declared on both Order and IService in SimpleSource -> disambiguate.
         var located = await symbolNavEngine.LocateSymbolAsync("GetLabel", containingType: "Order");
         var handle = located.Single();
 
@@ -477,7 +477,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // modifier is now NonAccessibilityModifier (an enum that excludes public/private/internal/
     // protected/etc.), so passing an accessibility keyword can no longer reach this method at all
-    // — JSON schema/binding rejects it before ModifyModifier runs, which is what
+    // -> JSON schema/binding rejects it before ModifyModifier runs, which is what
     // ModifyModifier_RejectsAccessibilityKeyword used to test at this layer.
 
     // --- SummaryComment ---
@@ -841,7 +841,7 @@ public enum Status { Active = 1, Pending = 2 }
             ("Helper.cs", "namespace App; public class Helper { public int Value; public void Go() {} }"),
             ("Owner.cs", "namespace App; public class Owner {}"));
         // dryRun avoids writing to disk under a bare relative filename (resolves against the test
-        // runner's CWD) — without it, a stray file left by a prior run makes the diff spuriously
+        // runner's CWD) -> without it, a stray file left by a prior run makes the diff spuriously
         // empty since the on-disk "before" already matches the freshly-computed "after".
         var result = await _advTools.InlineClass(reason: "test message", "Helper.cs", "Owner.cs", "Helper", dryRun: true, returnDiff: true);
         Assert.That(result.Success, Is.True, result.Error?.Message);
@@ -947,7 +947,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
-        Assert.That(result.Success, Is.True, "GetLabel has no callers in SimpleSource — default precheck must let it through.");
+        Assert.That(result.Success, Is.True, "GetLabel has no callers in SimpleSource - default precheck must let it through.");
     }
 
     [Test]
@@ -977,7 +977,7 @@ public enum Status { Active = 1, Pending = 2 }
     [Test]
     public async Task RemoveMember_HasCaller_SkipPrecheckTrue_StillRefusedByEngineCallerCheck()
     {
-        // skipPrecheck: true bypasses only the new tool-level (callers+implementations) precheck —
+        // skipPrecheck: true bypasses only the new tool-level (callers+implementations) precheck ->
         // RefactoringEngine.RemoveMemberAsync's own pre-existing, unconditional caller check
         // (SymbolFinder-based, no bypass) still applies underneath, so a member with a real caller
         // is never truly force-removable. This matches the existing engine-level contract
@@ -1006,7 +1006,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         // An interface member's implementation isn't caught by the engine's caller-only
         // SymbolFinder check, so the default (skipPrecheck: false) refusal here can only be coming
-        // from the new tool-level precheck. With skipPrecheck: true that precheck is bypassed —
+        // from the new tool-level precheck. With skipPrecheck: true that precheck is bypassed ->
         // removal still fails, but for a different reason (the general compile-validation safety
         // net catching the now-unimplemented interface member), demonstrating skipPrecheck actually
         // skips the precheck rather than the refusal being a fluke of some other gate.
@@ -1029,7 +1029,7 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(refused.Error!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
 
         var result = await _tools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet", skipPrecheck: true);
-        Assert.That(result.Success, Is.False, "Removing an interface's sole implementation still breaks compilation — the separate compile-validation safety net catches it.");
+        Assert.That(result.Success, Is.False, "Removing an interface's sole implementation still breaks compilation - the separate compile-validation safety net catches it.");
         Assert.That(result.Error!.Message, Does.Contain("does not implement interface member"),
             "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped.");
     }
@@ -1038,7 +1038,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveMember_OverrideWithNoCallersOrImplementations_SucceedsByDefault()
     {
         // An override with no callers of its own and nothing further overriding it isn't flagged by
-        // either the tool-level precheck or the engine's caller check — confirms the precheck isn't
+        // either the tool-level precheck or the engine's caller check -> confirms the precheck isn't
         // over-broad (it doesn't flag every virtual/override method, only ones with real relationships).
         SetMultiFile(
             ("AnimalBase.cs", """

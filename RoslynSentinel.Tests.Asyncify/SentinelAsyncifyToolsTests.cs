@@ -6,24 +6,24 @@ namespace RoslynSentinel.Tests.Asyncify;
 
 /// <summary>
 /// Tests for SentinelAsyncifyTools public MCP methods:
-///   T1  – ScanAsyncMigrationCandidates, no solution → SolutionNotLoaded
-///   T2  – ScanAsyncMigrationCandidates, loadList with [MigrationCandidate] → finding returned
-///   T3  – ScanAsyncMigrationCandidates, summarize=true → MigrationScanSummary with 5 bucket keys
-///   T4  – ScanAsyncMigrationCandidates, minScore above all scores → empty list
-///   T5  – GetAsyncMigrationProgress, no solution → SolutionNotLoaded
-///   T6  – GetAsyncMigrationProgress, solution with async methods → report populated
-///   T7  – FlagAsyncMigrationCandidates, no solution → SolutionNotLoaded
-///   T8  – BridgeAsyncMethods, empty targets → 0 attempted, success
-///   T9  – FlagAsyncMigrationCandidates, scope=targets, DryRun=true → succeeded
-///   T10 – BridgeAsyncMethods, DryRun=true → all items attempted, none failed
-///   T11 – AddCancellationToken, DryRun=true → returns without error
-///   T12 – PropagateCancellationToken, empty targets → 0 attempted, success
-///   T13 – ExtractEventHandlers, DryRun=true, missing ContextSnippet → failed items
-///   T14 – UpliftCallers, empty targets → 0 attempted, SuggestedPropagateTargets empty
-///   T15 – EventHandlersToAsync, no solution → SolutionNotLoaded
-///   T17 – UpliftCallers, qualified static call → qualifier preserved (Service.SyncMethodAsync not SyncMethodAsync)
-///   T19 – Asyncify macro, default params, Score=49 candidate → Phase 2 skips it (below aligned threshold of 50)
-///   T20 – Asyncify macro, default params, Score=70 candidate with caller → bridges AND uplifts (Phase 2 + 3)
+///   T1  – ScanAsyncMigrationCandidates, no solution -> SolutionNotLoaded
+///   T2  – ScanAsyncMigrationCandidates, loadList with [MigrationCandidate] -> finding returned
+///   T3  – ScanAsyncMigrationCandidates, summarize=true -> MigrationScanSummary with 5 bucket keys
+///   T4  – ScanAsyncMigrationCandidates, minScore above all scores -> empty list
+///   T5  – GetAsyncMigrationProgress, no solution -> SolutionNotLoaded
+///   T6  – GetAsyncMigrationProgress, solution with async methods -> report populated
+///   T7  – FlagAsyncMigrationCandidates, no solution -> SolutionNotLoaded
+///   T8  – BridgeAsyncMethods, empty targets -> 0 attempted, success
+///   T9  – FlagAsyncMigrationCandidates, scope=targets, DryRun=true -> succeeded
+///   T10 – BridgeAsyncMethods, DryRun=true -> all items attempted, none failed
+///   T11 – AddCancellationToken, DryRun=true -> returns without error
+///   T12 – PropagateCancellationToken, empty targets -> 0 attempted, success
+///   T13 – ExtractEventHandlers, DryRun=true, missing ContextSnippet -> failed items
+///   T14 – UpliftCallers, empty targets -> 0 attempted, SuggestedPropagateTargets empty
+///   T15 – EventHandlersToAsync, no solution -> SolutionNotLoaded
+///   T17 – UpliftCallers, qualified static call -> qualifier preserved (Service.SyncMethodAsync not SyncMethodAsync)
+///   T19 – Asyncify macro, default params, Score=49 candidate -> Phase 2 skips it (below aligned threshold of 50)
+///   T20 – Asyncify macro, default params, Score=70 candidate with caller -> bridges AND uplifts (Phase 2 + 3)
 /// </summary>
 [TestFixture]
 public class SentinelAsyncifyToolsTests
@@ -42,7 +42,7 @@ public class SentinelAsyncifyToolsTests
         }
         """;
 
-    // loadList source adapted from Avaal3 RegionForm.cs — WinForms deps stripped.
+    // loadList source adapted from Avaal3 RegionForm.cs -> WinForms deps stripped.
     private const string LoadListFlaggedSource = """
         public class RegionForm
         {
@@ -59,7 +59,7 @@ public class SentinelAsyncifyToolsTests
         }
         """ + "\n" + AttrStub;
 
-    // loadList without attribute — for flag_migration_candidates tests.
+    // loadList without attribute -> for flag_migration_candidates tests.
     private const string LoadListUnflaggedSource = """
         public class RegionForm
         {
@@ -126,7 +126,7 @@ public class SentinelAsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T1 – ScanAsyncMigrationCandidates, no solution → SolutionNotLoaded
+    // T1 – ScanAsyncMigrationCandidates, no solution -> SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -140,7 +140,7 @@ public class SentinelAsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T2 – ScanAsyncMigrationCandidates, loadList with [MigrationCandidate] → finding returned
+    // T2 – ScanAsyncMigrationCandidates, loadList with [MigrationCandidate] -> finding returned
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -162,7 +162,7 @@ public class SentinelAsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T3 – ScanAsyncMigrationCandidates, summarize=true → MigrationScanSummary, 5 bucket keys
+    // T3 – ScanAsyncMigrationCandidates, summarize=true -> MigrationScanSummary, 5 bucket keys
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -186,7 +186,7 @@ public class SentinelAsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T4 – ScanAsyncMigrationCandidates, minScore above all → empty list
+    // T4 – ScanAsyncMigrationCandidates, minScore above all -> empty list
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -205,7 +205,7 @@ public class SentinelAsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T5 – GetAsyncMigrationProgress, no solution → SolutionNotLoaded
+    // T5 – GetAsyncMigrationProgress, no solution -> SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -219,7 +219,7 @@ public class SentinelAsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T6 – GetAsyncMigrationProgress, solution with async methods → report populated
+    // T6 – GetAsyncMigrationProgress, solution with async methods -> report populated
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(15000)]
@@ -242,7 +242,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T7 – FlagAsyncMigrationCandidates, no solution → SolutionNotLoaded
+    // T7 – FlagAsyncMigrationCandidates, no solution -> SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -258,7 +258,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T8 – BridgeAsyncMethods, empty targets → 0 attempted, success
+    // T8 – BridgeAsyncMethods, empty targets -> 0 attempted, success
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -275,7 +275,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T9 – FlagAsyncMigrationCandidates, scope=targets, DryRun=true → succeeded
+    // T9 – FlagAsyncMigrationCandidates, scope=targets, DryRun=true -> succeeded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -302,12 +302,12 @@ public class Svc
         Assert.That(result.Data, Is.Not.Null);
         Assert.That(result.Data!.BreakerOpen, Is.False);
         Assert.That(result.Data.Succeeded, Is.EqualTo(1),
-            "loadList should be flagged (DryRun=true — changes computed but not written).");
+            "loadList should be flagged (DryRun=true - changes computed but not written).");
         Assert.That(result.Data.Failed, Is.EqualTo(0));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T10 – BridgeAsyncMethods, DryRun=true → all items attempted, none failed
+    // T10 – BridgeAsyncMethods, DryRun=true -> all items attempted, none failed
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -327,7 +327,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T11 – AddCancellationToken, DryRun=true → returns without error
+    // T11 – AddCancellationToken, DryRun=true -> returns without error
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -352,7 +352,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T12 – PropagateCancellationToken, empty targets → 0 attempted, success
+    // T12 – PropagateCancellationToken, empty targets -> 0 attempted, success
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -372,7 +372,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T13 – ExtractEventHandlers, DryRun=true, missing ContextSnippet → failed items
+    // T13 – ExtractEventHandlers, DryRun=true, missing ContextSnippet -> failed items
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -402,7 +402,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T14 – UpliftCallers, empty targets → 0 attempted, SuggestedPropagateTargets empty
+    // T14 – UpliftCallers, empty targets -> 0 attempted, SuggestedPropagateTargets empty
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -419,7 +419,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T15 – EventHandlersToAsync, no solution → SolutionNotLoaded
+    // T15 – EventHandlersToAsync, no solution -> SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -433,7 +433,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T16 – Asyncify with maxIterations/maxRuntimeSeconds params, no solution → SolutionNotLoaded
+    // T16 – Asyncify with maxIterations/maxRuntimeSeconds params, no solution -> SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -447,7 +447,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T17 – UpliftCallers, qualified static call → type qualifier preserved
+    // T17 – UpliftCallers, qualified static call -> type qualifier preserved
     // Regression: callers using FooType.BridgedMethod(args) were incorrectly
     // rewritten to BridgedMethodAsync(args) (qualifier stripped).
     // ══════════════════════════════════════════════════════════════════════════
@@ -524,18 +524,18 @@ public static class DataHelper
         Assert.That(text, Does.Contain("(await "),
             "chained await must be parenthesised: `(await GetDataAsync(...)).Member`.");
         Assert.That(text, Does.Not.Contain("await DataHelper.GetDataAsync(cancellationToken)."),
-            "bare `await GetDataAsync(cancellationToken).Member` must not appear — parens required.");
+            "bare `await GetDataAsync(cancellationToken).Member` must not appear - parens required.");
         Assert.That(text, Does.Not.Contain("await GetDataAsync(cancellationToken)."),
-            "bare `await GetDataAsync(cancellationToken).Member` must not appear — parens required.");
+            "bare `await GetDataAsync(cancellationToken).Member` must not appear - parens required.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T19 – Asyncify macro, default params, Score=49 candidate → Phase 2 skips it
+    // T19 – Asyncify macro, default params, Score=49 candidate -> Phase 2 skips it
     // Verifies the lower boundary: a candidate one point below DefaultScoreThreshold=50
     // is found by Phase 2 but excluded, so Phase 3 (uplift) is never entered.
     // ══════════════════════════════════════════════════════════════════════════
 
-    // Score=49 — one point below the aligned DefaultScoreThreshold=50.
+    // Score=49 -> one point below the aligned DefaultScoreThreshold=50.
     private const string LoadListLowScoreSource = """
         public class RegionForm
         {
@@ -555,7 +555,7 @@ public static class DataHelper
     [Test, CancelAfter(15000)]
     public async Task T19_Asyncify_DefaultParams_Score49BelowThreshold_NoUplift()
     {
-        // loadList has Score=49, one below DefaultScoreThreshold=50 — must not be bridged.
+        // loadList has Score=49, one below DefaultScoreThreshold=50 -> must not be bridged.
         SetSource(LoadListLowScoreSource);
 
         var result = await _asyncifyTools.Asyncify(reason: "test message");
@@ -567,14 +567,14 @@ public static class DataHelper
             "loadList (Score=49) is below scoreThreshold=50 and must not be bridged.");
 
         Assert.That(result.Data.MinCandidateScore, Is.EqualTo(49),
-            "Phase 2 saw the Score=49 candidate but excluded it — MinCandidateScore should be 49.");
+            "Phase 2 saw the Score=49 candidate but excluded it - MinCandidateScore should be 49.");
 
         Assert.That(result.Data.Directive, Does.Contain("scoreThreshold").And.Contain("49"),
             "Directive must cite both the scoreThreshold and the candidate's score of 49.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T20 – Asyncify macro, default params, Score=70 candidate with a caller →
+    // T20 – Asyncify macro, default params, Score=70 candidate with a caller ->
     //        Phase 2 bridges, Phase 3 uplifts the caller
     // Confirms the full pipeline runs when the candidate score meets the threshold.
     // ══════════════════════════════════════════════════════════════════════════
@@ -616,7 +616,7 @@ public static class DataHelper
         Assert.That(result.Data, Is.Not.Null);
 
         // Phase 2 bridges loadList (Score=70 ≥ scoreThreshold=60).
-        // Phase 3 uplifts CallerClass.DoWork — the caller of the bridge wrapper.
+        // Phase 3 uplifts CallerClass.DoWork -> the caller of the bridge wrapper.
         Assert.That(result.Data!.Succeeded, Is.GreaterThanOrEqualTo(2),
             "Expected ≥ 2 successes: Phase 2 bridge (loadList) + Phase 3 uplift (DoWork). " +
             $"Directive: {result.Data.Directive}");
@@ -669,7 +669,7 @@ public static class DataHelper
 
         // Confirm the unqualified form is absent from the DoWorkAsync body.
         // (The bridge body 'DoWorkAsync().GetAwaiter().GetResult()' is unqualified, but that is
-        //  the caller-bridge call, not the rewritten callee call — so we check the specific pattern.)
+        //  the caller-bridge call, not the rewritten callee call -> so we check the specific pattern.)
         Assert.That(updatedSource, Does.Not.Contain("await SyncMethodAsync("),
             "Unqualified 'await SyncMethodAsync(' must not appear; the qualifier 'Service.' must be kept.");
     }

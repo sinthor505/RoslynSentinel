@@ -40,7 +40,7 @@ public static class ServerHttp
             return;
         }
 
-        // ── Logging (file + console — stdout is safe for HTTP transport) ─────
+        // ── Logging (file + console -> stdout is safe for HTTP transport) ─────
         var logDirectory = ServerStartupHelpers.ParseLogDirectory(args);
         var runId = ServerStartupHelpers.ParseRunId(args);
         var stepId = ServerStartupHelpers.ParseStepId(args);

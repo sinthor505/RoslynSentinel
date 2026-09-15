@@ -3,7 +3,7 @@
 // Launching with no --mode (and no --include-tools) registers zero tool classes. Before this
 // guard the failure surfaced from deep inside DI: the DEBUG smoke check demanded
 // SentinelWorkspaceTools unconditionally and threw "Tool type not resolvable:
-// SentinelWorkspaceTools" — a type the operator never mentioned, with no hint that a flag was
+// SentinelWorkspaceTools" -> a type the operator never mentioned, with no hint that a flag was
 // missing. Found while probing the refreshed bin-vscode stdio server with a bare
 // --transport=stdio.
 //
@@ -46,7 +46,7 @@ public class NoActiveToolsStartupTests
             Assert.That(failure, Does.Contain("--mode=all"), "must state the one-flag fix");
             Assert.That(failure, Does.Contain("--list-tools"), "must state how to check a combination");
             Assert.That(failure, Does.Not.Contain("SentinelWorkspaceTools"),
-                "must not name an internal type the operator never asked for — that was the old message");
+                "must not name an internal type the operator never asked for - that was the old message");
         });
     }
 
@@ -135,7 +135,7 @@ public class NoActiveToolsStartupTests
         // makes each entry point's AllModes field *equal to* ToolClassRegistry's own Keys, the
         // meaningful regression check is that "all" (i.e. every key in the registry) resolves to
         // a tool-class set containing SentinelAdminTools/SentinelWholeFileWriteTools for both
-        // variants — this fails again if either map ever grows a mode a hardcoded list wouldn't
+        // variants -> this fails again if either map ever grows a mode a hardcoded list wouldn't
         // have picked up.
         var basicAllModes = new HashSet<string>(
             ToolClassRegistry.BasicModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);

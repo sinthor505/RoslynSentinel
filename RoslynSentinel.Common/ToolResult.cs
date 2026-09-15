@@ -6,7 +6,7 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Identifies the running server build. Computed once from the entry assembly so tool
-/// responses carry a version signal — without this, a stale-server bug (running binaries
+/// responses carry a version signal -> without this, a stale-server bug (running binaries
 /// older than the latest committed source) is invisible until behavior is investigated by hand.
 /// </summary>
 public static class ServerBuildInfo
@@ -16,7 +16,7 @@ public static class ServerBuildInfo
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Full path to the running server's entry assembly (.dll) on disk. Lets a caller compare the
-    /// binary's actual location against the repo/worktree path it's editing — resolving both which
+    /// binary's actual location against the repo/worktree path it's editing -> resolving both which
     /// server instance it's talking to (multi-instance ambiguity) and whether that instance is even
     /// in the right repo, without a watcher, restart, or new failure mode. Empty when the entry
     /// assembly has no on-disk location (e.g. single-file publish).
@@ -27,7 +27,7 @@ public static class ServerBuildInfo
     /// Process ID of the running server. Lets a caller that has already compared <see cref="BinaryPath"/>
     /// across multiple running instances (multi-instance ambiguity, see <see cref="BinaryPath"/>'s remarks)
     /// kill the exact stale process by PID, rather than correlating binary path back to a live process by
-    /// hand. Read from <see cref="Environment.ProcessId"/> — a static property, no I/O, cannot fail.
+    /// hand. Read from <see cref="Environment.ProcessId"/> -> a static property, no I/O, cannot fail.
     /// </summary>
     public static readonly int Pid; static ServerBuildInfo()
     {
@@ -56,7 +56,7 @@ public static class ToolErrorCode
 
     /// <summary>
     /// A search ran successfully but matched zero results. Distinct from <see cref="NotFound"/>
-    /// (a named lookup whose input didn't resolve) — the search itself is valid, it just found
+    /// (a named lookup whose input didn't resolve) -> the search itself is valid, it just found
     /// nothing. Surfaced as an error (rather than a quiet success with a warning) so a client
     /// relying on the protocol-level IsError flag sees it as a signal to change approach.
     /// </summary>
@@ -81,7 +81,7 @@ public static class ToolErrorCode
 public record ToolResult<T>
 {
     /// <summary>
-    /// Server build identity (assembly version + binary write time). Not settable — every
+    /// Server build identity (assembly version + binary write time). Not settable -> every
     /// <see cref="ToolResult{T}"/> carries the same value, computed once in <see cref="ServerBuildInfo"/>.
     /// Lets a caller notice a running server predates a source change without checking DLL
     /// timestamps by hand (see docs/current/feedback_stale_server_before_rebuild.md).
@@ -92,17 +92,17 @@ public record ToolResult<T>
     public DateTime ServerBuildTimeUtc { get; init; } = ServerBuildInfo.BuildTimeUtc;
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
-    /// Full path to the running server's binary (.dll) on disk. Not settable — every
+    /// Full path to the running server's binary (.dll) on disk. Not settable -> every
     /// <see cref="ToolResult{T}"/> carries the same value, computed once in <see cref="ServerBuildInfo"/>.
     /// Lets a caller compare the binary's actual location against the repo/worktree path it's
-    /// editing — resolving both which server instance it's talking to (multi-instance ambiguity)
+    /// editing -> resolving both which server instance it's talking to (multi-instance ambiguity)
     /// and whether that instance is even in the right repo. See <see cref="ServerVersion"/> and
     /// docs/current/feedback_stale_server_before_rebuild.md.
     /// </summary>
     public string ServerBinaryPath { get; init; } = ServerBuildInfo.BinaryPath;
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
-    /// Process ID of the running server. Not settable — every <see cref="ToolResult{T}"/> carries the
+    /// Process ID of the running server. Not settable -> every <see cref="ToolResult{T}"/> carries the
     /// same value, computed once in <see cref="ServerBuildInfo"/>. Lets a caller that has already
     /// compared <see cref="ServerBinaryPath"/> across multiple running instances (multi-instance
     /// ambiguity) kill the exact stale process by PID, rather than correlating binary path back to a
@@ -298,7 +298,7 @@ public sealed class ToolOptionsResult
         get; set;
     }
 
-    /// <summary>Machine-readable map of option key → field-list or value list.</summary>
+    /// <summary>Machine-readable map of option key -> field-list or value list.</summary>
     public Dictionary<string, object>? StructuredOptions
     {
         get; set;

@@ -3,7 +3,7 @@
 // The A3 defect from run 20260910-013550-398: 17 call sites in SentinelAdvancedRefactoringTools
 // passed slashed operation names ("WrapRange/region", "Inline/method", …). Path.Combine resolved
 // the blob into a non-existent operations/WrapRange/ subdirectory, the write threw
-// DirectoryNotFoundException, and the catch swallowed it into a return string nobody inspected —
+// DirectoryNotFoundException, and the catch swallowed it into a return string nobody inspected ->
 // so WrapRange, ExtractMembers, SyncInterface, Inline and MoveType all returned changeIds
 // UndoLastApply could never resolve. The call sites were renamed, but sanitization here is the
 // durable fix: it holds for any future name regardless of caller discipline. These tests pin the
@@ -64,7 +64,7 @@ public class OperationBlobWriterTests
 
         var operationsDir = Path.Combine(_solutionRoot, ".roslynsentinel", "operations");
         Assert.That(Directory.GetDirectories(operationsDir), Is.Empty,
-            "the operation name must not create a subdirectory — that nesting was the root cause");
+            "the operation name must not create a subdirectory - that nesting was the root cause");
         Assert.That(Path.GetFileName(Directory.GetFiles(operationsDir).Single()),
             Does.StartWith("Inline_method_"));
     }
@@ -87,7 +87,7 @@ public class OperationBlobWriterTests
     [Test]
     public async Task WriteAsync_NoSolutionRoot_IsNotAnIntegrityFailureAsync()
     {
-        // With no solution root there is nowhere a blob could live and no undo semantics at all —
+        // With no solution root there is nowhere a blob could live and no undo semantics at all ->
         // the in-memory/test-solution case, not a server fault. Classifying it as a failure tripped
         // the unrecoverable breaker on the first apply of every SetTestSolution-based fixture and
         // then refused all subsequent ones, so this distinction is load-bearing.
@@ -106,7 +106,7 @@ public class OperationBlobWriterTests
     public async Task WriteAsync_SolutionRootPresentButUnwritable_IsAnIntegrityFailureAsync()
     {
         // The case that must still halt: a root exists, so a blob is genuinely owed, but the write
-        // cannot land. "Owed but absent" has to stay distinguishable from "not owed" — a caller
+        // cannot land. "Owed but absent" has to stay distinguishable from "not owed" -> a caller
         // that can't tell them apart either warns on every no-op or stays silent on every fault.
         // A file standing where the operations directory must go makes CreateDirectory throw.
         var blocker = Path.Combine(_solutionRoot, ".roslynsentinel");
@@ -144,7 +144,7 @@ public class OperationBlobWriterTests
     {
         // The batch path (Asyncify, BulkComment, …). Their result shape carries a BlobName string
         // rather than an ApplyOutcome, and all ten call sites previously assigned the write's
-        // return value straight into it without checking — hence the centralized helper.
+        // return value straight into it without checking -> hence the centralized helper.
         var breaker = new RecordingBreaker();
         // Unwritable root, not a missing one: a missing root means no blob is owed at all.
         await File.WriteAllTextAsync(Path.Combine(_solutionRoot, ".roslynsentinel"), "not a directory");

@@ -22,7 +22,7 @@ public class FilePathFromWireTests
         var result = FilePathWrapper.FromWire("Test.cs", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
-            "With no solution root the caller's path must be preserved verbatim — resolving it "
+            "With no solution root the caller's path must be preserved verbatim - resolving it "
             + "against the process working directory would point outside the solution.");
     }
 
@@ -63,7 +63,7 @@ public class FilePathFromWireTests
         Assert.That(result.Absolute, Is.Empty);
     }
 
-    // Regression coverage for the LoadSolution "stray quotes baked into the path" bug — the same
+    // Regression coverage for the LoadSolution "stray quotes baked into the path" bug -> the same
     // sanitization now lives in NormalizeWirePath so every FromWire caller gets it for free.
     [Test]
     public void FromWire_PathWrappedInSingleQuotes_QuotesAreStripped()

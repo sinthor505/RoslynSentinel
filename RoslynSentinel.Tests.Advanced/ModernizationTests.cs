@@ -56,7 +56,7 @@ public class ModernizationTests
     }
 
     // ══════════════════════════════════════════════════════════════
-    // ModernizationEngine — ConvertMethodToExpressionBodyAsync
+    // ModernizationEngine -> ConvertMethodToExpressionBodyAsync
     // ══════════════════════════════════════════════════════════════
 
     [Test]
@@ -117,7 +117,7 @@ public class C
     }
 
     // ══════════════════════════════════════════════════════════════
-    // SyntaxUpgradeEngine — AddBracesAsync
+    // SyntaxUpgradeEngine -> AddBracesAsync
     // ══════════════════════════════════════════════════════════════
 
     [Test]
@@ -162,7 +162,7 @@ public class C
         // Should not duplicate braces or break formatting
         Assert.That(result.UpdatedText, Does.Contain("DoWork"),
             "Already-braced code should still contain the method call.");
-        // Count open braces — should not have extra ones
+        // Count open braces -> should not have extra ones
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
             "Result should be non-empty.");
     }
@@ -193,11 +193,11 @@ public class C
     }
 
     // ══════════════════════════════════════════════════════════════
-    // ModernizationEngine — ConvertToPatternAsync
+    // ModernizationEngine -> ConvertToPatternAsync
     // ══════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Test 1: Null check pattern - x == null → x is null
+    /// Test 1: Null check pattern - x == null -> x is null
     /// </summary>
     [Test]
     public async Task ConvertToPattern_NullCheck_EqualsNull_ConvertsToIsNull()
@@ -221,7 +221,7 @@ public class C
     }
 
     /// <summary>
-    /// Test 2: Null check pattern on right side - null == x → x is null
+    /// Test 2: Null check pattern on right side - null == x -> x is null
     /// </summary>
     [Test]
     public async Task ConvertToPattern_NullCheckReversed_ConvertsToIsNull()

@@ -7,7 +7,7 @@ namespace RoslynSentinel.Common;
 /// is populated on success.
 /// </summary>
 /// <param name="ChangeId">
-/// The undo handle. Null on error, on a dry run, and — added for the run-398 A3 defect — on a
+/// The undo handle. Null on error, on a dry run, and -> added for the run-398 A3 defect -> on a
 /// successful apply whose operation blob could not be written, in which case
 /// <paramref name="NotReversibleReason"/> is set. Withholding the handle in that case is
 /// deliberate: previously one was issued regardless, so five tools returned handles

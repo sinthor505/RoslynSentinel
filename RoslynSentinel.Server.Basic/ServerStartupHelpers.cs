@@ -62,7 +62,7 @@ public static class ServerStartupHelpers
     {
         operatingMode = args.Contains("--testing") ? OperatingMode.Testing : OperatingMode.Production;
 
-        // No --mode/--modes means no mode set is loaded (activeModes ends up empty) — a caller
+        // No --mode/--modes means no mode set is loaded (activeModes ends up empty) -> a caller
         // must opt in via --mode=all, an explicit mode list, or --include-tools.
         modeArg = GetArgValue(args, "--mode") ?? GetArgValue(args, "--modes") ?? "";
         solutionPath = GetArgValue(args, "--solution");
@@ -77,7 +77,7 @@ public static class ServerStartupHelpers
 
         // "all" expands to the full allModes set; when combined with other entries (e.g.
         // "all,admin") those extras are unioned in rather than being treated as literal mode
-        // names alongside a no-op "all" — otherwise "all" could only ever be used alone.
+        // names alongside a no-op "all" -> otherwise "all" could only ever be used alone.
         activeModes = requestedModes.Contains("all")
             ? new HashSet<string>(allModes, StringComparer.OrdinalIgnoreCase)
             : requestedModes;
@@ -190,7 +190,7 @@ public static class ServerStartupHelpers
     /// that still want it available; the manifest itself comes entirely from
     /// <paramref name="registerTools"/>, which already closes over modes/include/exclude).</param>
     /// <param name="registerTools">The exact tool registration this entry point would perform
-    /// against a real host — e.g. <c>(b, s) => b.AddRoslynSentinelToolsBasic(s, activeModes,
+    /// against a real host -> e.g. <c>(b, s) => b.AddRoslynSentinelToolsBasic(s, activeModes,
     /// includeTools, excludeTools)</c>. Invoked against a throwaway <see cref="IServiceCollection"/>
     /// so the printed manifest is built the same way a live server's actually is, instead of a
     /// separate reflection pass that can drift from it (see
@@ -230,7 +230,7 @@ public static class ServerStartupHelpers
     /// check demanded <c>SentinelWorkspaceTools</c> unconditionally and threw
     /// "Tool type not resolvable: SentinelWorkspaceTools". That names a type the operator never
     /// mentioned and says nothing about the missing flag. Checked here instead, where the actual
-    /// cause — no <c>--mode</c> and no <c>--include-tools</c> — is still known.
+    /// cause -> no <c>--mode</c> and no <c>--include-tools</c> -> is still known.
     ///
     /// Deliberately not defaulting to <c>--mode=all</c>: which tools are exposed changes agent
     /// behaviour measurably (see docs/current/project_wholefilewrite_gating_overnight_result_2026_09_08.md,
@@ -285,7 +285,7 @@ public static class ServerStartupHelpers
     /// </summary>
     /// <remarks>
     /// Written to stderr, never stdout: under the stdio transport stdout carries the MCP protocol
-    /// stream, and a plain-text diagnostic there would corrupt the first frame the client reads —
+    /// stream, and a plain-text diagnostic there would corrupt the first frame the client reads ->
     /// turning a clear configuration error into a protocol parse failure. Stderr is safe on both
     /// transports, and this runs before Serilog is configured on some paths, so Console is used
     /// rather than a logger.
@@ -315,7 +315,7 @@ public static class ServerStartupHelpers
     /// Output template shared by every Serilog file/console sink this server configures. RunId and
     /// StepId are enriched properties (see <see cref="ConfigureStdioLogging"/>/
     /// <see cref="ConfigureHttpLogging"/>/<see cref="AttachCrashHandlers"/>), and must be named here
-    /// explicitly to appear in the written file — Serilog does not print enriched properties unless
+    /// explicitly to appear in the written file -> Serilog does not print enriched properties unless
     /// the template references them. Always present (defaulting to "-" when the caller supplied
     /// none) so the column position and grep pattern never change between a correlated and an
     /// uncorrelated run.
@@ -378,7 +378,7 @@ public static class ServerStartupHelpers
 
     /// <summary>
     /// Parses --run-id (either "--run-id=value" or "--run-id value"); returns null if absent, in
-    /// which case logging falls back to "-" (see <see cref="LogOutputTemplate"/>). Not required —
+    /// which case logging falls back to "-" (see <see cref="LogOutputTemplate"/>). Not required ->
     /// a server launched without it (e.g. an interactive VS Code session) logs and runs exactly as
     /// before.
     /// </summary>
@@ -493,7 +493,7 @@ public static class ServerStartupHelpers
     /// Skipping types that were never registered is the point of taking
     /// <paramref name="activeToolClasses"/>. This check previously resolved its whole list
     /// unconditionally, which meant any narrower <c>--include-tools</c>/<c>--mode</c> selection
-    /// crashed at startup complaining about a type the operator had deliberately not asked for —
+    /// crashed at startup complaining about a type the operator had deliberately not asked for ->
     /// the caller's own comment above each ActiveToolTypes list predicted exactly this. Callers
     /// that reach zero active classes are caught earlier by
     /// <see cref="DescribeNoActiveToolsFailure"/>, so an empty set here is not treated as an error.
@@ -524,7 +524,7 @@ public static class ServerStartupHelpers
             {
                 throw new InvalidOperationException(
                     $"Tool class '{toolType.Name}' is active but could not be constructed. One of its " +
-                    $"dependencies is not registered — see the inner exception for which. {ex.Message}",
+                    $"dependencies is not registered - see the inner exception for which. {ex.Message}",
                     ex);
             }
         }
@@ -547,7 +547,7 @@ public static class ServerStartupHelpers
         if (logger.IsEnabled(LogLevel.Information))
         {
             // OperatingMode is logged explicitly (and names the doc root it selects) because a
-            // testing-mode server reading production docs — or the reverse — is otherwise only
+            // testing-mode server reading production docs -> or the reverse -> is otherwise only
             // detectable by noticing that ProjectDoc returned the wrong file.
             logger.LogInformation(
                 "Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg}) | IncludeTools: {IncludeTools} | ExcludeTools: {ExcludeTools} | OperatingMode: {OperatingMode} (ProjectDoc root: {DocRoot}) | Binary: {BinaryPath} (PID {Pid})",

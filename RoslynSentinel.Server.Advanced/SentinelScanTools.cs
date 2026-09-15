@@ -95,7 +95,7 @@ public class SentinelScanTools
     public async Task<ToolResult<object>> RunScanDetector(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.DetectorName)] DetectorId detector,
-        [Description("Some detectors are restricted to a specific scope — see DescribeScanDetectors.")]
+        [Description("Some detectors are restricted to a specific scope - see DescribeScanDetectors.")]
         [ExternalInputRequired(DataTag.Scope)] ToolScope scope,
         [Description("Required when scope=file: the file to scan.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
@@ -555,9 +555,9 @@ public class SentinelScanTools
     [
         // async (20)
         new(DetectorId.async_in_constructor, "async", "file", "Finds constructors that call async methods or contain await expressions. Constructors cannot be async."),
-        new(DetectorId.async_over_sync, "async", "file", "Finds async methods with no real await — wraps only completed tasks (async over sync anti-pattern)."),
+        new(DetectorId.async_over_sync, "async", "file", "Finds async methods with no real await - wraps only completed tasks (async over sync anti-pattern)."),
         new(DetectorId.async_void_without_try_catch, "async", "file|solution", "Finds async void methods whose body is not wrapped in a try/catch. Unhandled exceptions crash the process."),
-        new(DetectorId.blocking_calls_in, "async", "file", "Finds .Result/.Wait()/.GetAwaiter().GetResult() inside async methods — deadlock risk."),
+        new(DetectorId.blocking_calls_in, "async", "file", "Finds .Result/.Wait()/.GetAwaiter().GetResult() inside async methods - deadlock risk."),
         new(DetectorId.cancellation_token_not_forwarded, "async", "file|solution", "Finds async methods that have a CancellationToken parameter but don't forward it to awaitable callees."),
         new(DetectorId.configure_await_missing, "async", "file", "Finds awaits missing .ConfigureAwait(false) in library code."),
         new(DetectorId.inconsistent_async_suffix, "async", "any", "Finds async methods not ending with 'Async', and non-async methods that end with 'Async'."),
@@ -566,16 +566,16 @@ public class SentinelScanTools
         new(DetectorId.sequential_independent_awaits, "async", "file|solution", "Detects consecutive independent awaits that could be parallelized with Task.WhenAll."),
         new(DetectorId.task_delay_usage, "async", "file", "Detects Task.Delay() usage patterns."),
         new(DetectorId.task_delay_zero_usage, "async", "file", "Detects redundant Task.Delay(0) calls."),
-        new(DetectorId.task_run_in, "async", "file", "Detects 'await Task.Run(...)' patterns in server-side code — wasteful thread pool allocation."),
+        new(DetectorId.task_run_in, "async", "file", "Detects 'await Task.Run(...)' patterns in server-side code - wasteful thread pool allocation."),
         new(DetectorId.task_void_usage, "async", "file", "Detects dangerous async void methods that can crash the process on unhandled exceptions."),
         new(DetectorId.task_when_all_usage, "async", "file", "Detects sequential awaits that could be parallelized with Task.WhenAll."),
         new(DetectorId.task_yield_usage, "async", "file", "Detects Task.Yield() calls."),
         new(DetectorId.unawaited_fire_and_forget, "async", "any", "Finds Task-returning method calls not awaited (fire-and-forget). Exceptions are silently swallowed."),
-        new(DetectorId.unawaited_dispose, "async", "file|solution", "Detects DisposeAsync() calls that are not awaited — async cleanup finishes after the method returns."),
-        new(DetectorId.unobserved_task_in_field, "async", "file|solution", "Finds Task/ValueTask assigned to fields without being awaited — silent failure risk."),
+        new(DetectorId.unawaited_dispose, "async", "file|solution", "Detects DisposeAsync() calls that are not awaited - async cleanup finishes after the method returns."),
+        new(DetectorId.unobserved_task_in_field, "async", "file|solution", "Finds Task/ValueTask assigned to fields without being awaited - silent failure risk."),
         new(DetectorId.value_task_misuse, "async", "file", "Detects invalid ValueTask usage: double-await, deferred-await, .Result access."),
         // concurrency (8)
-        new(DetectorId.cas_loop_without_backoff, "concurrency", "any", "Detects CAS loops using Interlocked.CompareExchange with no back-off — can pin a CPU core under contention."),
+        new(DetectorId.cas_loop_without_backoff, "concurrency", "any", "Detects CAS loops using Interlocked.CompareExchange with no back-off - can pin a CPU core under contention."),
         new(DetectorId.check_then_act_on_dictionary, "concurrency", "any", "Detects ContainsKey()+Add() race on Dictionary/ConcurrentDictionary outside a lock. Use GetOrAdd()/TryAdd()."),
         new(DetectorId.concurrent_collection_opportunities, "concurrency", "file", "Finds lock-protected List/Dictionary fields that could use ConcurrentDictionary or ImmutableDictionary."),
         new(DetectorId.double_checked_locking, "concurrency", "any", "Detects DCL pattern where the lazily-initialized field is not declared volatile (memory model violation)."),
@@ -591,8 +591,8 @@ public class SentinelScanTools
         new(DetectorId.mutable_public_collection_properties, "convention", "project|solution", "Detects public collection properties (List/Dict/HashSet) with public non-init setters."),
         new(DetectorId.mutable_public_properties, "convention", "any", "Finds public mutable properties (public setter) on non-DTO public classes."),
         new(DetectorId.naming_violations, "convention", "any", "Checks _camelCase private fields, PascalCase methods, camelCase parameters."),
-        new(DetectorId.readonly_field_candidates, "convention", "file", "Finds private non-readonly fields only ever assigned in constructors — can be marked readonly."),
-        new(DetectorId.string_magic_values, "convention", "any", "Finds string literals appearing 3+ times — candidates for named constants."),
+        new(DetectorId.readonly_field_candidates, "convention", "file", "Finds private non-readonly fields only ever assigned in constructors - can be marked readonly."),
+        new(DetectorId.string_magic_values, "convention", "any", "Finds string literals appearing 3+ times - candidates for named constants."),
         new(DetectorId.todo_fixme_comments, "convention", "any", "Scans for TODO/FIXME/HACK/BUG/REVIEW comments sorted by severity."),
         // correctness (16)
         new(DetectorId.all_throw_sites, "correctness", "any", "Finds all throw statements across the scope, optionally sortable by exception-type frequency."),
@@ -601,21 +601,21 @@ public class SentinelScanTools
         new(DetectorId.memory_leaks, "correctness", "file", "Detects potential memory leaks (unhooked event subscriptions, etc.)."),
         new(DetectorId.misbound_overload_chains, "correctness", "project|solution", "Finds overload chains where a method calls the wrong overload (not the next-level one)."),
         new(DetectorId.missing_generic_constraints, "correctness", "any", "Finds 'new T()' without 'where T : new()' and similar missing generic constraints."),
-        new(DetectorId.multiple_out_parameter_methods, "correctness", "any", "Finds methods with 2+ out parameters — suggests ValueTuple return instead."),
+        new(DetectorId.multiple_out_parameter_methods, "correctness", "any", "Finds methods with 2+ out parameters - suggests ValueTuple return instead."),
         new(DetectorId.non_exhaustive_enum_switches, "correctness", "any", "Finds switch statements on enums that don't handle all members and have no default case."),
         new(DetectorId.possible_infinite_loops, "correctness", "file", "Detects loops with no reachable exit condition on any code path."),
         new(DetectorId.redundant_cast, "correctness", "any", "Detects unnecessary type casts that can be removed."),
         new(DetectorId.resource_disposal, "correctness", "any", "Finds IDisposable objects not properly disposed (missing using/Dispose call)."),
         new(DetectorId.services_not_registered, "correctness", "project|solution", "Finds injected service types (interfaces, Service/Repository/etc. suffixed types) missing from DI registrations."),
         new(DetectorId.stack_overflow_risks, "correctness", "file", "Detects direct recursion, property self-read/write, override-calls-self, and mutual recursion patterns."),
-        new(DetectorId.unbounded_recursion, "correctness", "project|solution", "Finds recursive methods without a depth guard or base-case check — StackOverflowException risk."),
-        new(DetectorId.unbounded_static_collections, "correctness", "project|solution", "Finds static collections populated with .Add() but never .Clear()ed — memory exhaustion risk."),
-        new(DetectorId.value_type_mutation_intent, "correctness", "any", "Flags value-type parameter reassignment inside the method body — change is invisible to the caller."),
+        new(DetectorId.unbounded_recursion, "correctness", "project|solution", "Finds recursive methods without a depth guard or base-case check - StackOverflowException risk."),
+        new(DetectorId.unbounded_static_collections, "correctness", "project|solution", "Finds static collections populated with .Add() but never .Clear()ed - memory exhaustion risk."),
+        new(DetectorId.value_type_mutation_intent, "correctness", "any", "Flags value-type parameter reassignment inside the method body - change is invisible to the caller."),
         // dead-code (8)
         new(DetectorId.obsolete_callers, "dead-code", "any", "Finds all call sites invoking [Obsolete]-decorated methods."),
         new(DetectorId.uninstantiated_types, "dead-code", "project|solution", "Finds classes never instantiated anywhere in the solution or project."),
         new(DetectorId.unused_constructors, "dead-code", "file", "Identifies constructors never called anywhere in the solution."),
-        new(DetectorId.unused_event_subscriptions, "dead-code", "file", "Finds event subscriptions that are never unsubscribed — potential memory leaks."),
+        new(DetectorId.unused_event_subscriptions, "dead-code", "file", "Finds event subscriptions that are never unsubscribed - potential memory leaks."),
         new(DetectorId.unused_interfaces, "dead-code", "project|solution", "Finds interfaces declared but never implemented."),
         new(DetectorId.unused_local_variables, "dead-code", "file", "Identifies local variables declared but never used within their scope."),
         new(DetectorId.unused_private_fields, "dead-code", "file", "Detects private fields never read or written."),
@@ -625,38 +625,38 @@ public class SentinelScanTools
         new(DetectorId.finalizer_on_disposable, "misc", "project|solution", "Finds IDisposable+finalizer combinations without a disposed-flag guard (double-free of unmanaged resources)."),
         // performance (11)
         new(DetectorId.boxing_allocations, "performance", "any", "Finds potential boxing allocations (value types cast to object, interface)."),
-        new(DetectorId.implicit_nullable_boxing, "performance", "file|solution", "Detects Nullable<T> values cast to object — boxes the nullable, surprising null-equality behavior."),
+        new(DetectorId.implicit_nullable_boxing, "performance", "file|solution", "Detects Nullable<T> values cast to object - boxes the nullable, surprising null-equality behavior."),
         new(DetectorId.inefficient_string_comparisons, "performance", "any", "Finds string comparison pitfalls: case-insensitive without OrdinalIgnoreCase, etc."),
-        new(DetectorId.linq_n1_patterns, "performance", "any", "Detects LINQ queries (Where/First/Any/Count) inside loop bodies — N+1 execution pattern."),
+        new(DetectorId.linq_n1_patterns, "performance", "any", "Detects LINQ queries (Where/First/Any/Count) inside loop bodies - N+1 execution pattern."),
         new(DetectorId.linq_redundant_where, "performance", "file|solution", "Finds .Where(pred).First()/.Any()/.Count() collapsible to single-pass overloads."),
         new(DetectorId.multiple_enumeration, "performance", "file|solution", "Detects IEnumerable locals iterated more than once without a materializing call (ToList/ToArray)."),
         new(DetectorId.performance, "performance", "file", "Broad performance analysis of a single file."),
-        new(DetectorId.re_do_s_patterns, "performance", "file", "Detects Regex patterns with nested quantifiers — catastrophic backtracking / ReDoS vulnerability."),
-        new(DetectorId.regex_new_in_loop, "performance", "file", "Detects new Regex() construction inside loop bodies — recompiles the pattern every iteration."),
-        new(DetectorId.string_format_in_loops, "performance", "file|solution", "Detects string interpolation or string.Format() inside loops — per-iteration allocation."),
+        new(DetectorId.re_do_s_patterns, "performance", "file", "Detects Regex patterns with nested quantifiers - catastrophic backtracking / ReDoS vulnerability."),
+        new(DetectorId.regex_new_in_loop, "performance", "file", "Detects new Regex() construction inside loop bodies - recompiles the pattern every iteration."),
+        new(DetectorId.string_format_in_loops, "performance", "file|solution", "Detects string interpolation or string.Format() inside loops - per-iteration allocation."),
         new(DetectorId.use_frozen_collections, "performance", "any", "Finds static readonly Dict/HashSet fields that could use FrozenDictionary/FrozenSet for better read performance."),
         // security (5)
         new(DetectorId.hardcoded_paths, "security", "any", "Finds hardcoded file system paths in the code."),
         new(DetectorId.reflection_usage, "security", "any", "Scans for System.Reflection usage (potential for dynamic invocation attacks)."),
         new(DetectorId.security, "security", "file", "Broad security vulnerability analysis of a single file."),
         new(DetectorId.sql_injection, "security", "any", "Detects possible SQL injection via dynamic string arguments to Execute*/FromSqlRaw/Query methods."),
-        new(DetectorId.unvalidated_regex_source, "security", "file", "Detects Regex() calls with a non-literal pattern argument — regex injection and ReDoS attack vector."),
+        new(DetectorId.unvalidated_regex_source, "security", "file", "Detects Regex() calls with a non-literal pattern argument - regex injection and ReDoS attack vector."),
         // structure (15)
         new(DetectorId.circular_dependencies, "structure", "solution", "Identifies circular project references (A → B → A) in the solution."),
-        new(DetectorId.circular_type_references, "structure", "project|solution", "Finds circular constructor-injection dependencies — the cycle that causes .NET DI container to throw at startup."),
+        new(DetectorId.circular_type_references, "structure", "project|solution", "Finds circular constructor-injection dependencies - the cycle that causes .NET DI container to throw at startup."),
         new(DetectorId.duplicate_blocks_in_hierarchy, "structure", "any", "Finds duplicate code blocks across a type hierarchy. scopeName = root type name (class or interface)."),
         new(DetectorId.duplicate_methods, "structure", "project|solution", "Finds structurally duplicate method implementations (same control-flow shape regardless of names)."),
         new(DetectorId.interface_extraction_candidates, "structure", "project|solution", "Finds public classes with 3+ public methods but no corresponding interface."),
-        new(DetectorId.internal_classes_that_could_be_private, "structure", "project|solution", "Finds internal classes used only in a single file — could be made private or nested."),
-        new(DetectorId.large_methods, "structure", "project|solution", "Finds methods exceeding 50 lines — extract-method candidates."),
-        new(DetectorId.large_switch_statements, "structure", "project|solution", "Finds switch statements with 10+ cases — refactoring candidates."),
-        new(DetectorId.large_types, "structure", "project|solution", "Finds types exceeding 500 lines — extract-class candidates."),
+        new(DetectorId.internal_classes_that_could_be_private, "structure", "project|solution", "Finds internal classes used only in a single file - could be made private or nested."),
+        new(DetectorId.large_methods, "structure", "project|solution", "Finds methods exceeding 50 lines - extract-method candidates."),
+        new(DetectorId.large_switch_statements, "structure", "project|solution", "Finds switch statements with 10+ cases - refactoring candidates."),
+        new(DetectorId.large_types, "structure", "project|solution", "Finds types exceeding 500 lines - extract-class candidates."),
         new(DetectorId.layer_violations, "structure", "any", "Detects namespace-level layer architecture violations based on using directives."),
-        new(DetectorId.long_parameter_list, "structure", "any", "Finds methods/constructors with 4+ parameters — suggests parameter object or builder."),
+        new(DetectorId.long_parameter_list, "structure", "any", "Finds methods/constructors with 4+ parameters - suggests parameter object or builder."),
         new(DetectorId.namespace_path_mismatches, "structure", "project|solution", "Finds files where the declared namespace doesn't match the folder path (syntax-only, no compilation required)."),
         new(DetectorId.primitive_obsession, "structure", "any", "Finds methods where the same primitive type appears 3+ times as distinct parameters."),
         new(DetectorId.structural_smells, "structure", "any", "Scans for structural file issues: multiple types in one file, file/type name mismatches."),
-        new(DetectorId.type_cohesion, "structure", "file", "Analyses LCOM cohesion metric per class — identifies god classes with low cohesion."),
+        new(DetectorId.type_cohesion, "structure", "file", "Analyses LCOM cohesion metric per class - identifies god classes with low cohesion."),
     ];
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -914,7 +914,7 @@ public class SentinelScanTools
     {
         // Single source of truth: derived from SentinelScanTools.scan_descriptors.
         // Adding, removing, or reclassifying a detector in scan_descriptors automatically
-        // propagates here — no manual sync required.
+        // propagates here -> no manual sync required.
         var byDomain = SentinelScanTools.scan_descriptors
             .GroupBy(d => d.Domain)
             .OrderBy(g => g.Key)
@@ -925,7 +925,7 @@ public class SentinelScanTools
         int total = SentinelScanTools.scan_descriptors.Length;
 
         var sb = new StringBuilder();
-        sb.AppendLine($"scan — valid detector IDs grouped by domain ({total} total):");
+        sb.AppendLine($"scan - valid detector IDs grouped by domain ({total} total):");
         sb.AppendLine();
         foreach (var (domain, ids) in byDomain)
         {
@@ -968,5 +968,5 @@ public class SentinelScanTools
         };
     }
 }
-// v2 — async domain extracted from concurrency; blocking_calls_in and unawaited_dispose relocated
-// v2 — async domain extracted; scan_descriptors made internal; ScanOptions derived from scan_descriptors
+// v2 -> async domain extracted from concurrency; blocking_calls_in and unawaited_dispose relocated
+// v2 -> async domain extracted; scan_descriptors made internal; ScanOptions derived from scan_descriptors

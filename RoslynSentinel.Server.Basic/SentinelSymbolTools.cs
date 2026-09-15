@@ -72,7 +72,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.SymbolId)]
     [Produces(DataTag.SessionId)]
     [Produces(DataTag.ProjectName)]
-    [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text — use SearchSolutionText for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
+    [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text - use SearchSolutionText for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
     public async Task<ToolResult<object>> LocateSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
@@ -125,12 +125,12 @@ public class SentinelSymbolTools
     }
     [McpServerTool(Name = "InspectSymbol")]
     [Produces(DataTag.SymbolId)]
-    [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol — if you only have a name, use LocateSymbol first to find the declaring file.")]
+    [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol - if you only have a name, use LocateSymbol first to find the declaring file.")]
     public async Task<ToolResult<object>> InspectSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
-        [Description("info returns type, kind, accessibility, attributes, and documentation. blastRadius returns all call sites and affected projects — for a full caller/override breakdown instead of a summary, use FindReferences.")]
+        [Description("info returns type, kind, accessibility, attributes, and documentation. blastRadius returns all call sites and affected projects - for a full caller/override breakdown instead of a summary, use FindReferences.")]
         [ToolOption(ToolOptionTag.Aspect)] InspectSymbolAspect aspect,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
@@ -193,7 +193,7 @@ public class SentinelSymbolTools
 
     /// <summary>
     /// <see cref="FindUsagesSearchKind"/> kinds resolve to symbol-relationship facts that are
-    /// meaningful for a member (method/property/field/event), not just a type — <c>objectCreations</c>
+    /// meaningful for a member (method/property/field/event), not just a type -> <c>objectCreations</c>
     /// specifically is the exception: it text-matches "new TypeName(...)" sites and is structurally
     /// incapable of ever matching a member.
     /// </summary>
@@ -218,7 +218,7 @@ public class SentinelSymbolTools
             _ => throw new ArgumentOutOfRangeException(nameof(searchKind), searchKind, "Unhandled searchKind.")
         };
 
-        // Every FindUsagesSearchKind backing method returns some IEnumerable<T> — normalize to
+        // Every FindUsagesSearchKind backing method returns some IEnumerable<T> -> normalize to
         // List<object> so broaden-on-empty can report a count and label results uniformly
         // regardless of which kind produced them.
         return ((System.Collections.IEnumerable)result).Cast<object>().ToList();
@@ -252,7 +252,7 @@ public class SentinelSymbolTools
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument,
-                            $"'{name}' resolves to a {kindsFound} ({resolved.Count} declaration(s) found), not a type — " +
+                            $"'{name}' resolves to a {kindsFound} ({resolved.Count} declaration(s) found), not a type - " +
                             "objectCreations only matches 'new TypeName(...)' expressions and is structurally incapable of " +
                             $"returning anything for a member name. Use FindReferences(symbolName: \"{name}\", kind: callers) " +
                             "to find call sites, or kind: implementations for overrides.")
@@ -287,7 +287,7 @@ public class SentinelSymbolTools
                 catch
                 {
                     // A kind that doesn't apply to this name (e.g. throws resolving as a type)
-                    // is just another empty result for broaden-on-empty purposes — skip it.
+                    // is just another empty result for broaden-on-empty purposes -> skip it.
                 }
             }
 
@@ -297,7 +297,7 @@ public class SentinelSymbolTools
                 {
                     Success = true,
                     Data = results,
-                    Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds — " +
+                    Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " +
                         "nothing found under any kind. This is a trustworthy 'not found anywhere' signal, not an error."
                 };
             }
@@ -309,7 +309,7 @@ public class SentinelSymbolTools
                 totalRecords: totalFound, cancellationToken: cancellationToken);
             return broadenedResult with
             {
-                Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds — " +
+                Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " +
                     $"found {totalFound} result(s): {summary}."
             };
         }
@@ -368,7 +368,7 @@ public class SentinelSymbolTools
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        [Description("Preferred way to identify the target, together with projectName — as returned by LocateSymbol. Unambiguous; no filepath needed.")]
+        [Description("Preferred way to identify the target, together with projectName - as returned by LocateSymbol. Unambiguous; no filepath needed.")]
         string? docCommentId = null,
         [Description(ToolParams.ProjectName)] string? projectName = null,
         [Description(ToolParams.SessionId)] string sessionId = "",
@@ -399,13 +399,13 @@ public class SentinelSymbolTools
     }
     [McpServerTool(Name = "FindReferences")]
     [Produces(DataTag.Report)]
-    [Description("Finds call sites and/or implementations for a symbol. This is a single-level, flat lookup — for a multi-level call tree use GetCallGraph, for a local variable's read/write/capture sites use TraceVariableLifetime, for a rename-impact summary use PreviewRenameImpact, and for type-relationship queries (implementors, attribute usage, object creation, etc.) use QuerySymbolRelationships.")]
+    [Description("Finds call sites and/or implementations for a symbol. This is a single-level, flat lookup - for a multi-level call tree use GetCallGraph, for a local variable's read/write/capture sites use TraceVariableLifetime, for a rename-impact summary use PreviewRenameImpact, and for type-relationship queries (implementors, attribute usage, object creation, etc.) use QuerySymbolRelationships.")]
     public async Task<ToolResult<object>> FindReferences(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
         [Description("callers: call sites only. implementations: overrides/interface implementations only. all: both, clearly labeled.")]
         [Consumes(DataTag.SymbolKind)] FindReferencesKind kind,
-        [Description("Optional — omit to search by name across the solution; supply to pin resolution when the name is ambiguous across files.")]
+        [Description("Optional - omit to search by name across the solution; supply to pin resolution when the name is ambiguous across files.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
@@ -463,11 +463,11 @@ public class SentinelSymbolTools
     }
     [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]
-    [Description("Returns type information for a type you already know the name of — hierarchy, members, or both. If you're not sure the type exists or need to disambiguate a common name, use LocateSymbol first. To change an enum's values, use ModifyEnum.")]
+    [Description("Returns type information for a type you already know the name of - hierarchy, members, or both. If you're not sure the type exists or need to disambiguate a common name, use LocateSymbol first. To change an enum's values, use ModifyEnum.")]
     public async Task<ToolResult<object>> GetTypeInfo(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.DataType)] string typeName,
-        [Description("hierarchy: base class chain, interfaces, derived types. members: all public/protected members — for an enum, each value appears as a Field member with its explicit/ordinal value inline in Signature (e.g. \"Status.Active = 1\"), and inherited System.Enum/ValueType noise is excluded automatically. both: hierarchy and members together (default).")]
+        [Description("hierarchy: base class chain, interfaces, derived types. members: all public/protected members - for an enum, each value appears as a Field member with its explicit/ordinal value inline in Signature (e.g. \"Status.Active = 1\"), and inherited System.Enum/ValueType noise is excluded automatically. both: hierarchy and members together (default).")]
         [ToolOptionAttribute(ToolOptionTag.Filter)] TypeInfoInclude include = TypeInfoInclude.both,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Description("Excludes inherited members when false. Applies only to include=members or include=both.")]
@@ -509,7 +509,7 @@ public class SentinelSymbolTools
             if (include == TypeInfoInclude.members)
             {
                 var warning = members!.Count == 0
-                    ? $"No members found for '{typeName}'. This can mean the type doesn't exist in the solution — retry with include=hierarchy or include=both to confirm — or that it genuinely has no members."
+                    ? $"No members found for '{typeName}'. This can mean the type doesn't exist in the solution - retry with include=hierarchy or include=both to confirm - or that it genuinely has no members."
                     : null;
                 return new ToolResult<object>
                 {

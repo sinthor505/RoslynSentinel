@@ -21,12 +21,12 @@ namespace RoslynSentinel.Common;
 /// can't build a normal schema for makes it fall back to one of two broken shapes, both handled below:
 /// <list type="bullet">
 /// <item>A converter implementing only <c>ReadAsPropertyName</c>/<c>WriteAsPropertyName</c> (e.g.
-/// <see cref="FilePathWrapper"/>) makes the exporter emit the bare JSON Schema boolean <c>true</c> —
+/// <see cref="FilePathWrapper"/>) makes the exporter emit the bare JSON Schema boolean <c>true</c> ->
 /// legal JSON Schema 2020-12, but rejected outright by LM Studio's grammar converter with
 /// "Unrecognized schema: true" the instant MCP tools are enabled.</item>
 /// <item>A converter implementing only <c>Read</c>/<c>Write</c> (e.g. <see cref="ToolCallReason"/>)
 /// makes the exporter emit an object with only the property's <c>description</c> and no <c>type</c>
-/// at all — not rejected outright, but silently unconstrained: LM Studio's grammar has nothing telling
+/// at all -> not rejected outright, but silently unconstrained: LM Studio's grammar has nothing telling
 /// it the value must be a string, so nothing stops a model from emitting a number/bool/object there
 /// instead (confirmed live 2026-09-11: RunTest's <c>reason</c> parameter, the only <c>ToolCallReason</c>
 /// in the schema missing a sibling <c>type</c> next to every other parameter's, letting a model supply
@@ -35,7 +35,7 @@ namespace RoslynSentinel.Common;
 /// The SDK's own <c>WithTools&lt;T&gt;()</c> never passes a
 /// <see cref="McpServerToolCreateOptions.SchemaCreateOptions"/> (confirmed by decompiling
 /// ModelContextProtocol.Core 2.2.0's <c>AIFunctionMcpServerTool</c>), so there is no way to plug this
-/// fix in through the SDK's extension method — this reimplements its registration loop with that one
+/// fix in through the SDK's extension method -> this reimplements its registration loop with that one
 /// option supplied.
 /// </remarks>
 public static class McpToolSchemaFix
@@ -53,7 +53,7 @@ public static class McpToolSchemaFix
         }
 
         // A schema object with no "type" at all (only "description", possibly alongside "default")
-        // is the exporter's other fallback for a custom-converter type it can't introspect further —
+        // is the exporter's other fallback for a custom-converter type it can't introspect further ->
         // every WithToolsFixed<T>-generated parameter that DOES have a normal shape always carries a
         // "type", so an object missing one here is never an intentionally-untyped schema, always this
         // fallback. Defaulting it to "string" matches every current custom-converter wrapper type
@@ -90,7 +90,7 @@ public static class McpToolSchemaFix
                 // Mirrors the SDK's own WithTools<T>() instance-method branch: construct a fresh
                 // target per invocation via ActivatorUtilities (DI-aware constructor injection,
                 // falling back to Activator.CreateInstance with no DI container), rather than
-                // resolving a pre-registered singleton — matches the SDK's documented "an instance
+                // resolving a pre-registered singleton -> matches the SDK's documented "an instance
                 // is constructed for each invocation" behavior for parity with WithTools<T>().
                 builder.Services.AddSingleton<McpServerTool>(services => McpServerTool.Create(
                     toolMethod,

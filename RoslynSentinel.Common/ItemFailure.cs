@@ -8,7 +8,7 @@ public enum FailureReason
 {
     /// <summary>An async overload already exists by name but lacks a CancellationToken parameter.</summary>
     OverloadAlreadyExists,
-    /// <summary>The caller is already async — normally reclassified to AlreadySatisfied at assembly time.</summary>
+    /// <summary>The caller is already async -> normally reclassified to AlreadySatisfied at assembly time.</summary>
     AlreadyAsync,
     /// <summary>No async API equivalent exists for the synchronous call the method makes.</summary>
     NoAsyncEquivalent,
@@ -29,7 +29,7 @@ public enum FailureReason
 public sealed class ToolHint
 {
     public string ToolName { get; init; } = "";
-    /// <summary>Parameter name → pre-filled value (as a string the model can pass verbatim).</summary>
+    /// <summary>Parameter name -> pre-filled value (as a string the model can pass verbatim).</summary>
     public IReadOnlyDictionary<string, string> PrefilledArgs { get; init; } = new Dictionary<string, string>();
     /// <summary>Required parameter names the substrate could not pre-fill; the model must supply these.</summary>
     public IReadOnlyList<string> RequiresFromModel { get; init; } = Array.Empty<string>();
@@ -48,7 +48,7 @@ public sealed class ItemFailure
     public ItemOutcome Outcome { get; init; }
     public FailureReason Reason { get; init; }
     public string Detail { get; init; } = "";
-    /// <summary>Null when the reason has no routable tool (loud null — the absence is itself a diagnostic signal).</summary>
+    /// <summary>Null when the reason has no routable tool (loud null -> the absence is itself a diagnostic signal).</summary>
     public ToolHint? SuggestedTool { get; init; }
 }
 

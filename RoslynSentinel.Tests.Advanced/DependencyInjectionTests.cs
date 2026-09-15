@@ -26,18 +26,18 @@ public class DependencyInjectionTests
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
         // 2. Register all engines via the real production registration path, not a hand-copied
-        // list — a hand-copied list is exactly what silently drifted out of sync with the actual
+        // list -> a hand-copied list is exactly what silently drifted out of sync with the actual
         // engine set three times (see docs/TODO.md's "Registration duplication" entry / the
         // project_dependency_direction memory). This now exercises the same code path
         // Program.cs/the HTTP hosts actually run.
         services.AddRoslynSentinelEnginesAdvanced();
 
-        // 3. Register all tool classes the same way — every class carrying [McpServerToolType],
+        // 3. Register all tool classes the same way -> every class carrying [McpServerToolType],
         // via the real mode-conditional registration path, all modes enabled, so
         // DynamicDiscovery_AllClassesWithToolAttribute_ShouldBeResolvable exercises the full set
         // rather than whatever subset happened to be hand-copied here. Derived from
         // ToolClassRegistry itself (Basic's map plus Advanced's) rather than a hand-copied string
-        // list — a hand-copied list silently drifted out of sync when SentinelWholeFileWriteTools'
+        // list -> a hand-copied list silently drifted out of sync when SentinelWholeFileWriteTools'
         // "WholeFileWrite" mode was added, since AddRoslynSentinelToolsAdvanced also registers
         // Basic's modes via AddRoslynSentinelToolsBasic.
         var allModes = new HashSet<string>(ToolClassRegistry.BasicModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);

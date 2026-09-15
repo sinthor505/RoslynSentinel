@@ -415,7 +415,7 @@ public class MyService
     }
 }"));
 
-        // In Helper.cs, line 3, column 17 → 'E' in Execute
+        // In Helper.cs, line 3, column 17 -> 'E' in Execute
         var preview = await _discoveryEngine.PreviewRenameImpactAsync(
             "Helper.cs", "Execute", contextSnippet: "public void Execute()");
 
@@ -432,7 +432,7 @@ public class MyService
     [Test]
     public async Task PreviewRenameImpact_UnusedPrivateMethod_ZeroOrOneReference()
     {
-        // A private method that is never called anywhere — should have 0 references (no callers)
+        // A private method that is never called anywhere -> should have 0 references (no callers)
         SetSource("public class Service\n{\n    private void Unused() { }\n}", "Service.cs");
 
         var preview = await _discoveryEngine.PreviewRenameImpactAsync(
@@ -450,7 +450,7 @@ public class MyService
     {
         // Regression test: PreviewRenameImpactAsync used to fall back to a bare symbolName
         // search (dropping lineBefore/lineAfter entirely) whenever contextSnippet was omitted,
-        // so disambiguating hints had no effect and the call always failed as "ambiguous" —
+        // so disambiguating hints had no effect and the call always failed as "ambiguous" ->
         // even when lineBefore uniquely identified the target, as it does here.
         SetSource(@"
 public class MyService

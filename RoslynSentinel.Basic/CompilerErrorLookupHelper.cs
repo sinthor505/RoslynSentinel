@@ -16,7 +16,7 @@ namespace RoslynSentinel.Basic;
 /// states the member's current accessibility and the caller's enclosing type directly, rather than
 /// leaving the model to infer accessibility from the absence of an error. CS0101/CS0111 (duplicate
 /// namespace member / duplicate member signature) name the real file the colliding symbol is
-/// already declared in — these fire when CreateFile/ApplyDiff targets a wrong-but-plausible path
+/// already declared in -> these fire when CreateFile/ApplyDiff targets a wrong-but-plausible path
 /// for a file that already exists elsewhere in the same project, and without the real path the
 /// model has no way to distinguish "you introduced a genuine duplicate" from "you guessed the
 /// wrong path for an existing file" (see docs/current/project_readfile_createfile_path_inconsistency_bug.md).
@@ -94,7 +94,7 @@ public static class CompilerErrorLookupHelper
         }
         catch (Exception)
         {
-            return $"  '{name}' is not a known symbol at this location. Common causes: a typo, a missing `using` for its namespace, or (if it's a static member of another class) calling it unqualified — C# does not resolve another class's static members just because you share a namespace or `using` it; qualify the call as ClassName.{name}(...).";
+            return $"  '{name}' is not a known symbol at this location. Common causes: a typo, a missing `using` for its namespace, or (if it's a static member of another class) calling it unqualified - C# does not resolve another class's static members just because you share a namespace or `using` it; qualify the call as ClassName.{name}(...).";
         }
 
         if (candidates.Count == 0)
@@ -109,7 +109,7 @@ public static class CompilerErrorLookupHelper
         }
         catch (Exception)
         {
-            // Fall through without namespace triage below — the plain candidate list still helps.
+            // Fall through without namespace triage below -> the plain candidate list still helps.
         }
 
         var missingUsingCandidates = usingContext != null
@@ -119,8 +119,8 @@ public static class CompilerErrorLookupHelper
         var suggestions = candidates
             .Take(5)
             .Select(c => c.ContainingType != null
-                ? $"    - {c.ContainingType}.{c.SymbolName} ({c.Signature}) — {c.FilePath}:{c.Line}"
-                : $"    - {c.SymbolName} ({c.Signature}) — {c.FilePath}:{c.Line}");
+                ? $"    - {c.ContainingType}.{c.SymbolName} ({c.Signature}) - {c.FilePath}:{c.Line}"
+                : $"    - {c.SymbolName} ({c.Signature}) - {c.FilePath}:{c.Line}");
 
         if (usingContext != null && missingUsingCandidates.Count > 0)
         {
@@ -138,7 +138,7 @@ public static class CompilerErrorLookupHelper
         }
 
         return $"  '{name}' is not accessible unqualified from this file. You MUST call it using the fully " +
-            "qualified name shown below (ContainingType.MemberName) — do not add a `using` directive, it will " +
+            "qualified name shown below (ContainingType.MemberName) - do not add a `using` directive, it will " +
             "not fix this. Candidates found:\n"
             + string.Join("\n", suggestions);
     }
@@ -159,7 +159,7 @@ public static class CompilerErrorLookupHelper
         var isExtensionCandidate = diagnostic.Id == "CS1061";
 
         // LocateSymbolAsync's containingType filter matches MinimallyQualifiedFormat (simple name,
-        // no generic arguments) exactly — the diagnostic's type name may be fully-qualified or
+        // no generic arguments) exactly -> the diagnostic's type name may be fully-qualified or
         // generic-decorated (e.g. "System.Collections.Generic.List<int>"), so reduce to a simple
         // name before using it as a scope filter. If reduction still doesn't match, the solution-wide
         // fallback below still finds the member by name alone.
@@ -168,13 +168,13 @@ public static class CompilerErrorLookupHelper
         List<SymbolLocation> candidates;
         try
         {
-            // Scope to the named type first — a typo'd member on the right type is the common case.
+            // Scope to the named type first -> a typo'd member on the right type is the common case.
             candidates = await symbolNavigationEngine.LocateSymbolAsync(
                 memberName, exactMatch: true, containingType: simpleTypeName, cancellationToken: cancellationToken);
 
             if (candidates.Count == 0)
             {
-                // Not on that type at all — search the whole solution in case the member exists on a
+                // Not on that type at all -> search the whole solution in case the member exists on a
                 // different, similarly-named type (or the model has the wrong receiver entirely).
                 candidates = await symbolNavigationEngine.LocateSymbolAsync(
                     memberName, exactMatch: true, cancellationToken: cancellationToken);
@@ -188,20 +188,20 @@ public static class CompilerErrorLookupHelper
         if (candidates.Count == 0)
         {
             return isExtensionCandidate
-                ? $"  No member or extension method named '{memberName}' was found anywhere in the solution for type '{typeName}'. This is likely a typo, a member that needs to be added to '{typeName}', or an extension method whose defining namespace needs a `using` — check FindExtensionMethods if one is expected to exist."
+                ? $"  No member or extension method named '{memberName}' was found anywhere in the solution for type '{typeName}'. This is likely a typo, a member that needs to be added to '{typeName}', or an extension method whose defining namespace needs a `using` - check FindExtensionMethods if one is expected to exist."
                 : $"  No member named '{memberName}' was found anywhere in the solution. This is likely a typo, or '{memberName}' needs to be added to '{typeName}'.";
         }
 
         var suggestions = candidates
             .Take(5)
             .Select(c => c.ContainingType != null
-                ? $"    - {c.ContainingType}.{c.SymbolName} ({c.Signature}) — {c.FilePath}:{c.Line}"
-                : $"    - {c.SymbolName} ({c.Signature}) — {c.FilePath}:{c.Line}");
+                ? $"    - {c.ContainingType}.{c.SymbolName} ({c.Signature}) - {c.FilePath}:{c.Line}"
+                : $"    - {c.SymbolName} ({c.Signature}) - {c.FilePath}:{c.Line}");
 
         var onNamedType = candidates.Any(c => string.Equals(c.ContainingType, simpleTypeName, StringComparison.OrdinalIgnoreCase));
         var explanation = onNamedType
             ? $"  '{memberName}' exists on '{typeName}' but isn't accessible the way it was called (wrong overload, wrong accessibility, or a static/instance mismatch)."
-            : $"  '{memberName}' was not found on '{typeName}', but a member with that name exists elsewhere — likely the wrong receiver type, or '{memberName}' needs to be added to '{typeName}' instead. Candidates found:";
+            : $"  '{memberName}' was not found on '{typeName}', but a member with that name exists elsewhere - likely the wrong receiver type, or '{memberName}' needs to be added to '{typeName}' instead. Candidates found:";
 
         return explanation + "\n" + string.Join("\n", suggestions);
     }
@@ -248,19 +248,19 @@ public static class CompilerErrorLookupHelper
         }
         catch (Exception)
         {
-            // Fall through without a caller type name below — the accessibility guidance still helps.
+            // Fall through without a caller type name below -> the accessibility guidance still helps.
         }
 
         var accessibility = symbol.Accessibility.ToLowerInvariant();
         var calledFrom = callerType != null ? $" from {callerType}" : string.Empty;
         return $"  '{qualifiedName}' is currently {accessibility}. It must be changed to a level accessible{calledFrom} ({diagnostic.FilePath}:{diagnostic.StartLine}).\n"
-            + $"  Note: accessibility is set per-member, not inherited from the containing type's accessibility — raising {simpleTypeName}'s own accessibility does not change {symbol.SymbolName}'s.";
+            + $"  Note: accessibility is set per-member, not inherited from the containing type's accessibility - raising {simpleTypeName}'s own accessibility does not change {symbol.SymbolName}'s.";
     }
 
     /// <summary>
     /// CS0101 ("namespace already contains a definition for X") and CS0111 ("type already defines a
     /// member called X with the same parameter types") both fire when the file being validated is a
-    /// wrong-but-plausible path for a file that already exists elsewhere in the same project — see
+    /// wrong-but-plausible path for a file that already exists elsewhere in the same project -> see
     /// docs/current/project_readfile_createfile_path_inconsistency_bug.md. Neither diagnostic's raw
     /// message says where the *other* declaration lives, which leaves a model with no way to tell
     /// "I introduced a genuine duplicate" apart from "I guessed the wrong path for an existing file."
@@ -312,11 +312,11 @@ public static class CompilerErrorLookupHelper
 
         if (realLocation == null)
         {
-            return $"  '{memberName}' collides with an existing declaration, but its real location could not be found — this may be a genuine duplicate rather than a wrong-path new file.";
+            return $"  '{memberName}' collides with an existing declaration, but its real location could not be found - this may be a genuine duplicate rather than a wrong-path new file.";
         }
 
         return $"  A declaration of '{memberName}' already exists at {realLocation.FilePath}:{realLocation.Line}. " +
-            $"If '{diagnostic.FilePath}' was meant to be that same file, this path is likely wrong — " +
+            $"If '{diagnostic.FilePath}' was meant to be that same file, this path is likely wrong - " +
             $"did you mean to ReadFile/ApplyDiff {realLocation.FilePath} instead of creating a new file here? " +
             "If this really is meant to be a new, separate declaration, rename it to avoid the collision.";
     }

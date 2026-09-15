@@ -18,11 +18,11 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// Same fixture, prompt ambiguity, and disambiguating sentence as
 /// <see cref="WholeFileRewriteAgentTests"/>'s MinimalGuidanceDisambiguated test, but additionally
 /// instructs the model to write out its complete plan in prose, with no tool calls, before making its
-/// first tool call — tests the "on-the-fly decisions fork 50/50, a committed-up-front plan anchors the
+/// first tool call -> tests the "on-the-fly decisions fork 50/50, a committed-up-front plan anchors the
 /// model" hypothesis raised alongside project_minimalguidance_reasoning_pattern_analysis. Nothing
 /// enforces the instruction server-side (a request filter can't see whether the model's prior turn
-/// was prose-only, only individual tool calls in isolation — see PlanOnlyAgentTests's doc comment for
-/// why a true two-phase plan-then-execute would need a second full model round-trip instead) — this is
+/// was prose-only, only individual tool calls in isolation -> see PlanOnlyAgentTests's doc comment for
+/// why a true two-phase plan-then-execute would need a second full model round-trip instead) -> this is
 /// a prompt-only nudge, and <see cref="AssertFixApplied"/> additionally records whether the model
 /// actually complied (turn 1 had zero tool calls) so compliant vs. non-compliant runs can be compared
 /// post-hoc, the same technique used for the reasoning-pattern analysis this test follows up on.
@@ -42,21 +42,21 @@ public class PlanThenExecuteAgentTests
         one class to be converted.
 
         Investigate `BlockConverter.cs`, find the root cause, and fix it. A similar bug was
-        already fixed elsewhere in this codebase using a reusable pattern — look for it and reuse
+        already fixed elsewhere in this codebase using a reusable pattern - look for it and reuse
         that same approach rather than inventing a new one.
 
         If the existing fix lives in a private method in another file, call it directly rather
-        than copying its body into your own fix — raise its accessibility (e.g. to `internal`) so
+        than copying its body into your own fix - raise its accessibility (e.g. to `internal`) so
         it can be called cross-file, but don't duplicate its logic, and don't modify anything else
         in that file. Once you switch the buggy method's call site to the shared method, delete
         only that one now-unused old method (the one the bug report is about) instead of leaving
-        it behind — do not delete, rename, or otherwise modify any other method, field, or class,
+        it behind - do not delete, rename, or otherwise modify any other method, field, or class,
         even ones that look unused, unrelated, or like dead code to you.
 
         Before making any tool call that edits a file, first write out your complete plan as plain
         text: the root cause, exactly which method(s)/file(s) you will modify, and the specific
         content you will place in `BlockConverter.cs`. Only after stating that plan in full should
-        you begin making edit tool calls — do not interleave planning and editing.
+        you begin making edit tool calls - do not interleave planning and editing.
 
         Verify your fix compiles, using an MCP tool (you have no terminal access). Scope the build
         to just the `ContosoOrders.Core` project rather than the whole solution.
@@ -65,7 +65,7 @@ public class PlanThenExecuteAgentTests
         leave it exactly as you found it. Report what you changed and the verification result.
         """;
 
-    // Same as WholeFileRewriteAgentTests.ActiveModes — full read+write toolset, nothing blocked here;
+    // Same as WholeFileRewriteAgentTests.ActiveModes -> full read+write toolset, nothing blocked here;
     // only the prompt differs from that test's MinimalGuidanceDisambiguated variant.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -85,7 +85,7 @@ public class PlanThenExecuteAgentTests
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
             Assert.Ignore(
-                "ROSLYNSENTINEL_LLM_MODEL is not set — model-eval tests require a real LM Studio " +
+                "ROSLYNSENTINEL_LLM_MODEL is not set - model-eval tests require a real LM Studio " +
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
@@ -191,7 +191,7 @@ public class PlanThenExecuteAgentTests
         Assert.That(result.Converged, Is.True,
             $"Agent did not converge (stopped: {result.StopReason}) within {result.TurnCount} turns. See transcript: {result.TranscriptPath}");
 
-        // Not a pass/fail gate — recorded so compliant vs. non-compliant runs can be compared
+        // Not a pass/fail gate -> recorded so compliant vs. non-compliant runs can be compared
         // post-hoc against AssertFixApplied's outcome (same technique as
         // project_minimalguidance_reasoning_pattern_analysis), since nothing server-side stops the
         // model from ignoring the "plan before editing" instruction.
@@ -217,7 +217,7 @@ public class PlanThenExecuteAgentTests
             $"The old ReformatWholeFile method should be deleted once its call site is replaced, " +
             $"not left behind unused. Transcript: {result.TranscriptPath}");
         Assert.That(fixedText, Does.Contain("ReplaceBlockFormatted"),
-            $"The fix should call ReplaceBlockFormatted (directly or qualified) — bringing it into " +
+            $"The fix should call ReplaceBlockFormatted (directly or qualified) - bringing it into " +
             $"scope, not duplicating its body. Transcript: {result.TranscriptPath}");
 
         // See WholeFileRewriteAgentTests.AssertFixApplied for the full rationale: the real-world
@@ -234,7 +234,7 @@ public class PlanThenExecuteAgentTests
             $"copy of it. Transcript: {result.TranscriptPath}");
 
         // Trivia-insensitive: the tool pipeline may legitimately normalize incidental whitespace
-        // (see AgentSystemPrompts.CodingAgent's note on this) — what matters is that the model
+        // (see AgentSystemPrompts.CodingAgent's note on this) -> what matters is that the model
         // didn't change either method's LOGIC.
         UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(fixedPath, "UnrelatedMethodBefore",
             "public string UnrelatedMethodBefore( int    x , int y )\n{\n        return (x+y).ToString();\n}");
@@ -247,15 +247,15 @@ public class PlanThenExecuteAgentTests
         // then correctly follows the guidance on retry legitimately costs 2 error tool calls, not
         // 1 - observed directly in a 2026-08-31 PlanThenExecute run that fully fixed the bug in 2
         // ApplyDiff attempts but tripped a <=1 gate. 3+ on the same tool is real thrashing, not a
-        // single guided recovery — see AgentToolErrorAssertions for why the cap is per-tool, not
+        // single guided recovery -> see AgentToolErrorAssertions for why the cap is per-tool, not
         // just total.
         //
         // Total cap raised 2 -> 8 (2026-09-02), matching WholeFileRewriteAgentTests.AssertFixApplied
-        // — see docs/current/project_modifymodifier_accessibility_footgun.md: 9/45 (20%) of this
+        // -> see docs/current/project_modifymodifier_accessibility_footgun.md: 9/45 (20%) of this
         // variant's runs hit the same cross-tool self-correction false negative (a real error on one
         // tool, a guided retry on a DIFFERENT tool, then any third unrelated benign hiccup tripping
         // a tight total cap even though no single tool ever thrashed).
-        // Per-tool cap raised 2 -> 4 (2026-09-04), matching AssertFixApplied — a legitimate
+        // Per-tool cap raised 2 -> 4 (2026-09-04), matching AssertFixApplied -> a legitimate
         // multi-step diagnosis (wrong fix -> compiler error -> adjusted fix -> still wrong ->
         // correct fix) can land 3 failed calls on ONE tool without being thrashing.
         AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8, maxPerTool: 4);

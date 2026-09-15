@@ -1,7 +1,7 @@
 // Coverage for the RunTest MCP tool (docs/current/plan-runtest-tool-v1.md). Uses TestSolutionFixture
 // (the ContosoOrders sample, which ships a real xUnit test project) rather than the in-memory
 // TestSolutionBuilder path, since RunTest shells out to a real `dotnet test` subprocess against
-// files on disk — same real-process rationale as BuildEngine's fullBuild path.
+// files on disk -> same real-process rationale as BuildEngine's fullBuild path.
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -98,7 +98,7 @@ public class RunTestTests
         Assert.That(result.Error!.Message, Does.Contain("scope=file"));
     }
 
-    // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun) —
+    // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun) ->
     // same TestSolutionFixture.Dispose()/RunTest-subprocess file-handle race as the comment on
     // RunTest_FilterMatchesZeroTests_DetailReportsZeroMatchAsync below; not specific to this test.
     [Test]
@@ -123,7 +123,7 @@ public class RunTestTests
     // not having fully released its file handles yet, throwing IOException on a .csproj file still
     // "in use by another process." Documented as a known, pre-existing, distinct issue in
     // docs/obsolete/blockers/blocking_error_persistentworkspacemanager_dispose_race_crashes_process.md's
-    // "Secondary symptom" section — not the PersistentWorkspaceManager.Dispose() deadlock fixed in
+    // "Secondary symptom" section -> not the PersistentWorkspaceManager.Dispose() deadlock fixed in
     // project_dispose_waithandle_deadlock_found.md, which this test also exercises but did not cause.
     [Test]
     public async Task RunTest_FilterMatchesZeroTests_DetailReportsZeroMatchAsync()
@@ -141,7 +141,7 @@ public class RunTestTests
         Assert.That(data.Detail, Does.Contain("matched filter"));
     }
 
-    // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun) —
+    // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun) ->
     // same TestSolutionFixture.Dispose()/RunTest-subprocess file-handle race as the comment on
     // RunTest_FilterMatchesZeroTests_DetailReportsZeroMatchAsync below; not specific to this test.
     [Test]
@@ -266,7 +266,7 @@ public class RunTestTests
         var workspaceTools = BuildTools(workspaceManager);
 
         // Diffs against a "before" snapshot (rather than asserting the directory is empty) so this
-        // test tolerates other RunTest calls racing concurrently elsewhere in the suite — each uses
+        // test tolerates other RunTest calls racing concurrently elsewhere in the suite -> each uses
         // its own GUID-suffixed filename, so only a leftover from *this* call would show up as new.
         var before = new HashSet<string>(Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx"));
 

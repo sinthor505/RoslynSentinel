@@ -206,7 +206,7 @@ public class Order
 
     [Test]
     [Description("Regression (ContosoOrders live agent run, attempt 7): ApplyDiscount is a single, "
-                 + "non-overloaded method — memberName alone already resolves it unambiguously. The "
+                 + "non-overloaded method - memberName alone already resolves it unambiguously. The "
                  + "agent nonetheless passed a defensive contextSnippet that didn't match the file "
                  + "(a formatting/indentation mismatch unrelated to which member was targeted), and "
                  + "the call failed twice with 'contextSnippet not found' even though there was "
@@ -242,7 +242,7 @@ public class C
         var mismatchedSnippetResult = await _refactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }",
             contextSnippet: "this text does not appear anywhere in the file");
         Assert.That(mismatchedSnippetResult.UpdatedText, Is.Null.Or.Empty,
-            "A genuinely ambiguous name (2+ overloads) with a non-matching contextSnippet must still fail — " +
+            "A genuinely ambiguous name (2+ overloads) with a non-matching contextSnippet must still fail - " +
             "the single-candidate bypass must not apply when there IS real ambiguity to resolve.");
         Assert.That(mismatchedSnippetResult.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
 
@@ -259,7 +259,7 @@ public class C
 
     [Test]
     [Description("NearMissList must surface every real candidate a snippet actually matched, not "
-                 + "just the first one — the losing NearestSnippet/CorrectedCoordinates strategies "
+                 + "just the first one - the losing NearestSnippet/CorrectedCoordinates strategies "
                  + "only ever showed candidate #1 here, which would mislead an agent into thinking "
                  + "there was one unrelated nearby match instead of 2 genuine ones to choose between.")]
     public async Task ReplaceMember_ThreeOverloads_AmbiguousSnippetListsUpToThreeCandidates()
@@ -285,7 +285,7 @@ public class C
     [Test]
     [Description("Type-level ambiguity (ResolveTypeByNameOrSnippet) via ModifyBaseType's AddBaseType "
                  + "action: 2 same-named nested types in sibling containers (a genuinely compilable "
-                 + "collision per the plan's Task D test guidance — plain top-level name collisions "
+                 + "collision per the plan's Task D test guidance - plain top-level name collisions "
                  + "don't compile). Confirms the NearMissList hint also covers the type-level helper, "
                  + "not just the member-level one.")]
     public async Task AddBaseType_TwoNestedTypesSameName_AmbiguousSnippetListsBothCandidates()

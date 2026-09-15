@@ -1,6 +1,6 @@
-// GetMethodSource — SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap
+// GetMethodSource -> SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap
 // flagged branches: document == null, method == null, methodBytes > threshold, plus happy path).
-// root == null is not exercised here — GetSyntaxRootAsync only returns null for non-source
+// root == null is not exercised here -> GetSyntaxRootAsync only returns null for non-source
 // documents, which TestSolutionBuilder never produces, so that branch is effectively unreachable
 // from these fixtures.
 

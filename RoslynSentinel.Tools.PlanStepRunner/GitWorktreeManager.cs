@@ -6,8 +6,8 @@ namespace RoslynSentinel.Tools.PlanStepRunner;
 /// <summary>
 /// Runs each plan step in its own git worktree, branched per <see cref="IStepBranchStrategy"/>
 /// (default: one dedicated run-owned branch shared by every step, e.g.
-/// "eval-defect-remediation-v2-auto-&lt;run-timestamp&gt;" — see <see cref="SharedBranchStrategy"/>)
-/// — never the user's own in-progress branch/worktree.
+/// "eval-defect-remediation-v2-auto-&lt;run-timestamp&gt;" -> see <see cref="SharedBranchStrategy"/>)
+/// -> never the user's own in-progress branch/worktree.
 /// A successful step commits onto its branch and the worktree is removed; a failed/halted step
 /// leaves its worktree in place under &lt;runDir&gt;\&lt;step-name&gt;\Worktree so the run is
 /// inspectable and independently re-runnable via --start-step/--end-step (or --clean, to discard
@@ -25,7 +25,7 @@ public sealed class GitWorktreeManager(string sourceRepo, IStepBranchStrategy br
         if (RunGit(sourceRepo, "rev-parse", "--verify", "--quiet", branch).ExitCode != 0)
         {
             var baseRef = branchStrategy.BaseRefFor(step);
-            Console.WriteLine($"Branch '{branch}' does not exist — creating it off '{baseRef}' in {sourceRepo}.");
+            Console.WriteLine($"Branch '{branch}' does not exist - creating it off '{baseRef}' in {sourceRepo}.");
             RunGitOrThrow(sourceRepo, "branch", branch, baseRef);
         }
     }
@@ -83,8 +83,8 @@ public sealed class GitWorktreeManager(string sourceRepo, IStepBranchStrategy br
     }
 
     /// <summary>
-    /// Every path the model touched in <paramref name="worktreePath"/> — modified, deleted, and
-    /// untracked alike — as forward-slashed repo-relative paths.
+    /// Every path the model touched in <paramref name="worktreePath"/> -> modified, deleted, and
+    /// untracked alike -> as forward-slashed repo-relative paths.
     /// </summary>
     /// <remarks>
     /// Called <em>before</em> <see cref="CommitWorktree"/>'s `git add -A`, so a read-only step's
@@ -102,12 +102,12 @@ public sealed class GitWorktreeManager(string sourceRepo, IStepBranchStrategy br
     {
         RunGitOrThrow(worktreePath, "add", "-A");
 
-        // Nothing to commit is not an error (a step whose model run made no on-disk changes) —
+        // Nothing to commit is not an error (a step whose model run made no on-disk changes) ->
         // just advance the branch pointer as-is by doing nothing further here.
         var status = RunGit(worktreePath, "status", "--porcelain");
         if (string.IsNullOrWhiteSpace(status.StdOut))
         {
-            Console.WriteLine($"No changes to commit for {message} — worktree tip already matches branch tip.");
+            Console.WriteLine($"No changes to commit for {message} - worktree tip already matches branch tip.");
             return;
         }
 
@@ -116,7 +116,7 @@ public sealed class GitWorktreeManager(string sourceRepo, IStepBranchStrategy br
 
     /// <summary>
     /// Pulls the path out of each `git status --porcelain` line. Each line is "XY &lt;path&gt;",
-    /// where a rename/copy renders as "old -&gt; new" — the new path is the one that matters for
+    /// where a rename/copy renders as "old -&gt; new" -> the new path is the one that matters for
     /// "what did this step touch", so that's what's returned. Quoted paths (git quotes anything
     /// with spaces or non-ASCII under the default core.quotepath) are unwrapped.
     /// </summary>
@@ -155,7 +155,7 @@ public sealed class GitWorktreeManager(string sourceRepo, IStepBranchStrategy br
 
     /// <summary>
     /// Removes a step's worktree after its work is already committed. Returns the git error text on
-    /// failure instead of throwing — Windows' ~260-char path limit can make `git worktree remove`
+    /// failure instead of throwing -> Windows' ~260-char path limit can make `git worktree remove`
     /// fail deleting deeply-nested build output (e.g. "Filename too long") even though the commit
     /// itself succeeded, and that's not worth aborting the whole run over (see --clean, which already
     /// force-removes leftover worktrees on a later retry).

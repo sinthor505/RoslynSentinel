@@ -158,9 +158,9 @@ public class BuildEngine
         // Process.WaitForExitAsync alongside BeginOutputReadLine/BeginErrorReadLine can hang
         // indefinitely even after the child has exited: confirmed live via attached debugger that a
         // "dotnet build" child had fully exited (no such process remained) while WaitForExitAsync was
-        // still stuck awaiting pipe EOF — a grandchild (e.g. an MSBuild worker node) can inherit and
+        // still stuck awaiting pipe EOF -> a grandchild (e.g. an MSBuild worker node) can inherit and
         // hold the redirected stdout/stderr handles open. Reading the streams directly with
-        // ReadToEndAsync — instead of the event-based BeginOutputReadLine/BeginErrorReadLine — and
+        // ReadToEndAsync -> instead of the event-based BeginOutputReadLine/BeginErrorReadLine -> and
         // bounding the whole thing with a timeout that kills the process tree closes both the hang
         // and its blast radius.
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -213,7 +213,7 @@ public class BuildEngine
         if (stderrText.Contains("MSB3027") || stdoutText.Contains("MSB3027") ||
             stderrText.Contains("MSB3021") || stdoutText.Contains("MSB3021"))
         {
-            detail = "Build failed to copy the output file — it is likely locked by a running process (e.g. this MCP server or an IDE holding the binary). Close the process holding the file and retry.";
+            detail = "Build failed to copy the output file - it is likely locked by a running process (e.g. this MCP server or an IDE holding the binary). Close the process holding the file and retry.";
         }
 
         const int TailLines = 40;
@@ -228,7 +228,7 @@ public class BuildEngine
             ExitCode: process.ExitCode,
             ErrorCount: errors.Count,
             WarningCount: warnings.Count,
-            // Capped by maxDetails, same as RunQuickBuildAsync — the raw per-diagnostic lists
+            // Capped by maxDetails, same as RunQuickBuildAsync -> the raw per-diagnostic lists
             // previously shipped uncapped regardless of the caller's maxDetails value (a confirmed
             // 2,160-error / ~880KB response, since Build's own maxDetails parameter was never
             // forwarded to this method at all). ErrorSummary/WarningSummary below remain the

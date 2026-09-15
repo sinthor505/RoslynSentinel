@@ -5,20 +5,20 @@ using RoslynSentinel.Tests.Fakes;
 namespace RoslynSentinel.Tests;
 
 /// <summary>
-/// Battery #3 — Tests targeting the four tools rated 4-star in Battery #2:
-///   a) ExtractConstantSafe       — strong disk-based tests for int/decimal/bool/char literals,
+/// Battery #3 -> Tests targeting the four tools rated 4-star in Battery #2:
+///   a) ExtractConstantSafe       -> strong disk-based tests for int/decimal/bool/char literals,
 ///                                   multi-occurrence replacement, error cases
-///   b) ConvertStringFormatToInterpolatedSmart — 3-arg, format specifiers, escaped braces,
+///   b) ConvertStringFormatToInterpolatedSmart -> 3-arg, format specifiers, escaped braces,
 ///                                   error cases
-///   c) PreviewAddMissingUsings   — actual preview with a type in another namespace,
+///   c) PreviewAddMissingUsings   -> actual preview with a type in another namespace,
 ///                                   no-missing case, preview does not touch disk
-///   d) FormatDocumentSafe        — preview vs. apply, disk side-effects, error case
+///   d) FormatDocumentSafe        -> preview vs. apply, disk side-effects, error case
 ///
 /// Goal: all four tools reach 5-star quality with no gaps in coverage.
 /// </summary>
 
 // ══════════════════════════════════════════════════════════════════════════════
-// A. ExtractConstantSafe — additional strong tests
+// A. ExtractConstantSafe -> additional strong tests
 // ══════════════════════════════════════════════════════════════════════════════
 
 [TestFixture]
@@ -40,7 +40,7 @@ public class ExtractConstantSafeStrongTests
     // ── Numeric literal types ─────────────────────────────────────────────────
 
     [Test]
-    [Description("Extract an int literal — DetermineNumericType should return 'int'")]
+    [Description("Extract an int literal - DetermineNumericType should return 'int'")]
     public async Task ExtractConstant_IntLiteral_ExtractsToIntConst()
     {
         var tempFile = MakeTempFile();
@@ -63,7 +63,7 @@ public class ExtractConstantSafeStrongTests
                 "const int declaration must be emitted");
             Assert.That(result.UpdatedContent, Does.Contain("MaxRetries = 5"),
                 "Constant must be initialised to 5");
-            // Both usages replaced — the raw literal '5' should only appear once (in const decl)
+            // Both usages replaced -> the raw literal '5' should only appear once (in const decl)
             var rawCount = result.UpdatedContent!.Split("= 5").Length - 1;
             Assert.That(rawCount, Is.EqualTo(1),
                 "All usages of '5' should be replaced with MaxRetries");
@@ -72,7 +72,7 @@ public class ExtractConstantSafeStrongTests
     }
 
     [Test]
-    [Description("Extract a decimal literal — should produce 'const decimal'")]
+    [Description("Extract a decimal literal - should produce 'const decimal'")]
     public async Task ExtractConstant_DecimalLiteral_ExtractsToDecimalConst()
     {
         var tempFile = MakeTempFile();
@@ -99,7 +99,7 @@ public class ExtractConstantSafeStrongTests
     }
 
     [Test]
-    [Description("Extract a bool literal — should produce 'const bool'")]
+    [Description("Extract a bool literal - should produce 'const bool'")]
     public async Task ExtractConstant_BoolLiteral_ExtractsToBoolConst()
     {
         var tempFile = MakeTempFile();
@@ -125,7 +125,7 @@ public class ExtractConstantSafeStrongTests
     }
 
     [Test]
-    [Description("Extract a char literal — should produce 'const char'")]
+    [Description("Extract a char literal - should produce 'const char'")]
     public async Task ExtractConstant_CharLiteral_ExtractsToCharConst()
     {
         var tempFile = MakeTempFile();
@@ -187,7 +187,7 @@ public class ExtractConstantSafeStrongTests
     // ── Literal inside nested class ──────────────────────────────────────────
 
     [Test]
-    [Description("Literal inside a nested class — constant placed inside that nested class")]
+    [Description("Literal inside a nested class - constant placed inside that nested class")]
     public async Task ExtractConstant_LiteralInNestedClass_PlacedInContainingType()
     {
         var tempFile = MakeTempFile();
@@ -278,7 +278,7 @@ public class ExtractConstantSafeStrongTests
     // ── Regression: interpolated string literal returns clean error (not crash) ──
 
     [Test]
-    [Description("Interpolated string ($\"\") cannot be const — must fail cleanly, not throw")]
+    [Description("Interpolated string ($\"\") cannot be const - must fail cleanly, not throw")]
     public async Task ExtractConstant_InterpolatedString_FailsCleanly()
     {
         var tempFile = MakeTempFile();
@@ -294,7 +294,7 @@ public class ExtractConstantSafeStrongTests
             var result = await _engine.ExtractConstantSafeAsync(
                 tempFile, "$\"user:", "UserCacheKey");
 
-            // Interpolated strings are NOT literals — the engine should either:
+            // Interpolated strings are NOT literals -> the engine should either:
             // (a) fail gracefully because the $ prefix makes it an interpolated expression, not a literal
             // (b) succeed if it finds an adjacent string piece
             // Either way: no throw, no null result, always has an error message when Success=false
@@ -327,7 +327,7 @@ public class ExtractConstantSafeStrongTests
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// B. ConvertStringFormatToInterpolatedSmart — additional tests
+// B. ConvertStringFormatToInterpolatedSmart -> additional tests
 // ══════════════════════════════════════════════════════════════════════════════
 
 [TestFixture]
@@ -511,7 +511,7 @@ public class ConvertStringFormatSmartTests
     // ── Regression: named const + literal (covered in RegressionTests) ─────────
 
     [Test]
-    [Description("Regression guard: named const format string — the core differentiator from standard tool")]
+    [Description("Regression guard: named const format string - the core differentiator from standard tool")]
     public async Task ConvertStringFormat_NamedConst_ResolvesAndConverts_Regression()
     {
         SetSource("""
@@ -530,7 +530,7 @@ public class ConvertStringFormatSmartTests
             "Test.cs", "string.Format(EntryFmt");
 
         Assert.That(result.Success, Is.True,
-            "Named const — this is the core bug fix; must succeed");
+            "Named const - this is the core bug fix; must succeed");
         Assert.That(result.UpdatedContent, Does.Contain("action"),
             "First arg must appear in output");
         Assert.That(result.UpdatedContent, Does.Contain("user"),
@@ -541,7 +541,7 @@ public class ConvertStringFormatSmartTests
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// C. PreviewAddMissingUsings — actual preview tests (with loaded solution)
+// C. PreviewAddMissingUsings -> actual preview tests (with loaded solution)
 // ══════════════════════════════════════════════════════════════════════════════
 
 [TestFixture]
@@ -607,7 +607,7 @@ public class PreviewAddMissingUsingsLoadedTests
     }
 
     [Test]
-    [Description("Preview does NOT write to disk — the file is never touched")]
+    [Description("Preview does NOT write to disk - the file is never touched")]
     public async Task PreviewAddMissing_Preview_DoesNotWriteToDisk()
     {
         // Write a file to disk with no usings so we can verify it's unchanged after preview
@@ -699,12 +699,12 @@ public class PreviewAddMissingUsingsLoadedTests
         var result = await _engine.PreviewAddMissingUsingsAsync("Consumer.cs");
 
         Assert.That(result.UsingsToAdd, Does.Contain("MyApp.Alpha"),
-            "AlphaService lives in MyApp.Alpha — must be suggested");
+            "AlphaService lives in MyApp.Alpha - must be suggested");
     }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// D. FormatDocumentSafe — disk-based tests (preview vs. apply, error paths)
+// D. FormatDocumentSafe -> disk-based tests (preview vs. apply, error paths)
 // ══════════════════════════════════════════════════════════════════════════════
 
 [TestFixture]
@@ -741,7 +741,7 @@ public class FormatDocumentSafeTests
             Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
             Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty,
                 "Formatted content must be returned");
-            // Roslyn formatter adds proper indentation — body should be indented
+            // Roslyn formatter adds proper indentation -> body should be indented
             Assert.That(result.UpdatedContent, Does.Contain("    "),
                 "Formatted output must contain 4-space indentation (or equivalent)");
         }
@@ -749,7 +749,7 @@ public class FormatDocumentSafeTests
     }
 
     [Test]
-    [Description("Preview mode must NOT write to disk — the file must remain identical")]
+    [Description("Preview mode must NOT write to disk - the file must remain identical")]
     public async Task FormatDocumentSafe_Preview_DoesNotModifyDisk()
     {
         var tempFile = MakeTempFile();
@@ -763,7 +763,7 @@ public class FormatDocumentSafeTests
             var diskContent = await File.ReadAllTextAsync(tempFile);
             Assert.That(diskContent, Is.EqualTo(ugly),
                 "FormatDocumentSafe(preview=true) must NEVER modify the file on disk " +
-                "(this is the core bug fix — standard format_document has no preview mode)");
+                "(this is the core bug fix - standard format_document has no preview mode)");
         }
         finally { SafeDelete(tempFile); }
     }
@@ -849,13 +849,13 @@ public class FormatDocumentSafeTests
         var tempFile = MakeTempFile();
         try
         {
-            // Missing closing brace — still valid Roslyn parse (error recovery)
+            // Missing closing brace -> still valid Roslyn parse (error recovery)
             await File.WriteAllTextAsync(tempFile, "public class Broken { void M() { ");
 
             // Roslyn's formatter handles error-recovery trees; should not throw
             var result = await _engine.FormatDocumentSafeAsync(tempFile, preview: true);
 
-            // We don't mandate success here — just that it doesn't throw
+            // We don't mandate success here -> just that it doesn't throw
             Assert.That(result, Is.Not.Null, "Must return a result, never throw");
         }
         finally { SafeDelete(tempFile); }

@@ -1,4 +1,4 @@
-// Battery #12 — CodeStyleEngine / SyntaxUpgradeEngine / ModernizationEngine / RefactoringEngine
+// Battery #12 -> CodeStyleEngine / SyntaxUpgradeEngine / ModernizationEngine / RefactoringEngine
 // All engines in this battery require SentinelConfiguration, which defaults all features to enabled.
 
 using Microsoft.Extensions.Logging.Abstractions;

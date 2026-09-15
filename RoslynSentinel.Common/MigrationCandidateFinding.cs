@@ -28,11 +28,11 @@ public record MigrationCandidateFinding(
 {
     /// <summary>
     /// Human-readable one-liner combining the most useful fields.
-    /// Example: <c>"AsyncBridgeCandidate (score=70): Calls search/isExistedInDB — updateSettlement"</c>.
+    /// Example: <c>"AsyncBridgeCandidate (score=70): Calls search/isExistedInDB -> updateSettlement"</c>.
     /// </summary>
     public string Summary =>
         $"{Pattern} (score={Score})" +
         (string.IsNullOrWhiteSpace(Reason) ? "" : $": {Reason}") +
-        $" — {MethodName}";
+        $" - {MethodName}";
 }
-// v2 — ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)
+// v2 -> ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)

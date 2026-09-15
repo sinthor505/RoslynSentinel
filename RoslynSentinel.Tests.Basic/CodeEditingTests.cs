@@ -37,7 +37,7 @@ public class CodeEditingTests
     }
 
     // ══════════════════════════════════════════════════════════════
-    // AddMemberAsync — record and struct support
+    // AddMemberAsync -> record and struct support
     // ══════════════════════════════════════════════════════════════
 
     [Test]
@@ -107,7 +107,7 @@ public class Animal
 
         Assert.That(result.UpdatedText, Does.Contain("public int First() => 1;\r\n\r\n    public int Second")
             .Or.Contain("public int First() => 1;\n\n    public int Second"),
-            "Blank line between untouched siblings First and Second must survive unchanged — appending a " +
+            "Blank line between untouched siblings First and Second must survive unchanged - appending a " +
             "new member must not reformat the whole container.");
 
         var secondIdx = result.UpdatedText!.IndexOf("public int Second()", StringComparison.Ordinal);
@@ -116,7 +116,7 @@ public class Animal
 
         var betweenSecondAndThird = result.UpdatedText.Substring(secondIdx, thirdIdx - secondIdx);
         Assert.That(betweenSecondAndThird, Does.Contain("\n\n").Or.Contain("\r\n\r\n"),
-            "A blank line must separate the newly appended member from the preceding sibling (Second) — " +
+            "A blank line must separate the newly appended member from the preceding sibling (Second) - " +
             "this is the exact defect from docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md.");
     }
     [Test]
@@ -141,7 +141,7 @@ public enum ToolScope
     // ══════════════════════════════════════════════════════════════
     // Enum member support: AddEnumMemberAsync / RemoveEnumMemberAsync /
     // ReplaceEnumMemberAsync / IsEnumContainerAsync / TryGetEnumMemberContainerNameAsync /
-    // GetContainerMembersAsync(enum) — all delegate to the pre-existing ModifyEnumAsync.
+    // GetContainerMembersAsync(enum) -> all delegate to the pre-existing ModifyEnumAsync.
     // ══════════════════════════════════════════════════════════════
 
     private const string ToolScopeEnumSource = @"
@@ -656,12 +656,12 @@ public enum ToolScope
 
         var betweenNewAndSecond = result.UpdatedText.Substring(newIdx, secondIdx - newIdx);
         Assert.That(betweenNewAndSecond, Does.Contain("\n\n").Or.Contain("\r\n\r\n"),
-            "A blank line must separate the newly inserted member from the following sibling (Second) — " +
+            "A blank line must separate the newly inserted member from the following sibling (Second) - " +
             "this is the exact defect from docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md.");
 
         Assert.That(result.UpdatedText, Does.Contain("public int Second() => 2;\r\n\r\n    public int Third")
             .Or.Contain("public int Second() => 2;\n\n    public int Third"),
-            "Blank line between untouched siblings Second and Third must survive unchanged — a whole-container " +
+            "Blank line between untouched siblings Second and Third must survive unchanged - a whole-container " +
             "reformat would collapse or alter it, matching the 2026-09-07 unrelated-method-respacing symptom.");
     }
     // ══════════════════════════════════════════════════════════════
@@ -883,7 +883,7 @@ public class Bar
     }
 
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
-    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
+    // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task RemoveAttribute_MatchesSuffixVariant()
     {
@@ -1027,7 +1027,7 @@ public class Base
         Assert.That(result.UpdatedText, Does.Contain("private int Add"), "Method should now be private.");
         Assert.That(result.UpdatedText, Does.Contain("public int Subtract(int a, int b) => a - b;\r\n\r\n\r\n    public int Multiply")
             .Or.Contain("public int Subtract(int a, int b) => a - b;\n\n\n    public int Multiply"),
-            "Blank lines between untouched members below the edit must survive unchanged — a whole-file reformat would collapse them.");
+            "Blank lines between untouched members below the edit must survive unchanged - a whole-file reformat would collapse them.");
     }
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
@@ -1169,7 +1169,7 @@ public class Calc
         Assert.That(result.UpdatedText, Does.Not.Contain("ToBeRemoved"));
 
         Assert.That(result.UpdatedText, Does.Contain("public string UnrelatedMethodBefore(int    x , int y)"),
-            "RemoveMember must not reformat an unrelated sibling's interior spacing — this is the exact " +
+            "RemoveMember must not reformat an unrelated sibling's interior spacing - this is the exact " +
             "'(int    x , int y)' -> '(int x, int y)' respacing symptom from the 2026-09-07 memory " +
             "(project_member_replace_drops_leading_blank_line_and_verify_gap.md, run 5).");
 
@@ -1180,7 +1180,7 @@ public class Calc
         var between = result.UpdatedText.Substring(beforeIdx, afterIdx - beforeIdx);
         Assert.That(between, Does.Contain("\n\n").Or.Contain("\r\n\r\n"),
             "A blank line must still separate UnrelatedMethodBefore from UnrelatedMethodAfter after the " +
-            "removal — the untouched sibling on the far side of the removed member must not be respaced.");
+            "removal - the untouched sibling on the far side of the removed member must not be respaced.");
     }
     [Test]
     public async Task AddModifier_PreservesLeadingDocComment()
@@ -1466,8 +1466,8 @@ public class Order
         // target from the previous member, and landed "/// <summary>" at column 0 instead of the
         // member's own indentation. Root cause: the synthetic doc comment (parsed from a string built
         // at column 0) was inserted into rebuiltTrivia without ever prepending baseIndent to it, and
-        // WithLeadingTrivia(newTrivia) replaced the target's entire original leading trivia — including
-        // the blank-line EndOfLine trivia — with only docTrivia + kept comments + one trailing baseIndent.
+        // WithLeadingTrivia(newTrivia) replaced the target's entire original leading trivia -> including
+        // the blank-line EndOfLine trivia -> with only docTrivia + kept comments + one trailing baseIndent.
         SetSource(@"
 public class Widget
 {
@@ -1518,7 +1518,7 @@ public class Widget
     public async Task AddSummaryComment_TargetIsEnum_Succeeds()
     {
         // GetMemberName had no switch case for EnumDeclarationSyntax, so ResolveMemberByNameOrSnippet
-        // silently dropped every enum candidate regardless of name — a live agent's
+        // silently dropped every enum candidate regardless of name -> a live agent's
         // AddSummaryCommentAsync("OrderStatus", ...) against a real, unambiguous top-level enum
         // failed "target not found" purely because of this gap, not any real ambiguity or missing file.
         SetSource(@"
@@ -1545,7 +1545,7 @@ public enum OrderStatus
     {
         // EnumMemberDeclarationSyntax does not derive from MemberDeclarationSyntax, so it was
         // invisible to ResolveMemberByNameOrSnippet's DescendantNodes().OfType<MemberDeclarationSyntax>()
-        // scan regardless of GetMemberName — a live agent's AddSummaryCommentAsync("Pending", ...)
+        // scan regardless of GetMemberName -> a live agent's AddSummaryCommentAsync("Pending", ...)
         // against an unambiguous enum member failed "target not found" even though the enclosing
         // enum type itself resolved fine.
         SetSource(@"
@@ -1573,7 +1573,7 @@ public enum OrderStatus
         // Mirrors VS/Roslyn's native "///" auto-generate: the tag *shape* (param names taken from
         // the real signature, <returns> only for a non-void/non-Task result) is mechanical and
         // should always be right even though BulkComment's LLM-authored text only ever fills
-        // <summary> — the empty <param>/<returns> tags alone still improve IDE tooltip/IntelliSense
+        // <summary> -> the empty <param>/<returns> tags alone still improve IDE tooltip/IntelliSense
         // quality over a bare <summary>.
         SetSource(@"
 public class Calculator
@@ -1642,7 +1642,7 @@ public enum OrderStatus
         Assert.That(added.Outcome, Is.EqualTo(EditOutcome.Modified));
 
         // RefactoringEngine methods read from the workspace's current solution rather than each
-        // other's return values — in the real tool layer, SentinelRefactoringTools writes
+        // other's return values -> in the real tool layer, SentinelRefactoringTools writes
         // UpdatedText back into the workspace between calls, so mirror that here.
         SetSource(added.UpdatedText!, "OrderStatus.cs");
 

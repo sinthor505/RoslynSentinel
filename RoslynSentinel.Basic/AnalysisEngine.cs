@@ -477,14 +477,14 @@ public class AnalysisEngine
             };
         }
 
-        // Gather fields with their types (private instance fields only — skip const, static, backing fields)
+        // Gather fields with their types (private instance fields only -> skip const, static, backing fields)
         var fieldsWithTypes = classNode.Members.OfType<FieldDeclarationSyntax>()
             .Where(f => !f.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword) || m.IsKind(SyntaxKind.StaticKeyword)))
             .SelectMany(f => f.Declaration.Variables.Select(v =>
                 (Name: v.Identifier.Text, Type: f.Declaration.Type.ToString())))
             .ToList();
 
-        // Prefer auto-properties when available — they represent the class's semantic identity
+        // Prefer auto-properties when available -> they represent the class's semantic identity
         var propertyFields = classNode.Members.OfType<PropertyDeclarationSyntax>()
             .Where(p => !p.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) &&
                         p.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) == true)
@@ -551,7 +551,7 @@ public class AnalysisEngine
             .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(body))
             .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
 
-        // Build GetHashCode: HashCode.Combine(f1, f2, ...) — handles up to 8 args natively
+        // Build GetHashCode: HashCode.Combine(f1, f2, ...) -> handles up to 8 args natively
         ExpressionSyntax hashBody;
         if (fieldNames.Count <= 8)
         {
@@ -709,7 +709,7 @@ public class AnalysisEngine
                             $"- Class '{classNode.Identifier.Text}' subscribes to '{sub.Left}' but {reason}.");
                     }
 
-                    // Extra: lambda handler captures 'this' or an outer variable — the publisher
+                    // Extra: lambda handler captures 'this' or an outer variable -> the publisher
                     // holds a reference to the subscriber even without IDisposable.
                     bool handlerIsLambda = sub.Right is LambdaExpressionSyntax or AnonymousMethodExpressionSyntax;
                     if (!handlerIsLambda)
@@ -728,7 +728,7 @@ public class AnalysisEngine
                         results.Add(
                             $"{target.Document.FilePath ?? target.Document.Name}:{lineSpan2.StartLinePosition.Line + 1} " +
                             $"- Class '{classNode.Identifier.Text}' subscribes to '{sub.Left}' with a lambda that captures " +
-                            $"'this' — the publisher will keep this instance alive until unsubscribed.");
+                            $"'this' - the publisher will keep this instance alive until unsubscribed.");
                     }
                 }
             }
@@ -907,7 +907,7 @@ public class AnalysisEngine
                 }
 
                 // Check if ANY other member of the class contains a release call.
-                // Covers methods, constructors, properties, and finalizers — catches helper-method patterns.
+                // Covers methods, constructors, properties, and finalizers -> catches helper-method patterns.
                 bool classHasReleaseElsewhere = containingType?.Members
                     .Where(m => !ReferenceEquals(m, method))
                     .Any(m => m.ToString().Contains(".Release(")) == true;
@@ -935,14 +935,14 @@ public class AnalysisEngine
 
                 if (classHasReleaseElsewhere)
                 {
-                    // Pool pattern — semaphore lifetime spans method boundaries intentionally.
+                    // Pool pattern -> semaphore lifetime spans method boundaries intentionally.
                     // Report as advisory so callers know to verify the release path is always reachable.
                     results.Add($"Advisory (pool pattern): '{method.Identifier.Text}' in {target.Document.Name} acquires a semaphore slot; Release() is in another method of the same class. Verify the release path is always reachable (e.g., via try/finally or a paired return method).");
                 }
                 else
                 {
-                    // Genuine leak — WaitAsync is called but no Release() exists anywhere in the class.
-                    results.Add($"Semaphore leak in '{method.Identifier.Text}' in {target.Document.Name}: WaitAsync() is called but no Release() was found in this class — pool slots will be permanently lost on exceptions.");
+                    // Genuine leak -> WaitAsync is called but no Release() exists anywhere in the class.
+                    results.Add($"Semaphore leak in '{method.Identifier.Text}' in {target.Document.Name}: WaitAsync() is called but no Release() was found in this class - pool slots will be permanently lost on exceptions.");
                 }
             }
         }
@@ -967,11 +967,11 @@ public class AnalysisEngine
                     var line = loop.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     results.Add(
                         $"{target.Document.FilePath ?? target.Document.Name}:{line} " +
-                        $"- Potential infinite loop (while(true)) in '{method?.Identifier.Text ?? "<unknown>"}' — no break/return/throw found.");
+                        $"- Potential infinite loop (while(true)) in '{method?.Identifier.Text ?? "<unknown>"}' - no break/return/throw found.");
                 }
             }
 
-            // for (;;) { ... } — ForStatement with no condition
+            // for (;;) { ... } -> ForStatement with no condition
             foreach (var loop in target.Root.DescendantNodes().OfType<ForStatementSyntax>()
                 .Where(f => f.Condition == null))
             {
@@ -981,7 +981,7 @@ public class AnalysisEngine
                     var line = loop.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     results.Add(
                         $"{target.Document.FilePath ?? target.Document.Name}:{line} " +
-                        $"- Potential infinite loop (for(;;)) in '{method?.Identifier.Text ?? "<unknown>"}' — no break/return/throw found.");
+                        $"- Potential infinite loop (for(;;)) in '{method?.Identifier.Text ?? "<unknown>"}' - no break/return/throw found.");
                 }
             }
         }
@@ -1069,7 +1069,7 @@ public class AnalysisEngine
             }
 
             // Pre-collect variables that are awaited anywhere in the document.
-            // var t = DoAsync(); ... await t; — t should not be flagged at the assignment site.
+            // var t = DoAsync(); ... await t; -> t should not be flagged at the assignment site.
             var awaitedLocalVars = new HashSet<string>();
             foreach (var awaitExpr in target.Root.DescendantNodes().OfType<AwaitExpressionSyntax>())
             {
@@ -1109,7 +1109,7 @@ public class AnalysisEngine
                 {
                     continue;
                 }
-                // await expr! — null-forgiving wraps the invocation; parent is PostfixUnary, grandparent is Await
+                // await expr! -> null-forgiving wraps the invocation; parent is PostfixUnary, grandparent is Await
                 if (invocation.Parent is PostfixUnaryExpressionSyntax pue &&
                     pue.IsKind(SyntaxKind.SuppressNullableWarningExpression) &&
                     pue.Parent is AwaitExpressionSyntax)
@@ -1128,7 +1128,7 @@ public class AnalysisEngine
                 // Skip: the invocation IS the return expression (expression-bodied or return statement).
                 // e.g.  public Task<T> FooAsync() => Task.FromResult(x);
                 //        return Task.FromResult(x);
-                // These are not fire-and-forget — the Task is propagated to the caller.
+                // These are not fire-and-forget -> the Task is propagated to the caller.
                 if (invocation.Parent is ArrowExpressionClauseSyntax)
                 {
                     continue;
@@ -1175,7 +1175,7 @@ public class AnalysisEngine
                     continue;
                 }
 
-                // Skip: Task / ValueTask factory methods — synchronous, no actual async work
+                // Skip: Task / ValueTask factory methods -> synchronous, no actual async work
                 // e.g. Task.FromResult(x), Task.FromException(ex), Task.FromCanceled(cancellationToken)
                 if (invocation.Expression is MemberAccessExpressionSyntax factoryMa &&
                     (factoryMa.Expression.ToString() is "Task" or "ValueTask") &&
@@ -1184,7 +1184,7 @@ public class AnalysisEngine
                     continue;
                 }
 
-                // Skip: await using — the await keyword is on the using declaration, not the invocation directly
+                // Skip: await using -> the await keyword is on the using declaration, not the invocation directly
                 // e.g.  await using var conn = OpenConnectionAsync(cancellationToken);
                 var ancestorLocalDecl = invocation.Ancestors().OfType<LocalDeclarationStatementSyntax>().FirstOrDefault();
                 if (ancestorLocalDecl?.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword) == true)
@@ -1193,8 +1193,8 @@ public class AnalysisEngine
                 }
 
                 // Skip: the invocation is the receiver in a method chain consumed by the chain itself
-                // e.g. MethodAsync().ContinueWith(...)  — the returned Task feeds the chain
-                // Also skip .GetAwaiter().GetResult() chains — these are intentional blocking
+                // e.g. MethodAsync().ContinueWith(...)  -> the returned Task feeds the chain
+                // Also skip .GetAwaiter().GetResult() chains -> these are intentional blocking
                 // sync-over-async wrappers (bridge pattern). find_blocking_calls_in covers them.
                 if (invocation.Parent is MemberAccessExpressionSyntax chainedMa &&
                     chainedMa.Parent is InvocationExpressionSyntax chainedCall &&
@@ -1268,7 +1268,7 @@ public class AnalysisEngine
     }
 
     // A catch block with a comment inside (e.g., /* best-effort */, // intentional) is
-    // considered justified — the developer has explicitly acknowledged the swallow.
+    // considered justified -> the developer has explicitly acknowledged the swallow.
     private static bool HasJustifyingComment(BlockSyntax block) =>
         block.DescendantTrivia().Any(t =>
             t.IsKind(SyntaxKind.SingleLineCommentTrivia) ||
@@ -1296,7 +1296,7 @@ public class AnalysisEngine
         foreach (var target in targets)
         {
             // Test teardown patterns (e.g. catch (IOException){} on Directory.Delete) are
-            // intentional best-effort cleanup — no value flagging them in test infrastructure.
+            // intentional best-effort cleanup -> no value flagging them in test infrastructure.
             if (IsTestFile(target.Document.FilePath))
             {
                 continue;
@@ -1614,7 +1614,7 @@ public class AnalysisEngine
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
 
-        // Build map: simpleName → set of constructor-parameter simple names
+        // Build map: simpleName -> set of constructor-parameter simple names
         var deps = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
         foreach (var target in targets)
@@ -1703,7 +1703,7 @@ public class AnalysisEngine
                 }
 
                 // Check if the finalizer guards with a disposed flag (correct IDisposable pattern).
-                // Use identifier-level checks only — "disposed" as a bare word also appears in
+                // Use identifier-level checks only -> "disposed" as a bare word also appears in
                 // comments like "/* no disposed guard */" and would produce false negatives.
                 var finalizerText = finalizer.ToString();
                 bool hasDisposedGuard = finalizerText.Contains("_disposed") ||
@@ -1732,7 +1732,7 @@ public class AnalysisEngine
 
     /// <summary>
     /// Detects static fields that hold unbounded collections (Dictionary, List, etc.) with
-    /// no size cap, Clear(), or expiry — a memory exhaustion DoS vector when populated from
+    /// no size cap, Clear(), or expiry -> a memory exhaustion DoS vector when populated from
     /// user-controlled data. Flags when: static field is a known collection type AND the class
     /// adds to it (.Add / .TryAdd) but never calls .Clear() or checks Count against a limit.
     /// </summary>
@@ -1802,7 +1802,7 @@ public class AnalysisEngine
     }
 
     /// <summary>
-    /// Detects directly recursive methods — methods that call themselves on every code path
+    /// Detects directly recursive methods -> methods that call themselves on every code path
     /// without a depth parameter or an early-return base case that does NOT itself recurse.
     /// Unbounded recursion causes StackOverflowException on deep or adversarial input.
     /// </summary>
@@ -1828,7 +1828,7 @@ public class AnalysisEngine
 
                 IMethodSymbol? containingSymbol = model?.GetDeclaredSymbol(method, cancellationToken) as IMethodSymbol;
 
-                // Find self-recursive calls — use semantic model to skip overload chaining
+                // Find self-recursive calls -> use semantic model to skip overload chaining
                 SyntaxNode body = (SyntaxNode?)method.Body ?? method.ExpressionBody!;
                 var selfCalls = body.DescendantNodes().OfType<InvocationExpressionSyntax>()
                     .Where(inv =>
@@ -1930,7 +1930,7 @@ public class AnalysisEngine
             foreach (var f in findings)
             {
                 results.Add(
-                    $"{f.FilePath}:{f.LineNumber} [{f.Kind}] — {f.Description}. Fix: {f.Recommendation}");
+                    $"{f.FilePath}:{f.LineNumber} [{f.Kind}] - {f.Description}. Fix: {f.Recommendation}");
             }
         }
 
@@ -1952,7 +1952,7 @@ public class AnalysisEngine
 
         if (path.Contains(current))
         {
-            // Found a cycle — normalise the cycle key so A→B→A and B→A→B produce one report
+            // Found a cycle -> normalise the cycle key so A→B→A and B→A->B produce one report
             var cycleStart = path.IndexOf(current);
             var cycle = path.Skip(cycleStart).Concat(new[] { current }).ToList();
             var key = string.Join("→", cycle.OrderBy(x => x));
@@ -1980,7 +1980,7 @@ public class AnalysisEngine
 
     /// <summary>
     /// Detects generic type parameters that are used in the method body in ways that imply
-    /// a missing constraint — for example, null-comparing T without "where T : class",
+    /// a missing constraint -> for example, null-comparing T without "where T : class",
     /// or calling new T() without "where T : new()".  These are not compile errors but are
     /// design gaps that can surprise callers and lead to confusing runtime exceptions.
     /// </summary>
@@ -2040,7 +2040,7 @@ public class AnalysisEngine
 
                     if (paramNamesOfT.Count == 0)
                     {
-                        continue; // no parameters typed as T — skip null checks
+                        continue; // no parameters typed as T - skip null checks
                     }
 
                     // Check: a parameter of type T is compared to null, but no 'class' constraint exists.
@@ -2069,7 +2069,7 @@ public class AnalysisEngine
                         results.Add(
                             $"{target.Document.FilePath ?? target.Document.Name}:{loc.Line + 1} " +
                             $"- Method '{method.Identifier.Text}': type parameter '{tName}' is compared to null " +
-                            $"but is missing 'where {tName} : class' constraint — value types will never be null.");
+                            $"but is missing 'where {tName} : class' constraint - value types will never be null.");
                     }
                 }
             }
@@ -2103,7 +2103,7 @@ public class AnalysisEngine
                 p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
         }
 
-        // Build a cross-project lookup: fully-qualified-type-name → list of file paths
+        // Build a cross-project lookup: fully-qualified-type-name -> list of file paths
         // Used to detect duplicate type names across mismatched paths (Error severity).
         var typeToFiles = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -2174,7 +2174,7 @@ public class AnalysisEngine
                 }
                 else
                 {
-                    // Multiple namespace declarations — report as a warning, use first for path check.
+                    // Multiple namespace declarations -> report as a warning, use first for path check.
                     declaredNs = nsDecls[0] switch
                     {
                         NamespaceDeclarationSyntax ns => ns.Name.ToString().Trim(),
@@ -2203,7 +2203,7 @@ public class AnalysisEngine
                     ? DeriveExpectedNamespace(filePath, projectRoot, rootNamespace)
                     : rootNamespace;
 
-                // Track type → file for duplicate detection.
+                // Track type -> file for duplicate detection.
                 foreach (var typeName in typeNames)
                 {
                     var fqn = $"{declaredNs ?? ""}.{typeName}";
@@ -2226,7 +2226,7 @@ public class AnalysisEngine
 
             if (declaredNs is null)
             {
-                // No namespace declaration — global namespace is unexpected when a root namespace exists.
+                // No namespace declaration -> global namespace is unexpected when a root namespace exists.
                 if (!string.IsNullOrEmpty(expectedNs))
                 {
                     warnings.Add(new NamespacePathMismatch
@@ -2245,7 +2245,7 @@ public class AnalysisEngine
 
             if (string.Equals(declaredNs, expectedNs, StringComparison.OrdinalIgnoreCase))
             {
-                continue;  // Clean — matches.
+                continue;  // Clean - matches.
             }
 
             // Mismatch detected. Check for duplicate type names at the conflicting path.
@@ -2399,7 +2399,7 @@ public class AnalysisEngine
     /// </summary>
     private static string GetRootNamespace(Project project)
     {
-        // Try to read <RootNamespace> from the .csproj XML directly — works for both
+        // Try to read <RootNamespace> from the .csproj XML directly -> works for both
         // SDK-style and legacy project formats, and doesn't require a compilation.
         if (project.FilePath is not null)
         {
@@ -2415,7 +2415,7 @@ public class AnalysisEngine
                     return ns.Trim();
                 }
             }
-            catch { /* best effort — fall through to project name */ }
+            catch { /* best effort - fall through to project name */ }
         }
 
         return project.Name;

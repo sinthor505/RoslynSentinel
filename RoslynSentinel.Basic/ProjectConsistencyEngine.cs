@@ -80,7 +80,7 @@ public class ProjectConsistencyEngine
             }
             catch (Exception)
             {
-                // Malformed .csproj — skip
+                // Malformed .csproj -> skip
             }
         }
 
@@ -187,7 +187,7 @@ public class ProjectConsistencyEngine
                     framework = doc.Descendants("TargetFramework").FirstOrDefault()?.Value?.Trim()
                              ?? doc.Descendants("TargetFrameworks").FirstOrDefault()?.Value?.Trim();
                 }
-                catch (Exception) { /* malformed — leave null */ }
+                catch (Exception) { /* malformed - leave null */ }
             }
 
             results.Add(new ProjectFrameworkSummary(project.Name, framework ?? "unknown", project.FilePath));

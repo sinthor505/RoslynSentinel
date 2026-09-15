@@ -334,7 +334,7 @@ public class DependencyInjectionEngine
         "ITopicProducer", "IRequestClient",                // MassTransit 2
         "IEventHubProducerClient",                         // Azure Event Hubs
         "IQueueClient", "ITopicClient",                    // Azure Service Bus legacy
-        // Messaging / outbox infrastructure — registered via extension methods, not Add<T>
+        // Messaging / outbox infrastructure -> registered via extension methods, not Add<T>
         "IMessageBus", "IOutboxWriter", "IOutboxReader",
         "IEventPublisher", "IDomainEventPublisher",
     };
@@ -346,7 +346,7 @@ public class DependencyInjectionEngine
     };
 
     // Collection interfaces that ASP.NET Core's DI container resolves natively by
-    // aggregating all registered implementations — the user never registers these directly.
+    // aggregating all registered implementations -> the user never registers these directly.
     private static readonly HashSet<string> _nativeCollectionInterfaces = new(StringComparer.OrdinalIgnoreCase)
     {
         "IEnumerable", "IReadOnlyList", "IReadOnlyCollection",
@@ -358,7 +358,7 @@ public class DependencyInjectionEngine
         var simpleName = typeName.Split('<')[0].Split('.').Last();
 
         // Collection wrappers (IEnumerable<IFoo>, IReadOnlyList<T>, etc.) are always
-        // resolved natively — flagging them as "missing" is always a false positive.
+        // resolved natively -> flagging them as "missing" is always a false positive.
         if (_nativeCollectionInterfaces.Contains(simpleName))
         {
             return false;
@@ -503,7 +503,7 @@ public class DependencyInjectionEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        // Build a map: simple type name → lifetime (checking both service and impl type)
+        // Build a map: simple type name -> lifetime (checking both service and impl type)
         var registrations = await FindDiRegistrationsAsync(projectName: projectName, cancellationToken: cancellationToken);
 
         // Also parse lambda factory registrations (task 13)

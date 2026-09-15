@@ -35,7 +35,7 @@ public enum GitStageScope
     /// <summary>Stage modifications/deletions of already-tracked files only (<c>git add -u</c>). New untracked files are NOT staged.</summary>
     tracked,
 
-    /// <summary>Stage every change in the working tree, including untracked files (<c>git add -A</c>). Ignores <c>files</c> — passing both is an error.</summary>
+    /// <summary>Stage every change in the working tree, including untracked files (<c>git add -A</c>). Ignores <c>files</c> -> passing both is an error.</summary>
     all,
 
     /// <summary>Stage exactly the paths named in <c>files</c>, untracked ones included (<c>git add -- &lt;paths&gt;</c>). Requires <c>files</c>.</summary>
@@ -69,12 +69,12 @@ public enum ProposedChangeAction
 {
     apply, validate,
 
-    // confirmationCode was removed from the live ApplyDiff tool — it reliably caused model
+    // confirmationCode was removed from the live ApplyDiff tool -> it reliably caused model
     // hallucination (agents fabricated a confirmationCode and called action=confirmationCode
     // even when the real problem was unrelated; see docs/current/overnight-run-2026-08-30.md
     // section 5b) and was never used correctly in practice. Commented out (not deleted) so the
     // value can't appear in ApplyDiff's JSON schema at all, while keeping the old mechanism
-    // available to reintroduce later — see the commented-out ApplyDiffWithConfirmationCode in
+    // available to reintroduce later -> see the commented-out ApplyDiffWithConfirmationCode in
     // SentinelWorkspaceTools.cs, which depends on this value and is commented out alongside it.
     // confirmationCode
 
@@ -169,7 +169,7 @@ public enum AttributeModifyAction
 }
 
 // Deliberately excludes accessibility keywords (public/private/internal/protected/...) so it is
-// impossible to pass one to ModifyModifier — use ChangeAccessibility/AccessibilityLevel instead.
+// impossible to pass one to ModifyModifier -> use ChangeAccessibility/AccessibilityLevel instead.
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum NonAccessibilityModifier
 {

@@ -33,7 +33,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
         => throw new NotImplementedException();
     public BatchResultSummary? CheckBreaker() => throw new NotImplementedException();
-    // Always under limit — tests exercising real rate-limit behavior use their own IRateLimiter (see RunTestTests).
+    // Always under limit -> tests exercising real rate-limit behavior use their own IRateLimiter (see RunTestTests).
     public string? CheckRateLimit(string toolName, int defaultLimit) => null;
     public void ClearExternalFileChanges() => throw new NotImplementedException();
     public void ClearSessionHalt() => throw new NotImplementedException();
@@ -103,7 +103,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public (Dictionary<FilePathWrapper, string> Changes, int RetryCount, bool ValidateOnApply)? TakePendingChangeset(string confirmationCode) => throw new NotImplementedException();
     // Mirrors PersistentWorkspaceManager.SetFilePath(): checks CurrentSolution directly (not
     // GetSolutionRoot()) to distinguish "no solution loaded" from "a solution is loaded but has no
-    // on-disk root" (e.g. an in-memory SetTestSolution solution) — the latter must fall through to
+    // on-disk root" (e.g. an in-memory SetTestSolution solution) -> the latter must fall through to
     // normal path resolution, not be misreported as "no solution loaded."
     public FilePathWrapper SetFilePath(string? filepath)
     {

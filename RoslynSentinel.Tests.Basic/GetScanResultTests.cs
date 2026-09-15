@@ -12,12 +12,12 @@ namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
 /// Tests for SentinelWorkspaceTools.GetLargeResult:
-///   T1  – No resultId and no filePath → error "Result file not found"
-///   T2  – Unknown resultId (file doesn't exist) → error
-///   T3  – Valid resultId, MigrationCandidateFindingList file → findings returned, TotalRecords set
-///   T4  – Valid resultId, ApiSurfaceEntryList file → entries returned
-///   T5  – FilePathWrapper inside largeresults directory → findings returned
-///   T6  – FilePathWrapper outside largeresults directory → error
+///   T1  – No resultId and no filePath -> error "Result file not found"
+///   T2  – Unknown resultId (file doesn't exist) -> error
+///   T3  – Valid resultId, MigrationCandidateFindingList file -> findings returned, TotalRecords set
+///   T4  – Valid resultId, ApiSurfaceEntryList file -> entries returned
+///   T5  – FilePathWrapper inside largeresults directory -> findings returned
+///   T6  – FilePathWrapper outside largeresults directory -> error
 /// </summary>
 [TestFixture]
 public class GetLargeResultTests
@@ -112,7 +112,7 @@ public class GetLargeResultTests
             .ToList();
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T1 – No resultId and no filePath → error
+    // T1 – No resultId and no filePath -> error
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -127,7 +127,7 @@ public class GetLargeResultTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T2 – Unknown resultId → error
+    // T2 – Unknown resultId -> error
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -140,7 +140,7 @@ public class GetLargeResultTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T3 – Valid resultId, MigrationCandidateFindingList → findings returned, TotalRecords set
+    // T3 – Valid resultId, MigrationCandidateFindingList -> findings returned, TotalRecords set
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -156,7 +156,7 @@ public class GetLargeResultTests
         Assert.That(result.TotalRecords, Is.EqualTo(5), "TotalRecords must match the item count in the file.");
         Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total → HasMorePages should be true.");
 
-        // GetLargeResult's Data is the flat, paged List<MigrationCandidateFinding> — the same
+        // GetLargeResult's Data is the flat, paged List<MigrationCandidateFinding> -> the same
         // shape every other ToolResult<object>-returning tool uses; it used to be double-wrapped
         // in an inner ToolResult<object>, which was a bug (fixed alongside these assertions).
         var returnedFindings = result.Data as List<MigrationCandidateFinding>;
@@ -166,7 +166,7 @@ public class GetLargeResultTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T4 – Valid resultId, ApiSurfaceEntryList → entries returned
+    // T4 – Valid resultId, ApiSurfaceEntryList -> entries returned
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -188,7 +188,7 @@ public class GetLargeResultTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T7 – Valid resultId, SolutionSymbolEntryList (ListAll's offload type) → entries returned,
+    // T7 – Valid resultId, SolutionSymbolEntryList (ListAll's offload type) -> entries returned,
     //      and a non-zero offset actually skips records rather than always returning page 1.
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -206,7 +206,7 @@ public class GetLargeResultTests
         Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total → HasMorePages should be true.");
 
         var returnedEntries = result.Data as List<SolutionSymbolEntry>;
-        Assert.That(returnedEntries, Is.Not.Null, "Data should be List<SolutionSymbolEntry> — ListAll's offloaded results must be pageable, not fall through to \"Unknown scan result type\".");
+        Assert.That(returnedEntries, Is.Not.Null, "Data should be List<SolutionSymbolEntry> - ListAll's offloaded results must be pageable, not fall through to \"Unknown scan result type\".");
         Assert.That(returnedEntries!.Select(e => e.Name), Is.EqualTo(new[] { "Method_0", "Method_1", "Method_2" }));
     }
 
@@ -242,7 +242,7 @@ public class GetLargeResultTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T6 – FilePathWrapper outside scans directory → error
+    // T6 – FilePathWrapper outside scans directory -> error
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -318,7 +318,7 @@ public class GetLargeResultTests
             reassembled.Append(text);
 
             // A single page must never itself be big enough to re-trigger the offload filter on
-            // its way back out — otherwise GetLargeResult(Raw) could re-offload under a new
+            // its way back out -> otherwise GetLargeResult(Raw) could re-offload under a new
             // resultId in an unbounded fetch/still-too-big/re-offload loop.
             Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.OffloadThresholdBytes));
 

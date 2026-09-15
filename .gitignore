@@ -42,3 +42,4 @@ PlanStepRunner/
 /docs/research/
 .claude/
 docs/known-build-warnings.Solution.txt
+*.tmp

@@ -59,7 +59,7 @@ public class LedgerSnapshot
     {
         get; set;
     }
-    /// <summary>Number of methods touched more than once — the primary re-entry diagnostic.</summary>
+    /// <summary>Number of methods touched more than once -> the primary re-entry diagnostic.</summary>
     public int RepeatedMethods
     {
         get; set;
@@ -79,14 +79,14 @@ internal class LedgerData
 /// <summary>
 /// Singleton service that records every method mutated by a migration phase and persists the
 /// ledger to <c>.roslynsentinel/migration-ledger.json</c> under the solution root after each
-/// Asyncify run. Survives server restarts — data accumulates across multiple sessions.
+/// Asyncify run. Survives server restarts -> data accumulates across multiple sessions.
 ///
 /// Phase tokens used by AsyncBatchEngine:
-///   "Bridge"               — method converted to async-bridge pattern
-///   "BridgeStaleSkip"      — bridge skipped because async overload already has CT
-///   "Uplift"               — caller uplifted to async overload
-///   "UpliftIdempotentSkip" — uplift skipped because file already contains the transformation
-///   "CtPropagated"         — CancellationToken forwarded through a file
+///   "Bridge"               -> method converted to async-bridge pattern
+///   "BridgeStaleSkip"      -> bridge skipped because async overload already has CT
+///   "Uplift"               -> caller uplifted to async overload
+///   "UpliftIdempotentSkip" -> uplift skipped because file already contains the transformation
+///   "CtPropagated"         -> CancellationToken forwarded through a file
 /// </summary>
 public class MigrationLedger
 {
@@ -112,7 +112,7 @@ public class MigrationLedger
 
     /// <summary>
     /// Loads the ledger from disk for <paramref name="solutionRoot"/> if not already loaded.
-    /// Safe to call on every <c>AsyncifyCore</c> entry — no-ops when root is unchanged.
+    /// Safe to call on every <c>AsyncifyCore</c> entry -> no-ops when root is unchanged.
     /// </summary>
     public async Task EnsureLoadedAsync(string? solutionRoot)
     {
@@ -128,7 +128,7 @@ public class MigrationLedger
 
         if (_solutionRoot != null && _solutionRoot != solutionRoot)
         {
-            // Different solution loaded — start fresh rather than mixing two codebases.
+            // Different solution loaded -> start fresh rather than mixing two codebases.
             lock (_lock)
             {
                 _entries.Clear();
@@ -147,7 +147,7 @@ public class MigrationLedger
     /// <see cref="BeginRun"/> call. Thread-safe.
     /// </summary>
     /// <param name="reason">
-    /// Optional failure detail — typically the first compiler diagnostic message when the phase is
+    /// Optional failure detail -> typically the first compiler diagnostic message when the phase is
     /// a failure phase (e.g. BridgeValidationFail, UpliftValidationFail). Null for success phases.
     /// </param>
     public void Record(string filePath, string methodName, string phase, string? reason = null)
@@ -175,7 +175,7 @@ public class MigrationLedger
 
     /// <summary>
     /// Writes the ledger to disk. Called after each Asyncify run so progress is never lost
-    /// to a server restart. Never throws — failures are silently swallowed.
+    /// to a server restart. Never throws -> failures are silently swallowed.
     /// </summary>
     public async Task SaveAsync()
     {
@@ -198,7 +198,7 @@ public class MigrationLedger
                 JsonSerializer.Serialize(data, JsonOpts),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }
-        catch { /* non-fatal — log callers handle observability */ }
+        catch { /* non-fatal - log callers handle observability */ }
         finally { _saveLock.Release(); }
     }
 
@@ -272,7 +272,7 @@ public class MigrationLedger
                 }
             }
         }
-        catch { /* corrupt file — start fresh */ }
+        catch { /* corrupt file - start fresh */ }
     }
 
     private string LedgerFilePath() =>

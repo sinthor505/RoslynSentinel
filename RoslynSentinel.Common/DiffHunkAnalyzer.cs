@@ -5,7 +5,7 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Diagnoses a raw unified-diff string's hunks against known failure patterns from
-/// model-generated diffs — wrong header line counts, phantom trailing-blank anchor lines, missing
+/// model-generated diffs -> wrong header line counts, phantom trailing-blank anchor lines, missing
 /// "-" lines, and stale/mismatched line numbers. <see cref="DiffEngine.ApplyDiff"/> runs this on
 /// every call (see its <c>diagnosticLog</c> parameter) so a failure comes with a ready-made report
 /// instead of requiring the kind of manual line-by-line archaeology that root-caused the original
@@ -43,7 +43,7 @@ public static class DiffHunkAnalyzer
             }
             if (EndsWithUnmarkedBlankLine)
             {
-                sb.Append(" [ends with an unmarked blank line — ambiguous between a real blank " +
+                sb.Append(" [ends with an unmarked blank line - ambiguous between a real blank " +
                           "context line and a diff-text trailing-newline artifact]");
             }
             return sb.ToString();
@@ -74,7 +74,7 @@ public static class DiffHunkAnalyzer
     /// Parses <paramref name="unifiedDiff"/> hunk-by-hunk and reports, for each one, the header's
     /// declared old/new counts alongside what the body actually contains. A mismatch here is what
     /// caused the original bug this class was built to catch: a model-generated hunk header
-    /// claiming 7 old-side lines when the body only had 3 does not, on its own, break anything —
+    /// claiming 7 old-side lines when the body only had 3 does not, on its own, break anything ->
     /// but it is exactly the kind of drift that makes any future count-trusting change to
     /// <see cref="DiffEngine"/> unsafe, so it is worth surfacing even when the apply itself
     /// succeeds via the structural (blank-line/next-header) scan.
@@ -112,7 +112,7 @@ public static class DiffHunkAnalyzer
 
                 if (line.Length == 0 && isLastBeforeBoundary)
                 {
-                    // Structural terminator (diff-end or next-hunk separator), not hunk content —
+                    // Structural terminator (diff-end or next-hunk separator), not hunk content ->
                     // matches DiffEngine.ReadHunkBody's own boundary logic exactly.
                     break;
                 }

@@ -1,7 +1,7 @@
 // The blob-integrity invariant: an apply that writes files and returns a changeId must have a
 // blob that UndoLastApply can resolve.
 //
-// Run 20260910-013550-398 (A3) violated it across five tools at once — WrapRange, ExtractMembers,
+// Run 20260910-013550-398 (A3) violated it across five tools at once -> WrapRange, ExtractMembers,
 // SyncInterface, Inline and MoveType all passed slashed operation names ("WrapRange/region"),
 // Path.Combine resolved the blob into a non-existent subdirectory, the write threw, and
 // ValidateAndApplyHelper discarded the result. Each tool reported status:"applied" with a
@@ -10,7 +10,7 @@
 // Driven across all five tools rather than the one the original report named, because this is the
 // third recorded UndoLastApply gap (cf. project_synctypeandfilename_undolastapply_blocker) and the
 // class of bug is what needs covering. Tools that decline a change (target not found, etc.) return
-// no changeId and are simply not exercised by that case — the assertion is conditional on a
+// no changeId and are simply not exercised by that case -> the assertion is conditional on a
 // changeId being issued, which is exactly the invariant's own precondition.
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -74,7 +74,7 @@ public class BlobIntegrityInvariantTests
     }
 
     /// <summary>
-    /// The invariant itself. Asserts nothing about whether the operation succeeded — only that if
+    /// The invariant itself. Asserts nothing about whether the operation succeeded -> only that if
     /// it issued a changeId, that changeId is redeemable. A tool that declines the change passes
     /// trivially, which is correct: the invariant is about issued handles.
     /// </summary>
@@ -91,7 +91,7 @@ public class BlobIntegrityInvariantTests
             Is.Not.Null,
             $"{toolName} returned changeId '{changeId}' but UndoLastApply cannot resolve a blob for it. " +
             "Either the blob write failed silently, or the operation name contains a character that " +
-            "can't appear in a filename (the A3 defect — see OperationBlobWriterTests).");
+            "can't appear in a filename (the A3 defect - see OperationBlobWriterTests).");
     }
 
     [Test]

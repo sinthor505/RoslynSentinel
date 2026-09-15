@@ -8,7 +8,7 @@ namespace RoslynSentinel.Common;
 /// <see cref="InvalidOperationException"/>, so a catch block matching on type alone can't tell
 /// "solution not loaded" apart from "hunk anchor not found" apart from "member name ambiguous."
 /// Each subclass below corresponds to a category actually observed across the engine layer (see
-/// docs/TODO.md's error-wrapper entries) — this is not a speculative taxonomy.
+/// docs/TODO.md's error-wrapper entries) -> this is not a speculative taxonomy.
 /// </summary>
 public abstract class ToolException : Exception
 {
@@ -38,7 +38,7 @@ public sealed class SolutionNotLoadedException : ToolException
 
 /// <summary>
 /// A named file, symbol, type, member, project, or context snippet does not exist where the
-/// caller said it would. Distinct from a confirmed "zero results" answer — the lookup never ran
+/// caller said it would. Distinct from a confirmed "zero results" answer -> the lookup never ran
 /// because its input didn't resolve. Maps to <see cref="ToolErrorCode.NotFound"/>.
 /// </summary>
 public sealed class ToolNotFoundException : ToolException
@@ -52,7 +52,7 @@ public sealed class ToolNotFoundException : ToolException
 
 /// <summary>
 /// A caller-supplied name or snippet matches more than one candidate and needs a disambiguating
-/// argument (contextSnippet, lineBefore/lineAfter, containingType, etc.) — distinct from
+/// argument (contextSnippet, lineBefore/lineAfter, containingType, etc.) -> distinct from
 /// <see cref="ToolNotFoundException"/> because the content DOES exist, just not uniquely. Maps to
 /// <see cref="ToolErrorCode.Ambiguous"/>.
 /// </summary>
@@ -66,7 +66,7 @@ public sealed class ToolAmbiguousMatchException : ToolException
 }
 
 /// <summary>
-/// A unified diff's hunk could not be applied — its declared position and content didn't match
+/// A unified diff's hunk could not be applied -> its declared position and content didn't match
 /// the file even after <see cref="DiffEngine"/>'s re-anchoring search. The remediation (regenerate
 /// the diff against current content) is specific enough to warrant its own code rather than
 /// folding into <see cref="ToolErrorCode.NotFound"/>. Maps to <see cref="ToolErrorCode.DiffApplyFailed"/>.
@@ -82,7 +82,7 @@ public sealed class DiffApplyException : ToolException
 
 /// <summary>
 /// A search ran to completion but matched zero results. Distinct from
-/// <see cref="ToolNotFoundException"/>: the search itself is valid and did run — it just found
+/// <see cref="ToolNotFoundException"/>: the search itself is valid and did run -> it just found
 /// nothing, and the caller (an agent guessing at names/patterns) should treat that as a signal to
 /// browse instead of retrying near-identical guesses. Maps to <see cref="ToolErrorCode.NoMatches"/>.
 /// </summary>
@@ -92,7 +92,7 @@ public sealed class NoSearchMatchesException : ToolException
 
     /// <summary>
     /// True when this exact call's RecordSearchOutcome invocation is what flipped the
-    /// orientation breaker open — lets the catch site attach a one-time Finding to the
+    /// orientation breaker open -> lets the catch site attach a one-time Finding to the
     /// triggering call's own result instead of only a pre-check on the next call.
     /// </summary>
     public bool JustTrippedBreaker { get; init; }
@@ -103,7 +103,7 @@ public sealed class NoSearchMatchesException : ToolException
 }
 
 /// <summary>
-/// The requested operation has no real implementation behind it — the engine method is a
+/// The requested operation has no real implementation behind it -> the engine method is a
 /// deliberate stub (e.g. always returns an empty change set) rather than something that ran and
 /// found nothing. Distinct from <see cref="ToolNotFoundException"/>: the caller's names may be
 /// perfectly valid, but the tool cannot act on them at all yet. Maps to
@@ -121,7 +121,7 @@ public sealed class ToolNotImplementedException : ToolException
 /// <summary>
 /// A confirmed external content-drift hit tripped the session-wide halt latch (see
 /// docs/current/ideas/external-drift-hard-blocker.md). Once thrown, every subsequent mutating
-/// call on this <see cref="PersistentWorkspaceManager"/> instance throws this same exception —
+/// call on this <see cref="PersistentWorkspaceManager"/> instance throws this same exception ->
 /// deliberately terminal and non-actionable by the in-task model, since a genuine drift hit under
 /// the single-session/no-concurrent-actors assumption means the session's whole view of disk may
 /// be untrustworthy, not just the one file that tripped it. Maps to

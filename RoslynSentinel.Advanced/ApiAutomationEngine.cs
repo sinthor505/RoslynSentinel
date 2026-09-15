@@ -77,31 +77,31 @@ public class ApiAutomationEngine
 
     private static string ExtractClientReturnType(string rawReturn)
     {
-        // Task<ActionResult<X>> → Task<X>  (handles nested generics like Dictionary<string,int>)
+        // Task<ActionResult<X>> -> Task<X>  (handles nested generics like Dictionary<string,int>)
         if (rawReturn.StartsWith("Task<ActionResult<") && rawReturn.EndsWith(">>"))
         {
             return string.Concat("Task<", rawReturn.AsSpan(18, rawReturn.Length - 20), ">");
         }
 
-        // Task<ActionResult> / Task<IActionResult> → Task
+        // Task<ActionResult> / Task<IActionResult> -> Task
         if (rawReturn is "Task<ActionResult>" or "Task<IActionResult>")
         {
             return "Task";
         }
 
-        // ActionResult<X> → Task<X>
+        // ActionResult<X> -> Task<X>
         if (rawReturn.StartsWith("ActionResult<") && rawReturn.EndsWith(">"))
         {
             return string.Concat("Task<", rawReturn.AsSpan(13, rawReturn.Length - 14), ">");
         }
 
-        // ActionResult / IActionResult / void → Task
+        // ActionResult / IActionResult / void -> Task
         if (rawReturn is "ActionResult" or "IActionResult" or "void")
         {
             return "Task";
         }
 
-        // Already Task<X> or Task → keep as-is
+        // Already Task<X> or Task -> keep as-is
         if (rawReturn.StartsWith("Task"))
         {
             return rawReturn;

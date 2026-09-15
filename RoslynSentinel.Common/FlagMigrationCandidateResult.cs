@@ -10,7 +10,7 @@ namespace RoslynSentinel.Common;
 /// <param name="Line">1-based source line of the method declaration after rewriting.</param>
 /// <param name="WasAlreadyFlagged">
 /// <c>true</c> if the method already carried a <c>[MigrationCandidate]</c> attribute with this exact
-/// pattern — the attribute was replaced (idempotent update); <c>false</c> for a fresh flag.
+/// pattern -> the attribute was replaced (idempotent update); <c>false</c> for a fresh flag.
 /// </param>
 /// <param name="PreviousPattern">
 /// The pattern string from a pre-existing <c>[MigrationCandidate]</c> attribute, or <c>null</c>
@@ -31,4 +31,4 @@ public record FlagMigrationCandidateResult(
     bool AttributeClassInjected,
     string Summary
 );
-// v2 — ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)
+// v2 -> ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)

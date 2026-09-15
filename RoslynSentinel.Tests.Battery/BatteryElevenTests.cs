@@ -1,4 +1,4 @@
-// Battery #11 — ImmutabilityEngine / ThreadSafetyEngine / AsyncSafetyEngine / DeadCodeEngine
+// Battery #11 -> ImmutabilityEngine / ThreadSafetyEngine / AsyncSafetyEngine / DeadCodeEngine
 // Adds dedicated XxxEngineTests fixture classes for 4 more engine classes.
 // All tests run in-memory via AdhocWorkspace (no MSBuild/project-file loading).
 

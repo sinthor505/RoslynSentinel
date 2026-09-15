@@ -20,17 +20,17 @@ public static class LlmOptions
     /// <c>project_lmstudio_streaming_json_truncation_investigation</c> and the two observed cases
     /// of LM Studio going silent mid-stream without closing the connection or logging an error).
     /// This measures idle time between bytes, not total call duration, so a model that is genuinely
-    /// still emitting slowly (e.g. a long reasoning burst) is not penalized — only a stream that
+    /// still emitting slowly (e.g. a long reasoning burst) is not penalized -> only a stream that
     /// stops producing anything at all trips it. Deliberately separate from
-    /// <see cref="TimeoutSeconds"/>/<c>HttpClient.Timeout</c>, which — once headers are read for a
-    /// streamed response — no longer bounds the time spent reading the body.
+    /// <see cref="TimeoutSeconds"/>/<c>HttpClient.Timeout</c>, which -> once headers are read for a
+    /// streamed response -> no longer bounds the time spent reading the body.
     /// </summary>
     public static int StreamIdleTimeoutSeconds { get; private set; } = 120;
 
     /// <summary>
     /// When true, model-eval test hosts that support it narrow the MCP <c>tools/list</c> schema
     /// down to a small hand-picked allow-list instead of exposing every tool the active modes
-    /// would otherwise register — see <c>project_granite42_8b_tool_schema_size_isolated</c>: a
+    /// would otherwise register -> see <c>project_granite42_8b_tool_schema_size_isolated</c>: a
     /// 48-tool schema alone (independent of context growth, task ambiguity, or temperature) costs
     /// ~15x the latency of a 2-tool schema on the same trivial prompt for granite-4.2-8b. Opt-in
     /// per run via <c>--llm-minimal-tools</c>/<c>ROSLYNSENTINEL_LLM_MINIMAL_TOOLS</c> rather than
@@ -41,7 +41,7 @@ public static class LlmOptions
 
     /// <summary>
     /// Sampling temperature sent on every <c>/v1/responses</c> request, or null to omit the field
-    /// entirely (LM Studio then applies its own default — confirmed 1.0 via the response's own
+    /// entirely (LM Studio then applies its own default -> confirmed 1.0 via the response's own
     /// echoed value, not necessarily whatever's shown in LM Studio's UI sampling panel for the
     /// loaded model). Confirmed real (not a silent no-op) 2026-09-05: LM Studio echoes back
     /// whatever <c>temperature</c> value is sent in the same response body field, and a same-prompt
@@ -60,18 +60,18 @@ public static class LlmOptions
     /// this harness's actual endpoint, <c>/v1/responses</c>, showed the field is silently absent
     /// from the echoed response body, and a same-prompt/same-temperature A/B test at very different
     /// <c>repeat_penalty</c> values (see <see cref="RepeatPenalty"/>) produced byte-identical
-    /// generations — strong evidence <c>/v1/responses</c> drops these three fields rather than
+    /// generations -> strong evidence <c>/v1/responses</c> drops these three fields rather than
     /// forwarding them to the sampler. NOT wired into <see cref="LmStudioAgentClient"/>'s request
     /// body for that reason (a param that looks configured but silently does nothing is worse than
-    /// no param at all) — exposed here only so the modeleval script can print a reminder to set it
+    /// no param at all) -> exposed here only so the modeleval script can print a reminder to set it
     /// by hand in LM Studio's sampling panel instead.
     /// </summary>
     public static double? TopK { get; private set; }
 
-    /// <summary>UI-ONLY — see <see cref="TopK"/>'s remarks; this is the param the 2026-09-05 A/B test (1.0 vs 1.8, byte-identical output) was run against directly.</summary>
+    /// <summary>UI-ONLY -> see <see cref="TopK"/>'s remarks; this is the param the 2026-09-05 A/B test (1.0 vs 1.8, byte-identical output) was run against directly.</summary>
     public static double? RepeatPenalty { get; private set; }
 
-    /// <summary>UI-ONLY — see <see cref="TopK"/>'s remarks. Also not in LM Studio's own documented parameter list for either endpoint, unlike top_k/repeat_penalty.</summary>
+    /// <summary>UI-ONLY -> see <see cref="TopK"/>'s remarks. Also not in LM Studio's own documented parameter list for either endpoint, unlike top_k/repeat_penalty.</summary>
     public static double? MinP { get; private set; }
 
     /// <summary>Parses --llm-* args (falling back to ROSLYNSENTINEL_LLM_* env vars) into the static properties above. Call once at process startup, before DI is built.</summary>

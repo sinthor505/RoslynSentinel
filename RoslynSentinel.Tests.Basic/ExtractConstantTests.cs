@@ -131,7 +131,7 @@ public class Calculator
     // Test 4: Boolean Literal Extraction  
     // ══════════════════════════════════════════════════════════════════════════
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
-    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
+    // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractConstant_BooleanLiteral_ExtractsCorrectly()
     {
@@ -159,7 +159,7 @@ public class Settings
     // Test 5: Negative Numbers in Expressions
     // ══════════════════════════════════════════════════════════════════════════
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
-    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
+    // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractConstant_LargeIntegerLiteral_ExtractsCorrectly()
     {
@@ -186,7 +186,7 @@ public class Range
     // Test 6: Zero Literal Extraction
     // ══════════════════════════════════════════════════════════════════════════
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
-    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
+    // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractConstant_ZeroLiteral_ExtractsCorrectly()
     {
@@ -213,7 +213,7 @@ public class Counter
     // Test 7: Empty String Extraction
     // ══════════════════════════════════════════════════════════════════════════
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
-    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
+    // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractConstant_EmptyString_ExtractsCorrectly()
     {
@@ -240,7 +240,7 @@ public class StringHelper
     // Test 8: Multiple Occurrences in Same Method
     // ══════════════════════════════════════════════════════════════════════════
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
-    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
+    // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractConstant_MultipleOccurrences_ReplacesAll()
     {
@@ -264,7 +264,7 @@ public class PageSize
     // Test 9: Unique Constant Name Usage
     // ══════════════════════════════════════════════════════════════════════════
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
-    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
+    // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractConstant_UniqueName_UsesProvidedName()
     {
@@ -317,7 +317,7 @@ public class Money
     // Test 11: Public Visibility Modifier
     // ══════════════════════════════════════════════════════════════════════════
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
-    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
+    // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractConstant_PublicVisibility_AppliesCorrectly()
     {

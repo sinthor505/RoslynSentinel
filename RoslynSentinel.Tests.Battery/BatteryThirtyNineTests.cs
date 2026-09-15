@@ -5,17 +5,17 @@ namespace RoslynSentinel.Tests.Battery;
 
 /// <summary>
 /// Tests for stack overflow risk detection (Battery 39):
-///  1. Clean method with no recursion — zero findings.
-///  2. Unconditional self-call — Definite DirectRecursion.
-///  3. Conditional self-call — Suspicious ConditionalRecursion.
-///  4. Expression-body property reads itself — Definite PropertySelfRead.
-///  5. Block getter reads itself — Definite PropertySelfRead.
-///  6. Setter assigns to self — Definite PropertySelfWrite.
-///  7. Override calls own name (not base) — Definite OverrideCallsSelf.
-///  8. Conditional recursion with unchanged argument — Suspicious ArgumentNotDecreasing.
-///  9. Mutual recursion A→B→A — Suspicious MutualRecursion.
-/// 10. In-file inheritance cycle: override→base→virtual→same override — InheritanceCycle.
-/// 11. Valid recursion (decreasing arg, guarded) — no Definite findings.
+///  1. Clean method with no recursion -> zero findings.
+///  2. Unconditional self-call -> Definite DirectRecursion.
+///  3. Conditional self-call -> Suspicious ConditionalRecursion.
+///  4. Expression-body property reads itself -> Definite PropertySelfRead.
+///  5. Block getter reads itself -> Definite PropertySelfRead.
+///  6. Setter assigns to self -> Definite PropertySelfWrite.
+///  7. Override calls own name (not base) -> Definite OverrideCallsSelf.
+///  8. Conditional recursion with unchanged argument -> Suspicious ArgumentNotDecreasing.
+///  9. Mutual recursion A→B->A -> Suspicious MutualRecursion.
+/// 10. In-file inheritance cycle: override→base→virtual->same override -> InheritanceCycle.
+/// 11. Valid recursion (decreasing arg, guarded) -> no Definite findings.
 /// 12. Inheritance property cycle: override accesses base property that calls overridden method.
 /// </summary>
 [TestFixture]
@@ -47,7 +47,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 1 — Clean method → no findings
+    // 1 -> Clean method -> no findings
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -68,7 +68,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 2 — Unconditional self-call → Definite DirectRecursion
+    // 2 -> Unconditional self-call -> Definite DirectRecursion
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -89,7 +89,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 3 — Conditional self-call → Suspicious ConditionalRecursion
+    // 3 -> Conditional self-call -> Suspicious ConditionalRecursion
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -113,7 +113,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 4 — Expression-body property reads itself → Definite PropertySelfRead
+    // 4 -> Expression-body property reads itself -> Definite PropertySelfRead
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -133,7 +133,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 5 — Block getter reads itself → Definite PropertySelfRead
+    // 5 -> Block getter reads itself -> Definite PropertySelfRead
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -157,7 +157,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 6 — Setter assigns to self → Definite PropertySelfWrite
+    // 6 -> Setter assigns to self -> Definite PropertySelfWrite
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -180,7 +180,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 7 — Override calls own name instead of base → Definite OverrideCallsSelf
+    // 7 -> Override calls own name instead of base -> Definite OverrideCallsSelf
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -205,7 +205,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 8 — Guarded recursion but argument unchanged → Suspicious ArgumentNotDecreasing
+    // 8 -> Guarded recursion but argument unchanged -> Suspicious ArgumentNotDecreasing
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -230,7 +230,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 9 — Mutual recursion A→B→A → Suspicious MutualRecursion
+    // 9 -> Mutual recursion A→B→A -> Suspicious MutualRecursion
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -251,11 +251,11 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 10 — In-file inheritance dispatch cycle → InheritanceCycle
+    // 10 -> In-file inheritance dispatch cycle -> InheritanceCycle
     //
     // ConcreteProcessor.OnExecute calls Execute() (base method).
     // Processor.Execute calls OnExecute() (abstract/virtual).
-    // Virtual dispatch routes back to ConcreteProcessor.OnExecute → infinite loop.
+    // Virtual dispatch routes back to ConcreteProcessor.OnExecute -> infinite loop.
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -283,7 +283,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 11 — Valid recursion: guarded + decreasing argument → no Definite findings
+    // 11 -> Valid recursion: guarded + decreasing argument -> no Definite findings
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -309,11 +309,11 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 12 — Property chain inheritance cycle
+    // 12 -> Property chain inheritance cycle
     //
     // MyWidget.GetLabel() override returns the 'Label' property (PascalCase access).
     // Widget.Label getter calls GetLabel() (virtual method).
-    // Virtual dispatch → MyWidget.GetLabel → reads Label → Widget.Label → GetLabel → cycle.
+    // Virtual dispatch → MyWidget.GetLabel → reads Label → Widget.Label → GetLabel -> cycle.
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]

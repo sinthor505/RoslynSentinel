@@ -252,7 +252,7 @@ public class ComprehensiveToolTests
     public async Task GetFileOutline_EnumOnlyFile_ListsTheEnumAndItsMembers()
     {
         // A file containing only an enum used to produce an outline with nothing but the
-        // "namespace" entry — enum/struct/record/constructor/field were never covered by the
+        // "namespace" entry -> enum/struct/record/constructor/field were never covered by the
         // switch, silently implying the file had no commentable/editable members at all. This
         // was the root cause behind a live agent skipping OrderStatus.cs entirely while adding
         // summary comments to every other file in a solution.

@@ -188,7 +188,7 @@ public class DocPathGuardTests
         var ext = Path.GetExtension(filename).ToLowerInvariant();
         bool expectOk = DocPathGuard.AllowedDocExtensions.Contains(ext);
         Assert.That(ok, Is.EqualTo(expectOk),
-            $"Extension '{ext}' — expected ok={expectOk} but got ok={ok}");
+            $"Extension '{ext}' - expected ok={expectOk} but got ok={ok}");
     }
 
     // ── Cleanup ───────────────────────────────────────────────────────────────

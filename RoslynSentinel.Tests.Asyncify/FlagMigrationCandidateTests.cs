@@ -142,7 +142,7 @@ namespace Avaal.Service
         Assert.That(result.AttributeClassInjected, Is.False,
             "AttributeClassInjected should be false when the class was already present.");
         Assert.That(changes.Count, Is.EqualTo(1),
-            "Should only update the target file — no new attribute class injection needed.");
+            "Should only update the target file - no new attribute class injection needed.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

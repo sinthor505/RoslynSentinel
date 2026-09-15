@@ -14,7 +14,7 @@ public static class ContextHelper
 {
     /// <summary>
     /// A snippet match's location AND real length in the source text. The length is not always
-    /// <c>contextSnippet.Length</c> — the whitespace-collapsing fallback paths in
+    /// <c>contextSnippet.Length</c> -> the whitespace-collapsing fallback paths in
     /// <see cref="FindAllSnippetMatchesWithLength"/> match content that is equivalent once
     /// whitespace is normalized, but whose raw span in the source can be a different length
     /// (different indentation, extra spaces, etc.). Any caller that removes/replaces a span of the
@@ -40,7 +40,7 @@ public static class ContextHelper
     /// CRLF-normalized, then whitespace-collapsed single-line, then whitespace-collapsed
     /// multi-line window), but returns each match's real length in the source alongside its
     /// start offset. Use this instead of <see cref="FindAllSnippetMatches"/> whenever the caller
-    /// needs to remove/replace the matched span of text — see <see cref="SnippetMatch"/>.
+    /// needs to remove/replace the matched span of text -> see <see cref="SnippetMatch"/>.
     /// </summary>
     public static List<SnippetMatch> FindAllSnippetMatchesWithLength(
         SourceText sourceText, string contextSnippet,
@@ -62,11 +62,11 @@ public static class ContextHelper
 
         if (allMatches.Count == 0 && contextSnippet.Contains('\n'))
         {
-            // A multi-line snippet failed the exact ordinal search — the likely cause is a
+            // A multi-line snippet failed the exact ordinal search -> the likely cause is a
             // line-ending mismatch (e.g. the caller composed the snippet with \n while the file
             // on disk is \r\n, or vice versa), not a genuine content difference. Retry treating
             // any \r\n/\r/\n in the snippet as interchangeable with whatever the source actually
-            // uses, without loosening any other whitespace — a caller building a multi-statement
+            // uses, without loosening any other whitespace -> a caller building a multi-statement
             // selection out of literal source lines should not need to know the file's line-ending
             // convention.
             var pattern = string.Join(@"\r?\n",
@@ -83,7 +83,7 @@ public static class ContextHelper
         {
             // Fallback: try matching with collapsed whitespace. This handles a single-line
             // snippet whose indentation doesn't match the source (common when an AI caller
-            // retypes a line from memory instead of copying it verbatim character-for-character —
+            // retypes a line from memory instead of copying it verbatim character-for-character ->
             // models reliably reproduce tokens but not incidental indentation).
             var snippetNorm = System.Text.RegularExpressions.Regex.Replace(contextSnippet.Trim(), @"\s+", " ");
             var lines = sourceText.Lines;
@@ -98,13 +98,13 @@ public static class ContextHelper
                     // corresponding offset in the real (pre-collapse) line text, so callers that
                     // need in-line precision (e.g. ExtractLocalVariableAsync locating an
                     // ExpressionSyntax's SpanStart) land on the actual match, not just "somewhere
-                    // in the right line" — the line-start position was fine for member/type
+                    // in the right line" -> the line-start position was fine for member/type
                     // resolution (FindNode/AncestorsAndSelf walk up to the enclosing declaration
                     // regardless of exact column) but wrong for expression-level lookups.
                     //
                     // realEnd is mapped independently of realStart (not realStart + snippetNorm.Length)
                     // because the raw line can have a different amount of whitespace than the
-                    // collapsed snippet (e.g. source "a  +  b" vs snippet "a + b") — the real span's
+                    // collapsed snippet (e.g. source "a  +  b" vs snippet "a + b") -> the real span's
                     // length is realEnd - realStart, which is NOT contextSnippet.Length. A caller that
                     // assumed contextSnippet.Length here is what corrupted BuildResult.cs via
                     // ReplaceSnippet (see project_replacesnippet_silent_splice_corruption_adjacent_lines).
@@ -118,15 +118,15 @@ public static class ContextHelper
         if (allMatches.Count == 0 && contextSnippet.Contains('\n'))
         {
             // Fallback: same whitespace-collapse tolerance as above, but for a snippet spanning
-            // multiple statements/lines. The single-line fallback can never match this shape —
+            // multiple statements/lines. The single-line fallback can never match this shape ->
             // it only ever tests one source line against the whole (newline-collapsed) snippet.
             // Instead, slide a window of N consecutive source lines (N = the snippet's own line
-            // count), collapse whitespace runs on both sides identically, and compare — this
+            // count), collapse whitespace runs on both sides identically, and compare -> this
             // preserves line-by-line structure (so it won't match reordered statements) while
             // being indifferent to indentation depth, which carries no compiler meaning in C#.
             //
             // A caller-supplied snippet very commonly ends (and sometimes starts) with a blank
-            // line — e.g. "return foo;\n}\n" from copying a whole statement plus its closing brace
+            // line -> e.g. "return foo;\n}\n" from copying a whole statement plus its closing brace
             // with a trailing newline. Split('\n') on that produces a trailing empty-string
             // element, which would otherwise inflate windowSize by one and force the window to
             // swallow one real, unrelated source line that was never meant to be part of the
@@ -155,11 +155,11 @@ public static class ContextHelper
                 if (windowNorm.Equals(snippetWindowNorm, StringComparison.OrdinalIgnoreCase))
                 {
                     // The window's real length runs to the end of its last line's own text
-                    // (excluding that line's trailing line break), not EndIncludingLineBreak —
+                    // (excluding that line's trailing line break), not EndIncludingLineBreak ->
                     // matching FindSnippetPosition's historical start-of-line-only precision
                     // while still giving an accurate removable span. Like the single-line fallback
                     // above, this length is derived from the actual source lines, NOT
-                    // contextSnippet.Length — the two diverge whenever indentation/spacing differs
+                    // contextSnippet.Length -> the two diverge whenever indentation/spacing differs
                     // between the caller's snippet and the real file content.
                     var realEnd = lines[i + windowSize - 1].End;
                     allMatches.Add(new SnippetMatch(windowStart, realEnd - windowStart));
@@ -228,7 +228,7 @@ public static class ContextHelper
         string? lineBefore = null, string? lineAfter = null)
         => FindSnippetPositionWithLength(sourceText, contextSnippet, lineBefore, lineAfter).Start;
 
-    /// <summary>String overload — delegates to SourceText for consistent line handling.</summary>
+    /// <summary>String overload -> delegates to SourceText for consistent line handling.</summary>
     public static int FindSnippetPosition(
         string fullSource, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
@@ -275,7 +275,7 @@ public static class ContextHelper
         };
     }
 
-    /// <summary>String overload — delegates to SourceText for consistent line handling.</summary>
+    /// <summary>String overload -> delegates to SourceText for consistent line handling.</summary>
     public static SnippetMatch FindSnippetPositionWithLength(
         string fullSource, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
@@ -284,12 +284,12 @@ public static class ContextHelper
     /// <summary>
     /// Strict variant of <see cref="FindAllSnippetMatchesWithLength"/> for callers that remove/replace
     /// the matched span of raw text (as opposed to merely locating a Roslyn node/token). Only the
-    /// literal-ordinal and CRLF-normalized match paths run — never the whitespace-collapsing
-    /// fallbacks — so every returned <see cref="SnippetMatch.Length"/> is guaranteed to equal
+    /// literal-ordinal and CRLF-normalized match paths run -> never the whitespace-collapsing
+    /// fallbacks -> so every returned <see cref="SnippetMatch.Length"/> is guaranteed to equal
     /// <c>contextSnippet.Length</c> (mod line-ending substitution) and the removed span is always
     /// exactly the text the caller supplied. Used by <c>ReplaceSnippet</c>, whose contract is a
     /// verbatim oldContent/newContent swap with no tolerance for the caller retyping content from
-    /// memory — unlike <see cref="FindAllSnippetMatchesWithLength"/>'s callers (diff/patch-style
+    /// memory -> unlike <see cref="FindAllSnippetMatchesWithLength"/>'s callers (diff/patch-style
     /// tools), which need the whitespace tolerance to recover from stale or approximately-quoted
     /// context.
     /// </summary>
@@ -372,7 +372,7 @@ public static class ContextHelper
     }
 
     /// <summary>
-    /// Throwing variant of <see cref="FindAllExactSnippetMatches"/> — resolves to the unique exact
+    /// Throwing variant of <see cref="FindAllExactSnippetMatches"/> -> resolves to the unique exact
     /// match, or throws <see cref="ToolNotFoundException"/>/<see cref="ToolAmbiguousMatchException"/>
     /// with the same messages as <see cref="FindSnippetPositionWithLength"/>. Unlike that method,
     /// never falls back to whitespace-collapsed matching: a snippet that isn't present verbatim
@@ -395,7 +395,7 @@ public static class ContextHelper
         {
             throw new ToolNotFoundException(
                 $"contextSnippet not found verbatim: \"{contextSnippet.Trim()}\". " +
-                "Re-read the file and copy oldContent exactly (including whitespace) from the current content — " +
+                "Re-read the file and copy oldContent exactly (including whitespace) from the current content - " +
                 "approximate/retyped text is not accepted here.");
         }
 
@@ -463,7 +463,7 @@ public static class ContextHelper
         {
             if (char.IsWhiteSpace(rawLine[rawIndex]))
             {
-                // A whole run of raw whitespace collapses to a single normalized space — consume
+                // A whole run of raw whitespace collapses to a single normalized space -> consume
                 // the entire run in one step so rawIndex lands on the next real character, not
                 // partway through the run.
                 normIndex++;
@@ -503,10 +503,10 @@ public static class ContextHelper
     /// <summary>
     /// Prepends a <c>// Added by &lt;toolName&gt;</c> leading-trivia comment to a freshly synthesized
     /// member declaration, on its own line above any trivia the member already carries (e.g. a
-    /// blank-line separator). Intended for tools that insert a brand-new member — a constructor,
-    /// method, property, or field — so the addition is easy to spot in a diff or code review
+    /// blank-line separator). Intended for tools that insert a brand-new member -> a constructor,
+    /// method, property, or field -> so the addition is easy to spot in a diff or code review
     /// without cross-referencing which MCP tool call produced it. Not for tools that edit an
-    /// existing member in place (e.g. AddSummaryComment, ChangeAccessibility) — only for genuinely
+    /// existing member in place (e.g. AddSummaryComment, ChangeAccessibility) -> only for genuinely
     /// new members.
     /// </summary>
     public static T WithAddedByComment<T>(this T member, string toolName) where T : MemberDeclarationSyntax
@@ -561,7 +561,7 @@ public static class ContextHelper
     /// </summary>
     /// <remarks>
     /// Deliberately does NOT walk up <c>AncestorsAndSelf()</c> looking for the first ancestor with a
-    /// declared symbol — for a snippet that lands on a plain reference (e.g. a field-assignment line
+    /// declared symbol -> for a snippet that lands on a plain reference (e.g. a field-assignment line
     /// like <c>_x = x;</c>, which is neither a declaration nor annotated with symbol info itself, just
     /// its child IdentifierName is), that walk climbs past the reference entirely and returns the
     /// *enclosing member's* declared symbol (e.g. the constructor), silently resolving to the wrong

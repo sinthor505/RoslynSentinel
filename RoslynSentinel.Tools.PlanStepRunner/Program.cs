@@ -9,12 +9,12 @@ namespace RoslynSentinel.Tools.PlanStepRunner;
 
 /// <summary>
 /// Drives the plan-eval-defect-remediation-v2-steps step files one at a time, each in its own
-/// fresh git worktree, against a real LM Studio model — the automated version of manually
+/// fresh git worktree, against a real LM Studio model -> the automated version of manually
 /// starting a new LM Studio chat per step with "Load the solution. Review &lt;step&gt;.md.
 /// Implement the plan."
 ///
 /// Each step: create a worktree off the running branch tip, `dotnet build` that worktree's own
-/// RoslynSentinel.Server.Advanced (never build.ps1 — see DotnetProcess's remarks on why), launch
+/// RoslynSentinel.Server.Advanced (never build.ps1 -> see DotnetProcess's remarks on why), launch
 /// it over stdio, LoadSolution, run the step's prompt to convergence via ModelAgentRunner, log a
 /// build+test snapshot, then either commit-and-advance or halt and leave the worktree for
 /// inspection.
@@ -104,7 +104,7 @@ public static class Program
 
                 if (!shouldAdvance)
                 {
-                    Console.WriteLine($"HALTING before commit — inspect the worktree at {worktreePath}");
+                    Console.WriteLine($"HALTING before commit - inspect the worktree at {worktreePath}");
                     Console.WriteLine($"  converged={outcome.Converged} blocked={outcome.LooksBlocked} buildErrors={outcome.BuildErrorCount} buildOptional={step.BuildOptional}");
                     return 1;
                 }
@@ -113,11 +113,11 @@ public static class Program
                 // read-only step's constraint used to live only in the step's prose, so when run
                 // 20260910-013550-398's model never saw that prose it performed two other steps'
                 // work and the runner was a turn-cap away from committing it under this step's
-                // name — silently corrupting every step that followed.
+                // name -> silently corrupting every step that followed.
                 if (step.ReadOnly && outcome.TouchedPaths.Count > 0)
                 {
                     Console.WriteLine(
-                        $"HALTING — read-only step {step.FileName} modified {outcome.TouchedPaths.Count} path(s): " +
+                        $"HALTING - read-only step {step.FileName} modified {outcome.TouchedPaths.Count} path(s): " +
                         string.Join(", ", outcome.TouchedPaths));
                     Console.WriteLine($"  worktree left for inspection at {worktreePath}");
                     return 1;
@@ -125,20 +125,20 @@ public static class Program
 
                 git.CommitWorktree(worktreePath, $"Plan step {step.FileName}");
 
-                // Cleanup failure after a successful commit isn't worth aborting the run over — the
+                // Cleanup failure after a successful commit isn't worth aborting the run over -> the
                 // step's work is already safely on the branch. Windows' path-length limit can make
                 // this fail on deeply-nested build output; a leftover worktree is harmless (--clean
                 // discards it on a later retry).
                 var removeError = git.TryRemoveWorktree(worktreePath);
                 if (removeError is not null)
                 {
-                    Console.WriteLine($"Warning: failed to remove worktree at {worktreePath} after commit — leaving it in place.");
+                    Console.WriteLine($"Warning: failed to remove worktree at {worktreePath} after commit - leaving it in place.");
                     Console.WriteLine($"  {removeError}");
                 }
             }
             catch (Exception)
             {
-                Console.WriteLine($"HALTING on exception — worktree left in place at {worktreePath}");
+                Console.WriteLine($"HALTING on exception - worktree left in place at {worktreePath}");
                 throw;
             }
         }
@@ -167,11 +167,11 @@ public static class Program
         var serverExe = Path.Combine(serverBinDir, "RoslynSentinel.Server.Advanced.exe");
         var solutionPath = Path.Combine(worktreePath, "RoslynSentinel.slnx");
 
-        // --transport is omitted deliberately (defaults to stdio) — PlanStepRunner is the one
+        // --transport is omitted deliberately (defaults to stdio) -> PlanStepRunner is the one
         // calling the MCP tools itself (via ModelAgentRunner), never the model's own LM Studio
         // host directly, so stdio's built-in per-worktree child-process ownership is exactly
         // what's wanted here; no port to coordinate or collide with the user's own separately
-        // running server. --solution is likewise omitted — Server.Advanced's own auto-load on
+        // running server. --solution is likewise omitted -> Server.Advanced's own auto-load on
         // --solution is fire-and-forget/unawaited (see WarmupAndAutoLoadAdvanced), so it can't
         // be trusted to have finished before the first tool call arrives. LoadSolution is called
         // explicitly below instead, which blocks until the real load completes.
@@ -211,14 +211,14 @@ public static class Program
 
         // The step text is inlined into the prompt rather than referenced by path. Handing over a
         // path made the model re-resolve it through ProjectDoc, and in run 20260910-013550-398 that
-        // lookup silently answered with a *different* step file — so the model spent the whole run
+        // lookup silently answered with a *different* step file -> so the model spent the whole run
         // implementing a plan nobody asked for. Passing the content by value removes the lookup,
         // and with it any chance of substitution, regardless of how ProjectDoc resolves names.
         // step.Body already has any frontmatter stripped, so the model sees only the step itself.
         var userPrompt =
-            "The solution is already loaded — do not call LoadSolution or ListWorkspaceSolutions, " +
+            "The solution is already loaded - do not call LoadSolution or ListWorkspaceSolutions, " +
             "go straight to reading/editing.\n" +
-            "Implement the plan step below. It is reproduced here in full — do not look for it on " +
+            "Implement the plan step below. It is reproduced here in full - do not look for it on " +
             "disk, and do not read any other plan step file.\n\n" +
             $"=== BEGIN PLAN STEP: {step.FileName} ===\n{step.Body}\n=== END PLAN STEP ===";
 
@@ -266,7 +266,7 @@ public static class Program
             buildErrorCount, testText, stepDir, touchedPaths, unmentionedPaths);
     }
 
-    /// <summary>The runner's own build output inside each worktree — never the model's doing.</summary>
+    /// <summary>The runner's own build output inside each worktree -> never the model's doing.</summary>
     private const string RunnerBuildOutputPrefix = "bin-runner/";
 
     /// <summary>
@@ -288,7 +288,7 @@ public static class Program
     /// Records a tripped repeated-failure breaker as a blocker doc in the source repo, matching the
     /// convention in docs/current/blockers/. Written by the harness rather than relied upon from
     /// the model: the working agreement is that a tool failure is a blocking finding to be written
-    /// up, and run 20260910-013550-398's model simply didn't — it kept retrying instead.
+    /// up, and run 20260910-013550-398's model simply didn't -> it kept retrying instead.
     /// Deliberately targets the source repo, not the worktree, which is removed on success and
     /// otherwise left only for manual inspection.
     /// </summary>
@@ -305,7 +305,7 @@ public static class Program
 
             var content =
                 $"""
-                # Repeated tool failure — `{failure.ToolName}` during plan step {step.FileName}
+                # Repeated tool failure - `{failure.ToolName}` during plan step {step.FileName}
 
                 **Written automatically by PlanStepRunner** when its repeated-failure breaker tripped.
 
@@ -348,9 +348,9 @@ public static class Program
         }
         catch (Exception ex)
         {
-            // The blocker doc is diagnostics, not the deliverable — failing to write it must not
+            // The blocker doc is diagnostics, not the deliverable -> failing to write it must not
             // mask the underlying breaker trip, which the caller reports through StepOutcome.
-            Console.WriteLine($"WARNING — could not write blocker doc for {step.FileName}: {ex.Message}");
+            Console.WriteLine($"WARNING - could not write blocker doc for {step.FileName}: {ex.Message}");
         }
     }
 
@@ -385,10 +385,10 @@ public static class Program
         if (outcome.UnmentionedPaths.Count > 0)
         {
             Console.WriteLine(
-                $"[{step.FileName}] WARNING — {outcome.UnmentionedPaths.Count} changed file(s) are not " +
+                $"[{step.FileName}] WARNING - {outcome.UnmentionedPaths.Count} changed file(s) are not " +
                 $"named anywhere in the step text: {string.Join(", ", outcome.UnmentionedPaths)}");
             Console.WriteLine(
-                $"[{step.FileName}]   (not a halt — a step may legitimately touch call sites it doesn't " +
+                $"[{step.FileName}]   (not a halt - a step may legitimately touch call sites it doesn't " +
                 "enumerate; review if the step looks off-scope.)");
         }
 
@@ -436,7 +436,7 @@ public static class Program
 /// post-step build/test snapshots so it reflects the model's edits alone.
 /// </param>
 /// <param name="UnmentionedPaths">
-/// Subset of <paramref name="TouchedPaths"/> whose file name never appears in the step text — a
+/// Subset of <paramref name="TouchedPaths"/> whose file name never appears in the step text -> a
 /// possible scope violation, reported as a warning only.
 /// </param>
 internal sealed record StepOutcome(

@@ -1,4 +1,4 @@
-// Battery #26 — Gotcha / Edge-Case Tests
+// Battery #26 -> Gotcha / Edge-Case Tests
 // Covers false positives, boundary conditions, and behaviors that must NOT trigger
 // detections across AntiPatternEngine, AsyncSafetyEngine, ThreadSafetyEngine,
 // SecurityAndSafetyEngine, and ImmutabilityEngine.
@@ -44,8 +44,8 @@ public class BlockingCallFalsePositiveTests
     [Test]
     public async Task DetectAntiPatterns_ContextResultAssignment_IsNotFlaggedAsBlockingCall()
     {
-        // context.Result = x  →  left-hand side of assignment; the engine has an explicit
-        // guard: if (assign.Left == ma) continue — this MUST prevent a false positive.
+        // context.Result = x  ->  left-hand side of assignment; the engine has an explicit
+        // guard: if (assign.Left == ma) continue -> this MUST prevent a false positive.
         const string source = """
             public class MyResult { }
             public class MyContext { public MyResult Result { get; set; } = new MyResult(); }
@@ -111,7 +111,7 @@ public class BlockingCallFalsePositiveTests
     public async Task DetectAntiPatterns_StringReplaceMethod_IsNotFlagged()
     {
         // The method name "Replace" != "Result" and != "Wait".
-        // Only the name filter is checked first — this must not reach the semantic phase.
+        // Only the name filter is checked first -> this must not reach the semantic phase.
         const string source = """
             public class StringOps {
                 public string Process(string input) {
@@ -210,7 +210,7 @@ public class AsyncVoidGotchaTests
     [Test]
     public async Task DetectAsyncVoid_AsyncTaskMethod_IsNotFlagged()
     {
-        // async Task is the correct pattern — must produce no reports.
+        // async Task is the correct pattern -> must produce no reports.
         const string source = """
             using System.Threading.Tasks;
             public class Good {
@@ -261,7 +261,7 @@ public class AsyncVoidGotchaTests
 
         var reports = await _engine.DetectAsyncVoidMethodsAsync("MyForm.cs");
 
-        // Event handler is still reported — but with an advisory message, NOT the crash warning.
+        // Event handler is still reported -> but with an advisory message, NOT the crash warning.
         Assert.That(reports, Has.Count.EqualTo(1),
             "Event handlers matching (object sender, *EventArgs e) should still produce a report.");
         Assert.That(reports[0].MethodName, Is.EqualTo("Button_Click"));
@@ -498,7 +498,7 @@ public class ThreadSafeLockGotchaTests
     [Test]
     public async Task ConvertLockToSemaphoreSlim_MethodWithNoLock_ReturnsOriginalCode()
     {
-        // When no lock statements are found the engine returns root.ToFullString() — the original code.
+        // When no lock statements are found the engine returns root.ToFullString() -> the original code.
         const string source = """
             public class NoLockAtAll {
                 public void Process() { var x = 1; }
@@ -580,7 +580,7 @@ public class ValueTaskMisuseGotchaTests
     [Test]
     public async Task DetectValueTaskMisuse_ValueTaskAwaitedTwice_IsFlagged()
     {
-        // Awaiting a ValueTask more than once is undefined behaviour — must be flagged.
+        // Awaiting a ValueTask more than once is undefined behaviour -> must be flagged.
         const string source = """
             using System.Threading.Tasks;
             public class DoubleAwaited {
@@ -681,7 +681,7 @@ public class ExceptionHandlingGotchaTests
     [Test]
     public async Task AnalyzeExceptions_CatchWithCommentOnly_IsSwallowedException()
     {
-        // A comment is not a SyntaxNode — block.Statements.Count == 0 even with a comment.
+        // A comment is not a SyntaxNode -> block.Statements.Count == 0 even with a comment.
         // The engine must treat this the same as an empty catch.
         const string source = """
             public class CommentSwallower {
@@ -704,7 +704,7 @@ public class ExceptionHandlingGotchaTests
     [Test]
     public async Task AnalyzeExceptions_CatchWithLogAndRethrow_IsNotSwallowedException()
     {
-        // hasLog=true AND hasRethrow=true — SwallowedException must NOT be added.
+        // hasLog=true AND hasRethrow=true -> SwallowedException must NOT be added.
         // Note: CatchAll WILL still be present because type is System.Exception.
         const string source = """
             public class ProperHandler {
@@ -730,7 +730,7 @@ public class ExceptionHandlingGotchaTests
     [Test]
     public async Task AnalyzeExceptions_FilteredCatchWithRethrow_IsNotSwallowedException()
     {
-        // when-filter + throw; → hasRethrow=true → SwallowedException must NOT be added.
+        // when-filter + throw; → hasRethrow=true -> SwallowedException must NOT be added.
         const string source = """
             public class Filtered {
                 public void DoWork() {
@@ -754,7 +754,7 @@ public class ExceptionHandlingGotchaTests
     [Test]
     public async Task AnalyzeExceptions_SpecificExceptionTypeCatch_IsNotCatchAll()
     {
-        // System.IO.IOException is a specific type — the CatchAll pattern requires
+        // System.IO.IOException is a specific type -> the CatchAll pattern requires
         // bare catch, Exception, or System.Exception.  A specific type must NOT add CatchAll.
         const string source = """
             public class SpecificCatch {
@@ -814,7 +814,7 @@ public class ImmutabilityGotchaTests
     [Test]
     public async Task MakeClassImmutable_AlreadyImmutableClass_IsIdempotent()
     {
-        // The property already uses init; — there is no set accessor to replace.
+        // The property already uses init; -> there is no set accessor to replace.
         // The engine must not add a second init or corrupt the output.
         const string source = """
             public class AlreadyImmutable { public string Name { get; init; } = ""; }
@@ -850,7 +850,7 @@ public class ImmutabilityGotchaTests
     public async Task MakeClassImmutable_UnknownClassName_ReturnsOriginalCodeNotEmpty()
     {
         // When the class name is not found the engine does: return root?.ToFullString() ?? ""
-        // That means the ENTIRE original source is returned — not null, not empty.
+        // That means the ENTIRE original source is returned -> not null, not empty.
         const string source = """
             public class RealClass { public string Name { get; set; } = ""; }
             """;
@@ -906,7 +906,7 @@ public class StringConcatInLoopGotchaTests
     [Test]
     public async Task DetectAntiPatterns_StringLiteralRhsInForLoop_IsFlagged()
     {
-        // RHS is a string literal → rhsIsString=true → pattern fires regardless of variable name.
+        // RHS is a string literal → rhsIsString=true -> pattern fires regardless of variable name.
         const string source = """
             public class Builder {
                 public string Build(int n) {
@@ -928,7 +928,7 @@ public class StringConcatInLoopGotchaTests
     [Test]
     public async Task DetectAntiPatterns_StringLiteralRhsOutsideLoop_IsNotFlagged()
     {
-        // Same += with a string literal but outside any loop — must NOT flag.
+        // Same += with a string literal but outside any loop -> must NOT flag.
         const string source = """
             public class Greeter {
                 public string Greet(string name) {
@@ -950,7 +950,7 @@ public class StringConcatInLoopGotchaTests
     [Test]
     public async Task DetectAntiPatterns_LooksLikeStringVarInForeach_IsFlagged()
     {
-        // Variable named "text" ends in "text" → LooksLikeStringVar=true → fires even with
+        // Variable named "text" ends in "text" → LooksLikeStringVar=true -> fires even with
         // a non-literal RHS (identifier).
         const string source = """
             using System.Collections.Generic;
@@ -975,7 +975,7 @@ public class StringConcatInLoopGotchaTests
     public async Task DetectAntiPatterns_WhileLoopStringConcat_IsFlagged()
     {
         // The loop-ancestor check covers ForStatement, ForEachStatement, WhileStatement,
-        // and DoStatement — so a while loop must also fire.
+        // and DoStatement -> so a while loop must also fire.
         const string source = """
             public class WhileBuilder {
                 public string Build(int n) {
@@ -1094,7 +1094,7 @@ public class MissingCancellationTokenGotchaTests
 // ─────────────────────────────────────────────────────────────────────────────
 // 10. UnsafeTypeCastGotchaTests
 //     FindUnsafeTypeCastsAsync
-//     Only CastExpressionSyntax is flagged — "as" and "is" patterns are safe.
+//     Only CastExpressionSyntax is flagged -> "as" and "is" patterns are safe.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class UnsafeTypeCastGotchaTests
@@ -1152,7 +1152,7 @@ public class UnsafeTypeCastGotchaTests
     public async Task FindUnsafeCasts_AsCast_IsNotFlagged()
     {
         // "as" produces an AsExpressionSyntax, NOT a CastExpressionSyntax.
-        // The engine only flags CastExpressionSyntax — "as" is safe and must be skipped.
+        // The engine only flags CastExpressionSyntax -> "as" is safe and must be skipped.
         const string source = """
             public class SafeCaster {
                 public string? Convert(object obj) { return obj as string; }
@@ -1164,7 +1164,7 @@ public class UnsafeTypeCastGotchaTests
         var issues = await _engine.FindUnsafeTypeCastsAsync("SafeCaster.cs");
 
         Assert.That(issues, Is.Empty,
-            "\"obj as string\" must NOT be flagged — it returns null instead of throwing.");
+            "\"obj as string\" must NOT be flagged - it returns null instead of throwing.");
     }
 
     [Test]

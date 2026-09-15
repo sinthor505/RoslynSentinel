@@ -4,17 +4,17 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 /// <summary>
-/// Battery #4 — Advanced edge-case tests for four augmented tools:
-///   A. EncapsulateFieldSafe  (5 tests) — readonly, static, underscore naming, override name, usage renaming
-///   B. AnalyzeForeachForLinqConversion (4 tests) — file-not-found, snippet-not-found, multi-target, field collection
-///   C. SwitchConversionAdvanced (6 tests) — analyze/convert file-not-found, snippet-not-found,
+/// Battery #4 -> Advanced edge-case tests for four augmented tools:
+///   A. EncapsulateFieldSafe  (5 tests) -> readonly, static, underscore naming, override name, usage renaming
+///   B. AnalyzeForeachForLinqConversion (4 tests) -> file-not-found, snippet-not-found, multi-target, field collection
+///   C. SwitchConversionAdvanced (6 tests) -> analyze/convert file-not-found, snippet-not-found,
 ///      throw-per-case analysis, return-per-case conversion, and the documented throw-only limitation
 ///
 /// Total: 15 tests. All workspace-based tools use SetSource(); all disk-based tools use temp files.
 /// </summary>
 
 // ════════════════════════════════════════════════════════════════════════════════
-// A. EncapsulateFieldSafe — advanced edge cases
+// A. EncapsulateFieldSafe -> advanced edge cases
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class EncapsulateFieldSafeAdvancedTests
@@ -39,7 +39,7 @@ public class EncapsulateFieldSafeAdvancedTests
     }
 
     [Test]
-    [Description("readonly field → generated property must have get accessor only — no setter")]
+    [Description("readonly field → generated property must have get accessor only - no setter")]
     public async Task EncapsulateField_ReadonlyField_GeneratesGetOnlyProperty()
     {
         SetSource("""
@@ -55,7 +55,7 @@ public class EncapsulateFieldSafeAdvancedTests
         Assert.That(result.UpdatedContent, Does.Contain("get"),
             "Property must have a getter");
         Assert.That(result.UpdatedContent, Does.Not.Contain("set"),
-            "readonly field must produce get-only property — no setter allowed");
+            "readonly field must produce get-only property - no setter allowed");
     }
 
     [Test]
@@ -97,7 +97,7 @@ public class EncapsulateFieldSafeAdvancedTests
         Assert.That(result.UpdatedContent, Does.Contain("Count"),
             "Property name must be 'Count' (PascalCase strip of '_count')");
         Assert.That(result.UpdatedContent, Does.Contain("_count"),
-            "Backing field name must remain '_count' — no rename when field already has underscore prefix");
+            "Backing field name must remain '_count' - no rename when field already has underscore prefix");
         Assert.That(result.UpdatedContent, Does.Not.Contain("__count"),
             "Must NOT produce a double-underscore backing name '__count'");
     }
@@ -151,7 +151,7 @@ public class EncapsulateFieldSafeAdvancedTests
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// B. AnalyzeForeachForLinqConversion — advanced edge cases
+// B. AnalyzeForeachForLinqConversion -> advanced edge cases
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class AnalyzeForeachAdvancedTests
@@ -275,9 +275,9 @@ public class AnalyzeForeachAdvancedTests
                 tempFile, "foreach (var e in incoming)");
 
             // Implementation: when the collection has no local-variable declaration in the same block,
-            // declIndex=-1 → returns IsSafeToConvert=true with a note to use standard tool.
+            // declIndex=-1 -> returns IsSafeToConvert=true with a note to use standard tool.
             Assert.That(result.IsSafeToConvert, Is.True,
-                "No local pre-modification to block — should report safe to convert");
+                "No local pre-modification to block - should report safe to convert");
             Assert.That(result.CollectionVariableName, Is.EqualTo("_events"),
                 "Must correctly identify '_events' as the Add() target collection");
         }
@@ -286,7 +286,7 @@ public class AnalyzeForeachAdvancedTests
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// C. SwitchConversionAdvanced — AnalyzeSwitchForPatternConversion + ConvertSwitchToPatternSafe
+// C. SwitchConversionAdvanced -> AnalyzeSwitchForPatternConversion + ConvertSwitchToPatternSafe
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class SwitchConversionAdvancedTests
@@ -343,7 +343,7 @@ public class SwitchConversionAdvancedTests
     }
 
     [Test]
-    [Description("All cases are throw statements — Analyze correctly reports safe (throws have no assignments)")]
+    [Description("All cases are throw statements - Analyze correctly reports safe (throws have no assignments)")]
     public async Task AnalyzeSwitchForPattern_ThrowPerCase_ReportedAsSafe()
     {
         SetSource("""
@@ -365,9 +365,9 @@ public class SwitchConversionAdvancedTests
             "Test.cs", "switch (code)");
 
         // ThrowStatementSyntax nodes contain no AssignmentExpressionSyntax.
-        // The multi-assignment counter finds 0 assignments per case → reports safe.
+        // The multi-assignment counter finds 0 assignments per case -> reports safe.
         Assert.That(result.IsSafeToConvert, Is.True,
-            "Throw-per-case switch has no multi-assignments — Analyze must report safe");
+            "Throw-per-case switch has no multi-assignments - Analyze must report safe");
         Assert.That(result.BlockingReason, Is.Null.Or.Empty,
             "No blocking reason should be set for a structurally clean throw switch");
     }
@@ -425,18 +425,18 @@ public class SwitchConversionAdvancedTests
     }
 
     [Test]
-    [Description("DOCUMENTED LIMITATION: throw-only switch — Analyze says safe, Convert reveals the gap")]
+    [Description("DOCUMENTED LIMITATION: throw-only switch - Analyze says safe, Convert reveals the gap")]
     public async Task ConvertSwitchToPattern_ThrowOnlySwitch_FailsWithDocumentedLimitation()
     {
         // This test documents a known design gap between analysis and conversion:
         //
         // AnalyzeSwitchForPatternConversion counts AssignmentExpressionSyntax nodes.
         // ThrowStatementSyntax contains none, so HasMultipleAssignments=false for every
-        // case → IsSafeToConvert=true (correct by its own narrow logic).
+        // case -> IsSafeToConvert=true (correct by its own narrow logic).
         //
         // ConvertSwitchToPatternSafe encounters throw cases and sets isReturnSwitch=false.
         // With isReturnSwitch=false AND targetVariable=null, it falls to the "could not
-        // determine replacement form" path → returns Fail.
+        // determine replacement form" path -> returns Fail.
         //
         // EXPECTED: analysis says safe; conversion fails with an explicit message.
         // This is preferable to a silent corrupt-output failure.
@@ -467,6 +467,6 @@ public class SwitchConversionAdvancedTests
             "Known limitation: throw-only switch cannot be converted to switch expression by this tool version");
         Assert.That(conversion.Error, Does.Contain("Could not determine replacement form")
                                           .Or.Contain("Manual conversion required"),
-            "Error message must be explicit — users need to know WHY the conversion was rejected");
+            "Error message must be explicit - users need to know WHY the conversion was rejected");
     }
 }

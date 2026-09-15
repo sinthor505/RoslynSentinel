@@ -7,7 +7,7 @@ namespace RoslynSentinel.Server.Basic;
 // Restricted/operator-only tools, gated behind the "Admin" mode (deliberately excluded from
 // AllModes in ServerStdio.cs/ServerHttp.cs, so it's off by default and only reachable via an
 // explicit --mode=Admin or --mode=<...>,Admin). See
-// docs/current/ideas/external-drift-hard-blocker.md — these two tools used to live in
+// docs/current/ideas/external-drift-hard-blocker.md -> these two tools used to live in
 // SentinelWorkspaceTools (model-visible by default under the "Workspace" mode), but letting the
 // in-task model reconcile external drift itself only works for a genuinely concurrent-editing
 // scenario this server doesn't target; under the single-session/no-concurrent-actors assumption a
@@ -66,7 +66,7 @@ public class SentinelAdminTools
     // Added by AddMember (expected - used for diagnostics)
     [McpServerTool(Name = "McpServerControl")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Operator-only control of this server process. op='status' reports whether this instance is running normally. op='stop' terminates this server process — VS Code will respawn a fresh instance (via the launch wrapper, which rebuilds) on its next tool call. 'stop' requires confirmServerStop='confirmServerStop' (case-insensitive) or it is refused.")]
+    [Description("Operator-only control of this server process. op='status' reports whether this instance is running normally. op='stop' terminates this server process - VS Code will respawn a fresh instance (via the launch wrapper, which rebuilds) on its next tool call. 'stop' requires confirmServerStop='confirmServerStop' (case-insensitive) or it is refused.")]
     public string McpServerControl(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         string op,

@@ -10,7 +10,7 @@ namespace RoslynSentinel.Common;
 /// <param name="CancellationTokenPct">Percentage of async methods that carry a CancellationToken (0–100).</param>
 /// <param name="BridgeWrappers">Methods decorated with [Obsolete] where the message contains "Asyncify-bridge".</param>
 /// <param name="PendingObsoleteCallers">Call sites of those bridge wrappers that still need to be migrated.</param>
-/// <param name="AsyncVoidEventHandlers">Count of <c>async void</c> methods (informational — signatures are fixed).</param>
+/// <param name="AsyncVoidEventHandlers">Count of <c>async void</c> methods (informational -> signatures are fixed).</param>
 public record AsyncMigrationProgressReport(
     int TotalAsyncMethods,
     int WithCancellationToken,
@@ -20,4 +20,4 @@ public record AsyncMigrationProgressReport(
     int PendingObsoleteCallers,
     int AsyncVoidEventHandlers
 );
-// v2 — ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)
+// v2 -> ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)

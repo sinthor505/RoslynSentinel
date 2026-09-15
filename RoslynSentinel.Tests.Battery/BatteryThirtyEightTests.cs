@@ -6,20 +6,20 @@ namespace RoslynSentinel.Tests.Battery;
 /// <summary>
 /// Tests for the path-driven test generation capability (Battery 38):
 ///  1. Missing method returns error gracefully (no exception).
-///  2. Simple method with no branches → exactly one happy-path test.
-///  3. If-with-null-check → happy path + true branch (null param).
-///  4. If-with-else → happy path + both branches reported.
-///  5. ForEach loop → happy path + empty-collection + with-items cases.
-///  6. Switch statement → happy path + one case per switch label.
-///  7. Async method → generated test stubs are async Task.
-///  8. Method with interface dependency → mock setup comment in arrange.
-///  9. Framework=xunit → constructor setup, [Fact] attribute, correct class name.
+///  2. Simple method with no branches -> exactly one happy-path test.
+///  3. If-with-null-check -> happy path + true branch (null param).
+///  4. If-with-else -> happy path + both branches reported.
+///  5. ForEach loop -> happy path + empty-collection + with-items cases.
+///  6. Switch statement -> happy path + one case per switch label.
+///  7. Async method -> generated test stubs are async Task.
+///  8. Method with interface dependency -> mock setup comment in arrange.
+///  9. Framework=xunit -> constructor setup, [Fact] attribute, correct class name.
 /// 10. GeneratedTestCode is non-empty and contains the test class name.
-/// 11. For loop over param bound → zero / one / multiple iteration stubs.
-/// 12. While loop writing to returned variable → never-enters / terminates stubs.
-/// 13. Do-while over param condition → single-pass / multi-pass stubs.
-/// 14. For loop with constant bound (no param) → not reported (irrelevant loop filter).
-/// 15. While loop that doesn't touch params or return value → not reported.
+/// 11. For loop over param bound -> zero / one / multiple iteration stubs.
+/// 12. While loop writing to returned variable -> never-enters / terminates stubs.
+/// 13. Do-while over param condition -> single-pass / multi-pass stubs.
+/// 14. For loop with constant bound (no param) -> not reported (irrelevant loop filter).
+/// 15. While loop that doesn't touch params or return value -> not reported.
 /// </summary>
 [TestFixture]
 public class BatteryThirtyEightTests
@@ -50,7 +50,7 @@ public class BatteryThirtyEightTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 1 — Missing method → graceful error result (no exception)
+    // 1 -> Missing method -> graceful error result (no exception)
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -67,7 +67,7 @@ public class BatteryThirtyEightTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 2 — Simple method with no branches → exactly one happy-path test
+    // 2 -> Simple method with no branches -> exactly one happy-path test
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -81,13 +81,13 @@ public class OrderService {
 
         var report = await _engine.GeneratePathDrivenTestsAsync(docPath, "GetName");
 
-        Assert.That(report.PathCount, Is.EqualTo(1), "A branchless method has exactly one path — the happy path");
+        Assert.That(report.PathCount, Is.EqualTo(1), "A branchless method has exactly one path - the happy path");
         Assert.That(report.TestCases[0].TestMethodName, Does.Contain("HappyPath"),
             "First test must be the happy-path stub");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 3 — If with null check → happy path + true (null) branch
+    // 3 -> If with null check -> happy path + true (null) branch
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -114,7 +114,7 @@ public class OrderService {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 4 — If-with-else → both branches in the report
+    // 4 -> If-with-else -> both branches in the report
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -142,7 +142,7 @@ public class OrderService {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 5 — ForEach loop → empty and with-items cases
+    // 5 -> ForEach loop -> empty and with-items cases
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -168,7 +168,7 @@ public class OrderService {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 6 — Switch statement → one case per switch label
+    // 6 -> Switch statement -> one case per switch label
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -198,7 +198,7 @@ public class OrderService {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 7 — Async method → generated test stubs are async Task
+    // 7 -> Async method -> generated test stubs are async Task
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -223,7 +223,7 @@ public class OrderService {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 8 — Method with interface dependency → mock comment in happy-path arrange
+    // 8 -> Method with interface dependency -> mock comment in happy-path arrange
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -254,7 +254,7 @@ public class OrderService {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 9 — Framework=xunit → [Fact] attribute, constructor setup
+    // 9 -> Framework=xunit -> [Fact] attribute, constructor setup
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -274,13 +274,13 @@ public class OrderService {
         Assert.That(report.GeneratedTestCode, Does.Contain("[Fact]"),
             "xUnit framework must emit [Fact] test attribute");
         Assert.That(report.GeneratedTestCode, Does.Not.Contain("[Test]"),
-            "[Test] is NUnit — must not appear in xunit output");
+            "[Test] is NUnit - must not appear in xunit output");
         Assert.That(report.GeneratedTestCode, Does.Not.Contain("[SetUp]"),
-            "[SetUp] is NUnit — constructor-based setup must be used for xunit");
+            "[SetUp] is NUnit - constructor-based setup must be used for xunit");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 10 — GeneratedTestCode is non-empty and contains expected class name
+    // 10 -> GeneratedTestCode is non-empty and contains expected class name
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -307,7 +307,7 @@ public class PaymentProcessor {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 11 — For loop with param-controlled bound → zero / one / multiple stubs
+    // 11 -> For loop with param-controlled bound -> zero / one / multiple stubs
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -339,7 +339,7 @@ public class BatchService {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 12 — While loop writing to returned variable → never-enters / terminates
+    // 12 -> While loop writing to returned variable -> never-enters / terminates
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -371,7 +371,7 @@ public class QueueService {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 13 — Do-while over param condition → single-pass / multi-pass stubs
+    // 13 -> Do-while over param condition -> single-pass / multi-pass stubs
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -401,7 +401,7 @@ public class RetryService {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 14 — For loop with constant bound (no param ref) → not reported
+    // 14 -> For loop with constant bound (no param ref) -> not reported
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -425,11 +425,11 @@ public class FixedService {
             t.TestMethodName.Contains("MultipleIterations"));
 
         Assert.That(hasForLoop, Is.False,
-            "A for loop with a constant bound (no param, no outgoing var) must not produce loop test cases — it is not in the path of any variable of interest");
+            "A for loop with a constant bound (no param, no outgoing var) must not produce loop test cases - it is not in the path of any variable of interest");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 15 — While loop not touching params or return value → not reported
+    // 15 -> While loop not touching params or return value -> not reported
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -440,7 +440,7 @@ using System.Threading;
 public class SpinService {
     public void WaitForFlag() {
         bool flag = false;
-        // spins on a local — no param reference, nothing in return path
+        // spins on a local -> no param reference, nothing in return path
         while (!flag) { flag = true; }
     }
 }");

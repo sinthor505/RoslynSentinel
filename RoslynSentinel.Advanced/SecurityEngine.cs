@@ -301,7 +301,7 @@ public class SecurityEngine
             // Get semantic model to check if interpolation expressions are compile-time constants
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
 
-            // Collect local string variables assigned an interpolated string — these may be passed to SQL methods
+            // Collect local string variables assigned an interpolated string -> these may be passed to SQL methods
             var interpolatedLocals = new HashSet<string>();
             foreach (var localDecl in root.DescendantNodes().OfType<LocalDeclarationStatementSyntax>())
             {
@@ -361,7 +361,7 @@ public class SecurityEngine
         {
             if (semanticModel == null)
             {
-                return true; // no model — assume dynamic
+                return true; // no model - assume dynamic
             }
 
             var constVal = semanticModel.GetConstantValue(interp.Expression, cancellationToken);
@@ -370,7 +370,7 @@ public class SecurityEngine
                 return true; // not a compile-time constant → suspect
             }
         }
-        return false; // all interpolations are constants — safe
+        return false; // all interpolations are constants - safe
     }
 
     private static bool IsDynamicStringConcat(BinaryExpressionSyntax bin)
@@ -561,7 +561,7 @@ public class SecurityEngine
                     var receiver = ma.Expression.ToString();
                     var name = ma.Name.Identifier.Text;
 
-                    // Regex.IsMatch(input, pattern) — pattern is arg[1]
+                    // Regex.IsMatch(input, pattern) -> pattern is arg[1]
                     if (receiver == "Regex" && RegexFactoryMethods.Contains(name))
                     {
                         patternIndex = 1;
@@ -570,7 +570,7 @@ public class SecurityEngine
                 else if (invocation.Parent is ObjectCreationExpressionSyntax ctor &&
                          ctor.Type.ToString() is "Regex" or "System.Text.RegularExpressions.Regex")
                 {
-                    // new Regex(pattern) — pattern is arg[0]
+                    // new Regex(pattern) -> pattern is arg[0]
                     patternIndex = 0;
                 }
 
@@ -733,10 +733,10 @@ public class SecurityEngine
 
     /// <summary>
     /// Detects common JSON anti-patterns:
-    ///   1. JsonDocument.Parse() without a using block — leaks pooled memory.
-    ///   2. JsonElement.GetProperty() without null/kind check — throws on missing keys.
-    ///   3. Deserializing to dynamic or object — loses type safety.
-    ///   4. JsonSerializer.Deserialize without null check on result — can silently return null.
+    ///   1. JsonDocument.Parse() without a using block -> leaks pooled memory.
+    ///   2. JsonElement.GetProperty() without null/kind check -> throws on missing keys.
+    ///   3. Deserializing to dynamic or object -> loses type safety.
+    ///   4. JsonSerializer.Deserialize without null check on result -> can silently return null.
     /// </summary>
     public async Task<List<SecurityIssueReport>> DetectJsonAntiPatternsAsync(
         FilePathWrapper filePath, CancellationToken cancellationToken = default)
@@ -808,7 +808,7 @@ public class SecurityEngine
                 }
             }
 
-            // 2. JsonElement.GetProperty() — should prefer TryGetProperty to avoid KeyNotFoundException
+            // 2. JsonElement.GetProperty() -> should prefer TryGetProperty to avoid KeyNotFoundException
             if (methodName == "GetProperty")
             {
                 var enclosing = invocation.Ancestors()
@@ -826,7 +826,7 @@ public class SecurityEngine
                 }
             }
 
-            // 3. JsonSerializer.Deserialize<dynamic> or Deserialize<object> — untyped
+            // 3. JsonSerializer.Deserialize<dynamic> or Deserialize<object> -> untyped
             if ((receiver == "JsonSerializer" || receiver == "JsonConvert") &&
                 methodName == "Deserialize")
             {

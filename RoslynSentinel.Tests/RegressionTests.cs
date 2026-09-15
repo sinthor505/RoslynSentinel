@@ -11,16 +11,16 @@ namespace RoslynSentinel.Tests;
 /// If any of these tests start failing, a regression has been introduced.
 /// 
 /// Sections:
-///  1. ChangeSignature — call-site rewriting (was a complete stub)
-///  2. ExtractInterface — block-style namespace + usings (was missing from generated file)
-///  3. ConvertPropertySafe — modifier preservation, contextSnippet disambiguation
-///  4. InterpolateStringSafe — const format string (the specific bug vs MS built-in)
-///  5. MoveTypeToFile — interface types, single-type file boundary
-///  6. FindCallersSafe — contextSnippet overload disambiguation
-///  7. ImplementInterfaceSafe — partial implementation, property-only interfaces, no 'override'
-///  8. FormatDocumentPreview — hunk content structure
-///  9. DiagnosticEngine — grouping behaviour
-///  10. ContextHelper — snippet disambiguation with lineBefore/lineAfter
+///  1. ChangeSignature -> call-site rewriting (was a complete stub)
+///  2. ExtractInterface -> block-style namespace + usings (was missing from generated file)
+///  3. ConvertPropertySafe -> modifier preservation, contextSnippet disambiguation
+///  4. InterpolateStringSafe -> const format string (the specific bug vs MS built-in)
+///  5. MoveTypeToFile -> interface types, single-type file boundary
+///  6. FindCallersSafe -> contextSnippet overload disambiguation
+///  7. ImplementInterfaceSafe -> partial implementation, property-only interfaces, no 'override'
+///  8. FormatDocumentPreview -> hunk content structure
+///  9. DiagnosticEngine -> grouping behaviour
+///  10. ContextHelper -> snippet disambiguation with lineBefore/lineAfter
 /// </summary>
 [TestFixture]
 public class RegressionTests
@@ -59,7 +59,7 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 1. ChangeSignature — call-site rewriting
+    // 1. ChangeSignature -> call-site rewriting
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -82,7 +82,7 @@ public class RegressionTests
                 }
                 """));
 
-        // Reorder [a, b, c] → [c, a, b] using permutation index [2, 0, 1]
+        // Reorder [a, b, c] -> [c, a, b] using permutation index [2, 0, 1]
         var changeResult = await _refactoringEngine.ChangeSignatureAsync("Math.cs", "Add", new SignatureParameterSpec[] { new ExistingParameterSpec(2), new ExistingParameterSpec(0), new ExistingParameterSpec(1) });
         var result = changeResult.Changes;
         Assert.That(changeResult.SkippedCallSites, Is.Empty, "This call site has matching arity and should not be skipped");
@@ -96,9 +96,9 @@ public class RegressionTests
         Assert.That(aIdx, Is.LessThan(bIdx), "Declaration: a must come before b");
 
         // Call site in App.cs must also be reordered: Add(3, 1, 2)
-        Assert.That(result.ContainsKey("App.cs"), "App.cs must be included — call site needs rewriting");
+        Assert.That(result.ContainsKey("App.cs"), "App.cs must be included - call site needs rewriting");
         var callSite = result["App.cs"];
-        // Arguments reordered: was (1,2,3) → c=3 first, so (3, 1, 2)
+        // Arguments reordered: was (1,2,3) -> c=3 first, so (3, 1, 2)
 #pragma warning disable CA1865 // Use char overload
         var arg3Pos = callSite.IndexOf("3", callSite.IndexOf("Add(", StringComparison.Ordinal), StringComparison.Ordinal);
 #pragma warning restore CA1865 // Use char overload
@@ -122,7 +122,7 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 2. ExtractInterface — block-style namespace
+    // 2. ExtractInterface -> block-style namespace
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -179,13 +179,13 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 3. ConvertPropertySafe — modifier preservation + contextSnippet
+    // 3. ConvertPropertySafe -> modifier preservation + contextSnippet
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     public async Task ConvertPropertySafe_PreservesVirtualModifier_OnToFullProperty()
     {
-        // ConvertPropertySafe promises to handle virtual/override/new — this test enforces that.
+        // ConvertPropertySafe promises to handle virtual/override/new -> this test enforces that.
         SetSource("""
             public class Base
             {
@@ -243,11 +243,11 @@ public class RegressionTests
         // Person.Name should still be an auto-property (no _name backing for Alice)
         var personSection = result.UpdatedText!.Substring(0, result.UpdatedText!.IndexOf("Company", StringComparison.Ordinal));
         Assert.That(personSection, Does.Contain("{ get; set; }"),
-            "Person.Name must remain an auto-property — context snippet should have limited the change");
+            "Person.Name must remain an auto-property - context snippet should have limited the change");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 4. InterpolateStringSafe — const format string (the exact MS built-in bug)
+    // 4. InterpolateStringSafe -> const format string (the exact MS built-in bug)
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -302,13 +302,13 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 5. MoveTypeToFile — interface types, single-type boundary
+    // 5. MoveTypeToFile -> interface types, single-type boundary
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     public async Task MoveTypeToFile_InterfaceType_MovesToOwnFile()
     {
-        // Tests moving an interface (not class/record) — untested by prior tests.
+        // Tests moving an interface (not class/record) -> untested by prior tests.
         var solution = TestSolutionBuilder.CreateSolutionWithProject("DummyApp", new[]
         {
             ("Services.cs", """
@@ -336,7 +336,7 @@ public class RegressionTests
     public async Task MoveTypeToFile_SingleTypeFile_ReturnsEmptyDict()
     {
         // When a file contains only one type whose name matches the filename, it's already in its own
-        // file — MoveTypeToFile should return an empty dict (no-op).
+        // file -> MoveTypeToFile should return an empty dict (no-op).
         var solution = TestSolutionBuilder.CreateSolutionWithProject("DummyApp", new[]
         {
             ("Solo.cs", """
@@ -349,13 +349,13 @@ public class RegressionTests
         var changes = await _refactoringEngine.MoveTypeToFileAsync("Solo.cs", "Solo");
 
         Assert.That(changes, Is.Empty,
-            "Solo is already in Solo.cs — MoveTypeToFile should return empty (no-op)");
+            "Solo is already in Solo.cs - MoveTypeToFile should return empty (no-op)");
     }
 
     [Test]
     public async Task MoveTypeToFile_EnumType_MovesToOwnFile()
     {
-        // Enums are BaseTypeDeclarationSyntax — should be movable.
+        // Enums are BaseTypeDeclarationSyntax -> should be movable.
         var solution = TestSolutionBuilder.CreateSolutionWithProject("DummyApp", new[]
         {
             ("Domain.cs", """
@@ -376,7 +376,7 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 6. FindCallersSafe — contextSnippet overload disambiguation
+    // 6. FindCallersSafe -> contextSnippet overload disambiguation
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -484,7 +484,7 @@ public class RegressionTests
         // Regression for the same blocker doc: pinning filePath with symbolName alone (no
         // contextSnippet) used to throw "was not found declared" for a field that genuinely is
         // declared there, because GetDeclaredSymbol was called directly on the
-        // FieldDeclarationSyntax (which always returns null — the declared symbol lives on its
+        // FieldDeclarationSyntax (which always returns null -> the declared symbol lives on its
         // VariableDeclaratorSyntax child) instead of falling back to that child.
         SetSource("""
             public class Worker
@@ -507,13 +507,13 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 7. ImplementInterfaceSafe — partial implementation, property-only, no override
+    // 7. ImplementInterfaceSafe -> partial implementation, property-only, no override
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     public async Task ImplementInterfaceSafe_PartialImplementation_OnlyGeneratesMissingMembers()
     {
-        // Class already implements one method — only the missing one should be generated.
+        // Class already implements one method -> only the missing one should be generated.
         const string source = """
             namespace App;
 
@@ -535,10 +535,10 @@ public class RegressionTests
         // Stop() must be generated
         Assert.That(result.UpdatedText, Does.Contain("public void Stop"),
             "Missing Stop() method must be generated");
-        // Start() must NOT be duplicated — check 'public void Start' (not 'void Start' which also matches interface)
+        // Start() must NOT be duplicated -> check 'public void Start' (not 'void Start' which also matches interface)
         var publicStartCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"public void Start").Count;
         Assert.That(publicStartCount, Is.EqualTo(1),
-            "Start() must NOT be duplicated — it was already implemented");
+            "Start() must NOT be duplicated - it was already implemented");
     }
 
     [Test]
@@ -626,13 +626,13 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 8. FormatDocumentPreview — hunk content structure
+    // 8. FormatDocumentPreview -> hunk content structure
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     public async Task FormatDocumentPreview_ChangedFile_HunksHaveRemovedOrAddedContent()
     {
-        // A hunk must carry actual line content — not just empty lists.
+        // A hunk must carry actual line content -> not just empty lists.
         SetSource("public class Messy{public int X{get;set;}\npublic int Y{get;set;}\n}");
 
         var preview = await _refactoringEngine.FormatDocumentPreviewAsync("Test.cs");
@@ -651,7 +651,7 @@ public class RegressionTests
     [Test]
     public async Task FormatDocumentPreview_TotalHunks_MatchesHunkListCount()
     {
-        // TotalHunks property must match the Hunks list length — structural consistency.
+        // TotalHunks property must match the Hunks list length -> structural consistency.
         SetSource("public class Messy{public int X{get;set;}public string Y{get;set;}}");
 
         var preview = await _refactoringEngine.FormatDocumentPreviewAsync("Test.cs");
@@ -681,7 +681,7 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 9. DiagnosticEngine — grouping behaviour
+    // 9. DiagnosticEngine -> grouping behaviour
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -734,7 +734,7 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 10. MoveTypeToFile — ContentPreviews regression (the Session 11 fix)
+    // 10. MoveTypeToFile -> ContentPreviews regression (the Session 11 fix)
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -793,7 +793,7 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 11. MsToolAugmentEngine — augmented replacements for buggy MS tools
+    // 11. MsToolAugmentEngine -> augmented replacements for buggy MS tools
     // ══════════════════════════════════════════════════════════════════════════
 
     private MsToolAugmentEngine CreateAugmentEngine()
@@ -805,7 +805,7 @@ public class RegressionTests
     public async Task EncapsulateFieldSafe_BackingFieldUsesUnderscoreCamelCase()
     {
         // Bug: standard encapsulate_field generates "private int SuccessCount;"
-        // then "public int SuccessCount { get { return SuccessCount; } }" — self-reference!
+        // then "public int SuccessCount { get { return SuccessCount; } }" -> self-reference!
         // Our version must rename the backing field to _successCount.
         SetSource("""
             public class Counter
@@ -893,7 +893,7 @@ public class RegressionTests
     [Test]
     public async Task AnalyzeSwitchForPatternConversion_SingleAssignPerCase_IsSafe()
     {
-        // A switch where every case assigns exactly one variable → safe to convert
+        // A switch where every case assigns exactly one variable -> safe to convert
         SetSource("""
             public class Converter
             {
@@ -1006,7 +1006,7 @@ public class RegressionTests
         var result = await engine.ConvertSwitchToPatternSafeAsync("Test.cs", "switch (unit)");
 
         Assert.That(result.Success, Is.False,
-            "Must REJECT multi-assign switch — not silently corrupt it");
+            "Must REJECT multi-assign switch - not silently corrupt it");
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
             "Must explain WHY conversion was rejected");
     }
@@ -1049,7 +1049,7 @@ public class RegressionTests
     [Test]
     public async Task ConvertStringFormatToInterpolatedSmart_ConstFormatString_Converts()
     {
-        // Standard tool fails on named constants — ours resolves via semantic model
+        // Standard tool fails on named constants -> ours resolves via semantic model
         SetSource("""
             public class CacheService
             {
@@ -1103,7 +1103,7 @@ public class RegressionTests
     [Test]
     public async Task SortAndDeduplicateUsings_DuplicatesAreRemoved()
     {
-        // Standard sort_usings does NOT remove duplicates — ours does
+        // Standard sort_usings does NOT remove duplicates -> ours does
         SetSource("""
             using System.Collections.Generic;
             using System.Linq;
@@ -1176,7 +1176,7 @@ public class RegressionTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 16. New Augmented Tools — FormatDocumentSafe, AnalyzeForeachForLinqConversion,
+    // 16. New Augmented Tools -> FormatDocumentSafe, AnalyzeForeachForLinqConversion,
     //     GetWorkspaceHealthAsync, PreviewAddMissingUsings, ExtractConstantSafe
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -1230,7 +1230,7 @@ public class RegressionTests
 
             var engine = CreateAugmentEngine();
 
-            // Act: preview=false → should write to disk
+            // Act: preview=false -> should write to disk
             var result = await engine.FormatDocumentSafeAsync(tempFile, preview: false);
 
             Assert.That(result.Success, Is.True, "FormatDocumentSafe apply should succeed");
@@ -1405,7 +1405,7 @@ public class RegressionTests
         var result = await engine.PreviewAddMissingUsingsAsync("NonExistentFile.cs");
 
         Assert.That(result.SolutionRequired, Is.False,
-            "Solution IS loaded — SolutionRequired should be false");
+            "Solution IS loaded - SolutionRequired should be false");
         Assert.That(result.Warning, Is.Not.Null.And.Not.Empty,
             "A warning should be returned when the file is not in the solution");
     }
@@ -1467,7 +1467,7 @@ public class RegressionTests
 
             Assert.That(result.Success, Is.True, result.Error);
             // After extraction there must be EXACTLY one string literal "localhost"
-            // — the one in the const declaration itself
+            // -> the one in the const declaration itself
             var rawLiteralCount = CountStringOccurrences(result.UpdatedContent!, "\"localhost\"");
             Assert.That(rawLiteralCount, Is.EqualTo(1),
                 "All occurrences of the literal except the const declaration should be replaced");
@@ -1521,7 +1521,7 @@ public class RegressionTests
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 10. ContextHelper — snippet disambiguation with lineBefore/lineAfter
+// 10. ContextHelper -> snippet disambiguation with lineBefore/lineAfter
 // ══════════════════════════════════════════════════════════════════════════
 
 [TestFixture]
@@ -1529,7 +1529,7 @@ public class ContextHelperDisambiguationTests
 {
     private static SourceText Src(string code) => SourceText.From(code);
 
-    // ── single match — no hints required ─────────────────────────────────
+    // ── single match -> no hints required ─────────────────────────────────
 
     [Test]
     public void FindSnippetPosition_SingleMatch_ReturnsCorrectOffset()
@@ -1539,7 +1539,7 @@ public class ContextHelperDisambiguationTests
         Assert.That(offset, Is.EqualTo(11)); // after the first line + '\n'
     }
 
-    // ── multiple matches, no hints → throws ──────────────────────────────
+    // ── multiple matches, no hints -> throws ──────────────────────────────
 
     [Test]
     public void FindSnippetPosition_MultipleMatches_NoHints_ThrowsAmbiguous()
@@ -1563,7 +1563,7 @@ public class ContextHelperDisambiguationTests
         Assert.That(linePos.Line, Is.EqualTo(3)); // 0-based line 3 = "int x = 2;"
     }
 
-    // ── both hints match both occurrences → still ambiguous ──────────────
+    // ── both hints match both occurrences -> still ambiguous ──────────────
 
     [Test]
     public void FindSnippetPosition_MultipleMatches_BothHints_StillAmbiguous_Throws()

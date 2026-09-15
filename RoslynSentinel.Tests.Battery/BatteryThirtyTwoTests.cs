@@ -1,17 +1,17 @@
-// Battery #32 — Regression tests for GenerateFluentBuilder: error result (not exception) on DI/POCO-less classes
+// Battery #32 -> Regression tests for GenerateFluentBuilder: error result (not exception) on DI/POCO-less classes
 // Bug fixed: GenerateFluentBuilderAsync used to throw InvalidOperationException on classes with no
 // settable public properties. The fix returns a FluentBuilderResult with a non-empty Error field.
 //
 // Tests in this battery:
-//   1. DI service class (no settable props) → returns error result, does NOT throw
-//   2. API controller class (no settable props) → returns error result, does NOT throw
-//   3. Abstract class with no props → returns error result, does NOT throw
-//   4. Empty class → returns error result with class name in the error
+//   1. DI service class (no settable props) -> returns error result, does NOT throw
+//   2. API controller class (no settable props) -> returns error result, does NOT throw
+//   3. Abstract class with no props -> returns error result, does NOT throw
+//   4. Empty class -> returns error result with class name in the error
 //   5. Error message contains expected guidance (class name, "DI-injected", "settable public properties")
-//   6. POCO class WITH settable properties → no error, valid builder generated
-//   7. Record with primary constructor → no error, valid builder generated
-//   8. Class with init-only properties → no error, valid builder generated
-//   9. Multiple DI classes in file — per-class call still returns error
+//   6. POCO class WITH settable properties -> no error, valid builder generated
+//   7. Record with primary constructor -> no error, valid builder generated
+//   8. Class with init-only properties -> no error, valid builder generated
+//   9. Multiple DI classes in file -> per-class call still returns error
 //  10. Previously correct class (POCO) still generates correct builder after fix
 
 using System.Threading.Tasks;
@@ -74,7 +74,7 @@ public class BatteryThirtyTwoTests
         await Assert.DoesNotThrowAsync(async () =>
         {
             result = await _codeGenerationEngine.GenerateFluentBuilderAsync("OrderService.cs", "OrderService");
-        }, "GenerateFluentBuilderAsync must NOT throw — should return an error result instead");
+        }, "GenerateFluentBuilderAsync must NOT throw - should return an error result instead");
 
         Assert.That(result, Is.Not.Null, "Result must not be null");
         Assert.That(result!.Error, Is.Not.Null.And.Not.Empty,
@@ -101,7 +101,7 @@ public class BatteryThirtyTwoTests
         await Assert.DoesNotThrowAsync(async () =>
         {
             result = await _codeGenerationEngine.GenerateFluentBuilderAsync("ProductsController.cs", "ProductsController");
-        }, "API controller must NOT cause exception — returns error result");
+        }, "API controller must NOT cause exception - returns error result");
 
         Assert.That(result!.Error, Is.Not.Null.And.Not.Empty,
             "Controller class (no settable props) must have non-empty Error");

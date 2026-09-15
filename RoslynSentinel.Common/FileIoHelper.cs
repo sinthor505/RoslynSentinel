@@ -5,7 +5,7 @@ namespace RoslynSentinel.Common;
 /// System.IO passthrough plus a <see cref="FilePathLock"/> acquisition around writes/deletes (and
 /// the reads that specifically need to observe a consistent state relative to those writes), so
 /// every call that can race a concurrent write to the same path goes through one place. Not a
-/// general-purpose File.* replacement — existence/metadata checks and read-only helpers unrelated
+/// general-purpose File.* replacement -> existence/metadata checks and read-only helpers unrelated
 /// to the write path (solution parsing, config lookups, etc.) still call System.IO directly.
 /// </summary>
 public static class FileIoHelper

@@ -4,9 +4,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 /// <summary>
-/// Battery #5 — First-ever functional tests for engines with 0–1 test coverage:
-///   C. SecurityAndSafetyEngine  (5 tests) — FindUnsafeTypeCasts (real logic), DetectMissingNullChecks
-///   D. InstrumentationEngine    (5 tests) — AddTryCatch, AddTryCatchToClass, AddStopwatch
+/// Battery #5 -> First-ever functional tests for engines with 0–1 test coverage:
+///   C. SecurityAndSafetyEngine  (5 tests) -> FindUnsafeTypeCasts (real logic), DetectMissingNullChecks
+///   D. InstrumentationEngine    (5 tests) -> AddTryCatch, AddTryCatchToClass, AddStopwatch
 ///
 /// Total: 10 tests. All workspace-based (SetSource / SetTestSolution).
 /// </summary>
@@ -44,7 +44,7 @@ public class Processor
 {
     public void Process(object input)
     {
-        var value = (int)input; // Direct cast — should flag UnsafeCast
+        var value = (int)input; // Direct cast - should flag UnsafeCast
     }
 }");
         var issues = await _engine.FindUnsafeTypeCastsAsync("Test.cs");
@@ -62,7 +62,7 @@ public class Processor
 {
     public string Process(object input)
     {
-        return input as string ?? string.Empty; // Safe — no direct cast
+        return input as string ?? string.Empty; // Safe - no direct cast
     }
 }");
         var issues = await _engine.FindUnsafeTypeCastsAsync("Test.cs");
@@ -101,7 +101,7 @@ public class Converter
     [Test]
     public async Task DetectMissingNullChecks_PublicMethod_UnguardedReferenceParam_IsReported()
     {
-        // Formerly documented as stub — now properly implemented.
+        // Formerly documented as stub -> now properly implemented.
         // Public method uses reference-type parameter without null guard = MissingNullCheck.
         SetSource(@"
 public class Service
@@ -119,7 +119,7 @@ public class Service
     [Test]
     public async Task DetectMissingNullChecks_PrivateMethod_IsNotFlagged()
     {
-        // Only public methods are checked — private methods are trusted internal callers.
+        // Only public methods are checked -> private methods are trusted internal callers.
         SetSource(@"
 public class Service
 {
@@ -133,7 +133,7 @@ public class Service
     [Test]
     public async Task DetectMissingNullChecks_NullableReferenceParam_IsNotFlagged()
     {
-        // string? is explicitly nullable — the caller knows it can be null.
+        // string? is explicitly nullable -> the caller knows it can be null.
         SetSource(@"
 public class Service
 {
@@ -197,7 +197,7 @@ public class Service
     [Test]
     public async Task DetectMissingNullChecks_ValueTypeParam_IsNotFlagged()
     {
-        // int/bool/struct params cannot be null — should never be flagged.
+        // int/bool/struct params cannot be null -> should never be flagged.
         SetSource(@"
 public class Service
 {
@@ -331,7 +331,7 @@ public class UserService
         var result = await _engine.AddTryCatchToClassAsync("Test.cs", "UserService");
 
         // Each public method should have a try/catch wrapper
-        // Count 'try' occurrences — should be 2 (CreateUser + DeleteUser), not 3
+        // Count 'try' occurrences -> should be 2 (CreateUser + DeleteUser), not 3
         var tryCount = CountOccurrences(result.UpdatedText!, "try");
         Assert.That(tryCount, Is.EqualTo(2), "Should wrap exactly 2 public methods");
         Assert.That(result.UpdatedText, Does.Contain("AuditLog"), "Private method should still appear but without wrapping");

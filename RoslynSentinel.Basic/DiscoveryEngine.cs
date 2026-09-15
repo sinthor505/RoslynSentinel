@@ -279,7 +279,7 @@ public class DiscoveryEngine
         if (sortByFrequency)
         {
             // When searching across the whole solution, rank by how many times each
-            // distinct resolved type name appears — most-instantiated type first
+            // distinct resolved type name appears -> most-instantiated type first
             var freqMap = results
                 .GroupBy(r => r.TypeName, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
@@ -485,7 +485,7 @@ public class DiscoveryEngine
 
     private static string? InferImplicitCreationType(ImplicitObjectCreationExpressionSyntax node)
     {
-        // var x = new(...) — check EqualsValueClause → VariableDeclaration type
+        // var x = new(...) -> check EqualsValueClause -> VariableDeclaration type
         if (node.Parent is EqualsValueClauseSyntax equals &&
             equals.Parent is VariableDeclaratorSyntax &&
             equals.Parent?.Parent is VariableDeclarationSyntax varDecl)
@@ -497,7 +497,7 @@ public class DiscoveryEngine
             }
         }
 
-        // x = new(...) — check AssignmentExpression left side
+        // x = new(...) -> check AssignmentExpression left side
         if (node.Parent is AssignmentExpressionSyntax assignment)
         {
             return assignment.Left.ToString();
@@ -518,7 +518,7 @@ public class DiscoveryEngine
             .OfType<TypeDeclarationSyntax>()
             .FirstOrDefault(t => t.Identifier.Text == containerName) ?? throw new InvalidOperationException($"Type '{containerName}' not found.");
 
-        // Standard C# ordering: fields(0) → constructors(1) → destructors(2) → properties(3) → events(4) → methods(5) → nested(6)
+        // Standard C# ordering: fields(0) → constructors(1) → destructors(2) → properties(3) → events(4) → methods(5) -> nested(6)
         static int MemberOrder(MemberDeclarationSyntax m) => m switch
         {
             FieldDeclarationSyntax => 0,
@@ -550,7 +550,7 @@ public class DiscoveryEngine
             // Empty type: insert after the opening brace
             var openBrace = container.OpenBraceToken;
             var lineSpan = openBrace.GetLocation().GetLineSpan();
-            return new BestInsertionResult(filePath, containerName, memberKind, lineSpan.StartLinePosition.Line + 2, "Empty type — inserting after opening brace");
+            return new BestInsertionResult(filePath, containerName, memberKind, lineSpan.StartLinePosition.Line + 2, "Empty type - inserting after opening brace");
         }
 
         // Find last member of same kind
@@ -699,7 +699,7 @@ public class DiscoveryEngine
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             var sourceText = await document.GetTextAsync(cancellationToken);
 
-            // contextSnippet, when omitted, falls back to symbolName as the search text — either
+            // contextSnippet, when omitted, falls back to symbolName as the search text -> either
             // way, lineBefore/lineAfter must be forwarded or disambiguation silently never happens.
             var snippet = contextSnippet ?? symbolName;
             var position = ContextHelper.FindSnippetPosition(sourceText, snippet, lineBefore, lineAfter);

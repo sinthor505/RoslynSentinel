@@ -32,7 +32,7 @@ public sealed class ToolGraph
     }
 
     /// <summary>
-    /// Builds a <see cref="ToolGraph"/> from an explicit list of tag→descriptor registrations.
+    /// Builds a <see cref="ToolGraph"/> from an explicit list of tag->descriptor registrations.
     /// Duplicate tool names for the same tag are silently de-duplicated (first wins).
     /// </summary>
     public static ToolGraph Build(IEnumerable<(DataTag Tag, ToolDescriptor Descriptor)> registrations)

@@ -138,7 +138,7 @@ public class SentinelGitTools
 {
     /// <summary>
     /// Bound on how long a single git subprocess invocation may run. Applied whenever no caller-
-    /// supplied CancellationToken already carries a shorter deadline — MCP tool calls that omit
+    /// supplied CancellationToken already carries a shorter deadline -> MCP tool calls that omit
     /// cancellationToken get CancellationToken.None here, which would otherwise let a hung git
     /// process (see docs/TODO.md's "Git(operation: status) hung indefinitely" entry) block forever.
     /// </summary>
@@ -165,13 +165,13 @@ public class SentinelGitTools
     /// Finds the git repository root. Git operations read the working tree, not the Roslyn
     /// compilation, so this deliberately does NOT require a loaded solution: it falls back to
     /// walking up from the server's own base/working directory when nothing is loaded. When a
-    /// solution IS loaded, its directory is tried FIRST — a loaded solution reflects the
+    /// solution IS loaded, its directory is tried FIRST -> a loaded solution reflects the
     /// worktree/repo the caller most recently pointed the server at via LoadSolution, whereas the
     /// server's base directory and process working directory are fixed at process launch and
     /// never change afterward. Trying those first meant that once LoadSolution pointed the
     /// workspace at a git worktree, status/diff/commit still silently resolved against whatever
     /// repo the server binary happened to be launched from/inside (almost always the primary
-    /// checkout) instead of the worktree — a plausible, well-formed, wrong answer with no error.
+    /// checkout) instead of the worktree -> a plausible, well-formed, wrong answer with no error.
     /// See docs/current/blockers/blocking_error_git_tool_commit_reports_clean_tree_worktree.md.
     /// </summary>
     private string? TryGetGitRoot(out string error)
@@ -198,7 +198,7 @@ public class SentinelGitTools
             return fromBaseDirectory;
         }
 
-        // 3. Walk up from the current working directory — covers a server whose binaries are
+        // 3. Walk up from the current working directory -> covers a server whose binaries are
         //    deployed outside the repo but which was launched from inside it.
         var fromCurrentDirectory = FindRepositoryRoot(Directory.GetCurrentDirectory());
         if (fromCurrentDirectory is not null)
@@ -221,7 +221,7 @@ public class SentinelGitTools
     /// Walks up from <paramref name="startDirectory"/> looking for a <c>.git</c> entry. Accepts a
     /// <c>.git</c> <b>file</b> as well as a directory: linked worktrees and submodules use a
     /// <c>.git</c> file holding a gitdir pointer, and a directory-only check silently walks past
-    /// them into the parent repository — which is exactly how a PlanStepRunner harness clone would
+    /// them into the parent repository -> which is exactly how a PlanStepRunner harness clone would
     /// end up having git operations aimed at the wrong repo.
     /// </summary>
     private static string? FindRepositoryRoot(string? startDirectory)
@@ -236,7 +236,7 @@ public class SentinelGitTools
         }
         catch (Exception)
         {
-            // A malformed or over-long path is not something the caller can act on — treat it as
+            // A malformed or over-long path is not something the caller can act on -> treat it as
             // "nothing found here" so the next candidate directory still gets tried.
             return null;
         }
@@ -277,7 +277,7 @@ public class SentinelGitTools
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
 
-        // A caller-supplied token (if any) can still cancel earlier than GitProcessTimeout — this
+        // A caller-supplied token (if any) can still cancel earlier than GitProcessTimeout -> this
         // only adds a ceiling for the common case (MCP call omits cancellationToken, so this method
         // otherwise gets CancellationToken.None and would wait on a hung git process forever).
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -298,14 +298,14 @@ public class SentinelGitTools
         {
             TryKillGitProcess(process);
             // Full detail (args, timeout value, TODO cross-reference) is server-side only, via the
-            // logger call below — every caller's catch block folds the thrown exception's Message
+            // logger call below -> every caller's catch block folds the thrown exception's Message
             // straight into the ResultError text returned to the agent, so that Message must stay
             // a plain, self-contained statement with no internal paths/docs the agent can't open.
             if (_logger.IsEnabled(LogLevel.Error))
             {
                 _logger.LogError(
                     "git {Args} did not exit within {TimeoutSeconds}s and was killed. Not a normal git " +
-                    "failure — see docs/TODO.md's 'Git(operation: status) hung indefinitely' entry.",
+                    "failure - see docs/TODO.md's 'Git(operation: status) hung indefinitely' entry.",
                     string.Join(' ', args), GitProcessTimeout.TotalSeconds);
             }
             throw new TimeoutException($"Git operation timed out after {GitProcessTimeout.TotalSeconds:0}s and was cancelled.");
@@ -348,7 +348,7 @@ public class SentinelGitTools
         }
         catch
         {
-            // Best-effort — the process may have exited between the check and the kill, or the
+            // Best-effort -> the process may have exited between the check and the kill, or the
             // handle may already be invalid. Nothing more useful to do here.
         }
     }
@@ -374,16 +374,16 @@ public class SentinelGitTools
         int count = 20,
         [Description("diff: \"working\" (unstaged), \"staged\", or a commit hash.")]
         string target = "working",
-        [Description("diff: repo-relative paths to restrict the diff to, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array — call once per file if you need per-file results.")]
+        [Description("diff: repo-relative paths to restrict the diff to, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array - call once per file if you need per-file results.")]
         string? paths = null,
         [Description("diff: byte cap on the returned diff (max 524288).")]
         int maxBytes = 65536,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit, unused otherwise.
         [Description("commit: the commit message. Required for operation=commit.")]
         string? message = null,
-        [Description("stage/commit: which files to stage. \"tracked\" (default) stages modifications and deletions of already-tracked files only (git add -u) and does NOT stage new files. \"all\" stages everything in the working tree including untracked files (git add -A). \"listed\" stages exactly the paths you name in files/paths, untracked ones included — use this whenever you know which files you want. Naming files alongside a scope other than \"listed\" is rejected, so a file list can never be silently overridden.")]
+        [Description("stage/commit: which files to stage. \"tracked\" (default) stages modifications and deletions of already-tracked files only (git add -u) and does NOT stage new files. \"all\" stages everything in the working tree including untracked files (git add -A). \"listed\" stages exactly the paths you name in files/paths, untracked ones included - use this whenever you know which files you want. Naming files alongside a scope other than \"listed\" is rejected, so a file list can never be silently overridden.")]
         GitStageScope scope = GitStageScope.tracked,
-        [Description("stage/commit: repo-relative paths to stage, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array — call once per file if you need per-file results. Requires scope=\"listed\". Alias of paths for these operations — pass one or the other, not both.")]
+        [Description("stage/commit: repo-relative paths to stage, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array - call once per file if you need per-file results. Requires scope=\"listed\". Alias of paths for these operations - pass one or the other, not both.")]
         string? files = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is required when operation=revert, unused otherwise.
         [Description("revert: the commit to revert (full or short hash, from log). Required for operation=revert.")]
@@ -418,7 +418,7 @@ public class SentinelGitTools
             return new
             {
                 Success = false,
-                Error = "Both 'files' and 'paths' were supplied — they are aliases for the same list and must not be combined. Pass just one of them (either spelling is accepted)."
+                Error = "Both 'files' and 'paths' were supplied - they are aliases for the same list and must not be combined. Pass just one of them (either spelling is accepted)."
             };
         }
         var resolvedPaths = !string.IsNullOrWhiteSpace(files) ? files : paths;
@@ -524,7 +524,7 @@ public class SentinelGitTools
         count = Math.Clamp(count, 1, 100);
         try
         {
-            // Unit separator (ASCII 31) used as field delimiter — safe in commit messages.
+            // Unit separator (ASCII 31) used as field delimiter -> safe in commit messages.
             const string sep = "\x1f";
             var format = $"%H{sep}%h{sep}%an{sep}%aI{sep}%s";
 
@@ -676,7 +676,7 @@ public class SentinelGitTools
     // Added by InsertMemberBefore (expected - used for diagnostics)
     /// <summary>
     /// Removes files from the index (<c>git reset</c>), leaving the working tree untouched. The
-    /// tool could previously stage but never un-stage, so any mis-stage forced a shell fallback —
+    /// tool could previously stage but never un-stage, so any mis-stage forced a shell fallback ->
     /// a state the tool could create but not exit. With no paths this resets the whole index; with
     /// paths it un-stages only those.
     /// </summary>
@@ -736,7 +736,7 @@ public class SentinelGitTools
 
             // When specific files were named (scope=listed), restrict the commit itself to those
             // paths via a pathspec. Without this, `git commit -m message` commits the ENTIRE
-            // current index regardless of what was just staged above — silently sweeping in
+            // current index regardless of what was just staged above -> silently sweeping in
             // anything left over from earlier staging in the same working tree. `files`/`paths`
             // must narrow the commit, not just add to what StageAsync staged.
             string[] commitArgs;
@@ -802,7 +802,7 @@ public class SentinelGitTools
             {
                 Success = true,
                 CommitHash = newHash,
-                Message = noCommit ? "Revert staged — call commit to finalise." : stdout.Trim(),
+                Message = noCommit ? "Revert staged - call commit to finalise." : stdout.Trim(),
                 PendingCommit = noCommit,
             };
         }
@@ -815,7 +815,7 @@ public class SentinelGitTools
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Lists branches (default), or creates/deletes one when <paramref name="branchName"/> is
-    /// given. Creation is a plain, non-destructive <c>git branch &lt;name&gt; [startPoint]</c> — it
+    /// given. Creation is a plain, non-destructive <c>git branch &lt;name&gt; [startPoint]</c> -> it
     /// does not switch to the new branch; use <c>checkout</c> for that, optionally with
     /// <c>createBranch=true</c> to do both in one call. Deletion uses the safe <c>-d</c> form
     /// (refuses an unmerged branch) rather than <c>-D</c>, so a mistaken delete can't silently
@@ -923,7 +923,7 @@ public class SentinelGitTools
     }
 
     /// <summary>
-    /// Pushes the current branch to <paramref name="remoteName"/>. Never forces — there is no
+    /// Pushes the current branch to <paramref name="remoteName"/>. Never forces -> there is no
     /// exposed <c>--force</c>/<c>--force-with-lease</c>, since a wrong force-push is destructive to
     /// shared history and this tool has no confirmation gate for it yet.
     /// </summary>
@@ -978,7 +978,7 @@ public class SentinelGitTools
 
     /// <summary>
     /// Pulls (fetch + merge, git's default) the current branch from <paramref name="remoteName"/>.
-    /// No <c>--rebase</c>/<c>--force</c> options exposed yet — a plain merge pull is the
+    /// No <c>--rebase</c>/<c>--force</c> options exposed yet -> a plain merge pull is the
     /// least-surprising default and never rewrites local commits.
     /// </summary>
     private async Task<GitRemoteResult> PullAsync(
@@ -998,7 +998,8 @@ public class SentinelGitTools
             _logger.LogError(ex, "Git pull failed (remote={Remote})", remoteName);
             return new GitRemoteResult { Success = false, Operation = "pull", Error = $"Git pull failed: {ex.Message}" };
         }
-    }}
+    }
+}
 // Added by AddTopLevelType (expected - used for diagnostics)
 public class GitBranchEntry
 {

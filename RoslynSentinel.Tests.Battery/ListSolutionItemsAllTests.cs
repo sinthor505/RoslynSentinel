@@ -1,4 +1,4 @@
-// Coverage for ListSolutionItems(kind: all) — see docs/current/plan-orientation-breaker.md
+// Coverage for ListSolutionItems(kind: all) -> see docs/current/plan-orientation-breaker.md
 // section 3. This is the aggregation option the orientation breaker's tripped-state message
 // points agents at as a "browse everything" alternative to guessing SearchSolutionText
 // patterns: it returns projects + solutionItems + every project's files and dependencies in

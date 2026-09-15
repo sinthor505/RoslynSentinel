@@ -89,7 +89,7 @@ public class SemanticSearchEngine
                 }
                 catch (Exception)
                 {
-                    // non-fatal — contextSnippet stays null
+                    // non-fatal -> contextSnippet stays null
                 }
 
                 results.Add(new SearchResult(
@@ -141,7 +141,7 @@ public class SemanticSearchEngine
 
             if (attrSymbol == null)
             {
-                // Attribute not found in this project's compilation — skip.
+                // Attribute not found in this project's compilation -> skip.
                 continue;
             }
 

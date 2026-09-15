@@ -1,6 +1,6 @@
 namespace RoslynSentinel.Common;
 
-/// <summary>Canonical batch input — used by all batch-first mutation tools.</summary>
+/// <summary>Canonical batch input -> used by all batch-first mutation tools.</summary>
 public class BatchTargetInput
 {
     public List<BatchTarget> Targets { get; set; } = new();
@@ -47,19 +47,19 @@ public record AsyncifyPhaseCount
 /// </summary>
 public record AsyncifyPhaseBreakdown
 {
-    /// <summary>Phase 0 — HandlerExtract: event-handler bodies extracted into new methods.</summary>
+    /// <summary>Phase 0 -> HandlerExtract: event-handler bodies extracted into new methods.</summary>
     public AsyncifyPhaseCount HandlerExtract { get; init; } = new();
-    /// <summary>Phase 1 — Flag: methods newly annotated [MigrationCandidate("AsyncBridgeCandidate")].</summary>
+    /// <summary>Phase 1 -> Flag: methods newly annotated [MigrationCandidate("AsyncBridgeCandidate")].</summary>
     public AsyncifyPhaseCount Flag { get; init; } = new();
-    /// <summary>Phase 2 — Bridge: sync methods converted to bridge pattern (sync stub + async overload).</summary>
+    /// <summary>Phase 2 -> Bridge: sync methods converted to bridge pattern (sync stub + async overload).</summary>
     public AsyncifyPhaseCount Bridge { get; init; } = new();
-    /// <summary>Phase 3 — Uplift: caller methods updated to use async overloads directly.</summary>
+    /// <summary>Phase 3 -> Uplift: caller methods updated to use async overloads directly.</summary>
     public AsyncifyPhaseCount Uplift { get; init; } = new();
-    /// <summary>Phase 3a — HandlerToAsync: extracted event-handler bodies bridged.</summary>
+    /// <summary>Phase 3a -> HandlerToAsync: extracted event-handler bodies bridged.</summary>
     public AsyncifyPhaseCount HandlerToAsync { get; init; } = new();
-    /// <summary>Phase 3b — Handler: AsyncHandlerCandidate event handlers converted in-place to async void.</summary>
+    /// <summary>Phase 3b -> Handler: AsyncHandlerCandidate event handlers converted in-place to async void.</summary>
     public AsyncifyPhaseCount Handler { get; init; } = new();
-    /// <summary>Phase 4 — PropagateCt: CancellationToken forwarded through bridged-file call sites.</summary>
+    /// <summary>Phase 4 -> PropagateCt: CancellationToken forwarded through bridged-file call sites.</summary>
     public AsyncifyPhaseCount PropagateCt { get; init; } = new();
 }
 
@@ -94,12 +94,12 @@ public record BatchResultSummary : EngineResultBase
     {
         get; init;
     }
-    /// <summary>Populated when FailuresTruncated=true. Reason→count over the captured sample (first 10 failures).</summary>
+    /// <summary>Populated when FailuresTruncated=true. Reason->count over the captured sample (first 10 failures).</summary>
     public Dictionary<string, int>? FailuresByReason
     {
         get; init;
     }
-    /// <summary>"ok" | "caution" | "halt" — keyed field, never infer from prose.</summary>
+    /// <summary>"ok" | "caution" | "halt" -> keyed field, never infer from prose.</summary>
     public string Severity { get; init; } = "ok";
     public string Directive { get; init; } = "";
     // Added by InsertMemberAfter (expected - used for diagnostics)
@@ -111,10 +111,10 @@ public record BatchResultSummary : EngineResultBase
     }
     /// <summary>
     /// Score value to help calibrate <c>scoreThreshold</c> on subsequent Asyncify calls.
-    /// From FlagAsyncMigrationCandidates: the lowest score among newly-flagged methods — set
+    /// From FlagAsyncMigrationCandidates: the lowest score among newly-flagged methods -> set
     /// scoreThreshold at or below this to include all flagged candidates.
     /// From Asyncify when no candidates qualified: the highest score among candidates that fell
-    /// below scoreThreshold — lower scoreThreshold to this value to include the best one.
+    /// below scoreThreshold -> lower scoreThreshold to this value to include the best one.
     /// Null when no candidates were scored or the operation used scope="targets".
     /// </summary>
     public int? MinCandidateScore
@@ -149,7 +149,7 @@ public record BatchResultSummary : EngineResultBase
         failed > 0 || (succeeded == 0 && skipped == 0) ? DirectiveKind.ReviewRequired : DirectiveKind.Proceed;
 }
 
-/// <summary>Return type for <c>AsyncifyLoop</c> — aggregates per-iteration Asyncify results.</summary>
+/// <summary>Return type for <c>AsyncifyLoop</c> -> aggregates per-iteration Asyncify results.</summary>
 public record AsyncifyLoopResult
 {
     /// <summary>Number of complete iterations executed.</summary>
@@ -157,7 +157,7 @@ public record AsyncifyLoopResult
     {
         get; init;
     }
-    /// <summary>True when the last iteration produced Succeeded=0 and Failed=0 — nothing left to migrate.</summary>
+    /// <summary>True when the last iteration produced Succeeded=0 and Failed=0 -> nothing left to migrate.</summary>
     public bool Converged
     {
         get; init;
@@ -195,8 +195,8 @@ public class FailureDetail
 }
 
 /// <summary>
-/// Collapses a failure/skip list down to a reason→count breakdown. Per-item file/method detail
-/// isn't actionable to a caller deciding what to do next — a batch of thousands of members
+/// Collapses a failure/skip list down to a reason->count breakdown. Per-item file/method detail
+/// isn't actionable to a caller deciding what to do next -> a batch of thousands of members
 /// skipped for the same reason (e.g. one validation error, or the same maxMembers cap) is fully
 /// described by the reason and how many, not by echoing every row back.
 /// </summary>
@@ -206,7 +206,7 @@ public static class FailureSummary
         failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count());
 }
 
-// ── Phase 4 — Batch-first input types ─────────────────────────────────────────
+// ── Phase 4 -> Batch-first input types ─────────────────────────────────────────
 
 /// <summary>One target in a <c>handler_extract</c> call.</summary>
 public class HandlerExtractTarget
@@ -251,7 +251,7 @@ public class UpliftTarget
     }
     /// <summary>
     /// Optional Roslyn documentation-comment ID (e.g. <c>M:Avaal.Service.CommonSearch.search(System.String)</c>)
-    /// that uniquely identifies the bridge symbol. When set, only callers of this exact overload are uplifted —
+    /// that uniquely identifies the bridge symbol. When set, only callers of this exact overload are uplifted ->
     /// unrelated methods with the same name on other types are ignored. Copy from <c>ObsoleteCallerFinding.SymbolId</c>.
     /// </summary>
     public string? SymbolId
@@ -272,7 +272,7 @@ public class RunUpliftInput
 /// <summary>One target in a <c>flag_migration_candidates</c> call (scope="targets").</summary>
 public class FlagCandidateTarget
 {
-    // Wire type is string, not FilePathWrapper — see comment on HandlerExtractTarget.FilePathWrapper above.
+    // Wire type is string, not FilePathWrapper -> see comment on HandlerExtractTarget.FilePathWrapper above.
     public string FilePath { get; set; } = "";
     public string MethodName { get; set; } = "";
     public string Pattern { get; set; } = "AsyncBridgeCandidate";
@@ -286,7 +286,7 @@ public class FlagCandidateTarget
 /// <summary>Canonical input for <c>flag_migration_candidates</c>.</summary>
 public class FlagCandidatesInput
 {
-    /// <summary>"targets" — process explicit list; "project" — autonomous project-level scan.</summary>
+    /// <summary>"targets" -> process explicit list; "project" -> autonomous project-level scan.</summary>
     public string Scope { get; set; } = "targets";
     /// <summary>Required when Scope="targets".</summary>
     public List<FlagCandidateTarget>? Targets
@@ -308,7 +308,7 @@ public class FlagCandidatesInput
     public bool ForceRescan { get; set; } = false;
 }
 
-// ── Phase 6 — asyncify macro input ────────────────────────────────────────────
+// ── Phase 6 -> asyncify macro input ────────────────────────────────────────────
 
 /// <summary>Canonical input for the <c>asyncify</c> macro-workflow tool.</summary>
 public class AsyncifyInput
@@ -372,11 +372,11 @@ public class AsyncifyInput
     public int MaxIterations { get; set; } = 0;
 }
 
-// ── Phase 7 — per-operation result types with next-step chaining fields ───────
+// ── Phase 7 -> per-operation result types with next-step chaining fields ───────
 
 /// <summary>
 /// Return type for <c>bridge_async_methods</c>. Wraps <see cref="BatchResultSummary"/> and adds
-/// <see cref="SuggestedUpliftTargets"/> — the exact input for the next workflow step
+/// <see cref="SuggestedUpliftTargets"/> -> the exact input for the next workflow step
 /// (<c>uplift_callers</c>).
 /// </summary>
 public class BridgeAsyncMethodsResult
@@ -391,7 +391,7 @@ public class BridgeAsyncMethodsResult
 
 /// <summary>
 /// Return type for <c>uplift_callers</c>. Wraps <see cref="BatchResultSummary"/> and adds
-/// <see cref="SuggestedPropagateTargets"/> — the exact input for the next workflow step
+/// <see cref="SuggestedPropagateTargets"/> -> the exact input for the next workflow step
 /// (<c>propagate_cancellation_token</c>).
 /// </summary>
 public class UpliftCallersResult
@@ -405,7 +405,7 @@ public class UpliftCallersResult
     public List<BatchTarget> SuggestedPropagateTargets { get; init; } = new();
     /// <summary>
     /// Structured outcome classification with routed failure hints (spec §3.6).
-    /// Substrate-derived — never infer outcome from Summary.Severity or prose scanning.
+    /// Substrate-derived -> never infer outcome from Summary.Severity or prose scanning.
     /// </summary>
     public OperationSummary? OperationSummary
     {
@@ -413,7 +413,7 @@ public class UpliftCallersResult
     }
 }
 
-// ── Phase 7 — async_migrate combined input ────────────────────────────────────
+// ── Phase 7 -> async_migrate combined input ────────────────────────────────────
 
 /// <summary>
 /// Combined input for <c>async_migrate</c>. Only populate the fields relevant to
@@ -515,7 +515,7 @@ public class AsyncMigrateInput
 /// <summary>One edit in a batch <c>ReplaceSnippet</c> call.</summary>
 public class SnippetEdit
 {
-    // Wire type is string, not FilePathWrapper — see comment on HandlerExtractTarget.FilePath above.
+    // Wire type is string, not FilePathWrapper -> see comment on HandlerExtractTarget.FilePath above.
     /// <summary>Absolute path of the .cs file this edit applies to.</summary>
     public string FilePath { get; set; } = "";
     /// <summary>Verbatim text to find and replace, matched exactly against the file's original content.</summary>
@@ -537,7 +537,7 @@ public class SnippetEdit
 /// <summary>One edit in a batch ModifyModifier call.</summary>
 public class ModifierEdit
 {
-    // Wire type is string, not FilePathWrapper — see comment on HandlerExtractTarget.FilePath above.
+    // Wire type is string, not FilePathWrapper -> see comment on HandlerExtractTarget.FilePath above.
     public string FilePath { get; set; } = "";
     public string TargetName { get; set; } = "";
     public NonAccessibilityModifier Modifier
@@ -565,7 +565,7 @@ public class ModifierEdit
 /// <summary>One edit in a batch ModifyAttribute call.</summary>
 public class AttributeEdit
 {
-    // Wire type is string, not FilePathWrapper — see comment on HandlerExtractTarget.FilePath above.
+    // Wire type is string, not FilePathWrapper -> see comment on HandlerExtractTarget.FilePath above.
     public string FilePath { get; set; } = "";
     public string TargetName { get; set; } = "";
     public string ExistingAttribute { get; set; } = "";
@@ -573,7 +573,7 @@ public class AttributeEdit
     {
         get; set;
     }
-    // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for Action=replace, unused for add/remove —
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for Action=replace, unused for add/remove ->
     // same rule as ModifyAttribute's own newAttribute parameter.
     public string? NewAttribute
     {

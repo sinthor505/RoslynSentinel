@@ -1,4 +1,4 @@
-// Battery #34 — Real-Solution Smoke Tests: Engines Not Covered in Battery #28
+// Battery #34 -> Real-Solution Smoke Tests: Engines Not Covered in Battery #28
 //
 // Loads a real .NET solution to smoke-test all 15 engines that power
 // write/transform MCP tools but were NOT yet smoke-tested against live code:
@@ -14,9 +14,9 @@
 //     ModernizationUpgradeEngine
 //
 //   All tests follow the Battery #28 contract:
-//     • DoesNotThrowAsync — engine must not crash on real-world code
-//     • result Is.Not.Null — engine must return a valid object
-//     • Engines are called directly — no disk writes (safe)
+//     • DoesNotThrowAsync -> engine must not crash on real-world code
+//     • result Is.Not.Null -> engine must return a valid object
+//     • Engines are called directly -> no disk writes (safe)
 
 #pragma warning disable CS8618
 
@@ -34,7 +34,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // ── State ───────────────────────────────────────────────────────────────
     private IWorkspaceManager _workspaceManager = null!;
 
-    /// Generic file discovered at SetUp — guaranteed to contain a class.
+    /// Generic file discovered at SetUp -> guaranteed to contain a class.
     private string _realFilePath = null!;
     private string _realClassName = null!;
     private string _realMethodName = null!;
@@ -102,7 +102,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     public void TearDown() => _workspaceManager?.Dispose();
 
     // =========================================================================
-    // 1 — PerformanceEngine
+    // 1 -> PerformanceEngine
     // =========================================================================
 
     [Test]
@@ -139,7 +139,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 2 — SecurityEngine
+    // 2 -> SecurityEngine
     // =========================================================================
 
     [Test]
@@ -165,7 +165,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 3 — AsyncSafetyEngine
+    // 3 -> AsyncSafetyEngine
     // =========================================================================
 
     [Test]
@@ -192,7 +192,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 4 — AsyncOptimizationEngine
+    // 4 -> AsyncOptimizationEngine
     // =========================================================================
 
     [Test]
@@ -220,7 +220,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 5 — ThreadSafetyEngine
+    // 5 -> ThreadSafetyEngine
     // =========================================================================
 
     [Test]
@@ -237,7 +237,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 6 — ControlFlowEngine
+    // 6 -> ControlFlowEngine
     // =========================================================================
 
     [Test]
@@ -252,7 +252,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 7 — DiagnosticEngine
+    // 7 -> DiagnosticEngine
     // =========================================================================
 
     [Test]
@@ -278,7 +278,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 8 — ModernizationEngine (ClassToRecord — staged, not applied)
+    // 8 -> ModernizationEngine (ClassToRecord -> staged, not applied)
     // =========================================================================
 
     [Test]
@@ -295,7 +295,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 9 — SyntaxUpgradeEngine
+    // 9 -> SyntaxUpgradeEngine
     // =========================================================================
 
     [Test]
@@ -323,7 +323,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 10 — CodeGenerationEngine
+    // 10 -> CodeGenerationEngine
     // =========================================================================
 
     [Test]
@@ -351,7 +351,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 11 — AnalysisEngine (solution-wide + file-level)
+    // 11 -> AnalysisEngine (solution-wide + file-level)
     // =========================================================================
 
     [Test]
@@ -380,7 +380,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 12 — RefactoringEngine
+    // 12 -> RefactoringEngine
     // =========================================================================
 
     [Test]
@@ -420,12 +420,12 @@ public class RealSolution_EngineSmoke_Battery34Tests
         await Assert.DoesNotThrowAsync(async () =>
             result = (await engine.SyncInterfaceToImplementationAsync(
                 _realFilePath, _realClassName, "I" + _realClassName)).UpdatedText!,
-            "RefactoringEngine.SyncInterfaceToImplementationAsync must not throw (interface may not exist — graceful return expected).");
+            "RefactoringEngine.SyncInterfaceToImplementationAsync must not throw (interface may not exist - graceful return expected).");
         Assert.That(result, Is.Not.Null);
     }
 
     // =========================================================================
-    // 13 — GranularRefactoringEngine
+    // 13 -> GranularRefactoringEngine
     // =========================================================================
 
     [Test]
@@ -441,7 +441,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 14 — ModernizationUpgradeEngine
+    // 14 -> ModernizationUpgradeEngine
     // =========================================================================
 
     [Test]
@@ -468,7 +468,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 15 — Data quality invariants across all new engines
+    // 15 -> Data quality invariants across all new engines
     // =========================================================================
 
     [Test]

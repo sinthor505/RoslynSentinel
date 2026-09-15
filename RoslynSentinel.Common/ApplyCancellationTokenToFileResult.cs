@@ -25,4 +25,4 @@ public record ApplyCancellationTokenToFileResult(
     bool WorkspaceInSync = false,
     int WorkspaceVersion = 0
 );
-// v2 — ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)
+// v2 -> ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)

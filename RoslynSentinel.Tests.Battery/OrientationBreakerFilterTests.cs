@@ -2,13 +2,13 @@
 // registered in ServiceRegistrationExtensionsBasic.AddRoslynSentinelToolsBasic (see
 // docs/current/plan-orientation-breaker.md). Unlike OrientationBreakerTests.cs (which calls
 // PersistentWorkspaceManager's breaker interfaces directly), this drives genuine JSON-RPC
-// tool calls through the full filter chain, so it also proves the filter itself — not just
-// the breaker state machine — behaves correctly: short-circuiting non-allowlisted tools while
+// tool calls through the full filter chain, so it also proves the filter itself -> not just
+// the breaker state machine -> behaves correctly: short-circuiting non-allowlisted tools while
 // tripped, letting allowlisted tools through, and auto-resetting on success.
 //
 // Harness pattern (paired Pipes + WithStreamServerTransport + StreamClientTransport) copied
 // from RoslynSentinel.Tests.Advanced\McpTasksHarnessTests.cs, the first fixture to prove this
-// works at all — that one drives AddRoslynSentinelToolsAdvanced; this one drives
+// works at all -> that one drives AddRoslynSentinelToolsAdvanced; this one drives
 // AddRoslynSentinelToolsBasic, which is where the orientation breaker filter is registered.
 
 using System.IO.Pipelines;
@@ -67,7 +67,7 @@ public class OrientationBreakerFilterTests
             "LoadSolution",
             new Dictionary<string, object?> { ["reason"] = "test message", ["solutionPath"] = _fixture.SolutionPath }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
-        Assert.That(loadResult.IsError, Is.Not.True, "Fixture solution failed to load — cannot exercise the filter without a loaded solution.");
+        Assert.That(loadResult.IsError, Is.Not.True, "Fixture solution failed to load - cannot exercise the filter without a loaded solution.");
     }
 
     [TearDown]
@@ -133,7 +133,7 @@ public class OrientationBreakerFilterTests
         Assert.That(doc.RootElement.TryGetProperty("findings", out var findingsProp), Is.True,
             "The triggering call's own result should carry a findings array, not just a bare error.");
         Assert.That(findingsProp.GetArrayLength(), Is.GreaterThan(0),
-            "The 3rd call is the one that trips the breaker, so it should carry a non-empty findings array — not a 4th call.");
+            "The 3rd call is the one that trips the breaker, so it should carry a non-empty findings array - not a 4th call.");
 
         var firstFinding = findingsProp[0];
         Assert.That(firstFinding.GetProperty("source").GetString(), Is.EqualTo("OrientationBreaker"));
@@ -153,7 +153,7 @@ public class OrientationBreakerFilterTests
             cancellationToken: TestContext.CurrentContext.CancellationToken);
         Assert.That(listAllResult.IsError, Is.Not.True, "ListAll is allowlisted, so it should reach the real tool and succeed even while tripped.");
 
-        // Breaker should now be reset — a previously-blocked, non-allowlisted tool should succeed again.
+        // Breaker should now be reset -> a previously-blocked, non-allowlisted tool should succeed again.
         var afterReset = await _client.CallToolAsync(
             "ListWorkspaceSolutions",
             new Dictionary<string, object?> { ["reason"] = "test message", ["workspacePath"] = _fixture.SolutionDirectory }!,

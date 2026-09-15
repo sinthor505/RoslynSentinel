@@ -49,7 +49,7 @@ public class ToolGapsTests
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Bug 1: MakeMethodThreadSafeAsync — lockFieldName parameter
+    // Bug 1: MakeMethodThreadSafeAsync -> lockFieldName parameter
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -86,7 +86,7 @@ public class ToolGapsTests
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Bug 2: FindTaskWhenAllUsageAsync — dependency-aware sequential detection
+    // Bug 2: FindTaskWhenAllUsageAsync -> dependency-aware sequential detection
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -373,7 +373,7 @@ public class C {
     [Test]
     public async Task FindUseFrozenCollections_DoesNotFlag_InstanceDictionary()
     {
-        // Not static — should not be flagged
+        // Not static -> should not be flagged
         SetSource(
             "public class C { private readonly System.Collections.Generic.Dictionary<string, int> _map = new(); }",
             "C.cs");

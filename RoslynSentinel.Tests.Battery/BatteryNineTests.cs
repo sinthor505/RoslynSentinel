@@ -4,11 +4,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 /// <summary>
-/// Battery #9 — Dedicated test fixtures for four engines lacking named coverage:
-///   A. TestingEngine              (3 tests) — CalculateComplexity, GenerateTestSkeleton, GenerateTestScaffold
-///   B. PerformanceEngine          (3 tests) — StringConcatInLoop detected, clean code, unknown file
-///   C. StructuralRefinementEngine (3 tests) — SyncTypeAndFilename match/mismatch/unknown
-///   D. SolutionManagementEngine   (2 tests) — CreateProject null path, SplitProject propagates
+/// Battery #9 -> Dedicated test fixtures for four engines lacking named coverage:
+///   A. TestingEngine              (3 tests) -> CalculateComplexity, GenerateTestSkeleton, GenerateTestScaffold
+///   B. PerformanceEngine          (3 tests) -> StringConcatInLoop detected, clean code, unknown file
+///   C. StructuralRefinementEngine (3 tests) -> SyncTypeAndFilename match/mismatch/unknown
+///   D. SolutionManagementEngine   (2 tests) -> CreateProject null path, SplitProject propagates
 ///
 /// Total: 11 tests.
 /// </summary>
@@ -125,7 +125,7 @@ public class SolutionManagementEngineTests
     [Test]
     public async Task CreateProject_NullSolutionPath_ThrowsMissingSolutionPath()
     {
-        // AdhocWorkspace has no FilePathWrapper; SolutionPath is also null → "Solution path not found."
+        // AdhocWorkspace has no FilePathWrapper; SolutionPath is also null -> "Solution path not found."
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _engine.CreateProjectAsync("NewProject", "classlib"));
 
@@ -239,7 +239,7 @@ public class StructuralRefinementEngineTests
     [Test]
     public async Task SyncTypeAndFilename_WhenFilenameMatchesType_ReturnsNoChangeMessage()
     {
-        // File "MyService.cs" contains class MyService → names already match
+        // File "MyService.cs" contains class MyService -> names already match
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyService.cs", "public class MyService {}")]);
         _workspaceManager.SetTestSolution(solution);
 
@@ -251,14 +251,14 @@ public class StructuralRefinementEngineTests
     [Test]
     public async Task SyncTypeAndFilename_WhenFilenameDoesNotMatchType_ReturnsChangeDescriptor()
     {
-        // File "Wrong.cs" but class is MyService → mismatch, engine proposes rename
+        // File "Wrong.cs" but class is MyService -> mismatch, engine proposes rename
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Wrong.cs", "public class MyService {}")]);
         _workspaceManager.SetTestSolution(solution);
 
         var result = await _engine.SyncTypeAndFilenameAsync("Wrong.cs");
 
         // The engine proposes the rename via Changes (new file path -> content) and Message,
-        // not UpdatedText — there is no "CHANGE_" staging id anywhere in the implementation.
+        // not UpdatedText -> there is no "CHANGE_" staging id anywhere in the implementation.
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should propose a rename.");
         var changeKey = result.Changes?.Keys.FirstOrDefault(k => k.Contains("MyService.cs"));
         Assert.That(changeKey?.Absolute, Is.Not.Null.And.Not.Empty, "Target filename should be the type name");

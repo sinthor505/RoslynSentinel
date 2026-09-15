@@ -232,11 +232,11 @@ public class PathDrivenTestEngine
     /// <summary>
     /// Returns true when a loop is in the path of incoming or outgoing variables.
     ///
-    /// For all loop types — Incoming check:
+    /// For all loop types -> Incoming check:
     ///   The loop condition or (for 'for' loops) initializer references a method parameter.
     ///   A constant-bound for loop is deterministic, so boundary tests on input are meaningless.
     ///
-    /// For while/do-while only — Outgoing check:
+    /// For while/do-while only -> Outgoing check:
     ///   The loop body writes to a variable that appears in a return statement.
     ///   'for' loops are excluded from the outgoing check because a constant bound makes the
     ///   loop deterministic regardless of what accumulates in the body.
@@ -260,7 +260,7 @@ public class PathDrivenTestEngine
             return true;
         }
 
-        // For 'for' loops also check the initializer, then stop — no outgoing check.
+        // For 'for' loops also check the initializer, then stop -> no outgoing check.
         // A for loop with a constant bound (no param ref) is deterministic: the iteration
         // count cannot be varied by the caller, so zero/one/multi boundary stubs add no value.
         if (loop is ForStatementSyntax forStmt)
@@ -349,13 +349,13 @@ public class PathDrivenTestEngine
 
         return new PathDrivenTestCase(
             $"{methodName}_HappyPath_ReturnsExpectedResult",
-            "All inputs valid — method completes normally",
+            "All inputs valid - method completes normally",
             constraints,
             "Method returns successfully without exception",
             arrange.ToString().TrimEnd(),
             $"            var result = {await_}_sut.{methodName}({paramList});",
             "            // TODO: Assert result equals expected value",
-            "Happy path — mock setups are marked TODO; replace with real return values.");
+            "Happy path - mock setups are marked TODO; replace with real return values.");
     }
 
     // ── Per-decision-point cases ─────────────────────────────────────────────────
@@ -398,7 +398,7 @@ public class PathDrivenTestEngine
                         {
                             cases.Add(new PathDrivenTestCase(
                                 $"{methodName}_{SanitizeName(dp.Condition)}_IsFalse_{offset + cases.Count + 1}",
-                                $"Condition '{shortCond}' evaluates to false — takes else branch",
+                                $"Condition '{shortCond}' evaluates to false - takes else branch",
                                 [new PathInputConstraint(falseParam, "satisfies false/else branch", falseVal)],
                                 "Takes the else branch",
                                 $"            // TODO: Arrange so '{shortCond}' is false" +
@@ -417,7 +417,7 @@ public class PathDrivenTestEngine
                     {
                         cases.Add(new PathDrivenTestCase(
                             $"{methodName}_{SanitizeName(dp.Condition)}_{SanitizeName(label)}_{offset + cases.Count + 1}",
-                            $"Switch on '{dp.Condition}' — case {label}",
+                            $"Switch on '{dp.Condition}' - case {label}",
                             [new PathInputConstraint(dp.Condition, $"equals {label}", label)],
                             $"Executes case {label} branch",
                             $"            // TODO: Arrange so '{dp.Condition}' equals {label}",
@@ -431,7 +431,7 @@ public class PathDrivenTestEngine
                 {
                     cases.Add(new PathDrivenTestCase(
                         $"{methodName}_{SanitizeName(dp.Condition)}_EmptyCollection_{offset + cases.Count + 1}",
-                        $"ForEach over '{dp.Condition}' — empty collection, loop body never executes",
+                        $"ForEach over '{dp.Condition}' - empty collection, loop body never executes",
                         [new PathInputConstraint(dp.Condition, "empty collection", "[]")],
                         "Loop body is skipped entirely",
                         $"            // TODO: Arrange so '{dp.Condition}' is empty",
@@ -440,7 +440,7 @@ public class PathDrivenTestEngine
 
                     cases.Add(new PathDrivenTestCase(
                         $"{methodName}_{SanitizeName(dp.Condition)}_WithItems_{offset + cases.Count + 1}",
-                        $"ForEach over '{dp.Condition}' — collection has items, loop body executes",
+                        $"ForEach over '{dp.Condition}' - collection has items, loop body executes",
                         [new PathInputConstraint(dp.Condition, "collection with at least one item", "[item]")],
                         "Loop body executes at least once",
                         $"            // TODO: Arrange so '{dp.Condition}' has at least one item",
@@ -454,7 +454,7 @@ public class PathDrivenTestEngine
                     // Zero iterations: condition false on entry (boundary at 0)
                     cases.Add(new PathDrivenTestCase(
                         $"{methodName}_{SanitizeName(dp.Condition)}_ZeroIterations_{offset + cases.Count + 1}",
-                        $"For loop '{shortCond}' — condition false on entry, body never executes",
+                        $"For loop '{shortCond}' - condition false on entry, body never executes",
                         [new PathInputConstraint(dp.Condition, "loop bound = 0 so condition is false immediately", "0")],
                         "Loop body never runs; result is the initial/default value",
                         $"            // TODO: Arrange so '{shortCond}' is false on first evaluation\n" +
@@ -462,10 +462,10 @@ public class PathDrivenTestEngine
                         $"            {await_}_sut.{methodName}({paramList});",
                         $"            // TODO: Assert the result equals the identity/default (e.g. 0, empty, null)"));
 
-                    // One iteration: boundary test — condition true exactly once
+                    // One iteration: boundary test -> condition true exactly once
                     cases.Add(new PathDrivenTestCase(
                         $"{methodName}_{SanitizeName(dp.Condition)}_OneIteration_{offset + cases.Count + 1}",
-                        $"For loop '{shortCond}' — condition true exactly once (single-element boundary)",
+                        $"For loop '{shortCond}' - condition true exactly once (single-element boundary)",
                         [new PathInputConstraint(dp.Condition, "loop bound = 1 so body executes once", "1")],
                         "Loop body runs exactly once; good for single-element boundary validation",
                         $"            // TODO: Arrange so '{shortCond}' allows exactly one iteration\n" +
@@ -476,7 +476,7 @@ public class PathDrivenTestEngine
                     // Multiple iterations: representative working case
                     cases.Add(new PathDrivenTestCase(
                         $"{methodName}_{SanitizeName(dp.Condition)}_MultipleIterations_{offset + cases.Count + 1}",
-                        $"For loop '{shortCond}' — multiple iterations (N > 1)",
+                        $"For loop '{shortCond}' - multiple iterations (N > 1)",
                         [new PathInputConstraint(dp.Condition, "loop bound > 1", "3 or more")],
                         "Loop body runs N times; result accumulates across all iterations",
                         $"            // TODO: Arrange so '{shortCond}' allows multiple iterations",
@@ -490,7 +490,7 @@ public class PathDrivenTestEngine
                     // Never enters: condition false before first check
                     cases.Add(new PathDrivenTestCase(
                         $"{methodName}_{SanitizeName(dp.Condition)}_NeverEnters_{offset + cases.Count + 1}",
-                        $"While loop '{shortCond}' — condition false before first check, body never executes",
+                        $"While loop '{shortCond}' - condition false before first check, body never executes",
                         [new PathInputConstraint(dp.Condition, "condition false immediately", "make condition evaluate to false")],
                         "Loop is entirely skipped; result is the pre-loop value",
                         $"            // TODO: Arrange so '{shortCond}' is false on first evaluation",
@@ -500,7 +500,7 @@ public class PathDrivenTestEngine
                     // Terminates after some iterations: condition eventually becomes false
                     cases.Add(new PathDrivenTestCase(
                         $"{methodName}_{SanitizeName(dp.Condition)}_Terminates_{offset + cases.Count + 1}",
-                        $"While loop '{shortCond}' — executes then terminates when condition becomes false",
+                        $"While loop '{shortCond}' - executes then terminates when condition becomes false",
                         [new PathInputConstraint(dp.Condition, "condition true initially, false after N iterations", "finite input")],
                         "Loop executes at least once and exits normally",
                         $"            // TODO: Arrange so '{shortCond}' is true initially and becomes false after processing",
@@ -514,7 +514,7 @@ public class PathDrivenTestEngine
                     // Single pass: condition false immediately after first iteration
                     cases.Add(new PathDrivenTestCase(
                         $"{methodName}_{SanitizeName(dp.Condition)}_SinglePass_{offset + cases.Count + 1}",
-                        $"Do-while loop '{shortCond}' — body executes once, condition false on first check",
+                        $"Do-while loop '{shortCond}' - body executes once, condition false on first check",
                         [new PathInputConstraint(dp.Condition, "condition false after first pass", "make post-body condition false")],
                         "Body runs exactly once (do-while always executes at least once)",
                         $"            // TODO: Arrange so '{shortCond}' evaluates to false after the first iteration",
@@ -524,7 +524,7 @@ public class PathDrivenTestEngine
                     // Multiple passes: condition stays true for several iterations
                     cases.Add(new PathDrivenTestCase(
                         $"{methodName}_{SanitizeName(dp.Condition)}_MultiplePasses_{offset + cases.Count + 1}",
-                        $"Do-while loop '{shortCond}' — body executes multiple times before condition becomes false",
+                        $"Do-while loop '{shortCond}' - body executes multiple times before condition becomes false",
                         [new PathInputConstraint(dp.Condition, "condition true for N passes", "N > 1")],
                         "Body runs N times; result accumulates across all passes",
                         $"            // TODO: Arrange so '{shortCond}' stays true for multiple passes before exiting",

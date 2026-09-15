@@ -210,7 +210,7 @@ public class CloneDetectionEngine
             return [];
         }
 
-        // We need a SemanticModel for dataflow — use the root type's compilation for best results
+        // We need a SemanticModel for dataflow -> use the root type's compilation for best results
         // For hierarchy mode, dataflow uses the first model that compiled the block
         return GroupDuplicatesFromWindows(allWindows, minStatements);
     }
@@ -248,7 +248,7 @@ public class CloneDetectionEngine
                 continue;
             }
 
-            // Sliding window — use set to avoid overlapping windows from same method
+            // Sliding window -> use set to avoid overlapping windows from same method
             var coveredRanges = new List<(int Start, int End)>();
 
             for (int windowSize = stmts.Length; windowSize >= minStatements; windowSize--)

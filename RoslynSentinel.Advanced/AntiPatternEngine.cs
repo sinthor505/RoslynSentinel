@@ -214,7 +214,7 @@ public class AntiPatternEngine
 
     private static IEnumerable<AntiPatternFinding> DetectBlockingTaskWait(SyntaxNode root, FilePathWrapper filePath, SemanticModel? model = null)
     {
-        // .Result and .Wait() — use semantic model to verify Task/ValueTask type when available
+        // .Result and .Wait() -> use semantic model to verify Task/ValueTask type when available
         foreach (var ma in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
         {
             var name = ma.Name.Identifier.Text;
@@ -223,7 +223,7 @@ public class AntiPatternEngine
                 continue;
             }
 
-            // Skip if parent is an invocation whose callee has 'Result' as a method — e.g. IActionResult
+            // Skip if parent is an invocation whose callee has 'Result' as a method -> e.g. IActionResult
             if (name == "Result" && ma.Parent is InvocationExpressionSyntax)
             {
                 continue;
@@ -468,7 +468,7 @@ public class AntiPatternEngine
             }
 
             // A comment inside the block (/* best-effort */, // intentional, etc.)
-            // indicates the developer has explicitly acknowledged the swallow — skip.
+            // indicates the developer has explicitly acknowledged the swallow -> skip.
             if (CatchBlockHasJustifyingComment(catchClause))
             {
                 continue;
@@ -557,7 +557,7 @@ public class AntiPatternEngine
 
             var parameters = method.ParameterList.Parameters;
             // Zero-parameter public async methods should still accept CancellationToken
-            // so callers can cancel long-running operations — do NOT skip them.
+            // so callers can cancel long-running operations -> do NOT skip them.
 
             var hasCt = parameters.Any(p =>
                 p.Type?.ToString() is string t &&
@@ -712,7 +712,7 @@ public class AntiPatternEngine
             var snippet = Truncate(invocation.ToString());
             yield return new AntiPatternFinding(
                 "FireAndForgetTask",
-                $"'{snippet}' is not awaited and not stored — exceptions thrown inside will be silently swallowed. Assign to a Task variable or await it.",
+                $"'{snippet}' is not awaited and not stored - exceptions thrown inside will be silently swallowed. Assign to a Task variable or await it.",
                 "High", filePath, line, snippet);
         }
     }
@@ -821,7 +821,7 @@ public class AntiPatternEngine
     // ── DisposedAfterUsing ────────────────────────────────────────────────────
     // Detects: variable assigned inside a using() statement body, then accessed after the block.
     // The using-statement form (using (s = expr) { }) disposes on exit but does not scope the
-    // variable — s remains accessible after and is now disposed. Use 'using var' to prevent this.
+    // variable -> s remains accessible after and is now disposed. Use 'using var' to prevent this.
 
     private static IEnumerable<AntiPatternFinding> DetectDisposedAfterUsing(SyntaxNode root, FilePathWrapper filePath)
     {
@@ -874,7 +874,7 @@ public class AntiPatternEngine
                 var line = usingStmt.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 yield return new AntiPatternFinding(
                     "DisposedAfterUsing",
-                    $"Variable '{varName}' is used after its 'using' block — it is already disposed. " +
+                    $"Variable '{varName}' is used after its 'using' block - it is already disposed. " +
                     "Declare the variable inside the using block ('using var') to prevent this.",
                     "High", filePath, line, Truncate(usingStmt.ToString()));
             }
@@ -883,7 +883,7 @@ public class AntiPatternEngine
 
     // ── SyncCallInAsyncContext ────────────────────────────────────────────────
     // Detects synchronous blocking API calls inside async methods where an async alternative exists.
-    // Thread.Sleep → await Task.Delay; File.ReadAllText → await File.ReadAllTextAsync; etc.
+    // Thread.Sleep → await Task.Delay; File.ReadAllText -> await File.ReadAllTextAsync; etc.
 
     private static readonly Dictionary<string, string> SyncToAsyncSuggestions =
         new(StringComparer.Ordinal)
@@ -900,7 +900,7 @@ public class AntiPatternEngine
             // StreamReader/StreamWriter
             { "StreamReader.ReadToEnd", "await StreamReader.ReadToEndAsync()" },
             { "StreamWriter.Flush",     "await StreamWriter.FlushAsync()" },
-            // WebClient (obsolete — prefer HttpClient)
+            // WebClient (obsolete -> prefer HttpClient)
             { "WebClient.DownloadString",   "await HttpClient.GetStringAsync(...)" },
             { "WebClient.UploadString",     "await HttpClient.PostAsync(...)" },
             { "WebClient.DownloadData",     "await HttpClient.GetByteArrayAsync(...)" },
@@ -947,7 +947,7 @@ public class AntiPatternEngine
 
     // ── TaskRunBlocking ───────────────────────────────────────────────────────
     // Detects .Wait()/.Result/.GetAwaiter().GetResult() specifically on Task.Run(...)
-    // This blocks one thread-pool thread waiting for ANOTHER thread-pool thread — under
+    // This blocks one thread-pool thread waiting for ANOTHER thread-pool thread -> under
     // load the pool saturates and new work cannot start (thread starvation cascade).
 
     private static IEnumerable<AntiPatternFinding> DetectTaskRunBlocking(SyntaxNode root, FilePathWrapper filePath)
@@ -974,7 +974,7 @@ public class AntiPatternEngine
                 isTaskRun = true;
             }
 
-            // Variable: var t = Task.Run(...); t.Result  — harder to track, skip for now
+            // Variable: var t = Task.Run(...); t.Result  -> harder to track, skip for now
             if (!isTaskRun)
             {
                 continue;
@@ -992,7 +992,7 @@ public class AntiPatternEngine
 
     // ── NamedHandlerLeak / NamedHandlerThisCapture ────────────────────────────
     // NamedHandlerLeak: event += this.Handler (or external.Method) without paired -= in Dispose
-    // NamedHandlerThisCapture: += this.Method on an external publisher — keeps 'this' alive
+    // NamedHandlerThisCapture: += this.Method on an external publisher -> keeps 'this' alive
 
     private static IEnumerable<AntiPatternFinding> DetectNamedHandlerLeaks(
         SyntaxNode root, FilePathWrapper filePath, HashSet<string> activePatterns)
@@ -1045,7 +1045,7 @@ public class AntiPatternEngine
                         "Medium", filePath, line, Truncate(sub.ToString()));
                 }
 
-                // NamedHandlerThisCapture: RHS is 'this.Method' — keeps 'this' alive via publisher
+                // NamedHandlerThisCapture: RHS is 'this.Method' -> keeps 'this' alive via publisher
                 if (activePatterns.Contains("NamedHandlerThisCapture") &&
                     sub.Right is MemberAccessExpressionSyntax rma &&
                     rma.Expression is ThisExpressionSyntax)
@@ -1546,7 +1546,7 @@ public class AntiPatternEngine
                     continue;
                 }
 
-                // Skip event handlers — their delegate signature is fixed (object sender, XxxEventArgs e)
+                // Skip event handlers -> their delegate signature is fixed (object sender, XxxEventArgs e)
                 // and cannot be extended with a CancellationToken parameter.
                 if (IsEventHandlerSignature(method))
                 {
@@ -1690,7 +1690,7 @@ public class AntiPatternEngine
                 {
                     bool isEmpty = statements.Count == 0;
                     // An empty block with a comment (/* best-effort */, // intentional) is
-                    // acknowledged by the developer — downgrade to Info rather than High.
+                    // acknowledged by the developer -> downgrade to Info rather than High.
                     bool hasComment = CatchBlockHasJustifyingComment(catchClause);
                     var severity = isEmpty ? (hasComment ? "Info" : "High") : "Medium";
                     var desc = isEmpty
@@ -1727,7 +1727,7 @@ public class AntiPatternEngine
                 }
             }
 
-            // 5. throw new Exception("message") — too broad; suggest specific exception type
+            // 5. throw new Exception("message") -> too broad; suggest specific exception type
             foreach (var throwStmt in root.DescendantNodes().OfType<ThrowStatementSyntax>())
             {
                 if (throwStmt.Expression is not ObjectCreationExpressionSyntax oc)
@@ -2235,7 +2235,7 @@ public class AntiPatternEngine
 
             foreach (var throwStmt in tryStmt.Finally.Block.DescendantNodes().OfType<ThrowStatementSyntax>())
             {
-                // Bare `throw;` re-throws current exception — that is fine
+                // Bare `throw;` re-throws current exception -> that is fine
                 if (throwStmt.Expression == null)
                 {
                     continue;
@@ -2279,7 +2279,7 @@ public class AntiPatternEngine
                 continue;
             }
 
-            // Heuristic: receiver starts with uppercase letter — likely a class name (static access)
+            // Heuristic: receiver starts with uppercase letter -> likely a class name (static access)
             var receiverText = lhsMa.Expression.ToString();
             if (string.IsNullOrEmpty(receiverText) || !char.IsUpper(receiverText[0]))
             {
@@ -2455,11 +2455,11 @@ public class AntiPatternEngine
                     continue;
                 }
 
-                // Map parameter name → parameter symbol for fast lookup
+                // Map parameter name -> parameter symbol for fast lookup
                 var paramSymbols = new Dictionary<string, (IParameterSymbol Symbol, bool IsValueType)>();
                 foreach (var p in method.ParameterList.Parameters)
                 {
-                    // Skip ref/out/in — those are intentionally pass-by-reference
+                    // Skip ref/out/in -> those are intentionally pass-by-reference
                     if (p.Modifiers.Any(m =>
                         m.IsKind(SyntaxKind.RefKeyword) ||
                         m.IsKind(SyntaxKind.OutKeyword) ||
@@ -2526,7 +2526,7 @@ public class AntiPatternEngine
 
                     if (entry.IsValueType && !isReturned)
                     {
-                        // Value type param reassigned but not returned — caller will never see the change
+                        // Value type param reassigned but not returned -> caller will never see the change
                         results.Add(new AntiPatternFinding(
                             "ValueTypeParameterReassigned",
                             $"Parameter '{paramName}' ({entry.Symbol.Type.Name}) is a value type reassigned inside the method but not returned. " +
@@ -2538,7 +2538,7 @@ public class AntiPatternEngine
                     }
                     else if (!entry.IsValueType && !isReturned)
                     {
-                        // Reference type param replaced with new instance — caller's reference is unaffected
+                        // Reference type param replaced with new instance -> caller's reference is unaffected
                         // Only flag if RHS is an object creation (new ...) to reduce false positives
                         bool rhsIsNewInstance =
                             assignment.Right is ObjectCreationExpressionSyntax ||
@@ -2565,7 +2565,7 @@ public class AntiPatternEngine
 
     /// <summary>
     /// Finds all call sites that invoke a method decorated with <see cref="ObsoleteAttribute"/>.
-    /// Useful for tracking CS0618 migration progress — every result is a caller that still needs
+    /// Useful for tracking CS0618 migration progress -> every result is a caller that still needs
     /// to be migrated away from the deprecated (bridge) method.
     /// </summary>
     /// <param name="messagePattern">Optional substring to filter by the [Obsolete] message text (case-insensitive).</param>
@@ -2835,7 +2835,7 @@ public class AntiPatternEngine
                 var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken).ConfigureAwait(false);
                 if (syntaxTree == null || !compilation.ContainsSyntaxTree(syntaxTree))
                 {
-                    return; // generated file or excluded document — skip
+                    return; // generated file or excluded document - skip
                 }
 
                 var root = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
@@ -2847,7 +2847,7 @@ public class AntiPatternEngine
                     var returnType = method.ReturnType.ToString();
                     bool returnsTask = returnType.StartsWith("Task") || returnType.StartsWith("ValueTask");
 
-                    // Count async void methods (event handlers — informational only).
+                    // Count async void methods (event handlers -> informational only).
                     if (isAsync && method.ReturnType.IsKind(SyntaxKind.PredefinedType) &&
                         method.ReturnType.ToString() == "void")
                     {

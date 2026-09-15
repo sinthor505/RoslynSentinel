@@ -12,12 +12,12 @@ internal sealed record DotnetTestResult(int Passed, int Failed, int Skipped, int
 /// <summary>
 /// Runs `dotnet test` against a real test project (e.g. ContosoOrders.Tests) and parses its
 /// pass/fail/skip counts from the captured console output. Used as a before/after baseline diff
-/// to verify unrelated code still behaves correctly after a model's edit — replacing brittle
+/// to verify unrelated code still behaves correctly after a model's edit -> replacing brittle
 /// text/whitespace matching (see docs/current/modeleval_fixture_test_suite_redesign.md) with a
 /// real test run, the same way a developer would actually check "did I break anything."
 ///
 /// Deliberately a separate process invocation rather than routing through this repo's own
-/// RunTest MCP tool, so a bug in RunTest can't mask a real fixture failure — the agent under
+/// RunTest MCP tool, so a bug in RunTest can't mask a real fixture failure -> the agent under
 /// test already exercises RunTest live during its own run.
 /// </summary>
 internal static class DotnetTestRunner
@@ -28,7 +28,7 @@ internal static class DotnetTestRunner
 
     /// <summary>
     /// Runs `dotnet test` against <paramref name="testProjectPath"/> and returns the parsed
-    /// counts. Does NOT throw on a nonzero exit code — a failing test run is an expected,
+    /// counts. Does NOT throw on a nonzero exit code -> a failing test run is an expected,
     /// meaningful result here, not an infrastructure error. Only throws if the summary line
     /// can't be found at all (e.g. the project failed to build before any test ran) or the
     /// process fails to start.
@@ -55,7 +55,7 @@ internal static class DotnetTestRunner
         {
             throw new InvalidOperationException(
                 $"DotnetTestRunner: could not find a test summary line in dotnet test output for " +
-                $"'{testProjectPath}' (exit code {process.ExitCode}) — likely a build error before any test ran:\n{output}");
+                $"'{testProjectPath}' (exit code {process.ExitCode}) - likely a build error before any test ran:\n{output}");
         }
 
         return new DotnetTestResult(

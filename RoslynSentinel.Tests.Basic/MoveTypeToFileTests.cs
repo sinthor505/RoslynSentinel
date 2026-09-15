@@ -76,7 +76,7 @@ public sealed record FeatureGateErrorResponse { public string ErrorMessage { get
     [Test]
     public async Task MoveTypeToFile_NewFileContainsMovedType()
     {
-        // Arrange — the new file should contain the moved type declaration
+        // Arrange -> the new file should contain the moved type declaration
         var solution = TestSolutionBuilder.CreateSolutionWithProject("DummyApp", new[] {
             ("MultiType.cs", @"
 namespace MyApp.Services;
@@ -89,7 +89,7 @@ public class ServiceB { public string Name { get; set; } }
         // Act
         var changes = await _refactoringEngine.MoveTypeToFileAsync("MultiType.cs", "ServiceB");
 
-        // Assert — new file has the moved type, source file no longer does
+        // Assert -> new file has the moved type, source file no longer does
         var newKey = changes.Keys.Single(k => k.Contains("ServiceB.cs"));
         var srcKey = changes.Keys.Single(k => !k.Contains("ServiceB.cs"));
 
@@ -101,7 +101,7 @@ public class ServiceB { public string Name { get; set; } }
     [Test]
     public async Task MoveTypeToFile_NewFilePreservesNamespaceAndUsings()
     {
-        // Arrange — verify namespace and usings are copied into the new file
+        // Arrange -> verify namespace and usings are copied into the new file
         var solution = TestSolutionBuilder.CreateSolutionWithProject("DummyApp", new[] {
             ("OrderTypes.cs", @"
 using System.Collections.Generic;

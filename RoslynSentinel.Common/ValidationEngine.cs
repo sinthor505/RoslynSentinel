@@ -51,7 +51,7 @@ public class ValidationEngine
 
     /// <summary>
     /// Validates proposed file changes using the current workspace snapshot.
-    /// Returns only NEWLY INTRODUCED errors — errors present after the change that were
+    /// Returns only NEWLY INTRODUCED errors -> errors present after the change that were
     /// not already present before it (delta approach).
     /// When errors are found, writes a blob to .roslynsentinel/validation/ for manual review.
     /// </summary>
@@ -61,7 +61,7 @@ public class ValidationEngine
 
     /// <param name="removePaths">
     /// Paths whose existing Document (if any) should be removed from the candidate solution
-    /// before <paramref name="fileChanges"/> is applied — for a rename-shaped change where the
+    /// before <paramref name="fileChanges"/> is applied -> for a rename-shaped change where the
     /// old path's document would otherwise coexist with the new path's, causing a spurious
     /// duplicate-declaration diagnostic. See <see cref="ValidateChangesAsync(Solution, Dictionary{FilePathWrapper, string}, IReadOnlyCollection{FilePathWrapper}?, CancellationToken)"/>.
     /// </param>
@@ -83,12 +83,12 @@ public class ValidationEngine
     }
 
     /// <summary>
-    /// Static core — takes a Solution snapshot directly so it can be called without a
+    /// Static core -> takes a Solution snapshot directly so it can be called without a
     /// workspace manager instance (e.g. from inside ApplyProposedChangesAsync using
     /// CurrentSolution, avoiding re-acquiring the solution lock).
     ///
     /// A new file (no existing Document for its path) is added into the candidate solution
-    /// so it participates in compilation like any edit — this is what lets brand-new files
+    /// so it participates in compilation like any edit -> this is what lets brand-new files
     /// with compile errors get caught here instead of being written to disk unvalidated.
     /// Only a new file whose containing project can't be inferred (no existing project's
     /// directory is an ancestor of its path) stays pass-through: there is no compilation to

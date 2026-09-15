@@ -621,7 +621,7 @@ public class ThreadSafetyEngine
     }
 
     // ── CheckThenActOnDictionary ──────────────────────────────────────────────
-    // ContainsKey(k) → Add(k, v) is a classic check-then-act race: another thread
+    // ContainsKey(k) -> Add(k, v) is a classic check-then-act race: another thread
     // may insert the same key between the check and the add, causing a duplicate-key
     // exception or silent data loss. Use GetOrAdd / TryAdd instead.
 

@@ -43,7 +43,7 @@ public sealed record WriteAdvice(
 /// Exists because error messages that name a gated-off tool are worse than no advice at all: they
 /// send the agent looking for a tool it cannot call. Run 20260910-013550-398 livelocked for 24
 /// turns on a <c>ReplaceSnippet</c> size error whose text directed it to
-/// <c>WriteFile(operation=ReplaceFile)</c> — a tool the run had deliberately gated off (see
+/// <c>WriteFile(operation=ReplaceFile)</c> -> a tool the run had deliberately gated off (see
 /// docs/current/project_wholefilewrite_gating_overnight_result_2026_09_08.md, where gating it off
 /// scored 26/26 against a 47% baseline, so it stays gated).
 /// </para>
@@ -55,21 +55,21 @@ public sealed record WriteAdvice(
 /// <para>
 /// Granularity matters here. <see cref="ToolClassRegistry"/> resolves at <em>class</em>
 /// granularity, but advice names <em>tools</em>, and <c>SentinelWholeFileWriteTools</c> alone holds
-/// four of them — so "is that class active?" cannot answer "may I mention ApplyUnifiedDiff?"
-/// without the tool→class map below.
+/// four of them -> so "is that class active?" cannot answer "may I mention ApplyUnifiedDiff?"
+/// without the tool->class map below.
 /// </para>
 /// <para>
 /// Basic-only by design. Every tool this can name is a gated whole-file-write tool, and all four
 /// live together in Basic's <c>SentinelWholeFileWriteTools</c>; Advanced has no whole-file-write
 /// tools at all. (Distinguish those from <em>mutating</em> tools generally, a much larger set
-/// spanning both projects — Advanced's mutators are semantic refactorings, not escape hatches for
+/// spanning both projects -> Advanced's mutators are semantic refactorings, not escape hatches for
 /// an oversized text edit, so they never appear here.)
 /// </para>
 /// </remarks>
 public sealed class WriteToolAdviceHelper
 {
     /// <summary>
-    /// Tool name → the <c>[McpServerToolType]</c> class that declares it, for every tool this
+    /// Tool name -> the <c>[McpServerToolType]</c> class that declares it, for every tool this
     /// helper may name. Only escape-hatch tools need an entry; this is not a full tool census.
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> ToolToDeclaringClass =
@@ -88,7 +88,7 @@ public sealed class WriteToolAdviceHelper
     private readonly HashSet<string> _activeToolClasses;
 
     /// <param name="activeToolClasses">
-    /// The resolved tool-class set for this server — the same value
+    /// The resolved tool-class set for this server -> the same value
     /// <see cref="ServerStartupHelpers.ResolveActiveToolClasses"/> returns, after
     /// <c>--mode</c>/<c>--include-tools</c>/<c>--exclude-tools</c> have all been applied.
     /// </param>
@@ -99,7 +99,7 @@ public sealed class WriteToolAdviceHelper
 
     /// <summary>
     /// A helper that considers every escape-hatch tool exposed. For test fixtures that construct a
-    /// tool class directly and aren't exercising gating — they get the full-surface advice, which
+    /// tool class directly and aren't exercising gating -> they get the full-surface advice, which
     /// is what an ungated server would produce. Tests that <em>are</em> about gating should pass an
     /// explicit class list to the constructor instead.
     /// </summary>
@@ -150,7 +150,7 @@ public sealed class WriteToolAdviceHelper
             return new WriteAdvice(
                 WriteEscapeRoute.StructuredEdit,
                 structuralTools,
-                $"If this is a structural change (rename, signature, extract, add/replace a member) rather than free text, use the matching Roslyn tool ({string.Join(", ", structuralTools)}) — those have no size limit. " +
+                $"If this is a structural change (rename, signature, extract, add/replace a member) rather than free text, use the matching Roslyn tool ({string.Join(", ", structuralTools)}) - those have no size limit. " +
                 $"Otherwise split the edit into several smaller {rejectingToolName} calls, one per contiguous region.");
         }
 

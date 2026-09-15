@@ -17,23 +17,23 @@ namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>
 /// Drives a real LM Studio model through a real in-process MCP server against the
-/// <see cref="OrderPricingRefactorReproducer"/> fixture — three independent, ordinary refactoring
+/// <see cref="OrderPricingRefactorReproducer"/> fixture -> three independent, ordinary refactoring
 /// steps chained on one small class (extract a duplicated expression, rename a method with a real
 /// cross-file call site, change the new method's accessibility) rather than
 /// <see cref="WholeFileRewriteAgentTests"/>/<see cref="SizeThresholdAgentTests"/>'s single bug-fix
 /// scenario. The prompt states the three outcomes and constraints, not exact tool calls or exact
-/// parameters, matching the flexibility <c>MinimalGuidance</c>/<c>Disambiguated</c> give elsewhere —
+/// parameters, matching the flexibility <c>MinimalGuidance</c>/<c>Disambiguated</c> give elsewhere ->
 /// the model may use dedicated refactor tools (ExtractMethodSafe, RenameSymbol, ChangeAccessibility/
 /// ModifyModifier) or ApplyDiff for any step, its choice.
 ///
 /// Updated 2026-09-05 after 2/2 runs in a batch independently produced the same wrong-but-plausible
 /// extraction: step 1's original wording ("extract that duplicated discount-amount calculation")
 /// was ambiguous between "factor out the shared `amount * rate` expression" (the intended, narrower
-/// reading — what AssertRefactorsApplied actually checks for) and "extract the whole per-branch
+/// reading -> what AssertRefactorsApplied actually checks for) and "extract the whole per-branch
 /// discount-amount computation, including the 1.1x branching, into one new method" (a broader,
 /// equally reasonable reading of the same sentence). Both failing runs took the broader reading,
 /// moved the if/else into the new method, and wrote `amount * rate` separately in each of ITS two
-/// branches — so the literal duplication the fixture targets survived, just one level down, while
+/// branches -> so the literal duplication the fixture targets survived, just one level down, while
 /// still fully satisfying the step's own stated goal ("share one calculation" read as "share the
 /// discount logic"). Reworded step 1 to name the exact expression to factor out and explicitly say
 /// the branching/scaling logic must stay in `CalcDisc`, closing off the broader reading.
@@ -44,10 +44,10 @@ public class OrderPricingRefactorAgentTests
     private const string UserPromptTemplate = """
         # Task: Three small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
         straight to ReadFile/SearchSolutionText/ListAll on the paths below.
 
-        You have flexibility in exactly how you implement each step below — use whichever MCP
+        You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
         the end result matches what's described.
 
@@ -62,14 +62,14 @@ public class OrderPricingRefactorAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline — this includes the
+           your new method instead of repeating `amount * rate` inline - this includes the
            preferred-customer branch, which still applies its 1.1x scaling on top of the
            extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
            in `CalcDisc` and does not move into the new method. Preserve the existing behavior
            exactly (preferred customers still get the 1.1x scaling, standard customers don't).
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
-           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
         3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
@@ -79,10 +79,10 @@ public class OrderPricingRefactorAgentTests
 
         - Do not change the logic of `DescribeOrder` or `SummarizeShipping` in
           `OrderPricingCalculator.cs`, or anything in `OrderCheckout.cs` other than the one call
-          site that must follow the rename — reformatting is fine, but their behavior must stay
+          site that must follow the rename - reformatting is fine, but their behavior must stay
           identical.
         - Do not change the observable behavior of `CalculateDiscountedTotal` (formerly
-          `CalcDisc`) — same inputs must still produce the same outputs.
+          `CalcDisc`) - same inputs must still produce the same outputs.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
 
@@ -95,9 +95,9 @@ public class OrderPricingRefactorAgentTests
         1. Does the standard-customer branch call your new extracted method? Does the
            preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
            did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
-           Both branches must call the new method — re-read both branches, not just one.
+           Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
-           `OrderCheckout.cs` updated to the new name — not just one of the two?
+           `OrderCheckout.cs` updated to the new name - not just one of the two?
         3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
            not still `private`?
 
@@ -107,7 +107,7 @@ public class OrderPricingRefactorAgentTests
         Report what you changed and the verification result.
         """;
 
-    // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks —
+    // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks ->
     // together they register ApplyDiff/Build/ReadFile/SearchSolutionText/ListSolutionItems plus
     // SentinelRefactoringTools (ExtractMethodSafe, RenameSymbol, ChangeAccessibility,
     // ModifyModifier), without pulling in Advanced's larger tool catalog.
@@ -116,7 +116,7 @@ public class OrderPricingRefactorAgentTests
         "Refactor", "Workspace",
     };
 
-    // See OrderPricingRefactorChainAgentTests' identical toggle for the rationale — an isolation
+    // See OrderPricingRefactorChainAgentTests' identical toggle for the rationale -> an isolation
     // experiment comparing this rung with and without the WriteFile whole-file-rewrite escape
     // hatch available, keeping ApplyDiff/ApplyUnifiedDiff/RenameSymbol/ChangeSignature exposed.
     private static readonly bool BlockWriteFile = false;
@@ -135,7 +135,7 @@ public class OrderPricingRefactorAgentTests
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
             Assert.Ignore(
-                "ROSLYNSENTINEL_LLM_MODEL is not set — model-eval tests require a real LM Studio " +
+                "ROSLYNSENTINEL_LLM_MODEL is not set - model-eval tests require a real LM Studio " +
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
@@ -309,7 +309,7 @@ public class OrderPricingRefactorAgentTests
         }
 
         TestContext.Out.WriteLine($"Pass rate: {passCount}/{runs}. Turn counts: [{string.Join(", ", turnCounts)}]");
-        Assert.That(passCount, Is.GreaterThan(0), $"Model never succeeded across {runs} runs — see per-run transcripts under {_runDirectory}/../");
+        Assert.That(passCount, Is.GreaterThan(0), $"Model never succeeded across {runs} runs - see per-run transcripts under {_runDirectory}/../");
     }
 
     private async Task<AgentRunResult> RunOnceAsync(CancellationToken cancellationToken)
@@ -332,7 +332,7 @@ public class OrderPricingRefactorAgentTests
         var checkoutText = File.ReadAllText(checkoutPath);
 
         // Step 2 (rename): old name gone everywhere, new name present in both the declaration and
-        // the call site — a same-file-only rename (missing OrderCheckout.cs) is the specific
+        // the call site -> a same-file-only rename (missing OrderCheckout.cs) is the specific
         // failure mode this fixture is built to catch.
         Assert.That(calculatorText, Does.Not.Match(@"\bCalcDisc\b"),
             $"CalcDisc should be fully renamed to CalculateDiscountedTotal in OrderPricingCalculator.cs. Transcript: {result.TranscriptPath}");
@@ -343,7 +343,7 @@ public class OrderPricingRefactorAgentTests
         Assert.That(checkoutText, Does.Match(@"\bCalculateDiscountedTotal\b"),
             $"OrderCheckout.cs should call CalculateDiscountedTotal after the rename. Transcript: {result.TranscriptPath}");
 
-        // Step 1 (extract): the discount-amount expression should no longer appear twice as CODE —
+        // Step 1 (extract): the discount-amount expression should no longer appear twice as CODE ->
         // both branches should route through one shared method instead. Strip // and /// comment
         // lines first: the fixture's own doc comment on CalcDisc/CalculateDiscountedTotal
         // describes this exact calculation in prose, and a model isn't asked to touch comments, so
@@ -371,7 +371,7 @@ public class OrderPricingRefactorAgentTests
         Assert.That(calculatorText, Does.Not.Match(@"private\s+(?:static\s+)?decimal\s+(?!CalculateDiscountedTotal\b)\w+\s*\("),
             $"The extracted discount method should no longer be private. Transcript: {result.TranscriptPath}");
 
-        // Unrelated code must still BEHAVE correctly — checked by running the fixture's own real
+        // Unrelated code must still BEHAVE correctly -> checked by running the fixture's own real
         // test project (ContosoOrders.Tests), whose OrderCheckoutTests front door exercises
         // GetFinalPrice -> the renamed/extracted calculator logic underneath it, rather than
         // scanning for byte-for-byte/whitespace-collapsed-unchanged text (see
@@ -386,11 +386,11 @@ public class OrderPricingRefactorAgentTests
             $"Transcript: {result.TranscriptPath}\n{postRunTestResult.RawOutput}");
         Assert.That(postRunTestResult.Total, Is.EqualTo(_testBaseline.Total),
             $"ContosoOrders.Tests' total test count should be unchanged (baseline: {_testBaseline.Total}, " +
-            $"after: {postRunTestResult.Total}) — a dropped count means a test was deleted or disabled " +
+            $"after: {postRunTestResult.Total}) - a dropped count means a test was deleted or disabled " +
             $"instead of the underlying code being fixed. Transcript: {result.TranscriptPath}");
 
         // DescribeOrder/SummarizeShipping have no front door (nothing calls them), so they fall back
-        // to trivia-insensitive structural equivalence — legitimate reformatting (e.g. normalizing
+        // to trivia-insensitive structural equivalence -> legitimate reformatting (e.g. normalizing
         // the fixture's deliberately odd spacing) is fine, only a change to signature/behavior counts.
         UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(
             calculatorPath, "DescribeOrder", OrderPricingRefactorReproducer.StartingCalculatorFileContent);
@@ -400,7 +400,7 @@ public class OrderPricingRefactorAgentTests
         AgentToolErrorAssertions.AssertWithinBudget(result, maxTotal: 8, maxPerTool: 4);
 
         // Text-scan checks above can't catch code that compiles but is functionally broken (e.g. the
-        // preferred-customer 1.1x scaling silently dropped during extraction) — build and
+        // preferred-customer 1.1x scaling silently dropped during extraction) -> build and
         // reflection-invoke the real method with both branches to confirm behavior is preserved.
         var coreProjectDirectory = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core");
         var (preferredResult, standardResult) = await FunctionalFixVerifier.InvokeCalculateDiscountedTotalAsync(

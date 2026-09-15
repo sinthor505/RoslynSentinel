@@ -1,10 +1,10 @@
-// Battery #27 — Bug-Hunt Findings (Session 7)
+// Battery #27 -> Bug-Hunt Findings (Session 7)
 // Confirmed bugs found by manual engine code review:
 //
 //   BH-01: DetectMissingCancellationToken skips methods with < 3 parameters
 //   BH-02: DetectStringConcatInLoop misses `str = str + value` (non-compound form)
 //   BH-03: FindUnsafeTypeCastsAsync flags safe numeric casts (false positive)
-//   BH-04: DetectMissingNullChecksAsync is a stub — detection logic is commented out
+//   BH-04: DetectMissingNullChecksAsync is a stub -> detection logic is commented out
 //   BH-05: ConvertLockToSemaphoreSlimAsync makes ALL overloads async when only one has a lock
 //
 // Tests in this file confirm the bugs that exist BEFORE the engine fixes are applied.
@@ -20,7 +20,7 @@ namespace RoslynSentinel.Tests.Advanced
 {
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // BH-01: DetectMissingCancellationToken — wrong parameter-count threshold
+    // BH-01: DetectMissingCancellationToken -> wrong parameter-count threshold
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
     public class BH01_MissingCancellationTokenThresholdTests
@@ -43,7 +43,7 @@ namespace RoslynSentinel.Tests.Advanced
         {
             // BUG (before fix): `parameters.Count < 3` skips methods with 1 or 2 params.
             // A public async Task method with a single string param and no CancellationToken
-            // should be flagged — callers cannot cancel it.
+            // should be flagged -> callers cannot cancel it.
             const string source = """
             using System.Threading.Tasks;
             public class Service {
@@ -149,7 +149,7 @@ namespace RoslynSentinel.Tests.Advanced
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // BH-02: DetectStringConcatInLoop — misses str = str + value (non-compound)
+    // BH-02: DetectStringConcatInLoop -> misses str = str + value (non-compound)
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
     public class BH02_StringConcatInLoopNonCompoundTests
@@ -193,13 +193,13 @@ namespace RoslynSentinel.Tests.Advanced
             // existing engine for variable names that don't end in known suffixes.
             // We document what actually happens here.
             Assert.That(findings, Is.Empty,
-                "Variable 'result' (no string-suffix) with non-literal RHS is a known false negative — documenting current behavior.");
+                "Variable 'result' (no string-suffix) with non-literal RHS is a known false negative - documenting current behavior.");
         }
 
         [Test]
         public async Task StringConcatInLoop_CompoundAssignmentWithStringLiteralRhs_IsFlagged()
         {
-            // str += "literal"; — RHS is a literal so it IS detected regardless of name.
+            // str += "literal"; -> RHS is a literal so it IS detected regardless of name.
             const string source = """
             using System.Collections.Generic;
             public class Builder {
@@ -224,7 +224,7 @@ namespace RoslynSentinel.Tests.Advanced
         [Test]
         public async Task StringConcatInLoop_NonCompoundAssignment_IsNowFlagged()
         {
-            // BUG: str = str + value is a SimpleAssignmentExpression — only += is currently detected.
+            // BUG: str = str + value is a SimpleAssignmentExpression -> only += is currently detected.
             // After the fix, `htmlStr = htmlStr + part` should also be detected.
             const string source = """
             using System.Collections.Generic;
@@ -251,7 +251,7 @@ namespace RoslynSentinel.Tests.Advanced
         [Test]
         public async Task StringConcatInLoop_StringBuilderUsage_IsNotFlagged()
         {
-            // StringBuilder is the CORRECT pattern — must never be flagged.
+            // StringBuilder is the CORRECT pattern -> must never be flagged.
             const string source = """
             using System.Collections.Generic;
             using System.Text;
@@ -275,7 +275,7 @@ namespace RoslynSentinel.Tests.Advanced
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // BH-03: FindUnsafeTypeCastsAsync — flags safe numeric conversions (false positive)
+    // BH-03: FindUnsafeTypeCastsAsync -> flags safe numeric conversions (false positive)
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
     public class BH03_UnsafeCastFalsePositiveTests
@@ -296,7 +296,7 @@ namespace RoslynSentinel.Tests.Advanced
         [Test]
         public async Task FindUnsafeTypeCasts_NumericConversion_ShouldNotBeFlagged()
         {
-            // BUG: (int)myDouble is a safe numeric conversion — it will never throw
+            // BUG: (int)myDouble is a safe numeric conversion -> it will never throw
             // InvalidCastException (it may truncate, but that is not a cast failure).
             // The engine currently flags ALL CastExpressionSyntax nodes indiscriminately.
             const string source = """
@@ -319,7 +319,7 @@ namespace RoslynSentinel.Tests.Advanced
         [Test]
         public async Task FindUnsafeTypeCasts_ObjectToConcreteType_IsFlagged()
         {
-            // (MyClass)obj — this CAN throw InvalidCastException. Must be flagged.
+            // (MyClass)obj -> this CAN throw InvalidCastException. Must be flagged.
             const string source = """
             public class Processor {
                 public void Process(object data) {
@@ -359,7 +359,7 @@ namespace RoslynSentinel.Tests.Advanced
         [Test]
         public async Task FindUnsafeTypeCasts_InterfaceCast_IsFlagged()
         {
-            // (IDisposable)obj — can throw if obj doesn't implement the interface. Must be flagged.
+            // (IDisposable)obj -> can throw if obj doesn't implement the interface. Must be flagged.
             const string source = """
             using System;
             public class Handler {
@@ -378,7 +378,7 @@ namespace RoslynSentinel.Tests.Advanced
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // BH-04: DetectMissingNullChecksAsync — was a stub; now properly implemented
+    // BH-04: DetectMissingNullChecksAsync -> was a stub; now properly implemented
     // Tests verify the real detection logic works correctly.
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
@@ -400,8 +400,8 @@ namespace RoslynSentinel.Tests.Advanced
         [Test]
         public async Task DetectMissingNullChecks_PublicMethodUsesParameterWithoutGuard_IsReported()
         {
-            // The BUG was: detection logic was entirely commented out — always returned empty.
-            // FIX: Implemented real heuristic — finds public methods using reference-type params
+            // The BUG was: detection logic was entirely commented out -> always returned empty.
+            // FIX: Implemented real heuristic -> finds public methods using reference-type params
             //      without any null guard.
             const string source = """
             public class Service {
@@ -481,7 +481,7 @@ namespace RoslynSentinel.Tests.Advanced
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // BH-05: ConvertLockToSemaphoreSlimAsync — makes ALL overloads async (wrong)
+    // BH-05: ConvertLockToSemaphoreSlimAsync -> makes ALL overloads async (wrong)
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
     public class BH05_ConvertLockOverloadBugTests
@@ -504,7 +504,7 @@ namespace RoslynSentinel.Tests.Advanced
         {
             // BUG: ConvertLockToSemaphoreSlimAsync matches affected methods by name only.
             // If a method "Process" has a lock and an overload "Process(string)" does NOT,
-            // both overloads will be made async — the overload-without-lock should NOT be touched.
+            // both overloads will be made async -> the overload-without-lock should NOT be touched.
             const string source = """
             public class Worker {
                 private readonly object _lock = new object();
@@ -515,7 +515,7 @@ namespace RoslynSentinel.Tests.Advanced
                     }
                 }
 
-                // Overload WITHOUT a lock — should NOT be made async
+                // Overload WITHOUT a lock -> should NOT be made async
                 public void Process(string label) {
                     DoWork();
                 }

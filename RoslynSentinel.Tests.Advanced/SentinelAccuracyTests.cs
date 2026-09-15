@@ -1,5 +1,5 @@
 // Accuracy regression tests for the four improved tools.
-// Each [Test] exercises exactly one detection rule — positive (should flag) and
+// Each [Test] exercises exactly one detection rule -> positive (should flag) and
 // negative (should NOT flag, verifying false-positive guards).
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,7 +11,7 @@ using RoslynSentinel.Common;
 namespace RoslynSentinel.Tests.Advanced;
 
 // ════════════════════════════════════════════════════════════════════════════
-// 1. FindUnawaitedFireAndForgetAsync — null-conditional + chained patterns
+// 1. FindUnawaitedFireAndForgetAsync -> null-conditional + chained patterns
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class FireAndForgetAccuracyTests
@@ -266,12 +266,12 @@ public class C {
 }");
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Test.cs");
         Assert.That(reports, Is.Not.Empty,
-            "_ = ValueTask-returning method should be flagged — semantic model recognizes ValueTask");
+            "_ = ValueTask-returning method should be flagged - semantic model recognizes ValueTask");
     }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 2. AnalyzeSemaphoreUsageAsync — pool pattern vs genuine leak
+// 2. AnalyzeSemaphoreUsageAsync -> pool pattern vs genuine leak
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class SemaphoreAccuracyTests
@@ -305,7 +305,7 @@ public class C {
     }
 }");
         var results = await _engine.AnalyzeSemaphoreUsageAsync("Test.cs");
-        Assert.That(results, Is.Not.Empty, "semaphore acquired but never released anywhere in the class — genuine leak");
+        Assert.That(results, Is.Not.Empty, "semaphore acquired but never released anywhere in the class - genuine leak");
         Assert.That(results[0], Does.Contain("leak").IgnoreCase);
     }
 
@@ -363,7 +363,7 @@ public class C {
     }
 }");
         var results = await _engine.AnalyzeSemaphoreUsageAsync("Test.cs");
-        Assert.That(results, Is.Empty, "WaitAsync + Release in same method is correctly guarded — no flag");
+        Assert.That(results, Is.Empty, "WaitAsync + Release in same method is correctly guarded - no flag");
     }
 
     // ── Round 3: Release in non-method class members ─────────────────────
@@ -454,7 +454,7 @@ public class C {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 3. DetectMismatchedAwaitAsync — false positive reduction
+// 3. DetectMismatchedAwaitAsync -> false positive reduction
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class MismatchedAwaitAccuracyTests
@@ -538,7 +538,7 @@ public class C {
     public Task<int> GetAsync() => Task.FromResult(42);
 }");
         var results = await _engine.DetectMismatchedAwaitAsync("Test.cs");
-        Assert.That(results, Is.Empty, "Task.FromResult is synchronous — must not be flagged");
+        Assert.That(results, Is.Empty, "Task.FromResult is synchronous - must not be flagged");
     }
 
     [Test]
@@ -682,7 +682,7 @@ public class C {
     }
 }");
         var results = await _engine.DetectMismatchedAwaitAsync("Test.cs");
-        Assert.That(results, Is.Empty, "Task passed to collection.Add() must not be flagged — it is being tracked");
+        Assert.That(results, Is.Empty, "Task passed to collection.Add() must not be flagged - it is being tracked");
     }
 
     [Test]
@@ -715,7 +715,7 @@ public class C {
 }");
         var results = await _engine.DetectMismatchedAwaitAsync("Test.cs");
         Assert.That(results, Is.Not.Empty,
-            "calling a Func<Task> without await should be detected — semantic model resolves Func<Task>.Invoke() return type");
+            "calling a Func<Task> without await should be detected - semantic model resolves Func<Task>.Invoke() return type");
     }
 
     [Test]
@@ -749,7 +749,7 @@ public class C {
 }");
         var results = await _engine.DetectMismatchedAwaitAsync("Test.cs");
         Assert.That(results, Is.Not.Empty,
-            "unawaited ValueTask should be caught — semantic model recognizes ValueTask as awaitable");
+            "unawaited ValueTask should be caught - semantic model recognizes ValueTask as awaitable");
     }
 
     [Test]
@@ -774,7 +774,7 @@ public class C {
         SetSource(@"
 using System.Threading.Tasks;
 public class C {
-    // Returns int, not Task — should not be flagged despite Async suffix
+    // Returns int, not Task -> should not be flagged despite Async suffix
     public int GetCountAsync() => 42;
     public async Task M() {
         GetCountAsync();
@@ -787,7 +787,7 @@ public class C {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 4. AnalyzePerformanceAsync — new checks + .Result precision fix
+// 4. AnalyzePerformanceAsync -> new checks + .Result precision fix
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class PerformanceAccuracyTests
@@ -924,7 +924,7 @@ public class C {
             "lock with only sync code inside must not be flagged");
     }
 
-    // ── OrderBy().First() → MinBy() ───────────────────────────────────────
+    // ── OrderBy().First() -> MinBy() ───────────────────────────────────────
 
     [Test]
     public async Task Flags_OrderByFirst_ShouldUseMinBy()
@@ -973,7 +973,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "OrderByThenFirst"), Is.False,
-            ".OrderBy().First(predicate) is not equivalent to MinBy — must not be flagged");
+            ".OrderBy().First(predicate) is not equivalent to MinBy - must not be flagged");
     }
 
     // ── Pre-existing checks still work ───────────────────────────────────
@@ -1107,7 +1107,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "CollectionAllocationInLoop"), Is.False,
-            "new List<T>() outside loop — allocated once, reused — must not be flagged");
+            "new List<T>() outside loop - allocated once, reused - must not be flagged");
     }
 
     // ── Round 3: Select().Select() chaining ──────────────────────────────
@@ -1160,7 +1160,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "BlockingAsyncCall"), Is.False,
-            "OperationResult.Result must not be flagged — semantic model knows it is not Task<T>.Result");
+            "OperationResult.Result must not be flagged - semantic model knows it is not Task<T>.Result");
     }
 
     [Test]
@@ -1177,7 +1177,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "BlockingAsyncCall"), Is.True,
-            ".Result on a ValueTask<T> variable should be flagged — semantic model recognizes ValueTask");
+            ".Result on a ValueTask<T> variable should be flagged - semantic model recognizes ValueTask");
     }
 
     [Test]
@@ -1206,7 +1206,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "HttpClientPerRequest"), Is.False,
-            "MyHttpClientWrapper ends with 'HttpClient' but is not System.Net.Http.HttpClient — must not be flagged");
+            "MyHttpClientWrapper ends with 'HttpClient' but is not System.Net.Http.HttpClient - must not be flagged");
     }
 
     // ── Double enumeration ────────────────────────────────────────────────
@@ -1243,7 +1243,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "PotentialDoubleEnumeration"), Is.False,
-            "List<T> is already materialized — using it twice is fine");
+            "List<T> is already materialized - using it twice is fine");
     }
 
     // ── Inline Regex instantiation ────────────────────────────────────────
@@ -1275,7 +1275,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "InlineRegexInstantiation"), Is.False,
-            "static readonly Regex field is the correct pattern — must not be flagged");
+            "static readonly Regex field is the correct pattern - must not be flagged");
     }
 
     // ── Single-char string method args ────────────────────────────────────
@@ -1289,7 +1289,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "StringMethodWithSingleCharArg"), Is.True,
-            "s.Contains(\"x\") should be flagged — use s.Contains('x') char overload");
+            "s.Contains(\"x\") should be flagged - use s.Contains('x') char overload");
     }
 
     [Test]
@@ -1301,7 +1301,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "StringMethodWithSingleCharArg"), Is.True,
-            "s.IndexOf(\",\") should be flagged — use s.IndexOf(',') char overload");
+            "s.IndexOf(\",\") should be flagged - use s.IndexOf(',') char overload");
     }
 
     [Test]
@@ -1313,7 +1313,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "StringMethodWithSingleCharArg"), Is.False,
-            "multi-char string argument is not replaceable with char — must not be flagged");
+            "multi-char string argument is not replaceable with char - must not be flagged");
     }
 
     // ── Where().Where() chaining ──────────────────────────────────────────
@@ -1394,7 +1394,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "LoopInvariantCondition"), Is.False,
-            "array.Length in for loop condition is hoisted by the JIT — must not be flagged");
+            "array.Length in for loop condition is hoisted by the JIT - must not be flagged");
     }
 
     // ── dynamic type usage ────────────────────────────────────────────────
@@ -1411,7 +1411,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "DynamicTypeUsage"), Is.True,
-            "'dynamic' local variable should be flagged — forces DLR dispatch");
+            "'dynamic' local variable should be flagged - forces DLR dispatch");
     }
 
     [Test]
@@ -1440,7 +1440,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "ObjectTypeUsage"), Is.True,
-            "local variable typed as 'object' should be flagged — causes boxing for value types");
+            "local variable typed as 'object' should be flagged - causes boxing for value types");
     }
 
     [Test]
@@ -1452,7 +1452,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "ObjectTypeUsage"), Is.False,
-            "object field (e.g. lock target) must not be flagged — only local variables are in scope");
+            "object field (e.g. lock target) must not be flagged - only local variables are in scope");
     }
 
     // ── Enum.Parse in loop ────────────────────────────────────────────────
@@ -1471,7 +1471,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "EnumParseInLoop"), Is.True,
-            "Enum.Parse<T>() inside foreach should be flagged — re-parses string on every iteration");
+            "Enum.Parse<T>() inside foreach should be flagged - re-parses string on every iteration");
     }
 
     [Test]
@@ -1503,7 +1503,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "StringJoinOpportunity"), Is.True,
-            ".Aggregate() with string concat should be flagged — use string.Join()");
+            ".Aggregate() with string concat should be flagged - use string.Join()");
     }
 
     [Test]
@@ -1540,7 +1540,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "RepeatedMethodCallNotCached"), Is.True,
-            "same method call 3 times should be flagged — cache in a local variable");
+            "same method call 3 times should be flagged - cache in a local variable");
     }
 
     [Test]
@@ -1559,12 +1559,12 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "RepeatedMethodCallNotCached"), Is.False,
-            "same call only twice is below the caching threshold — must not be flagged");
+            "same call only twice is below the caching threshold - must not be flagged");
     }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 5. AnalyzeExceptionHandlingAsync — checks 5-7 + CatchAll suggestion
+// 5. AnalyzeExceptionHandlingAsync -> checks 5-7 + CatchAll suggestion
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class ExceptionHandlingAccuracyTests
@@ -1790,7 +1790,7 @@ public class C : IDisposable {
 }");
         var findings = await _engine.AnalyzeExceptionHandlingAsync("Test.cs");
         Assert.That(findings.Any(f => f.Pattern == "UnsafeDisposeImplementation"), Is.False,
-            "Dispose() with only one sub-Dispose does not need wrapping — no risk of skipping");
+            "Dispose() with only one sub-Dispose does not need wrapping - no risk of skipping");
     }
 
     [Test]
@@ -1813,7 +1813,7 @@ public class C : IDisposable {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 6. FireAndForgetTask — Task.Run / Task.Factory.StartNew not awaited
+// 6. FireAndForgetTask -> Task.Run / Task.Factory.StartNew not awaited
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class FireAndForgetTaskAccuracyTests
@@ -1848,7 +1848,7 @@ public class C {
 }");
         var findings = await _engine.DetectAntiPatternsAsync("Test.cs");
         Assert.That(findings.Any(f => f.Pattern == "FireAndForgetTask"), Is.True,
-            "Task.Run() not awaited should be flagged — exceptions silently swallowed");
+            "Task.Run() not awaited should be flagged - exceptions silently swallowed");
     }
 
     [Test]
@@ -1897,7 +1897,7 @@ public class C {
 }");
         var findings = await _engine.DetectAntiPatternsAsync("Test.cs");
         Assert.That(findings.Any(f => f.Pattern == "FireAndForgetTask"), Is.False,
-            "Task.Run() assigned to a variable must not be flagged — caller manages the task");
+            "Task.Run() assigned to a variable must not be flagged - caller manages the task");
     }
 
     [Test]
@@ -1918,7 +1918,7 @@ public class C {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 7. SecurityEngine — hardcoded secret values, secrets in comments, SQL Dapper
+// 7. SecurityEngine -> hardcoded secret values, secrets in comments, SQL Dapper
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class SecurityEngineAccuracyTests
@@ -1940,7 +1940,7 @@ public class SecurityEngineAccuracyTests
         _workspaceManager.SetTestSolution(
             TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", source)]));
 
-    // ── HardcodedSecretValue — connection string with password ────────────
+    // ── HardcodedSecretValue -> connection string with password ────────────
 
     [Test]
     public async Task Flags_ConnectionString_WithEmbeddedPassword()
@@ -1997,7 +1997,7 @@ public class C {
     {
         SetSource(@"
 public class C {
-    // password=admin123 — for local dev only
+    // password=admin123 -> for local dev only
     public void M() { }
 }");
         var issues = await _engine.AnalyzeSecurityAsync("Test.cs");
@@ -2028,7 +2028,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzeSecurityAsync("Test.cs");
         // 'token' alone in a description-style comment should ideally not fire,
-        // but our pattern is intentionally broad — accept either outcome but verify no crash
+        // but our pattern is intentionally broad -> accept either outcome but verify no crash
         Assert.That(issues, Is.Not.Null);
     }
 
@@ -2079,7 +2079,7 @@ public class C {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 8. MissingDispose — IDisposable allocation without using/try-finally
+// 8. MissingDispose -> IDisposable allocation without using/try-finally
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class MissingDisposeAccuracyTests
@@ -2184,7 +2184,7 @@ public class C {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 9. EnumSwitchExhaustiveness — missing enum members without default case
+// 9. EnumSwitchExhaustiveness -> missing enum members without default case
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class EnumSwitchExhaustivenessTests
@@ -2238,7 +2238,7 @@ public class C {
     }
 }");
         var gaps = await _engine.FindNonExhaustiveEnumSwitchesAsync("Test.cs");
-        Assert.That(gaps, Is.Empty, "switch with default case should not be flagged — explicitly handles unknowns");
+        Assert.That(gaps, Is.Empty, "switch with default case should not be flagged - explicitly handles unknowns");
     }
 
     [Test]
@@ -2314,7 +2314,7 @@ public class C {
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "ReflectionInLoop"), Is.True,
-            "GetMethod() inside foreach should be flagged — expensive per iteration");
+            "GetMethod() inside foreach should be flagged - expensive per iteration");
     }
 
     [Test]
@@ -2405,7 +2405,7 @@ public class C {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 11. CaptiveDependency — Singleton depending on Scoped/Transient
+// 11. CaptiveDependency -> Singleton depending on Scoped/Transient
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class CaptiveDependencyAccuracyTests
@@ -2462,7 +2462,7 @@ public class Startup {
 }");
         var findings = await _engine.FindCaptiveDependenciesAsync();
         Assert.That(findings.Any(f => f.ConsumerClass == "SingletonService"), Is.False,
-            "Singleton depending on another Singleton is fine — must not be flagged");
+            "Singleton depending on another Singleton is fine - must not be flagged");
     }
 
     [Test]
@@ -2539,7 +2539,7 @@ public class C {
 }");
         var issues = await _engine.FindNullDereferenceChainAsync("Test.cs");
         Assert.That(issues.Any(i => i.Type == "NullDereferenceChain"), Is.False,
-            "obj.Nested?.Value uses null-conditional — must not be flagged");
+            "obj.Nested?.Value uses null-conditional - must not be flagged");
     }
 
     // ── ArithmeticOverflowRisk ────────────────────────────────────────────
@@ -2569,7 +2569,7 @@ public class C {
 }");
         var issues = await _engine.FindArithmeticOverflowRisksAsync("Test.cs");
         Assert.That(issues.Any(i => i.Type == "ArithmeticOverflowRisk"), Is.False,
-            "int.MaxValue + 1 inside checked { } intentionally throws — must not be flagged");
+            "int.MaxValue + 1 inside checked { } intentionally throws - must not be flagged");
     }
 
     [Test]
@@ -2583,7 +2583,7 @@ public class C {
 }");
         var issues = await _engine.FindArithmeticOverflowRisksAsync("Test.cs");
         Assert.That(issues.Any(i => i.Type == "ArithmeticOverflowRisk"), Is.False,
-            "ordinary a + b must not be flagged — no boundary constant involved");
+            "ordinary a + b must not be flagged - no boundary constant involved");
     }
 }
 
@@ -2619,7 +2619,7 @@ public class A { public A(B b) { } }
 public class B { public B(A a) { } }
 ");
         var results = await _engine.FindCircularTypeReferencesAsync();
-        Assert.That(results, Is.Not.Empty, "A depends on B and B depends on A — circular dependency");
+        Assert.That(results, Is.Not.Empty, "A depends on B and B depends on A - circular dependency");
         Assert.That(results.Any(r => r.Contains("A") && r.Contains("B")), Is.True);
     }
 
@@ -2702,7 +2702,7 @@ public class C {
 }");
         var findings = await _engine.DetectAntiPatternsAsync(patternFilter: ["DisposedAfterUsing"]);
         Assert.That(findings.Any(f => f.Pattern == "DisposedAfterUsing"), Is.False,
-            "'using var' scopes the variable to the block — must not be flagged");
+            "'using var' scopes the variable to the block - must not be flagged");
     }
 
     [Test]
@@ -2824,7 +2824,7 @@ public class C {
 }");
         var results = await _engine.FindMissingGenericConstraintsAsync();
         Assert.That(results.Any(r => r.Contains("new()") && r.Contains("Create")), Is.False,
-            "'where T : new()' is already present — must not be flagged");
+            "'where T : new()' is already present - must not be flagged");
     }
 
     [Test]
@@ -2838,7 +2838,7 @@ public class C {
 }");
         var results = await _engine.FindMissingGenericConstraintsAsync();
         Assert.That(results.Any(r => r.Contains("class") && r.Contains("IsNull")), Is.True,
-            "'value == null' on unconstrained T should be flagged — value types can never be null");
+            "'value == null' on unconstrained T should be flagged - value types can never be null");
     }
 
     [Test]
@@ -2852,7 +2852,7 @@ public class C {
 }");
         var results = await _engine.FindMissingGenericConstraintsAsync();
         Assert.That(results.Any(r => r.Contains("class") && r.Contains("IsNull")), Is.False,
-            "'where T : class' is present — null comparison is valid, must not be flagged");
+            "'where T : class' is present - null comparison is valid, must not be flagged");
     }
 }
 
@@ -2908,7 +2908,7 @@ public class C {
 }");
         var issues = await _engine.DetectJsonAntiPatternsAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "JsonDocumentNotDisposed"), Is.False,
-            "'using var doc = JsonDocument.Parse(...)' is the correct pattern — must not be flagged");
+            "'using var doc = JsonDocument.Parse(...)' is the correct pattern - must not be flagged");
     }
 
     [Test]
@@ -3153,7 +3153,7 @@ public class C : System.IDisposable {
 }");
         var results = await _engine.FindFinalizerOnDisposableAsync();
         Assert.That(results, Is.Empty,
-            "Finalizer with _disposed guard is the correct pattern — must not be flagged");
+            "Finalizer with _disposed guard is the correct pattern - must not be flagged");
     }
 
     // ── UnboundedStaticCollection ──────────────────────────────────────────
@@ -3184,7 +3184,7 @@ public class Cache {
 }");
         var results = await _engine.FindUnboundedStaticCollectionsAsync();
         Assert.That(results, Is.Empty,
-            "Static Dictionary with Clear() is bounded — must not be flagged");
+            "Static Dictionary with Clear() is bounded - must not be flagged");
     }
 
     // ── UnboundedRecursion ─────────────────────────────────────────────────
@@ -3254,7 +3254,7 @@ public class C {
 }");
         var findings = await _engine.DetectAntiPatternsAsync(patternFilter: ["TaskRunBlocking"]);
         Assert.That(findings.Any(f => f.Pattern == "TaskRunBlocking"), Is.True,
-            "Task.Run(...).Result blocks thread-pool — should be flagged");
+            "Task.Run(...).Result blocks thread-pool - should be flagged");
     }
 
     [Test]
@@ -3267,7 +3267,7 @@ public class C {
 }");
         var findings = await _engine.DetectAntiPatternsAsync(patternFilter: ["TaskRunBlocking"]);
         Assert.That(findings.Any(f => f.Pattern == "TaskRunBlocking"), Is.False,
-            "await Task.Run() is fine — must not be flagged");
+            "await Task.Run() is fine - must not be flagged");
     }
 
     [Test]
@@ -3342,7 +3342,7 @@ public class C {
 }");
         var results = await _engine.FindUnsafeLazyInitAsync();
         Assert.That(results, Is.Empty,
-            "Null-check inside lock is safe — must not be flagged");
+            "Null-check inside lock is safe - must not be flagged");
     }
 
     [Test]
@@ -3384,7 +3384,7 @@ public class C {
 }");
         var results = await _engine.FindCasLoopWithoutBackoffAsync();
         Assert.That(results, Is.Empty,
-            "CAS loop with SpinWait is the correct pattern — must not be flagged");
+            "CAS loop with SpinWait is the correct pattern - must not be flagged");
     }
 }
 
@@ -3421,7 +3421,7 @@ public class C {
 }");
         var issues = await _engine.FindReDoSPatternsAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "ReDoSVulnerablePattern"), Is.True,
-            "(a+)+ is a classic ReDoS pattern — should be flagged");
+            "(a+)+ is a classic ReDoS pattern - should be flagged");
     }
 
     [Test]
@@ -3434,7 +3434,7 @@ public class C {
 }");
         var issues = await _engine.FindReDoSPatternsAsync("Test.cs");
         Assert.That(issues.Any(i => i.IssueType == "ReDoSVulnerablePattern"), Is.False,
-            "Simple digit pattern has no nested quantifiers — must not be flagged");
+            "Simple digit pattern has no nested quantifiers - must not be flagged");
     }
 }
 
@@ -3492,7 +3492,7 @@ public class C {
 }");
         var reports = await _engine.FindSequentialIndependentAwaitsAsync();
         Assert.That(reports, Is.Empty,
-            "Second await uses result of first — they are dependent, must not be flagged");
+            "Second await uses result of first - they are dependent, must not be flagged");
     }
 
     [Test]
@@ -3524,7 +3524,7 @@ public class C {
 }");
         var reports = await _engine.FindAsyncVoidWithoutTryCatchAsync();
         Assert.That(reports, Is.Empty,
-            "async void with try/catch wrapping the body is safe — must not be flagged");
+            "async void with try/catch wrapping the body is safe - must not be flagged");
     }
 }
 
@@ -3574,7 +3574,7 @@ public class C {
 }");
         var results = await _engine.FindMutablePublicCollectionPropertiesAsync();
         Assert.That(results, Is.Empty,
-            "private set restricts mutation — must not be flagged");
+            "private set restricts mutation - must not be flagged");
     }
 
     [Test]
@@ -3587,7 +3587,7 @@ public class C {
 }");
         var results = await _engine.FindMutablePublicCollectionPropertiesAsync();
         Assert.That(results, Is.Empty,
-            "IReadOnlyList with init is safe — must not be flagged");
+            "IReadOnlyList with init is safe - must not be flagged");
     }
 }
 
@@ -3714,7 +3714,7 @@ public class C {
 }");
         var results = await _engine.FindLinqRedundantWhereAsync();
         Assert.That(results.Any(r => r.IssueType == "LinqRedundantWhere"), Is.False,
-            "Direct FirstOrDefault(pred) is already optimal — must not be flagged");
+            "Direct FirstOrDefault(pred) is already optimal - must not be flagged");
     }
 }
 
@@ -3788,7 +3788,7 @@ public class Singleton {
 }");
         var results = await _engine.FindDoubleCheckedLockingAsync();
         Assert.That(results, Is.Empty,
-            "DCL with volatile field is the correct pattern — must not be flagged");
+            "DCL with volatile field is the correct pattern - must not be flagged");
     }
 }
 
@@ -3845,7 +3845,7 @@ public class Subscriber : System.IDisposable {
 }");
         var results = await _engine.DetectAntiPatternsAsync(null, null, ["StaticEventSubscription"]);
         Assert.That(results.Any(r => r.Pattern == "StaticEventSubscription"), Is.False,
-            "Paired -= in Dispose is the correct pattern — must not be flagged");
+            "Paired -= in Dispose is the correct pattern - must not be flagged");
     }
 }
 
@@ -3899,7 +3899,7 @@ public class C {
 }");
         var results = await _engine.FindUnvalidatedRegexSourceAsync("Test.cs");
         Assert.That(results.Any(r => r.IssueType == "UnvalidatedRegexSource"), Is.False,
-            "new Regex(literal) is safe — must not be flagged");
+            "new Regex(literal) is safe - must not be flagged");
     }
 }
 
@@ -3960,7 +3960,7 @@ public class C {
 }");
         var results = await _engine.FindCheckThenActOnDictionaryAsync();
         Assert.That(results, Is.Empty,
-            "ContainsKey + Add inside a lock is safe — must not be flagged");
+            "ContainsKey + Add inside a lock is safe - must not be flagged");
     }
 }
 
@@ -4018,7 +4018,7 @@ public class C : IAsyncDisposable {
 }");
         var results = await _engine.FindUnawaitedDisposeAsyncAsync();
         Assert.That(results, Is.Empty,
-            "await DisposeAsync() is the correct pattern — must not be flagged");
+            "await DisposeAsync() is the correct pattern - must not be flagged");
     }
 }
 
@@ -4080,6 +4080,6 @@ public class C {
 }");
         var results = await _engine.FindRegexNewInLoopAsync("Test.cs");
         Assert.That(results.Any(r => r.IssueType == "RegexNewInLoop"), Is.False,
-            "Static readonly Regex hoisted outside the loop is the correct pattern — must not be flagged");
+            "Static readonly Regex hoisted outside the loop is the correct pattern - must not be flagged");
     }
 }

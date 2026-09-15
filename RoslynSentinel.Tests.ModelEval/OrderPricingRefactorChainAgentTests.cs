@@ -20,7 +20,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// takes that test's 3 refactor steps (extract/rename/accessibility) and adds exactly one more
 /// ordinary, idiomatic refactor on top, one rung at a time, so pass rate can be plotted against
 /// step count without also varying step "kind" (still no bug diagnosis, still no scale/entanglement
-/// change — see the finding that idiomatic refactors succeed where symptom-driven bug fixes in
+/// change -> see the finding that idiomatic refactors succeed where symptom-driven bug fixes in
 /// <see cref="WholeFileRewriteAgentTests"/> do not). Each rung reuses the prior rung's starting
 /// fixture content and prompt, appending one step:
 ///
@@ -29,7 +29,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// - Rung 2 (5 steps, <see cref="Model_AppliesFiveChainedRefactors"/>): + rename a parameter
 ///   (`rate` to `discountRate`) across its declaration and all uses within the method.
 /// - Rung 3 (6 steps, <see cref="Model_AppliesSixChainedRefactors"/>): + add a guard clause
-///   (reject a negative discount rate) at the top of the renamed method — the one rung where a new
+///   (reject a negative discount rate) at the top of the renamed method -> the one rung where a new
 ///   *behavior* is introduced rather than a pure structural change, so the prompt explicitly scopes
 ///   the "preserve existing behavior" constraint to non-negative rates to avoid a repeat of
 ///   <see cref="OrderPricingRefactorAgentTests"/>'s step-1 wording ambiguity.
@@ -37,21 +37,21 @@ namespace RoslynSentinel.Tests.ModelEval;
 ///   (`IOrderPricingCalculator`) and have `OrderCheckout` depend on the interface type instead of
 ///   the concrete class.
 /// - Rung 5 (8 steps, <see cref="Model_AppliesEightChainedRefactors"/>): + rename the
-///   `OrderPricingCalculator` class itself to `StandardOrderPricingCalculator` — an ordinary type
+///   `OrderPricingCalculator` class itself to `StandardOrderPricingCalculator` -> an ordinary type
 ///   rename that ripples into both its own file's class declaration and `OrderCheckout`'s
 ///   construction call, without touching the interface name, member shape, or `OrderCheckout`'s
 ///   public constructor (which the shared front-door test in
 ///   <see cref="Fixtures.OrderPricingRefactorReproducer.CheckoutFrontDoorTestsFileContent"/>
-///   depends on staying parameterless across every rung — DI-style constructor injection was
+///   depends on staying parameterless across every rung -> DI-style constructor injection was
 ///   deliberately ruled out here for that reason).
 /// - Rung 6 (9 steps, <see cref="Model_AppliesNineChainedRefactors"/>): + widen
 ///   `IOrderPricingCalculator` to also declare `DescribeOrder(int, string): string`, so the
 ///   (renamed) calculator class must satisfy a second interface member it already has a
-///   compatible method for — an ordinary "grow the interface" step, distinct from rung 4's
+///   compatible method for -> an ordinary "grow the interface" step, distinct from rung 4's
 ///   original extraction.
 /// - Rung 7 (10 steps, <see cref="Model_AppliesTenChainedRefactors"/>): + replace
 ///   `SummarizeShipping`'s magic zone numbers (`1`, `2`) with named `const int` fields and use
-///   them in the switch — a self-contained "introduce named constant" step with no cross-file
+///   them in the switch -> a self-contained "introduce named constant" step with no cross-file
 ///   ripple, unlike every other step in the chain.
 ///
 /// Each rung is its own prompt/fixture/assertion method rather than one parameterized test, since
@@ -61,7 +61,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 [TestFixture]
 public class OrderPricingRefactorChainAgentTests
 {
-    // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks —
+    // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks ->
     // together they register ApplyDiff/Build/ReadFile/SearchSolutionText/ListSolutionItems plus
     // SentinelRefactoringTools (ExtractMethodSafe, RenameSymbol, ChangeAccessibility,
     // ModifyModifier, SyncInterface), without pulling in Advanced's larger tool catalog.
@@ -94,7 +94,7 @@ public class OrderPricingRefactorChainAgentTests
         if (string.IsNullOrEmpty(LlmOptions.Model))
         {
             Assert.Ignore(
-                "ROSLYNSENTINEL_LLM_MODEL is not set — model-eval tests require a real LM Studio " +
+                "ROSLYNSENTINEL_LLM_MODEL is not set - model-eval tests require a real LM Studio " +
                 "server with a loaded model and are skipped rather than failed when unconfigured.");
         }
 
@@ -118,7 +118,7 @@ public class OrderPricingRefactorChainAgentTests
         if (BlockWriteFile)
         {
             // Mirrors PlanOnlyAgentTests' filter shape, blocking just WriteFile instead of every
-            // mutating tool — the model still has ApplyDiff/ApplyUnifiedDiff/RenameSymbol/
+            // mutating tool -> the model still has ApplyDiff/ApplyUnifiedDiff/RenameSymbol/
             // ChangeSignature/etc., so this isolates the one specific tool rather than reverting to
             // a read-only exercise.
             mcpBuilder.WithRequestFilters(filters =>
@@ -233,10 +233,10 @@ public class OrderPricingRefactorChainAgentTests
     private const string FourStepUserPromptTemplate = """
         # Task: Four small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
         straight to ReadFile/SearchSolutionText/ListAll on the paths below.
 
-        You have flexibility in exactly how you implement each step below — use whichever MCP
+        You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
         the end result matches what's described.
 
@@ -251,14 +251,14 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline — this includes the
+           your new method instead of repeating `amount * rate` inline - this includes the
            preferred-customer branch, which still applies its 1.1x scaling on top of the
            extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
            in `CalcDisc` and does not move into the new method. Preserve the existing behavior
            exactly (preferred customers still get the 1.1x scaling, standard customers don't).
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
-           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
         3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
@@ -268,7 +268,7 @@ public class OrderPricingRefactorChainAgentTests
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
            after it's declared, purely to hold the result of your extracted method before
            subtracting it. Remove that local variable and subtract the extracted method's call
-           result directly in the `return` statement instead — the preferred-customer branch's
+           result directly in the `return` statement instead - the preferred-customer branch's
            `discount` local should be left exactly as it is; only the standard-customer branch's
            local is being inlined.
 
@@ -276,10 +276,10 @@ public class OrderPricingRefactorChainAgentTests
 
         - Do not change the logic of `DescribeOrder` or `SummarizeShipping` in
           `OrderPricingCalculator.cs`, or anything in `OrderCheckout.cs` other than the one call
-          site that must follow the rename — reformatting is fine, but their behavior must stay
+          site that must follow the rename - reformatting is fine, but their behavior must stay
           identical.
         - Do not change the observable behavior of `CalculateDiscountedTotal` (formerly
-          `CalcDisc`) — same inputs must still produce the same outputs.
+          `CalcDisc`) - same inputs must still produce the same outputs.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
 
@@ -292,9 +292,9 @@ public class OrderPricingRefactorChainAgentTests
         1. Does the standard-customer branch call your new extracted method? Does the
            preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
            did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
-           Both branches must call the new method — re-read both branches, not just one.
+           Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
-           `OrderCheckout.cs` updated to the new name — not just one of the two?
+           `OrderCheckout.cs` updated to the new name - not just one of the two?
         3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
            not still `private`?
         4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
@@ -331,10 +331,10 @@ public class OrderPricingRefactorChainAgentTests
     private const string FiveStepUserPromptTemplate = """
         # Task: Five small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
         straight to ReadFile/SearchSolutionText/ListAll on the paths below.
 
-        You have flexibility in exactly how you implement each step below — use whichever MCP
+        You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
         the end result matches what's described.
 
@@ -349,14 +349,14 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline — this includes the
+           your new method instead of repeating `amount * rate` inline - this includes the
            preferred-customer branch, which still applies its 1.1x scaling on top of the
            extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
            in `CalcDisc` and does not move into the new method. Preserve the existing behavior
            exactly (preferred customers still get the 1.1x scaling, standard customers don't).
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
-           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
         3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
@@ -366,14 +366,14 @@ public class OrderPricingRefactorChainAgentTests
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
            after it's declared, purely to hold the result of your extracted method before
            subtracting it. Remove that local variable and subtract the extracted method's call
-           result directly in the `return` statement instead — the preferred-customer branch's
+           result directly in the `return` statement instead - the preferred-customer branch's
            `discount` local should be left exactly as it is; only the standard-customer branch's
            local is being inlined.
 
         5. **Rename a parameter**: rename the `rate` parameter of `CalculateDiscountedTotal` to
            `discountRate`. Update every use of it inside `CalculateDiscountedTotal` (including in
            the call to your extracted method from step 1) to the new name. Leave the extracted
-           method's own parameter name(s) exactly as you already chose them in step 1 — this step
+           method's own parameter name(s) exactly as you already chose them in step 1 - this step
            only renames `CalculateDiscountedTotal`'s own parameter, not the extracted method's
            signature. `OrderCheckout.cs` calls this method positionally (not with named arguments),
            so its call site does not need to change for this step.
@@ -382,10 +382,10 @@ public class OrderPricingRefactorChainAgentTests
 
         - Do not change the logic of `DescribeOrder` or `SummarizeShipping` in
           `OrderPricingCalculator.cs`, or anything in `OrderCheckout.cs` other than the one call
-          site that must follow the rename in step 2 — reformatting is fine, but their behavior
+          site that must follow the rename in step 2 - reformatting is fine, but their behavior
           must stay identical.
         - Do not change the observable behavior of `CalculateDiscountedTotal` (formerly
-          `CalcDisc`) — same inputs must still produce the same outputs.
+          `CalcDisc`) - same inputs must still produce the same outputs.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
 
@@ -398,9 +398,9 @@ public class OrderPricingRefactorChainAgentTests
         1. Does the standard-customer branch call your new extracted method? Does the
            preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
            did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
-           Both branches must call the new method — re-read both branches, not just one.
+           Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
-           `OrderCheckout.cs` updated to the new name — not just one of the two?
+           `OrderCheckout.cs` updated to the new name - not just one of the two?
         3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
            not still `private`?
         4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
@@ -409,7 +409,7 @@ public class OrderPricingRefactorChainAgentTests
         5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now (not
            `rate`), at its declaration AND at every use inside the method, including inside the call
            to your extracted method from step 1? Did the extracted method's OWN parameter name(s)
-           stay exactly as you chose them in step 1 — this rename only touches
+           stay exactly as you chose them in step 1 - this rename only touches
            `CalculateDiscountedTotal`'s parameter, not the extracted method's.
 
         If re-reading the code reveals any of the above isn't true, fix it now before reporting —
@@ -434,7 +434,7 @@ public class OrderPricingRefactorChainAgentTests
 
         // Step 5: CalculateDiscountedTotal's own parameter must be renamed. Anchored to the method
         // declaration specifically (not a solution-wide text search) so a leftover "rate" identifier
-        // inside the extracted method from step 1 — which step 5 explicitly says NOT to rename —
+        // inside the extracted method from step 1 -> which step 5 explicitly says NOT to rename ->
         // isn't mistaken for an incomplete rename here.
         var calculateDiscountedTotalDeclaration = System.Text.RegularExpressions.Regex.Match(
             calculatorText, @"decimal\s+CalculateDiscountedTotal\s*\(([^)]*)\)");
@@ -453,7 +453,7 @@ public class OrderPricingRefactorChainAgentTests
     // Rung 3 (6 steps): rung 2's 5 steps + a guard clause rejecting a negative discount rate.
     //
     // This is the one rung that adds new *behavior* rather than a pure structural change, so the
-    // wording explicitly scopes "preserve existing behavior" to non-negative rates — closing off
+    // wording explicitly scopes "preserve existing behavior" to non-negative rates -> closing off
     // the exact ambiguity class that caused OrderPricingRefactorAgentTests's step-1 failure (see
     // its class doc comment): here the risk isn't "which reading of the sentence is intended," but
     // whether an unscoped "don't change behavior" instruction fights the also-present "add a guard
@@ -463,10 +463,10 @@ public class OrderPricingRefactorChainAgentTests
     private const string SixStepUserPromptTemplate = """
         # Task: Six small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
         straight to ReadFile/SearchSolutionText/ListAll on the paths below.
 
-        You have flexibility in exactly how you implement each step below — use whichever MCP
+        You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
         the end result matches what's described.
 
@@ -481,13 +481,13 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline — this includes the
+           your new method instead of repeating `amount * rate` inline - this includes the
            preferred-customer branch, which still applies its 1.1x scaling on top of the
            extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
            in `CalcDisc` and does not move into the new method.
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
-           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
         3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
@@ -497,7 +497,7 @@ public class OrderPricingRefactorChainAgentTests
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
            after it's declared, purely to hold the result of your extracted method before
            subtracting it. Remove that local variable and subtract the extracted method's call
-           result directly in the `return` statement instead — the preferred-customer branch's
+           result directly in the `return` statement instead - the preferred-customer branch's
            `discount` local should be left exactly as it is; only the standard-customer branch's
            local is being inlined.
 
@@ -511,14 +511,14 @@ public class OrderPricingRefactorChainAgentTests
         6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
            existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
            `discountRate` is negative (i.e. `discountRate < 0`). This is a deliberate, intentional
-           behavior change for negative rates only — do not try to preserve the old behavior for
+           behavior change for negative rates only - do not try to preserve the old behavior for
            negative input, there was no meaningful old behavior for negative input to preserve.
 
         ## Constraints
 
         - Do not change the logic of `DescribeOrder` or `SummarizeShipping` in
           `OrderPricingCalculator.cs`, or anything in `OrderCheckout.cs` other than the one call
-          site that must follow the rename in step 2 — reformatting is fine, but their behavior
+          site that must follow the rename in step 2 - reformatting is fine, but their behavior
           must stay identical.
         - For every NON-negative `discountRate`, `CalculateDiscountedTotal` (formerly `CalcDisc`)
           must keep producing exactly the same output it did before your changes. The only
@@ -536,9 +536,9 @@ public class OrderPricingRefactorChainAgentTests
         1. Does the standard-customer branch call your new extracted method? Does the
            preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
            did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
-           Both branches must call the new method — re-read both branches, not just one.
+           Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
-           `OrderCheckout.cs` updated to the new name — not just one of the two?
+           `OrderCheckout.cs` updated to the new name - not just one of the two?
         3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
            not still `private`?
         4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
@@ -547,10 +547,10 @@ public class OrderPricingRefactorChainAgentTests
         5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now (not
            `rate`), at its declaration AND at every use inside the method, including inside the call
            to your extracted method from step 1? Did the extracted method's OWN parameter name(s)
-           stay exactly as you chose them in step 1 — this rename only touches
+           stay exactly as you chose them in step 1 - this rename only touches
            `CalculateDiscountedTotal`'s parameter, not the extracted method's.
         6. Is the negative-`discountRate` guard clause actually the FIRST thing in the method body,
-           before any of the other logic — not appended after, and not skipped entirely?
+           before any of the other logic - not appended after, and not skipped entirely?
 
         If re-reading the code reveals any of the above isn't true, fix it now before reporting —
         do not report success based on what you intended to do.
@@ -641,10 +641,10 @@ public class OrderPricingRefactorChainAgentTests
     private const string SevenStepUserPromptTemplate = """
         # Task: Seven small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
         straight to ReadFile/SearchSolutionText/ListAll on the paths below.
 
-        You have flexibility in exactly how you implement each step below — use whichever MCP
+        You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
         the end result matches what's described.
 
@@ -659,13 +659,13 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline — this includes the
+           your new method instead of repeating `amount * rate` inline - this includes the
            preferred-customer branch, which still applies its 1.1x scaling on top of the
            extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
            in `CalcDisc` and does not move into the new method.
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
-           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
         3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
@@ -675,7 +675,7 @@ public class OrderPricingRefactorChainAgentTests
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
            after it's declared, purely to hold the result of your extracted method before
            subtracting it. Remove that local variable and subtract the extracted method's call
-           result directly in the `return` statement instead — the preferred-customer branch's
+           result directly in the `return` statement instead - the preferred-customer branch's
            `discount` local should be left exactly as it is; only the standard-customer branch's
            local is being inlined.
 
@@ -687,44 +687,44 @@ public class OrderPricingRefactorChainAgentTests
         6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
            existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
            `discountRate` is negative (i.e. `discountRate < 0`). This is a deliberate, intentional
-           behavior change for negative rates only — do not try to preserve the old behavior for
+           behavior change for negative rates only - do not try to preserve the old behavior for
            negative input, there was no meaningful old behavior for negative input to preserve.
 
         7. **Extract an interface**: create a new interface `IOrderPricingCalculator` (in its own
            new file, `{0}/FixtureHelpers/IOrderPricingCalculator.cs`) containing exactly one member:
            `CalculateDiscountedTotal(decimal amount, decimal discountRate, bool isPreferredCustomer)`
            returning `decimal`. Make `OrderPricingCalculator` implement this interface (only the
-           `CalculateDiscountedTotal` method needs to satisfy it — do not add `DescribeOrder` or
+           `CalculateDiscountedTotal` method needs to satisfy it - do not add `DescribeOrder` or
            `SummarizeShipping` to the interface). Then change `OrderCheckout`'s `_calculator` field
            in `OrderCheckout.cs` to be declared as `IOrderPricingCalculator` instead of the concrete
            `OrderPricingCalculator` type (the field can still be *constructed* with
-           `new OrderPricingCalculator()` — only its declared/static type changes to the interface).
+           `new OrderPricingCalculator()` - only its declared/static type changes to the interface).
 
         ## Constraints
 
         - Do not change the logic of `DescribeOrder` or `SummarizeShipping` in
-          `OrderPricingCalculator.cs` — reformatting is fine, but their behavior must stay identical.
+          `OrderPricingCalculator.cs` - reformatting is fine, but their behavior must stay identical.
         - For every NON-negative `discountRate`, `CalculateDiscountedTotal` must keep producing
           exactly the same output it did before your changes. The only observable behavior change
           anywhere in this task is the new exception for negative `discountRate` from step 6.
         - `OrderCheckout.GetFinalPrice` must still return the same value it did before, for the same
-          non-negative inputs — only the declared type of the private field backing it changes.
+          non-negative inputs - only the declared type of the private field backing it changes.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
           build to just the `ContosoOrders.Core` project rather than the whole solution.
 
         ## Before you report done
 
         Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`),
-        `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` — do not rely on your memory of the
+        `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` - do not rely on your memory of the
         edit you intended to make. For each item below, check the real code and answer yourself
         honestly before writing your summary:
 
         1. Does the standard-customer branch call your new extracted method? Does the
            preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
            did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
-           Both branches must call the new method — re-read both branches, not just one.
+           Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
-           `OrderCheckout.cs` updated to the new name — not just one of the two?
+           `OrderCheckout.cs` updated to the new name - not just one of the two?
         3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
            not still `private`?
         4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
@@ -733,15 +733,15 @@ public class OrderPricingRefactorChainAgentTests
         5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now (not
            `rate`), at its declaration AND at every use inside the method, including inside the call
            to your extracted method from step 1? Did the extracted method's OWN parameter name(s)
-           stay exactly as you chose them in step 1 — this rename only touches
+           stay exactly as you chose them in step 1 - this rename only touches
            `CalculateDiscountedTotal`'s parameter, not the extracted method's.
         6. Is the negative-`discountRate` guard clause actually the FIRST thing in the method body,
-           before any of the other logic — not appended after, and not skipped entirely?
+           before any of the other logic - not appended after, and not skipped entirely?
         7. Does `IOrderPricingCalculator.cs` exist with exactly the one member described? Does
            `OrderPricingCalculator` actually implement that interface? Is `OrderCheckout`'s
            `_calculator` field's DECLARED type actually `IOrderPricingCalculator` now, not still the
            concrete `OrderPricingCalculator` type (construction can still use `new
-           OrderPricingCalculator()` — only the declared/static type changes)?
+           OrderPricingCalculator()` - only the declared/static type changes)?
 
         If re-reading the code reveals any of the above isn't true, fix it now before reporting —
         do not report success based on what you intended to do.
@@ -828,10 +828,10 @@ public class OrderPricingRefactorChainAgentTests
     private const string EightStepUserPromptTemplate = """
         # Task: Eight small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
         straight to ReadFile/SearchSolutionText/ListAll on the paths below.
 
-        You have flexibility in exactly how you implement each step below — use whichever MCP
+        You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
         the end result matches what's described.
 
@@ -846,13 +846,13 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline — this includes the
+           your new method instead of repeating `amount * rate` inline - this includes the
            preferred-customer branch, which still applies its 1.1x scaling on top of the
            extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
            in `CalcDisc` and does not move into the new method.
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
-           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
         3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
@@ -862,7 +862,7 @@ public class OrderPricingRefactorChainAgentTests
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
            after it's declared, purely to hold the result of your extracted method before
            subtracting it. Remove that local variable and subtract the extracted method's call
-           result directly in the `return` statement instead — the preferred-customer branch's
+           result directly in the `return` statement instead - the preferred-customer branch's
            `discount` local should be left exactly as it is; only the standard-customer branch's
            local is being inlined.
 
@@ -874,38 +874,38 @@ public class OrderPricingRefactorChainAgentTests
         6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
            existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
            `discountRate` is negative (i.e. `discountRate < 0`). This is a deliberate, intentional
-           behavior change for negative rates only — do not try to preserve the old behavior for
+           behavior change for negative rates only - do not try to preserve the old behavior for
            negative input, there was no meaningful old behavior for negative input to preserve.
 
         7. **Extract an interface**: create a new interface `IOrderPricingCalculator` (in its own
            new file, `{0}/FixtureHelpers/IOrderPricingCalculator.cs`) containing exactly one member:
            `CalculateDiscountedTotal(decimal amount, decimal discountRate, bool isPreferredCustomer)`
            returning `decimal`. Make `OrderPricingCalculator` implement this interface (only the
-           `CalculateDiscountedTotal` method needs to satisfy it — do not add `DescribeOrder` or
+           `CalculateDiscountedTotal` method needs to satisfy it - do not add `DescribeOrder` or
            `SummarizeShipping` to the interface). Then change `OrderCheckout`'s `_calculator` field
            in `OrderCheckout.cs` to be declared as `IOrderPricingCalculator` instead of the concrete
            `OrderPricingCalculator` type (the field can still be *constructed* with
-           `new OrderPricingCalculator()` — only its declared/static type changes to the interface).
+           `new OrderPricingCalculator()` - only its declared/static type changes to the interface).
 
         8. **Rename the class**: rename the `OrderPricingCalculator` class itself to
            `StandardOrderPricingCalculator`. Update its declaration (including the `: IOrderPricingCalculator`
-           base-list entry, which keeps its own name unchanged — only the class being renamed
+           base-list entry, which keeps its own name unchanged - only the class being renamed
            implements it), the file's own name is NOT required to change, and the construction
            call in `OrderCheckout.cs` (`new OrderPricingCalculator()` becomes
            `new StandardOrderPricingCalculator()`). `IOrderPricingCalculator` itself is a different
-           symbol and must NOT be renamed — only the concrete class name changes.
+           symbol and must NOT be renamed - only the concrete class name changes.
 
         ## Constraints
 
         - Do not change the logic of `DescribeOrder` or `SummarizeShipping` in
-          `OrderPricingCalculator.cs` — reformatting is fine, but their behavior must stay identical.
+          `OrderPricingCalculator.cs` - reformatting is fine, but their behavior must stay identical.
         - For every NON-negative `discountRate`, `CalculateDiscountedTotal` must keep producing
           exactly the same output it did before your changes. The only observable behavior change
           anywhere in this task is the new exception for negative `discountRate` from step 6.
         - `OrderCheckout.GetFinalPrice` must still return the same value it did before, for the same
-          non-negative inputs — only the declared type of the private field backing it changes (step
+          non-negative inputs - only the declared type of the private field backing it changes (step
           7), and the concrete type it's constructed with (step 8).
-        - `OrderCheckout`'s own public constructor must remain parameterless — nothing in this task
+        - `OrderCheckout`'s own public constructor must remain parameterless - nothing in this task
           asks you to change how `OrderCheckout` itself is constructed, only what it constructs
           internally.
         - Verify your changes compile, using an MCP tool (you have no terminal access). Scope the
@@ -914,16 +914,16 @@ public class OrderPricingRefactorChainAgentTests
         ## Before you report done
 
         Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`),
-        `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` — do not rely on your memory of the
+        `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` - do not rely on your memory of the
         edit you intended to make. For each item below, check the real code and answer yourself
         honestly before writing your summary:
 
         1. Does the standard-customer branch call your new extracted method? Does the
            preferred-customer branch ALSO call it (with `* 1.1m` applied to the call's result), or
            did it get skipped and still compute `amount * rate` (or `amount * rate * 1.1m`) inline?
-           Both branches must call the new method — re-read both branches, not just one.
+           Both branches must call the new method - re-read both branches, not just one.
         2. Is the method's declaration renamed to `CalculateDiscountedTotal`, AND is the call site in
-           `OrderCheckout.cs` updated to the new name — not just one of the two?
+           `OrderCheckout.cs` updated to the new name - not just one of the two?
         3. Is the extracted method's accessibility actually `internal` in the file on disk right now,
            not still `private`?
         4. Is the `standardDiscount` local variable actually gone from the standard-customer branch,
@@ -932,16 +932,16 @@ public class OrderPricingRefactorChainAgentTests
         5. Is `CalculateDiscountedTotal`'s own parameter actually named `discountRate` now (not
            `rate`), at its declaration AND at every use inside the method, including inside the call
            to your extracted method from step 1? Did the extracted method's OWN parameter name(s)
-           stay exactly as you chose them in step 1 — this rename only touches
+           stay exactly as you chose them in step 1 - this rename only touches
            `CalculateDiscountedTotal`'s parameter, not the extracted method's.
         6. Is the negative-`discountRate` guard clause actually the FIRST thing in the method body,
-           before any of the other logic — not appended after, and not skipped entirely?
+           before any of the other logic - not appended after, and not skipped entirely?
         7. Does `IOrderPricingCalculator.cs` exist with exactly the one member described? Does the
            calculator class actually implement that interface? Is `OrderCheckout`'s `_calculator`
            field's DECLARED type actually `IOrderPricingCalculator` now, not still the concrete
            class type (construction can still use `new`)?
         8. Is the calculator class's name actually `StandardOrderPricingCalculator` on disk right
-           now, at BOTH its declaration and every place it's constructed — not still
+           now, at BOTH its declaration and every place it's constructed - not still
            `OrderPricingCalculator`? Is `IOrderPricingCalculator` itself still named
            `IOrderPricingCalculator`, unchanged?
 
@@ -1002,7 +1002,7 @@ public class OrderPricingRefactorChainAgentTests
             $"Step 7: OrderCheckout's _calculator field should be declared as IOrderPricingCalculator, not the concrete class. Transcript: {result.TranscriptPath}");
 
         // Step 8: the concrete class is renamed at both its declaration and every construction
-        // site, while the interface name itself is untouched — checked separately from
+        // site, while the interface name itself is untouched -> checked separately from
         // AssertThreeBaseStepsApplied's class-declaration check since the construction call site
         // lives in a different file (OrderCheckout.cs).
         Assert.That(checkoutText, Does.Match(@"new\s+StandardOrderPricingCalculator\s*\("),
@@ -1036,10 +1036,10 @@ public class OrderPricingRefactorChainAgentTests
     private const string NineStepUserPromptTemplate = """
         # Task: Nine small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
         straight to ReadFile/SearchSolutionText/ListAll on the paths below.
 
-        You have flexibility in exactly how you implement each step below — use whichever MCP
+        You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
         the end result matches what's described.
 
@@ -1054,13 +1054,13 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline — this includes the
+           your new method instead of repeating `amount * rate` inline - this includes the
            preferred-customer branch, which still applies its 1.1x scaling on top of the
            extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
            in `CalcDisc` and does not move into the new method.
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
-           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
         3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
@@ -1070,7 +1070,7 @@ public class OrderPricingRefactorChainAgentTests
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
            after it's declared, purely to hold the result of your extracted method before
            subtracting it. Remove that local variable and subtract the extracted method's call
-           result directly in the `return` statement instead — the preferred-customer branch's
+           result directly in the `return` statement instead - the preferred-customer branch's
            `discount` local should be left exactly as it is; only the standard-customer branch's
            local is being inlined.
 
@@ -1082,7 +1082,7 @@ public class OrderPricingRefactorChainAgentTests
         6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
            existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
            `discountRate` is negative (i.e. `discountRate < 0`). This is a deliberate, intentional
-           behavior change for negative rates only — do not try to preserve the old behavior for
+           behavior change for negative rates only - do not try to preserve the old behavior for
            negative input, there was no meaningful old behavior for negative input to preserve.
 
         7. **Extract an interface**: create a new interface `IOrderPricingCalculator` (in its own
@@ -1091,29 +1091,29 @@ public class OrderPricingRefactorChainAgentTests
            returning `decimal`. Make `OrderPricingCalculator` implement this interface. Then change
            `OrderCheckout`'s `_calculator` field in `OrderCheckout.cs` to be declared as
            `IOrderPricingCalculator` instead of the concrete `OrderPricingCalculator` type (the
-           field can still be *constructed* with `new OrderPricingCalculator()` — only its
+           field can still be *constructed* with `new OrderPricingCalculator()` - only its
            declared/static type changes to the interface).
 
         8. **Rename the class**: rename the `OrderPricingCalculator` class itself to
            `StandardOrderPricingCalculator`. Update its declaration (including the
            `: IOrderPricingCalculator` base-list entry, which keeps its own name unchanged) and the
            construction call in `OrderCheckout.cs`. `IOrderPricingCalculator` itself must NOT be
-           renamed — only the concrete class name changes.
+           renamed - only the concrete class name changes.
 
         9. **Widen the interface**: add a second member to `IOrderPricingCalculator`:
            `DescribeOrder(int id, string label)` returning `string`. The calculator class already
            has a compatible `DescribeOrder(int id, string label)` method (unrelated padding, not
-           previously part of the interface) — do not change that method's body or parameter names,
+           previously part of the interface) - do not change that method's body or parameter names,
            only add the new member to the interface declaration and, if your tool requires it,
            confirm the class's existing method satisfies it (an implicit interface implementation
            needs no code change on the class side beyond the interface itself gaining the member).
-           `SummarizeShipping` is NOT added to the interface — only `DescribeOrder` and the
+           `SummarizeShipping` is NOT added to the interface - only `DescribeOrder` and the
            already-present `CalculateDiscountedTotal`.
 
         ## Constraints
 
         - Do not change the logic of `DescribeOrder` or `SummarizeShipping` in
-          `OrderPricingCalculator.cs` — reformatting is fine, but their behavior must stay identical.
+          `OrderPricingCalculator.cs` - reformatting is fine, but their behavior must stay identical.
           Step 9 changes DescribeOrder's membership in the interface, not its implementation.
         - For every NON-negative `discountRate`, `CalculateDiscountedTotal` must keep producing
           exactly the same output it did before your changes. The only observable behavior change
@@ -1127,7 +1127,7 @@ public class OrderPricingRefactorChainAgentTests
         ## Before you report done
 
         Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`),
-        `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` — do not rely on your memory of the
+        `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` - do not rely on your memory of the
         edit you intended to make. For each item below, check the real code and answer yourself
         honestly before writing your summary:
 
@@ -1212,7 +1212,7 @@ public class OrderPricingRefactorChainAgentTests
             $"Step 8: OrderCheckout.cs should no longer construct the old 'OrderPricingCalculator' name. Transcript: {result.TranscriptPath}");
 
         // Step 9: the interface must now declare DescribeOrder(int, string): string too, and
-        // SummarizeShipping must still be absent — checked against the interface file's own text
+        // SummarizeShipping must still be absent -> checked against the interface file's own text
         // rather than the calculator class (which never needed to change its DescribeOrder body).
         Assert.That(interfaceText, Does.Match(@"string\s+DescribeOrder\s*\(\s*int\s+\w+\s*,\s*string\s+\w+\s*\)"),
             $"Step 9: IOrderPricingCalculator should declare 'string DescribeOrder(int, string)'. Transcript: {result.TranscriptPath}");
@@ -1245,10 +1245,10 @@ public class OrderPricingRefactorChainAgentTests
     private const string TenStepUserPromptTemplate = """
         # Task: Ten small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
-        The solution is already loaded — do not call ListWorkspaceSolutions or LoadSolution, go
+        The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
         straight to ReadFile/SearchSolutionText/ListAll on the paths below.
 
-        You have flexibility in exactly how you implement each step below — use whichever MCP
+        You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
         the end result matches what's described.
 
@@ -1263,13 +1263,13 @@ public class OrderPricingRefactorChainAgentTests
         1. **Extract**: both branches of `CalcDisc` repeat the exact expression `amount * rate` —
            factor only that expression out into its own new private method on the same class (it
            should take `amount` and `rate` and return their product), and have both branches call
-           your new method instead of repeating `amount * rate` inline — this includes the
+           your new method instead of repeating `amount * rate` inline - this includes the
            preferred-customer branch, which still applies its 1.1x scaling on top of the
            extracted call. The `* 1.1m` scaling factor is the only part of that branch that stays
            in `CalcDisc` and does not move into the new method.
 
         2. **Rename**: Rename `CalcDisc` to `CalculateDiscountedTotal`. This method is called from
-           `OrderCheckout.cs` — that call site must also be updated to the new name; a rename that
+           `OrderCheckout.cs` - that call site must also be updated to the new name; a rename that
            only changes the method's declaration and misses its caller is not complete.
 
         3. **Change accessibility**: Change the new method you extracted in step 1 from `private`
@@ -1279,7 +1279,7 @@ public class OrderPricingRefactorChainAgentTests
            `CalcDisc`), the local variable `standardDiscount` is used exactly once, immediately
            after it's declared, purely to hold the result of your extracted method before
            subtracting it. Remove that local variable and subtract the extracted method's call
-           result directly in the `return` statement instead — the preferred-customer branch's
+           result directly in the `return` statement instead - the preferred-customer branch's
            `discount` local should be left exactly as it is; only the standard-customer branch's
            local is being inlined.
 
@@ -1291,7 +1291,7 @@ public class OrderPricingRefactorChainAgentTests
         6. **Add a guard clause**: at the very top of `CalculateDiscountedTotal`'s body, before any
            existing logic, add a check that throws `System.ArgumentOutOfRangeException` if
            `discountRate` is negative (i.e. `discountRate < 0`). This is a deliberate, intentional
-           behavior change for negative rates only — do not try to preserve the old behavior for
+           behavior change for negative rates only - do not try to preserve the old behavior for
            negative input, there was no meaningful old behavior for negative input to preserve.
 
         7. **Extract an interface**: create a new interface `IOrderPricingCalculator` (in its own
@@ -1300,34 +1300,34 @@ public class OrderPricingRefactorChainAgentTests
            returning `decimal`. Make `OrderPricingCalculator` implement this interface. Then change
            `OrderCheckout`'s `_calculator` field in `OrderCheckout.cs` to be declared as
            `IOrderPricingCalculator` instead of the concrete `OrderPricingCalculator` type (the
-           field can still be *constructed* with `new OrderPricingCalculator()` — only its
+           field can still be *constructed* with `new OrderPricingCalculator()` - only its
            declared/static type changes to the interface).
 
         8. **Rename the class**: rename the `OrderPricingCalculator` class itself to
            `StandardOrderPricingCalculator`. Update its declaration (including the
            `: IOrderPricingCalculator` base-list entry, which keeps its own name unchanged) and the
            construction call in `OrderCheckout.cs`. `IOrderPricingCalculator` itself must NOT be
-           renamed — only the concrete class name changes.
+           renamed - only the concrete class name changes.
 
         9. **Widen the interface**: add a second member to `IOrderPricingCalculator`:
            `DescribeOrder(int id, string label)` returning `string`. The calculator class already
-           has a compatible `DescribeOrder(int id, string label)` method — do not change that
+           has a compatible `DescribeOrder(int id, string label)` method - do not change that
            method's body or parameter names, only add the new member to the interface declaration.
            `SummarizeShipping` is NOT added to the interface.
 
         10. **Introduce named constants**: in `SummarizeShipping`, the `switch` expression matches
             the raw integer literals `1` and `2` (for the "local" and "regional" cases). Add two
-            `private const int` fields to the calculator class — `LocalZone = 1` and
-            `RegionalZone = 2` — and replace the literal `1` and `2` in the switch's case patterns
+            `private const int` fields to the calculator class - `LocalZone = 1` and
+            `RegionalZone = 2` - and replace the literal `1` and `2` in the switch's case patterns
             with `LocalZone` and `RegionalZone` respectively. The `_ => "national"` default case is
             unaffected (there is no named constant for it). `SummarizeShipping`'s parameter, body
-            structure, and returned strings must otherwise stay exactly as they are — only the two
+            structure, and returned strings must otherwise stay exactly as they are - only the two
             case-pattern literals are replaced with the new constants.
 
         ## Constraints
 
         - Do not change the logic of `DescribeOrder` or `SummarizeShipping` beyond what step 10
-          explicitly asks for — reformatting is fine, but behavior (including the returned strings
+          explicitly asks for - reformatting is fine, but behavior (including the returned strings
           for each zone) must stay identical.
         - For every NON-negative `discountRate`, `CalculateDiscountedTotal` must keep producing
           exactly the same output it did before your changes. The only observable behavior change
@@ -1341,7 +1341,7 @@ public class OrderPricingRefactorChainAgentTests
         ## Before you report done
 
         Re-read the current, actual contents of `CalculateDiscountedTotal` (formerly `CalcDisc`),
-        `SummarizeShipping`, `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` — do not rely on
+        `SummarizeShipping`, `OrderCheckout.cs`, and `IOrderPricingCalculator.cs` - do not rely on
         your memory of the edit you intended to make. For each item below, check the real code and
         answer yourself honestly before writing your summary:
 
@@ -1365,7 +1365,7 @@ public class OrderPricingRefactorChainAgentTests
             values `1` and `2`? Does `SummarizeShipping`'s switch actually use `LocalZone` and
             `RegionalZone` in its case patterns instead of the literals `1` and `2`? Does calling
             `SummarizeShipping(1)` still return `"local"` and `SummarizeShipping(2)` still return
-            `"regional"` — i.e. did the constant values actually match the original literals?
+            `"regional"` - i.e. did the constant values actually match the original literals?
 
         If re-reading the code reveals any of the above isn't true, fix it now before reporting —
         do not report success based on what you intended to do.
@@ -1431,7 +1431,7 @@ public class OrderPricingRefactorChainAgentTests
         Assert.That(interfaceText, Does.Not.Match(@"SummarizeShipping"),
             $"Step 9: SummarizeShipping should NOT be added to IOrderPricingCalculator. Transcript: {result.TranscriptPath}");
 
-        // Step 10: named constants must exist and actually be used in the switch's case patterns —
+        // Step 10: named constants must exist and actually be used in the switch's case patterns ->
         // checked structurally (constant declarations + case-pattern identifiers) rather than just
         // "the literals 1/2 are gone somewhere", since the same literals legitimately still appear
         // in the constants' own initializers.
@@ -1485,7 +1485,7 @@ public class OrderPricingRefactorChainAgentTests
         // 45min/60 turns, not the base 3-step test's 30min: every added rung is strictly more work
         // on top of the same 3 base steps, and the first Chain5 (5-step) batch run hit the old
         // 30-minute cap after correctly completing 4 of 5 steps, stalling only on a tool-misuse
-        // retry for the last one — a step-scaled cap gives real headroom to recover from that kind
+        // retry for the last one -> a step-scaled cap gives real headroom to recover from that kind
         // of retry instead of cutting the run off right as it's converging.
         var runner = new ModelAgentRunner(
             _agentClient, _mcpClient, repeatedFailureLimit: 10, turnCap: 60, wallClockCap: TimeSpan.FromMinutes(45),
@@ -1495,14 +1495,14 @@ public class OrderPricingRefactorChainAgentTests
     }
 
     /// <summary>
-    /// Checks the 3 base steps (extract/rename/accessibility) shared by every rung — identical to
+    /// Checks the 3 base steps (extract/rename/accessibility) shared by every rung -> identical to
     /// <see cref="OrderPricingRefactorAgentTests.AssertRefactorsApplied"/>'s corresponding checks,
     /// duplicated here (rather than shared) because each rung's assertion method also needs to
     /// check its own additional step(s) inline against the same file reads, and the two test
     /// classes are allowed to diverge independently as each rung's wording gets tuned.
     /// </summary>
     /// <param name="expectedCalculatorClassName">
-    /// The calculator class's expected name at its own declaration (not just at call sites) — pass
+    /// The calculator class's expected name at its own declaration (not just at call sites) -> pass
     /// null for rungs 1-4, where the class stays named <c>OrderPricingCalculator</c>, or
     /// <c>"StandardOrderPricingCalculator"</c> for rungs 5+, where step 8 renames it. Checked
     /// against the declaration specifically so a model that updates every construction call site
@@ -1548,10 +1548,10 @@ public class OrderPricingRefactorChainAgentTests
         Assert.That(calculatorText, Does.Not.Match(@"private\s+(?:static\s+)?decimal\s+(?!CalculateDiscountedTotal\b)\w+\s*\("),
             $"The extracted discount method should no longer be private. Transcript: {result.TranscriptPath}");
 
-        // Unrelated code must still BEHAVE correctly — run the fixture's own real test project
+        // Unrelated code must still BEHAVE correctly -> run the fixture's own real test project
         // (ContosoOrders.Tests), whose OrderCheckoutTests front door exercises GetFinalPrice -> the
         // renamed/extracted/interface-wrapped calculator logic underneath it across every rung
-        // (OrderCheckout's own constructor/public shape is never touched by any rung's prompt — see
+        // (OrderCheckout's own constructor/public shape is never touched by any rung's prompt -> see
         // docs/current/modeleval_fixture_test_suite_redesign.md), rather than scanning for
         // byte-for-byte/whitespace-collapsed-unchanged text. Asserting the total count is unchanged
         // (not just Failed == 0) closes the loophole where a model "fixes" a failing test by
@@ -1565,11 +1565,11 @@ public class OrderPricingRefactorChainAgentTests
             $"Transcript: {result.TranscriptPath}\n{postRunTestResult.RawOutput}");
         Assert.That(postRunTestResult.Total, Is.EqualTo(_testBaseline.Total),
             $"ContosoOrders.Tests' total test count should be unchanged (baseline: {_testBaseline.Total}, " +
-            $"after: {postRunTestResult.Total}) — a dropped count means a test was deleted or disabled " +
+            $"after: {postRunTestResult.Total}) - a dropped count means a test was deleted or disabled " +
             $"instead of the underlying code being fixed. Transcript: {result.TranscriptPath}");
 
         // DescribeOrder/SummarizeShipping have no front door (nothing calls them), so they fall back
-        // to trivia-insensitive structural equivalence — legitimate reformatting is fine, only a
+        // to trivia-insensitive structural equivalence -> legitimate reformatting is fine, only a
         // change to signature/behavior counts.
         UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(
             CalculatorPath, "DescribeOrder", OrderPricingRefactorReproducer.StartingCalculatorFileContent);

@@ -15,7 +15,7 @@ public record MethodSourceResult
 {
     /// <summary>Scope/truncation metadata for the containing file. See <see cref="ReadEnvelope"/>.</summary>
     public ReadEnvelope Envelope { get; init; } = null!;
-    /// <summary>Condensed method declaration: modifiers, return type, name, and parameter list — no body.</summary>
+    /// <summary>Condensed method declaration: modifiers, return type, name, and parameter list -> no body.</summary>
     public string Signature { get; init; } = "";
     /// <summary>Attributes declared on the method, in declaration order.</summary>
     public List<MethodAttributeInfo> Attributes { get; init; } = new();
@@ -35,7 +35,7 @@ public record MethodAttributeInfo
 /// <summary>
 /// Plain implementation class for the read/navigation slice of workspace tools: GetMethodSource,
 /// GetFileOutline, ListAll, SearchSolutionText, GetOperationDetail, GetLargeResult. Method bodies
-/// are verbatim moves from SentinelWorkspaceTools — see docs/current/plan_split_workspace_refactoring_tools_for_di.md
+/// are verbatim moves from SentinelWorkspaceTools -> see docs/current/plan_split_workspace_refactoring_tools_for_di.md
 /// (Decision 1-Amendment). Not an [McpServerToolType]; the MCP surface lives in WorkspaceReadNavigationTools.
 /// </summary>
 public class WorkspaceReadNavigationImpl
@@ -59,7 +59,7 @@ public class WorkspaceReadNavigationImpl
 
     // Candidate-suggestion behavior confirmed live: an agent asked to read a file at a slightly
     // wrong path (e.g. missing a subfolder) retried the identical wrong path 2-3 times before
-    // giving up, even when ListSolutionItems's own earlier output already showed the real path —
+    // giving up, even when ListSolutionItems's own earlier output already showed the real path ->
     // the plain "file not found" message gave them nothing to act on. Searching the solution for
     // files sharing the requested filename turns most of these into a one-shot redirect; when
     // nothing matches by filename either, the message issues an explicit, unhedged directive
@@ -120,7 +120,7 @@ public class WorkspaceReadNavigationImpl
             }
 
             // Constructors are ConstructorDeclarationSyntax, not MethodDeclarationSyntax, but callers
-            // naturally pass the class name for "give me the source of its constructor" — resolve
+            // naturally pass the class name for "give me the source of its constructor" -> resolve
             // both node kinds under the shared BaseMethodDeclarationSyntax base.
             var method = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.Ordinal)) ?? root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.OrdinalIgnoreCase));
             if (method == null)
@@ -246,7 +246,7 @@ public class WorkspaceReadNavigationImpl
         }
     }
 
-    /// <summary>Walks a document's syntax tree and extracts the same outline entries GetFileOutline returns for one file — shared with ListAll, which runs this across every document in the solution.</summary>
+    /// <summary>Walks a document's syntax tree and extracts the same outline entries GetFileOutline returns for one file -> shared with ListAll, which runs this across every document in the solution.</summary>
     internal static List<OutlineItem> ExtractOutlineItems(SyntaxNode root)
     {
         var items = new List<OutlineItem>();
@@ -282,7 +282,7 @@ public class WorkspaceReadNavigationImpl
                     container = (prop.Parent as TypeDeclarationSyntax)?.Identifier.Text;
                     break;
                 // Struct/record/enum, and enum members, constructors, and fields were never
-                // covered here — a file containing only these (e.g. a pure enum file) produced
+                // covered here -> a file containing only these (e.g. a pure enum file) produced
                 // an outline with nothing but a "namespace" entry, silently implying the file had
                 // no commentable/editable members at all. Confirmed live: an agent asked to add
                 // summary comments to every member skipped OrderStatus.cs's enum entirely because
@@ -422,7 +422,7 @@ public class WorkspaceReadNavigationImpl
             catch (ArgumentException)
             {
                 regexPatternValid = false;
-                warnings.Add($"Pattern '{pattern}' is not a valid regex — only literal substring matches are returned.");
+                warnings.Add($"Pattern '{pattern}' is not a valid regex - only literal substring matches are returned.");
             }
 
             var options1 = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount };
@@ -512,7 +512,7 @@ public class WorkspaceReadNavigationImpl
             }
             else if (results.Count >= maxResults)
             {
-                warnings.Add($"{results.Count} matches found — returning first ({maxResults}) matches scanned — Narrow fileGlob/pattern or increase maxResults to see more.");
+                warnings.Add($"{results.Count} matches found - returning first ({maxResults}) matches scanned - Narrow fileGlob/pattern or increase maxResults to see more.");
             }
 
             _workspaceManager.RecordSearchOutcome(literalResults.Count + regexResults.Count);
@@ -555,7 +555,7 @@ public class WorkspaceReadNavigationImpl
     /// <summary>
     /// Walks up from <paramref name = "position"/> to the nearest named member declaration
     /// (method, property, constructor, field/event, indexer, or operator) and returns its name.
-    /// Returns null if the position isn't inside any member — e.g. a using directive, a
+    /// Returns null if the position isn't inside any member -> e.g. a using directive, a
     /// namespace-level comment, or a type declaration's own header.
     /// </summary>
     private static string? GetEnclosingMemberName(SyntaxNode root, int position)
@@ -587,7 +587,7 @@ public class WorkspaceReadNavigationImpl
                 case EventFieldDeclarationSyntax eventField:
                     return string.Join(", ", eventField.Declaration.Variables.Select(v => v.Identifier.Text));
                 case BaseTypeDeclarationSyntax:
-                    // Reached a type declaration without finding a member first — e.g. the match
+                    // Reached a type declaration without finding a member first -> e.g. the match
                     // was on the class header itself, not inside any member body.
                     return null;
             }
@@ -599,7 +599,7 @@ public class WorkspaceReadNavigationImpl
     // Globs without a path separator (e.g. "*.cs", "OrderService.cs") are matched against the
     // bare filename so callers can filter by name without knowing the file's directory. Globs
     // with a separator (e.g. "**/OrderService.cs", "ContosoOrders.Core/*.cs") are matched against
-    // the path relative to the solution root instead — matching them against Path.GetFileName()
+    // the path relative to the solution root instead -> matching them against Path.GetFileName()
     // would strip the very directory segment the glob is testing for, so a glob like "**/*.cs"
     // could never match anything.
     private static bool GlobMatchesFileName(FilePathWrapper filePath, string glob)
@@ -836,20 +836,20 @@ public class WorkspaceReadNavigationImpl
                 return new ToolResult<object>
                 {
                     Success = false,
-                    Error = new ResultError("Exception", "Result file has no Data payload — it may be corrupt.")
+                    Error = new ResultError("Exception", "Result file has no Data payload - it may be corrupt.")
                 };
             }
 
             // Raw (the generic MCP request-filter offload backstop, see
-            // docs/current/proposal_centralized_large_result_filter.md) has no known element shape —
-            // the filter that wrote it only ever saw opaque serialized text, never a typed value — so
+            // docs/current/proposal_centralized_large_result_filter.md) has no known element shape ->
+            // the filter that wrote it only ever saw opaque serialized text, never a typed value -> so
             // the list-shaped Skip(offset).Take(limit) paging every other case below uses does not
             // apply. Instead this pages over the stored raw text itself as a byte/char window, sized
             // and offset by the caller's limit/offset (reinterpreted as a character count and
             // position for this case only), capped so a single response can never itself exceed
             // OffloadThresholdBytes. Without this cap, returning the whole stored payload here would
             // let the very filter that offloaded it catch this response on the way back out and
-            // re-offload it under a new resultId — an unbounded fetch/still-too-big/re-offload loop.
+            // re-offload it under a new resultId -> an unbounded fetch/still-too-big/re-offload loop.
             if (all.Type == ResultWrapperType.Raw)
             {
                 var rawText = all.Data.ToString();
@@ -861,7 +861,7 @@ public class WorkspaceReadNavigationImpl
                 // we embed in it. Two things inflate the final size past the slice length: the
                 // envelope's own field names/punctuation (text/offset/nextOffset/totalChars, the
                 // outer success/data/totalRecords/hasMorePages wrapper), and JSON string-escaping of
-                // the slice content itself — every '"' or '\' in the slice doubles in size once
+                // the slice content itself -> every '"' or '\' in the slice doubles in size once
                 // embedded as a JSON string value, and stored Raw payloads are frequently
                 // already-serialized JSON (quote-dense), so escaping overhead cannot be treated as a
                 // small fixed constant.
@@ -923,7 +923,7 @@ public class WorkspaceReadNavigationImpl
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            // limit/offset were previously accepted but never applied — the full
+                            // limit/offset were previously accepted but never applied -> the full
                             // on-disk list was returned regardless of the requested page.
                             Data = findings.Skip(offset).Take(limit).ToList()
                         };

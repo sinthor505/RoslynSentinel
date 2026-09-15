@@ -212,7 +212,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetCallGraph")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Builds a call graph for a method. For a single-level, flat list of callers instead of a multi-level tree, use FindReferences(kind: callers) — cheaper when you don't need depth beyond direct callers.")]
+    [Description("Builds a call graph for a method. For a single-level, flat list of callers instead of a multi-level tree, use FindReferences(kind: callers) - cheaper when you don't need depth beyond direct callers.")]
     public async Task<ToolResult<object>> GetCallGraph(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,

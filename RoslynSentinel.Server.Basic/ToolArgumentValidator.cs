@@ -6,7 +6,7 @@ public static class ToolArgumentValidator
 {
     // Added by AddMember (expected - used for diagnostics)
     /// <summary>
-    /// Cache of tool name → (all declared parameter names, required parameter names, and each
+    /// Cache of tool name -> (all declared parameter names, required parameter names, and each
     /// declared parameter's own schema node for type/enum checks). Cached because the schema is
     /// fixed for the process lifetime and this runs on every single tool call.
     /// </summary>
@@ -16,7 +16,7 @@ public static class ToolArgumentValidator
     /// Reads the declared and required parameter names, plus each declared parameter's own schema
     /// node (for type/enum checks), out of the tool's emitted JSON input schema. Reads the schema
     /// that is actually emitted to clients rather than reflecting over the C# signature, because
-    /// this repo has a history of the two disagreeing — validating against the signature would
+    /// this repo has a history of the two disagreeing -> validating against the signature would
     /// reject calls that match what the model was actually shown, which is the exact failure mode
     /// this validator exists to prevent. Returns <see langword="null"/> when the tool or its
     /// schema cannot be resolved, in which case the caller must skip validation rather than guess.
@@ -171,49 +171,49 @@ public static class ToolArgumentValidator
         ["solutionPath"] = "the absolute path to a .slnx/.sln/.csproj file, e.g. \"C:\\\\repos\\\\MyApp\\\\MyApp.slnx\". Call ListWorkspaceSolutions to discover the solutions available on this host.",
         ["filepath"] = "a repo-relative or absolute path to a file in the loaded solution, e.g. \"src/Orders/OrderService.cs\". Call ListAll or ListSolutionItems to list the files in the solution.",
         ["filePath"] = "a repo-relative or absolute path to a file in the loaded solution, e.g. \"src/Orders/OrderService.cs\". Call ListAll or ListSolutionItems to list the files in the solution.",
-        ["docCommentId"] = "a documentation comment ID, e.g. \"M:MyApp.Orders.OrderService.Total(System.Int32)\". Call LocateSymbol to obtain the exact ID for a symbol — do not hand-write one.",
+        ["docCommentId"] = "a documentation comment ID, e.g. \"M:MyApp.Orders.OrderService.Total(System.Int32)\". Call LocateSymbol to obtain the exact ID for a symbol - do not hand-write one.",
         ["reason"] = "a short phrase (at least 10 characters, containing a space) saying why you are calling this tool right now, e.g. \"checking the working tree before staging\".",
         ["operation"] = "one of the operation names listed in this tool's schema enum. Re-read the tool's parameter schema and pick one of them verbatim.",
         ["typeName"] = "the name of a type in the loaded solution, e.g. \"OrderService\". Call ListAll(kind: types) or LocateSymbol to find the exact name.",
         ["memberName"] = "the name of a member on the target type, e.g. \"CalculateTotal\". Call Member(operation: view) or GetFileOutline to list a container's members.",
         ["containerName"] = "the name of the type that holds the member, e.g. \"OrderService\". Call GetFileOutline to see the types declared in a file.",
-        ["oldContent"] = "the exact text to replace, copied verbatim from a prior ReadFile/GetMethodSource result — not retyped from memory.",
+        ["oldContent"] = "the exact text to replace, copied verbatim from a prior ReadFile/GetMethodSource result - not retyped from memory.",
         ["newContent"] = "the replacement text.",
         ["message"] = "the commit message describing what the change does.",
     };
     // Added by AddMember (expected - used for diagnostics)
     /// <summary>
     /// Checks a tool call's arguments against the tool's emitted input schema BEFORE dispatch, and
-    /// returns an actionable error message when the call cannot succeed as written — or
+    /// returns an actionable error message when the call cannot succeed as written -> or
     /// <see langword="null"/> to let the call proceed.
     /// <para>
     /// Three dispatch-layer defects make this necessary, and none is fixable per-tool:
     /// </para>
     /// <list type="bullet">
     /// <item><description>
-    /// An <b>unknown argument is silently discarded.</b> Argument binding is a pull model —
+    /// An <b>unknown argument is silently discarded.</b> Argument binding is a pull model ->
     /// <c>AIFunctionFactory</c> looks up each declared parameter by name in the arguments
-    /// dictionary and never inspects what is left over — so a misspelled or misapplied parameter
+    /// dictionary and never inspects what is left over -> so a misspelled or misapplied parameter
     /// name is simply never read. The tool then runs on its defaults and returns
     /// <c>success:true</c> with the wrong result. That silent-wrong-behaviour class is the hardest
-    /// of all for a weak model to recover from: there is no error to react to. Confirmed live —
+    /// of all for a weak model to recover from: there is no error to react to. Confirmed live ->
     /// <c>Git(operation:"stage", paths:"…")</c> quietly staged tracked files only, because
     /// <c>stage</c> reads <c>files</c> and <c>paths</c> belonged to <c>diff</c>.
     /// </description></item>
     /// <item><description>
     /// A <b>missing required argument throws a raw framework exception.</b>
     /// <c>AIFunctionFactory</c> raises "The arguments dictionary is missing a value for the
-    /// required parameter 'x'. (Parameter 'arguments')" — dispatch-layer vocabulary describing an
+    /// required parameter 'x'. (Parameter 'arguments')" -> dispatch-layer vocabulary describing an
     /// internal data structure the caller never sees, with no example value and no route to a real
     /// one, in violation of the never-leak-raw-exceptions convention in CLAUDE.md.
     /// </description></item>
     /// <item><description>
     /// A <b>type-mismatched or invalid-enum argument throws a raw <c>JsonException</c>.</b> Passing
     /// an array where the schema declares a scalar <c>string</c> (e.g. <c>Git(operation:"stage",
-    /// files:["a","b"])</c> — the plural parameter name invites this), or a string that isn't one of
+    /// files:["a","b"])</c> -> the plural parameter name invites this), or a string that isn't one of
     /// the schema's declared <c>enum</c> members (e.g. <c>Git(operation:"show")</c>, not a real
     /// <c>GitOperation</c>), both crash during framework-level deserialization before the tool
-    /// method body ever runs — no tool-level try/catch can intercept it. Confirmed live for both
+    /// method body ever runs -> no tool-level try/catch can intercept it. Confirmed live for both
     /// shapes; see docs/current/finding_git_tool_array_param_and_invalid_operation_crash.md.
     /// </description></item>
     /// </list>
@@ -263,7 +263,7 @@ public static class ToolArgumentValidator
 
                 builder.Append("This tool accepts only: ")
                        .Append(string.Join(", ", declared.OrderBy(d => d, StringComparer.Ordinal)))
-                       .Append(". Nothing was executed — the call was rejected before running, because an unrecognised parameter would otherwise be ignored and the tool would run on its defaults and report success with the wrong result.");
+                       .Append(". Nothing was executed - the call was rejected before running, because an unrecognised parameter would otherwise be ignored and the tool would run on its defaults and report success with the wrong result.");
 
                 return builder.ToString();
             }
@@ -297,7 +297,7 @@ public static class ToolArgumentValidator
             return builder.ToString();
         }
 
-        // 3. Type-mismatched or invalid-enum arguments — the two shapes that otherwise crash with a
+        // 3. Type-mismatched or invalid-enum arguments -> the two shapes that otherwise crash with a
         //    raw JsonException during framework-level deserialization, before the tool method body
         //    ever runs (so no per-tool try/catch can intercept them).
         if (arguments is not null && arguments.Count > 0)
@@ -342,7 +342,7 @@ public static class ToolArgumentValidator
                     if (declaresScalarOnly)
                     {
                         return $"Parameter '{argument.Key}' for tool '{toolName}' takes a single {string.Join(" or ", declaredTypes)} value, not an {actualTypeWord}. " +
-                               $"Call this tool once per value instead of passing a {actualTypeWord} — e.g. if you have several files, call the tool separately for each one. Nothing was executed.";
+                               $"Call this tool once per value instead of passing a {actualTypeWord} - e.g. if you have several files, call the tool separately for each one. Nothing was executed.";
                     }
                 }
 

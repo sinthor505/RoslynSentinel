@@ -14,13 +14,13 @@ namespace RoslynSentinel.Tests.ModelEval.AgentLoop;
 /// <see cref="McpClient"/> (same in-process pipe-wired client construction as
 /// RoslynSentinel.Tests.Advanced's McpTasksHarness* tests). The model's own tool list comes from
 /// <see cref="McpClient.ListToolsAsync"/> on the same client, so the harness never hand-maintains a
-/// duplicate tool catalog — it always reflects whatever the running server actually exposes.
+/// duplicate tool catalog -> it always reflects whatever the running server actually exposes.
 /// </summary>
 public sealed class ModelAgentRunner
 {
     /// <summary>
     /// Tool args/result JSON longer than this is offloaded to a sidecar file in agent.log rather
-    /// than inlined — a single ReadFile result at 35,000 chars made even grepping the log risk
+    /// than inlined -> a single ReadFile result at 35,000 chars made even grepping the log risk
     /// blowing an analysis agent's context window. transcript.json (the structured record replayed
     /// by roslynsentinel-interrogate.ps1) always keeps the full payload; only agent.log is affected.
     /// </summary>
@@ -37,7 +37,7 @@ public sealed class ModelAgentRunner
     /// <param name="repeatedFailureLimit">
     /// How many <em>consecutive</em> identically-failing tool calls end the run with
     /// <see cref="AgentStopReason.RepeatedToolFailure"/>. Required, with no default, so every call
-    /// site states its own tolerance rather than silently inheriting one — the eval fixtures want a
+    /// site states its own tolerance rather than silently inheriting one -> the eval fixtures want a
     /// high, non-interfering value while an unattended runner wants to bail early.
     /// <para>
     /// Not to be confused with <c>AgentToolErrorAssertions.AssertWithinBudget</c>: that is a
@@ -145,7 +145,7 @@ public sealed class ModelAgentRunner
             var turnCompletedAt = DateTimeOffset.Now;
 
             _logger.LogInformation(
-                "Turn {Turn}: model responded in {Latency} — {ToolCallCount} tool call(s). Reasoning: {Reasoning} Content: {Content}",
+                "Turn {Turn}: model responded in {Latency} - {ToolCallCount} tool call(s). Reasoning: {Reasoning} Content: {Content}",
                 turnNumber, turnStopwatch.Elapsed, modelMessage.ToolCalls.Count,
                 string.IsNullOrWhiteSpace(modelMessage.ReasoningContent) ? "(none)" : modelMessage.ReasoningContent,
                 string.IsNullOrWhiteSpace(modelMessage.Content) ? "(none)" : modelMessage.Content);
@@ -248,7 +248,7 @@ public sealed class ModelAgentRunner
                         firstFailureTurn, turnNumber, toolCall.ArgumentsJson, resultJson);
                     _logger.LogWarning(
                         "Turn {Turn}: {Tool} failed {Count} consecutive time(s) with the same signature " +
-                        "[{Signature}] across turns {FirstTurn}-{LastTurn} — tripping the repeated-failure " +
+                        "[{Signature}] across turns {FirstTurn}-{LastTurn} - tripping the repeated-failure " +
                         "breaker (limit {Limit}) instead of burning the remaining turn budget.",
                         turnNumber, toolCall.Name, consecutiveFailures, signature,
                         firstFailureTurn, turnNumber, _repeatedFailureLimit);
@@ -325,7 +325,7 @@ public sealed class ModelAgentRunner
     }
 
     /// <summary>
-    /// Finds <paramref name="propertyName"/> at the root or shallowly nested beneath it — error
+    /// Finds <paramref name="propertyName"/> at the root or shallowly nested beneath it -> error
     /// codes on this server sit under a "data"/"error" envelope about as often as at the top level.
     /// Depth-bounded so a large successful payload isn't walked exhaustively.
     /// </summary>
@@ -398,7 +398,7 @@ public sealed class ModelAgentRunner
             .FirstOrDefault() ?? "";
 
         // Check both envelope layers: the outer MCP-protocol IsError and the inner domain-level
-        // ToolResult<T>.Success — see [[project_searchmode_literal_override_bug]], now fixed
+        // ToolResult<T>.Success -> see [[project_searchmode_literal_override_bug]], now fixed
         // server-side via a CallToolFilter, but the harness still checks both defensively rather
         // than trusting either alone.
         var isError = result.IsError == true || BodyReportsFailure(text);
@@ -430,7 +430,7 @@ public sealed class ModelAgentRunner
     /// <summary>
     /// Returns <paramref name="json"/> unchanged when it's short enough for agent.log, otherwise
     /// writes it to a sidecar file under <paramref name="transcriptDirectory"/> and returns a stub
-    /// naming that file and the original size. transcript.json is unaffected — this only changes
+    /// naming that file and the original size. transcript.json is unaffected -> this only changes
     /// what <see cref="_logger"/> is handed for the human-readable agent.log line.
     /// </summary>
     /// <remarks>

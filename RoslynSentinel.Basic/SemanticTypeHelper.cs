@@ -88,7 +88,7 @@ public static class SemanticTypeHelper
             return true;
         }
 
-        // LINQ operator result types (e.g. WhereSelectArrayIterator, OrderedEnumerable) —
+        // LINQ operator result types (e.g. WhereSelectArrayIterator, OrderedEnumerable) ->
         // they have internal names but implement IEnumerable<T>
         if (type is INamedTypeSymbol named)
         {

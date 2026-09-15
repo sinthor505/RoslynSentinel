@@ -6,10 +6,10 @@ using RoslynSentinel.Common;
 namespace RoslynSentinel.Tests.Battery;
 
 /// <summary>
-/// Battery #7 — Tests for three engines at 6-mention coverage:
-///   A. StandardRefactoringEngine (4 tests) — ConvertMethodToProperty, MakeMethodStatic, InvertBoolean stub
-///   B. SemanticSearchEngine      (4 tests) — FindMethodsByReturnType, FindTypesByAttribute
-///   C. AdvancedTypeEngine        (5 tests) — ConvertTupleToClass, ChangePropertyType, ConvertAnonymousToNamed
+/// Battery #7 -> Tests for three engines at 6-mention coverage:
+///   A. StandardRefactoringEngine (4 tests) -> ConvertMethodToProperty, MakeMethodStatic, InvertBoolean stub
+///   B. SemanticSearchEngine      (4 tests) -> FindMethodsByReturnType, FindTypesByAttribute
+///   C. AdvancedTypeEngine        (5 tests) -> ConvertTupleToClass, ChangePropertyType, ConvertAnonymousToNamed
 ///
 /// Total: 13 tests. All workspace-based (SetSource / SetMultipleFiles).
 /// </summary>
@@ -50,7 +50,7 @@ public class Counter
 }");
         var result = await _engine.ConvertMethodToPropertyAsync("Test.cs", "GetCount");
 
-        // Method becomes an expression-bodied property — no parameter list
+        // Method becomes an expression-bodied property -> no parameter list
         Assert.That(result.UpdatedText, Does.Contain("GetCount"), "Property name should be preserved");
         Assert.That(result.UpdatedText, Does.Contain("=>"), "Should produce expression-bodied property");
         Assert.That(result.UpdatedText, Does.Not.Contain("GetCount()"), "Should not have method parameter parens");
@@ -68,7 +68,7 @@ public class Calculator
 
         var result = await _engine.ConvertMethodToPropertyAsync("Test.cs", "Add");
 
-        // Methods with parameters cannot be converted — source returned unchanged
+        // Methods with parameters cannot be converted -> source returned unchanged
         Assert.That(result.UpdatedText, Does.Contain("Add(int a, int b)"), "Parameterized method should remain unchanged");
         Assert.That(result.UpdatedText, Does.Not.Contain("Add =>"), "Should not produce arrow property for parameterized method");
     }
@@ -90,7 +90,7 @@ public class MathHelper
     [Test]
     public async Task InvertBoolean_AnyInput_ReturnsEmpty()
     {
-        // InvertBoolean is a documented stub — requires solution-wide reference tracking
+        // InvertBoolean is a documented stub -> requires solution-wide reference tracking
         SetSource("public class C { public bool IsEnabled { get; set; } }");
 
         var result = await _engine.InvertBooleanAsync("Test.cs", "IsEnabled");
@@ -152,7 +152,7 @@ public class OrderService
 }");
         var results = await _engine.FindMethodsByReturnTypeAsync("XmlDocument");
 
-        Assert.That(results, Is.Empty, "No methods return XmlDocument — should yield empty list");
+        Assert.That(results, Is.Empty, "No methods return XmlDocument - should yield empty list");
     }
 
     [Test]

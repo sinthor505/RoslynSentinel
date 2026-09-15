@@ -1,4 +1,4 @@
-// Battery #20 — SentinelWorkspaceTools
+// Battery #20 -> SentinelWorkspaceTools
 // Tests all 26 public methods of SentinelWorkspaceTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -214,7 +214,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         // "Order" contains no regex metacharacters, so every regex match is also a literal match
-        // at the same file/line/col — regexResults should be empty and the overlap reported.
+        // at the same file/line/col -> regexResults should be empty and the overlap reported.
         var result = await _workspaceTools.SearchSolutionText(reason: "test message", "Order");
 
         Assert.That(result.Success, Is.True);
@@ -238,7 +238,7 @@ public class BatteryTwentyTests
     [Test]
     public async Task SearchSolutionText_InvalidRegexPattern_StillReturnsLiteralResults()
     {
-        // Comment text containing an unclosed '[' — unambiguously invalid regex in .NET — but a
+        // Comment text containing an unclosed '[' -> unambiguously invalid regex in .NET -> but a
         // perfectly normal literal substring to search for. Must not throw a parse error, and
         // literal search must still work.
         SetSource("namespace TestProj; // array like foo[bar\npublic class Order { }", "Test.cs");
@@ -384,7 +384,7 @@ public class BatteryTwentyTests
     {
         // Regression: a model passed workspacePath:"/" (a plausible "search from root" guess),
         // which Directory.Exists resolves to the current drive's root on Windows, sending an
-        // uncancellable Directory.EnumerateFiles(..., AllDirectories) across the entire C: drive —
+        // uncancellable Directory.EnumerateFiles(..., AllDirectories) across the entire C: drive ->
         // observed hanging 30+ minutes while climbing to 4.6GB RAM in a real model-eval run.
         var driveRoot = Path.GetPathRoot(Path.GetTempPath())!;
 
@@ -397,7 +397,7 @@ public class BatteryTwentyTests
     [Test]
     public void ListWorkspaceSolutions_BareSlash_RejectedInsteadOfScanningWholeDrive()
     {
-        // "/" is the exact value observed triggering the hang above — NormalizeWirePath leaves it
+        // "/" is the exact value observed triggering the hang above -> NormalizeWirePath leaves it
         // untouched, and Directory.Exists("/") is true on Windows (resolves to the current drive).
         var result = _workspaceTools.ListWorkspaceSolutions(reason: "test message", "/");
 
@@ -407,7 +407,7 @@ public class BatteryTwentyTests
 
     // --- Diagnose ---
 
-    // GetExternalChanges/AcknowledgeSync tests moved to SentinelAdminToolsTests.cs —
+    // GetExternalChanges/AcknowledgeSync tests moved to SentinelAdminToolsTests.cs ->
     // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to SentinelAdminTools
     // (RoslynSentinel.Server.Basic/SentinelAdminTools.cs), gated behind the "Admin" mode. See
     // docs/current/ideas/external-drift-hard-blocker.md.
@@ -541,7 +541,7 @@ public class Order
     [Description("Regression (ContosoOrders live agent run, attempt 5): the contextSnippet/lineBefore/"
                  + "lineAfter fallback path was documented on SafeDeleteUnusedSymbol's own [Description] "
                  + "but never wired to any resolution logic, leaving an agent with only a raw line/column "
-                 + "pair to identify a target — and no other tool exposes a column, only a line, making "
+                 + "pair to identify a target - and no other tool exposes a column, only a line, making "
                  + "that pair effectively unobtainable too. A live agent hit exactly this: it had a line "
                  + "number from SearchSolutionText but no column, called the tool with line-only, and got "
                  + "a generic 'requires either (sessionId, projectName, docCommentId) or (line, column)' "

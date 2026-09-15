@@ -366,7 +366,7 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// ERROR: Cannot convert '{methodName}' to an indexer — it must have exactly one parameter (has {method.ParameterList.Parameters.Count})."
+                Message = $"// ERROR: Cannot convert '{methodName}' to an indexer - it must have exactly one parameter (has {method.ParameterList.Parameters.Count})."
             };
         }
 
@@ -377,7 +377,7 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// ERROR: Cannot convert static method '{methodName}' to an indexer — C# does not support static indexers."
+                Message = $"// ERROR: Cannot convert static method '{methodName}' to an indexer - C# does not support static indexers."
             };
         }
 
@@ -394,12 +394,12 @@ public class GranularRefactoringEngine
         }
         else
         {
-            // Abstract/extern methods have no body — cannot create indexer
+            // Abstract/extern methods have no body -> cannot create indexer
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// ERROR: Cannot convert '{methodName}' to an indexer — method has no body."
+                Message = $"// ERROR: Cannot convert '{methodName}' to an indexer - method has no body."
             };
         }
 
@@ -555,7 +555,7 @@ public class GranularRefactoringEngine
 
     public async Task<DocumentEditResult> IntroduceParameterAsync(FilePathWrapper filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        // NOTE: Single-file only — call sites in other files are not updated.
+        // NOTE: Single-file only -> call sites in other files are not updated.
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
@@ -696,7 +696,7 @@ public class GranularRefactoringEngine
         var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
 
         // Primary: find an expression whose span starts at position and whose text matches
-        // the snippet — handles compound expressions like "a + b".
+        // the snippet -> handles compound expressions like "a + b".
         var trimmedSnippet = contextSnippet.Trim();
         var expression = root.DescendantNodes()
             .OfType<ExpressionSyntax>()
@@ -737,7 +737,7 @@ public class GranularRefactoringEngine
         }
 
         // If the expression IS the entire initializer of an existing local var declaration, the
-        // variable is already introduced — extracting it would produce `var x = x;` (a duplicate).
+        // variable is already introduced -> extracting it would produce `var x = x;` (a duplicate).
         if (containingStatement is LocalDeclarationStatementSyntax existingDecl &&
             existingDecl.Declaration.Variables.Count == 1 &&
             existingDecl.Declaration.Variables[0].Initializer?.Value?.IsEquivalentTo(expression) == true)
@@ -747,7 +747,7 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// '{existingName}' is already a local variable — nothing to introduce."
+                Message = $"// '{existingName}' is already a local variable - nothing to introduce."
             };
         }
 
@@ -758,7 +758,7 @@ public class GranularRefactoringEngine
                         .WithInitializer(SyntaxFactory.EqualsValueClause(expression.WithoutTrivia())))));
 
         // If the extracted expression is the sole content of a parenthesized expression,
-        // replace the outer parens too — avoids spurious "(sum) * c" when extracting "a + b"
+        // replace the outer parens too -> avoids spurious "(sum) * c" when extracting "a + b"
         // from "(a + b) * c". A bare identifier never needs parens (highest precedence).
         SyntaxNode nodeToReplace = expression;
         if (expression.Parent is ParenthesizedExpressionSyntax parenParent &&
@@ -1108,7 +1108,7 @@ public class GranularRefactoringEngine
         var interfaceNode = methodNode.Parent as InterfaceDeclarationSyntax;
 
         // Shared annotation for every node introduced/replaced below (the rewritten method and,
-        // further down, the newly-appended record declaration) — lets the final Formatter.FormatAsync
+        // further down, the newly-appended record declaration) -> lets the final Formatter.FormatAsync
         // pass reformat just these edited spans instead of reflowing the whole file.
         var editAnnotation = new SyntaxAnnotation();
         var annotatedNewMethodNode = newMethodNode.WithAdditionalAnnotations(editAnnotation);
@@ -1126,7 +1126,7 @@ public class GranularRefactoringEngine
             // Check if method implements an interface
             if (methodSymbol?.ContainingType?.Interfaces.Length > 0)
             {
-                // Method implements interface — add warning but update the implementation
+                // Method implements interface -> add warning but update the implementation
                 newRoot = root.ReplaceNode(methodNode, annotatedNewMethodNode);
                 // Append warning comment
                 var warning = $"// WARNING: This method implements an interface. Update the interface signature in the corresponding interface file.\n";

@@ -20,7 +20,7 @@ namespace RoslynSentinel.Server.Advanced
 
         // Advanced tool types eligible for the DEBUG smoke-resolve check.
         // Extend this list as new tool classes are activated in AddRoslynSentinelToolsAdvanced.
-        // SentinelAugmentTools is deliberately excluded — it declares zero [McpServerTool] methods.
+        // SentinelAugmentTools is deliberately excluded -> it declares zero [McpServerTool] methods.
         // Types here are only resolved when the run's --mode/--include-tools actually activated
         // them, so a narrower selection no longer crashes at startup on a type it never asked for;
         // adding a conditionally-registered class to this list is now safe.
@@ -76,7 +76,7 @@ namespace RoslynSentinel.Server.Advanced
                 replReadStream = s2cPipe.Reader.AsStream();
             }
 
-            // ── Logging (file-only — stdout must stay clean for stdio transport) ─
+            // ── Logging (file-only -> stdout must stay clean for stdio transport) ─
             var logDirectory = ServerStartupHelpers.ParseLogDirectory(args);
             var runId = ServerStartupHelpers.ParseRunId(args);
             var stepId = ServerStartupHelpers.ParseStepId(args);

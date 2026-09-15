@@ -1,4 +1,4 @@
-// SentinelAdminTools — tests for the "Admin"-mode-gated reconciliation tools.
+// SentinelAdminTools -> tests for the "Admin"-mode-gated reconciliation tools.
 // See docs/current/ideas/external-drift-hard-blocker.md.
 
 using Microsoft.Extensions.Logging.Abstractions;

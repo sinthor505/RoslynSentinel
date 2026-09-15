@@ -109,7 +109,7 @@ public class SentinelDocumentationTools
 
         // docs/testing/ is kept entirely separate from docs/ (rather than being a subdirectory
         // reachable from it) so an eval fixture can carry the same filename as the production doc
-        // it mirrors without either resolving to the other — the collision that made run
+        // it mirrors without either resolving to the other -> the collision that made run
         // 20260910-013550-398 execute a different plan than the one it asked for.
         return IsTestingMode
             ? Path.Combine(solutionRoot, "docs", "testing")
@@ -119,7 +119,7 @@ public class SentinelDocumentationTools
     /// <summary>
     /// Resolves the root that per-docType subdirectories (plans/handoffs/completed/documentation)
     /// live under. Some repos archive active docs under docs/current/ (with a matching docs/obsolete/
-    /// for retired ones) instead of directly under docs/ — if docs/current/ exists, root subdirs
+    /// for retired ones) instead of directly under docs/ -> if docs/current/ exists, root subdirs
     /// there so ProjectDoc(read/write) can reach what ProjectDoc(list) already reports.
     /// </summary>
     private static string GetDocTypeSubdirRoot(string docsRoot)
@@ -129,7 +129,7 @@ public class SentinelDocumentationTools
     }
 
     /// <summary>
-    /// True when <paramref name="filename"/> names a directory as well as a file — i.e. the caller
+    /// True when <paramref name="filename"/> names a directory as well as a file -> i.e. the caller
     /// stated <em>where</em> the file is, not just what it's called. Basename fallback must not
     /// override such a request: it discards the directory (see <see cref="FindByBasename"/>), so a
     /// same-named file elsewhere in the tree would be substituted silently. Run
@@ -139,7 +139,7 @@ public class SentinelDocumentationTools
         filename.Contains('/') || filename.Contains('\\');
 
     /// <param name="subdir">The docType's own subdirectory, e.g. docs/current/plans/.</param>
-    /// <param name="docTypeSubdirRoot">The directory those subdirs sit in — docs/current/ when it
+    /// <param name="docTypeSubdirRoot">The directory those subdirs sit in -> docs/current/ when it
     /// exists, else docs/. Distinct from <paramref name="docsRoot"/>, and the base that action:list
     /// paths for a docs/current/ layout are most naturally written against.</param>
     /// <param name="docsRoot">docs/ (or docs/testing/ in testing mode).</param>
@@ -187,7 +187,7 @@ public class SentinelDocumentationTools
 
         // A path-qualified request that missed both exact locations is a hard miss. Falling back to
         // a basename search here would discard the directory the caller explicitly gave and could
-        // substitute a same-named file from elsewhere in the tree — which is exactly how run
+        // substitute a same-named file from elsewhere in the tree -> which is exactly how run
         // 20260910-013550-398 spent 60 turns implementing a plan it never asked for.
         if (ok && IsPathQualified(filename))
         {
@@ -197,12 +197,12 @@ public class SentinelDocumentationTools
                 Filename = filename,
                 Error = ignoreDocType
                     ? $"'{filename}' was not found under the testing doc root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted. Call ProjectDoc(action: list) to see the exact available paths."
-                    : $"'{filename}' was not found under docType='{docType}', nor at that path relative to the docs root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted — a same-named file in a different directory is not a valid substitute. Call ProjectDoc(action: list) to see the exact available paths."
+                    : $"'{filename}' was not found under docType='{docType}', nor at that path relative to the docs root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted - a same-named file in a different directory is not a valid substitute. Call ProjectDoc(action: list) to see the exact available paths."
             };
         }
 
         // Fallback 1: match by basename (extension-insensitive) anywhere under the primary scope.
-        // Handles a bare name or a wrong/missing extension — both observed model behaviors when
+        // Handles a bare name or a wrong/missing extension -> both observed model behaviors when
         // the exact relative path isn't already known.
         var matches = FindByBasename(primaryScope, filename);
         if (matches.Count == 1)
@@ -226,7 +226,7 @@ public class SentinelDocumentationTools
             };
         }
 
-        // Fallback 2 (bare names only — path-qualified requests already returned above): the
+        // Fallback 2 (bare names only -> path-qualified requests already returned above): the
         // requested docType's subdirectory doesn't hold it, but action:list walks all of docs/, so
         // search that same full tree before giving up. Covers docs laid out outside the five known
         // docType subdirs. Skipped when ignoreDocType already made the full root the primary scope.

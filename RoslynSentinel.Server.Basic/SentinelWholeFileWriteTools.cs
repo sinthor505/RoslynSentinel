@@ -75,7 +75,7 @@ public class SentinelWholeFileWriteTools
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.Exception,
-                        "WriteFile: this content would introduce new compiler errors — not written to disk. Fix the issue(s) below and retry:\n" +
+                        "WriteFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                 };
             }
@@ -161,7 +161,7 @@ public class SentinelWholeFileWriteTools
 
     /// <summary>
     /// Fraction of <paramref name="oldContent"/>'s line count that <paramref name="newContent"/>
-    /// would remove. Only shrinkage counts — a large *increase* (codegen, genuine expansion) is
+    /// would remove. Only shrinkage counts -> a large *increase* (codegen, genuine expansion) is
     /// not the "submitted a fragment as if it were the whole file" failure mode this guards
     /// against, so it's exempt. Returns 0 for a new file (no oldContent to shrink from) or a
     /// same-size-or-larger replacement.
@@ -187,7 +187,7 @@ public class SentinelWholeFileWriteTools
     /// Count of non-blank source lines in <paramref name="content"/> that contain real C# syntax
     /// (tokens), as opposed to lines that are blank or entirely comment trivia. Parsed rather than
     /// regex-matched so that comment markers appearing inside string literals don't skew the count.
-    /// Returns 0 (guard exempt — see <see cref="PercentActiveCodeLinesRemoved"/>) if the content
+    /// Returns 0 (guard exempt -> see <see cref="PercentActiveCodeLinesRemoved"/>) if the content
     /// doesn't parse as C#, since a non-.cs file has no meaningful "active code line" notion here.
     /// </summary>
     private static int CountActiveCodeLines(string content)
@@ -220,7 +220,7 @@ public class SentinelWholeFileWriteTools
     /// out every existing line one-for-one (e.g. prefixing each with "// ") produces a file with
     /// the SAME line count as before, so the shrink guard sees 0% change, even though the file now
     /// contains no working code. Only files that still look like C# after the edit are checked
-    /// (both old and new content must parse to at least one active line) — a genuine full-file
+    /// (both old and new content must parse to at least one active line) -> a genuine full-file
     /// deletion-to-near-empty is already caught by the line-count guard, and non-.cs content has no
     /// "active code line" concept to compare. Returns 0 (exempt) for a new file or malformed content.
     /// </summary>
@@ -251,7 +251,7 @@ public class SentinelWholeFileWriteTools
     /// branch, and ApplyUnifiedDiff), including <paramref name="diffReport"/>'s findings when it has
     /// any. Previously a hunk whose header line counts didn't match its own body (e.g. declaring 2
     /// removed/10 added lines when the body actually had 2 removed/159 added) was only logged
-    /// server-side on success — the caller had no way to learn its hunk was malformed until the file
+    /// server-side on success -> the caller had no way to learn its hunk was malformed until the file
     /// came out wrong. Surfacing it here lets the calling model catch its own mistake immediately.
     /// </summary>
     private static object BuildDiffApplyResponseData(
@@ -278,7 +278,7 @@ public class SentinelWholeFileWriteTools
     /// A files-format apply where any file would lose more than this fraction of its line count
     /// (see <see cref="PercentLinesRemoved"/>), or of its active C# code lines (see
     /// <see cref="PercentActiveCodeLinesRemoved"/>), is rejected (see
-    /// <see cref="ToolErrorCode.ConfirmationRequired"/>) rather than applied — the first check
+    /// <see cref="ToolErrorCode.ConfirmationRequired"/>) rather than applied -> the first check
     /// catches a caller submitting only a changed fragment as if it were the entire file; the
     /// second catches the same intent expressed by commenting out the whole file instead of
     /// shortening it, which leaves the raw line count unchanged. A large increase in either
@@ -291,7 +291,7 @@ public class SentinelWholeFileWriteTools
     // subset for its chosen format and only find out at runtime.
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a change set, either as full file contents (changesetFormat=files) or as a unified diff against one file (changesetFormat=diff). For changesetFormat=diff, hunk line numbers are a starting guess — a mismatched position is re-anchored by searching nearby lines, so modest drift from an earlier edit is tolerated. For changesetFormat=files with action=apply, any file that would shrink by more than 50% (by line count or by active/non-comment code lines) is rejected with errorCode=ConfirmationRequired, since that usually signals a partial fragment or a comment-collapse was submitted instead of the full file. By default this also delta-compiles the edited project(s) plus every transitively-referencing project before writing, and rejects the change if it introduces a new compiler error — for a rename or signature change spanning files, prefer RenameSymbol/ChangeSignature, or pass validateOnApply=false on intermediate calls and validate once at the end.")]
+    [Description("Applies or validates a change set, either as full file contents (changesetFormat=files) or as a unified diff against one file (changesetFormat=diff). For changesetFormat=diff, hunk line numbers are a starting guess - a mismatched position is re-anchored by searching nearby lines, so modest drift from an earlier edit is tolerated. For changesetFormat=files with action=apply, any file that would shrink by more than 50% (by line count or by active/non-comment code lines) is rejected with errorCode=ConfirmationRequired, since that usually signals a partial fragment or a comment-collapse was submitted instead of the full file. By default this also delta-compiles the edited project(s) plus every transitively-referencing project before writing, and rejects the change if it introduces a new compiler error - for a rename or signature change spanning files, prefer RenameSymbol/ChangeSignature, or pass validateOnApply=false on intermediate calls and validate once at the end.")]
     public async Task<ToolResult<object>> ApplyDiff(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("files: changes is a filePath→newContent dict (filepath/unifiedDiff unused). diff: filepath and unifiedDiff apply to a single file (changes unused).")]
@@ -374,7 +374,7 @@ public class SentinelWholeFileWriteTools
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.Exception,
-                                "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
+                                "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
                     await _workspaceTools.WriteBlobForApplyAsync("apply_diff", result);
@@ -491,7 +491,7 @@ public class SentinelWholeFileWriteTools
                             {
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
-                                    "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
+                                    "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                     await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                             };
                         await _workspaceTools.WriteBlobForApplyAsync("apply_diff", result);
@@ -547,20 +547,20 @@ public class SentinelWholeFileWriteTools
             };
         }
     }
-    // Simplified, diff-only sibling of ApplyDiff — collapses ApplyDiff's two required-param-sets
+    // Simplified, diff-only sibling of ApplyDiff -> collapses ApplyDiff's two required-param-sets
     // (files: 'changes' dict / diff: 'filepath'+'unifiedDiff', with 'filepath' silently ignored in
     // files mode) into a single always-required (filepath, unifiedDiff) pair, closing the common
     // agent footgun of supplying unifiedDiff without filepath. Whole-file rewrites now go through
     // WriteFile(operation=ReplaceFile) instead of a 'files' mode here. ApplyDiff itself is kept
     // unchanged (not deleted) so its multi-file 'files' mode can be reactivated later if needed.
     // Moved here (off the default MCP surface, this class carries no [McpServerToolType]) from
-    // SentinelWorkspaceTools.cs — ReplaceSnippet there now covers small exact-text edits on the
+    // SentinelWorkspaceTools.cs -> ReplaceSnippet there now covers small exact-text edits on the
     // default surface without diff-hunk syntax; this tool is kept for reactivation if a genuine
     // need for multi-line diff-hunk edits resurfaces. See
     // docs/current/design_applyunifieddiff_replace_snippet_v1.md.
     [McpServerTool(Name = "ApplyUnifiedDiff")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a unified diff against a single file. Hunk line numbers are a starting guess — a mismatched position is re-anchored by searching nearby lines, so modest drift from an earlier edit is tolerated. For a whole-file rewrite, use WriteFile(operation=ReplaceFile) instead. By default this also delta-compiles the edited project(s) plus every transitively-referencing project before writing, and rejects the change if it introduces a new compiler error — since this tool only touches one file per call, prefer RenameSymbol/ChangeSignature for a rename or signature change spanning files, or pass validateOnApply=false here and on the other file's edit, then validate once after both are applied.")]
+    [Description("Applies or validates a unified diff against a single file. Hunk line numbers are a starting guess - a mismatched position is re-anchored by searching nearby lines, so modest drift from an earlier edit is tolerated. For a whole-file rewrite, use WriteFile(operation=ReplaceFile) instead. By default this also delta-compiles the edited project(s) plus every transitively-referencing project before writing, and rejects the change if it introduces a new compiler error - since this tool only touches one file per call, prefer RenameSymbol/ChangeSignature for a rename or signature change spanning files, or pass validateOnApply=false here and on the other file's edit, then validate once after both are applied.")]
     public async Task<ToolResult<object>> ApplyUnifiedDiff(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: applies the diff. validate: checks it would apply cleanly without writing.")]
@@ -624,7 +624,7 @@ public class SentinelWholeFileWriteTools
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.Exception,
-                                "ApplyUnifiedDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors — change not applied. Fix the issue(s) below and retry:\n" +
+                                "ApplyUnifiedDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
                     await _workspaceTools.WriteBlobForApplyAsync("apply_unified_diff", result);

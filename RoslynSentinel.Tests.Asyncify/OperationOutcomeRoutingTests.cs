@@ -1,14 +1,14 @@
 namespace RoslynSentinel.Tests.Asyncify;
 
 /// <summary>
-/// Tests for spec §6 — Operation Outcome Classification + ToolGraph-Routed Failure Hints.
-///   T-R1  FromCounts derivation — one test per OperationOutcome value (5 sub-cases)
-///   T-R2  AlreadySatisfied exclusion — absent from Actionable and excluded from failure rate
-///   T-R3  Router hit — OverloadAlreadyExists returns hint naming the producer with pre-filled args
-///   T-R4  Router miss (loud null) — NoAsyncEquivalent returns null hint; item still in Actionable
-///   T-R5  Router empty-producers — OverloadAlreadyExists with no registered producer returns null
-///   T-R6  Determinism — two equal-weight producers resolve same tool across repeated calls
-///   T-R7  Directive/Outcome consistency — no completion claim when Outcome is NoProgress/PartialProgress
+/// Tests for spec §6 -> Operation Outcome Classification + ToolGraph-Routed Failure Hints.
+///   T-R1  FromCounts derivation -> one test per OperationOutcome value (5 sub-cases)
+///   T-R2  AlreadySatisfied exclusion -> absent from Actionable and excluded from failure rate
+///   T-R3  Router hit -> OverloadAlreadyExists returns hint naming the producer with pre-filled args
+///   T-R4  Router miss (loud null) -> NoAsyncEquivalent returns null hint; item still in Actionable
+///   T-R5  Router empty-producers -> OverloadAlreadyExists with no registered producer returns null
+///   T-R6  Determinism -> two equal-weight producers resolve same tool across repeated calls
+///   T-R7  Directive/Outcome consistency -> no completion claim when Outcome is NoProgress/PartialProgress
 /// </summary>
 [TestFixture]
 public class OperationOutcomeRoutingTests
@@ -90,7 +90,7 @@ public class OperationOutcomeRoutingTests
         };
 
         // Per spec: Actionable must only contain Failed/Blocked items.
-        // Caller must filter before passing to FromCounts — assert the contract
+        // Caller must filter before passing to FromCounts -> assert the contract
         // by building a summary where Actionable is empty (AlreadySatisfied not included).
         OperationSummary result = OperationSummary.FromCounts(
             blobName: "", changeId: "",

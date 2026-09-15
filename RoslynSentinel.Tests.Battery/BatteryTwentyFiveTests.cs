@@ -1,4 +1,4 @@
-// Battery #25 — Gap Coverage: 40 untested engine methods across 14 engines
+// Battery #25 -> Gap Coverage: 40 untested engine methods across 14 engines
 // Each group covers the specific methods that had zero test references.
 // All tests use in-memory AdhocWorkspace via TestSolutionBuilder (no MSBuild/project loading).
 
@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 // ════════════════════════════════════════════════════════════════════════════════
-// A. AdvancedLogicEngine — 4 untested methods
+// A. AdvancedLogicEngine -> 4 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class AdvancedLogicEngineGapTests
@@ -110,7 +110,7 @@ public class Looper {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// B. AnalysisEngine — 9 untested methods
+// B. AnalysisEngine -> 9 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class AnalysisEngineGapTests
@@ -285,7 +285,7 @@ public class Bar {}
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// C. AntiPatternEngine — 4 untested methods
+// C. AntiPatternEngine -> 4 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class AntiPatternEngineGapTests
@@ -363,7 +363,7 @@ public class Service {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// D. CodeHealingEngine — 1 untested method
+// D. CodeHealingEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class CodeHealingEngineGapTests
@@ -384,7 +384,7 @@ public class CodeHealingEngineGapTests
     [Test]
     public async Task AddRetryPolicyAsync_AnyInput_ReturnsNonNull()
     {
-        // AddRetryPolicyAsync is a stub that always returns "" — verify it at least doesn't throw
+        // AddRetryPolicyAsync is a stub that always returns "" -> verify it at least doesn't throw
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Service.cs", "public class Service { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
@@ -396,7 +396,7 @@ public class CodeHealingEngineGapTests
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// E. CodeStyleEngine — 1 untested method
+// E. CodeStyleEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class CodeStyleEngineGapTests
@@ -444,7 +444,7 @@ public class Slicer {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// F. ControlFlowEngine — 1 untested method
+// F. ControlFlowEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class ControlFlowEngineGapTests
@@ -495,7 +495,7 @@ public class Calculator {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// G. DeadCodeEngine — 1 untested method
+// G. DeadCodeEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class DeadCodeEngineGapTests
@@ -545,7 +545,7 @@ public class Calc {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// H. DependencyEngine — 1 untested method
+// H. DependencyEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class DependencyEngineGapTests
@@ -592,7 +592,7 @@ public class DependencyEngineGapTests
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// I. DependencyInjectionEngine — 1 untested method
+// I. DependencyInjectionEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class DependencyInjectionEngineGapTests
@@ -628,7 +628,7 @@ public class DependencyInjectionEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
 
-        // The method either returns empty/error string OR throws for an unknown file — both are acceptable
+        // The method either returns empty/error string OR throws for an unknown file -> both are acceptable
         DocumentEditResult? result = null;
         Exception? caughtEx = null;
         try
@@ -646,7 +646,7 @@ public class DependencyInjectionEngineGapTests
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// J. GranularRefactoringEngine — 4 untested methods
+// J. GranularRefactoringEngine -> 4 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class GranularRefactoringEngineGapTests
@@ -671,7 +671,7 @@ public class GranularRefactoringEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
 
-        // Use a real dispatch ID — 'type-to-var' is safe on any code (converts explicit types)
+        // Use a real dispatch ID -> 'type-to-var' is safe on any code (converts explicit types)
         var result = await _engine.RunMicroRefactoringAsync("Service.cs", "type-to-var", 1);
 
         Assert.That(result, Is.Not.Null);
@@ -758,13 +758,13 @@ public class Outer {
 
         var result = await _engine.MoveTypeToOuterScopeAsync("NoFile.cs", "Inner");
 
-        // Returns empty string or an error message — must not throw
+        // Returns empty string or an error message -> must not throw
         Assert.That(result, Is.Not.Null);
     }
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// K. PerformanceEngine — 1 untested method
+// K. PerformanceEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class PerformanceEngineGapTests
@@ -796,7 +796,7 @@ public class PerformanceEngineGapTests
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// L. RefactoringEngine — 5 untested methods
+// L. RefactoringEngine -> 5 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class RefactoringEngineGapTests
@@ -960,7 +960,7 @@ public class Service {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// M. SymbolNavigationEngine — 5 untested methods
+// M. SymbolNavigationEngine -> 5 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class SymbolNavigationEngineGapTests
@@ -991,7 +991,7 @@ public class Calculator {
         // The method may return null if it can't resolve the symbol in in-memory workspace
         var result = await _engine.GetSymbolInfoAsync("Calculator.cs", "Add");
 
-        // Either a valid result or null is acceptable — method should not throw
+        // Either a valid result or null is acceptable -> method should not throw
         Assert.That(() => result == null || result.Name != null, Is.True, "Should return SymbolHoverInfo or null without throwing");
     }
 
@@ -1107,7 +1107,7 @@ public static class StringExtensions {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// N. SyntaxUpgradeEngine — 2 untested methods
+// N. SyntaxUpgradeEngine -> 2 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class SyntaxUpgradeEngineGapTests

@@ -7,4 +7,4 @@ public record PathDrivenTestReport(
     int PathCount,
     List<PathDrivenTestCase> TestCases,
     string GeneratedTestCode,
-    string Note = "Generated stubs are starting points — input constraints are inferred heuristically and may not precisely trigger each intended path.");
+    string Note = "Generated stubs are starting points - input constraints are inferred heuristically and may not precisely trigger each intended path.");
