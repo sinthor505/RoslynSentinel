@@ -10,17 +10,18 @@
     Stops every running RoslynSentinel* process before building (any of them can transitively
     lock a build via project references or shared projects - see the Lock check region).
 
-    On a successful build (of any flavor - not just Advanced itself), also refreshes two
-    dedicated VS Code copies of the Advanced binary (one process per transport, launched with
-    different --transport args), separate from the flavor/config combo the rest of the script
-    builds/tests so a routine baseline check never locks or interrupts VS Code's own connection:
-      - bin-vscode\Advanced (--transport=stdio): rebuilt only. VS Code's MCP client spawns
-        stdio servers itself per-connection, so there's no standalone process here to
-        stop/start - just a fresh .exe at a stable path outside the Debug/Release output this
-        script's Lock check region stops/rebuilds during normal dev work.
+    On a successful build (of any flavor - not just Advanced itself), also refreshes the dedicated
+    VS Code HTTP-fallback copy of the Advanced binary, separate from the flavor/config combo the
+    rest of the script builds/tests so a routine baseline check never locks or interrupts VS Code's
+    own connection:
       - bin-vscode\Advanced.Http (--transport=http): rebuilt AND restarted as a standalone
         process on $VSCodePort, since HTTP has no external spawner to do that for it.
-    See -SkipVSCodeRestart to disable both.
+    See -SkipVSCodeRestart to disable this.
+
+    The stdio copy VS Code actually connects to is no longer managed here - each VS Code window now
+    builds and launches its own isolated instance via scripts/roslynsentinel-mcp-launch.ps1 (see
+    docs/current/proposal_per_session_mcp_server.md), so there's no single shared stdio path left
+    for this script to rebuild.
 
 .PARAMETER Flavor
     Basic | Advanced | Solution
@@ -48,12 +49,13 @@
     Stop a locking process without prompting. Without this flag, the script asks first.
 
 .PARAMETER SkipVSCodeRestart
-    Don't refresh either dedicated VS Code copy (bin-vscode\Advanced stdio rebuild, and
-    bin-vscode\Advanced.Http rebuild+restart on port $VSCodePort) after a successful build. Use
-    this if you're actively attached to the HTTP copy for something a restart would disrupt.
-    Refresh is otherwise automatic - both copies are stateless (reload from disk, no valuable
-    in-memory session state), so refreshing them after every successful build costs a few
-    seconds and avoids working against stale tools.
+    Don't refresh the dedicated VS Code HTTP-fallback copy (bin-vscode\Advanced.Http
+    rebuild+restart on port $VSCodePort) after a successful build. Use this if you're actively
+    attached to that copy for something a restart would disrupt. Refresh is otherwise automatic -
+    the copy is stateless (reloads from disk, no valuable in-memory session state), so refreshing
+    it after every successful build costs a few seconds and avoids working against stale tools.
+    The stdio copy VS Code actually connects to is unaffected either way - see
+    scripts/roslynsentinel-mcp-launch.ps1.
 
 .PARAMETER VSCodePort
     Port for the dedicated VS Code Advanced binary's HTTP-transport instance. Default: 5150.
@@ -63,8 +65,8 @@
 .EXAMPLE
     .\build.ps1 -Flavor Advanced -Config Debug
     Build + test the Advanced flavor's Debug config; report only new warnings/failures; on a
-    successful build, also refresh both dedicated VS Code copies (stdio rebuild in
-    bin-vscode\Advanced, HTTP rebuild+restart on port 5150 in bin-vscode\Advanced.Http).
+    successful build, also refresh the dedicated VS Code HTTP-fallback copy (rebuild+restart on
+    port 5150 in bin-vscode\Advanced.Http).
 
 .EXAMPLE
     .\build.ps1 -Flavor Solution -Mode Build -UpdateBaseline
@@ -301,43 +303,6 @@ function Invoke-TestMode {
 #endregion
 
 #region VS Code server restart
-# Dedicated Advanced (stdio) copy for VS Code's MCP connection: separate output dir from whatever
-# Debug/Release config this run just built/tested, so a routine baseline check never deletes or
-# rewrites the binary VS Code's stdio client has open. Build-only - stdio has no standalone
-# process to stop/restart, since VS Code's MCP client spawns and owns that process itself per
-# connection. Refreshing the .exe on disk is still worth doing after every successful build so
-# the next connection VS Code spawns isn't running stale code.
-function Invoke-VSCodeStdioRebuild {
-    $vscodeOutDir = Join-Path $repoRoot 'bin-vscode\Advanced'
-    $vscodeProject = Join-Path $repoRoot $flavorToProject['Advanced']
-    $vscodeExe = Join-Path $vscodeOutDir 'RoslynSentinel.Server.Advanced.exe'
-
-    Write-Host ""
-    Write-Host "=== Rebuilding VS Code Advanced (stdio) copy (bin-vscode\Advanced) ===" -ForegroundColor Cyan
-
-    # VS Code owns this process's lifecycle (spawns it per-connection, not this script), but it can
-    # still be running and locking the .exe at build time - same MSB3027 risk as any other flavor.
-    $existing = Get-Process | Where-Object { $_.ProcessName -eq 'RoslynSentinel.Server.Advanced' -and $_.Path -eq $vscodeExe }
-    if ($existing) {
-        Write-Host "Stopping existing VS Code stdio copy (PID $($existing.Id)) so the build isn't locked - VS Code will respawn it on its next tool call..." -ForegroundColor Yellow
-        $existing | Stop-Process -Force
-        Start-Sleep -Seconds 1
-    }
-
-    $previousEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    & dotnet build $vscodeProject -c Debug -o $vscodeOutDir --nologo -v quiet 2>&1 | Out-Null
-    $buildExit = $LASTEXITCODE
-    $ErrorActionPreference = $previousEap
-
-    if ($buildExit -ne 0) {
-        Write-Warning "VS Code stdio copy build failed (exit $buildExit) - leaving the existing binary in place rather than guessing whether it's safe to use. Investigate, then re-run."
-        return
-    }
-
-    Write-Host "VS Code Advanced (stdio) copy rebuilt at $vscodeOutDir. VS Code will spawn it fresh on its next connection - no running process to restart here." -ForegroundColor Green
-}
-
 # Dedicated Advanced binary copy running in HTTP mode, for anything still using HTTP (manual
 # testing, curl, etc.): separate output dir and port from whatever this run just built/tested, so
 # the two never lock each other and this copy's connection doesn't drop just because a routine
@@ -430,12 +395,11 @@ if (-not $UpdateBaseline) {
 
 if ($SkipVSCodeRestart) {
     Write-Host ""
-    Write-Host "Skipping VS Code Advanced (stdio + HTTP) refresh (-SkipVSCodeRestart). Both copies may now be running stale code." -ForegroundColor Yellow
+    Write-Host "Skipping VS Code Advanced HTTP-copy refresh (-SkipVSCodeRestart). It may now be running stale code." -ForegroundColor Yellow
 } else {
-    # Each gated on its own dotnet build of the Advanced project specifically, not on whatever
+    # Gated on its own dotnet build of the Advanced project specifically, not on whatever
     # flavor/mode this run targeted - a Basic build succeeding (or a Test-only run with no build
     # at all) says nothing about whether Advanced itself currently compiles.
-    Invoke-VSCodeStdioRebuild
     Invoke-VSCodeServerRestart
 
     # Invoke-VSCodeServerRestart only confirms the process launched (PID exists after a fixed

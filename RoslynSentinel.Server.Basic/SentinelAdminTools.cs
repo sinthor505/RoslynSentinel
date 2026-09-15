@@ -61,4 +61,47 @@ public class SentinelAdminTools
             ? $"Cleared {count} tracked external file change(s) and the session-wide fatal drift latch."
             : $"Cleared {count} tracked external file change(s).";
     }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    [McpServerTool(Name = "McpServerControl")]
+    [Produces(DataTag.ResultOnly)]
+    [Description("Operator-only control of this server process. op='status' reports whether this instance is running normally. op='stop' terminates this server process — VS Code will respawn a fresh instance (via the launch wrapper, which rebuilds) on its next tool call. 'stop' requires confirmServerStop='confirmServerStop' (case-insensitive) or it is refused.")]
+    public string McpServerControl(
+        [Description(ToolParams.Reason)] ToolCallReason reason,
+        string op,
+        string? confirmServerStop = null,
+        CancellationToken cancellationToken = default)
+    {
+        _ = cancellationToken;
+
+        if (op == "status")
+        {
+            return $"Running. PID={Environment.ProcessId}, path={System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName}";
+        }
+
+        if (op == "stop")
+        {
+            if (!string.Equals(confirmServerStop, "confirmserverstop", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Refused: stopping this server requires confirmServerStop='confirmServerStop' (case-insensitive). This terminates the current process; VS Code will respawn a fresh instance on its next tool call.";
+            }
+
+            // The MCP SDK's request-handling path awaits the tool handler and then awaits flushing
+            // the response to the stdio transport before this call completes - so by the time this
+            // method returns, the caller is guaranteed to already have the response in flight. Exiting
+            // synchronously here would still be safe by that reasoning, but scheduling it on a
+            // detached continuation with a short delay is cheap defense-in-depth against being wrong
+            // about that ordering, for what is otherwise an irreversible action.
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(250));
+                Environment.Exit(0);
+            });
+
+            return "Stopping. VS Code will respawn a fresh instance on its next tool call.";
+        }
+
+        return $"Unknown op '{op}'. Valid ops: status, stop.";
+    }
 }

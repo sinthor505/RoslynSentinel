@@ -1,25 +1,33 @@
 <#
 .SYNOPSIS
     Start/restart/status/build the dedicated VS Code copies of RoslynSentinel.Server.Advanced
-    (stdio + HTTP) without needing to remember build.ps1's exact flags.
+    (per-window stdio instances + the shared HTTP fallback) without needing to remember build.ps1's
+    exact flags.
 
 .DESCRIPTION
-    build.ps1 refreshes both dedicated VS Code copies as a side effect of a successful solution
-    build, but that means the only documented way to check or recover the HTTP copy is to run a
-    full build. This script is a single, verb-based front door for that:
+    build.ps1 refreshes the HTTP fallback copy as a side effect of a successful solution build, but
+    that means the only documented way to check or recover it is to run a full build. This script is
+    a single, verb-based front door for that:
 
       status  - Is the HTTP copy's process running, AND is it actually answering on the port?
                 (These can disagree - a running process that isn't listening, or that's listening
                 but not responding, is exactly the "connection refused" failure this script exists
-                to diagnose without guesswork.) Also reports the stdio copy's exe presence/mtime.
+                to diagnose without guesswork.) Also enumerates every per-window stdio instance
+                folder under bin-vscode\ (each one built/launched independently by
+                scripts/roslynsentinel-mcp-launch.ps1 - see
+                docs/current/proposal_per_session_mcp_server.md), reporting each instance's exe
+                mtime and whether its process is currently running.
       start   - Start the HTTP copy if it isn't already running. Leaves an already-running copy
                 alone. Reuses the existing binary as-is; does not rebuild it.
       restart - Stop the HTTP copy (if running) and start it again. Reuses the existing binary.
-      build   - Rebuild both VS Code copies from current source (delegates to build.ps1), then
-                restart the HTTP copy. Use this after pulling new commits.
+      build   - Rebuild the HTTP copy from current source (delegates to build.ps1), then restart it.
+                Use this after pulling new commits. Per-window stdio instances are unaffected - each
+                rebuilds itself on its own next launch via roslynsentinel-mcp-launch.ps1.
 
-    Only touches the two VS Code copies under bin-vscode\ - not the Debug/Release flavor used by
-    `dotnet test` / build.ps1's own lock-check region.
+    start/restart/build only ever touch the shared HTTP fallback copy under bin-vscode\Advanced.Http
+    - not the Debug/Release flavor used by `dotnet test` / build.ps1's own lock-check region, and not
+    the per-window stdio instance folders (those are only ever built/launched/torn down by the
+    wrapper script itself, per window).
 
 .PARAMETER Action
     status | start | restart | build. Default: status.
@@ -41,7 +49,8 @@
 
 .EXAMPLE
     .\roslynsentinel-vscode-control.ps1 build -Force
-    Rebuild both VS Code copies from source, then restart the HTTP copy.
+    Rebuild the HTTP fallback copy from source, then restart it. Per-window stdio instances rebuild
+    themselves independently on their own next launch.
 #>
 [CmdletBinding()]
 param(
@@ -57,10 +66,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 
-$stdioOutDir = Join-Path $repoRoot 'bin-vscode\Advanced'
-$stdioExe = Join-Path $stdioOutDir 'RoslynSentinel.Server.Advanced.exe'
+$binVscodeRoot = Join-Path $repoRoot 'bin-vscode'
+$instanceFolderPattern = '^\d+-[0-9a-f]{8}$'
 $httpOutDir = Join-Path $repoRoot 'bin-vscode\Advanced.Http'
 $httpExe = Join-Path $httpOutDir 'RoslynSentinel.Server.Advanced.exe'
+
+function Get-StdioInstanceFolders {
+    Get-ChildItem -LiteralPath $binVscodeRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match $instanceFolderPattern }
+}
 
 function Get-HttpCopyProcess {
     Get-Process -Name 'RoslynSentinel.Server.Advanced' -ErrorAction SilentlyContinue |
@@ -141,13 +155,24 @@ function Wait-HttpCopyReachable {
 
 function Show-Status {
     Write-Host ""
-    Write-Host "=== VS Code Advanced (stdio) copy ===" -ForegroundColor Cyan
-    if (Test-Path $stdioExe) {
-        $mtime = (Get-Item $stdioExe).LastWriteTime
-        Write-Host "Present at $stdioExe (built $mtime). VS Code's MCP client spawns this itself per-connection." -ForegroundColor Green
+    Write-Host "=== VS Code Advanced (stdio) per-window instances ===" -ForegroundColor Cyan
+    $instances = @(Get-StdioInstanceFolders)
+    if ($instances.Count -eq 0) {
+        Write-Host "None found under bin-vscode\ - no VS Code window has connected yet (each one is built/launched on demand by roslynsentinel-mcp-launch.ps1)." -ForegroundColor Yellow
     }
     else {
-        Write-Warning "$stdioExe does not exist. Run '.\roslynsentinel-vscode-control.ps1 build' first."
+        foreach ($instanceDir in $instances) {
+            $exe = Join-Path $instanceDir.FullName 'Advanced\RoslynSentinel.Server.Advanced.exe'
+            if (-not (Test-Path -LiteralPath $exe)) {
+                Write-Warning "$($instanceDir.Name): no exe at $exe (build may have failed - check its launch.log)."
+                continue
+            }
+            $mtime = (Get-Item -LiteralPath $exe).LastWriteTime
+            $running = Get-Process -Name 'RoslynSentinel.Server.Advanced' -ErrorAction SilentlyContinue |
+                Where-Object { $_.Path -eq $exe }
+            $liveDesc = if ($running) { "running (PID $($running.Id -join ', '))" } else { "not running (VS Code will respawn on next tool call)" }
+            Write-Host "$($instanceDir.Name): built $mtime, $liveDesc." -ForegroundColor Green
+        }
     }
 
     Write-Host ""
@@ -202,10 +227,10 @@ function Start-HttpCopy {
         }
     }
 
-    # Mirrors the --include-tools list in C:\Users\Administrator\.mcp.json's stdio launch, so this
-    # fallback serves the same tool surface rather than drifting into a second, unsynced set. Keep
-    # the two in sync by hand if either changes - stdio is primary; this copy only exists in case
-    # stdio flakes.
+    # Mirrors the --include-tools list in C:\Users\Administrator\.mcp.json's stdio launch entry
+    # (invoked via scripts/roslynsentinel-mcp-launch.ps1), so this fallback serves the same tool
+    # surface rather than drifting into a second, unsynced set. Keep the two in sync by hand if
+    # either changes - stdio is primary; this copy only exists in case stdio flakes.
     $includeTools = "SentinelWorkspaceTools,SentinelDocumentationTools,SentinelSymbolTools,SentinelGitTools,SentinelAdminTools,SentinelWholeFileWriteTools,SentinelRefactoringTools,SentinelAdvancedRefactoringTools,SentinelIntelligenceTools,SentinelScanTools,SentinelModernizationTools,SentinelCommentingTools"
 
     # -WindowStyle Hidden means an unredirected child's console output is simply gone - the server's
@@ -277,7 +302,7 @@ switch ($Action) {
         exit ([int](-not $ok))
     }
     'build' {
-        Write-Host "=== Rebuilding VS Code copies from source (delegates to build.ps1) ===" -ForegroundColor Cyan
+        Write-Host "=== Rebuilding VS Code HTTP-fallback copy from source (delegates to build.ps1) ===" -ForegroundColor Cyan
         & (Join-Path $PSScriptRoot 'build.ps1') -Flavor Solution -Mode Build -Force:$Force -VSCodePort $VSCodePort
         exit $LASTEXITCODE
     }

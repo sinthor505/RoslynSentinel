@@ -20,6 +20,10 @@
 | **[UNFINISHED.md](./UNFINISHED.md)** | Backlog: planned features and known limitations |
 | **[UNFINISHED_FEATURES.md](./UNFINISHED_FEATURES.md)** | Deferred bugs with regression tests and edge-case limitations |
 | **[reference-code-file-write-paths-v1.md](./reference-code-file-write-paths-v1.md)** | Living reference: the single write-to-disk chokepoint and its guarantees |
+| **[reference_log_sources_and_cross_referencing.md](./reference_log_sources_and_cross_referencing.md)** | Living reference: agent-side vs. server-side log locations, how to cross-reference them |
+| **[reference-vscode-control-script-v1.md](./reference-vscode-control-script-v1.md)** | Living reference: `roslynsentinel-vscode-control.ps1` status/start/restart/build verbs |
+| **[reference-roslynsentinel-mcp-launch-v1.md](./reference-roslynsentinel-mcp-launch-v1.md)** | Living reference: per-VS-Code-window stdio server launch wrapper, instance-ID derivation, sweep |
+| **[proposal_per_session_mcp_server.md](./proposal_per_session_mcp_server.md)** | Design doc: per-session MCP server isolation (implemented 2026-09-14) |
 | **[roslyn-duplication-audit-v1.md](./roslyn-duplication-audit-v1.md)** | Ongoing audit of hand-rolled logic vs. native Roslyn APIs |
 | **[tool-terminology-refinement-reference-v1.md](./tool-terminology-refinement-reference-v1.md)** | Open naming/terminology backlog for MCP tool surface |
 | **[spec-read-tool-metadata-envelope-v1.md](./spec-read-tool-metadata-envelope-v1.md)** | Unimplemented spec: truncation/scope metadata envelope for read tools |

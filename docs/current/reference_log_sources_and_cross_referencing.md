@@ -82,9 +82,14 @@ actually running.
 
 Which binary directory depends on who launched the server:
 
-- **VS Code / your interactive MCP session** → `bin-vscode\Advanced\logs\` (or
-  `bin-vscode\Advanced.Http\logs\` for the HTTP flavor). This is the one to check when a tool
-  misbehaves during normal interactive work.
+- **VS Code / your interactive MCP session** → `bin-vscode\<instance-id>\Advanced\logs\`, where
+  `<instance-id>` is the per-VS-Code-window ID (`<pid>-<repoHash>`) derived by
+  `scripts/roslynsentinel-mcp-launch.ps1` (see `reference-roslynsentinel-mcp-launch-v1.md`) — each
+  window's stdio server is a fully separate build/process since 2026-09-14, so there is no longer a
+  single fixed stdio path here. (Or `bin-vscode\Advanced.Http\logs\` for the shared HTTP fallback
+  flavor, still a single fixed path.) Run `scripts/roslynsentinel-vscode-control.ps1 status` to list
+  which instance folders currently exist. This is the one to check when a tool misbehaves during
+  normal interactive work.
 - **A normal dev build** → `RoslynSentinel.Server.{Basic,Advanced}\bin\{Debug,Release}\net10.0\logs\`.
 - **PlanStepRunner** → builds its own server per step into `<worktree>\bin-runner\Advanced\`
   (`Program.cs:154`), so its log is `<worktree>\bin-runner\Advanced\logs\server-<ts>.log`,

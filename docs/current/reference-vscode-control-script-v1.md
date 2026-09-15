@@ -17,10 +17,14 @@ build/test pass just to restart one process. This script manages that copy direc
 .\roslynsentinel-vscode-control.ps1 <status|start|restart|build>
 ```
 
-- **`status`** — checks both process-running AND actual HTTP reachability (a real JSON-RPC POST to
-  `/mcp`, not just a port/TCP check). This distinguishes three failure modes that look identical
-  from the outside: process dead, process running but nothing listening, and listening but not
-  answering. Run this first whenever the VS Code MCP connection shows `ConnectionRefused`.
+- **`status`** — for the HTTP copy, checks both process-running AND actual HTTP reachability (a real
+  JSON-RPC POST to `/mcp`, not just a port/TCP check). This distinguishes three failure modes that
+  look identical from the outside: process dead, process running but nothing listening, and
+  listening but not answering. Run this first whenever the VS Code MCP connection shows
+  `ConnectionRefused`. Also enumerates every per-VS-Code-window stdio instance folder under
+  `bin-vscode\` (each one owned by `scripts/roslynsentinel-mcp-launch.ps1`, see
+  `reference-roslynsentinel-mcp-launch-v1.md`), reporting each instance's exe build time and
+  whether its process is currently running.
 - **`start`** — starts the HTTP copy only if not already running (checks port-owner conflicts too).
 - **`restart`** — stop + start, reusing the binary already on disk (no rebuild).
 - **`build`** — delegates to `build.ps1 -Flavor Solution -Mode Build`, i.e. the heavyweight path
