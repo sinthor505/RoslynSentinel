@@ -12,6 +12,16 @@ public record TestCaseResult(
     string? ErrorStackTrace
 );
 
+public record ProjectTestSummary(
+    string ProjectName,
+    bool RunSucceeded,
+    int TotalCount,
+    int PassedCount,
+    int FailedCount,
+    int SkippedCount,
+    string? Detail
+);
+
 public record TestRunResult(
     bool RunSucceeded,
     int ExitCode,
@@ -25,7 +35,8 @@ public record TestRunResult(
     string? StderrTail,
     TimeSpan Duration,
     string? Detail = null,
-    bool RunCompleted = true
+    bool RunCompleted = true,
+    List<ProjectTestSummary>? ProjectSummaries = null
 );
 
 public class TestRunEngine
@@ -55,7 +66,7 @@ public class TestRunEngine
                 error: new EngineError("scope=file is not supported by RunTest — there is no per-file test-execution unit in `dotnet test`. Use scope=project or scope=solution, optionally narrowed with filter."));
         }
 
-        string targetPath;
+        List<(string Name, string Path)> targets;
         if (scope == ToolScope.project)
         {
             if (string.IsNullOrEmpty(scopeName))
@@ -72,21 +83,162 @@ public class TestRunEngine
                     error: new EngineError($"Project '{scopeName}' was not found in the loaded solution."));
             }
 
-            targetPath = project.FilePath;
+            targets = [(project.Name, project.FilePath)];
         }
         else
         {
-            var solutionPath = _workspaceManager.CurrentSolution?.FilePath ?? _workspaceManager.SolutionPath;
-            if (string.IsNullOrEmpty(solutionPath))
+            if (_workspaceManager.CurrentSolution is null && _workspaceManager.SolutionPath is null)
             {
                 return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
                     error: new EngineError("No solution is loaded. Call LoadSolution before running RunTest."));
             }
 
-            targetPath = solutionPath;
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            targets = solution.Projects
+                .Where(p => p.FilePath is not null && IsTestProject(p))
+                .Select(p => (p.Name, p.FilePath!))
+                .OrderBy(t => t.Name)
+                .ToList();
+
+            if (targets.Count == 0)
+            {
+                return new EngineResultWrapper<TestRunResult>(EngineOutcome.Success, new TestRunResult(
+                    RunSucceeded: false,
+                    ExitCode: -1,
+                    TotalCount: 0,
+                    PassedCount: 0,
+                    FailedCount: 0,
+                    SkippedCount: 0,
+                    FailureSummary: [],
+                    Results: [],
+                    StdoutTail: null,
+                    StderrTail: null,
+                    Duration: DateTime.UtcNow - start,
+                    Detail: "No test projects (referencing Microsoft.NET.Test.Sdk) were found in the loaded solution.",
+                    RunCompleted: false
+                ));
+            }
         }
 
-        var trxPath = Path.Combine(Path.GetTempPath(), $"roslynsentinel_runtest_{Guid.NewGuid():n}.trx");
+        // dotnet test run once per test project rather than once against the whole solution/target
+        // list: `dotnet test <solution>` fans out internally into one vstest invocation per test
+        // project, and every one of those sub-invocations was writing to the *same* shared
+        // `--logger trx;LogFileName=...` path, so only the last project to finish survived in the
+        // parsed result — every other project's counts were silently discarded. Giving each project
+        // its own process and TRX file, then aggregating here, is what makes counts trustworthy for
+        // scope=solution.
+        var projectResults = new List<(TestRunResult Result, string ProjectName)>();
+        foreach (var (name, path) in targets)
+        {
+            var result = await RunOneProjectAsync(name, path, filter, timeoutSeconds, cancellationToken);
+            projectResults.Add((result, name));
+        }
+
+        var totalCount = projectResults.Sum(p => p.Result.TotalCount);
+        var passedCount = projectResults.Sum(p => p.Result.PassedCount);
+        var failedCount = projectResults.Sum(p => p.Result.FailedCount);
+        var skippedCount = projectResults.Sum(p => p.Result.SkippedCount);
+        var allRunCompleted = projectResults.All(p => p.Result.RunCompleted);
+        var allExitZero = projectResults.All(p => p.Result.ExitCode == 0);
+
+        var allCaseResults = projectResults.SelectMany(p => p.Result.Results).ToList();
+        var failedCaseResults = allCaseResults.Where(r => r.Outcome == TestOutcome.Failed).ToList();
+
+        var failureSummary = failedCaseResults
+            .GroupBy(r => Signature(r.ErrorMessage))
+            .Select(g => new GroupedCountSummary(Signature: g.Key, Count: g.Count(), ExampleRef: g.First().TestName))
+            .OrderByDescending(g => g.Count)
+            .ToList();
+
+        IEnumerable<TestCaseResult> filtered = resultsType switch
+        {
+            TestResultsFilter.failed => allCaseResults.Where(r => r.Outcome == TestOutcome.Failed),
+            TestResultsFilter.skipped => allCaseResults.Where(r => r.Outcome is TestOutcome.Skipped or TestOutcome.NotExecuted),
+            _ => allCaseResults,
+        };
+
+        var ordered = summary
+            ? []
+            : filtered
+                .OrderBy(r => r.Outcome switch { TestOutcome.Failed => 0, TestOutcome.Skipped or TestOutcome.NotExecuted => 1, _ => 2 })
+                .Take(maxDetails)
+                .ToList();
+
+        var projectSummaries = projectResults
+            .Select(p => new ProjectTestSummary(
+                ProjectName: p.ProjectName,
+                RunSucceeded: p.Result.RunSucceeded,
+                TotalCount: p.Result.TotalCount,
+                PassedCount: p.Result.PassedCount,
+                FailedCount: p.Result.FailedCount,
+                SkippedCount: p.Result.SkippedCount,
+                Detail: p.Result.Detail))
+            .ToList();
+
+        var combinedStdoutTail = string.Join(
+            Environment.NewLine + Environment.NewLine,
+            projectResults.Where(p => p.Result.StdoutTail is not null).Select(p => $"── {p.ProjectName} ──{Environment.NewLine}{p.Result.StdoutTail}"));
+        var combinedStderrTail = string.Join(
+            Environment.NewLine + Environment.NewLine,
+            projectResults.Where(p => p.Result.StderrTail is not null).Select(p => $"── {p.ProjectName} ──{Environment.NewLine}{p.Result.StderrTail}"));
+
+        string? overallDetail = null;
+        if (!allRunCompleted)
+        {
+            overallDetail = "One or more projects did not complete their run: " +
+                string.Join("; ", projectResults.Where(p => !p.Result.RunCompleted).Select(p => $"{p.ProjectName}: {p.Result.Detail}"));
+        }
+        else if (totalCount == 0)
+        {
+            overallDetail = !string.IsNullOrEmpty(filter)
+                ? $"0 tests matched filter '{filter}' across {targets.Count} project(s)."
+                : "No test projects found under the resolved scope.";
+        }
+
+        return new EngineResultWrapper<TestRunResult>(EngineOutcome.Success, new TestRunResult(
+            RunSucceeded: allRunCompleted && allExitZero && failedCount == 0,
+            ExitCode: allExitZero ? 0 : 1,
+            TotalCount: totalCount,
+            PassedCount: passedCount,
+            FailedCount: failedCount,
+            SkippedCount: skippedCount,
+            FailureSummary: failureSummary,
+            Results: ordered,
+            StdoutTail: string.IsNullOrEmpty(combinedStdoutTail) ? null : combinedStdoutTail,
+            StderrTail: string.IsNullOrEmpty(combinedStderrTail) ? null : combinedStderrTail,
+            Duration: DateTime.UtcNow - start,
+            Detail: overallDetail,
+            RunCompleted: allRunCompleted,
+            ProjectSummaries: projectSummaries
+        ));
+    }
+
+    /// <summary>"Is this a test project" — checked via the project file referencing
+    /// Microsoft.NET.Test.Sdk (the SDK package that actually makes `dotnet test` runnable), not via
+    /// referencing nunit.framework: a project can pull in NUnit's assertion library transitively
+    /// through a ProjectReference to a real test project (e.g. a benchmark/tool project referencing
+    /// a Tests project for shared fixtures) without being a test project itself — `dotnet test`
+    /// against such a project fails outright rather than running zero tests.</summary>
+    private static bool IsTestProject(Microsoft.CodeAnalysis.Project project) =>
+        project.FilePath is not null && File.Exists(project.FilePath) &&
+        File.ReadAllText(project.FilePath).Contains("Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Runs `dotnet test` against a single project with its own dedicated TRX file, and
+    /// parses the result. Never throws — timeouts, missing TRX, and process failures are all
+    /// reported via <see cref="TestRunResult.RunCompleted"/> and <see cref="TestRunResult.Detail"/>
+    /// so a single failing project can't take down the aggregate result for the rest.</summary>
+    private static async Task<TestRunResult> RunOneProjectAsync(
+        string projectName,
+        string projectPath,
+        string? filter,
+        int timeoutSeconds,
+        CancellationToken cancellationToken)
+    {
+        var start = DateTime.UtcNow;
+        var trxPath = Path.Combine(Path.GetTempPath(), $"roslynsentinel_runtest_{projectName}_{Guid.NewGuid():n}.trx");
+
+        const int TailLines = 40;
+        static string Tail(string text) => string.Join(Environment.NewLine, text.Split(Environment.NewLine).TakeLast(TailLines));
 
         try
         {
@@ -94,14 +246,14 @@ public class TestRunEngine
             process.StartInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                WorkingDirectory = Path.GetDirectoryName(targetPath),
+                WorkingDirectory = Path.GetDirectoryName(projectPath),
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
             process.StartInfo.ArgumentList.Add("test");
-            process.StartInfo.ArgumentList.Add(targetPath);
+            process.StartInfo.ArgumentList.Add(projectPath);
             process.StartInfo.ArgumentList.Add("--nologo");
             process.StartInfo.ArgumentList.Add("-v");
             process.StartInfo.ArgumentList.Add("quiet");
@@ -153,12 +305,9 @@ public class TestRunEngine
                 lockDetail = "Build failed to copy the output file — it is likely locked by a running process (e.g. this MCP server or an IDE holding the binary). Close the process holding the file and retry.";
             }
 
-            const int TailLines = 40;
-            static string Tail(string text) => string.Join(Environment.NewLine, text.Split(Environment.NewLine).TakeLast(TailLines));
-
             if (timeoutDetail is not null)
             {
-                return new EngineResultWrapper<TestRunResult>(EngineOutcome.Success, new TestRunResult(
+                return new TestRunResult(
                     RunSucceeded: false,
                     ExitCode: -1,
                     TotalCount: 0,
@@ -172,13 +321,13 @@ public class TestRunEngine
                     Duration: DateTime.UtcNow - start,
                     Detail: timeoutDetail,
                     RunCompleted: false
-                ));
+                );
             }
 
             if (!File.Exists(trxPath))
             {
-                var noTrxDetail = lockDetail ?? "No TRX result file was produced — no test projects were found under the resolved scope, or the run failed before any test adapter reported results.";
-                return new EngineResultWrapper<TestRunResult>(EngineOutcome.Success, new TestRunResult(
+                var noTrxDetail = lockDetail ?? "No TRX result file was produced — the run failed before any test adapter reported results.";
+                return new TestRunResult(
                     RunSucceeded: false,
                     ExitCode: process.ExitCode,
                     TotalCount: 0,
@@ -192,7 +341,7 @@ public class TestRunEngine
                     Duration: DateTime.UtcNow - start,
                     Detail: noTrxDetail,
                     RunCompleted: false
-                ));
+                );
             }
 
             var allResults = ParseTrx(trxPath);
@@ -208,7 +357,7 @@ public class TestRunEngine
             {
                 detail = !string.IsNullOrEmpty(filter)
                     ? $"0 tests matched filter '{filter}'."
-                    : "No test projects found under the resolved scope.";
+                    : "Project produced no test results.";
             }
 
             var failureSummary = failedResults
@@ -217,21 +366,7 @@ public class TestRunEngine
                 .OrderByDescending(g => g.Count)
                 .ToList();
 
-            IEnumerable<TestCaseResult> filtered = resultsType switch
-            {
-                TestResultsFilter.failed => allResults.Where(r => r.Outcome == TestOutcome.Failed),
-                TestResultsFilter.skipped => allResults.Where(r => r.Outcome is TestOutcome.Skipped or TestOutcome.NotExecuted),
-                _ => allResults,
-            };
-
-            var ordered = summary
-                ? []
-                : filtered
-                    .OrderBy(r => r.Outcome switch { TestOutcome.Failed => 0, TestOutcome.Skipped or TestOutcome.NotExecuted => 1, _ => 2 })
-                    .Take(maxDetails)
-                    .ToList();
-
-            return new EngineResultWrapper<TestRunResult>(EngineOutcome.Success, new TestRunResult(
+            return new TestRunResult(
                 RunSucceeded: process.ExitCode == 0 && failedCount == 0,
                 ExitCode: process.ExitCode,
                 TotalCount: totalCount,
@@ -239,12 +374,12 @@ public class TestRunEngine
                 FailedCount: failedCount,
                 SkippedCount: skippedCount,
                 FailureSummary: failureSummary,
-                Results: ordered,
+                Results: allResults,
                 StdoutTail: Tail(stdoutText),
                 StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),
                 Duration: DateTime.UtcNow - start,
                 Detail: detail
-            ));
+            );
         }
         finally
         {

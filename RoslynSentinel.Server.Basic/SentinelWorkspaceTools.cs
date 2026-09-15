@@ -571,23 +571,62 @@ public class SentinelWorkspaceTools
     // over-cap error can (see WriteToolAdviceHelper) — and a hardcoded name here would be shown to
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
-    [Description("Replaces one exact block of text with another in a single file, for localized edits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) instead. For multiple small edits in the same file, call this once per edit. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
+    [Description("Replaces one exact block of text with another in a single file, for localized edits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) instead. For multiple small edits — in the same file or across files — pass 'edits' instead of the singular filepath/oldContent/newContent params. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
     public async Task<ToolResult<object>> ReplaceSnippet(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
-        [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [ToolOption(ToolOptionTag.OldContent, required: true)][Description(ToolParams.OldContent)] string oldContent,
-        [ToolOption(ToolOptionTag.NewContent, required: true)][Description(ToolParams.NewContent)] string newContent,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        CancellationToken cancellationToken = default)
+    [Description(ToolParams.Reason)] ToolCallReason reason,
+    [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
+    [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted — see the either/or check below.
+    [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
+    [ToolOption(ToolOptionTag.OldContent, required: false)][Description(ToolParams.OldContent)] string? oldContent = null,
+    [ToolOption(ToolOptionTag.NewContent, required: false)][Description(ToolParams.NewContent)] string? newContent = null,
+    [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+    [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
+    [Description(ToolParams.SnippetEdits)] List<SnippetEdit>? edits = null,
+    [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
+    [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+    CancellationToken cancellationToken = default)
     {
         try
         {
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+            bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(oldContent) || newContent != null;
+            bool hasBatchEdit = edits != null;
+
+            if (hasSingularEdit && hasBatchEdit)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument,
+                        "ReplaceSnippet: supply either filepath/oldContent/newContent or 'edits', not both.")
+                };
+            }
+
+            if (hasBatchEdit)
+            {
+                if (edits!.Count == 0)
+                {
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'edits' was supplied but is empty.")
+                    };
+                }
+
+                return await ReplaceSnippetBatch(edits, action, validateOnApply, returnDiff, cancellationToken);
+            }
+
+            if (!filepath.HasValue)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument,
+                        "ReplaceSnippet: 'filepath' is required (it names the single file oldContent/newContent applies to), unless 'edits' is supplied instead.")
+                };
+            }
+
+            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath.Value);
             if (!filePathResolved.Validated)
             {
                 return new ToolResult<object>()
@@ -595,7 +634,7 @@ public class SentinelWorkspaceTools
                     Success = false,
                     Error = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
                         ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ReplaceSnippet: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
-                        : new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'filepath' is required (it names the single file oldContent/newContent applies to).")
+                        : new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'filepath' could not be resolved.")
                 };
             }
 
@@ -620,26 +659,7 @@ public class SentinelWorkspaceTools
             // Each bound is reported separately, with the actual value against the limit: run
             // 20260910-013550-398 shows the model repeatedly guessing wrong about which of the four
             // it had hit, because the old message named them all at once.
-            var exceeded = new List<string>();
-            var oldContentLineCount = oldContent.Split('\n').Length;
-            var newContentLineCount = newContent.Split('\n').Length;
-            if (oldContentLineCount > MaxOldContentLines)
-            {
-                exceeded.Add($"oldContent is {oldContentLineCount} lines (limit {MaxOldContentLines})");
-            }
-            if (oldContent.Length > MaxOldContentChars)
-            {
-                exceeded.Add($"oldContent is {oldContent.Length} chars (limit {MaxOldContentChars})");
-            }
-            if (newContentLineCount > MaxNewContentLines)
-            {
-                exceeded.Add($"newContent is {newContentLineCount} lines (limit {MaxNewContentLines})");
-            }
-            if (newContent.Length > MaxNewContentChars)
-            {
-                exceeded.Add($"newContent is {newContent.Length} chars (limit {MaxNewContentChars})");
-            }
-
+            var exceeded = DescribeExceededSnippetSizeBounds(oldContent, newContent);
             if (exceeded.Count > 0)
             {
                 // Escape-hatch advice comes from WriteToolAdviceHelper, never a hardcoded tool name:
@@ -746,6 +766,228 @@ public class SentinelWorkspaceTools
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReplaceSnippet")
+            };
+        }
+    }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private List<string> DescribeExceededSnippetSizeBounds(string oldContent, string newContent)
+    {
+        var exceeded = new List<string>();
+        var oldContentLineCount = oldContent.Split('\n').Length;
+        var newContentLineCount = newContent.Split('\n').Length;
+        if (oldContentLineCount > MaxOldContentLines)
+        {
+            exceeded.Add($"oldContent is {oldContentLineCount} lines (limit {MaxOldContentLines})");
+        }
+        if (oldContent.Length > MaxOldContentChars)
+        {
+            exceeded.Add($"oldContent is {oldContent.Length} chars (limit {MaxOldContentChars})");
+        }
+        if (newContentLineCount > MaxNewContentLines)
+        {
+            exceeded.Add($"newContent is {newContentLineCount} lines (limit {MaxNewContentLines})");
+        }
+        if (newContent.Length > MaxNewContentChars)
+        {
+            exceeded.Add($"newContent is {newContent.Length} chars (limit {MaxNewContentChars})");
+        }
+        return exceeded;
+    }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private async Task<ToolResult<object>> ReplaceSnippetBatch(
+        List<SnippetEdit> edits,
+        ProposedChangeAction action,
+        bool validateOnApply,
+        bool returnDiff,
+        CancellationToken cancellationToken)
+    {
+        if (edits.Count > MaxSnippetEditsPerBatch)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    $"ReplaceSnippet: edits has {edits.Count} entries (limit {MaxSnippetEditsPerBatch}). Split into multiple calls.")
+            };
+        }
+
+        var perEditErrors = new List<string>();
+        for (int i = 0; i < edits.Count; i++)
+        {
+            var edit = edits[i];
+            if (string.IsNullOrEmpty(edit.FilePath))
+            {
+                perEditErrors.Add($"edits[{i}]: filePath is required.");
+                continue;
+            }
+            if (string.IsNullOrEmpty(edit.OldContent))
+            {
+                perEditErrors.Add($"edits[{i}] ({edit.FilePath}): oldContent is required.");
+                continue;
+            }
+            if (edit.NewContent == null)
+            {
+                perEditErrors.Add($"edits[{i}] ({edit.FilePath}): newContent is required (pass an empty string for a pure deletion).");
+                continue;
+            }
+            var exceeded = DescribeExceededSnippetSizeBounds(edit.OldContent, edit.NewContent);
+            if (exceeded.Count > 0)
+            {
+                perEditErrors.Add($"edits[{i}] ({edit.FilePath}): {string.Join("; ", exceeded)}.");
+            }
+        }
+
+        if (perEditErrors.Count > 0)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected before anchoring:\n" + string.Join("\n", perEditErrors))
+            };
+        }
+
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var editsByFile = edits
+            .Select((edit, index) => (edit, index))
+            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
+
+        var finalContents = new Dictionary<FilePathWrapper, string>();
+        foreach (var fileGroup in editsByFile)
+        {
+            var filePathResolved = fileGroup.Key;
+            if (!filePathResolved.Validated)
+            {
+                perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? "no solution is loaded." : "path could not be resolved.")}");
+                continue;
+            }
+
+            var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePath == filePathResolved.Absolute);
+            if (document == null)
+            {
+                perEditErrors.Add($"'{filePathResolved}': file not found.");
+                continue;
+            }
+
+            var originalText = await document.GetTextAsync(cancellationToken);
+            var originalString = originalText.ToString();
+
+            // Resolve every edit's match against the file's ORIGINAL text — never against a prior
+            // edit's output within this same batch. This is what removes the sequencing hazard a
+            // series of single ReplaceSnippet calls has: every edit here is anchored against one
+            // fixed snapshot, not a chain of intermediate results the model never sees.
+            var resolved = new List<(int index, ContextHelper.SnippetMatch match, string newContent)>();
+            foreach (var (edit, index) in fileGroup)
+            {
+                try
+                {
+                    var match = ContextHelper.FindExactSnippetPosition(originalText, edit.OldContent, edit.LineBefore, edit.LineAfter);
+                    resolved.Add((index, match, edit.NewContent));
+                }
+                catch (ToolException toolEx)
+                {
+                    perEditErrors.Add($"edits[{index}] ({filePathResolved}): {toolEx.Message}");
+                }
+            }
+
+            if (perEditErrors.Count > 0)
+            {
+                continue;
+            }
+
+            // Reject overlapping matches before splicing anything — silent last-writer-wins here is
+            // the same corruption class as the closed ReplaceSnippet silent-splice-corruption finding
+            // on adjacent lines (wrong match length previously corrupted a neighboring line with no
+            // error at all).
+            var byStart = resolved.OrderBy(r => r.match.Start).ToList();
+            for (int i = 1; i < byStart.Count; i++)
+            {
+                var prev = byStart[i - 1];
+                var curr = byStart[i];
+                if (curr.match.Start < prev.match.Start + prev.match.Length)
+                {
+                    perEditErrors.Add(
+                        $"edits[{prev.index}] and edits[{curr.index}] ({filePathResolved}) have overlapping matches " +
+                        $"(edits[{prev.index}]: [{prev.match.Start}, {prev.match.Start + prev.match.Length}), " +
+                        $"edits[{curr.index}]: [{curr.match.Start}, {curr.match.Start + curr.match.Length})). " +
+                        "Split these into separate ReplaceSnippet calls.");
+                }
+            }
+
+            if (perEditErrors.Count > 0)
+            {
+                continue;
+            }
+
+            // Apply highest-offset-first so an earlier splice's growth/shrink never invalidates a
+            // later match's offset — every position was already computed against originalString above,
+            // so no running correction term is needed the way DiffEngine's forward hunk application uses.
+            var spliced = originalString;
+            foreach (var (_, match, newContent) in byStart.OrderByDescending(r => r.match.Start))
+            {
+                spliced = spliced.Remove(match.Start, match.Length).Insert(match.Start, newContent);
+            }
+
+            finalContents[filePathResolved] = spliced;
+        }
+
+        if (perEditErrors.Count > 0)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected — no changes were written:\n" + string.Join("\n", perEditErrors))
+            };
+        }
+
+        if (action == ProposedChangeAction.validate)
+        {
+            var validationResult = await _validationEngine.ValidateChangesAsync(finalContents);
+            return validationResult.Success
+                ? new ToolResult<object>() { Success = true, Data = validationResult }
+                : new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet batch validate failed: {validationResult.Diagnostics.ToInfo()}")
+                };
+        }
+
+        try
+        {
+            var result = await _workspaceManager.ApplyProposedChangesAsync(finalContents, validateChanges: validateOnApply);
+            if (!result.Success && result.ValidationResult != null)
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception,
+                        "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors — no changes were written. Fix the issue(s) below and retry:\n" +
+                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                };
+            await WriteBlobForApplyAsync("replace_snippet_batch", result);
+            var strippedResult = result with { PreImages = null };
+            object responseData = returnDiff
+                ? new
+                {
+                    result = strippedResult,
+                    diff = SentinelRefactoringTools.BuildDiffFromPreImages(finalContents, result.PreImages)
+                }
+                : strippedResult;
+            return new ToolResult<object>()
+            {
+                Success = true,
+                Data = responseData
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ReplaceSnippet batch ({Action}) unexpected exception for {Count} file(s)", action, finalContents.Count);
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet batch {action} for {finalContents.Count} file(s)")
             };
         }
     }
@@ -2075,4 +2317,8 @@ public class SentinelWorkspaceTools
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         return _readNav.GetLargeResult(reason, resultId, filePathResolved, limit, offset, cancellationToken);
     }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    private const int MaxSnippetEditsPerBatch = 20;
 }

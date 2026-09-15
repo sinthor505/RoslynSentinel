@@ -26,9 +26,18 @@ public class BatchTarget
 /// <summary>Operation counts for a single Asyncify phase.</summary>
 public record AsyncifyPhaseCount
 {
-    public int Succeeded { get; init; }
-    public int Failed { get; init; }
-    public int Skipped { get; init; }
+    public int Succeeded
+    {
+        get; init;
+    }
+    public int Failed
+    {
+        get; init;
+    }
+    public int Skipped
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -144,13 +153,25 @@ public record BatchResultSummary : EngineResultBase
 public record AsyncifyLoopResult
 {
     /// <summary>Number of complete iterations executed.</summary>
-    public int LoopsCompleted { get; init; }
+    public int LoopsCompleted
+    {
+        get; init;
+    }
     /// <summary>True when the last iteration produced Succeeded=0 and Failed=0 — nothing left to migrate.</summary>
-    public bool Converged { get; init; }
+    public bool Converged
+    {
+        get; init;
+    }
     /// <summary>Total Succeeded across all iterations.</summary>
-    public int TotalSucceeded { get; init; }
+    public int TotalSucceeded
+    {
+        get; init;
+    }
     /// <summary>Total Failed across all iterations.</summary>
-    public int TotalFailed { get; init; }
+    public int TotalFailed
+    {
+        get; init;
+    }
     /// <summary>One entry per completed iteration, in order.</summary>
     public List<BatchResultSummary> Iterations { get; init; } = new();
 }
@@ -167,7 +188,10 @@ public class FailureDetail
     /// <summary>"failed" | "rolledback" | "skipped"</summary>
     public ItemRecordOutcome Outcome { get; set; } = ItemRecordOutcome.Unset;
     /// <summary>Structured Roslyn diagnostics that caused the failure. Null when failure is not compiler-error-related.</summary>
-    public List<DiagnosticInfo>? CompilerDiagnostics { get; set; }
+    public List<DiagnosticInfo>? CompilerDiagnostics
+    {
+        get; set;
+    }
 }
 
 /// <summary>
@@ -198,9 +222,15 @@ public class HandlerExtractTarget
     /// <summary>A short unique code snippet that identifies the block of statements to extract.</summary>
     public string ContextSnippet { get; set; } = "";
     /// <summary>Optional line immediately before the snippet for disambiguation.</summary>
-    public string? LineBefore { get; set; }
+    public string? LineBefore
+    {
+        get; set;
+    }
     /// <summary>Optional line immediately after the snippet for disambiguation.</summary>
-    public string? LineAfter { get; set; }
+    public string? LineAfter
+    {
+        get; set;
+    }
     /// <summary>
     /// When <c>true</c>, <see cref="ContextSnippet"/> is the name of the source method
     /// whose entire body is extracted. <see cref="LineBefore"/> and <see cref="LineAfter"/>
@@ -215,13 +245,19 @@ public class UpliftTarget
     /// <summary>Name of the Asyncify-bridge sync method whose callers should be uplifted.</summary>
     public string BridgedMethodName { get; set; } = "";
     /// <summary>Restrict caller scan to one project. null = entire solution.</summary>
-    public string? ProjectName { get; set; }
+    public string? ProjectName
+    {
+        get; set;
+    }
     /// <summary>
     /// Optional Roslyn documentation-comment ID (e.g. <c>M:Avaal.Service.CommonSearch.search(System.String)</c>)
     /// that uniquely identifies the bridge symbol. When set, only callers of this exact overload are uplifted —
     /// unrelated methods with the same name on other types are ignored. Copy from <c>ObsoleteCallerFinding.SymbolId</c>.
     /// </summary>
-    public string? SymbolId { get; set; }
+    public string? SymbolId
+    {
+        get; set;
+    }
 }
 
 /// <summary>Canonical input for <c>run_uplift</c>.</summary>
@@ -371,7 +407,10 @@ public class UpliftCallersResult
     /// Structured outcome classification with routed failure hints (spec §3.6).
     /// Substrate-derived — never infer outcome from Summary.Severity or prose scanning.
     /// </summary>
-    public OperationSummary? OperationSummary { get; init; }
+    public OperationSummary? OperationSummary
+    {
+        get; init;
+    }
 }
 
 // ── Phase 7 — async_migrate combined input ────────────────────────────────────
@@ -467,5 +506,113 @@ public class AsyncMigrateInput
     /// Extraction targets for <c>handler_extract</c>. Each entry specifies one code block to
     /// extract into a new private method. ContextSnippet identifies the block to extract.
     /// </summary>
-    public List<HandlerExtractTarget>? HandlerExtractTargets { get; set; }
+    public List<HandlerExtractTarget>? HandlerExtractTargets
+    {
+        get; set;
+    }
+}
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>One edit in a batch <c>ReplaceSnippet</c> call.</summary>
+public class SnippetEdit
+{
+    // Wire type is string, not FilePathWrapper — see comment on HandlerExtractTarget.FilePath above.
+    /// <summary>Absolute path of the .cs file this edit applies to.</summary>
+    public string FilePath { get; set; } = "";
+    /// <summary>Verbatim text to find and replace, matched exactly against the file's original content.</summary>
+    public string OldContent { get; set; } = "";
+    /// <summary>Verbatim replacement text. May be empty (pure deletion) or longer than OldContent (net insertion).</summary>
+    public string NewContent { get; set; } = "";
+    /// <summary>Optional line immediately before OldContent, for disambiguation.</summary>
+    public string? LineBefore
+    {
+        get; set;
+    }
+    /// <summary>Optional line immediately after OldContent, for disambiguation.</summary>
+    public string? LineAfter
+    {
+        get; set;
+    }
+}
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>One edit in a batch ModifyModifier call.</summary>
+public class ModifierEdit
+{
+    // Wire type is string, not FilePathWrapper — see comment on HandlerExtractTarget.FilePath above.
+    public string FilePath { get; set; } = "";
+    public string TargetName { get; set; } = "";
+    public NonAccessibilityModifier Modifier
+    {
+        get; set;
+    }
+    public AddRemoveAction Action
+    {
+        get; set;
+    }
+    public string? ContextSnippet
+    {
+        get; set;
+    }
+    public string? LineBefore
+    {
+        get; set;
+    }
+    public string? LineAfter
+    {
+        get; set;
+    }
+}
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>One edit in a batch ModifyAttribute call.</summary>
+public class AttributeEdit
+{
+    // Wire type is string, not FilePathWrapper — see comment on HandlerExtractTarget.FilePath above.
+    public string FilePath { get; set; } = "";
+    public string TargetName { get; set; } = "";
+    public string ExistingAttribute { get; set; } = "";
+    public AttributeModifyAction Action
+    {
+        get; set;
+    }
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for Action=replace, unused for add/remove —
+    // same rule as ModifyAttribute's own newAttribute parameter.
+    public string? NewAttribute
+    {
+        get; set;
+    }
+    public string? ContextSnippet
+    {
+        get; set;
+    }
+    public string? LineBefore
+    {
+        get; set;
+    }
+    public string? LineAfter
+    {
+        get; set;
+    }
+}
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>One edit in a batch ModifyBaseType call.</summary>
+public class BaseTypeEdit
+{
+    public string FilePath { get; set; } = "";
+    public string TypeName { get; set; } = "";
+    public string BaseTypeName { get; set; } = "";
+    public AddRemoveAction Action
+    {
+        get; set;
+    }
+    public string? ContextSnippet
+    {
+        get; set;
+    }
+    public string? LineBefore
+    {
+        get; set;
+    }
+    public string? LineAfter
+    {
+        get; set;
+    }
 }

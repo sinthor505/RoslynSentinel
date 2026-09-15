@@ -93,7 +93,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = $PSScriptRoot
+$repoRoot = Split-Path $PSScriptRoot -Parent
 $docsDir = Join-Path $repoRoot 'docs'
 # Baselines are keyed by Flavor only, not Config - Debug/Release compile the same source, so a
 # warning/failure set split by config would just double the files to maintain with no real signal.
@@ -443,7 +443,7 @@ if ($SkipVSCodeRestart) {
     # `status` verb for a real JSON-RPC round-trip (see its Test-HttpCopyReachable), so a restart
     # that started a process which then failed during startup is caught here instead of only
     # surfacing later as a confusing ConnectionRefused from whatever tool call happens to run next.
-    & (Join-Path $repoRoot 'roslynsentinel-vscode-control.ps1') status -VSCodePort $VSCodePort
+    & (Join-Path $PSScriptRoot 'roslynsentinel-vscode-control.ps1') status -VSCodePort $VSCodePort
 }
 
 exit ([int](-not $ok))

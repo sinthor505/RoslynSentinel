@@ -305,7 +305,7 @@ public class ComprehensiveToolTests
 
         Assert.That(result.Success, Is.True);
         var entries = (List<SolutionSymbolEntry>)result.Data!;
-        Assert.That(entries, Has.All.Matches<SolutionSymbolEntry>(e => e.Kind == "method"));
+        Assert.That(entries, Has.All.Matches<SolutionSymbolEntry>(e => e?.Kind == "method"));
         Assert.That(entries.Select(e => e.Name), Contains.Item("Ship"));
     }
 

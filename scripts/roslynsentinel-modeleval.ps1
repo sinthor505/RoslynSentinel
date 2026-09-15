@@ -211,7 +211,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = $PSScriptRoot
+$repoRoot = Split-Path $PSScriptRoot -Parent
 
 $knownHosts = @{
     '112' = @{ BaseUrl = 'http://192.168.1.112:1234/v1'; Suffix = '112' }

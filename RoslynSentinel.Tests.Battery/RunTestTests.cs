@@ -202,7 +202,7 @@ public class RunTestTests
         Assert.That(result.Success, Is.True, result.Error?.Message);
         var data = (TestRunResult)result.Data!;
         Assert.That(data.Results, Is.Not.Empty);
-        Assert.That(data.Results, Has.All.Matches<TestCaseResult>(r => r.Outcome == TestOutcome.Failed));
+        Assert.That(data.Results, Has.All.Matches<TestCaseResult>(r => r?.Outcome == TestOutcome.Failed));
     }
 
     [Test]

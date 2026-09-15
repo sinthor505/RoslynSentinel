@@ -101,6 +101,49 @@ public static class FormattingHelper
 
         return problems;
     }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Batch form of <see cref="ReplaceNodeFormattedAsync"/>: replaces every old→new pair in
+    /// <paramref name="replacements"/> against one evolving root and formats the whole set in a
+    /// single <see cref="Formatter.FormatAsync"/> pass, instead of one call per pair. Needed because
+    /// after the first <c>ReplaceNode</c> call, every other pending old node reference is stale — the
+    /// original node objects are no longer part of the tree being edited. <see cref="SyntaxNode.TrackNodes"/>/
+    /// <see cref="SyntaxNode.GetCurrentNode{TNode}"/> re-locates each tracked old node against the
+    /// current root before building its replacement, the same idiom already used in
+    /// <c>AdvancedRefactoringEngine</c> for chained method-body rewrites. Each old node's leading/
+    /// trailing trivia is preserved onto its replacement by default, same as the single-pair overload.
+    /// </summary>
+    public static async Task<string> ReplaceNodesFormattedAsync(Document document, SyntaxNode root, Dictionary<SyntaxNode, SyntaxNode> replacements, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
+    {
+        var originalSourceText = await document.GetTextAsync(cancellationToken);
+        var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
+
+        var trackedRoot = root.TrackNodes(replacements.Keys);
+        var annotation = new SyntaxAnnotation();
+
+        var currentRoot = trackedRoot;
+        foreach (var (oldNode, newNode) in replacements)
+        {
+            var currentOldNode = currentRoot.GetCurrentNode(oldNode);
+            if (currentOldNode == null)
+            {
+                continue;
+            }
+
+            var leadingTrivia = triviaIntent == TriviaEditIntent.ReplaceLeading ? newNode.GetLeadingTrivia() : currentOldNode.GetLeadingTrivia();
+            var trailingTrivia = currentOldNode.GetTrailingTrivia();
+            var annotatedNewNode = newNode.WithLeadingTrivia(leadingTrivia).WithTrailingTrivia(trailingTrivia).WithAdditionalAnnotations(annotation);
+            currentRoot = currentRoot.ReplaceNode(currentOldNode, annotatedNewNode);
+        }
+
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(currentRoot), annotation, cancellationToken: cancellationToken);
+        var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+        return EolUtilities.NormalizeEol(formattedText, dominantEol);
+    }
+
+
     /// <summary>
     /// Removes <paramref name = "nodeToRemove"/> without reformatting any sibling's interior.
     /// KeepExteriorTrivia splices the removed node's leading trivia onto the token immediately

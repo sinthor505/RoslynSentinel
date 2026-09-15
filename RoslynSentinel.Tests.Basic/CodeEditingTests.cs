@@ -2,8 +2,6 @@ using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
 #pragma warning disable CS8618
 
 namespace RoslynSentinel.Tests.Basic;
@@ -183,7 +181,7 @@ public enum ToolScope
 
         Assert.That(outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(members.Select(m => m.Name), Is.EquivalentTo(new[] { "file", "project", "solution" }));
-        Assert.That(members, Has.All.Matches<RefactoringEngine.ContainerMemberInfo>(m => m.Kind == "enumMember"));
+        Assert.That(members, Has.All.Matches<RefactoringEngine.ContainerMemberInfo>(m => m?.Kind == "enumMember"));
     }
 
     [Test]
@@ -1234,8 +1232,6 @@ public class Calc
         var text = result.UpdatedText!;
         Assert.That(text, Does.Not.Contain("\r\n"), "An LF-dominant file must not gain any stray CRLF line endings.");
     }
-
-
 
     // AddModifierAsync / RemoveModifierAsync
     // ══════════════════════════════════════════════════════════════

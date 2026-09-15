@@ -55,7 +55,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = $PSScriptRoot
+$repoRoot = Split-Path $PSScriptRoot -Parent
 
 $stdioOutDir = Join-Path $repoRoot 'bin-vscode\Advanced'
 $stdioExe = Join-Path $stdioOutDir 'RoslynSentinel.Server.Advanced.exe'
@@ -278,7 +278,7 @@ switch ($Action) {
     }
     'build' {
         Write-Host "=== Rebuilding VS Code copies from source (delegates to build.ps1) ===" -ForegroundColor Cyan
-        & (Join-Path $repoRoot 'build.ps1') -Flavor Solution -Mode Build -Force:$Force -VSCodePort $VSCodePort
+        & (Join-Path $PSScriptRoot 'build.ps1') -Flavor Solution -Mode Build -Force:$Force -VSCodePort $VSCodePort
         exit $LASTEXITCODE
     }
 }

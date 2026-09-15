@@ -33,6 +33,14 @@ public class SentinelRefactoringTools
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelRefactoringTools> _logger;
 
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    // Reuses ReplaceSnippet's batch cap (SentinelWorkspaceTools.MaxSnippetEditsPerBatch) as a starting
+    // value — these are keyword/name edits rather than text blocks, so the limit is purely count-based,
+    // not size-derived.
+    private const int MaxModifierFamilyEditsPerBatch = 20;
+
+
     public SentinelRefactoringTools(
         RefactoringEngine refactoringEngine,
         StandardRefactoringEngine standardRefactoringEngine,
@@ -161,6 +169,284 @@ public class SentinelRefactoringTools
         Dictionary<FilePathWrapper, string> changes,
         IReadOnlyDictionary<string, string?>? preImages) =>
         ValidateAndApplyHelper.BuildDiffFromPreImages(changes, preImages);
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private async Task<ToolResult<object>> ModifyModifierBatch(List<ModifierEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
+    {
+        if (edits.Count > MaxModifierFamilyEditsPerBatch)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    $"ModifyModifier: edits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
+            };
+        }
+
+        var perEditErrors = new List<string>();
+        for (int i = 0; i < edits.Count; i++)
+        {
+            if (string.IsNullOrEmpty(edits[i].FilePath))
+            {
+                perEditErrors.Add($"edits[{i}]: filePath is required.");
+            }
+            if (string.IsNullOrEmpty(edits[i].TargetName))
+            {
+                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): targetName is required.");
+            }
+        }
+
+        if (perEditErrors.Count > 0)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyModifier batch rejected before resolving targets:\n" + string.Join("\n", perEditErrors))
+            };
+        }
+
+        var editsByFile = edits
+            .Select((edit, index) => (edit, index))
+            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
+
+        var finalContents = new Dictionary<FilePathWrapper, string>();
+        var touchedFiles = new List<FilePathWrapper>();
+        foreach (var fileGroup in editsByFile)
+        {
+            var filePathResolved = fileGroup.Key;
+            if (!filePathResolved.Validated)
+            {
+                perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? "no solution is loaded." : "path could not be resolved.")}");
+                continue;
+            }
+
+            var engineEdits = fileGroup.Select(pair => (
+                pair.index,
+                pair.edit.TargetName,
+                pair.edit.Modifier.ToString(),
+                pair.edit.Action,
+                pair.edit.ContextSnippet,
+                pair.edit.LineBefore,
+                pair.edit.LineAfter)).ToList();
+
+            var updated = await _refactoringEngine.ApplyModifierBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
+            {
+                perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
+                continue;
+            }
+
+            finalContents[filePathResolved] = updated.UpdatedText;
+            touchedFiles.Add(filePathResolved);
+        }
+
+        if (perEditErrors.Count > 0)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyModifier batch rejected — no changes were written:\n" + string.Join("\n", perEditErrors))
+            };
+        }
+
+        var apply = await ValidateAndApplyAsync(finalContents, $"Batch-modified {edits.Count} modifier edit(s) across {touchedFiles.Count} file(s).", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
+        if (apply.Error is not null)
+            return new ToolResult<object> { Success = false, Error = apply.Error };
+
+        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, $"Applied {edits.Count} modifier edit(s) across {touchedFiles.Count} file(s).", apply.DryRun, apply.Diff);
+        return new ToolResult<object>() { Success = true, Data = summary };
+    }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private async Task<ToolResult<object>> ModifyAttributeBatch(List<AttributeEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
+    {
+        if (edits.Count > MaxModifierFamilyEditsPerBatch)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    $"ModifyAttribute: edits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
+            };
+        }
+
+        var perEditErrors = new List<string>();
+        for (int i = 0; i < edits.Count; i++)
+        {
+            if (string.IsNullOrEmpty(edits[i].FilePath))
+            {
+                perEditErrors.Add($"edits[{i}]: filePath is required.");
+            }
+            if (string.IsNullOrEmpty(edits[i].TargetName))
+            {
+                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): targetName is required.");
+            }
+            if (string.IsNullOrEmpty(edits[i].ExistingAttribute))
+            {
+                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): existingAttribute is required.");
+            }
+            if (edits[i].Action == AttributeModifyAction.replace && string.IsNullOrEmpty(edits[i].NewAttribute))
+            {
+                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): newAttribute is required for action 'replace'.");
+            }
+        }
+
+        if (perEditErrors.Count > 0)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute batch rejected before resolving targets:\n" + string.Join("\n", perEditErrors))
+            };
+        }
+
+        var editsByFile = edits
+            .Select((edit, index) => (edit, index))
+            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
+
+        var finalContents = new Dictionary<FilePathWrapper, string>();
+        var touchedFiles = new List<FilePathWrapper>();
+        foreach (var fileGroup in editsByFile)
+        {
+            var filePathResolved = fileGroup.Key;
+            if (!filePathResolved.Validated)
+            {
+                perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? "no solution is loaded." : "path could not be resolved.")}");
+                continue;
+            }
+
+            var engineEdits = fileGroup.Select(pair => (
+                pair.index,
+                pair.edit.TargetName,
+                pair.edit.ExistingAttribute,
+                pair.edit.Action,
+                pair.edit.NewAttribute,
+                pair.edit.ContextSnippet,
+                pair.edit.LineBefore,
+                pair.edit.LineAfter)).ToList();
+
+            var updated = await _refactoringEngine.ApplyAttributeBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
+            {
+                perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
+                continue;
+            }
+
+            finalContents[filePathResolved] = updated.UpdatedText;
+            touchedFiles.Add(filePathResolved);
+        }
+
+        if (perEditErrors.Count > 0)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute batch rejected — no changes were written:\n" + string.Join("\n", perEditErrors))
+            };
+        }
+
+        var apply = await ValidateAndApplyAsync(finalContents, $"Batch-modified {edits.Count} attribute edit(s) across {touchedFiles.Count} file(s).", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
+        if (apply.Error is not null)
+            return new ToolResult<object> { Success = false, Error = apply.Error };
+
+        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, $"Applied {edits.Count} attribute edit(s) across {touchedFiles.Count} file(s).", apply.DryRun, apply.Diff);
+        return new ToolResult<object>() { Success = true, Data = summary };
+    }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private async Task<ToolResult<object>> ModifyBaseTypeBatch(List<BaseTypeEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
+    {
+        if (edits.Count > MaxModifierFamilyEditsPerBatch)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    $"ModifyBaseType: edits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
+            };
+        }
+
+        var perEditErrors = new List<string>();
+        for (int i = 0; i < edits.Count; i++)
+        {
+            if (string.IsNullOrEmpty(edits[i].FilePath))
+            {
+                perEditErrors.Add($"edits[{i}]: filePath is required.");
+            }
+            if (string.IsNullOrEmpty(edits[i].TypeName))
+            {
+                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): typeName is required.");
+            }
+            if (string.IsNullOrEmpty(edits[i].BaseTypeName))
+            {
+                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): baseTypeName is required.");
+            }
+        }
+
+        if (perEditErrors.Count > 0)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyBaseType batch rejected before resolving targets:\n" + string.Join("\n", perEditErrors))
+            };
+        }
+
+        var editsByFile = edits
+            .Select((edit, index) => (edit, index))
+            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
+
+        var finalContents = new Dictionary<FilePathWrapper, string>();
+        var touchedFiles = new List<FilePathWrapper>();
+        foreach (var fileGroup in editsByFile)
+        {
+            var filePathResolved = fileGroup.Key;
+            if (!filePathResolved.Validated)
+            {
+                perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? "no solution is loaded." : "path could not be resolved.")}");
+                continue;
+            }
+
+            var engineEdits = fileGroup.Select(pair => (
+                pair.index,
+                pair.edit.TypeName,
+                pair.edit.BaseTypeName,
+                pair.edit.Action,
+                pair.edit.ContextSnippet,
+                pair.edit.LineBefore,
+                pair.edit.LineAfter)).ToList();
+
+            var updated = await _refactoringEngine.ApplyBaseTypeBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
+            {
+                perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
+                continue;
+            }
+
+            finalContents[filePathResolved] = updated.UpdatedText;
+            touchedFiles.Add(filePathResolved);
+        }
+
+        if (perEditErrors.Count > 0)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyBaseType batch rejected — no changes were written:\n" + string.Join("\n", perEditErrors))
+            };
+        }
+
+        var apply = await ValidateAndApplyAsync(finalContents, $"Batch-modified {edits.Count} base type edit(s) across {touchedFiles.Count} file(s).", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);
+        if (apply.Error is not null)
+            return new ToolResult<object> { Success = false, Error = apply.Error };
+
+        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, $"Applied {edits.Count} base type edit(s) across {touchedFiles.Count} file(s).", apply.DryRun, apply.Diff);
+        return new ToolResult<object>() { Success = true, Data = summary };
+    }
+
 
     [McpServerTool(Name = "RenameSymbol")]
     [Produces(DataTag.ChangeId)]
@@ -1216,25 +1502,64 @@ public class SentinelRefactoringTools
     [Description("Adds, replaces, or removes an [Attribute] on a type or member. Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords, not this tool.")]
     public async Task<ToolResult<object>> ModifyAttribute(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted — see the either/or check below.
+        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
         [Description("For overloaded/duplicate-named targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-        [Consumes(DataTag.SymbolName, required: true)] string targetName,
+        [Consumes(DataTag.SymbolName, required: false)] string? targetName = null,
         [Description("The attribute to add/replace/remove. May include or omit the surrounding [ ] brackets.")]
-        [ExternalInputRequired(DataTag.AttributeName, required: true)] string existingAttribute,
-        [Consumes(DataTag.Action, required: true)] AttributeModifyAction action,
+        [ExternalInputRequired(DataTag.AttributeName, required: false)] string? existingAttribute = null,
+        [Consumes(DataTag.Action, required: false)] AttributeModifyAction? action = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=replace, unused for add/remove.
         [Description("Required for action=replace — the attribute to replace existingAttribute with. Not used for add/remove.")]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? newAttribute = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
+        [Description(ToolParams.AttributeEdits)] List<AttributeEdit>? edits = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(targetName) || !string.IsNullOrEmpty(existingAttribute) || action.HasValue;
+        bool hasBatchEdit = edits != null;
+
+        if (hasSingularEdit && hasBatchEdit)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    "ModifyAttribute: supply either filepath/targetName/existingAttribute/action or 'edits', not both.")
+            };
+        }
+
+        if (hasBatchEdit)
+        {
+            if (edits!.Count == 0)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute: 'edits' was supplied but is empty.")
+                };
+            }
+
+            return await ModifyAttributeBatch(edits, dryRun, returnDiff, cancellationToken);
+        }
+
+        if (!filepath.HasValue || string.IsNullOrEmpty(targetName) || string.IsNullOrEmpty(existingAttribute) || !action.HasValue)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    "ModifyAttribute: 'filepath', 'targetName', 'existingAttribute', and 'action' are all required, unless 'edits' is supplied instead.")
+            };
+        }
+
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath.Value, _workspaceManager.GetSolutionRoot());
         try
         {
             if (action == AttributeModifyAction.replace && string.IsNullOrEmpty(newAttribute))
@@ -1298,21 +1623,60 @@ public class SentinelRefactoringTools
     [Description("Adds or removes a non-accessibility modifier keyword. Action: add or remove. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Does NOT cover accessibility (private/public/etc.) — use ChangeAccessibility for those, or ModifyAttribute for [Attribute] syntax. Returns changeId.")]
     public async Task<ToolResult<object>> ModifyModifier(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        [ExternalInputRequired(DataTag.Modifier, required: true)] NonAccessibilityModifier modifier,
-        [Consumes(DataTag.Action, required: true)] AddRemoveAction action,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted — see the either/or check below.
+        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
+        [Consumes(DataTag.SymbolName, required: false)] string? targetName = null,
+        [ExternalInputRequired(DataTag.Modifier, required: false)] NonAccessibilityModifier? modifier = null,
+        [Consumes(DataTag.Action, required: false)] AddRemoveAction? action = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
+        [Description(ToolParams.ModifierEdits)] List<ModifierEdit>? edits = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        var modifierText = modifier.ToString();
+        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(targetName) || modifier.HasValue || action.HasValue;
+        bool hasBatchEdit = edits != null;
+
+        if (hasSingularEdit && hasBatchEdit)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    "ModifyModifier: supply either filepath/targetName/modifier/action or 'edits', not both.")
+            };
+        }
+
+        if (hasBatchEdit)
+        {
+            if (edits!.Count == 0)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyModifier: 'edits' was supplied but is empty.")
+                };
+            }
+
+            return await ModifyModifierBatch(edits, dryRun, returnDiff, cancellationToken);
+        }
+
+        if (!filepath.HasValue || string.IsNullOrEmpty(targetName) || !modifier.HasValue || !action.HasValue)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    "ModifyModifier: 'filepath', 'targetName', 'modifier', and 'action' are all required, unless 'edits' is supplied instead.")
+            };
+        }
+
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath.Value, _workspaceManager.GetSolutionRoot());
+        var modifierText = modifier.Value.ToString();
         try
         {
             DocumentEditResult updated;
@@ -1355,31 +1719,70 @@ public class SentinelRefactoringTools
     [Description("Adds or removes a base type or interface from a type declaration.")]
     public async Task<ToolResult<object>> ModifyBaseType(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted — see the either/or check below.
+        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
         [Description("For types with the same name in the same file, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-        [Consumes(DataTag.SymbolName, required: true)] string typeName,
-        [Description("The base type or interface name to add or remove.")] string baseTypeName,
-        [Description("add or remove.")] AddRemoveAction action,
+        [Consumes(DataTag.SymbolName, required: false)] string? typeName = null,
+        [Description("The base type or interface name to add or remove.")] string? baseTypeName = null,
+        [Description("add or remove.")] AddRemoveAction? action = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
+        [Description(ToolParams.BaseTypeEdits)] List<BaseTypeEdit>? edits = null,
         [Description(ToolParams.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(typeName) || !string.IsNullOrEmpty(baseTypeName) || action.HasValue;
+        bool hasBatchEdit = edits != null;
+
+        if (hasSingularEdit && hasBatchEdit)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    "ModifyBaseType: supply either filepath/typeName/baseTypeName/action or 'edits', not both.")
+            };
+        }
+
+        if (hasBatchEdit)
+        {
+            if (edits!.Count == 0)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyBaseType: 'edits' was supplied but is empty.")
+                };
+            }
+
+            return await ModifyBaseTypeBatch(edits, dryRun, returnDiff, cancellationToken);
+        }
+
+        if (!filepath.HasValue || string.IsNullOrEmpty(typeName) || string.IsNullOrEmpty(baseTypeName) || !action.HasValue)
+        {
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    "ModifyBaseType: 'filepath', 'typeName', 'baseTypeName', and 'action' are all required, unless 'edits' is supplied instead.")
+            };
+        }
+
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath.Value, _workspaceManager.GetSolutionRoot());
         try
         {
             DocumentEditResult updated;
             if (action == AddRemoveAction.add)
             {
-                updated = await _refactoringEngine.AddBaseTypeAsync(filePathResolved, typeName, baseTypeName, contextSnippet, lineBefore, lineAfter);
+                updated = await _refactoringEngine.AddBaseTypeAsync(filePathResolved, typeName!, baseTypeName!, contextSnippet, lineBefore, lineAfter);
             }
             else if (action == AddRemoveAction.remove)
             {
-                updated = await _refactoringEngine.RemoveBaseTypeAsync(filePathResolved, typeName, baseTypeName, contextSnippet, lineBefore, lineAfter);
+                updated = await _refactoringEngine.RemoveBaseTypeAsync(filePathResolved, typeName!, baseTypeName!, contextSnippet, lineBefore, lineAfter);
             }
             else
             {

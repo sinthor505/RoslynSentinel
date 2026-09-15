@@ -3105,6 +3105,381 @@ public class RefactoringEngine
         };
     }
 
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Batch form of <see cref="AddModifierAsync"/>/<see cref="RemoveModifierAsync"/>: applies every
+    /// edit in <paramref name="edits"/> to <paramref name="filePath"/> against ONE original syntax root,
+    /// then folds all replacements into a single <see cref="FormattingHelper.ReplaceNodesFormattedAsync"/>
+    /// call. Calling the single-edit methods N times independently would be wrong for a multi-edit batch
+    /// targeting the same file: each call resolves against its own fresh GetCurrentSolutionAsync root, so
+    /// the second call's UpdatedText would silently discard the first edit instead of compounding it.
+    /// Returns one <see cref="DocumentEditResult"/> for the whole file: <see cref="EditOutcome.Modified"/>
+    /// with UpdatedText on full success, or <see cref="EditOutcome.CannotEdit"/> with every per-index
+    /// failure joined into Message (never a partial write) when any edit in this file's group fails to
+    /// resolve or two edits collide on the same target node.
+    /// </summary>
+    public async Task<DocumentEditResult> ApplyModifierBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TargetName, string Modifier, AddRemoveAction Action, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, FilePath = filePath, Message = "// Document not found." };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = "// Cannot edit: syntax root not found." };
+        }
+
+        var errors = new List<string>();
+        var resolvedTargets = new Dictionary<int, MemberDeclarationSyntax>();
+        foreach (var edit in edits)
+        {
+            try
+            {
+                var target = ResolveMemberByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
+                if (target == null)
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): target not found.");
+                    continue;
+                }
+                resolvedTargets[edit.Index] = target;
+            }
+            catch (InvalidOperationException ex)
+            {
+                errors.Add($"edits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+        }
+
+        // Same-node collision check: two edits resolving to the identical declaration is the node-identity
+        // equivalent of ReplaceSnippet batch's span-overlap rejection — reject before building any replacement.
+        var seen = new Dictionary<MemberDeclarationSyntax, int>();
+        foreach (var kvp in resolvedTargets)
+        {
+            if (seen.TryGetValue(kvp.Value, out var firstIndex))
+            {
+                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls.");
+            }
+            else
+            {
+                seen[kvp.Value] = kvp.Key;
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+        }
+
+        var replacements = new Dictionary<SyntaxNode, SyntaxNode>();
+        foreach (var edit in edits)
+        {
+            var target = resolvedTargets[edit.Index];
+            var kind = SyntaxFacts.GetKeywordKind(edit.Modifier);
+            if (kind == SyntaxKind.None)
+            {
+                kind = SyntaxFacts.GetContextualKeywordKind(edit.Modifier);
+            }
+
+            if (edit.Action == AddRemoveAction.add)
+            {
+                if (target.Modifiers.Any(m => m.IsKind(kind)))
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): modifier already exists.");
+                    continue;
+                }
+                var token = SyntaxFactory.Token(kind).WithTrailingTrivia(SyntaxFactory.Space);
+                replacements[target] = target.WithModifiers(target.Modifiers.Add(token));
+            }
+            else
+            {
+                if (!target.Modifiers.Any(m => m.IsKind(kind)))
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): modifier not found.");
+                    continue;
+                }
+                replacements[target] = target.WithModifiers(SyntaxFactory.TokenList(target.Modifiers.Where(m => !m.IsKind(kind))));
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+        }
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = await FormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
+        };
+    }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Batch form of <see cref="AddAttributeAsync"/>/<see cref="ReplaceAttributeAsync"/>/
+    /// <see cref="RemoveAttributeAsync"/>: same execution model as <see cref="ApplyModifierBatchAsync"/> —
+    /// resolve every edit's target against ONE original root, reject same-node collisions, fold all
+    /// replacements into one <see cref="FormattingHelper.ReplaceNodesFormattedAsync"/> call.
+    /// </summary>
+    public async Task<DocumentEditResult> ApplyAttributeBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TargetName, string ExistingAttribute, AttributeModifyAction Action, string? NewAttribute, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, FilePath = filePath, Message = "// Document not found." };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = "// Cannot edit: syntax root not found." };
+        }
+
+        var errors = new List<string>();
+        var resolvedTargets = new Dictionary<int, SyntaxNode>();
+        foreach (var edit in edits)
+        {
+            try
+            {
+                var memberTarget = ResolveMemberByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter, m => m is not BaseTypeDeclarationSyntax);
+                SyntaxNode? targetNode = memberTarget ?? ResolveTypeByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
+                if (targetNode == null)
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): target not found.");
+                    continue;
+                }
+                resolvedTargets[edit.Index] = targetNode;
+            }
+            catch (InvalidOperationException ex)
+            {
+                errors.Add($"edits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+        }
+
+        var seen = new Dictionary<SyntaxNode, int>();
+        foreach (var kvp in resolvedTargets)
+        {
+            if (seen.TryGetValue(kvp.Value, out var firstIndex))
+            {
+                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls.");
+            }
+            else
+            {
+                seen[kvp.Value] = kvp.Key;
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+        }
+
+        var replacements = new Dictionary<SyntaxNode, SyntaxNode>();
+        foreach (var edit in edits)
+        {
+            var targetNode = resolvedTargets[edit.Index];
+            var attrLists = targetNode is MemberDeclarationSyntax memberForRead ? memberForRead.AttributeLists : ((BaseTypeDeclarationSyntax)targetNode).AttributeLists;
+
+            if (edit.Action == AttributeModifyAction.add)
+            {
+                var normalizedSource = edit.ExistingAttribute.Trim();
+                if (!normalizedSource.StartsWith("["))
+                {
+                    normalizedSource = $"[{normalizedSource}]";
+                }
+                var snippet = SyntaxFactory.ParseCompilationUnit($"{normalizedSource}\npublic class __Dummy__ {{}}");
+                var attrList = snippet.DescendantNodes().OfType<AttributeListSyntax>().FirstOrDefault();
+                if (attrList == null)
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): invalid attribute source.");
+                    continue;
+                }
+                replacements[targetNode] = targetNode is MemberDeclarationSyntax memberTarget ? memberTarget.AddAttributeLists(attrList) : ((BaseTypeDeclarationSyntax)targetNode).AddAttributeLists(attrList);
+            }
+            else if (edit.Action == AttributeModifyAction.replace)
+            {
+                if (string.IsNullOrEmpty(edit.NewAttribute))
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): newAttribute is required for action 'replace'.");
+                    continue;
+                }
+                var normalizedNew = edit.NewAttribute.Trim();
+                if (!normalizedNew.StartsWith("["))
+                {
+                    normalizedNew = $"[{normalizedNew}]";
+                }
+                var snippet = SyntaxFactory.ParseCompilationUnit($"{normalizedNew}\npublic class __Dummy__ {{}}");
+                var newAttrList = snippet.DescendantNodes().OfType<AttributeListSyntax>().FirstOrDefault();
+                if (newAttrList == null)
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): invalid new attribute source.");
+                    continue;
+                }
+                var newAttr = newAttrList.Attributes.First();
+                var oldAttr = attrLists.SelectMany(al => al.Attributes).FirstOrDefault(a => GetAttributeName(a) == edit.ExistingAttribute);
+                if (oldAttr == null)
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): attribute '{edit.ExistingAttribute}' not found on target.");
+                    continue;
+                }
+                replacements[oldAttr] = newAttr;
+            }
+            else
+            {
+                var attrCore = edit.ExistingAttribute.EndsWith("Attribute") ? edit.ExistingAttribute[..^9] : edit.ExistingAttribute;
+                bool AttrMatches(AttributeSyntax a)
+                {
+                    var name = a.Name.ToString();
+                    return name == edit.ExistingAttribute || name == attrCore || name == attrCore + "Attribute";
+                }
+                if (targetNode is not MemberDeclarationSyntax memberTarget2)
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): action 'remove' requires a member target, not a type.");
+                    continue;
+                }
+                var newAttrLists = memberTarget2.AttributeLists.Select(al => al.WithAttributes(SyntaxFactory.SeparatedList(al.Attributes.Where(a => !AttrMatches(a))))).Where(al => al.Attributes.Count > 0).ToList();
+                replacements[targetNode] = memberTarget2.WithAttributeLists(SyntaxFactory.List(newAttrLists));
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+        }
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = await FormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
+        };
+    }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Batch form of <see cref="AddBaseTypeAsync"/>/<see cref="RemoveBaseTypeAsync"/>: same execution
+    /// model as <see cref="ApplyModifierBatchAsync"/> — resolve every edit's type target against ONE
+    /// original root, reject same-node collisions, fold all replacements into one
+    /// <see cref="FormattingHelper.ReplaceNodesFormattedAsync"/> call.
+    /// </summary>
+    public async Task<DocumentEditResult> ApplyBaseTypeBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TypeName, string BaseTypeName, AddRemoveAction Action, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, FilePath = filePath, Message = "// Document not found." };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = "// Cannot edit: syntax root not found." };
+        }
+
+        var errors = new List<string>();
+        var resolvedTargets = new Dictionary<int, BaseTypeDeclarationSyntax>();
+        foreach (var edit in edits)
+        {
+            try
+            {
+                var container = ResolveTypeByNameOrSnippet(root, sourceText, edit.TypeName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
+                if (container == null)
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TypeName}): type not found.");
+                    continue;
+                }
+                resolvedTargets[edit.Index] = container;
+            }
+            catch (InvalidOperationException ex)
+            {
+                errors.Add($"edits[{edit.Index}] ({edit.TypeName}): {ex.Message}");
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+        }
+
+        var seen = new Dictionary<BaseTypeDeclarationSyntax, int>();
+        foreach (var kvp in resolvedTargets)
+        {
+            if (seen.TryGetValue(kvp.Value, out var firstIndex))
+            {
+                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls.");
+            }
+            else
+            {
+                seen[kvp.Value] = kvp.Key;
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+        }
+
+        var replacements = new Dictionary<SyntaxNode, SyntaxNode>();
+        foreach (var edit in edits)
+        {
+            var container = resolvedTargets[edit.Index];
+            if (edit.Action == AddRemoveAction.add)
+            {
+                if (container.BaseList?.Types.Any(t => t.ToString().Contains(edit.BaseTypeName)) == true)
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TypeName}): base type already exists.");
+                    continue;
+                }
+                var baseType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(edit.BaseTypeName));
+                replacements[container] = container.AddBaseListTypes(baseType);
+            }
+            else
+            {
+                if (container.BaseList == null)
+                {
+                    errors.Add($"edits[{edit.Index}] ({edit.TypeName}): base type not found.");
+                    continue;
+                }
+                var remaining = container.BaseList.Types.Where(t => !t.ToString().Contains(edit.BaseTypeName)).ToList();
+                replacements[container] = remaining.Count == 0 ? container.WithBaseList(null) : container.WithBaseList(container.BaseList.WithTypes(SyntaxFactory.SeparatedList(remaining)));
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+        }
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = await FormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
+        };
+    }
+
+
     public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePathWrapper filePath, string targetName, AccessibilityLevel accessibility, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);

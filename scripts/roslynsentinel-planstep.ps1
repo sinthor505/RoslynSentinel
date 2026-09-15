@@ -148,7 +148,7 @@ param(
 
     [string]$Model = 'qwen/qwen3.6-35b-a3b',
 
-    [string]$ImplRepo = $PSScriptRoot,
+    [string]$ImplRepo = (Split-Path $PSScriptRoot -Parent),
 
     [string]$PlanDir,
 
@@ -173,7 +173,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = $PSScriptRoot
+$repoRoot = Split-Path $PSScriptRoot -Parent
 
 if ($PSCmdlet.ParameterSetName -eq 'Single') {
     $StartStep = $Step

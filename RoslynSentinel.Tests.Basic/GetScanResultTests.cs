@@ -42,6 +42,7 @@ public class GetLargeResultTests
         _tempDir = Path.Combine(Path.GetTempPath(), "GetLargeResultTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
         _workspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");
+        _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", []));
 
         var config = new SentinelConfiguration();
         var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -226,13 +227,6 @@ public class GetLargeResultTests
         Assert.That(names2, Is.EqualTo(new[] { "Method_2", "Method_3" }),
             "offset=2 must skip the first 2 records already seen at offset=0, not repeat the same page.");
     }
-    // KNOWN PRE-EXISTING FAILURE (confirmed 2026-09-12, unrelated to the Raw/T9-T12 additions below):
-    // this fixture never calls _workspaceManager.SetTestSolution(...), so CurrentSolution stays
-    // null even though SolutionPath is set. SetFilePath (PersistentWorkspaceManager.cs) returns
-    // NoSolutionLoaded whenever CurrentSolution is null, regardless of SolutionPath, so
-    // GetLargeResult's filepath-resolution branch never runs and "Result file not found" is
-    // returned. Fix is to call _workspaceManager.SetTestSolution(...) in SetUp; left unfixed here
-    // since it's outside the scope of the Raw-offload test additions.
     [Test, CancelAfter(10000)]
     public async Task T5_GetLargeResult_ValidFilePath_InLargeResultsDir_ReturnsFindings()
     {
