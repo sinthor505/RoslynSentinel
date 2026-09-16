@@ -778,23 +778,37 @@ public class SentinelWorkspaceTools
         var exceeded = new List<string>();
         var oldContentLineCount = oldContent.Split('\n').Length;
         var newContentLineCount = newContent.Split('\n').Length;
+        var oldContentCharCount = CountCharsIgnoringLeadingIndentation(oldContent);
+        var newContentCharCount = CountCharsIgnoringLeadingIndentation(newContent);
         if (oldContentLineCount > MaxOldContentLines)
         {
             exceeded.Add($"oldContent is {oldContentLineCount} lines (limit {MaxOldContentLines})");
         }
-        if (oldContent.Length > MaxOldContentChars)
+        if (oldContentCharCount > MaxOldContentChars)
         {
-            exceeded.Add($"oldContent is {oldContent.Length} chars (limit {MaxOldContentChars})");
+            exceeded.Add($"oldContent is {oldContentCharCount} chars excluding leading indentation (limit {MaxOldContentChars})");
         }
         if (newContentLineCount > MaxNewContentLines)
         {
             exceeded.Add($"newContent is {newContentLineCount} lines (limit {MaxNewContentLines})");
         }
-        if (newContent.Length > MaxNewContentChars)
+        if (newContentCharCount > MaxNewContentChars)
         {
-            exceeded.Add($"newContent is {newContent.Length} chars (limit {MaxNewContentChars})");
+            exceeded.Add($"newContent is {newContentCharCount} chars excluding leading indentation (limit {MaxNewContentChars})");
         }
         return exceeded;
+    }
+
+    // Leading indentation is not meaningful "content" - a deeply-nested but small edit
+    // should not trip the size guard purely because of indentation depth.
+    private static int CountCharsIgnoringLeadingIndentation(string content)
+    {
+        var total = 0;
+        foreach (var line in content.Split('\n'))
+        {
+            total += line.TrimStart(' ', '\t').Length;
+        }
+        return total;
     }
 
 
