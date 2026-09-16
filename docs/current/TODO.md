@@ -408,3 +408,27 @@ the wrong mode then gets the right answer ranked second instead of an empty resu
 whether the union should be de-duplicated per (file, line) or per (file, line, column); whether
 `maxResults` applies before or after ranking; and whether the response should label each match with
 the mode that found it.
+
+## `SessionHalted` external-drift latch: false-positive from timestamp-only touch, message doesn't self-report scope — not started
+
+Raised 2026-09-15 resolving `blockers/resolved/blocking_error_sessionhalted_concurrent_session_drift_mid_contexterrorbuilder_plan.md`.
+A `ReplaceSnippet(apply)` call mid-plan hit `SessionHalted`; `ListExternalDiskChanges` reported 34
+drifted files, but `Git(operation: status)` showed only 1 file genuinely modified (plus expected
+untracked new files) — zero overlap with the 34. Most likely trigger: an earlier MCP server restart
+this session updated file mtimes without changing content, and the drift detector treats a
+timestamp-only touch the same as real content drift. Cleared via `AcknowledgeExternalFileChanges`
+once confirmed false-positive; not yet fixed at the detector level.
+
+Three concrete gaps, all still open:
+
+- The `SessionHalted` error message names only the one file the blocked call touched — it doesn't
+  say "N files drifted" or point at `ListExternalDiskChanges`/`AcknowledgeExternalFileChanges` by
+  name, forcing a blind follow-up call just to learn the blast radius and the recovery path.
+- The detector doesn't appear to distinguish "mtime changed, content identical" from "content
+  actually changed on disk" — the former should not be able to trip a fatal, session-wide latch.
+  Needs source-level confirmation (not yet read this session) of where the drift check lives and
+  whether it hashes content or only compares timestamps.
+- Whether per-session (vs. solution-wide) halting is even the right granularity when multiple
+  concurrent sessions against the same solution are a supported pattern (`project_concurrent_sessions`
+  memory) is still unresolved — same open question as the prior occurrence,
+  `blocking_error_session_halt_from_out_of_band_rm_mid_spike.md`.

@@ -51,8 +51,8 @@ public static class ContextHelper
             return new List<SnippetMatch>();
         }
 
-        ThrowIfMultiLine(nameof(lineBefore), lineBefore, isAfter: false);
-        ThrowIfMultiLine(nameof(lineAfter), lineAfter, isAfter: true);
+        ThrowIfMultiLine(sourceText, nameof(lineBefore), lineBefore, isAfter: false);
+        ThrowIfMultiLine(sourceText, nameof(lineAfter), lineAfter, isAfter: true);
 
         var source = sourceText.ToString();
         var allMatches = new List<SnippetMatch>();
@@ -135,15 +135,7 @@ public static class ContextHelper
             // swallow one real, unrelated source line that was never meant to be part of the
             // match. Trim blank leading/trailing lines before computing windowSize so the window
             // reflects only the snippet's actual content lines.
-            var normalizedSnippet = contextSnippet.Replace("\r\n", "\n").Replace("\r", "\n");
-            var snippetLineTexts = normalizedSnippet.Split('\n')
-                .SkipWhile(string.IsNullOrWhiteSpace)
-                .Reverse().SkipWhile(string.IsNullOrWhiteSpace).Reverse()
-                .ToArray();
-            if (snippetLineTexts.Length == 0)
-            {
-                snippetLineTexts = normalizedSnippet.Split('\n');
-            }
+            var snippetLineTexts = SplitSnippetIntoTrimmedContentLines(contextSnippet);
             var snippetWindowNorm = System.Text.RegularExpressions.Regex.Replace(
                 string.Join("\n", snippetLineTexts.Select(l => l.Trim())).Trim(), @"\s+", " ");
             var lines = sourceText.Lines;
@@ -213,7 +205,9 @@ public static class ContextHelper
 
         if (matches.Count == 0)
         {
-            throw new ToolNotFoundException($"contextSnippet not found: \"{contextSnippet.Trim()}\"");
+            throw ContextErrorBuilder.Build(
+                SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
+                diagnosis: DiagnoseNoMatch(sourceText, contextSnippet), verbatimRequired: false);
         }
 
         if (matches.Count == 1)
@@ -226,14 +220,10 @@ public static class ContextHelper
 
         return (lbTrimmed, laTrimmed) switch
         {
-            (null, null) => throw new ToolAmbiguousMatchException(
-                $"contextSnippet is ambiguous ({matches.Count} matches): \"{contextSnippet.Trim()}\". " +
-                "Provide lineBefore and/or lineAfter using one of the exact values below (copy " +
-                "verbatim, do not retype from memory) to select the intended match:\n" +
-                DescribeAmbiguousCandidates(sourceText, matches)),
-            _ => throw new ToolAmbiguousMatchException(
-                $"contextSnippet is still ambiguous ({matches.Count} matches remain): \"{contextSnippet.Trim()}\". " +
-                "Provide more specific lineBefore and/or lineAfter content.")
+            (null, null) => throw ContextErrorBuilder.Build(
+                SnippetMatchOutcome.Ambiguous, contextSnippet, sourceText, matches),
+            _ => throw ContextErrorBuilder.Build(
+                SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches)
         };
     }
 
@@ -264,8 +254,8 @@ public static class ContextHelper
             return new List<SnippetMatch>();
         }
 
-        ThrowIfMultiLine(nameof(lineBefore), lineBefore, isAfter: false);
-        ThrowIfMultiLine(nameof(lineAfter), lineAfter, isAfter: true);
+        ThrowIfMultiLine(sourceText, nameof(lineBefore), lineBefore, isAfter: false);
+        ThrowIfMultiLine(sourceText, nameof(lineAfter), lineAfter, isAfter: true);
 
         var source = sourceText.ToString();
         var allMatches = new List<SnippetMatch>();
@@ -318,10 +308,9 @@ public static class ContextHelper
 
         if (matches.Count == 0)
         {
-            throw new ToolNotFoundException(
-                $"contextSnippet not found verbatim: \"{contextSnippet.Trim()}\". " +
-                "Re-read the file and copy oldContent exactly (including whitespace) from the current content - " +
-                "approximate/retyped text is not accepted here.");
+            throw ContextErrorBuilder.Build(
+                SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
+                diagnosis: DiagnoseNoMatch(sourceText, contextSnippet), verbatimRequired: true);
         }
 
         if (matches.Count == 1)
@@ -334,14 +323,10 @@ public static class ContextHelper
 
         return (lbTrimmed, laTrimmed) switch
         {
-            (null, null) => throw new ToolAmbiguousMatchException(
-                $"contextSnippet is ambiguous ({matches.Count} matches): \"{contextSnippet.Trim()}\". " +
-                "Provide lineBefore and/or lineAfter using one of the exact values below (copy " +
-                "verbatim, do not retype from memory) to select the intended match:\n" +
-                DescribeAmbiguousCandidates(sourceText, matches)),
-            _ => throw new ToolAmbiguousMatchException(
-                $"contextSnippet is still ambiguous ({matches.Count} matches remain): \"{contextSnippet.Trim()}\". " +
-                "Provide more specific lineBefore and/or lineAfter content.")
+            (null, null) => throw ContextErrorBuilder.Build(
+                SnippetMatchOutcome.Ambiguous, contextSnippet, sourceText, matches),
+            _ => throw ContextErrorBuilder.Build(
+                SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches)
         };
     }
 
@@ -410,12 +395,230 @@ public static class ContextHelper
     }
 
     /// <summary>
+    /// Splits a (possibly CRLF/CR/LF-mixed) multi-line snippet into its own content lines, with
+    /// leading/trailing blank lines trimmed off. Shared by the multi-line window fallback in
+    /// <see cref="FindAllSnippetMatchesWithLength"/> and <see cref="DiagnoseNoMatch"/> -> a
+    /// caller-supplied snippet very commonly starts/ends with a blank line (e.g. copying a whole
+    /// statement plus its closing brace with a trailing newline), which would otherwise inflate
+    /// line counts with content that was never meant to be matched.
+    /// </summary>
+    private static string[] SplitSnippetIntoTrimmedContentLines(string contextSnippet)
+    {
+        var normalized = contextSnippet.Replace("\r\n", "\n").Replace("\r", "\n");
+        var lineTexts = normalized.Split('\n')
+            .SkipWhile(string.IsNullOrWhiteSpace)
+            .Reverse().SkipWhile(string.IsNullOrWhiteSpace).Reverse()
+            .ToArray();
+        return lineTexts.Length == 0 ? normalized.Split('\n') : lineTexts;
+    }
+
+    /// <summary>
+    /// Cheap nearest-neighbor heuristic for <see cref="DiagnoseNoMatch"/>: shared leading-character
+    /// count minus a length-difference penalty. Deliberately NOT full Levenshtein distance (see the
+    /// plan's "Rejected: full sliding-window Levenshtein" section) -&gt; this is O(min(len)) per
+    /// candidate line rather than O(len1 x len2), which matters when it runs once per filtered
+    /// snippet line against every source line in the file. Higher is more similar; can be negative.
+    /// </summary>
+    private static int LineSimilarityScore(string trimmedSnippetLine, string trimmedSourceLine)
+    {
+        int sharedPrefix = 0;
+        int maxPrefix = Math.Min(trimmedSnippetLine.Length, trimmedSourceLine.Length);
+        while (sharedPrefix < maxPrefix && trimmedSnippetLine[sharedPrefix] == trimmedSourceLine[sharedPrefix])
+        {
+            sharedPrefix++;
+        }
+        int lengthDiff = Math.Abs(trimmedSnippetLine.Length - trimmedSourceLine.Length);
+        return sharedPrefix - lengthDiff;
+    }
+
+    /// <summary>
+    /// "Your block is right but not contiguous / not where you think" case: every filtered
+    /// snippet line matched somewhere in the file, just not in the arrangement supplied.
+    /// </summary>
+    private static string FormatAllMatchedDiagnosis(
+        int filteredCount, List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText)> hits)
+    {
+        var lines = hits.OrderBy(h => h.SnippetLineIndex).ThenBy(h => h.SourceLineNumber)
+            .Select(h => $"snippet line {h.SnippetLineIndex + 1} was located at source line {h.SourceLineNumber}: \"{h.SourceLineText}\"");
+        return $"{filteredCount} of {filteredCount} lines in contextSnippet were located individually in " +
+               "the file, but not in the arrangement you supplied. Each is a candidate to copy back verbatim:\n" +
+               string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// "Wholly unrecognized, not a partial-transcription error" case: zero filtered snippet lines
+    /// matched anywhere. Only suggests a nearest-neighbor line when it clears
+    /// <paramref name="similarityFloor"/> -&gt; never forces a suggestion onto unrelated content.
+    /// </summary>
+    private static string FormatZeroMatchedDiagnosis(
+        (int SourceLineNumber, string SourceLineText, int Score)?[] nearest, int similarityFloor)
+    {
+        var best = nearest.Where(n => n != null).Select(n => n!.Value)
+            .OrderByDescending(n => n.Score).Cast<(int SourceLineNumber, string SourceLineText, int Score)?>()
+            .FirstOrDefault();
+
+        if (best != null && best.Value.Score >= similarityFloor)
+        {
+            return "No line in contextSnippet was located anywhere in the file - this is not a " +
+                   "partial-transcription error, the block is wholly unrecognized. The closest line in the " +
+                   $"file is line {best.Value.SourceLineNumber}: \"{best.Value.SourceLineText}\", but it is " +
+                   "not a confident match - re-read the file rather than retrying this text.";
+        }
+
+        return "No line in contextSnippet was located anywhere in the file, and no line in the file is " +
+               "similar enough to suggest - re-read the file and copy a fresh contextSnippet from its current content.";
+    }
+
+    /// <summary>
+    /// Appends the "did not match" section for <see cref="FormatPartialMatchDiagnosis"/>, one
+    /// entry per unmatched snippet line, with a nearest-neighbor candidate when one clears
+    /// <paramref name="similarityFloor"/>.
+    /// </summary>
+    private static string AppendUnmatchedLines(
+        List<string> parts, int[] unmatched,
+        (int SourceLineNumber, string SourceLineText, int Score)?[] nearest,
+        string[] snippetLines, int similarityFloor)
+    {
+        parts.Add("Lines that did NOT match (re-copy these verbatim from the file):");
+        foreach (var i in unmatched)
+        {
+            var n = nearest[i];
+            parts.Add(n != null && n.Value.Score >= similarityFloor
+                ? $"  line {i + 1} (\"{snippetLines[i]}\") did not match; closest is source line " +
+                  $"{n.Value.SourceLineNumber}: \"{n.Value.SourceLineText}\""
+                : $"  line {i + 1} (\"{snippetLines[i]}\") did not match, and no file line is close to it");
+        }
+        return string.Join("\n", parts);
+    }
+
+    /// <summary>
+    /// The entries/entries2-shaped and tuple-generic-paren-dropping-shaped failure this design
+    /// targets: some but not all filtered snippet lines matched. Names the diverging line(s) and
+    /// offers a nearest-neighbor candidate for each.
+    /// </summary>
+    private static string FormatPartialMatchDiagnosis(
+        int[] filteredIndexes, int[] matchedIndexes,
+        List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText)> hits,
+        (int SourceLineNumber, string SourceLineText, int Score)?[] nearest,
+        string[] snippetLines, int similarityFloor)
+    {
+        var matchedSet = matchedIndexes.ToHashSet();
+        var unmatched = filteredIndexes.Where(i => !matchedSet.Contains(i)).ToArray();
+        var parts = new List<string>
+        {
+            $"{matchedIndexes.Length} of {filteredIndexes.Length} lines in contextSnippet matched " +
+            "somewhere in the file; the rest did not - a partial-transcription error, not a genuine " +
+            "absence. Lines that matched:"
+        };
+        parts.AddRange(hits.Where(h => matchedSet.Contains(h.SnippetLineIndex))
+            .OrderBy(h => h.SnippetLineIndex).ThenBy(h => h.SourceLineNumber)
+            .Select(h => $"  line {h.SnippetLineIndex + 1} -> source line {h.SourceLineNumber}: \"{h.SourceLineText}\""));
+        return AppendUnmatchedLines(parts, unmatched, nearest, snippetLines, similarityFloor);
+    }
+
+    /// <summary>
+    /// Dispatches <see cref="DiagnoseNoMatch"/>'s evidence to the right classification: all
+    /// filtered lines matched (non-contiguous), some matched (partial-transcription error), or
+    /// none matched (wholly unrecognized). A similarity floor of 2 (shared-prefix minus
+    /// length-difference) avoids forcing a nearest-neighbor suggestion onto unrelated content.
+    /// </summary>
+    private static string FormatNoMatchDiagnosis(
+        int[] filteredIndexes, int[] matchedIndexes,
+        List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText)> hits,
+        (int SourceLineNumber, string SourceLineText, int Score)?[] nearest,
+        string[] snippetLines)
+    {
+        const int SimilarityFloor = 2;
+
+        if (matchedIndexes.Length == filteredIndexes.Length)
+        {
+            return FormatAllMatchedDiagnosis(filteredIndexes.Length, hits);
+        }
+
+        if (matchedIndexes.Length > 0)
+        {
+            return FormatPartialMatchDiagnosis(filteredIndexes, matchedIndexes, hits, nearest, snippetLines, SimilarityFloor);
+        }
+
+        return FormatZeroMatchedDiagnosis(nearest, SimilarityFloor);
+    }
+
+    /// <summary>
+    /// One single-threaded pass over the source lines: collects every exact trimmed-text hit AND
+    /// tracks the closest source line (<see cref="LineSimilarityScore"/>) per filtered snippet
+    /// line in the same loop - two collections from one traversal, not two passes. Deliberately
+    /// NOT Parallel.ForEach - see the plan doc's "Rejected" section.
+    /// </summary>
+    private static (
+        List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText)> Hits,
+        (int SourceLineNumber, string SourceLineText, int Score)?[] Nearest)
+        GatherNoMatchEvidence(SourceText sourceText, string[] snippetLines, int[] filteredIndexes)
+    {
+        var hits = new List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText)>();
+        var nearest = new (int SourceLineNumber, string SourceLineText, int Score)?[snippetLines.Length];
+        var sourceLines = sourceText.Lines;
+
+        for (int s = 0; s < sourceLines.Count; s++)
+        {
+            var sourceLineText = sourceLines[s].ToString().Trim();
+            if (sourceLineText.Length == 0)
+            {
+                continue;
+            }
+
+            foreach (var i in filteredIndexes)
+            {
+                var snippetLine = snippetLines[i];
+                if (sourceLineText.Contains(snippetLine, StringComparison.Ordinal))
+                {
+                    hits.Add((i, s + 1, sourceLineText));
+                    continue;
+                }
+
+                var score = LineSimilarityScore(snippetLine, sourceLineText);
+                if (nearest[i] == null || score > nearest[i]!.Value.Score)
+                {
+                    nearest[i] = (s + 1, sourceLineText, score);
+                }
+            }
+        }
+
+        return (hits, nearest);
+    }
+
+    /// <summary>
+    /// Diagnoses why <paramref name="contextSnippet"/> matched nothing in
+    /// <paramref name="sourceText"/>, so <see cref="ContextErrorBuilder"/> can append orienting
+    /// guidance to a NoMatch error instead of a bare "not found". See
+    /// docs/current/plans/plan_contexterrorbuilder_orienting_guidance.md for the full design.
+    /// </summary>
+    private static string DiagnoseNoMatch(SourceText sourceText, string contextSnippet)
+    {
+        const int MinLineLength = 4;
+
+        var snippetLines = SplitSnippetIntoTrimmedContentLines(contextSnippet).Select(l => l.Trim()).ToArray();
+        var filteredIndexes = Enumerable.Range(0, snippetLines.Length)
+            .Where(i => snippetLines[i].Length >= MinLineLength).ToArray();
+
+        if (filteredIndexes.Length == 0)
+        {
+            return "The contextSnippet has no line long enough to search for individually " +
+                   "(every line is under 4 characters once trimmed) - re-read the file and copy " +
+                   "a longer, more specific snippet.";
+        }
+
+        var (hits, nearest) = GatherNoMatchEvidence(sourceText, snippetLines, filteredIndexes);
+        var matchedIndexes = hits.Select(h => h.SnippetLineIndex).Distinct().ToArray();
+        return FormatNoMatchDiagnosis(filteredIndexes, matchedIndexes, hits, nearest, snippetLines);
+    }
+
+    /// <summary>
     /// Describes each candidate's real, verbatim adjacent line(s) so an ambiguous-match error can
     /// let the caller copy one back as lineBefore/lineAfter instead of constructing one from
     /// memory. Also flags true ties (identical before AND after) since those can't be
     /// disambiguated this way at all.
     /// </summary>
-    private static string DescribeAmbiguousCandidates(SourceText sourceText, List<SnippetMatch> allMatches)
+    internal static string DescribeAmbiguousCandidates(SourceText sourceText, List<SnippetMatch> allMatches)
     {
         var descriptions = new List<(string Before, string After)>();
         var lines = new List<string>();
@@ -448,15 +651,13 @@ public static class ContextHelper
     /// otherwise silently eliminate every candidate, surfacing as a misleading "not found"
     /// instead of naming the actual problem.
     /// </summary>
-    private static void ThrowIfMultiLine(string parameterName, string? value, bool isAfter)
+    private static void ThrowIfMultiLine(SourceText sourceText, string parameterName, string? value, bool isAfter)
     {
         if (value != null && value.Contains('\n'))
         {
-            throw new ToolNotFoundException(
-                $"{parameterName} must be a single line, but the supplied value spans multiple lines: " +
-                $"\"{value.Trim()}\". Pass only the one real source line immediately " +
-                $"{(isAfter ? "after" : "before")} the match " +
-                "(e.g. the nearest distinguishing line, not a multi-line block).");
+            throw ContextErrorBuilder.Build(
+                SnippetMatchOutcome.InvalidDisambiguator, contextSnippet: value, sourceText,
+                parameterName: parameterName, invalidValue: value, isAfter: isAfter);
         }
     }
 

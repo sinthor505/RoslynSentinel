@@ -20,7 +20,10 @@ public class ContextHelperTests
         var source = "namespace Foo;\npublic class Bar { }";
         var ex = Assert.Throws<ToolNotFoundException>(
             () => ContextHelper.FindSnippetPosition(source, "NotPresent"));
-        Assert.That(ex!.Message, Does.Contain("not found").IgnoreCase);
+        // Reworded per plan_contexterrorbuilder_orienting_guidance.md Step 3 (same class of change
+        // as FindExactSnippetPosition_ApproximateIndentation_ThrowsNotFound below) - "not found" read
+        // as content absence to a weak model, not a match failure.
+        Assert.That(ex!.Message, Does.Contain("An exact match could not be located").IgnoreCase);
     }
 
     [Test]
@@ -300,7 +303,11 @@ public class ContextHelperTests
 
         var ex = Assert.Throws<ToolNotFoundException>(
             () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), "a + b"));
-        Assert.That(ex!.Message, Does.Contain("not found verbatim"));
+        // Reworded per plan_contexterrorbuilder_orienting_guidance.md Step 3: "not found" read as
+        // content absence to a weak model, not a match failure. New wording is unambiguous that
+        // this is a *matching* problem, and explicitly requires verbatim text for this strict path.
+        Assert.That(ex!.Message, Does.Contain("An exact match could not be located"));
+        Assert.That(ex.Message, Does.Contain("verbatim required"));
     }
 
     [Test]
@@ -565,5 +572,45 @@ public class ContextHelperTests
                 SourceText.From(source), "var entries = Deserialize(x);", lineBefore: multilineLineBefore));
         Assert.That(ex!.Message, Does.Contain("single line"));
         Assert.That(ex.Message, Does.Contain("lineBefore"));
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    [Test]
+    [Description("DiagnoseNoMatch: mirrors the real entries/entries2 CS0103 bug - 4 of 5 snippet " +
+                 "lines match verbatim at contiguous source lines and one line diverges (caller " +
+                 "typed 'entries' where the file actually has 'entries2'). The error must name the " +
+                 "specific diverging line and quote what's actually on disk there, not just say " +
+                 "'not found'.")]
+    public void FindSnippetPositionWithLength_ContiguousLineDiverges_NamesDivergingLineAndQuotesActualText()
+    {
+        var source =
+            "void M()\n" +
+            "{\n" +
+            "    var entries2 = Deserialize(payload);\n" +
+            "    var count = entries2.Count;\n" +
+            "    var first = entries2.First();\n" +
+            "    return first;\n" +
+            "}\n";
+
+        // Caller's contextSnippet mistranscribes the 3rd line ("entries" instead of "entries2") -
+        // the other 3 lines are verbatim-correct and contiguous in the real file.
+        var contextSnippet =
+            "    var entries = Deserialize(payload);\n" +
+            "    var count = entries2.Count;\n" +
+            "    var first = entries2.First();\n" +
+            "    return first;";
+
+        var ex = Assert.Throws<ToolNotFoundException>(
+            () => ContextHelper.FindSnippetPositionWithLength(SourceText.From(source), contextSnippet));
+
+        // 3 of 4 lines matched verbatim (the ones already using "entries2"); only line 1 (the
+        // mistranscribed "entries") diverges - this is the partial-match diagnosis path, and it
+        // must name the diverging line and quote the real "entries2 = Deserialize(payload);" text
+        // as the near-miss candidate to copy back verbatim.
+        Assert.That(ex!.Message, Does.Contain("did NOT match"));
+        Assert.That(ex.Message, Does.Contain("closest is source line 3"));
+        Assert.That(ex.Message, Does.Contain("entries2 = Deserialize(payload);"),
+            "must quote the actual on-disk text of the diverging line as the near-miss candidate");
     }
 }

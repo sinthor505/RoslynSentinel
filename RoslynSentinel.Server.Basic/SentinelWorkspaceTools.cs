@@ -725,6 +725,7 @@ public class SentinelWorkspaceTools
                             Success = false,
                             Error = new ResultError(ToolErrorCode.Exception,
                                 "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
+                                "[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
                     await WriteBlobForApplyAsync("replace_snippet", result);
@@ -964,6 +965,7 @@ public class SentinelWorkspaceTools
                     Success = false,
                     Error = new ResultError(ToolErrorCode.Exception,
                         "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors - no changes were written. Fix the issue(s) below and retry:\n" +
+                        "[COMPILER ERROR]\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                 };
             await WriteBlobForApplyAsync("replace_snippet_batch", result);
@@ -1074,6 +1076,7 @@ public class SentinelWorkspaceTools
                     Success = false,
                     Error = new ResultError(ToolErrorCode.Exception,
                         "CreateFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
+                        "[COMPILER ERROR]\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                 };
             }
@@ -1092,7 +1095,12 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = true,
-                Data = strippedResult
+                Data = strippedResult,
+                Findings = _writeAdvice.IsExposed("WriteFile")
+                    ? [new Finding("CreateFile",
+                        "WriteFile is also available on this server and can create a file with its full body " +
+                        "in one call, instead of populating it afterward via Member(add).")]
+                    : []
             };
         }
         catch (Exception ex)
@@ -1208,7 +1216,7 @@ public class SentinelWorkspaceTools
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.Exception,
-                                "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
+                                "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
                     await WriteBlobForApplyAsync("apply_diff", result);
@@ -1316,7 +1324,7 @@ public class SentinelWorkspaceTools
                             {
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
-                                    "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
+                                    "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
                                     await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                             };
                         await WriteBlobForApplyAsync("apply_diff", result);
