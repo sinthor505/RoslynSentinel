@@ -330,7 +330,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_Add_OnEnumContainer_Succeeds()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Status", newMemberSource: "Cancelled");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Status", newMemberSource: "Cancelled");
         Assert.That(result.Success, Is.True);
     }
 
@@ -364,7 +364,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InsertMemberAfter_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Order", newMemberSource: "public string Description => \"\";", position: "after:GetLabel");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Description => \"\";", position: "after:GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -374,7 +374,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InsertMemberBefore_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Order", newMemberSource: "public string Tag => \"\";", position: "before:GetLabel");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Tag => \"\";", position: "before:GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -496,7 +496,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddProperty_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addTypedMember, "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -506,7 +506,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddField_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addTypedMember, "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -928,7 +928,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddMemberToClass_ValidClass_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.add, "Order", newMemberSource: "public string Tag { get; set; }");
+        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Tag { get; set; }");
         Assert.That(result, Is.Not.Null);
     }
 

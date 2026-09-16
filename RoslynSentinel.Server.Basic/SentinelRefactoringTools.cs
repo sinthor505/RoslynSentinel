@@ -579,46 +579,34 @@ public class SentinelRefactoringTools
     // supply the wrong subset for its chosen operation and only find out at runtime.
     [McpServerTool(Name = "Member")]
     [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, replace, or view a type member (method, property, field, constructor), or add a brand-new top-level type. This is the right choice even for a one-line change inside a member - read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
+    [Description("Add (as a raw source member, a generated typed property/field, or a brand-new top-level type), remove, replace, or view a type member (method, property, field, constructor). This is the right choice even for a one-line change inside a member - read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
     public async Task<ToolResult<object>> Member(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("add: adds a member (or a new top-level type). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
+        [Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add (unless adding a brand-new
-        // top-level type -> see newMemberSource) and operation=view; unused for remove/replace, which
-        // resolve memberName directly regardless of container.
-        [Description("Required for add (except when adding a brand-new top-level type) and view. Not needed for remove/replace.")]
+        [Description("Required for addMember and addTypedMember, and for view. Not used for addTopLevelType, remove, or replace.")]
         [Consumes(DataTag.SymbolName, required: false)] string? containerName = null,
-        [Description("Only used for operation=add when newMemberSource is a top-level type declaration (enum/class/record/struct/interface) and containerName is omitted. Disambiguates which namespace to add it to, when the file has more than one. Ignored otherwise.")]
+        [Description("addTopLevelType only. Disambiguates which namespace to add the new type to, when the file has more than one. Not used otherwise.")]
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=remove and operation=replace;
-        // unused for add/view.
         [Description("Required for remove and replace - the member to target. For overloaded targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=replace; for operation=add,
-        // required unless typedKind+typedName+typedType is supplied instead (exactly one of the two
-        // forms is required, not both); unused for remove/view. Also doubles as the full top-level
-        // type declaration when adding a brand-new type with containerName omitted.
-        [Description("replace: the full replacement member source (signature + body). add: either the full raw member source (with containerName), or a brand-new top-level type declaration (enum/class/record/struct/interface) with containerName omitted - mutually exclusive with typedKind. This is also the correct path for adding a whole new method, class, record, struct, or interface as a member/nested type: omit typedKind/typedName entirely, pass the full member source here, and use position (\"after:MemberName\"/\"before:MemberName\"/\"end\") to place it.")]
+        [Description("replace: the full replacement member source (signature + body). addMember: the full raw member source to insert into containerName - use position (\"after:MemberName\"/\"before:MemberName\"/\"end\") to place it. addTopLevelType: the full new type declaration (enum/class/record/struct/interface) - containerName is not used. Not used for addTypedMember, remove, or view.")]
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
-        [Description("add only: where to insert - null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\". Ignored for a brand-new top-level type.")]
+        [Description("addMember only: where to insert - null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\". Not used for addTopLevelType, addTypedMember, remove, replace, or view.")]
         [ExternalInputRequired(DataTag.Position)] string? position = null,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: alternative to newMemberSource for operation=add -> set
-        // this (with typedName+typedType) to generate a typed property/field instead of supplying
-        // raw source. Mutually exclusive with newMemberSource; unused for remove/view/replace.
-        [Description("add only, alternative to newMemberSource: generates a typed property or field - this is the ONLY two kinds typedKind supports (valid values: \"property\", \"field\"). Requires typedName+typedType alongside it. To add a whole new method, class, record, struct, or interface via Member(add) instead, do NOT use typedKind/typedName - omit them and pass the full source via newMemberSource together with containerName (or containerName: \"\" for a brand-new top-level type) and position (e.g. \"after:TypeName\").")]
+        [Description("addTypedMember only (required): which kind to generate - \"property\" or \"field\". Requires typedName+typedType alongside it. To add a whole new method, class, record, struct, or interface, use addMember or addTopLevelType with newMemberSource instead.")]
         [ExternalInputRequired(DataTag.SymbolKind, required: false)] TypedMemberKind? typedKind = null,
-        [Description("Required when typedKind is set: the generated member's name.")]
+        [Description("Required for addTypedMember: the generated member's name.")]
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? typedName = null,
-        [Description("Required when typedKind is set: the generated member's type.")]
+        [Description("Required for addTypedMember: the generated member's type.")]
         [ExternalInputRequired(DataTag.DataType, required: false)] string? typedType = null,
-        [Description(ToolParams.AccessibilityValues + " typedKind generation only.")][ExternalInputRequired(DataTag.Accessibility)] string accessibility = "public",
-        [Description("typedKind=property only.")][ExternalInputRequired(DataTag.HasSetter)] bool hasSetter = true,
-        [Description("typedKind=property only.")][ExternalInputRequired(DataTag.IsInit)] bool isInit = false,
-        [Description("typedKind=field only.")][ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
-        [Description("typedKind=field only.")][ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
-        [Description("typedKind=field only: optional initializer expression.")][ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
+        [Description(ToolParams.AccessibilityValues + " addTypedMember only.")][ExternalInputRequired(DataTag.Accessibility)] string accessibility = "public",
+        [Description("addTypedMember, typedKind=property only.")][ExternalInputRequired(DataTag.HasSetter)] bool hasSetter = true,
+        [Description("addTypedMember, typedKind=property only.")][ExternalInputRequired(DataTag.IsInit)] bool isInit = false,
+        [Description("addTypedMember, typedKind=field only.")][ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
+        [Description("addTypedMember, typedKind=field only.")][ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
+        [Description("addTypedMember, typedKind=field only: optional initializer expression.")][ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
         [Description("remove only. When false (default), refuses removal if the member has any callers or implementations (checked the same way as FindReferences(kind: all)). Set true to skip this check and remove unconditionally.")] bool skipPrecheck = false,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -751,11 +739,43 @@ public class SentinelRefactoringTools
                 return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Removed '{memberName}' from {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
             }
 
-            // operation == MemberAction.add
-            if (string.IsNullOrEmpty(containerName))
+            // operation is addMember, addTopLevelType, or addTypedMember below.
+            static string RequiredParamsHint(MemberAction op) => op switch
             {
-                if (string.IsNullOrEmpty(newMemberSource) || typedKind != null)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Member: containerName is required for operation 'add', unless newMemberSource is a brand-new top-level type declaration (enum/class/record/struct/interface) with no typedKind set.") };
+                MemberAction.addMember => "Required params for addMember: containerName, newMemberSource. Optional: position.",
+                MemberAction.addTopLevelType => "Required params for addTopLevelType: newMemberSource (the full type declaration). Optional: namespaceName.",
+                MemberAction.addTypedMember => "Required params for addTypedMember: containerName, typedKind, typedName, typedType. Optional: accessibility, hasSetter/isInit (typedKind=property), isReadonly/isStatic/initializer (typedKind=field).",
+                _ => throw new ArgumentOutOfRangeException(nameof(op))
+            };
+
+            static string? IgnoredNonDefaultTypedOnlyParamsNote(MemberAction op, string accessibility, bool hasSetter, bool isInit, bool isReadonly, bool isStatic, string? initializer)
+            {
+                if (op == MemberAction.addTypedMember)
+                    return null;
+
+                var ignored = new List<string>();
+                if (accessibility != "public") ignored.Add($"accessibility={accessibility}");
+                if (!hasSetter) ignored.Add($"hasSetter={hasSetter}");
+                if (isInit) ignored.Add($"isInit={isInit}");
+                if (isReadonly) ignored.Add($"isReadonly={isReadonly}");
+                if (isStatic) ignored.Add($"isStatic={isStatic}");
+                if (initializer != null) ignored.Add($"initializer=\"{initializer}\"");
+
+                return ignored.Count == 0
+                    ? null
+                    : $"informational: {string.Join(", ", ignored)} was supplied but is not used for {op}.";
+            }
+
+            if (operation == MemberAction.addTopLevelType)
+            {
+                if (containerName != null)
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is not used for operation 'addTopLevelType' (there is no container - the type is added at the top level). {RequiredParamsHint(operation)} If you meant to add a member to an existing container, use operation 'addMember' instead.") };
+                if (typedKind != null || typedName != null || typedType != null)
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedKind/typedName/typedType are not used for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
+                if (position != null)
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: position is not used for operation 'addTopLevelType' (the type is always appended). {RequiredParamsHint(operation)}") };
+                if (string.IsNullOrEmpty(newMemberSource))
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
 
                 var topLevelResult = await _refactoringEngine.AddTopLevelTypeAsync(filePathResolved, newMemberSource, namespaceName, cancellationToken);
                 if (!autoStage)
@@ -764,6 +784,9 @@ public class SentinelRefactoringTools
                     return topLevelGuardResult;
 
                 var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
+                var topLevelNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
+                if (topLevelNote != null)
+                    topLevelDescription += " " + topLevelNote;
 
                 var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText! };
                 var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
@@ -779,17 +802,35 @@ public class SentinelRefactoringTools
                     workspaceVersion: _workspaceManager.WorkspaceVersion);
             }
 
-            var hasRawSource = !string.IsNullOrEmpty(newMemberSource);
-            var hasTypedSpec = typedKind != null;
-            if (hasRawSource == hasTypedSpec)
+            if (operation == MemberAction.addMember)
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Member: for operation 'add', pass exactly one of newMemberSource (raw source) or typedKind+typedName+typedType (generated property/field).") };
+                if (string.IsNullOrEmpty(containerName))
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is required for operation 'addMember'. {RequiredParamsHint(operation)}") };
+                if (string.IsNullOrEmpty(newMemberSource))
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addMember'. {RequiredParamsHint(operation)}") };
+                if (typedKind != null || typedName != null || typedType != null)
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedKind/typedName/typedType are not used for operation 'addMember' - use addTypedMember instead. {RequiredParamsHint(operation)}") };
             }
+            else // operation == MemberAction.addTypedMember
+            {
+                if (string.IsNullOrEmpty(containerName))
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is required for operation 'addTypedMember'. {RequiredParamsHint(operation)}") };
+                if (typedKind == null)
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedKind is required for operation 'addTypedMember'. {RequiredParamsHint(operation)}") };
+                if (string.IsNullOrEmpty(typedName) || string.IsNullOrEmpty(typedType))
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedName and typedType are required for operation 'addTypedMember'. {RequiredParamsHint(operation)}") };
+                if (!string.IsNullOrEmpty(newMemberSource))
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is not used for operation 'addTypedMember' - use typedKind/typedName/typedType instead. {RequiredParamsHint(operation)}") };
+                if (position != null)
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: position is not used for operation 'addTypedMember' (generated members are always appended). {RequiredParamsHint(operation)}") };
+            }
+
+            var hasTypedSpec = operation == MemberAction.addTypedMember;
 
             if (await _refactoringEngine.IsEnumContainerAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken))
             {
                 if (hasTypedSpec)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: '{containerName}' is an enum - typedKind (property/field generation) doesn't apply. Pass newMemberSource as a bare member token ('Name' or 'Name=IntValue') instead, or retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: '{containerName}' is an enum - typedKind (property/field generation) doesn't apply. Pass newMemberSource as a bare member token ('Name' or 'Name=IntValue') instead via addMember, or retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly.") };
 
                 string? afterName = position != null && position.StartsWith("after:", StringComparison.OrdinalIgnoreCase) ? position.Substring("after:".Length) : null;
                 string? beforeName = position != null && position.StartsWith("before:", StringComparison.OrdinalIgnoreCase) ? position.Substring("before:".Length) : null;
@@ -804,6 +845,9 @@ public class SentinelRefactoringTools
                     return new ToolResult<object>() { Success = true, Data = enumAdded.ToJsonSummary() };
 
                 var enumAddDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+                var enumAddNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
+                if (enumAddNote != null)
+                    enumAddDescription += " " + enumAddNote;
                 var enumAddChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText! };
                 var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (enumAddApply.Error is not null)
@@ -828,9 +872,6 @@ public class SentinelRefactoringTools
             string? addedMemberSource = hasTypedSpec ? null : newMemberSource;
             if (hasTypedSpec)
             {
-                if (string.IsNullOrEmpty(typedName) || string.IsNullOrEmpty(typedType))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Member: typedName and typedType are required when typedKind is set.") };
-
                 if (typedKind == TypedMemberKind.property)
                 {
                     updated = await _refactoringEngine.AddPropertyAsync(filePathResolved, containerName, typedName, typedType, accessibility, hasSetter, isInit, contextSnippet, lineBefore, lineAfter);
@@ -870,6 +911,10 @@ public class SentinelRefactoringTools
             }
             if (RequireUpdatedText(updated, "Member", filePathResolved) is { } guardResult)
                 return guardResult;
+
+            var addNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
+            if (addNote != null)
+                description += " " + addNote;
 
             var addChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             var addApply = await ValidateAndApplyAsync(addChanges, description, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);

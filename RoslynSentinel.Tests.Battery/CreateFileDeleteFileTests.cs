@@ -441,7 +441,7 @@ public class CreateFileDeleteFileTests
         // Populate a member inside the type CreateFile seeded.
         var populateResult = await refactoringTools.Member(
             reason: "test message",
-            operation: MemberAction.add,
+            operation: MemberAction.addMember,
             filepath: newFile,
             containerName: "Foo",
             newMemberSource: "public int Value { get; set; }");
@@ -450,9 +450,8 @@ public class CreateFileDeleteFileTests
         // Add a second top-level type -> CreateFile only seeds the first.
         var secondTypeResult = await refactoringTools.Member(
             reason: "test message",
-            operation: MemberAction.add,
+            operation: MemberAction.addTopLevelType,
             filepath: newFile,
-            containerName: null,
             newMemberSource: "public class Bar { }");
         Assert.That(secondTypeResult.Success, Is.True, secondTypeResult.Error?.Message);
 

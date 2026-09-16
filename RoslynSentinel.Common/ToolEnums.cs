@@ -191,7 +191,12 @@ public enum AddRemoveViewAction
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum MemberAction
 {
-    add, remove, replace, view
+    addMember,
+    addTopLevelType,
+    addTypedMember,
+    remove,
+    replace,
+    view
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
