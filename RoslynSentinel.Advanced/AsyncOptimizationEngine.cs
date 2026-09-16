@@ -251,7 +251,7 @@ public class AsyncOptimizationEngine
 
         var newMethodNode = methodNode.WithBody(SyntaxFactory.Block(newStatements));
         var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
@@ -355,7 +355,7 @@ public class AsyncOptimizationEngine
         var newClassNode = classNode.InsertNodesAfter(methodNode, new[] { asyncMethod });
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
@@ -595,7 +595,7 @@ public class AsyncOptimizationEngine
         var classWithBoth = classWithBridge.InsertNodesAfter(bridgeInNewClass, new[] { asyncMethod });
 
         var newRoot = root.ReplaceNode(classNode, classWithBoth);
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
@@ -734,7 +734,7 @@ public class AsyncOptimizationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot2).ToFullString(),
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot2).ToFullString(),
             FilePath = filePath,
         };
     }
@@ -898,7 +898,7 @@ public class AsyncOptimizationEngine
         rewrittenMethod = (MethodDeclarationSyntax)new AsyncifyAnonymousFunctionsRewriter().Visit(rewrittenMethod)!;
 
         var newRoot = root.ReplaceNode(methodNode, rewrittenMethod);
-        var updatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+        var updatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
         progress?.Report(new ProgressNotificationValue()
         {
             Message = $"Rewrote {bridgeTargets.Count} bridge call(s) in '{asyncMethodName}' body in {filePath}",
@@ -979,7 +979,7 @@ public class AsyncOptimizationEngine
             return orig.WithExpression(configureAwait);
         });
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
@@ -1016,7 +1016,7 @@ public class AsyncOptimizationEngine
             return baseExpr.WithTriviaFrom(orig);
         });
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
@@ -1201,7 +1201,7 @@ public class AsyncOptimizationEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+                UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
                 FilePath = filePath
             };
         }
@@ -1393,7 +1393,7 @@ public class AsyncOptimizationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
             FilePath = filePath
         };
     }
@@ -1878,7 +1878,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             methodNode, MigrationCandidateShortName, MigrationCandidateFullName, pattern, newAttr);
 
         var newRoot = root.ReplaceNode(methodNode, updatedMethod);
-        var newSource = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+        var newSource = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
 
         var result = new Dictionary<FilePathWrapper, string> { { filePath, newSource } };
 
@@ -2062,7 +2062,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             }
 
             // Write final combined source once for all methods in this file.
-            var finalSource = FormattingHelper.NormalizeWholeSubtreeWhitespace(root).ToFullString();
+            var finalSource = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root).ToFullString();
             var fileChanges = new Dictionary<FilePathWrapper, string> { { filePath, finalSource } };
 
             // Inject MigrationCandidateAttribute.cs if not yet in solution (check once per file).
@@ -2630,7 +2630,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
                 if (fileModified)
                 {
-                    fileChanges[document.FilePath!] = FormattingHelper.NormalizeWholeSubtreeWhitespace(rewrittenRoot).ToFullString();
+                    fileChanges[document.FilePath!] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(rewrittenRoot).ToFullString();
                 }
             }
         }).ConfigureAwait(false);

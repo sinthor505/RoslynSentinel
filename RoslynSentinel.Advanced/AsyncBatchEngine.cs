@@ -1118,7 +1118,7 @@ public class AsyncBatchEngine
         newMethod = (MethodDeclarationSyntax)new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newMethod)!;
         var newRoot = root.ReplaceNode(callerAsyncMethod, newMethod);
 
-        return FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+        return RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1456,7 +1456,7 @@ public class AsyncBatchEngine
         var newRoot = (SyntaxNode)annotatedRoot.ReplaceNode(annotatedMethod, rewrittenMethod);
         newRoot = new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newRoot)!;
 
-        return FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+        return RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
     }
 
     // ──────────────────────────────────────────────────────────────────────────

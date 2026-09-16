@@ -84,7 +84,7 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (newRoot is null ? null : FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? FormattingHelper.NormalizeWholeSubtreeWhitespace(root).ToFullString()
+            UpdatedText = (newRoot is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root).ToFullString()
         };
     }
 
@@ -419,7 +419,7 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, method, indexer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, method, indexer, cancellationToken)
         };
     }
 
@@ -515,7 +515,7 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentClass, newClass, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentClass, newClass, cancellationToken)
         };
     }
 
@@ -663,7 +663,7 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentMethod, updatedMethod, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentMethod, updatedMethod, cancellationToken)
         };
     }
 
@@ -791,7 +791,7 @@ public class GranularRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Local variable introduced.",
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
         };
     }
 
@@ -958,7 +958,7 @@ public class GranularRefactoringEngine
             }
 
             // Format with proper newlines
-            var formattedCode = FormattingHelper.NormalizeWholeSubtreeWhitespace(newCompilationUnit).ToFullString();
+            var formattedCode = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newCompilationUnit).ToFullString();
             // Ensure proper spacing after usings before namespace
             if (usings.Count != 0 && !string.IsNullOrEmpty(namespaceName))
             {

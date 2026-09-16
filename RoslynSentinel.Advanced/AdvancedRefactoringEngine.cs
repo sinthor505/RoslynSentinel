@@ -90,7 +90,7 @@ public class AdvancedRefactoringEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
             FilePath = filePath
         };
     }
@@ -290,7 +290,7 @@ public class AdvancedRefactoringEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
             FilePath = filePath
         };
     }
@@ -353,7 +353,7 @@ public class AdvancedRefactoringEngine
         return new Dictionary<FilePathWrapper, string>
         {
             { filePath, updatedRoot.ToFullString() },
-            { Path.Combine(Path.GetDirectoryName(filePath)!, $"{serviceName}.cs"), FormattingHelper.NormalizeWholeSubtreeWhitespace(serviceRoot).ToFullString() }
+            { Path.Combine(Path.GetDirectoryName(filePath)!, $"{serviceName}.cs"), RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(serviceRoot).ToFullString() }
         };
     }
 }

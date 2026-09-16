@@ -30,7 +30,7 @@ public class EolUtilitiesTests
         var classDecl = root!.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>().First();
         var method = classDecl.Members.OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>().First();
         var newMethod = method.WithModifiers(Microsoft.CodeAnalysis.CSharp.SyntaxFactory.TokenList(Microsoft.CodeAnalysis.CSharp.SyntaxFactory.Token(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PrivateKeyword).WithTrailingTrivia(Microsoft.CodeAnalysis.CSharp.SyntaxFactory.Space)));
-        var result = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, method, newMethod);
+        var result = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, method, newMethod);
         var crlfCount = System.Text.RegularExpressions.Regex.Matches(result, "\r\n").Count;
         var bareLfCount = System.Text.RegularExpressions.Regex.Matches(result, "(?<!\r)\n").Count;
         Assert.That(crlfCount, Is.EqualTo(0), $"Expected 0 CRLF but found {crlfCount}. Bare LF count: {bareLfCount}. Result: {result}");
@@ -53,7 +53,7 @@ public class EolUtilitiesTests
         var classDecl = root!.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>().First();
         var method = classDecl.Members.OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>().First();
         var newMethod = method.WithModifiers(Microsoft.CodeAnalysis.CSharp.SyntaxFactory.TokenList(Microsoft.CodeAnalysis.CSharp.SyntaxFactory.Token(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PrivateKeyword).WithTrailingTrivia(Microsoft.CodeAnalysis.CSharp.SyntaxFactory.Space)));
-        var result = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, method, newMethod);
+        var result = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, method, newMethod);
         var crlfCount = System.Text.RegularExpressions.Regex.Matches(result, "\r\n").Count;
         var bareLfCount = System.Text.RegularExpressions.Regex.Matches(result, "(?<!\r)\n").Count;
         Assert.That(crlfCount, Is.EqualTo(0), $"Expected 0 CRLF but found {crlfCount}. Bare LF count: {bareLfCount}. Result: {result}");
@@ -75,7 +75,7 @@ public class EolUtilitiesTests
         var classDecl = root!.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>().First();
         var method = classDecl.Members.OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>().First();
         var newMethod = method.WithModifiers(Microsoft.CodeAnalysis.CSharp.SyntaxFactory.TokenList(Microsoft.CodeAnalysis.CSharp.SyntaxFactory.Token(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PrivateKeyword).WithTrailingTrivia(Microsoft.CodeAnalysis.CSharp.SyntaxFactory.Space)));
-        var result = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, method, newMethod);
+        var result = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, method, newMethod);
         var crlfCount = System.Text.RegularExpressions.Regex.Matches(result, "\r\n").Count;
         var bareLfCount = System.Text.RegularExpressions.Regex.Matches(result, "(?<!\r)\n").Count;
         Assert.That(bareLfCount, Is.EqualTo(0), $"Expected 0 bare LF but found {bareLfCount}. CRLF count: {crlfCount}. Result: {result}");

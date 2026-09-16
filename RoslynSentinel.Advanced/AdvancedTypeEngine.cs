@@ -68,8 +68,8 @@ public class AdvancedTypeEngine
 
         return new Dictionary<FilePathWrapper, string>
         {
-            { filePath, FormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString() },
-            { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), FormattingHelper.NormalizeWholeSubtreeWhitespace(classRoot).ToFullString() }
+            { filePath, RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString() },
+            { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(classRoot).ToFullString() }
         };
     }
 
@@ -124,7 +124,7 @@ public class AdvancedTypeEngine
                 .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
                 .AddMembers(properties.ToArray());
 
-            return new Dictionary<FilePathWrapper, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), FormattingHelper.NormalizeWholeSubtreeWhitespace(newClass).ToFullString() } };
+            return new Dictionary<FilePathWrapper, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newClass).ToFullString() } };
         }
 
         throw new InvalidOperationException("Anonymous type not found.");

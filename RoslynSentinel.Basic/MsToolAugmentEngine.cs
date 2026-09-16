@@ -415,7 +415,7 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail("Could not determine replacement form (return/assignment). Manual conversion required.");
         }
 
-        return MsAugmentResult.Ok(await FormattingHelper.ReplaceNodeFormattedAsync(doc, root, sw, replacement, cancellationToken));
+        return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeFormattedAsync(doc, root, sw, replacement, cancellationToken));
     }
 
     // ── 4. ConvertStringFormatToInterpolatedSmart ─────────────────────────────
@@ -562,7 +562,7 @@ public class MsToolAugmentEngine
             SyntaxFactory.Token(SyntaxKind.InterpolatedStringEndToken))
             .WithTriviaFrom(invocation);
 
-        return MsAugmentResult.Ok(await FormattingHelper.ReplaceNodeFormattedAsync(doc, root, invocation, interpolated, cancellationToken));
+        return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeFormattedAsync(doc, root, invocation, interpolated, cancellationToken));
     }
 
     // ── 5. SortAndDeduplicateUsings ───────────────────────────────────────────
@@ -1127,7 +1127,7 @@ public class MsToolAugmentEngine
             newContainingType.Members.Insert(0, constDecl));
 
         var finalRoot = replacedRoot.ReplaceNode(newContainingType, updatedType);
-        return MsAugmentResult.Ok(FormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString());
+        return MsAugmentResult.Ok(RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString());
     }
 
     private static string DetermineNumericType(SyntaxToken token)
@@ -1290,7 +1290,7 @@ public class MsToolAugmentEngine
 
         var newTypeDecl = typeDecl.AddMembers(method);
         var newRoot = root.ReplaceNode(typeDecl, newTypeDecl);
-        return MsAugmentResult.Ok(FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString());
+        return MsAugmentResult.Ok(RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString());
     }
 
     // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────

@@ -80,7 +80,7 @@ public class ImmutabilityEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Class made immutable.",
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
         };
     }
 }

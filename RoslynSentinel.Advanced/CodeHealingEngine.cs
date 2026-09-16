@@ -53,7 +53,7 @@ public class CodeHealingEngine
         }
 
         var rewriter = new ThreadSleepRewriter();
-        var newRoot = FormattingHelper.NormalizeWholeSubtreeWhitespace(rewriter.Visit(root));
+        var newRoot = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(rewriter.Visit(root));
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -165,7 +165,7 @@ public class CodeHealingEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = f,
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -198,7 +198,7 @@ public class CodeHealingEngine
                 var newExceptionName = target.NewExceptionName;
                 var newOce = oce.WithType(SyntaxFactory.ParseTypeName(newExceptionName));
                 var newRoot = root!.ReplaceNode(oce, newOce);
-                changes[target.FilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+                changes[target.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
 
                 // Generate the new exception class
                 var nsDeclaration = string.IsNullOrEmpty(ns) ? "" : $"namespace {ns};\n";

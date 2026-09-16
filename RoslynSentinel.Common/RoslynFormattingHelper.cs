@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynSentinel.Common;
 
-public static class FormattingHelper
+public static class RoslynFormattingHelper
 {
     // Added by AddTopLevelType (expected - used for diagnostics)
     /// <summary>

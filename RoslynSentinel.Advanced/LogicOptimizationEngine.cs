@@ -51,7 +51,7 @@ public class LogicOptimizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Boolean expressions simplified.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -115,7 +115,7 @@ public class LogicOptimizationEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = "// Guard clauses added.",
-                UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+                UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
             };
         }
 
@@ -124,7 +124,7 @@ public class LogicOptimizationEngine
             Outcome = EditOutcome.NoChange,
             FilePath = filePath,
             Message = "// No reference type parameters found.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(root!).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root!).ToFullString()
         };
     }
 
@@ -165,7 +165,7 @@ public class LogicOptimizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null coalescing operators applied.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -214,7 +214,7 @@ public class LogicOptimizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Switch statements converted.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 

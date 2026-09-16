@@ -130,7 +130,7 @@ public class ModernLoggingEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Logging methods generated.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 }

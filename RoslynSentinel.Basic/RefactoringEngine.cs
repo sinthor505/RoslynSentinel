@@ -473,7 +473,7 @@ public class RefactoringEngine
             modifiers.Add(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
         }
 
-        var extractedMethod = (MethodDeclarationSyntax)FormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(returnType, newMethodName).WithModifiers(SyntaxFactory.TokenList(modifiers)).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(paramSyntax))).WithBody(SyntaxFactory.Block(bodyStmts)));
+        var extractedMethod = (MethodDeclarationSyntax)RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(returnType, newMethodName).WithModifiers(SyntaxFactory.TokenList(modifiers)).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(paramSyntax))).WithBody(SyntaxFactory.Block(bodyStmts)));
         // Build call site -> include ref/out/in keywords for parameter symbols
         var argList = parameters.Select(sym =>
         {
@@ -537,7 +537,7 @@ public class RefactoringEngine
         var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), null, cancellationToken);
         var updatedContent = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
         var beforeSnippet = string.Concat(selectedStatements.Select(s => s.ToFullString())).Trim();
-        var callSiteText = FormattingHelper.NormalizeWholeSubtreeWhitespace(callStatement).ToFullString().Trim();
+        var callSiteText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(callStatement).ToFullString().Trim();
         var extractedMethodText = extractedMethod.ToFullString().Trim();
         return new ExtractMethodResult(true, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
     }
@@ -815,7 +815,7 @@ public class RefactoringEngine
         var ifacePath = Path.Combine(Path.GetDirectoryName(filePath) ?? "", $"{interfaceName}.cs");
         // Format the interface file using NormalizeWhitespace for reliable member separation.
         // Formatter.FormatAsync with null workspace options can flatten all members onto one line.
-        var ifaceContent = FormattingHelper.NormalizeWholeSubtreeWhitespace(ifaceCompUnit, elasticTrivia: false).ToFullString();
+        var ifaceContent = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(ifaceCompUnit, elasticTrivia: false).ToFullString();
         // Format the original file
         var origDoc = document.WithSyntaxRoot(updatedOrig);
         var formattedOrigDoc = await Formatter.FormatAsync(origDoc, null, cancellationToken);
@@ -1039,7 +1039,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Indexer converted to method.",
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, indexer, getter, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, indexer, getter, cancellationToken)
         };
     }
 
@@ -1088,7 +1088,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Params keyword toggled.",
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, lastParam, newParam, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, lastParam, newParam, cancellationToken)
         };
     }
 
@@ -1159,7 +1159,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member replaced.",
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken)
         };
     }
 
@@ -1251,7 +1251,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member added.",
-            UpdatedText = await FormattingHelper.InsertMemberFormattedAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, cancellationToken)
         };
     }
 
@@ -1339,7 +1339,7 @@ public class RefactoringEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = "// Top-level type added.",
-                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, targetNamespace, newNamespace, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, targetNamespace, newNamespace, cancellationToken)
             };
         }
 
@@ -1434,7 +1434,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member removed.",
-            UpdatedText = await FormattingHelper.RemoveNodeFormattedAsync(document, root, member, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodeFormattedAsync(document, root, member, cancellationToken)
         };
     }
 
@@ -1494,7 +1494,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Class converted to primary constructor.",
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
         };
     }
 
@@ -1621,7 +1621,7 @@ public class RefactoringEngine
             }
         }
 
-        var newRoot = root.ReplaceNode(target, FormattingHelper.NormalizeWholeSubtreeWhitespace(newTarget));
+        var newRoot = root.ReplaceNode(target, RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newTarget));
         var doc = document.WithSyntaxRoot(newRoot);
         var formatted = await Formatter.FormatAsync(doc, null, cancellationToken);
         return new DocumentEditResult
@@ -1727,7 +1727,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, trackedRoot, currentType, newType, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, trackedRoot, currentType, newType, cancellationToken)
         };
     }
 
@@ -1923,7 +1923,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
         };
     }
 
@@ -2196,7 +2196,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.RemoveNodeFormattedAsync(document, root, existing, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodeFormattedAsync(document, root, existing, cancellationToken)
         };
     }
 
@@ -2386,7 +2386,7 @@ public class RefactoringEngine
         }
 
         var newEnumNode = enumDecl.WithMembers(SyntaxFactory.SeparatedList(newMembers));
-        var updatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, enumDecl, newEnumNode, cancellationToken);
+        var updatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, enumDecl, newEnumNode, cancellationToken);
         var summary = new List<string>();
         if (added.Count > 0)
         {
@@ -2596,7 +2596,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await FormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
             };
         }
 
@@ -2677,7 +2677,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await FormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
             };
         }
 
@@ -2785,7 +2785,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, targetNode, newNode, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, targetNode, newNode, cancellationToken)
         };
     }
 
@@ -2858,7 +2858,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -2952,7 +2952,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, oldAttr, newAttr, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, oldAttr, newAttr, cancellationToken)
         };
     }
 
@@ -3030,7 +3030,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, memberTarget, newMember, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, memberTarget, newMember, cancellationToken)
         };
     }
 
@@ -3101,7 +3101,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -3110,7 +3110,7 @@ public class RefactoringEngine
     /// <summary>
     /// Batch form of <see cref="AddModifierAsync"/>/<see cref="RemoveModifierAsync"/>: applies every
     /// edit in <paramref name="edits"/> to <paramref name="filePath"/> against ONE original syntax root,
-    /// then folds all replacements into a single <see cref="FormattingHelper.ReplaceNodesFormattedAsync"/>
+    /// then folds all replacements into a single <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/>
     /// call. Calling the single-edit methods N times independently would be wrong for a multi-edit batch
     /// targeting the same file: each call resolves against its own fresh GetCurrentSolutionAsync root, so
     /// the second call's UpdatedText would silently discard the first edit instead of compounding it.
@@ -3220,7 +3220,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
         };
     }
 
@@ -3230,7 +3230,7 @@ public class RefactoringEngine
     /// Batch form of <see cref="AddAttributeAsync"/>/<see cref="ReplaceAttributeAsync"/>/
     /// <see cref="RemoveAttributeAsync"/>: same execution model as <see cref="ApplyModifierBatchAsync"/> ->
     /// resolve every edit's target against ONE original root, reject same-node collisions, fold all
-    /// replacements into one <see cref="FormattingHelper.ReplaceNodesFormattedAsync"/> call.
+    /// replacements into one <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/> call.
     /// </summary>
     public async Task<DocumentEditResult> ApplyAttributeBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TargetName, string ExistingAttribute, AttributeModifyAction Action, string? NewAttribute, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
     {
@@ -3369,7 +3369,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
         };
     }
 
@@ -3379,7 +3379,7 @@ public class RefactoringEngine
     /// Batch form of <see cref="AddBaseTypeAsync"/>/<see cref="RemoveBaseTypeAsync"/>: same execution
     /// model as <see cref="ApplyModifierBatchAsync"/> -> resolve every edit's type target against ONE
     /// original root, reject same-node collisions, fold all replacements into one
-    /// <see cref="FormattingHelper.ReplaceNodesFormattedAsync"/> call.
+    /// <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/> call.
     /// </summary>
     public async Task<DocumentEditResult> ApplyBaseTypeBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TypeName, string BaseTypeName, AddRemoveAction Action, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
     {
@@ -3475,7 +3475,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
         };
     }
 
@@ -3551,7 +3551,7 @@ public class RefactoringEngine
         var remaining = target.Modifiers.Where(m => !accessModifierKinds.Contains(m.Kind())).ToList();
         var newTokens = newKinds.Select(k => SyntaxFactory.Token(k).WithTrailingTrivia(SyntaxFactory.Space));
         var newModifiers = SyntaxFactory.TokenList(newTokens.Concat(remaining));
-        var updatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken);
+        var updatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -3634,7 +3634,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
         };
     }
 
@@ -3711,7 +3711,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
         };
     }
 
@@ -3965,7 +3965,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), cancellationToken, FormattingHelper.TriviaEditIntent.ReplaceLeading)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), cancellationToken, RoslynFormattingHelper.TriviaEditIntent.ReplaceLeading)
         };
     }
 
@@ -4087,7 +4087,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -4176,7 +4176,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
         };
     }
 
@@ -4288,7 +4288,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
             };
         }
         catch (ToolException ex)
@@ -4418,7 +4418,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
             Message = $"// paramName='{paramName}', fieldName='{derivedFieldName}'"
         };
     }
@@ -4558,7 +4558,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
             Message = fieldDecl != null ? $"// paramName='{paramName}', fieldName='{candidateFieldName}', fieldRemoved='{newMembers.All(m => m != fieldDecl)}'" : $"// paramName='{paramName}'"
         };
     }
@@ -4768,7 +4768,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken),
             Message = $"// paramName='{paramName}'"
         };
     }
@@ -4863,7 +4863,7 @@ public class RefactoringEngine
         var newMethodDecl = methodDecl.WithParameterList(newParams);
         var pendingChanges = new Dictionary<FilePathWrapper, string>
         {
-            [filePath] = await FormattingHelper.ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken)
+            [filePath] = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken)
         };
 
         var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
@@ -5629,7 +5629,7 @@ public class RefactoringEngine
             }
 
             // Build interface method: return type + name + params, no body
-            var ifaceMethod = (MemberDeclarationSyntax)FormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(method.ReturnType, method.Identifier).WithParameterList(method.ParameterList).WithTypeParameterList(method.TypeParameterList).WithConstraintClauses(method.ConstraintClauses).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()));
+            var ifaceMethod = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(method.ReturnType, method.Identifier).WithParameterList(method.ParameterList).WithTypeParameterList(method.TypeParameterList).WithConstraintClauses(method.ConstraintClauses).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()));
             newMembers.Add(ifaceMethod);
         }
 
@@ -5660,7 +5660,7 @@ public class RefactoringEngine
                 accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
             }
 
-            var ifaceProp = (MemberDeclarationSyntax)FormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()));
+            var ifaceProp = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()));
             newMembers.Add(ifaceProp);
         }
 
@@ -5683,7 +5683,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = updatedPath,
-                UpdatedText = "// Updated file: " + updatedPath + "\n" + await FormattingHelper.ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
+                UpdatedText = "// Updated file: " + updatedPath + "\n" + await RoslynFormattingHelper.ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
             };
         }
 
@@ -5691,7 +5691,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = interfaceDocument.FilePath ?? interfaceDocument.Name,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
         };
     }
 

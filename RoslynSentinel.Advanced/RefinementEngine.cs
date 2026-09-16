@@ -110,7 +110,7 @@ public class RefinementEngine
             var updatedDocRoot = docRoot.ReplaceNodes(
                 callSiteNodes,
                 (original, _) => expressionTemplate.WithTriviaFrom(original));
-            result[doc.FilePath] = FormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot).ToFullString();
+            result[doc.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot).ToFullString();
         }
 
         // Remove the method declaration from the defining document
@@ -123,13 +123,13 @@ public class RefinementEngine
         if (methodToRemove != null)
         {
             var withoutMethod = definingRoot.RemoveNode(methodToRemove, SyntaxRemoveOptions.KeepUnbalancedDirectives);
-            result[definingFilePath] = (withoutMethod is null ? null : FormattingHelper.NormalizeWholeSubtreeWhitespace(withoutMethod).ToFullString()) ?? definingRoot.ToFullString();
+            result[definingFilePath] = (withoutMethod is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(withoutMethod).ToFullString()) ?? definingRoot.ToFullString();
         }
         else if (!result.ContainsKey(definingFilePath))
         {
             // Method had no callers but still needs the declaration removed
             var withoutMethod = root.RemoveNode(method, SyntaxRemoveOptions.KeepUnbalancedDirectives);
-            result[definingFilePath] = (withoutMethod is null ? null : FormattingHelper.NormalizeWholeSubtreeWhitespace(withoutMethod).ToFullString()) ?? root.ToFullString();
+            result[definingFilePath] = (withoutMethod is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(withoutMethod).ToFullString()) ?? root.ToFullString();
         }
 
         return result;

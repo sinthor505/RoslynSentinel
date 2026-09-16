@@ -90,7 +90,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (newRoot is null ? null : FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? root.ToFullString()
+            UpdatedText = (newRoot is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? root.ToFullString()
         };
     }
 
@@ -164,7 +164,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
         };
     }
 
@@ -209,7 +209,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (newRoot is null ? null : FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? root.ToFullString()
+            UpdatedText = (newRoot is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? root.ToFullString()
         };
     }
 
@@ -254,7 +254,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (newRoot is null ? null : FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? root.ToFullString()
+            UpdatedText = (newRoot is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? root.ToFullString()
         };
     }
 
@@ -320,7 +320,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(cu).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(cu).ToFullString()
         };
     }
 
@@ -365,7 +365,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -410,7 +410,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 

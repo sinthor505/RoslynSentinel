@@ -77,7 +77,7 @@ public class ModernizationUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// String parsing upgraded to use Span<char>.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -148,7 +148,7 @@ public class ModernizationUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Pattern matching upgraded.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -192,7 +192,7 @@ public class ModernizationUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null coalescing throw expressions applied.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 

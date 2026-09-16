@@ -88,7 +88,7 @@ public class MappingEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Mapping method generated for {fromSymbol.Name} to {toSymbol.Name}",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(mappingMethod).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(mappingMethod).ToFullString()
         };
     }
 

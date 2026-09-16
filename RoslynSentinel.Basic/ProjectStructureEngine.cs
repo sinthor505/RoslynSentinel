@@ -52,7 +52,7 @@ public class ProjectStructureEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = "// Namespace updated.",
-                UpdatedText = await FormattingHelper.ReplaceNodeFormattedAsync(document, root!, nsNode, newNsNode, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, nsNode, newNsNode, cancellationToken)
             };
         }
 

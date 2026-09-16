@@ -131,7 +131,7 @@ public class ModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Record converted to class.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -204,7 +204,7 @@ public class ModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Record converted to class.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -250,7 +250,7 @@ public class ModernizationEngine
                     Outcome = EditOutcome.Modified,
                     FilePath = filePath,
                     Message = "// Method converted to expression-bodied.",
-                    UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+                    UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
                 };
             }
         }
@@ -306,7 +306,7 @@ public class ModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Patterns modernized.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 

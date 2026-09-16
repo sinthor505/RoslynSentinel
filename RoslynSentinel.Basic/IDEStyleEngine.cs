@@ -94,7 +94,7 @@ public class IDEStyleEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Object initializers applied.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
@@ -227,7 +227,7 @@ public class IDEStyleEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null-propagation applied.",
-            UpdatedText = FormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
         };
     }
 
