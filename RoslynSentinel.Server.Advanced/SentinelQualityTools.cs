@@ -247,10 +247,10 @@ public class SentinelQualityTools
             SUPPORTED forms:
               1. All cases assign to the SAME variable:
                    case "g": factor = 1.0; break;
-                   → factor = unit switch { "g" => 1.0, ... };
+                   -> factor = unit switch { "g" => 1.0, ... };
               2. All cases are return statements:
                    case "g": return 1.0;
-                   → return unit switch { "g" => 1.0, ... };
+                   -> return unit switch { "g" => 1.0, ... };
               3. All cases are throw statements (or mixed with return).
 
             REJECTED (returned as error, not silently dropped):

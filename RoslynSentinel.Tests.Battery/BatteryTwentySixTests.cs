@@ -730,7 +730,7 @@ public class ExceptionHandlingGotchaTests
     [Test]
     public async Task AnalyzeExceptions_FilteredCatchWithRethrow_IsNotSwallowedException()
     {
-        // when-filter + throw; → hasRethrow=true -> SwallowedException must NOT be added.
+        // when-filter + throw; -> hasRethrow=true -> SwallowedException must NOT be added.
         const string source = """
             public class Filtered {
                 public void DoWork() {
@@ -906,7 +906,7 @@ public class StringConcatInLoopGotchaTests
     [Test]
     public async Task DetectAntiPatterns_StringLiteralRhsInForLoop_IsFlagged()
     {
-        // RHS is a string literal → rhsIsString=true -> pattern fires regardless of variable name.
+        // RHS is a string literal -> rhsIsString=true -> pattern fires regardless of variable name.
         const string source = """
             public class Builder {
                 public string Build(int n) {
@@ -950,7 +950,7 @@ public class StringConcatInLoopGotchaTests
     [Test]
     public async Task DetectAntiPatterns_LooksLikeStringVarInForeach_IsFlagged()
     {
-        // Variable named "text" ends in "text" → LooksLikeStringVar=true -> fires even with
+        // Variable named "text" ends in "text" -> LooksLikeStringVar=true -> fires even with
         // a non-literal RHS (identifier).
         const string source = """
             using System.Collections.Generic;

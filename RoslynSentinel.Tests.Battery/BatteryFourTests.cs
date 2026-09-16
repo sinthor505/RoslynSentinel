@@ -39,7 +39,7 @@ public class EncapsulateFieldSafeAdvancedTests
     }
 
     [Test]
-    [Description("readonly field → generated property must have get accessor only - no setter")]
+    [Description("readonly field -> generated property must have get accessor only - no setter")]
     public async Task EncapsulateField_ReadonlyField_GeneratesGetOnlyProperty()
     {
         SetSource("""
@@ -59,7 +59,7 @@ public class EncapsulateFieldSafeAdvancedTests
     }
 
     [Test]
-    [Description("static field → generated backing field AND property must both be static")]
+    [Description("static field -> generated backing field AND property must both be static")]
     public async Task EncapsulateField_StaticField_GeneratesStaticBackingAndProperty()
     {
         SetSource("""
@@ -103,7 +103,7 @@ public class EncapsulateFieldSafeAdvancedTests
     }
 
     [Test]
-    [Description("overridePropertyName parameter → custom name is used instead of the derived PascalCase name")]
+    [Description("overridePropertyName parameter -> custom name is used instead of the derived PascalCase name")]
     public async Task EncapsulateField_OverridePropertyName_UsesProvidedName()
     {
         SetSource("""
@@ -124,7 +124,7 @@ public class EncapsulateFieldSafeAdvancedTests
     }
 
     [Test]
-    [Description("Field referenced in method bodies → all usages are renamed to the backing field name")]
+    [Description("Field referenced in method bodies -> all usages are renamed to the backing field name")]
     public async Task EncapsulateField_FieldUsagesInMethods_AllRenamedToBackingField()
     {
         SetSource("""
@@ -176,7 +176,7 @@ public class AnalyzeForeachAdvancedTests
     }
 
     [Test]
-    [Description("Non-existent file path → IsSafeToConvert=false with a 'Could not read file' error")]
+    [Description("Non-existent file path -> IsSafeToConvert=false with a 'Could not read file' error")]
     public async Task AnalyzeForeach_FileNotFound_ReturnsCleanError()
     {
         var nonExistent = Path.Combine(Path.GetTempPath(), "GhostFile_" + Guid.NewGuid() + ".cs");
@@ -190,7 +190,7 @@ public class AnalyzeForeachAdvancedTests
     }
 
     [Test]
-    [Description("File exists but snippet is not present → IsSafeToConvert=false with a context error")]
+    [Description("File exists but snippet is not present -> IsSafeToConvert=false with a context error")]
     public async Task AnalyzeForeach_SnippetNotFoundInFile_ReturnsCleanError()
     {
         var tempFile = MakeTempFile();
@@ -215,7 +215,7 @@ public class AnalyzeForeachAdvancedTests
     }
 
     [Test]
-    [Description("Foreach body adds to two different collections → cannot pick a single conversion target")]
+    [Description("Foreach body adds to two different collections -> cannot pick a single conversion target")]
     public async Task AnalyzeForeach_MultipleAddTargets_ReportsConflict()
     {
         var tempFile = MakeTempFile();
@@ -249,7 +249,7 @@ public class AnalyzeForeachAdvancedTests
     }
 
     [Test]
-    [Description("Collection is a class field (not a local variable) → IsSafeToConvert=true with a guidance note")]
+    [Description("Collection is a class field (not a local variable) -> IsSafeToConvert=true with a guidance note")]
     public async Task AnalyzeForeach_CollectionIsFieldNotLocal_ReturnsSafeWithNote()
     {
         var tempFile = MakeTempFile();
@@ -313,7 +313,7 @@ public class SwitchConversionAdvancedTests
     // ── AnalyzeSwitchForPatternConversion ───────────────────────────────────────
 
     [Test]
-    [Description("File not in workspace → Analyze returns IsSafeToConvert=false with file-not-found message")]
+    [Description("File not in workspace -> Analyze returns IsSafeToConvert=false with file-not-found message")]
     public async Task AnalyzeSwitchForPattern_FileNotInWorkspace_ReturnsFileNotFoundError()
     {
         SetSource("public class C { public void M() { } }"); // loaded as "Test.cs"
@@ -328,7 +328,7 @@ public class SwitchConversionAdvancedTests
     }
 
     [Test]
-    [Description("Snippet not present in file → Analyze returns IsSafeToConvert=false with context error")]
+    [Description("Snippet not present in file -> Analyze returns IsSafeToConvert=false with context error")]
     public async Task AnalyzeSwitchForPattern_SnippetNotFound_ReturnsError()
     {
         SetSource("public class C { public void M() { } }");
@@ -375,7 +375,7 @@ public class SwitchConversionAdvancedTests
     // ── ConvertSwitchToPatternSafe ───────────────────────────────────────────────
 
     [Test]
-    [Description("All cases are return statements → output is 'return x switch { ... }' with arm values preserved")]
+    [Description("All cases are return statements -> output is 'return x switch { ... }' with arm values preserved")]
     public async Task ConvertSwitchToPattern_ReturnPerCase_ProducesReturnSwitchExpression()
     {
         SetSource("""
@@ -410,7 +410,7 @@ public class SwitchConversionAdvancedTests
     }
 
     [Test]
-    [Description("File not in workspace → Convert fails cleanly because Analyze fails first")]
+    [Description("File not in workspace -> Convert fails cleanly because Analyze fails first")]
     public async Task ConvertSwitchToPattern_FileNotInWorkspace_FailsWithError()
     {
         SetSource("public class C { public void M() { } }");

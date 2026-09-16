@@ -11,8 +11,8 @@ PersistentWorkspaceManager.cs
 •	ReloadWorkspaceFromDiskAsync(CancellationToken ct) - the existing MSBuild reload, extracted verbatim from the current slow path
 2.	ApplyInMemoryDocumentUpdatesAsync:
 •	Guard only on CurrentSolution == null (not _workspace == null) so it also works in test scenarios via SetTestSolution
-•	For each .cs file: read from disk → SourceText.From(content, Encoding.UTF8) → find Document in CurrentSolution by FilePath (case-insensitive) → CurrentSolution = CurrentSolution.WithDocumentText(docId, sourceText)
-•	For a new .cs file (not found in solution): call new helper FindContainingProject(solution, filePath) → CurrentSolution = CurrentSolution.AddDocument(DocumentId.CreateNewId(projectId), fileName, sourceText, filePath: filePath)
+•	For each .cs file: read from disk -> SourceText.From(content, Encoding.UTF8) -> find Document in CurrentSolution by FilePath (case-insensitive) -> CurrentSolution = CurrentSolution.WithDocumentText(docId, sourceText)
+•	For a new .cs file (not found in solution): call new helper FindContainingProject(solution, filePath) -> CurrentSolution = CurrentSolution.AddDocument(DocumentId.CreateNewId(projectId), fileName, sourceText, filePath: filePath)
 •	For .csproj / .sln files: set a bool needsFullReload = true flag and skip in-memory update
 •	Always update _lastLoadedAt and prune _internalChanges (already done)
 3.	Add private static Project? FindContainingProject(Solution solution, string filePath):

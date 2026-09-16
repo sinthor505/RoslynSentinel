@@ -62,7 +62,7 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "ScanAsyncMigrationCandidates")]
     [Produces(DataTag.MigrationCandidate)]
-    [Description("Step 1 of the bridge workflow: flags qualifying methods with [MigrationCandidate] attributes, then reports the results. Full workflow: ScanAsyncMigrationCandidates(summarize: true) → BridgeAsyncMethods → UpliftCallers → PropagateCancellationToken.")]
+    [Description("Step 1 of the bridge workflow: flags qualifying methods with [MigrationCandidate] attributes, then reports the results. Full workflow: ScanAsyncMigrationCandidates(summarize: true) -> BridgeAsyncMethods -> UpliftCallers -> PropagateCancellationToken.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName is required when scope=project; filePath is required when scope=file (and skips the flag phase). Enforced at runtime, not by the schema.
     public async Task<ToolResult<object>> ScanAsyncMigrationCandidates(
         [Description(ToolParams.Reason)] ToolCallReason reason,
@@ -520,7 +520,7 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "BridgeAsyncMethods")]
     [Produces(DataTag.BatchResultSummary)]
-    [Description("Step 2 of the bridge workflow: converts each named method to the Asyncify-bridge pattern (a sync wrapper delegating to an async overload). Prefer the Asyncify tool for automatic end-to-end migration; use this only for manual step-by-step control. Full workflow: ScanAsyncMigrationCandidates(summarize: true) → BridgeAsyncMethods → UpliftCallers(targets: SuggestedUpliftTargets) → PropagateCancellationToken.")]
+    [Description("Step 2 of the bridge workflow: converts each named method to the Asyncify-bridge pattern (a sync wrapper delegating to an async overload). Prefer the Asyncify tool for automatic end-to-end migration; use this only for manual step-by-step control. Full workflow: ScanAsyncMigrationCandidates(summarize: true) -> BridgeAsyncMethods -> UpliftCallers(targets: SuggestedUpliftTargets) -> PropagateCancellationToken.")]
     public async Task<ToolResult<BridgeAsyncMethodsResult>> BridgeAsyncMethods(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("{ FilePathWrapper, MethodNames } entries - MethodNames is required per entry. Must be non-empty; an empty list is a no-op.")]
@@ -2294,7 +2294,7 @@ public class SentinelAsyncifyTools
                     FilePath = candidate.FilePath,
                     MethodName = candidate.MethodName,
                     Outcome = ItemRecordOutcome.Skipped,
-                    Reason = $"dry_run phase:handler_extract → would extract to '{newMethodName}'",
+                    Reason = $"dry_run phase:handler_extract -> would extract to '{newMethodName}'",
                 });
                 state.P0Succeeded++; state.Succeeded++;
                 continue;
@@ -2357,7 +2357,7 @@ public class SentinelAsyncifyTools
                     FilePath = candidate.FilePath,
                     MethodName = candidate.MethodName,
                     Outcome = ItemRecordOutcome.Succeeded,
-                    Reason = $"phase:handler_extract → '{newMethodName}'",
+                    Reason = $"phase:handler_extract -> '{newMethodName}'",
                 });
                 state.P0Succeeded++; state.Succeeded++;
             }
@@ -3643,7 +3643,7 @@ public class SentinelAsyncifyTools
         "";
 
     // Converts an event-handler name to PascalCase by splitting on '_' and capitalising each part.
-    // Example: "button1_Click" → "Button1Click", "Form_Load" -> "FormLoad".
+    // Example: "button1_Click" -> "Button1Click", "Form_Load" -> "FormLoad".
     private static string ToPascalCase(string name)
     {
         var parts = name.Split('_', StringSplitOptions.RemoveEmptyEntries);

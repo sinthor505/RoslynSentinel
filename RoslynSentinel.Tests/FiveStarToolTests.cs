@@ -152,7 +152,7 @@ public class ExtractConstantSafeStrongTests
     // ── Multi-occurrence replacement ─────────────────────────────────────────
 
     [Test]
-    [Description("Four identical string literals → all replaced, one const declaration")]
+    [Description("Four identical string literals -> all replaced, one const declaration")]
     public async Task ExtractConstant_FourIdenticalLiterals_AllReplaced()
     {
         var tempFile = MakeTempFile();
@@ -217,7 +217,7 @@ public class ExtractConstantSafeStrongTests
     // ── Error cases ──────────────────────────────────────────────────────────
 
     [Test]
-    [Description("Snippet that doesn't appear in the file → clean human-readable error")]
+    [Description("Snippet that doesn't appear in the file -> clean human-readable error")]
     public async Task ExtractConstant_SnippetNotFound_ReturnsHelpfulError()
     {
         var tempFile = MakeTempFile();
@@ -245,7 +245,7 @@ public class ExtractConstantSafeStrongTests
     }
 
     [Test]
-    [Description("File does not exist → clean error, no throw")]
+    [Description("File does not exist -> clean error, no throw")]
     public async Task ExtractConstant_FileNotFound_ReturnsHelpfulError()
     {
         var result = await _engine.ExtractConstantSafeAsync(
@@ -257,7 +257,7 @@ public class ExtractConstantSafeStrongTests
     }
 
     [Test]
-    [Description("Invalid identifier → clear rejection before attempting extraction")]
+    [Description("Invalid identifier -> clear rejection before attempting extraction")]
     public async Task ExtractConstant_InvalidCSharpIdentifier_ReturnsHelpfulError()
     {
         var tempFile = MakeTempFile();
@@ -356,7 +356,7 @@ public class ConvertStringFormatSmartTests
     // ── Three-argument conversion ────────────────────────────────────────────
 
     [Test]
-    [Description("Three-argument string.Format → all three placeholders appear in the interpolated string")]
+    [Description("Three-argument string.Format -> all three placeholders appear in the interpolated string")]
     public async Task ConvertStringFormat_ThreeArgs_AllPlaceholdersConverted()
     {
         SetSource("""
@@ -442,7 +442,7 @@ public class ConvertStringFormatSmartTests
     // ── Error cases ──────────────────────────────────────────────────────────
 
     [Test]
-    [Description("Snippet pointing to non-Format code → clean error, not throw")]
+    [Description("Snippet pointing to non-Format code -> clean error, not throw")]
     public async Task ConvertStringFormat_SnippetNotOnFormatCall_ReturnsHelpfulError()
     {
         SetSource("""
@@ -462,7 +462,7 @@ public class ConvertStringFormatSmartTests
     }
 
     [Test]
-    [Description("Dynamic (non-constant) format string → clean failure, not throw")]
+    [Description("Dynamic (non-constant) format string -> clean failure, not throw")]
     public async Task ConvertStringFormat_NonResolvableFormatArg_ReturnsHelpfulError()
     {
         SetSource("""
@@ -485,7 +485,7 @@ public class ConvertStringFormatSmartTests
     }
 
     [Test]
-    [Description("Single-argument string.Format (no args, just a literal) → valid conversion")]
+    [Description("Single-argument string.Format (no args, just a literal) -> valid conversion")]
     public async Task ConvertStringFormat_SingleArg_ConvertedToPlainInterpolatedString()
     {
         // string.Format with ONLY a format string and no arguments is unusual but valid.
@@ -569,7 +569,7 @@ public class PreviewAddMissingUsingsLoadedTests
     // ── Actual preview: type in another namespace ─────────────────────────────
 
     [Test]
-    [Description("Type defined in another source-file namespace → preview suggests the using")]
+    [Description("Type defined in another source-file namespace -> preview suggests the using")]
     public async Task PreviewAddMissing_TypeInProjectNamespace_SuggestsCorrectUsing()
     {
         // Two source files in the same project:
@@ -645,7 +645,7 @@ public class PreviewAddMissingUsingsLoadedTests
     }
 
     [Test]
-    [Description("Clean code with no diagnostics → UsingsToAdd is empty, no crash")]
+    [Description("Clean code with no diagnostics -> UsingsToAdd is empty, no crash")]
     public async Task PreviewAddMissing_CleanCode_ReturnsEmptyUsingsToAdd()
     {
         SetMultiFileSolution(
@@ -669,7 +669,7 @@ public class PreviewAddMissingUsingsLoadedTests
     }
 
     [Test]
-    [Description("Two files each missing a different namespace → both discovered independently")]
+    [Description("Two files each missing a different namespace -> both discovered independently")]
     public async Task PreviewAddMissing_EachFileMissingDifferentNamespace_BothFound()
     {
         SetMultiFileSolution(
@@ -726,7 +726,7 @@ public class FormatDocumentSafeTests
     // ── Preview mode (default) ────────────────────────────────────────────────
 
     [Test]
-    [Description("Poorly indented code → preview returns well-formatted content")]
+    [Description("Poorly indented code -> preview returns well-formatted content")]
     public async Task FormatDocumentSafe_MisindentedCode_FormatsCorrectly_Preview()
     {
         var tempFile = MakeTempFile();
@@ -830,7 +830,7 @@ public class FormatDocumentSafeTests
     // ── Error cases ──────────────────────────────────────────────────────────
 
     [Test]
-    [Description("File does not exist → clean error, not throw")]
+    [Description("File does not exist -> clean error, not throw")]
     public async Task FormatDocumentSafe_FileNotFound_ReturnsHelpfulError()
     {
         var result = await _engine.FormatDocumentSafeAsync(

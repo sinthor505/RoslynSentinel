@@ -388,7 +388,7 @@ public class Svc
                 {
                     FilePath = "RegionForm.cs",
                     NewMethodName = "DoSearch",
-                    ContextSnippet = "",   // intentionally empty → validation failure
+                    ContextSnippet = "",   // intentionally empty -> validation failure
                 }
             ],
             dryRun: true);

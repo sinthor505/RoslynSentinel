@@ -1952,13 +1952,13 @@ public class AnalysisEngine
 
         if (path.Contains(current))
         {
-            // Found a cycle -> normalise the cycle key so A→B→A and B→A->B produce one report
+            // Found a cycle -> normalise the cycle key so A->B->A and B->A->B produce one report
             var cycleStart = path.IndexOf(current);
             var cycle = path.Skip(cycleStart).Concat(new[] { current }).ToList();
-            var key = string.Join("→", cycle.OrderBy(x => x));
+            var key = string.Join("->", cycle.OrderBy(x => x));
             if (reportedCycles.Add(key))
             {
-                results.Add($"Circular type dependency: {string.Join(" → ", cycle)}");
+                results.Add($"Circular type dependency: {string.Join(" -> ", cycle)}");
             }
 
             return;

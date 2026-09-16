@@ -256,7 +256,7 @@ public class AsyncOptimizationEngine
 
     /// <summary>
     /// Derives a task variable name from the result variable name or awaited expression.
-    /// e.g. varName="item" → "itemTask"; varName=null, method="GetItemAsync" -> "getItemTask"
+    /// e.g. varName="item" -> "itemTask"; varName=null, method="GetItemAsync" -> "getItemTask"
     /// </summary>
     private static string DeriveTaskVarName(string? varName, ExpressionSyntax awaitedExpr)
     {
@@ -348,7 +348,7 @@ public class AsyncOptimizationEngine
                         SyntaxFactory.CarriageReturnLineFeed,
                         SyntaxFactory.Comment("// TODO: Replace synchronous operations with their async equivalents"),
                         SyntaxFactory.CarriageReturnLineFeed,
-                        SyntaxFactory.Comment("// e.g., File.ReadAllText → File.ReadAllTextAsync, DbCommand.ExecuteReader → ExecuteReaderAsync"),
+                        SyntaxFactory.Comment("// e.g., File.ReadAllText -> File.ReadAllTextAsync, DbCommand.ExecuteReader -> ExecuteReaderAsync"),
                         SyntaxFactory.CarriageReturnLineFeed)));
 
         asyncMethod = asyncMethod.WithBody(scaffoldBody);

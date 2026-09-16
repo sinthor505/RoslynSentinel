@@ -234,11 +234,11 @@ public class Svc
         }
 
         // Verify bucket assignments (scores: -5, 10, 30, 60, 80).
-        Assert.That(summary.ByScoreBucket["<0"], Is.EqualTo(1), "Score -5 → bucket '<0'");
-        Assert.That(summary.ByScoreBucket["0-25"], Is.EqualTo(1), "Score 10 → bucket '0-25'");
-        Assert.That(summary.ByScoreBucket["26-50"], Is.EqualTo(1), "Score 30 → bucket '26-50'");
-        Assert.That(summary.ByScoreBucket["51-75"], Is.EqualTo(1), "Score 60 → bucket '51-75'");
-        Assert.That(summary.ByScoreBucket["76plus"], Is.EqualTo(1), "Score 80 → bucket '76plus'");
+        Assert.That(summary.ByScoreBucket["<0"], Is.EqualTo(1), "Score -5 -> bucket '<0'");
+        Assert.That(summary.ByScoreBucket["0-25"], Is.EqualTo(1), "Score 10 -> bucket '0-25'");
+        Assert.That(summary.ByScoreBucket["26-50"], Is.EqualTo(1), "Score 30 -> bucket '26-50'");
+        Assert.That(summary.ByScoreBucket["51-75"], Is.EqualTo(1), "Score 60 -> bucket '51-75'");
+        Assert.That(summary.ByScoreBucket["76plus"], Is.EqualTo(1), "Score 80 -> bucket '76plus'");
 
         // By-pattern counts.
         Assert.That(summary.ByPattern["AsyncBridgeCandidate"], Is.EqualTo(3));

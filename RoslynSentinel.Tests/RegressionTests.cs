@@ -1171,7 +1171,7 @@ public class RegressionTests
         var result = await engine.SortAndDeduplicateUsingsAsync("Test.cs");
 
         Assert.That(result.RemovedDuplicates, Is.EqualTo(0),
-            "No duplicates → RemovedDuplicates must be 0");
+            "No duplicates -> RemovedDuplicates must be 0");
         Assert.That(result.OriginalCount, Is.EqualTo(3));
     }
 
@@ -1283,7 +1283,7 @@ public class RegressionTests
                 tempFile, "foreach (var item in items)");
 
             Assert.That(analysis.IsSafeToConvert, Is.True,
-                "No pre-foreach modifications → should be safe to convert");
+                "No pre-foreach modifications -> should be safe to convert");
             Assert.That(analysis.CollectionVariableName, Is.EqualTo("results"));
             Assert.That(analysis.StatementsBeforeForeach, Is.EqualTo(0));
             Assert.That(analysis.BlockingReason, Is.Null);

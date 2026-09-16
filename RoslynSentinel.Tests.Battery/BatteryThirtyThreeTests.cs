@@ -9,8 +9,8 @@
 // Bug #2 root cause: the skip condition for "invocation is the lambda body" only matched when
 //   the invocation's direct parent was the lambda expression. For the pattern
 //     ct => new ValueTask<T>(FetchAsync(id, ct))
-//   the invocation's parent chain is InvocationExpression → ArgumentSyntax ->
-//   ArgumentListSyntax → ObjectCreationExpressionSyntax -> Lambda, so the direct parent is
+//   the invocation's parent chain is InvocationExpression -> ArgumentSyntax ->
+//   ArgumentListSyntax -> ObjectCreationExpressionSyntax -> Lambda, so the direct parent is
 //   ArgumentSyntax, not the lambda. Fix: also skip when invocation.Parent is ArgumentSyntax
 //   inside an ObjectCreationExpressionSyntax whose type contains "ValueTask".
 

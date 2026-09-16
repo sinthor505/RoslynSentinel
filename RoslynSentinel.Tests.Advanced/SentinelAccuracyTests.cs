@@ -2631,7 +2631,7 @@ public class A { public A(B b) { } }
 public class B { public B() { } }
 ");
         var results = await _engine.FindCircularTypeReferencesAsync();
-        Assert.That(results, Is.Empty, "A→B with B having no deps should not be circular");
+        Assert.That(results, Is.Empty, "A->B with B having no deps should not be circular");
     }
 
     [Test]
@@ -2643,7 +2643,7 @@ public class Y { public Y(Z z) { } }
 public class Z { public Z(X x) { } }
 ");
         var results = await _engine.FindCircularTypeReferencesAsync();
-        Assert.That(results, Is.Not.Empty, "X→Y→Z→X is a three-way cycle");
+        Assert.That(results, Is.Not.Empty, "X->Y->Z->X is a three-way cycle");
     }
 }
 

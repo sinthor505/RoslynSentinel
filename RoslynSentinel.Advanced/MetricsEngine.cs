@@ -345,7 +345,7 @@ public class MetricsEngine
         {
             // All methods share the same leading verb -> suggest a nominal form
             var verb = dominant.Key;
-            var nominal = verb.EndsWith("e") ? verb + "r" : verb + "er"; // Parse→Parser, Validate→Validator
+            var nominal = verb.EndsWith("e") ? verb + "r" : verb + "er"; // Parse->Parser, Validate->Validator
             return $"{nominal}";
         }
 

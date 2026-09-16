@@ -154,7 +154,7 @@ public class GetLargeResultTests
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(5), "TotalRecords must match the item count in the file.");
-        Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total → HasMorePages should be true.");
+        Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total -> HasMorePages should be true.");
 
         // GetLargeResult's Data is the flat, paged List<MigrationCandidateFinding> -> the same
         // shape every other ToolResult<object>-returning tool uses; it used to be double-wrapped
@@ -180,7 +180,7 @@ public class GetLargeResultTests
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(4));
-        Assert.That(result.HasMorePages, Is.False, "limit=10 of 4 total → HasMorePages should be false.");
+        Assert.That(result.HasMorePages, Is.False, "limit=10 of 4 total -> HasMorePages should be false.");
 
         var returnedEntries = result.Data as List<ApiSurfaceEntry>;
         Assert.That(returnedEntries, Is.Not.Null, "Data should be List<ApiSurfaceEntry>.");
@@ -203,7 +203,7 @@ public class GetLargeResultTests
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(5));
-        Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total → HasMorePages should be true.");
+        Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total -> HasMorePages should be true.");
 
         var returnedEntries = result.Data as List<SolutionSymbolEntry>;
         Assert.That(returnedEntries, Is.Not.Null, "Data should be List<SolutionSymbolEntry> - ListAll's offloaded results must be pageable, not fall through to \"Unknown scan result type\".");

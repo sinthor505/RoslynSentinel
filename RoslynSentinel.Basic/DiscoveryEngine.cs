@@ -518,7 +518,7 @@ public class DiscoveryEngine
             .OfType<TypeDeclarationSyntax>()
             .FirstOrDefault(t => t.Identifier.Text == containerName) ?? throw new InvalidOperationException($"Type '{containerName}' not found.");
 
-        // Standard C# ordering: fields(0) → constructors(1) → destructors(2) → properties(3) → events(4) → methods(5) -> nested(6)
+        // Standard C# ordering: fields(0) -> constructors(1) -> destructors(2) -> properties(3) -> events(4) -> methods(5) -> nested(6)
         static int MemberOrder(MemberDeclarationSyntax m) => m switch
         {
             FieldDeclarationSyntax => 0,

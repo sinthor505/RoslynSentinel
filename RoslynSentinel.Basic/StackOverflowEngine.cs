@@ -266,8 +266,8 @@ public sealed class StackOverflowEngine
 
     // ── In-file inheritance dispatch cycles ───────────────────────────────────
     //
-    // Catches: DerivedClass.Override → BaseClass.Method (call/prop access) ->
-    //          BaseClass.Virtual (dispatch) → DerivedClass.VirtualOverride -> loops
+    // Catches: DerivedClass.Override -> BaseClass.Method (call/prop access) ->
+    //          BaseClass.Virtual (dispatch) -> DerivedClass.VirtualOverride -> loops
     //
     // Works purely syntactically -> both classes must be in the same file.
 
@@ -364,7 +364,7 @@ public sealed class StackOverflowEngine
 
                     foreach (var virtualDispatch in baseCalls.Where(derivedOverrideNames.Contains))
                     {
-                        // Loop: overrideName → calledName (base) → virtualDispatch (virtual) -> derived override
+                        // Loop: overrideName -> calledName (base) -> virtualDispatch (virtual) -> derived override
                         var isDirectLoop = virtualDispatch == overrideName;
 
                         var dispatchedOverride = derivedOverrides
@@ -394,10 +394,10 @@ public sealed class StackOverflowEngine
                             : StackOverflowRisk.Informational;
 
                         var cyclePath = $"{derivedName}.{overrideName}"
-                            + $" → {baseClassName}.{calledName} (base)"
-                            + $" → {baseClassName}.{virtualDispatch} (virtual dispatch)"
-                            + $" → {derivedName}.{virtualDispatch} (override)"
-                            + (closesLoop ? $" → loops back to {overrideName}" : " [loop not confirmed]");
+                            + $" -> {baseClassName}.{calledName} (base)"
+                            + $" -> {baseClassName}.{virtualDispatch} (virtual dispatch)"
+                            + $" -> {derivedName}.{virtualDispatch} (override)"
+                            + (closesLoop ? $" -> loops back to {overrideName}" : " [loop not confirmed]");
 
                         var line = overrideMember.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                         findings.Add(new StackOverflowFinding(
@@ -406,7 +406,7 @@ public sealed class StackOverflowEngine
                             FilePath: filePath,
                             LineNumber: line,
                             ContainingMember: $"{derivedName}.{overrideName}",
-                            Description: $"Inheritance dispatch cycle: {derivedName}.{overrideName} → {baseClassName}.{calledName} → virtual {virtualDispatch} → {derivedName}.{virtualDispatch}",
+                            Description: $"Inheritance dispatch cycle: {derivedName}.{overrideName} -> {baseClassName}.{calledName} -> virtual {virtualDispatch} -> {derivedName}.{virtualDispatch}",
                             CyclePath: cyclePath,
                             Recommendation: $"Verify '{virtualDispatch}' override does not call '{overrideName}' or '{calledName}' - this creates an infinite dispatch loop through the base class"));
                     }
@@ -498,10 +498,10 @@ public sealed class StackOverflowEngine
                     var baseTypeName = baseSymbol.ContainingType?.Name ?? "Base";
                     var line = overrideSyntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     var cyclePath = $"{classDecl.Identifier.Text}.{overrideName}"
-                        + $" → {baseTypeName}.{overrideName} (base dispatch)"
-                        + $" → {calledName} (virtual dispatch)"
-                        + $" → {classDecl.Identifier.Text}.{calledName} (override)"
-                        + (closesLoop ? " → calls back" : "");
+                        + $" -> {baseTypeName}.{overrideName} (base dispatch)"
+                        + $" -> {calledName} (virtual dispatch)"
+                        + $" -> {classDecl.Identifier.Text}.{calledName} (override)"
+                        + (closesLoop ? " -> calls back" : "");
 
                     findings.Add(new StackOverflowFinding(
                         Kind: "InheritanceCycle",
@@ -509,7 +509,7 @@ public sealed class StackOverflowEngine
                         FilePath: filePath,
                         LineNumber: line,
                         ContainingMember: $"{classDecl.Identifier.Text}.{overrideName}",
-                        Description: $"Cross-file inheritance dispatch cycle: {classDecl.Identifier.Text}.{overrideName} → base.{overrideName} → virtual {calledName} → {classDecl.Identifier.Text}.{calledName}",
+                        Description: $"Cross-file inheritance dispatch cycle: {classDecl.Identifier.Text}.{overrideName} -> base.{overrideName} -> virtual {calledName} -> {classDecl.Identifier.Text}.{calledName}",
                         CyclePath: cyclePath,
                         Recommendation: $"Verify '{calledName}' override does not call '{overrideName}' - infinite dispatch loop via the base class"));
                 }
@@ -694,7 +694,7 @@ public sealed class StackOverflowEngine
                     continue;
                 }
 
-                var cyclePath = string.Join(" → ", path) + " → " + start;
+                var cyclePath = string.Join(" -> ", path) + " -> " + start;
                 var line = startSyntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 findings.Add(new StackOverflowFinding(
                     Kind: "MutualRecursion",

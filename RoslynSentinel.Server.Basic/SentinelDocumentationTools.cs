@@ -348,7 +348,7 @@ public class SentinelDocumentationTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("read, write, append (completed_work only), or list.")]
         DocAction action,
-        [Description("Which doc category to operate on: plan → plans/, handoff → handoffs/, completed_work → completed/ (append-only), documentation → documentation/, state → docs/migration-state.yaml (name is ignored).")]
+        [Description("Which doc category to operate on: plan -> plans/, handoff -> handoffs/, completed_work -> completed/ (append-only), documentation -> documentation/, state -> docs/migration-state.yaml (name is ignored).")]
         DocType docType,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: name is required for every action except when
         // docType=state (which uses a fixed filename) or action=list.

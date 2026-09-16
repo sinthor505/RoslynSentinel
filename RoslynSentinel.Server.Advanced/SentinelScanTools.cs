@@ -642,7 +642,7 @@ public class SentinelScanTools
         new(DetectorId.sql_injection, "security", "any", "Detects possible SQL injection via dynamic string arguments to Execute*/FromSqlRaw/Query methods."),
         new(DetectorId.unvalidated_regex_source, "security", "file", "Detects Regex() calls with a non-literal pattern argument - regex injection and ReDoS attack vector."),
         // structure (15)
-        new(DetectorId.circular_dependencies, "structure", "solution", "Identifies circular project references (A → B → A) in the solution."),
+        new(DetectorId.circular_dependencies, "structure", "solution", "Identifies circular project references (A -> B -> A) in the solution."),
         new(DetectorId.circular_type_references, "structure", "project|solution", "Finds circular constructor-injection dependencies - the cycle that causes .NET DI container to throw at startup."),
         new(DetectorId.duplicate_blocks_in_hierarchy, "structure", "any", "Finds duplicate code blocks across a type hierarchy. scopeName = root type name (class or interface)."),
         new(DetectorId.duplicate_methods, "structure", "project|solution", "Finds structurally duplicate method implementations (same control-flow shape regardless of names)."),

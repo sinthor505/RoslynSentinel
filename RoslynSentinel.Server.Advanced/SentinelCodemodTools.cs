@@ -1363,7 +1363,7 @@ public class SentinelCodemodTools
         Description = """
             apply_file_codemod - valid transform values:
               add_braces                        Adds braces to all brace-less control statements.
-              cleanup_implicit_spans            Removes redundant implicit Span<T>→Span<byte> casts.
+              cleanup_implicit_spans            Removes redundant implicit Span<T>->Span<byte> casts.
               convert_to_null_coalescing        Replaces null-conditional chains with ?? operators.
               convert_to_pattern                Converts is/as type-check+cast pairs to pattern matching.
               convert_to_switch                 Converts if-else chains to switch expressions.
@@ -1377,7 +1377,7 @@ public class SentinelCodemodTools
               add_configure_await_false         Adds .ConfigureAwait(false) to all awaits. libraryMode=true (default).
                                                 Returns SourceTransformResult.
               remove_configure_await_false      Removes all .ConfigureAwait(x) calls. Returns SourceTransformResult.
-              simplify_boolean_expressions      Simplifies redundant boolean expressions (x == true → x).
+              simplify_boolean_expressions      Simplifies redundant boolean expressions (x == true -> x).
               simplify_member_access            Removes unnecessary this./base. qualifiers.
               simplify_verbosity                Removes redundant type names and default parameter values.
               sort_and_deduplicate_usings       Sorts and deduplicates using directives. preview=false writes to disk.

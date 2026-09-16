@@ -367,7 +367,7 @@ public class SecurityEngine
             var constVal = semanticModel.GetConstantValue(interp.Expression, cancellationToken);
             if (!constVal.HasValue)
             {
-                return true; // not a compile-time constant → suspect
+                return true; // not a compile-time constant -> suspect
             }
         }
         return false; // all interpolations are constants - safe

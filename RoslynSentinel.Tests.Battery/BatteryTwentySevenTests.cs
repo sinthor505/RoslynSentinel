@@ -320,15 +320,15 @@ public class B18_ContextHelper_CaseSensitiveKeywords
 
         var result1 = ContextHelper.GetUniqueVariableName(emptyScope, "MyString");
         Assert.That(result1, Is.EqualTo("myString"),
-            "'MyString' → camelCase 'myString' is not a keyword and must be returned as-is.");
+            "'MyString' -> camelCase 'myString' is not a keyword and must be returned as-is.");
 
         var result2 = ContextHelper.GetUniqueVariableName(emptyScope, "MyObject");
         Assert.That(result2, Is.EqualTo("myObject"),
-            "'MyObject' → camelCase 'myObject' is not a keyword and must be returned as-is.");
+            "'MyObject' -> camelCase 'myObject' is not a keyword and must be returned as-is.");
 
         var result3 = ContextHelper.GetUniqueVariableName(emptyScope, "MyInt");
         Assert.That(result3, Is.EqualTo("myInt"),
-            "'MyInt' → camelCase 'myInt' is not a keyword and must be returned as-is.");
+            "'MyInt' -> camelCase 'myInt' is not a keyword and must be returned as-is.");
     }
 
     [Test]

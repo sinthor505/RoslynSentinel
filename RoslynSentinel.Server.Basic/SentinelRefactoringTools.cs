@@ -494,7 +494,7 @@ public class SentinelRefactoringTools
             {
                 Success = false,
                 Error = new ResultError(ToolErrorCode.Exception,
-                    $"RenameSymbol produced no file changes for '{result.OldName}' → '{result.NewName}'.")
+                    $"RenameSymbol produced no file changes for '{result.OldName}' -> '{result.NewName}'.")
             };
         }
 
@@ -557,7 +557,7 @@ public class SentinelRefactoringTools
 
             var result = await _mappingEngine.GenerateMappingAsync(filePathResolved, fromType, toType, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
-                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' → '{toType}' in '{filePathResolved}'. Ensure both types exist in the solution.") };
+                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' -> '{toType}' in '{filePathResolved}'. Ensure both types exist in the solution.") };
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress, cancellationToken: cancellationToken);

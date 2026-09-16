@@ -455,7 +455,7 @@ public sealed class ModelAgentRunner
 
         return kind == "args"
             ? $$"""{"_offloaded":true,"_sizeBytes":{{json.Length}},"_file":"{{sidecarFileName}}"}"""
-            : $"[{json.Length / 1024.0:F1} KB offloaded → {sidecarFileName}]";
+            : $"[{json.Length / 1024.0:F1} KB offloaded -> {sidecarFileName}]";
     }
 
     private static async Task<string> WriteTranscriptAsync(

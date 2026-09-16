@@ -180,7 +180,7 @@ public class CacheWarmupWorker { public void Initialize() { } }");
     [Test]
     public async Task FindCircularDependencies_TwoMutuallyDependentClasses_FindsDirectCycle()
     {
-        // A→B and B->A via field references -> classic direct cycle
+        // A->B and B->A via field references -> classic direct cycle
         SetMultipleFiles(
             ("NodeA.cs", @"
 public class NodeA
@@ -264,9 +264,9 @@ public class OrdersController
         var result = await _engine.GenerateHttpClientForControllerAsync("Test.cs", "OrdersController");
 
         // void, ActionResult, IActionResult -> all become Task
-        Assert.That(result.UpdatedText, Does.Contain("async Task Delete"), "void return → Task");
-        Assert.That(result.UpdatedText, Does.Contain("async Task Create"), "ActionResult → Task");
-        Assert.That(result.UpdatedText, Does.Contain("async Task Update"), "IActionResult → Task");
+        Assert.That(result.UpdatedText, Does.Contain("async Task Delete"), "void return -> Task");
+        Assert.That(result.UpdatedText, Does.Contain("async Task Create"), "ActionResult -> Task");
+        Assert.That(result.UpdatedText, Does.Contain("async Task Update"), "IActionResult -> Task");
     }
 
     [Test]

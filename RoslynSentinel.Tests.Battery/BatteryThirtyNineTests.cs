@@ -13,8 +13,8 @@ namespace RoslynSentinel.Tests.Battery;
 ///  6. Setter assigns to self -> Definite PropertySelfWrite.
 ///  7. Override calls own name (not base) -> Definite OverrideCallsSelf.
 ///  8. Conditional recursion with unchanged argument -> Suspicious ArgumentNotDecreasing.
-///  9. Mutual recursion A→B->A -> Suspicious MutualRecursion.
-/// 10. In-file inheritance cycle: override→base→virtual->same override -> InheritanceCycle.
+///  9. Mutual recursion A->B->A -> Suspicious MutualRecursion.
+/// 10. In-file inheritance cycle: override->base->virtual->same override -> InheritanceCycle.
 /// 11. Valid recursion (decreasing arg, guarded) -> no Definite findings.
 /// 12. Inheritance property cycle: override accesses base property that calls overridden method.
 /// </summary>
@@ -230,7 +230,7 @@ public class BatteryThirtyNineTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 9 -> Mutual recursion A→B→A -> Suspicious MutualRecursion
+    // 9 -> Mutual recursion A->B->A -> Suspicious MutualRecursion
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -247,7 +247,7 @@ public class BatteryThirtyNineTests
         var report = await _engine.AnalyzeStackOverflowRisksAsync(await GetDocPath());
 
         Assert.That(report.Findings.Any(f => f.Kind == "MutualRecursion" && f.Risk == StackOverflowRisk.Suspicious),
-            Is.True, "MutualRecursion Suspicious expected for A→B→A cycle");
+            Is.True, "MutualRecursion Suspicious expected for A->B->A cycle");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -277,7 +277,7 @@ public class BatteryThirtyNineTests
         var report = await _engine.AnalyzeStackOverflowRisksAsync(await GetDocPath());
 
         Assert.That(report.Findings.Any(f => f.Kind == "InheritanceCycle"),
-            Is.True, "InheritanceCycle expected: ConcreteProcessor.OnExecute → Execute → OnExecute (virtual) → ConcreteProcessor.OnExecute");
+            Is.True, "InheritanceCycle expected: ConcreteProcessor.OnExecute -> Execute -> OnExecute (virtual) -> ConcreteProcessor.OnExecute");
         Assert.That(report.Findings.First(f => f.Kind == "InheritanceCycle").CyclePath,
             Does.Contain("ConcreteProcessor"), "CyclePath should name the derived class");
     }
@@ -313,7 +313,7 @@ public class BatteryThirtyNineTests
     //
     // MyWidget.GetLabel() override returns the 'Label' property (PascalCase access).
     // Widget.Label getter calls GetLabel() (virtual method).
-    // Virtual dispatch → MyWidget.GetLabel → reads Label → Widget.Label → GetLabel -> cycle.
+    // Virtual dispatch -> MyWidget.GetLabel -> reads Label -> Widget.Label -> GetLabel -> cycle.
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
@@ -335,6 +335,6 @@ public class BatteryThirtyNineTests
         var report = await _engine.AnalyzeStackOverflowRisksAsync(await GetDocPath());
 
         Assert.That(report.Findings.Any(f => f.Kind == "InheritanceCycle"),
-            Is.True, "InheritanceCycle expected: MyWidget.GetLabel → Widget.Label → GetLabel() → MyWidget.GetLabel");
+            Is.True, "InheritanceCycle expected: MyWidget.GetLabel -> Widget.Label -> GetLabel() -> MyWidget.GetLabel");
     }
 }

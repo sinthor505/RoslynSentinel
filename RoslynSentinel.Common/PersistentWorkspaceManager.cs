@@ -148,7 +148,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     // Thresholds -> start generous; tighten on observed session data.
     private const int BreakerStreakThreshold = 8;     // consecutive batches with zero successes
     private const int BreakerRateMinAttempts = 20;    // min attempts before rate-trip fires
-    private const double BreakerRateThreshold = 0.30;  // >30% failure rate → halt
+    private const double BreakerRateThreshold = 0.30;  // >30% failure rate -> halt
     private const int BreakerRollbackScoreThreshold = 20;    // weighted score (rollback=2, fail=1)
     private const int CautionStreakThreshold = 4;
     private const int CautionRateMinAttempts = 10;

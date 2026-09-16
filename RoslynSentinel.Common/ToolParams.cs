@@ -18,23 +18,23 @@ public static class ToolParams
 
     // Validate-and-apply workflow
     public const string AutoStage =
-        "true (default) → validates and writes the result to disk immediately; returns changeId to pass to UndoLastApply. " +
-        "false → returns updated file content without validating or writing.";
+        "true (default) -> validates and writes the result to disk immediately; returns changeId to pass to UndoLastApply. " +
+        "false -> returns updated file content without validating or writing.";
 
     public const string ValidateOnApply =
-        "true (default) → delta-compiles the edited project(s) plus every project that transitively " +
+        "true (default) -> delta-compiles the edited project(s) plus every project that transitively " +
         "references them (so removing/narrowing a public member is caught even if nothing inside the " +
         "edited project itself calls it) before writing; returns errors without touching disk if new " +
         "errors found. " +
-        "false → writes regardless (for intentional intermediate broken-state edits).";
+        "false -> writes regardless (for intentional intermediate broken-state edits).";
 
     public const string DryRun =
-        "true → validates only; does not write to disk and returns no changeId. " +
-        "false (default) → validates and writes to disk immediately.";
+        "true -> validates only; does not write to disk and returns no changeId. " +
+        "false (default) -> validates and writes to disk immediately.";
 
     public const string ReturnDiff =
-        "true → include a unified-diff-style preview of the change in the response (costs extra context). " +
-        "false (default) → omit the diff to keep the response minimal.";
+        "true -> include a unified-diff-style preview of the change in the response (costs extra context). " +
+        "false (default) -> omit the diff to keep the response minimal.";
 
     // Context disambiguation
     public const string ContextSnippet =

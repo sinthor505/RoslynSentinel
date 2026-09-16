@@ -883,7 +883,7 @@ public class AntiPatternEngine
 
     // ── SyncCallInAsyncContext ────────────────────────────────────────────────
     // Detects synchronous blocking API calls inside async methods where an async alternative exists.
-    // Thread.Sleep → await Task.Delay; File.ReadAllText -> await File.ReadAllTextAsync; etc.
+    // Thread.Sleep -> await Task.Delay; File.ReadAllText -> await File.ReadAllTextAsync; etc.
 
     private static readonly Dictionary<string, string> SyncToAsyncSuggestions =
         new(StringComparer.Ordinal)
