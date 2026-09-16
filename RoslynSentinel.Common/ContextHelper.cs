@@ -51,6 +51,9 @@ public static class ContextHelper
             return new List<SnippetMatch>();
         }
 
+        ThrowIfMultiLine(nameof(lineBefore), lineBefore, isAfter: false);
+        ThrowIfMultiLine(nameof(lineAfter), lineAfter, isAfter: true);
+
         var source = sourceText.ToString();
         var allMatches = new List<SnippetMatch>();
         int idx = 0;
@@ -172,55 +175,12 @@ public static class ContextHelper
             return new List<SnippetMatch>();
         }
 
-        // If lineBefore/lineAfter are supplied, filter all matches (including single matches) against them
-        if (lineBefore != null || lineAfter != null)
-        {
-            var lbTrimmed = lineBefore?.Trim();
-            var laTrimmed = lineAfter?.Trim();
-
-            var filtered = allMatches.Where(match =>
-            {
-                var linePos = sourceText.Lines.GetLinePosition(match.Start);
-                var lineIndex = linePos.Line;
-
-                if (lbTrimmed != null)
-                {
-                    if (lineIndex == 0)
-                    {
-                        return false;
-                    }
-
-                    var prevLine = sourceText.Lines[lineIndex - 1].ToString().Trim();
-                    if (!MatchLine(prevLine, lbTrimmed))
-                    {
-                        return false;
-                    }
-                }
-                if (laTrimmed != null)
-                {
-                    if (lineIndex >= sourceText.Lines.Count - 1)
-                    {
-                        return false;
-                    }
-
-                    var nextLine = sourceText.Lines[lineIndex + 1].ToString().Trim();
-                    if (!MatchLine(nextLine, laTrimmed))
-                    {
-                        return false;
-                    }
-                }
-                return true;
-            }).ToList();
-
-            return filtered;
-        }
-
-        return allMatches;
+        return FilterByAdjacentLines(sourceText, allMatches, lineBefore, lineAfter);
     }
 
     /// <summary>
     /// Finds the unique character offset of contextSnippet within sourceText.
-    /// Optionally, provide lineBefore/lineAfter (verbatim text from adjacent lines) to disambiguate.
+    /// Optionally, provide lineBefore/lineAfter (the single verbatim adjacent line) to disambiguate.
     /// Throws InvalidOperationException if not found or still ambiguous after disambiguation.
     /// </summary>
     public static int FindSnippetPosition(
@@ -268,7 +228,9 @@ public static class ContextHelper
         {
             (null, null) => throw new ToolAmbiguousMatchException(
                 $"contextSnippet is ambiguous ({matches.Count} matches): \"{contextSnippet.Trim()}\". " +
-                "Provide lineBefore and/or lineAfter (verbatim text from the lines immediately above/below) to disambiguate."),
+                "Provide lineBefore and/or lineAfter using one of the exact values below (copy " +
+                "verbatim, do not retype from memory) to select the intended match:\n" +
+                DescribeAmbiguousCandidates(sourceText, matches)),
             _ => throw new ToolAmbiguousMatchException(
                 $"contextSnippet is still ambiguous ({matches.Count} matches remain): \"{contextSnippet.Trim()}\". " +
                 "Provide more specific lineBefore and/or lineAfter content.")
@@ -302,6 +264,9 @@ public static class ContextHelper
             return new List<SnippetMatch>();
         }
 
+        ThrowIfMultiLine(nameof(lineBefore), lineBefore, isAfter: false);
+        ThrowIfMultiLine(nameof(lineAfter), lineAfter, isAfter: true);
+
         var source = sourceText.ToString();
         var allMatches = new List<SnippetMatch>();
         int idx = 0;
@@ -328,47 +293,7 @@ public static class ContextHelper
             return new List<SnippetMatch>();
         }
 
-        if (lineBefore != null || lineAfter != null)
-        {
-            var lbTrimmed = lineBefore?.Trim();
-            var laTrimmed = lineAfter?.Trim();
-
-            return allMatches.Where(match =>
-            {
-                var linePos = sourceText.Lines.GetLinePosition(match.Start);
-                var lineIndex = linePos.Line;
-
-                if (lbTrimmed != null)
-                {
-                    if (lineIndex == 0)
-                    {
-                        return false;
-                    }
-
-                    var prevLine = sourceText.Lines[lineIndex - 1].ToString().Trim();
-                    if (!MatchLine(prevLine, lbTrimmed))
-                    {
-                        return false;
-                    }
-                }
-                if (laTrimmed != null)
-                {
-                    if (lineIndex >= sourceText.Lines.Count - 1)
-                    {
-                        return false;
-                    }
-
-                    var nextLine = sourceText.Lines[lineIndex + 1].ToString().Trim();
-                    if (!MatchLine(nextLine, laTrimmed))
-                    {
-                        return false;
-                    }
-                }
-                return true;
-            }).ToList();
-        }
-
-        return allMatches;
+        return FilterByAdjacentLines(sourceText, allMatches, lineBefore, lineAfter);
     }
 
     /// <summary>
@@ -411,7 +336,9 @@ public static class ContextHelper
         {
             (null, null) => throw new ToolAmbiguousMatchException(
                 $"contextSnippet is ambiguous ({matches.Count} matches): \"{contextSnippet.Trim()}\". " +
-                "Provide lineBefore and/or lineAfter (verbatim text from the lines immediately above/below) to disambiguate."),
+                "Provide lineBefore and/or lineAfter using one of the exact values below (copy " +
+                "verbatim, do not retype from memory) to select the intended match:\n" +
+                DescribeAmbiguousCandidates(sourceText, matches)),
             _ => throw new ToolAmbiguousMatchException(
                 $"contextSnippet is still ambiguous ({matches.Count} matches remain): \"{contextSnippet.Trim()}\". " +
                 "Provide more specific lineBefore and/or lineAfter content.")
@@ -480,6 +407,110 @@ public static class ContextHelper
         }
 
         return rawIndex;
+    }
+
+    /// <summary>
+    /// Describes each candidate's real, verbatim adjacent line(s) so an ambiguous-match error can
+    /// let the caller copy one back as lineBefore/lineAfter instead of constructing one from
+    /// memory. Also flags true ties (identical before AND after) since those can't be
+    /// disambiguated this way at all.
+    /// </summary>
+    private static string DescribeAmbiguousCandidates(SourceText sourceText, List<SnippetMatch> allMatches)
+    {
+        var descriptions = new List<(string Before, string After)>();
+        var lines = new List<string>();
+        for (int i = 0; i < allMatches.Count; i++)
+        {
+            var lineIndex = sourceText.Lines.GetLinePosition(allMatches[i].Start).Line;
+            var before = lineIndex > 0 ? sourceText.Lines[lineIndex - 1].ToString().Trim() : "(start of file)";
+            var after = lineIndex < sourceText.Lines.Count - 1
+                ? sourceText.Lines[lineIndex + 1].ToString().Trim()
+                : "(end of file)";
+            descriptions.Add((before, after));
+            lines.Add($"Match {i + 1} (line {lineIndex + 1}): lineBefore=\"{before}\" lineAfter=\"{after}\"");
+        }
+
+        var tieGroups = descriptions.Select((d, i) => (d, i)).GroupBy(x => x.d).Where(g => g.Count() > 1);
+        foreach (var tie in tieGroups)
+        {
+            var matchNumbers = string.Join(" and ", tie.Select(x => x.i + 1));
+            lines.Add(
+                $"Matches {matchNumbers} have identical surrounding lines and cannot be " +
+                "disambiguated by lineBefore/lineAfter alone; use a different tool or a longer contextSnippet.");
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// lineBefore/lineAfter disambiguate a match against exactly one real adjacent source line ->
+    /// a value containing an embedded newline can never satisfy that comparison and would
+    /// otherwise silently eliminate every candidate, surfacing as a misleading "not found"
+    /// instead of naming the actual problem.
+    /// </summary>
+    private static void ThrowIfMultiLine(string parameterName, string? value, bool isAfter)
+    {
+        if (value != null && value.Contains('\n'))
+        {
+            throw new ToolNotFoundException(
+                $"{parameterName} must be a single line, but the supplied value spans multiple lines: " +
+                $"\"{value.Trim()}\". Pass only the one real source line immediately " +
+                $"{(isAfter ? "after" : "before")} the match " +
+                "(e.g. the nearest distinguishing line, not a multi-line block).");
+        }
+    }
+
+    /// <summary>
+    /// Shared lineBefore/lineAfter filter for FindAllSnippetMatchesWithLength and
+    /// FindAllExactSnippetMatches -> previously duplicated between the two.
+    /// </summary>
+    private static List<SnippetMatch> FilterByAdjacentLines(
+        SourceText sourceText, List<SnippetMatch> allMatches, string? lineBefore, string? lineAfter)
+    {
+        if (lineBefore == null && lineAfter == null)
+        {
+            return allMatches;
+        }
+
+        var lbTrimmed = lineBefore?.Trim();
+        var laTrimmed = lineAfter?.Trim();
+
+        return allMatches.Where(match => FilterByAdjacentLinesPredicate(
+            sourceText, match, lbTrimmed, laTrimmed)).ToList();
+    }
+
+    private static bool FilterByAdjacentLinesPredicate(
+        SourceText sourceText, SnippetMatch match, string? lbTrimmed, string? laTrimmed)
+    {
+        var lineIndex = sourceText.Lines.GetLinePosition(match.Start).Line;
+
+        if (lbTrimmed != null)
+        {
+            if (lineIndex == 0)
+            {
+                return false;
+            }
+
+            var prevLine = sourceText.Lines[lineIndex - 1].ToString().Trim();
+            if (!MatchLine(prevLine, lbTrimmed))
+            {
+                return false;
+            }
+        }
+        if (laTrimmed != null)
+        {
+            if (lineIndex >= sourceText.Lines.Count - 1)
+            {
+                return false;
+            }
+
+            var nextLine = sourceText.Lines[lineIndex + 1].ToString().Trim();
+            if (!MatchLine(nextLine, laTrimmed))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// <summary>

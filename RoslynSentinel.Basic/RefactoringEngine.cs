@@ -1771,7 +1771,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.SourceInvalid,
                 FilePath = filePath,
-                Message = $"// Error: {snippetError} Re-check the snippet against GetMethodSource/GetFileOutline " + "output, or add lineBefore/lineAfter (verbatim text from the surrounding lines) to disambiguate."
+                Message = $"// Error: {snippetError} Re-check the snippet against GetMethodSource/GetFileOutline " + "output, or add lineBefore/lineAfter (the single verbatim line immediately before/after) to disambiguate."
             };
         }
 

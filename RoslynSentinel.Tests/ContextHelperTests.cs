@@ -541,4 +541,29 @@ public class ContextHelperTests
         Assert.Throws<ToolNotFoundException>(
             () => ContextHelper.FindSnippetPosition(ApplyDiscountLikeSource, fabricatedSnippet));
     }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    [Description("FindAllSnippetMatchesWithLength: a multi-line lineBefore can never satisfy the "
+                 + "single-line MatchLine comparison and must be rejected up front with a clear "
+                 + "message, not silently filtered down to zero candidates and reported as NotFound.")]
+    public void FindSnippetPositionWithLength_MultilineLineBefore_ThrowsClearRejection()
+    {
+        var source =
+            "case A:\n" +
+            "    var entries = Deserialize(x);\n" +
+            "    break;\n" +
+            "case B:\n" +
+            "    var entries = Deserialize(x);\n" +
+            "    break;\n";
+
+        var multilineLineBefore = "case A:\n    var entries = Deserialize(x);";
+
+        var ex = Assert.Throws<ToolNotFoundException>(
+            () => ContextHelper.FindSnippetPositionWithLength(
+                SourceText.From(source), "var entries = Deserialize(x);", lineBefore: multilineLineBefore));
+        Assert.That(ex!.Message, Does.Contain("single line"));
+        Assert.That(ex.Message, Does.Contain("lineBefore"));
+    }
 }

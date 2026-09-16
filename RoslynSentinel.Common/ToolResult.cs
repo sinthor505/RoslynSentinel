@@ -109,6 +109,18 @@ public record ToolResult<T>
     /// live process by hand. See <see cref="ServerVersion"/> and <see cref="ServerBinaryPath"/>.
     /// </summary>
     public int ServerPid { get; init; } = ServerBuildInfo.Pid;
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Unique identifier for this specific response, generated fresh per instance. Not settable ->
+    /// exists solely so a human or agent reviewing a transcript/log can locate the exact tool
+    /// response being discussed (e.g. "the call with ResponseId abc123..."), which a duplicate
+    /// tool name + similar arguments across many turns cannot do on its own.
+    /// </summary>
+    public string ResponseId { get; init; } = Guid.NewGuid().ToString();
+
+
     /// <summary>True when the operation completed without error.</summary>
     public bool Success
     {

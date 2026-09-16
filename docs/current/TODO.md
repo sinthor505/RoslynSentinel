@@ -115,6 +115,25 @@ rather than being bolted on as a same-shaped bool.
 recommendations for the user to decide, not gaps this session's work left broken — the additive,
 non-breaking behavior is working as designed today.
 
+## `contextSnippet` "not found"/"does not exist" wording is model-confusing across every ContextHelper-backed locator — not started
+
+**Found:** 2026-09-15. Full audit: [finding_snippet_notfound_wording_confusion_audit.md](finding_snippet_notfound_wording_confusion_audit.md).
+
+Every snippet/locator failure path built on `ContextHelper`'s literal-text matching reports a failed
+match using "not found"/"does not exist" wording, which a weak model reads as "the content itself is
+gone" rather than "your literal text didn't align to anything." Separately, several genuinely
+different failure kinds (a compiler diagnostic from a hypothetical edit, a malformed
+`lineBefore`/`lineAfter` argument, a resolved position with the wrong syntax-node kind at it) share
+the same message shape with no distinguishing label, risking conflation with real no-match errors —
+this is the case that prompted the audit (`ReplaceSnippet`'s `action=validate` compiler-diagnostic
+block reading identically to a snippet-not-found error).
+
+Root cause is concentrated in two places: `ContextHelper.cs`'s two throw sites (lines 216, 322), and
+`ToolException.cs`'s `ToolNotFoundException` conflating real-absence and snippet-mismatch under one
+error code. Nearly every other affected call site (9+ files) just propagates or lightly wraps that
+same message — fixing the root sites fixes most of the surface by inheritance. See the finding doc's
+"How to apply" section for the suggested fix order before drafting an implementation plan.
+
 ## Mutating tools don't return the resulting content, forcing a separate `ReadFile` to see the outcome
 
 **Found:** 2026-08-19/20, raised by Andrew while reviewing the `Build` tool implementation session.
