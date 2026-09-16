@@ -560,10 +560,12 @@ public class SentinelWorkspaceTools
     // reshaping the same edit. Bounds are per-parameter now rather than a shared char cap: unlike
     // the ApplyDiff family, which anchors a small hunk inside a larger context, ReplaceSnippet
     // replaces the entire matched span, so oldContent legitimately grows with the edit.
-    private const int MaxOldContentLines = 60;
-    private const int MaxOldContentChars = 2000;
-    private const int MaxNewContentLines = 60;
-    private const int MaxNewContentChars = 2000;
+    // Startup-tunable via ReplaceSnippetOptions (--replace-snippet-max-* args / env vars) so
+    // model-eval runs can experiment with looser/tighter limits without a code change.
+    private static int MaxOldContentLines => ReplaceSnippetOptions.MaxOldContentLines;
+    private static int MaxOldContentChars => ReplaceSnippetOptions.MaxOldContentChars;
+    private static int MaxNewContentLines => ReplaceSnippetOptions.MaxNewContentLines;
+    private static int MaxNewContentChars => ReplaceSnippetOptions.MaxNewContentChars;
     [McpServerTool(Name = "ReplaceSnippet")]
     [Produces(DataTag.ChangeId)]
     // Deliberately names no whole-file-write tool. Attribute arguments must be compile-time

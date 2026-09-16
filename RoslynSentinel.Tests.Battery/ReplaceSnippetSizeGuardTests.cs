@@ -41,8 +41,10 @@ public class ReplaceSnippetSizeGuardTests
     public async Task ReplaceSnippet_MidSizeEdit_IsNoLongerRejectedForSizeAsync()
     {
         // ~40 lines / ~1200 chars of newContent: comfortably over the old 20-line/200-char caps and
-        // under the new 60-line/2000-char ones. The assertion is specifically that it isn't
-        // *size*-rejected -> validation may still reject the content on its own merits.
+        // under the current default caps (line/char limits are startup-configurable via
+        // ReplaceSnippetOptions; these tests run against its built-in defaults). The assertion is
+        // specifically that it isn't *size*-rejected -> validation may still reject the content on
+        // its own merits.
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
@@ -98,7 +100,7 @@ public class ReplaceSnippetSizeGuardTests
         var tools = BuildTools(workspaceManager);
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
-        var tooManyLines = string.Join('\n', Enumerable.Range(0, 80).Select(i => $"line {i}"));
+        var tooManyLines = string.Join('\n', Enumerable.Range(0, 120).Select(i => $"line {i}"));
 
         var result = await tools.ReplaceSnippet(
             reason: "test message", ProposedChangeAction.validate, targetFile,
@@ -107,7 +109,7 @@ public class ReplaceSnippetSizeGuardTests
         Assert.That(result.Success, Is.False);
         Assert.Multiple(() =>
         {
-            Assert.That(result.Error!.Message, Does.Contain("oldContent is 80 lines"));
+            Assert.That(result.Error!.Message, Does.Contain("oldContent is 120 lines"));
             Assert.That(result.Error!.Message, Does.Contain("newContent is 2500 chars"));
         });
     }

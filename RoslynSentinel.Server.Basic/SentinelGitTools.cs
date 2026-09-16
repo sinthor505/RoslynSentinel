@@ -378,8 +378,8 @@ public class SentinelGitTools
         string? paths = null,
         [Description("diff: byte cap on the returned diff (max 524288).")]
         int maxBytes = 65536,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit, unused otherwise.
-        [Description("commit: the commit message. Required for operation=commit.")]
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
+        [Description("commit: the commit message. Required for operation=commit unless amend=true, in which case omitting it keeps HEAD's existing message.")]
         string? message = null,
         [Description("stage/commit: which files to stage. \"tracked\" (default) stages modifications and deletions of already-tracked files only (git add -u) and does NOT stage new files. \"all\" stages everything in the working tree including untracked files (git add -A). \"listed\" stages exactly the paths you name in files/paths, untracked ones included - use this whenever you know which files you want. Naming files alongside a scope other than \"listed\" is rejected, so a file list can never be silently overridden.")]
         GitStageScope scope = GitStageScope.tracked,
@@ -403,6 +403,8 @@ public class SentinelGitTools
         string remoteName = "origin",
         [Description("push: true also sets the pushed branch's upstream tracking (git push -u).")]
         bool setUpstream = false,
+        [Description("commit: true amends HEAD instead of creating a new commit (git commit --amend). message becomes optional when amend=true - omit it to keep HEAD's existing message (--no-edit), or pass one to replace it.")]
+        bool amend = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -430,7 +432,7 @@ public class SentinelGitTools
             GitOperation.diff => await DiffAsync(gitRoot, target, resolvedPaths, maxBytes, cancellationToken),
             GitOperation.stage or GitOperation.add => await StageAsync(gitRoot, scope, resolvedPaths, cancellationToken),
             GitOperation.unstage => await UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
-            GitOperation.commit => await CommitAsync(gitRoot, message, scope, resolvedPaths, cancellationToken),
+            GitOperation.commit => await CommitAsync(gitRoot, message, scope, resolvedPaths, amend, cancellationToken),
             GitOperation.revert => await RevertAsync(gitRoot, commitHash, noCommit, cancellationToken),
             GitOperation.branch => await BranchAsync(gitRoot, branchName, startPoint, deleteBranch, cancellationToken),
             GitOperation.checkout => await CheckoutAsync(gitRoot, branchName, createBranch, startPoint, cancellationToken),
@@ -717,9 +719,11 @@ public class SentinelGitTools
         }
     }
     private async Task<GitCommitResult> CommitAsync(
-        string gitRoot, string? message, GitStageScope scope, string? paths, CancellationToken cancellationToken)
+        string gitRoot, string? message, GitStageScope scope, string? paths, bool amend, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(message))
+        // Amend keeps HEAD's message when none is supplied (git commit --amend --no-edit);
+        // a plain commit has no prior message to fall back on, so it stays required.
+        if (string.IsNullOrWhiteSpace(message) && !amend)
         {
             return new GitCommitResult
             {
@@ -739,15 +743,22 @@ public class SentinelGitTools
             // current index regardless of what was just staged above -> silently sweeping in
             // anything left over from earlier staging in the same working tree. `files`/`paths`
             // must narrow the commit, not just add to what StageAsync staged.
+            var messageArgs = (amend, HasMessage: !string.IsNullOrWhiteSpace(message)) switch
+            {
+                (amend: true, HasMessage: true) => new[] { "--amend", "-m", message! },
+                (amend: true, HasMessage: false) => new[] { "--amend", "--no-edit" },
+                _ => new[] { "-m", message! }
+            };
+
             string[] commitArgs;
             if (scope == GitStageScope.listed && !string.IsNullOrWhiteSpace(paths))
             {
                 var filePaths = paths!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                commitArgs = ["commit", "-m", message, "--", .. filePaths];
+                commitArgs = ["commit", .. messageArgs, "--", .. filePaths];
             }
             else
             {
-                commitArgs = ["commit", "-m", message];
+                commitArgs = ["commit", .. messageArgs];
             }
 
             var (commitExit, commitOut, commitErr) = await RunGitAsync(gitRoot, commitArgs, cancellationToken);
@@ -764,7 +775,12 @@ public class SentinelGitTools
             var (hashExit, hashOut, _) = await RunGitAsync(gitRoot, ["rev-parse", "HEAD"], cancellationToken);
             var hash = hashExit == 0 ? hashOut.Trim() : "";
 
-            return new GitCommitResult { Success = true, CommitHash = hash, Message = message };
+            // message can be null here (amend --no-edit kept HEAD's existing message), so read
+            // back the commit's actual message rather than echoing the (possibly absent) input.
+            var (msgExit, msgOut, _) = await RunGitAsync(gitRoot, ["log", "-1", "--format=%B"], cancellationToken);
+            var finalMessage = msgExit == 0 ? msgOut.Trim() : message ?? "";
+
+            return new GitCommitResult { Success = true, CommitHash = hash, Message = finalMessage };
         }
         catch (Exception ex)
         {

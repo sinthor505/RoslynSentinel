@@ -24,6 +24,7 @@ public class ServerHttp
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
         LlmOptions.Configure(args);
+        ReplaceSnippetOptions.Configure(args);
 
         if (ServerStartupHelpers.HandleListTools(
                 args,
