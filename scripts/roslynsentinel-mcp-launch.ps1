@@ -40,6 +40,14 @@
     stdout/stderr must stay completely clean for the stdio JSON-RPC transport once the real server
     process is running - so every diagnostic this script itself emits goes to
     bin-vscode\<instance-id>\launch.log, never to the console.
+
+    If VS Code never seems to launch this script at all (no bin-vscode\<instance-id>\ folder
+    appears, no launch.log written), the fault is usually one level up: check
+    C:\Users\Administrator\.mcp.json first. It invokes this script via powershell.exe -File plus a
+    hand-edited JSON "args" array (--include-tools=... and the --replace-snippet-max-* flags) - a
+    missing comma or a truncated flag there is invalid JSON, so VS Code's MCP client silently never
+    gets a valid launch command and this script never runs. Validate it (e.g. any JSON parser) before
+    assuming this script itself is broken.
 #>
 [CmdletBinding()]
 param(

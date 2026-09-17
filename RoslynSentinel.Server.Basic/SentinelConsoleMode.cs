@@ -51,7 +51,7 @@ public static partial class SentinelConsoleMode
     /// Reads <see cref="McpServerTool.ProtocolTool"/> from every registered DI instance. Falls back
     /// to constructing tools directly via <see cref="McpServerTool.Create"/> over all loaded
     /// RoslynSentinel.Server.* assemblies when DI registration returns zero (e.g. singleton factory
-    /// delay or scope mismatch at startup time) -> mirrors what <c>WithToolsFixed&lt;T&gt;()</c> does.
+    /// delay or scope mismatch at startup time) -> mirrors what <c>WithSentinelTools&lt;T&gt;()</c> does.
     /// Shared by <see cref="BuildToolManifestFor"/> and <see cref="WriteStartupDump"/> so the two
     /// can never independently drift.
     /// </summary>
@@ -71,7 +71,7 @@ public static partial class SentinelConsoleMode
                 .SelectMany(type =>
                 {
                     var instance = services.GetService(type);
-                    var opts = new McpServerToolCreateOptions { Services = services, SchemaCreateOptions = McpToolSchemaFix.SchemaCreateOptions };
+                    var opts = new McpServerToolCreateOptions { Services = services, SchemaCreateOptions = McpToolSchemaPatcher.SchemaCreateOptions };
                     return type
                         .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                         .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null

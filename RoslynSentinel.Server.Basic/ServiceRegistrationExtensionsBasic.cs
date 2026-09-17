@@ -153,29 +153,29 @@ public static class RoslynSentinelServiceExtensionsBasic
         // effect, since it exists for the case where the selection itself might be the problem.
         // Deliberately not in ToolClassRegistry, so it's never counted or excludable.
         services.AddSingleton<SentinelServerStatusTools>();
-        mcpBuilder.WithToolsFixed<SentinelServerStatusTools>();
+        mcpBuilder.WithSentinelTools<SentinelServerStatusTools>();
 
         if (activeToolClasses.Contains("SentinelWorkspaceTools"))
         {
             services.AddSingleton<WorkspaceReadNavigationImpl>();
             services.AddSingleton<WorkspaceReadNavigationTools>();
             services.AddSingleton<SentinelWorkspaceTools>();
-            mcpBuilder.WithToolsFixed<SentinelWorkspaceTools>();
+            mcpBuilder.WithSentinelTools<SentinelWorkspaceTools>();
         }
         if (activeToolClasses.Contains("SentinelDocumentationTools"))
         {
             services.AddSingleton<SentinelDocumentationTools>();
-            mcpBuilder.WithToolsFixed<SentinelDocumentationTools>();
+            mcpBuilder.WithSentinelTools<SentinelDocumentationTools>();
         }
         if (activeToolClasses.Contains("SentinelSymbolTools"))
         {
             services.AddSingleton<SentinelSymbolTools>();
-            mcpBuilder.WithToolsFixed<SentinelSymbolTools>();
+            mcpBuilder.WithSentinelTools<SentinelSymbolTools>();
         }
         if (activeToolClasses.Contains("SentinelGitTools"))
         {
             services.AddSingleton<SentinelGitTools>();
-            mcpBuilder.WithToolsFixed<SentinelGitTools>();
+            mcpBuilder.WithSentinelTools<SentinelGitTools>();
         }
         if (activeToolClasses.Contains("SentinelAdminTools"))
         {
@@ -183,7 +183,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             // ServerStdio.cs/ServerHttp.cs), so --mode alone can't reach it; only an explicit
             // --mode=Admin or --include-tools=SentinelAdminTools activates it.
             services.AddSingleton<SentinelAdminTools>();
-            mcpBuilder.WithToolsFixed<SentinelAdminTools>();
+            mcpBuilder.WithSentinelTools<SentinelAdminTools>();
         }
         if (activeToolClasses.Contains("SentinelWholeFileWriteTools"))
         {
@@ -192,7 +192,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             // --mode=Admin/--mode=WholeFileWrite or --include-tools=SentinelWholeFileWriteTools
             // activates it.
             services.AddSingleton<SentinelWholeFileWriteTools>();
-            mcpBuilder.WithToolsFixed<SentinelWholeFileWriteTools>();
+            mcpBuilder.WithSentinelTools<SentinelWholeFileWriteTools>();
         }
         if (activeToolClasses.Contains("SentinelIntelligenceTools"))
         {
@@ -207,7 +207,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         if (activeToolClasses.Contains("SentinelRefactoringTools"))
         {
             services.AddSingleton<SentinelRefactoringTools>();
-            mcpBuilder.WithToolsFixed<SentinelRefactoringTools>();
+            mcpBuilder.WithSentinelTools<SentinelRefactoringTools>();
         }
         if (activeToolClasses.Contains("SentinelAdvancedRefactoringTools"))
         {

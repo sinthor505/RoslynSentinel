@@ -448,13 +448,13 @@ public class SentinelRefactoringTools
     }
 
 
-    [McpServerTool(Name = "RenameSymbol")]
+    [McpServerTool(Name = "RenameSymbol", UseStructuredContent = true, OutputSchemaType = typeof(RenameSymbolResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Renames a symbol and all its references across the solution, including mentions in XML doc comments, inline comments, and string literals. Returns changeId and updatedHandle for the renamed symbol, plus residualMentions for any leftover occurrences of the old name that rename couldn't reach (e.g. embedded in an unrelated identifier, or in a non-source file). Does NOT simplify call sites or add/remove using directives - if the rename target's new name needs a namespace not already in scope at a call site, or you want to shorten a fully-qualified reference, use the UsingDirective tool separately.")]
     public async Task<ToolResult<object>> RenameSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description(ToolParams.ProjectName)] string projectName,
-        [Description(ToolParams.DocCommentId)] string docCommentId,
+        [Description(ToolParams.DocCommentId)][Consumes(DataTag.DocCommentId, required: true)] string docCommentId,
         [Description("New name for the symbol. Must be a valid C# identifier.")] string newName,
         [Description(ToolParams.SessionId)] string sessionId = "",
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
@@ -1307,7 +1307,10 @@ public class SentinelRefactoringTools
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ConstructorParameter") };
         }
     }
-    [McpServerTool(Name = "MethodSignature")]
+    // OutputSchemaType covers the "view" branch's shape only ({ Parameters }) - the add/remove
+    // branches (ToJsonSummary / MemberChangedContentResult offload) are out of scope for this POC.
+    // See proposal_structuredcontent_rollout.md.
+    [McpServerTool(Name = "MethodSignature", UseStructuredContent = true, OutputSchemaType = typeof(MethodSignatureViewResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view a method's parameters (general-purpose - not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
     public async Task<ToolResult<object>> MethodSignature(
@@ -1663,7 +1666,7 @@ public class SentinelRefactoringTools
         }
     }
 
-    [McpServerTool(Name = "ModifyModifier")]
+    [McpServerTool(Name = "ModifyModifier", UseStructuredContent = true, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a non-accessibility modifier keyword. Action: add or remove. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Does NOT cover accessibility (private/public/etc.) - use ChangeAccessibility for those, or ModifyAttribute for [Attribute] syntax. Returns changeId.")]
     public async Task<ToolResult<object>> ModifyModifier(
@@ -1928,3 +1931,79 @@ public class SentinelRefactoringTools
         }
     }
 }
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Named shape mirroring the <c>updatedHandle</c> anonymous object inside
+/// <see cref="RenameSymbolResultEnvelope"/>'s <c>Data</c>, built from <see cref="SymbolHandle"/>.
+/// Primary path only - see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record RenameSymbolUpdatedHandle(
+    [property: Produces(DataTag.SessionId)] string SessionId,
+    [property: Produces(DataTag.ProjectName)] string ProjectName,
+    [property: Produces(DataTag.DocCommentId)] string DocCommentId);// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Named shape mirroring the anonymous object <see cref="SentinelRefactoringTools.RenameSymbol"/>
+/// assigns to <c>ToolResult&lt;object&gt;.Data</c> on its applied success path. Primary path only
+/// (the resolution-failed / no-pending-changes / apply-failed error paths return a different,
+/// error-shaped envelope with no Data) - see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record RenameSymbolData(
+    [property: Produces(DataTag.ChangeId)] string? ChangeId,
+    bool DryRun,
+    string? Diff,
+    [property: Produces(DataTag.SymbolName)] string OldName,
+    [property: Produces(DataTag.SymbolName)] string NewName,
+    int FilesChanged,
+    RenameSymbolUpdatedHandle? UpdatedHandle,
+    IReadOnlyList<ResidualMention>? ResidualMentions,
+    string? ResidualMentionsNote);// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Envelope shape mirroring <c>ToolResult&lt;object&gt;</c> as actually populated on
+/// <see cref="SentinelRefactoringTools.RenameSymbol"/>'s primary success path, which sets only
+/// <c>Success</c> and <c>Data</c> (not TotalRecords/WorkspaceVersion/etc). Primary path only -
+/// see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record RenameSymbolResultEnvelope(
+    bool Success,
+    RenameSymbolData? Data);// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Envelope shape mirroring <c>ToolResult&lt;object&gt;</c> as actually populated on
+/// <see cref="SentinelRefactoringTools.ModifyModifier"/>'s primary (autoStage=true, singular-edit,
+/// non-batch) success path, which sets only <c>Success</c> and <c>Data</c>. Deliberately does not
+/// cover the batch (edits != null), autoStage=false, or error branches - see
+/// proposal_structuredcontent_rollout.md. AppliedChangeSummary lives in RoslynSentinel.Common and
+/// is reused by several other tools (e.g. ChangeAccessibility); it is intentionally left
+/// undecorated here rather than adding DataTag attributes to a shared type outside this POC's
+/// file scope - ChangeId tagging on ModifyModifier's own output is expressed at the method level
+/// via the existing [Produces(DataTag.ChangeId)] instead.
+/// </summary>
+public sealed record ModifyModifierResultEnvelope(
+    bool Success,
+    AppliedChangeSummary? Data);// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Named shape mirroring the engine-layer <c>MethodParameterInfo</c> (RoslynSentinel.Basic,
+/// RefactoringEngine.cs) as surfaced by MethodSignature's view branch. Declared here (rather than
+/// tagging MethodParameterInfo itself) because that engine type lives outside this POC's file
+/// scope - see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record MethodSignatureParameterInfo(
+    [property: Produces(DataTag.SymbolName)] string ParamName,
+    [property: Produces(DataTag.DataType)] string ParamType,
+    string? DefaultValue);// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Mirrors the anonymous <c>new { Parameters = parameters }</c> object assigned to Data on
+/// MethodSignature's view branch.
+/// </summary>
+public sealed record MethodSignatureViewData(
+    IReadOnlyList<MethodSignatureParameterInfo> Parameters);// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Envelope shape mirroring <c>ToolResult&lt;object&gt;</c> as actually populated on
+/// <see cref="SentinelRefactoringTools.MethodSignature"/>'s "view" branch only (operation=view),
+/// which sets only <c>Success</c> and <c>Data = new { Parameters }</c>. The add/remove branches
+/// (both the non-autoStage ToJsonSummary shape and the autoStage applied-with-offload
+/// MemberChangedContentResult/AppliedChangeSummary shape) are intentionally NOT covered by this
+/// POC - see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record MethodSignatureViewResultEnvelope(
+    bool Success,
+    MethodSignatureViewData? Data);

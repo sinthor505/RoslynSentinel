@@ -1,12 +1,9 @@
-using System.Diagnostics;
 using System.Reflection;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Server.Advanced;
 
@@ -175,38 +172,38 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         if (activeToolClasses.Contains("SentinelIntelligenceTools"))
         {
             services.AddSingleton<SentinelIntelligenceTools>();
-            mcpBuilder.WithToolsFixed<SentinelIntelligenceTools>();
+            mcpBuilder.WithSentinelTools<SentinelIntelligenceTools>();
         }
         if (activeToolClasses.Contains("SentinelScanTools"))
         {
             services.AddSingleton<SentinelScanTools>();
-            mcpBuilder.WithToolsFixed<SentinelScanTools>();
+            mcpBuilder.WithSentinelTools<SentinelScanTools>();
         }
         if (activeToolClasses.Contains("SentinelAdvancedRefactoringTools"))
         {
             // SentinelRefactoringTools already registered above via Basic.
             services.AddSingleton<SentinelAdvancedRefactoringTools>();
-            mcpBuilder.WithToolsFixed<SentinelAdvancedRefactoringTools>();
+            mcpBuilder.WithSentinelTools<SentinelAdvancedRefactoringTools>();
         }
         if (activeToolClasses.Contains("SentinelModernizationTools"))
         {
             services.AddSingleton<SentinelModernizationTools>();
-            mcpBuilder.WithToolsFixed<SentinelModernizationTools>();
+            mcpBuilder.WithSentinelTools<SentinelModernizationTools>();
         }
         if (activeToolClasses.Contains("SentinelQualityTools"))
         {
             services.AddSingleton<SentinelQualityTools>();
-            mcpBuilder.WithToolsFixed<SentinelQualityTools>();
+            mcpBuilder.WithSentinelTools<SentinelQualityTools>();
         }
         if (activeToolClasses.Contains("SentinelGenerationTools"))
         {
             services.AddSingleton<SentinelGenerationTools>();
-            mcpBuilder.WithToolsFixed<SentinelGenerationTools>();
+            mcpBuilder.WithSentinelTools<SentinelGenerationTools>();
         }
         if (activeToolClasses.Contains("SentinelCommentingTools"))
         {
             services.AddSingleton<SentinelCommentingTools>();
-            mcpBuilder.WithToolsFixed<SentinelCommentingTools>();
+            mcpBuilder.WithSentinelTools<SentinelCommentingTools>();
         }
         var codemodActive = (ToolClassRegistry.CodemodTriggerModes.Any(activeModes.Contains) ||
                               resolvedIncludeTools.Contains(ToolClassRegistry.CodemodToolClass)) &&
@@ -214,12 +211,12 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         if (codemodActive)
         {
             services.AddSingleton<SentinelCodemodTools>();
-            mcpBuilder.WithToolsFixed<SentinelCodemodTools>();
+            mcpBuilder.WithSentinelTools<SentinelCodemodTools>();
         }
         if (activeToolClasses.Contains("SentinelAsyncifyTools"))
         {
             services.AddSingleton<SentinelAsyncifyTools>();
-            mcpBuilder.WithToolsFixed<SentinelAsyncifyTools>();
+            mcpBuilder.WithSentinelTools<SentinelAsyncifyTools>();
         }
 
         return mcpBuilder;

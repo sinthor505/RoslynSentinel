@@ -68,8 +68,8 @@ public class SentinelSymbolTools
         _workspaceManager = workspaceManager;
         _logger = logger;
     }
-    [McpServerTool(Name = "LocateSymbol")]
-    [Produces(DataTag.SymbolId)]
+    [McpServerTool(Name = "LocateSymbol", UseStructuredContent = true, OutputSchemaType = typeof(LocateSymbolResult))]
+    [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.SessionId)]
     [Produces(DataTag.ProjectName)]
     [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text - use SearchSolutionText for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
@@ -124,7 +124,7 @@ public class SentinelSymbolTools
         }
     }
     [McpServerTool(Name = "InspectSymbol")]
-    [Produces(DataTag.SymbolId)]
+    [Produces(DataTag.DocCommentId)]
     [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol - if you only have a name, use LocateSymbol first to find the declaring file.")]
     public async Task<ToolResult<object>> InspectSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
@@ -543,3 +543,41 @@ public class SentinelSymbolTools
         }
     }
 }
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Named shape mirroring <c>SymbolLocation</c> (the real per-item type
+/// <c>SymbolNavigationEngine.LocateSymbolAsync</c> returns), used only as part of
+/// <c>LocateSymbolResult</c>'s <c>OutputSchemaType</c> so <see cref="SentinelSymbolTools.LocateSymbol"/>
+/// can advertise a real MCP <c>outputSchema</c>/<c>StructuredContent</c> shape without changing the
+/// method's actual return type. Primary path only - see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record LocatedSymbolInfo(
+    [property: Produces(DataTag.SymbolName)] string SymbolName,
+    [property: Produces(DataTag.DocCommentId)] string? DocCommentId,
+    [property: Produces(DataTag.ProjectName)] string ProjectName,
+    string FullyQualifiedName,
+    [property: Produces(DataTag.SymbolKind)] string SymbolKind,
+    [property: Produces(DataTag.Signature)] string Signature,
+    [property: Produces(DataTag.ContainingType)] string? ContainingType,
+    [property: Produces(DataTag.ContainingNamespace)] string? ContainingNamespace,
+    [property: Produces(DataTag.SourceFilepath)] string? FilePath,
+    int? Line,
+    [property: Produces(DataTag.ContextSnippet)] string? ContextSnippet,
+    [property: Produces(DataTag.Accessibility)] string Accessibility);
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Named shape mirroring the actual <c>ToolResult&lt;object&gt;</c> envelope
+/// <see cref="SentinelSymbolTools.LocateSymbol"/> returns on its primary (match-found) success path
+/// - StructuredContent is populated from the whole method return value, not just its inner
+/// <c>Data</c>, since LocateSymbol (unlike McpServerStatus) returns
+/// <c>Task&lt;ToolResult&lt;object&gt;&gt;</c> rather than a bare object. Used only as
+/// <c>OutputSchemaType</c> so the tool can advertise a real MCP <c>outputSchema</c>/
+/// <c>StructuredContent</c> shape (2026-07-28 protocol) without changing the method's actual return
+/// type. Primary path only (the not-found and exception error paths return a different, error-shaped
+/// envelope with no Data) - see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record LocateSymbolResult(
+    bool Success,
+    IReadOnlyList<LocatedSymbolInfo>? Data,
+    int? TotalRecords,
+    int? WorkspaceVersion);

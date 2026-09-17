@@ -252,7 +252,7 @@ public class UpliftTarget
     /// <summary>
     /// Optional Roslyn documentation-comment ID (e.g. <c>M:Avaal.Service.CommonSearch.search(System.String)</c>)
     /// that uniquely identifies the bridge symbol. When set, only callers of this exact overload are uplifted ->
-    /// unrelated methods with the same name on other types are ignored. Copy from <c>ObsoleteCallerFinding.SymbolId</c>.
+    /// unrelated methods with the same name on other types are ignored. Copy from <c>ObsoleteCallerFinding.DocCommentId</c>.
     /// </summary>
     public string? SymbolId
     {
@@ -384,7 +384,7 @@ public class BridgeAsyncMethodsResult
     public BatchResultSummary Summary { get; init; } = new();
     /// <summary>
     /// Bridged method names ready to pass as <c>targets</c> to <c>uplift_callers</c>.
-    /// Each entry has <c>BridgedMethodName</c> and <c>SymbolId</c>; <c>ProjectName</c> is null (solution-scoped).
+    /// Each entry has <c>BridgedMethodName</c> and <c>DocCommentId</c>; <c>ProjectName</c> is null (solution-scoped).
     /// </summary>
     public List<UpliftTarget> SuggestedUpliftTargets { get; init; } = new();
 }

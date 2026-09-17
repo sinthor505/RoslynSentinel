@@ -1,6 +1,6 @@
 namespace RoslynSentinel.Common;
 
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Parameter, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Parameter | AttributeTargets.Property, AllowMultiple = true)]
 public sealed class ProducesAttribute : Attribute
 {
     public DataTag Tag

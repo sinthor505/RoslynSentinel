@@ -17,7 +17,7 @@ public enum DataTag
     ResultId,
     OperationId,
     SessionId,
-    SymbolId,
+    DocCommentId,
     ContextSnippet,
     StartLine,
     EndLine,
