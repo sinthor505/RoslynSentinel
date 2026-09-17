@@ -26,6 +26,8 @@ public sealed class LmStudioAgentClient
     private readonly ILogger<LmStudioAgentClient> _logger;
     private readonly string _model;
     private readonly Task _loadedModelStatusCheck;
+    private readonly SemaphoreSlim _contextLengthLock = new(1, 1);
+    private int _cachedContextLength;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -222,6 +224,21 @@ public sealed class LmStudioAgentClient
             throw new InvalidOperationException("LM Studio stream ended without a response.completed event.");
         }
 
+        // A response can arrive via response.completed yet still be truncated -> the Responses API
+        // marks this via Status="incomplete" plus IncompleteDetails.Reason (typically
+        // "max_output_tokens"), not via a distinct SSE event. Left unchecked, this produces an
+        // assistant message with whatever partial reasoning/text streamed before the cutoff and
+        // (commonly) zero tool calls -> indistinguishable from the model genuinely deciding it's
+        // done, which is exactly what let a truncated turn commit silently as a "successful" no-op
+        // PlanStepRunner step (run 20260916-211352-610, step 04-rename-symbol-decode).
+        if (completedResponse.Status == "incomplete")
+        {
+            var reason = completedResponse.IncompleteDetails?.Reason ?? "unknown";
+            throw new InvalidOperationException(
+                $"LM Studio response was truncated (status=incomplete, reason={reason}). " +
+                "The model likely hit maxTokensPerTurn before finishing its turn; raise it for this call site.");
+        }
+
         // LM Studio always echoes back whatever value it actually used, including its own default
         // when the request omitted the field -> so a mismatch against a value we explicitly sent
         // means LM Studio silently coerced or ignored it (seen for temperature/top_p with certain
@@ -270,7 +287,87 @@ public sealed class LmStudioAgentClient
             Content = messageText,
             ReasoningContent = string.IsNullOrEmpty(reasoningText) ? null : reasoningText,
             ToolCalls = toolCalls,
+            TotalTokens = completedResponse.Usage?.TotalTokens,
         };
+    }
+
+    /// <summary>
+    /// Resolves and caches the loaded model's context window via LM Studio's native
+    /// <c>/api/v0/models</c> endpoint. Mirrors <c>LmStudioClient.GetContextLengthAsync</c> (that
+    /// method is private to a different class with its own HttpClient/model fields, and this is a
+    /// small enough GET+parse that duplicating it beats forcing a shared abstraction mid-fix).
+    /// Resolution failures are cached too, as -1, so a down LM Studio server doesn't add a failed
+    /// HTTP call to every single completion request.
+    /// </summary>
+    public async Task<int> GetContextLengthAsync(CancellationToken cancellationToken)
+    {
+        if (_cachedContextLength != 0)
+        {
+            return _cachedContextLength;
+        }
+
+        await _contextLengthLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_cachedContextLength != 0)
+            {
+                return _cachedContextLength;
+            }
+
+            _cachedContextLength = await FetchContextLengthAsync(cancellationToken);
+            return _cachedContextLength;
+        }
+        finally
+        {
+            _contextLengthLock.Release();
+        }
+    }
+
+    private async Task<int> FetchContextLengthAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var modelsUrl = new Uri(_httpClient.BaseAddress!, "../api/v0/models");
+            using var response = await _httpClient.GetAsync(modelsUrl, cancellationToken);
+            var responseText = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Could not fetch context size from LM Studio ({StatusCode}); skipping cumulative context-size tracking. Body: {Body}",
+                    response.StatusCode, responseText);
+                return -1;
+            }
+
+            var parsed = JsonSerializer.Deserialize<LmStudioModelsResponse>(responseText, JsonOptions);
+            var match = parsed?.Data?.FirstOrDefault(m => string.Equals(m.Id, _model, StringComparison.Ordinal));
+            if (match?.LoadedContextLength is int contextLength and > 0)
+            {
+                return contextLength;
+            }
+
+            _logger.LogWarning(
+                "LM Studio's /api/v0/models response had no loaded_context_length for model '{Model}'; skipping cumulative context-size tracking.",
+                _model);
+            return -1;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Failed to fetch context size from LM Studio; skipping cumulative context-size tracking.");
+            return -1;
+        }
+    }
+
+    private sealed class LmStudioModelsResponse
+    {
+        public List<LmStudioModelInfo>? Data { get; set; }
+    }
+
+    private sealed class LmStudioModelInfo
+    {
+        public string? Id { get; set; }
+        [JsonPropertyName("loaded_context_length")]
+        public int? LoadedContextLength { get; set; }
     }
 
     /// <summary>
@@ -475,6 +572,45 @@ public sealed class LmStudioAgentClient
         {
             get; set;
         }
+
+        // "completed" | "incomplete" | "failed" per the Responses API spec. A response.completed
+        // event does NOT mean the turn actually finished -> a max_output_tokens cutoff still arrives
+        // via response.completed, just with Status="incomplete" (see CompleteOnceAsync's post-loop
+        // check).
+        public string? Status
+        {
+            get; set;
+        }
+        [JsonPropertyName("incomplete_details")]
+        public IncompleteDetailsObject? IncompleteDetails
+        {
+            get; set;
+        }
+
+        // Present on a well-behaved Responses API server; null on one that omits it entirely (see
+        // AgentChatMessage.TotalTokens's estimator-fallback contract).
+        public UsageObject? Usage
+        {
+            get; set;
+        }
+    }
+
+    private sealed class IncompleteDetailsObject
+    {
+        // Typically "max_output_tokens" or "content_filter".
+        public string? Reason
+        {
+            get; set;
+        }
+    }
+
+    private sealed class UsageObject
+    {
+        [JsonPropertyName("total_tokens")]
+        public int? TotalTokens
+        {
+            get; set;
+        }
     }
 
     private sealed class OutputItem
@@ -530,6 +666,16 @@ public sealed class AgentChatMessage
         get; init;
     } // set only on role:"tool" messages
     public List<AgentToolCall> ToolCalls { get; init; } = [];
+    /// <summary>
+    /// The backend-reported total token count (prompt + completion) for the request that produced
+    /// this message, when the backend's response included a usage object. Null for non-assistant
+    /// roles and for backends/turns that omitted usage -> callers tracking cumulative context
+    /// pressure (see ModelAgentRunner.RunAsync) must fall back to PromptTokenEstimator when null.
+    /// </summary>
+    public int? TotalTokens
+    {
+        get; init;
+    }
 }
 
 public sealed class AgentToolCall

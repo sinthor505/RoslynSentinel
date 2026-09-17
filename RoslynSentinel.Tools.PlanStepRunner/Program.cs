@@ -123,6 +123,22 @@ public static class Program
                     return 1;
                 }
 
+                // Symmetric counterpart to the ReadOnly check above: a non-readOnly step that
+                // touched nothing is just as much a scope violation as one that touched too much,
+                // but silently -> Converged only means the model stopped calling tools, which is
+                // indistinguishable from a turn getting cut short before its first tool call (see
+                // LmStudioAgentClient.CompleteOnceAsync's incomplete-status check). Run
+                // 20260916-211352-610's step 04-rename-symbol-decode committed a byte-identical
+                // no-op this way, discoverable only by diffing against the prior step's commit.
+                if (!step.ReadOnly && outcome.TouchedPaths.Count == 0)
+                {
+                    Console.WriteLine(
+                        $"HALTING - step {step.FileName} is not read-only but touched no files. " +
+                        "The model likely converged without acting (e.g. a truncated turn) rather than genuinely finishing.");
+                    Console.WriteLine($"  worktree left for inspection at {worktreePath}");
+                    return 1;
+                }
+
                 git.CommitWorktree(worktreePath, $"Plan step {step.FileName}");
 
                 // Cleanup failure after a successful commit isn't worth aborting the run over -> the
@@ -205,6 +221,11 @@ public static class Program
             // absorb the loop. Run 20260910-013550-398 spent its last 23 turns (~13 minutes)
             // re-issuing one failing ReplaceSnippet call and was reported as TurnCapExceeded.
             repeatedFailureLimit: 3,
+            // 32768 (double the eval-fixture default of 16384): unattended plan steps can require
+            // substantial up-front reasoning before the first tool call, and a truncated turn here
+            // silently committed as a false-positive no-op step (run 20260916-211352-610, step
+            // 04-rename-symbol-decode) before CompleteOnceAsync's incomplete-status check existed.
+            maxTokensPerTurn: 32768,
             turnCap: options.TurnCap,
             wallClockCap: TimeSpan.FromMinutes(options.WallClockCapMinutes),
             logger: loggerFactory.CreateLogger<ModelAgentRunner>());

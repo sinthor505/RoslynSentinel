@@ -1980,7 +1980,7 @@ public class SentinelWorkspaceTools
                 object? outlineData = null;
                 try
                 {
-                    var fileOutline = await _readNav.GetFileOutline(reason: "test message", filePathResolved, cancellationToken);
+                    var fileOutline = await _readNav.GetFileOutline(reason: reason, filePathResolved, cancellationToken);
                     outlineData = fileOutline.Data;
                 }
                 catch (Exception ex)

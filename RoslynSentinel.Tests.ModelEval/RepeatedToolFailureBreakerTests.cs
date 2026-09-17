@@ -148,7 +148,7 @@ public class RepeatedToolFailureBreakerTests
         // Guards against "disable it by passing 0" -> the parameter is required precisely so every
         // call site states a real tolerance; a silent no-op limit would recreate the original gap.
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new ModelAgentRunner(NewAgentClient(_ => ""), _mcpClient, repeatedFailureLimit: 0));
+            new ModelAgentRunner(NewAgentClient(_ => ""), _mcpClient, repeatedFailureLimit: 0, maxTokensPerTurn: 8192));
     }
 
     private ModelAgentRunner NewRunner(
@@ -167,6 +167,7 @@ public class RepeatedToolFailureBreakerTests
         return new ModelAgentRunner(
             agentClient, _mcpClient,
             repeatedFailureLimit: repeatedFailureLimit,
+            maxTokensPerTurn: 8192,
             turnCap: turnCap,
             wallClockCap: TimeSpan.FromMinutes(2));
     }

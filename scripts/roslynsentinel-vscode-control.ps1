@@ -244,7 +244,7 @@ function Start-HttpCopy {
     $launchStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $launchStdout = Join-Path $launchLogDir "launch-stdout-$launchStamp.log"
     $launchStderr = Join-Path $launchLogDir "launch-stderr-$launchStamp.log"
-    Start-Process -FilePath $httpExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--include-tools=$includeTools" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
+    Start-Process -FilePath $httpExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--include-tools=$includeTools", "--replace-snippet-max-old-lines=200", "--replace-snippet-max-new-lines=200", "--replace-snippet-max-old-chars=3000", "--replace-snippet-max-new-chars=3000" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
 
     $started = $null
     $sw = [System.Diagnostics.Stopwatch]::StartNew()

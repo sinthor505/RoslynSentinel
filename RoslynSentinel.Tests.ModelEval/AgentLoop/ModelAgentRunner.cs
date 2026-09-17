@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Tests.ModelEval.AgentLoop;
 
 /// <summary>
@@ -25,6 +27,16 @@ public sealed class ModelAgentRunner
     /// by roslynsentinel-interrogate.ps1) always keeps the full payload; only agent.log is affected.
     /// </summary>
     private const int AgentLogOffloadThresholdChars = 2000;
+
+    /// <summary>
+    /// Cumulative running-conversation tokens vs. the model's context window, as a fraction, at
+    /// which RunAsync starts logging a warning every turn. A truncated/failed call from hitting the
+    /// context limit outright (LM Studio's exceed_context_size_error) is often harder to diagnose
+    /// than max_output_tokens truncation (see LmStudioAgentClient.CompleteOnceAsync's Status check)
+    /// because nothing before this pointed at cumulative growth as the cause -> this makes the
+    /// approach visible in agent.log before the hard failure, not just after.
+    /// </summary>
+    private const double ContextUsageWarningFraction = 0.8;
 
     private readonly LmStudioAgentClient _llm;
     private readonly McpClient _mcpClient;
@@ -46,13 +58,24 @@ public sealed class ModelAgentRunner
     /// a live in-loop guard.
     /// </para>
     /// </param>
+    /// <param name="maxTokensPerTurn">
+    /// Per-turn output token ceiling, sent to LM Studio as max_output_tokens. Required, with no
+    /// default, for the same reason as <paramref name="repeatedFailureLimit"/>: a silent 8192
+    /// default let a model's turn get truncated mid-reasoning with zero tool calls emitted, which
+    /// LmStudioAgentClient.CompleteOnceAsync could not yet distinguish from the model genuinely
+    /// finishing -> PlanStepRunner then committed the truncated (no-op) turn as a successful step
+    /// (run 20260916-211352-610, step 04-rename-symbol-decode). CompleteOnceAsync now throws when
+    /// the Responses API reports Status="incomplete", but the budget itself still needs to be sized
+    /// per call site: a step expecting substantial up-front reasoning before its first tool call
+    /// needs more headroom than a fixture expecting a quick, simple turn.
+    /// </param>
     public ModelAgentRunner(
         LmStudioAgentClient llm,
         McpClient mcpClient,
         int repeatedFailureLimit,
+        int maxTokensPerTurn,
         int turnCap = 25,
         TimeSpan? wallClockCap = null,
-        int maxTokensPerTurn = 8192,
         ILogger<ModelAgentRunner>? logger = null)
     {
         if (repeatedFailureLimit < 1)
@@ -128,6 +151,12 @@ public sealed class ModelAgentRunner
         var firstFailureTurn = 0;
         RepeatedFailureDetail? repeatedFailure = null;
 
+        // Cumulative context tracking (see ContextUsageWarningFraction). contextLength is resolved
+        // once and cached (-1 if LM Studio couldn't report one, e.g. an older server) so a slow/down
+        // context-length lookup never adds latency to every turn.
+        var contextLength = await _llm.GetContextLengthAsync(cancellationToken);
+        var cumulativeTokens = 0;
+
         while (turnNumber < _turnCap)
         {
             if (overallStopwatch.Elapsed > _wallClockCap)
@@ -161,6 +190,22 @@ public sealed class ModelAgentRunner
             transcript.Turns.Add(turnRecord);
             messages.Add(modelMessage);
             await WriteTranscriptAsync(transcript, transcriptDirectory, cancellationToken);
+
+            // Prefer LM Studio's own reported total_tokens (exact) over PromptTokenEstimator (a
+            // chars/4 heuristic), falling back only when a backend omits usage. cumulativeTokens is
+            // a running total across the whole conversation, not per-turn, since that is what
+            // eventually triggers LM Studio's exceed_context_size_error.
+            cumulativeTokens += modelMessage.TotalTokens ?? PromptTokenEstimator.EstimateTokens(
+                LlmOptions.Model ?? "", (modelMessage.Content ?? "") + (modelMessage.ReasoningContent ?? ""));
+
+            if (contextLength > 0 && cumulativeTokens >= contextLength * ContextUsageWarningFraction)
+            {
+                _logger.LogWarning(
+                    "Turn {Turn}: cumulative conversation tokens (~{Cumulative}) have reached {Percent:P0} of " +
+                    "the model's {ContextLength}-token context window - further turns risk failing outright " +
+                    "with LM Studio's exceed_context_size_error.",
+                    turnNumber, cumulativeTokens, (double)cumulativeTokens / contextLength, contextLength);
+            }
 
             if (modelMessage.ToolCalls.Count == 0)
             {
