@@ -79,6 +79,7 @@ public class ServerStdio
         var stepId = ServerStartupHelpers.ParseStepId(args);
         var logPath = ServerStartupHelpers.ConfigureStdioLogging(logDirectory: logDirectory, runId: runId, stepId: stepId);
         ServerStartupHelpers.AttachCrashHandlers(logDirectory, runId, stepId);
+        var stoppedByScriptDetails = ServerStartupHelpers.ReadAndConsumeStoppedByScriptMarker();
 
         // ── Host ─────────────────────────────────────────────────────────────
         var builder = Host.CreateApplicationBuilder(args);
@@ -91,6 +92,8 @@ public class ServerStdio
         {
             builder.Services.AddRoslynSentinelHostOptions(operatingMode);
             builder.Services.AddRoslynSentinelEnginesBasic();
+            builder.Services.AddSingleton(new StoppedByScriptMarker(
+                WasFound: stoppedByScriptDetails is not null, Details: stoppedByScriptDetails));
 
             var mcpBuilder = builder.Services.AddMcpServer();
             if (isInteractive)

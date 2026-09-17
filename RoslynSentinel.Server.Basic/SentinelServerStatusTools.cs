@@ -11,11 +11,16 @@ public class SentinelServerStatusTools
     // Added by AddMember (expected - used for diagnostics)
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ActiveToolSurface _activeToolSurface;
+    private readonly StoppedByScriptMarker _stoppedByScriptMarker;
 
-    public SentinelServerStatusTools(IWorkspaceManager workspaceManager, ActiveToolSurface activeToolSurface)
+    public SentinelServerStatusTools(
+        IWorkspaceManager workspaceManager,
+        ActiveToolSurface activeToolSurface,
+        StoppedByScriptMarker stoppedByScriptMarker)
     {
         _workspaceManager = workspaceManager;
         _activeToolSurface = activeToolSurface;
+        _stoppedByScriptMarker = stoppedByScriptMarker;
     }
 
     [McpServerTool(Name = "McpServerStatus", UseStructuredContent = true, OutputSchemaType = typeof(McpServerStatusResult))]
@@ -62,6 +67,11 @@ public class SentinelServerStatusTools
                 activeToolClassCount = _activeToolSurface.ActiveToolClasses.Count,
                 activeToolClasses = _activeToolSurface.ActiveToolClasses,
             },
+            stoppedByScript = new
+            {
+                wasFound = _stoppedByScriptMarker.WasFound,
+                details = _stoppedByScriptMarker.Details,
+            },
         };
     }
 }
@@ -84,6 +94,11 @@ public sealed record McpServerStatusToolSurface(
     int ActiveToolClassCount,
     IReadOnlyCollection<string> ActiveToolClasses);
 // Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>Whether this instance's predecessor was deliberately stopped by
+/// roslynsentinel-vscode-control.ps1's stopallstdio/stopallhttp/stopalltypes actions, as reported by
+/// McpServerStatus.</summary>
+public sealed record McpServerStatusStoppedByScript(bool WasFound, string? Details);
+// Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Named shape mirroring <see cref="SentinelServerStatusTools.McpServerStatus"/>'s anonymous return
 /// object, used only as <c>OutputSchemaType</c> so the tool can advertise a real MCP
@@ -96,4 +111,5 @@ public sealed record McpServerStatusResult(
     int ProjectCount,
     int WorkspaceVersion,
     McpServerStatusBreakers Breakers,
-    McpServerStatusToolSurface ToolSurface);
+    McpServerStatusToolSurface ToolSurface,
+    McpServerStatusStoppedByScript StoppedByScript);

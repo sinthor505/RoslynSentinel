@@ -50,6 +50,7 @@ public class ServerHttp
         var stepId = ServerStartupHelpers.ParseStepId(args);
         var logPath = ServerStartupHelpers.ConfigureHttpLogging(logDirectory: logDirectory, runId: runId, stepId: stepId);
         ServerStartupHelpers.AttachCrashHandlers(logDirectory, runId, stepId);
+        var stoppedByScriptDetails = ServerStartupHelpers.ReadAndConsumeStoppedByScriptMarker();
 
         // ── Host ─────────────────────────────────────────────────────────────
         var builder = WebApplication.CreateBuilder(args);
@@ -65,6 +66,8 @@ public class ServerHttp
 
         builder.Services.AddRoslynSentinelHostOptions(operatingMode);
         builder.Services.AddRoslynSentinelEnginesAdvanced();
+        builder.Services.AddSingleton(new StoppedByScriptMarker(
+            WasFound: stoppedByScriptDetails is not null, Details: stoppedByScriptDetails));
 
         var mcpBuilder = builder.Services.AddMcpServer().WithHttpTransport();
         mcpBuilder.WithTasks(

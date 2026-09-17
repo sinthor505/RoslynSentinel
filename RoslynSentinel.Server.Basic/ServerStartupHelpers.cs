@@ -454,6 +454,43 @@ public static class ServerStartupHelpers
         };
     }
 
+    // ── Stopped-by-script marker ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Checks this instance's own root folder (one level above <see
+    /// cref="AppDomain.CurrentDomain"/>'s BaseDirectory, e.g. bin-vscode\&lt;instance-id&gt;\ for a
+    /// per-window stdio build whose exe lives in ...\Advanced\) for a marker file left by
+    /// roslynsentinel-vscode-control.ps1's stopallstdio/stopallhttp/stopalltypes actions, which write
+    /// it immediately before calling Stop-Process on this exact process. Consumed (read then deleted)
+    /// rather than left in place, so a stale marker from a previous life of this instance-id folder
+    /// can never be mistaken for a marker describing the CURRENT process's own shutdown - by the time
+    /// this runs, this process is the one that just started, so any marker found here necessarily
+    /// describes what happened to the previous occupant of this path. Read once at startup and cached
+    /// by the caller (see StoppedByScriptMarker DI registration) rather than re-read per call, since a
+    /// marker can only ever apply to how THIS process came to exist, not to anything that happens
+    /// during its lifetime.
+    /// </summary>
+    public static string? ReadAndConsumeStoppedByScriptMarker()
+    {
+        try
+        {
+            var markerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "stopped-by-script.marker");
+            if (!File.Exists(markerPath))
+            {
+                return null;
+            }
+
+            var contents = File.ReadAllText(markerPath);
+            File.Delete(markerPath);
+            return contents;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to read/consume stopped-by-script marker; ignoring.");
+            return null;
+        }
+    }
+
     // ── DI logger registration ────────────────────────────────────────────────
 
     /// <summary>

@@ -23,14 +23,23 @@
       build   - Rebuild the HTTP copy from current source (delegates to build.ps1), then restart it.
                 Use this after pulling new commits. Per-window stdio instances are unaffected - each
                 rebuilds itself on its own next launch via roslynsentinel-mcp-launch.ps1.
+      stopallstdio  - Stop every currently-running per-window stdio instance. Before killing each
+                one, writes a stopped-by-script.marker file into that instance's own root folder
+                (one level above its Advanced\ exe folder) recording the timestamp and PID. The
+                server itself reads and deletes this marker at its own next startup and reports it
+                live via the McpServerStatus tool - so an agent (or a human) can tell "this instance
+                was deliberately stopped by this script" without reading any log file.
+      stopallhttp   - Same marker-then-kill treatment for the shared HTTP fallback copy.
+      stopalltypes  - Both of the above.
 
     start/restart/build only ever touch the shared HTTP fallback copy under bin-vscode\Advanced.Http
     - not the Debug/Release flavor used by `dotnet test` / build.ps1's own lock-check region, and not
     the per-window stdio instance folders (those are only ever built/launched/torn down by the
-    wrapper script itself, per window).
+    wrapper script itself, per window). stopallstdio/stopallhttp/stopalltypes are the exception -
+    they intentionally reach into both scopes since their entire purpose is a known, markable stop.
 
 .PARAMETER Action
-    status | start | restart | build. Default: status.
+    status | start | restart | build | stopallstdio | stopallhttp | stopalltypes. Default: status.
 
 .PARAMETER VSCodePort
     Port for the dedicated VS Code Advanced binary's HTTP-transport instance. Default: 5150.
@@ -55,7 +64,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('status', 'start', 'restart', 'build')]
+    [ValidateSet('status', 'start', 'restart', 'build', 'stopallstdio', 'stopallhttp', 'stopalltypes')]
     [string]$Action = 'status',
 
     [int]$VSCodePort = 5150,
@@ -284,6 +293,68 @@ function Restart-HttpCopy {
     return Start-HttpCopy -AssumeStopped
 }
 
+# Writes a stopped-by-script marker into an instance's root folder (one level above its exe, e.g.
+# bin-vscode\<id>\ for a stdio instance or bin-vscode\Advanced.Http\ for the HTTP copy) BEFORE
+# Stop-Process runs, so the marker's presence can never race the process's own shutdown - the
+# server reads and deletes it (see ServerStartupHelpers.ReadAndConsumeStoppedByScriptMarker) at its
+# own next startup and surfaces it live via McpServerStatus, so an agent can see "the previous
+# occupant of this path was deliberately stopped by this script" without any log-file access.
+function Write-StoppedByScriptMarker {
+    param([Parameter(Mandatory)][string]$InstanceRoot, [Parameter(Mandatory)][int]$Pid_)
+
+    $markerPath = Join-Path $InstanceRoot 'stopped-by-script.marker'
+    $timestamp = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffK'
+    $line = "Stopped by roslynsentinel-vscode-control.ps1 script request at $timestamp. PID: $Pid_."
+    Add-Content -LiteralPath $markerPath -Value $line
+    return $markerPath
+}
+
+# Stops every currently-running RoslynSentinel.Server.Advanced process whose exe lives directly
+# under an Advanced\ folder one level below a per-window stdio instance root (bin-vscode\<id>\), as
+# opposed to the shared HTTP fallback copy (bin-vscode\Advanced.Http\) handled separately by
+# Stop-AllHttpInstances - Get-Process's own Path property is used to resolve each instance's root
+# rather than re-deriving it from Get-StdioInstanceFolders, so this also covers any stray process
+# whose folder no longer matches the instance-folder naming pattern.
+function Stop-AllStdioInstances {
+    $procs = @(Get-Process -Name 'RoslynSentinel.Server.Advanced' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -and $_.Path -ne $httpExe -and (Split-Path (Split-Path $_.Path -Parent) -Leaf) -eq 'Advanced' })
+
+    if ($procs.Count -eq 0) {
+        Write-Host "No per-window stdio instances currently running." -ForegroundColor Yellow
+        return $true
+    }
+
+    foreach ($proc in $procs) {
+        $instanceRoot = Split-Path (Split-Path $proc.Path -Parent) -Parent
+        $markerPath = Write-StoppedByScriptMarker -InstanceRoot $instanceRoot -Pid_ $proc.Id
+        Write-Host "Stopping PID $($proc.Id) ($instanceRoot) - marker: $markerPath" -ForegroundColor Yellow
+        $proc | Stop-Process -Force
+        Wait-ProcessExited -Process $proc
+    }
+
+    Write-Host "Stopped $($procs.Count) stdio instance(s)." -ForegroundColor Green
+    return $true
+}
+
+# Stops the shared HTTP fallback copy, mirroring Stop-AllStdioInstances's marker-then-kill ordering.
+# Kept separate from Restart-HttpCopy since that path is meant to bring the copy right back up,
+# whereas this is a deliberate "stop and leave stopped" action for stopallhttp/stopalltypes.
+function Stop-AllHttpInstances {
+    $proc = Get-HttpCopyProcess
+    if (-not $proc) {
+        Write-Host "HTTP copy is not currently running." -ForegroundColor Yellow
+        return $true
+    }
+
+    $markerPath = Write-StoppedByScriptMarker -InstanceRoot $httpOutDir -Pid_ $proc.Id
+    Write-Host "Stopping PID $($proc.Id) ($httpOutDir) - marker: $markerPath" -ForegroundColor Yellow
+    $proc | Stop-Process -Force
+    Wait-ProcessExited -Process $proc
+
+    Write-Host "Stopped HTTP copy." -ForegroundColor Green
+    return $true
+}
+
 switch ($Action) {
     'status' {
         $ok = Show-Status
@@ -305,5 +376,24 @@ switch ($Action) {
         Write-Host "=== Rebuilding VS Code HTTP-fallback copy from source (delegates to build.ps1) ===" -ForegroundColor Cyan
         & (Join-Path $PSScriptRoot 'build.ps1') -Flavor Solution -Mode Build -Force:$Force -VSCodePort $VSCodePort
         exit $LASTEXITCODE
+    }
+    'stopallstdio' {
+        Write-Host ""
+        Write-Host "=== Stopping all per-window stdio instances ===" -ForegroundColor Cyan
+        $ok = Stop-AllStdioInstances
+        exit ([int](-not $ok))
+    }
+    'stopallhttp' {
+        Write-Host ""
+        Write-Host "=== Stopping the shared HTTP fallback copy ===" -ForegroundColor Cyan
+        $ok = Stop-AllHttpInstances
+        exit ([int](-not $ok))
+    }
+    'stopalltypes' {
+        Write-Host ""
+        Write-Host "=== Stopping all per-window stdio instances and the shared HTTP fallback copy ===" -ForegroundColor Cyan
+        $okStdio = Stop-AllStdioInstances
+        $okHttp = Stop-AllHttpInstances
+        exit ([int](-not ($okStdio -and $okHttp)))
     }
 }

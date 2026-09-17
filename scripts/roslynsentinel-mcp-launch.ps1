@@ -107,6 +107,17 @@ $sweepCount = 0
 Get-ChildItem -LiteralPath $binVscodeRoot -Directory -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -match $instanceFolderPattern -and $_.Name -ne $instanceId } |
     ForEach-Object {
+        # A leftover marker here means this stale instance's own server process never got to
+        # consume it (see ServerStartupHelpers.ReadAndConsumeStoppedByScriptMarker) - most likely
+        # because roslynsentinel-vscode-control.ps1 stopped it and it was never relaunched. Log it
+        # before the folder (and marker with it) is deleted, since this sweep is the only other
+        # place that would ever see it.
+        $staleMarker = Join-Path $_.FullName 'stopped-by-script.marker'
+        if (Test-Path -LiteralPath $staleMarker) {
+            $markerContents = Get-Content -LiteralPath $staleMarker -Raw -ErrorAction SilentlyContinue
+            Write-LaunchLog "Sweep: '$($_.Name)' had a stopped-by-script marker (never consumed by a relaunch): $markerContents"
+        }
+
         Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
         if (-not (Test-Path -LiteralPath $_.FullName)) {
             $sweepCount++
