@@ -170,7 +170,7 @@ public class AdvancedStructuralEngine
     ///  - No existing class named targetClassName: synthesizes a new class (same behavior as the
     ///    former ExtractMembers as=class). STATIC MEMBERS ONLY, same reasoning as above.
     /// </summary>
-    public async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default)
+    public async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -227,13 +227,12 @@ public class AdvancedStructuralEngine
         }
 
         // Moving an INSTANCE member to anywhere other than an existing base class requires rewriting
-        // every call site's receiver expression -> and that's not always a safe mechanical substitution.
-        // A local like `var x = new ClassA(); x.Foo(); x.Bar();` where only Foo moves to ClassB has no
-        // single correct fix: retyping x to ClassB breaks Bar(), leaving it ClassA breaks Foo(). The real
-        // fix (splitting into two variables, or adding a second reference) reshapes the caller's method
-        // body -> a design decision, not something this tool can infer from the move alone. STATIC members
-        // have no such ambiguity (ClassA.Foo() -> ClassB.Foo() is unambiguous everywhere), so only those
-        // are supported for the existing-unrelated-class and new-class destinations.
+        // every call site's receiver expression. autoResolveCallSites (default true) drives that
+        // rewrite through MoveInstanceMembersAsync: unambiguous sites are fixed automatically, and
+        // anything left over must be named in callSiteFixups or the whole call is rejected -> see
+        // Decision 4 of docs/current/plans/plan_scoped_operation_ledger.md. STATIC members have no
+        // such ambiguity (ClassA.Foo() -> ClassB.Foo() is unambiguous everywhere) and always use the
+        // direct rewrite path below.
         var nonStaticMembers = membersToMove.Where(m =>
         {
             var modifiers = m switch
@@ -245,22 +244,6 @@ public class AdvancedStructuralEngine
             };
             return !modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword));
         }).ToList();
-
-        if (nonStaticMembers.Count > 0)
-        {
-            var names = string.Join(", ", nonStaticMembers.Select(m => m switch
-            {
-                MethodDeclarationSyntax meth => meth.Identifier.Text,
-                PropertyDeclarationSyntax prop => prop.Identifier.Text,
-                FieldDeclarationSyntax field => string.Join(", ", field.Declaration.Variables.Select(v => v.Identifier.Text)),
-                _ => "?"
-            }));
-            throw new ToolNotFoundException(
-                $"Cannot move instance member(s) [{names}] to '{targetClassName}': it is not an existing base class of '{className}'. " +
-                "Moving an instance member elsewhere requires rewriting every call site's receiver expression, which isn't always a safe " +
-                "mechanical substitution (a caller may use the same variable for other members that stay behind). Either make the member(s) " +
-                "static first, or move to an existing base class of the source type.");
-        }
 
         // Look for an existing (non-base) class named targetClassName, optionally narrowed by targetFilePath.
         var candidateDocs = targetFilePath.HasValue
@@ -284,6 +267,27 @@ public class AdvancedStructuralEngine
                 targetClassNode = candidate;
                 break;
             }
+        }
+
+        if (nonStaticMembers.Count > 0)
+        {
+            if (!autoResolveCallSites)
+            {
+                var names = string.Join(", ", nonStaticMembers.Select(m => m switch
+                {
+                    MethodDeclarationSyntax meth => meth.Identifier.Text,
+                    PropertyDeclarationSyntax prop => prop.Identifier.Text,
+                    FieldDeclarationSyntax field => string.Join(", ", field.Declaration.Variables.Select(v => v.Identifier.Text)),
+                    _ => "?"
+                }));
+                throw new ToolNotFoundException(
+                    $"Cannot move instance member(s) [{names}] to '{targetClassName}': it is not an existing base class of '{className}'. " +
+                    "Moving an instance member elsewhere requires rewriting every call site's receiver expression. Pass " +
+                    "autoResolveCallSites:true (the default) to have this resolved automatically where unambiguous, or " +
+                    "make the member(s) static first, or move to an existing base class of the source type.");
+            }
+
+            return await MoveInstanceMembersAsync(solution, filePath, className, membersToMove, targetClassName, memberNames, targetFilePath, targetDoc, targetClassNode, callSiteFixups, cancellationToken);
         }
 
         if (targetDoc?.FilePath != null && targetClassNode != null)
@@ -1005,5 +1009,153 @@ public class AdvancedStructuralEngine
         }
 
         return results;
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    private async Task<MoveMemberResult> MoveInstanceMembersAsync(
+        Solution solution,
+        FilePathWrapper filePath,
+        string className,
+        List<MemberDeclarationSyntax> membersToMove,
+        string targetClassName,
+        string[] memberNames,
+        FilePathWrapper? targetFilePath,
+        Document? existingTargetDoc,
+        ClassDeclarationSyntax? existingTargetClassNode,
+        Dictionary<string, string>? callSiteFixups,
+        CancellationToken cancellationToken)
+    {
+        var rows = await PreviewInstanceMoveCallSitesAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken);
+        var fixups = callSiteFixups ?? new Dictionary<string, string>();
+
+        var resolvedReceivers = new Dictionary<(string FilePath, int Line), string>();
+        var unresolved = new List<string>();
+
+        foreach (var row in rows)
+        {
+            if (row.Status == CallSiteStatus.Valid)
+            {
+                if (row.SuggestedFix != null)
+                {
+                    resolvedReceivers[(row.FilePath, row.Line)] = row.SuggestedFix;
+                }
+
+                continue;
+            }
+
+            var key = $"{row.FilePath}:{row.Line}";
+            if (fixups.TryGetValue(key, out var fixup))
+            {
+                resolvedReceivers[(row.FilePath, row.Line)] = fixup;
+                continue;
+            }
+
+            var candidateList = row.Candidates.Count > 0 ? $" Candidates in scope: {string.Join(", ", row.Candidates)}." : "";
+            unresolved.Add($"{Path.GetFileName(row.FilePath)}:{row.Line} ({row.CallExpression}) - {row.BlockReason}{candidateList}");
+        }
+
+        if (unresolved.Count > 0)
+        {
+            throw new ToolNotFoundException(
+                $"Cannot move instance member(s) [{string.Join(", ", memberNames)}] to '{targetClassName}': {unresolved.Count} call site(s) could not be resolved automatically and have no callSiteFixups entry:\n" +
+                string.Join("\n", unresolved) +
+                "\nSupply a callSiteFixups entry (key \"FilePath:Line\") for each, with either a reference-expression string or the shorthand \"new\".");
+        }
+
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
+        var root = (CompilationUnitSyntax)(await document.GetSyntaxRootAsync(cancellationToken))!;
+        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().First(c => c.Identifier.Text == className);
+
+        var updatedSourceClass = classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!;
+        var result = new Dictionary<FilePathWrapper, string>();
+
+        if (existingTargetDoc?.FilePath != null && existingTargetClassNode != null)
+        {
+            bool sameFile = string.Equals(Path.GetFullPath(filePath), Path.GetFullPath(existingTargetDoc.FilePath), StringComparison.OrdinalIgnoreCase);
+            if (sameFile)
+            {
+                var afterSourceEdit = root.ReplaceNode(classNode, updatedSourceClass);
+                var targetAfterSourceEdit = afterSourceEdit.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
+                var finalRoot = targetAfterSourceEdit != null
+                    ? afterSourceEdit.ReplaceNode(targetAfterSourceEdit, targetAfterSourceEdit.AddMembers(membersToMove.ToArray()))
+                    : afterSourceEdit;
+                result[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString();
+            }
+            else
+            {
+                var targetRoot = await existingTargetDoc.GetSyntaxRootAsync(cancellationToken);
+                var newTargetRoot = targetRoot!.ReplaceNode(existingTargetClassNode, existingTargetClassNode.AddMembers(membersToMove.ToArray()));
+                result[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root.ReplaceNode(classNode, updatedSourceClass)).ToFullString();
+                result[existingTargetDoc.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newTargetRoot).ToFullString();
+            }
+        }
+        else
+        {
+            var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
+            var newClassNode = SyntaxFactory.ClassDeclaration(targetClassName)
+                .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                .WithMembers(SyntaxFactory.List(membersToMove));
+            var cleanUsings = SyntaxFactory.List(root.Usings.Select(u =>
+                u.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
+            CompilationUnitSyntax newFileRoot;
+            if (ns != null)
+            {
+                BaseNamespaceDeclarationSyntax newNs = ns is FileScopedNamespaceDeclarationSyntax
+                    ? SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name).AddMembers(newClassNode)
+                    : (BaseNamespaceDeclarationSyntax)SyntaxFactory.NamespaceDeclaration(ns.Name).AddMembers(newClassNode);
+                newFileRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newNs);
+            }
+            else
+            {
+                newFileRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newClassNode);
+            }
+
+            var newFilePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{targetClassName}.cs");
+            result[newFilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newFileRoot).ToFullString();
+            result[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root.ReplaceNode(classNode, updatedSourceClass)).ToFullString();
+        }
+
+        foreach (var group in resolvedReceivers.GroupBy(kv => kv.Key.FilePath, StringComparer.OrdinalIgnoreCase))
+        {
+            var docFilePath = group.Key;
+            var doc = solution.GetDocumentIdsWithFilePath(docFilePath).Select(solution.GetDocument).FirstOrDefault();
+            if (doc == null)
+            {
+                continue;
+            }
+
+            SyntaxNode? docRoot = result.TryGetValue(docFilePath, out var already)
+                ? CSharpSyntaxTree.ParseText(already, cancellationToken: cancellationToken).GetRoot(cancellationToken)
+                : await doc.GetSyntaxRootAsync(cancellationToken);
+            if (docRoot == null)
+            {
+                continue;
+            }
+
+            var linesToFix = group.ToDictionary(kv => kv.Key.Line, kv => kv.Value);
+            var memberAccesses = docRoot.DescendantNodes()
+                .OfType<MemberAccessExpressionSyntax>()
+                .Where(ma => memberNames.Contains(ma.Name.Identifier.Text) && linesToFix.ContainsKey(ma.GetLocation().GetLineSpan().StartLinePosition.Line + 1))
+                .ToList();
+
+            SyntaxNode updatedDocRoot = docRoot;
+            if (memberAccesses.Count > 0)
+            {
+                updatedDocRoot = updatedDocRoot.ReplaceNodes(memberAccesses, (original, _) =>
+                {
+                    var line = original.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    var receiverExpr = linesToFix[line];
+                    var newReceiver = receiverExpr == "new"
+                        ? (ExpressionSyntax)SyntaxFactory.ObjectCreationExpression(SyntaxFactory.IdentifierName(targetClassName)).WithArgumentList(SyntaxFactory.ArgumentList())
+                        : SyntaxFactory.ParseExpression(receiverExpr);
+                    return original.WithExpression(newReceiver);
+                });
+            }
+
+            result[docFilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot).ToFullString();
+        }
+
+        return new MoveMemberResult(result, new List<SkippedCallSite>());
     }
 }

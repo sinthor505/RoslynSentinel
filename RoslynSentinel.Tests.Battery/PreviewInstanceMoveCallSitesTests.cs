@@ -163,6 +163,107 @@ public class PreviewInstanceMoveCallSitesTests
         });
     }
 
+
+    // Added by AddMember (expected - used for diagnostics)
+    [Test]
+    public async Task MoveMemberAsync_UnambiguousInstanceMember_AppliesAutomaticallyAsync()
+    {
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassA.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveInstanceClassA
+            {
+                public void Foo()
+                {
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassB.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveInstanceClassB
+            {
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceCallerUnambiguous.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveInstanceCallerUnambiguous
+            {
+                private readonly MoveInstanceClassB _classB = new MoveInstanceClassB();
+
+                public void Do()
+                {
+                    var a = new MoveInstanceClassA();
+                    a.Foo();
+                }
+            }
+            """);
+
+        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassA.cs"));
+
+        var result = await _engine.MoveMemberAsync(filePath, "MoveInstanceClassA", ["Foo"], "MoveInstanceClassB");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.SkippedCallSites, Is.Empty);
+            var callerChange = result.Changes.Single(kv => kv.Key.ToString().Contains("MoveInstanceCallerUnambiguous"));
+            Assert.That(callerChange.Value, Does.Contain("_classB.Foo"));
+            var targetChange = result.Changes.Single(kv => kv.Key.ToString().Contains("MoveInstanceClassB"));
+            Assert.That(targetChange.Value, Does.Contain("public void Foo()"));
+        });
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    [Test]
+    public async Task MoveMemberAsync_AmbiguousInstanceMemberNoFixup_RejectsWithSpecificErrorAsync()
+    {
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassC.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveInstanceClassC
+            {
+                public void Foo()
+                {
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassD.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveInstanceClassD
+            {
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceCallerAmbiguous2.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveInstanceCallerAmbiguous2
+            {
+                private readonly MoveInstanceClassD _d1 = new MoveInstanceClassD();
+                private readonly MoveInstanceClassD _d2 = new MoveInstanceClassD();
+
+                public void Do()
+                {
+                    var c = new MoveInstanceClassC();
+                    c.Foo();
+                }
+            }
+            """);
+
+        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassC.cs"));
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _engine.MoveMemberAsync(filePath, "MoveInstanceClassC", ["Foo"], "MoveInstanceClassD"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex!.Message, Does.Contain("MoveInstanceCallerAmbiguous2"));
+            Assert.That(ex.Message, Does.Contain("callSiteFixups"));
+        });
+    }
+
     // NOTE: no test here for MoveOrderDependent (a call site inside a member that's itself being
     // moved in the same batch). Tried the obvious fixture -- Foo() called unqualified from Baz(),
     // both in memberNames -- and it classifies as Valid, not MoveOrderDependent: when both members

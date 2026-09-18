@@ -449,7 +449,7 @@ public class SentinelAdvancedRefactoringTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.ClassName, required: true)] string className,
-        [Description("Members to move. Instance members can only move to an existing base type (pull-up); moving to anywhere else requires the member to be static first, since other call sites may still reference the source-class instance.")]
+        [Description("Members to move. Instance members moving anywhere other than an existing base type (pull-up) have their call sites rewritten automatically where unambiguous (autoResolveCallSites); ambiguous or unintroducible call sites must be resolved via callSiteFixups or the whole move is rejected.")]
         [Consumes(DataTag.SymbolName, required: true)] string[] memberNames,
         [Description("Target class name. If it's an existing base type of the source class, members are pulled up. If it's an existing unrelated class, members move there as-is. If no class with this name exists, a new class is synthesized in its own file.")]
         [ExternalInputRequired(DataTag.ClassName, required: true)] string targetClassName,
@@ -459,6 +459,10 @@ public class SentinelAdvancedRefactoringTools
         [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        [Description("When moving instance member(s) to a non-base-type destination, automatically rewrite unambiguous call sites (single in-scope candidate of the target type). Defaults to true. Set false to require every call site be resolved manually via callSiteFixups.")]
+        bool autoResolveCallSites = true,
+        [Description("Manual resolution for instance-move call sites autoResolveCallSites couldn't resolve (ambiguous or no in-scope candidate). Key is \"FilePath:Line\" (as reported by a dry-run preview); value is either a reference-expression string (e.g. \"_classB\") to use as the new receiver, or the shorthand \"new\" to construct the target type inline (target type must have a public zero-arg constructor).")]
+        Dictionary<string, string>? callSiteFixups = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -474,7 +478,7 @@ public class SentinelAdvancedRefactoringTools
                 ? (FilePathWrapper?)null
                 : FilePathWrapper.FromWire(targetFilepath, _workspaceManager.GetSolutionRoot());
 
-            var result = await _advancedStructuralEngine.MoveMemberAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken);
+            var result = await _advancedStructuralEngine.MoveMemberAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken, autoResolveCallSites, callSiteFixups);
             if (!autoStage)
             {
                 return new ToolResult<object>() { Success = true, Data = new { result.Changes, result.SkippedCallSites } };

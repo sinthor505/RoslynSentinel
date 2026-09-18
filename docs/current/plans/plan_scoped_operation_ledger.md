@@ -105,7 +105,50 @@ this is a different symptom of adjacent machinery):
   as a documentation gap, since neither the halt message nor `IsSessionHalted` mentions this recovery
   path.
 
-Next step: Decision 4 (lift the static-only restriction: auto-resolution + atomic apply of `Valid` rows).
+Decision 4 is DONE (commits pending this session). `AdvancedStructuralEngine.MoveInstanceMembersAsync`
+implemented as a new dedicated method (per the confirmed design choice, not a branch inside the
+existing static-only methods): calls `PreviewInstanceMoveCallSitesAsync` for the scan, auto-resolves
+`Valid` rows via their `SuggestedFix`, resolves any other row via a `callSiteFixups` entry keyed
+`"{FilePath}:{Line}"` (`FilePathWrapper.ToString()` returns `Absolute`, so this is consistent with
+`PreviewCallSite.FilePath`), and rejects the whole call with a `ToolNotFoundException` naming every
+still-unresolved site + its candidates if anything remains. `"new"` is the fixup shorthand for
+constructing the target type inline via a zero-arg `ObjectCreationExpression` - no explicit
+constructor-arity validation was added (Roslyn's own post-apply compiler check catches a missing
+zero-arg constructor as a real CS error, which is an acceptable failure mode here since it's the same
+"the atomic apply already validates" pattern `MoveMember` uses everywhere else, not a silent partial
+write). The member-relocation logic (existing-class same-file / existing-class cross-file / new-class
+synthesis) is duplicated from `MoveMembersToExistingClassAsync`/`MoveMembersToNewClassAsync` rather
+than shared, since those methods' call-site-rewrite loops are static-only and not reusable - flagged
+as a candidate for the "Caller-fixup tool audit" follow-up, not done here.
+
+`MoveMemberAsync`'s static-only guard (previously an unconditional throw for any non-static member
+moving to a non-base-type destination) now branches: `autoResolveCallSites` (new parameter, default
+`true`) routes to `MoveInstanceMembersAsync`; `autoResolveCallSites:false` keeps the original
+reject-with-guidance behavior, reworded to mention the new parameter instead of "move to a base class
+or make it static" as the only options. The existing/new-class target-resolution block (previously
+computed after the static-only throw) was moved earlier so both branches can use it.
+
+Wired through to the `MoveMember` MCP tool (`SentinelAdvancedRefactoringTools.cs`): added
+`autoResolveCallSites` (bool, default true) and `callSiteFixups` (`Dictionary<string,string>?`,
+default null) parameters with `[Description]` text explaining the fixup key format and the `"new"`
+shorthand's zero-arg-constructor requirement; `memberNames`' own `[Description]` updated to drop the
+stale "static first" wording. `MoveInstanceMembersAsync` does not call `ValidateAndApplyAsync`
+directly - it returns the same `MoveMemberResult` shape the static paths do, so the existing
+`MoveMember` tool's single `ValidateAndApplyAsync` call (unchanged) still provides the "one compiler
+check, one outcome" atomicity for both static and instance moves alike.
+
+Tests added to `PreviewInstanceMoveCallSitesTests.cs`: `MoveMemberAsync_UnambiguousInstanceMember_AppliesAutomaticallyAsync`
+(single in-scope candidate, zero manual input, asserts the caller's rewritten receiver and the
+target class's new member both land correctly) and
+`MoveMemberAsync_AmbiguousInstanceMemberNoFixup_RejectsWithSpecificErrorAsync` (two same-type
+candidates, no fixup, asserts the thrown exception names the specific caller file and mentions
+`callSiteFixups`). Both pass; full solution build 0 errors / 0 warnings.
+
+Re-encountered (not a new defect) the `Member(addMember)` multi-declaration truncation bug from
+Decision 3's blocker doc while adding these two tests as one call - second test method was silently
+dropped, same symptom, same workaround (split into two sequential `addMember` calls).
+
+Next step: Decision 5 (open a ledger for unresolved rows instead of rejecting).
 
 ## Facts to confirm once the solution loads (not yet verified this session - blocked)
 
@@ -209,7 +252,10 @@ record of what was intended going in).
   multiple-candidate ambiguous one, a missing-using-directive one, an inaccessible-type one, and one
   call site inside a method that's itself being moved in the same batch (`MoveOrderDependent`).
 
-## Decision 4 - Lift the static-only restriction: auto-resolution + atomic apply of `Valid` rows
+## Decision 4 - Lift the static-only restriction: auto-resolution + atomic apply of `Valid` rows - DONE
+
+See "Progress as of 2026-09-18" above for what actually landed. Kept below for the record of what
+was intended going in.
 
 Implements `proposal_movemember_instance_callsite_resolution.md` sections 1-3, behind the
 `autoResolveCallSites` switch from the "Risk posture" section (default `true`).
