@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Advanced;
 
-public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites);
+public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null);
 
 public class AdvancedStructuralEngine
 {
@@ -1030,7 +1030,6 @@ public class AdvancedStructuralEngine
         var fixups = callSiteFixups ?? new Dictionary<string, string>();
 
         var resolvedReceivers = new Dictionary<(string FilePath, int Line), string>();
-        var unresolved = new List<string>();
 
         foreach (var row in rows)
         {
@@ -1048,19 +1047,39 @@ public class AdvancedStructuralEngine
             if (fixups.TryGetValue(key, out var fixup))
             {
                 resolvedReceivers[(row.FilePath, row.Line)] = fixup;
-                continue;
             }
-
-            var candidateList = row.Candidates.Count > 0 ? $" Candidates in scope: {string.Join(", ", row.Candidates)}." : "";
-            unresolved.Add($"{Path.GetFileName(row.FilePath)}:{row.Line} ({row.CallExpression}) - {row.BlockReason}{candidateList}");
         }
 
-        if (unresolved.Count > 0)
+        var unresolvedRows = rows.Where(r => r.Status != CallSiteStatus.Valid && !resolvedReceivers.ContainsKey((r.FilePath, r.Line))).ToList();
+        var skippedCallSites = new List<SkippedCallSite>();
+        List<CallSiteLedgerEntry>? pendingLedgerEntries = null;
+        string? pendingLedgerOperationName = null;
+
+        if (unresolvedRows.Count > 0)
         {
-            throw new ToolNotFoundException(
-                $"Cannot move instance member(s) [{string.Join(", ", memberNames)}] to '{targetClassName}': {unresolved.Count} call site(s) could not be resolved automatically and have no callSiteFixups entry:\n" +
-                string.Join("\n", unresolved) +
-                "\nSupply a callSiteFixups entry (key \"FilePath:Line\") for each, with either a reference-expression string or the shorthand \"new\".");
+            // Deliberately NOT opened here via TryOpen: this method only returns a proposed change
+            // set, it does not write anything. The caller (MoveMember MCP tool) applies Changes via
+            // ValidateAndApplyAsync first, and only opens the ledger once that atomic write has
+            // actually succeeded -> opening it here would make IsBlocked refuse the move's own
+            // source/target file write in the same apply, since neither necessarily has an
+            // unresolved ledger entry for itself (see Decision 5 plan notes).
+            pendingLedgerEntries = unresolvedRows.Select(r => new CallSiteLedgerEntry
+            {
+                EntryId = Guid.NewGuid().ToString("n")[..8],
+                FilePath = r.FilePath,
+                Line = r.Line,
+                BrokenExpression = r.CallExpression,
+                OldStaticType = className,
+                Status = r.Status,
+                BlockReason = r.BlockReason,
+                SuggestedFix = r.SuggestedFix,
+                CandidatesInScope = r.Candidates,
+            }).ToList();
+            pendingLedgerOperationName = $"MoveMember [{string.Join(", ", memberNames)}] '{className}' -> '{targetClassName}'";
+
+            skippedCallSites = pendingLedgerEntries
+                .Select(e => new SkippedCallSite(e.FilePath, e.Line, $"{e.Status}: {e.BlockReason} (ledger entry {e.EntryId})"))
+                .ToList();
         }
 
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
@@ -1156,6 +1175,6 @@ public class AdvancedStructuralEngine
             result[docFilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot).ToFullString();
         }
 
-        return new MoveMemberResult(result, new List<SkippedCallSite>());
+        return new MoveMemberResult(result, skippedCallSites, pendingLedgerEntries, pendingLedgerOperationName);
     }
 }

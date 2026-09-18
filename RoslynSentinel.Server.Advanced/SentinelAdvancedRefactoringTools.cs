@@ -489,8 +489,23 @@ public class SentinelAdvancedRefactoringTools
                 return new ToolResult<object> { Success = false, Error = apply.Error };
 
             var summaryNote = $"Moved [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.";
+
+            // Ledger opened here, after the atomic apply above has actually landed - not inside
+            // MoveInstanceMembersAsync, since IsBlocked would otherwise refuse that same apply's
+            // own source/target file write (neither necessarily has an unresolved ledger entry for
+            // itself). dryRun never opens a ledger: nothing was written, so there is nothing to track.
+            if (!dryRun && result.PendingLedgerEntries is { Count: > 0 } pendingEntries)
+            {
+                var opened = ((IScopedOperationLedger)_workspaceManager).TryOpen(
+                    result.PendingLedgerOperationName ?? "MoveMember", pendingEntries, out var rejectionReason);
+                summaryNote += opened
+                    ? $" Opened a scoped operation ledger with {pendingEntries.Count} unresolved call site(s) - resolve them before making unrelated changes."
+                    : $" WARNING: {pendingEntries.Count} call site(s) could not be automatically rewritten, and a ledger could not be opened to track them ({rejectionReason}). Fix them manually: " +
+                        string.Join("; ", pendingEntries.Select(e => $"{Path.GetFileName(e.FilePath)}:{e.Line} ({e.BlockReason})"));
+            }
+
             if (result.SkippedCallSites.Count > 0)
-                summaryNote += $" WARNING: {result.SkippedCallSites.Count} call site(s) could not be automatically rewritten and must be fixed manually: " +
+                summaryNote += $" {result.SkippedCallSites.Count} call site(s) could not be automatically rewritten and must be fixed manually: " +
                     string.Join("; ", result.SkippedCallSites.Select(s => $"{Path.GetFileName(s.FilePath)}:{s.LineNumber} ({s.Reason})"));
 
             // Not wired into MemberChangedContentResult: this can touch 2-3 files (source, target,

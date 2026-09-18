@@ -215,9 +215,8 @@ public class PreviewInstanceMoveCallSitesTests
     }
 
 
-    // Added by AddMember (expected - used for diagnostics)
     [Test]
-    public async Task MoveMemberAsync_AmbiguousInstanceMemberNoFixup_RejectsWithSpecificErrorAsync()
+    public async Task MoveMemberAsync_AmbiguousInstanceMemberNoFixup_ReturnsPendingLedgerEntryAsync()
     {
         await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassC.cs"), """
             namespace ContosoOrders.Core;
@@ -254,14 +253,101 @@ public class PreviewInstanceMoveCallSitesTests
 
         var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassC.cs"));
 
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-            await _engine.MoveMemberAsync(filePath, "MoveInstanceClassC", ["Foo"], "MoveInstanceClassD"));
+        // Decision 5: MoveMemberAsync itself no longer rejects an unresolved instance-move call
+        // site. It returns a proposed change set (the move still happens) plus a pending ledger
+        // entry describing the site that couldn't be auto-resolved - opening the actual ledger is
+        // the MoveMember MCP tool's job, done only after the change set is atomically applied (see
+        // AdvancedStructuralEngine.MoveInstanceMembersAsync's comment on why TryOpen can't happen here).
+        var result = await _engine.MoveMemberAsync(filePath, "MoveInstanceClassC", ["Foo"], "MoveInstanceClassD");
 
         Assert.Multiple(() =>
         {
-            Assert.That(ex!.Message, Does.Contain("MoveInstanceCallerAmbiguous2"));
-            Assert.That(ex.Message, Does.Contain("callSiteFixups"));
+            Assert.That(result.PendingLedgerEntries, Is.Not.Null.And.Count.EqualTo(1));
+            var entry = result.PendingLedgerEntries!.Single();
+            Assert.That(entry.Status, Is.EqualTo(CallSiteStatus.Ambiguous));
+            Assert.That(entry.FilePath, Does.Contain("MoveInstanceCallerAmbiguous2"));
+            Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1));
         });
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    [Test]
+    public async Task MoveMemberAsync_UnresolvedCallSite_OpensLedgerThatBlocksUnrelatedFileAsync()
+    {
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassE.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveInstanceClassE
+            {
+                public void Foo()
+                {
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassF.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveInstanceClassF
+            {
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceCallerAmbiguous3.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveInstanceCallerAmbiguous3
+            {
+                private readonly MoveInstanceClassF _f1 = new MoveInstanceClassF();
+                private readonly MoveInstanceClassF _f2 = new MoveInstanceClassF();
+
+                public void Do()
+                {
+                    var e = new MoveInstanceClassE();
+                    e.Foo();
+                }
+            }
+            """);
+        var unrelatedFile = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassE.cs");
+        var unrelatedPath = _workspaceManager.SetFilePath(unrelatedFile);
+
+        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassE.cs"));
+
+        var result = await _engine.MoveMemberAsync(filePath, "MoveInstanceClassE", ["Foo"], "MoveInstanceClassF");
+        Assume.That(result.PendingLedgerEntries, Is.Not.Null.And.Count.EqualTo(1));
+
+        var applyResult = await _workspaceManager.ApplyProposedChangesAsync(result.Changes, validateChanges: false);
+        Assert.That(applyResult.Success, Is.True, applyResult.Summary);
+
+        var opened = ((IScopedOperationLedger)_workspaceManager).TryOpen(
+            "MoveMember_Test_Decision5", result.PendingLedgerEntries!, out var rejectionReason);
+        Assert.That(opened, Is.True, rejectionReason);
+
+        // An unrelated file - not the ledger's own tracked call-site file - must be refused while
+        // the ledger's entry is unresolved, per Decision 2's IsBlocked gate.
+        var otherFile = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassF.cs");
+        var otherPath = _workspaceManager.SetFilePath(otherFile);
+        var unrelatedChange = new Dictionary<FilePathWrapper, string>
+        {
+            [otherPath] = await File.ReadAllTextAsync(otherFile) + "\n// unrelated edit\n"
+        };
+        var blockedResult = await _workspaceManager.ApplyProposedChangesAsync(unrelatedChange, validateChanges: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(blockedResult.Success, Is.False);
+            Assert.That(blockedResult.Summary, Does.Contain("scoped operation ledger"));
+        });
+
+        // The ledger's own tracked file (the unresolved call site) must still be writable -> that's
+        // where RecordFix's resolving edit needs to land.
+        var entry = result.PendingLedgerEntries!.Single();
+        var fixupPath = _workspaceManager.SetFilePath(entry.FilePath);
+        var fixupChange = new Dictionary<FilePathWrapper, string>
+        {
+            [fixupPath] = (await File.ReadAllTextAsync(entry.FilePath)).Replace("_f1.Foo", "_f1.Foo")
+        };
+        var fixupApply = await _workspaceManager.ApplyProposedChangesAsync(fixupChange, validateChanges: false);
+        Assert.That(fixupApply.Success, Is.True, fixupApply.Summary);
     }
 
     // NOTE: no test here for MoveOrderDependent (a call site inside a member that's itself being

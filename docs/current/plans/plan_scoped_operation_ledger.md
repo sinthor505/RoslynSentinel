@@ -148,7 +148,21 @@ Re-encountered (not a new defect) the `Member(addMember)` multi-declaration trun
 Decision 3's blocker doc while adding these two tests as one call - second test method was silently
 dropped, same symptom, same workaround (split into two sequential `addMember` calls).
 
-Next step: Decision 5 (open a ledger for unresolved rows instead of rejecting).
+Decision 5 is DONE. See its own section below for what landed - the key correction was that `TryOpen`
+had to move out of the engine method and into the MCP tool layer, called only after the atomic apply
+succeeds, to avoid the newly-opened ledger immediately self-blocking that same apply's write to the
+moved member's own source/target files.
+
+Two session-level blockers were hit and resolved between Decision 4 and Decision 5, unrelated to any
+code in this plan:
+`docs/current/blockers/blocking_error_mcp_server_disconnected_connection_closed.md` (server process
+disconnected entirely; resolved by reconnect) and
+`docs/current/blockers/blocking_error_reconnected_server_is_wrong_flavor_basic_not_advanced.md` (the
+reconnected instance was running `Server.Basic` in the Advanced slot, per an uncommitted edit to
+`scripts/roslynsentinel-mcp-launch.ps1` from outside this session; resolved when the operator reverted
+that edit and restarted VS Code, confirmed via `serverBinaryPath` in the next tool response).
+
+Next step: Decision 6 (`UndoLastApply` / re-tripping integration).
 
 ## Facts to confirm once the solution loads (not yet verified this session - blocked)
 
@@ -278,9 +292,46 @@ Implements `proposal_movemember_instance_callsite_resolution.md` sections 1-3, b
   site and no `callSiteFixups` entry for it rejects with a specific, actionable error naming that
   site and its candidates.
 
-## Decision 5 - Open a ledger for unresolved rows instead of rejecting
+## Decision 5 - Open a ledger for unresolved rows instead of rejecting - DONE
 
 Connects Decision 4's "reject if anything unresolved" fallback to the real ledger from Decisions 1-2.
+See "Progress as of 2026-09-18" above (to be extended) for what actually landed; kept below for the
+record of what was intended going in.
+
+**Design correction found during implementation, not anticipated in the original bullets below:**
+`TryOpen` cannot be called from inside `MoveInstanceMembersAsync` itself. That method only *proposes*
+a change set (`MoveMemberResult.Changes`) - the actual write happens later, back in the `MoveMember`
+MCP tool, via `ValidateAndApplyAsync` -> `ApplyProposedChangesAsync`. If the ledger were opened before
+that write, Decision 2's `IsBlocked` gate (`PersistentWorkspaceManager.cs:1265`) would immediately
+refuse the move's own source/target-file write in the *same* apply: `IsBlocked` only allows a file
+through if it either has an unresolved entry for itself or there are no unresolved entries at all,
+and the source/target class files being moved essentially never coincide with an unresolved call
+site's file. Caught before it shipped by tracing the exact `IsBlocked` call site rather than assuming
+"open the ledger, then apply" would work.
+
+Fix: `MoveInstanceMembersAsync` now builds the `CallSiteLedgerEntry` list but does not call `TryOpen`
+- it returns them via two new fields on `MoveMemberResult` (`PendingLedgerEntries`,
+`PendingLedgerOperationName`). The `MoveMember` MCP tool calls `TryOpen` itself, after
+`ValidateAndApplyAsync` has already succeeded, and only when `!dryRun` (a dry-run writes nothing, so
+opening a ledger for it would track entries against a change that never landed). `SkippedCallSite`
+(pre-existing record, previously always empty for this path) is now populated from the same
+unresolved rows and surfaces in the tool's `summaryNote`, alongside a new line reporting whether the
+ledger opened successfully or - the one remaining fail-safe case - had to fall back to a manual-fix
+warning because another ledger was already open (`TryOpen` returning false).
+
+Tests: `MoveMemberAsync_AmbiguousInstanceMemberNoFixup_ReturnsPendingLedgerEntryAsync` (replaces
+Decision 4's now-obsolete reject test - the engine call no longer throws for an unresolved row, it
+returns `PendingLedgerEntries`) and
+`MoveMemberAsync_UnresolvedCallSite_OpensLedgerThatBlocksUnrelatedFileAsync` (the real end-to-end
+path: apply the move's `Changes`, then `TryOpen` the returned pending entries, then confirm an
+unrelated file is refused per Decision 2's gate while the ledger entry's own tracked file stays
+writable). Both pass; full Battery-fixture run 9/9. Full-solution run afterward showed one unrelated,
+pre-existing flaky failure (`McpServerStatus_Call_PopulatesStructuredContent_MatchingTextContent`,
+not touched this session, fails under full/parallel runs but passes in isolation) plus environmental
+LM Studio-connection failures in `RoslynSentinel.Tests.ModelEval` (no LM Studio server running this
+session) - neither caused by this change.
+
+Original plan bullets, for the record:
 
 - Replace Decision 4's temporary reject-on-unresolved behavior: instead, apply the move + every
   `Valid`/`callSiteFixups`-resolved row atomically (same as Decision 4), then open a ledger seeded
