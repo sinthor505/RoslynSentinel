@@ -63,7 +63,6 @@ public class SentinelWorkspaceTools
     private readonly TestRunEngine _testRunEngine;
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
-    private readonly DiffEngine _diffEngine;
     private readonly DiagnosticEngine _diagnosticEngine;
     private readonly SolutionManagementEngine _solutionManagementEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
@@ -73,6 +72,24 @@ public class SentinelWorkspaceTools
     private readonly ILogger<SentinelWorkspaceTools> _logger;
     private readonly WorkspaceReadNavigationTools _readNav;
     private readonly WriteToolAdviceHelper _writeAdvice;
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private readonly WorkspaceProjectManagementTools _projectManagement;
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private readonly WorkspaceBuildTestTools _buildTest;
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private readonly WorkspaceFileEditTools _fileEdit;
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private readonly WorkspaceHealthMiscTools _healthMisc;
+
+
     private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
         WriteIndented = true,
@@ -87,7 +104,6 @@ public class SentinelWorkspaceTools
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
-        _diffEngine = diffEngine;
         _diagnosticEngine = diagnosticEngine;
         _solutionManagementEngine = solutionManagementEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
@@ -100,240 +116,43 @@ public class SentinelWorkspaceTools
         _testRunEngine = testRunEngine;
         _readNav = readNav;
         _writeAdvice = writeAdvice;
+
+        // Decision 7 step 2 (plan_split_workspace_refactoring_tools_for_di.md): SentinelWorkspaceTools
+        // is now a legacy facade preserving its original constructor/tool signatures, delegating
+        // internally to the newly-split *Tools classes.
+        _projectManagement = new WorkspaceProjectManagementTools(workspaceManager, solutionManagementEngine, dependencyEngine, projectConsistencyEngine, structuralRefinementEngine, logger);
+        _buildTest = new WorkspaceBuildTestTools(workspaceManager, diagnosticEngine, buildEngine, testRunEngine, logger);
+        _fileEdit = new WorkspaceFileEditTools(workspaceManager, readNav, logger);
+        _healthMisc = new WorkspaceHealthMiscTools(workspaceManager, config, buildEngine, logger);
     }
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
     [Description("Queries or updates feature flags.")]
-    public async Task<ToolResult<object>> Features(
+    public Task<ToolResult<object>> Features(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("list: returns all feature flags. get: returns only the flags named in names. update: batch-updates the flags named in enabled.")]
         FeaturesAction action,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=get, unused for list/update.
         [Description("Required for action=get - the feature names to look up. Not used for list/update.")]
         List<string>? names = null,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=update, unused for list/get.
         [Description("Required for action=update - [{Key: featureName, Value: bool}] pairs to apply. Not used for list/get.")]
         List<KeyValuePair<string, bool>>? enabled = null,
         [Description("Test-only: waits this many seconds before acting, to exercise MCP task polling/cancellation.")]
         int delaySeconds = 0,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            if (delaySeconds > 0)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken).ConfigureAwait(false);
-            }
-
-            return action switch
-            {
-                FeaturesAction.list => new ToolResult<object> { Success = true, Data = _config.GetFeatureStatuses() },
-                FeaturesAction.get => new ToolResult<object> { Success = true, Data = _config.GetFeatureStatuses(names) },
-                FeaturesAction.update => new ToolResult<object> { Success = true, Data = UpdateFeaturesInternal(enabled ?? []) },
-                _ => new ToolResult<object>
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: list, get, update.")
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Features ({Action}) failed", action);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Features")
-            };
-        }
-    }
-
-    private string UpdateFeaturesInternal(List<KeyValuePair<string, bool>> updates)
-    {
-        _config.BatchUpdateFeatureStatus(updates);
-        return $"Updated {updates.Count} features.";
-    }
+        => _healthMisc.Features(reason, action, names, enabled, delaySeconds, cancellationToken);
     [McpServerTool(Name = "ListSolutionItems")]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
     [Description("Lists projects, files, dependencies, or solution-folder items in the loaded solution.")]
-    public async Task<ToolResult<object>> ListSolutionItems(
+    public Task<ToolResult<object>> ListSolutionItems(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("files/dependencies: requires projectName. projects/solutionItems: ignore projectName, list every project or every solution-folder item respectively - solutionItems are files attached via the .sln's Solution Folders (e.g. plan/handoff docs), never part of any project's compiled Documents, so SearchSolutionText and kind=files won't find them; read their content with ProjectDoc. all: ignores projectName and returns everything in one call (every project, every solution-folder item, and every project's files and dependencies) - use this for a complete, guaranteed-non-empty view instead of guessing which project or kind to ask for.")]
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for kind=files/dependencies, unused for kind=projects/solutionItems/all.
         [Description("Required for kind=files/dependencies. Not used for projects/solutionItems/all.")]
-        [Consumes(DataTag.ProjectName)] string? projectName = null, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.ProjectName)] string? projectName = null,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            if (kind == SolutionItemsKind.projects)
-            {
-                var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-                var projectInfos = solution.Projects.Select(p => new ProjectInfoEntry(p.Name, p.FilePath)).ToList();
-                return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                    projectInfos,
-                    _workspaceManager.GetSolutionRoot(),
-                    typeof(ProjectInfoEntry).Name,
-                    ResultWrapperType.ProjectInfoList,
-                    totalRecords: projectInfos.Count,
-                    cancellationToken: cancellationToken);
-            }
-
-            if (kind == SolutionItemsKind.solutionItems)
-            {
-                var solutionRoot = _workspaceManager.GetSolutionRoot();
-                if (solutionRoot is null)
-                {
-                    return new ToolResult<object>()
-                    {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.SolutionNotLoaded, "No solution loaded. Call LoadSolution first.")
-                    };
-                }
-
-                var items = _workspaceManager.GetSolutionFolderItems().Select(i => new SolutionItemFile(new FilePathWrapper(Path.GetFullPath(Path.Combine(solutionRoot, i.RelativePath)), solutionRoot), i.SolutionFolder)).ToList();
-                return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                    items,
-                    solutionRoot,
-                    typeof(SolutionItemFile).Name,
-                    ResultWrapperType.SolutionItemFileList,
-                    totalRecords: items.Count,
-                    cancellationToken: cancellationToken);
-            }
-
-            if (kind == SolutionItemsKind.files)
-            {
-                if (string.IsNullOrEmpty(projectName))
-                {
-                    return new ToolResult<object>()
-                    {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=files.")
-                    };
-                }
-
-                try
-                {
-                    var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-                    var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
-                    if (project == null)
-                    {
-                        return new ToolResult<object>()
-                        {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception, $"Project '{projectName}' not found.")
-                        };
-                    }
-
-                    var sep = Path.DirectorySeparatorChar;
-                    var files = project.Documents.Select(d => d.FilePath ?? d.Name).Where(p => !p.Contains($"{sep}obj{sep}", StringComparison.OrdinalIgnoreCase) && !p.Contains($"{sep}bin{sep}", StringComparison.OrdinalIgnoreCase)).ToList();
-                    return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                        files,
-                        _workspaceManager.GetSolutionRoot(),
-                        "ProjectFile",
-                        ResultWrapperType.ProjectFileList,
-                        totalRecords: files.Count,
-                        cancellationToken: cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "List files unexpected exception for project '{ProjectName}'", projectName);
-                    return new ToolResult<object>()
-                    {
-                        Success = false,
-                        Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"List files for project '{projectName}'")
-                    };
-                }
-            }
-
-            if (kind == SolutionItemsKind.dependencies)
-            {
-                if (string.IsNullOrEmpty(projectName))
-                {
-                    return new ToolResult<object>()
-                    {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=dependencies.")
-                    };
-                }
-
-                var result = await _dependencyEngine.GetProjectDependenciesAsync(projectName, cancellationToken);
-                return new ToolResult<object>()
-                {
-                    Success = true,
-                    Data = result
-                };
-            }
-
-            if (kind == SolutionItemsKind.all)
-            {
-                var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-                var solutionRoot = _workspaceManager.GetSolutionRoot();
-
-                var projectInfos = solution.Projects.Select(p => new ProjectInfoEntry(p.Name, p.FilePath)).ToList();
-
-                var solutionItems = new List<SolutionItemFile>();
-                if (solutionRoot is not null)
-                {
-                    solutionItems = _workspaceManager.GetSolutionFolderItems()
-                        .Select(i => new SolutionItemFile(new FilePathWrapper(Path.GetFullPath(Path.Combine(solutionRoot, i.RelativePath)), solutionRoot), i.SolutionFolder))
-                        .ToList();
-                }
-
-                var sep = Path.DirectorySeparatorChar;
-                var projectDetails = new List<ProjectFilesAndDependencies>();
-                // Files are deduped by path within each project's own list (a document can be
-                // linked into a project more than once); dependencies are inherently per-project,
-                // so they're kept as one report per project rather than merged.
-                foreach (var project in solution.Projects)
-                {
-                    var filesByPath = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var document in project.Documents)
-                    {
-                        var path = document.FilePath ?? document.Name;
-                        if (path.Contains($"{sep}obj{sep}", StringComparison.OrdinalIgnoreCase) ||
-                            path.Contains($"{sep}bin{sep}", StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue;
-                        }
-
-                        filesByPath[path] = path;
-                    }
-
-                    var dependencies = await _dependencyEngine.GetProjectDependenciesAsync(project.Name, cancellationToken);
-                    projectDetails.Add(new ProjectFilesAndDependencies(project.Name, filesByPath.Values.ToList(), dependencies));
-                }
-
-                var combined = new SolutionItemsAllResult(projectInfos, solutionItems, projectDetails);
-                var totalRecords = projectInfos.Count + solutionItems.Count + projectDetails.Sum(p => p.Files.Count);
-                return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                    combined,
-                    solutionRoot,
-                    typeof(SolutionItemsAllResult).Name,
-                    ResultWrapperType.SolutionItemsAllResult,
-                    totalRecords: totalRecords,
-                    cancellationToken: cancellationToken);
-            }
-
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'.")
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "List ({Kind}) failed", kind);
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "List")
-            };
-        }
-    }
+        => _projectManagement.ListSolutionItems(reason, kind, projectName, cancellationToken);
 
     /// <summary>
     /// Hard cap on how many files ListWorkspaceSolutions will walk before giving up -> protects
@@ -346,201 +165,22 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.SolutionList)]
     [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution.")]
-    public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
+    public ToolResult<List<RoslynSentinel.Server.Basic.SolutionFileInfo>> ListWorkspaceSolutions(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("Your workspace root - a real project/repo directory, not a drive root or '/'.")] string workspacePath, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Description("Your workspace root - a real project/repo directory, not a drive root or '/'.")] string workspacePath,
         CancellationToken cancellationToken = default)
-    {
-        workspacePath = FilePathWrapper.NormalizeWirePath(workspacePath);
-        if (!Directory.Exists(workspacePath))
-        {
-            return new ToolResult<List<SolutionFileInfo>>
-            {
-                Success = false,
-                Error = new ResultError("InvalidArgument", $"Directory not found: '{workspacePath}'")
-            };
-        }
-
-        var fullWorkspacePath = Path.GetFullPath(workspacePath);
-        var pathRoot = Path.GetPathRoot(fullWorkspacePath);
-        if (!string.IsNullOrEmpty(pathRoot) && string.Equals(
-                fullWorkspacePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                pathRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return new ToolResult<List<SolutionFileInfo>>
-            {
-                Success = false,
-                Error = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' resolves to the drive root '{pathRoot}'. Pass a real project/repo directory instead - scanning an entire drive is not supported.")
-            };
-        }
-
-        try
-        {
-            var files = new List<SolutionFileInfo>();
-            foreach (var pattern in new[] { "*.sln", "*.slnx" })
-            {
-                foreach (var path in Directory.EnumerateFiles(fullWorkspacePath, pattern, SearchOption.AllDirectories))
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    files.Add(new SolutionFileInfo(Path: path, Format: Path.GetExtension(path).TrimStart('.').ToLowerInvariant()));
-                    if (files.Count > ListWorkspaceSolutionsMaxFilesWalked)
-                    {
-                        return new ToolResult<List<SolutionFileInfo>>
-                        {
-                            Success = false,
-                            Error = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' contains more than {ListWorkspaceSolutionsMaxFilesWalked} matching files - this looks like too broad a root. Pass a narrower project/repo directory instead.")
-                        };
-                    }
-                }
-            }
-
-            files.Sort((a, b) => string.CompareOrdinal(a.Path, b.Path));
-            return new ToolResult<List<SolutionFileInfo>>
-            {
-                Success = true,
-                Data = files,
-                TotalRecords = files.Count
-            };
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ListWorkspaceSolutions failed for '{WorkspacePath}'", workspacePath);
-            return new ToolResult<List<SolutionFileInfo>>
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ListWorkspaceSolutions failed unexpectedly ({ex.GetType().Name}) while scanning '{workspacePath}'. Details: {ex.Message}")
-            };
-        }
-    }
-
-    public sealed record SolutionFileInfo(string Path, string Format);
+        => _projectManagement.ListWorkspaceSolutions(reason, workspacePath, cancellationToken);
     // current directory, --base-repo-dir (if set), or the server's install directory.
     [McpServerTool(Name = "LoadSolution")]
     [Produces(DataTag.ResultOnly)]
     [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, omit baseRepoDir and let the server resolve it against its configured base directory - only pass baseRepoDir if you have independently confirmed that exact directory exists on this host; a fabricated/guessed baseRepoDir is rejected with an error rather than silently ignored. If this exact solution is already loaded, this is a no-op by default (no re-read from disk) - pass forceReload:true to discard in-memory state and re-open it from disk.")]
-    public async Task<ToolResult<object>> LoadSolution(
+    public Task<ToolResult<object>> LoadSolution(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath, [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call. Must exist on this host - omit this entirely rather than guessing a value.")] string? baseRepoDir = null, [Description("If the given solutionPath is already loaded, false (default) returns immediately without touching the workspace. true forces a full reload from disk, discarding any in-memory state (equivalent to today's unconditional LoadSolution behavior). Has no effect when a different or no solution is currently loaded - that always loads normally regardless of this flag.")] bool forceReload = false, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath,
+        [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call. Must exist on this host - omit this entirely rather than guessing a value.")] string? baseRepoDir = null,
+        [Description("If the given solutionPath is already loaded, false (default) returns immediately without touching the workspace. true forces a full reload from disk, discarding any in-memory state (equivalent to today's unconditional LoadSolution behavior). Has no effect when a different or no solution is currently loaded - that always loads normally regardless of this flag.")] bool forceReload = false,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            // Compared regardless of forceReload so the success message below can correctly say
-            // "reloaded" vs "loaded" -> only the short-circuit-and-skip below is gated on
-            // forceReload being false. A relative path or a baseRepoDir override never matches here
-            // (IsAlreadyLoadedPath requires solutionPath to be rooted), always falling through to a
-            // real load: ResolveSolutionPath's multi-candidate disk search (private, deliberately
-            // not duplicated here) is the only reliable way to know what a relative path resolves to.
-            var wasAlreadyLoaded = IsAlreadyLoadedPath(solutionPath, out var currentPath);
-            if (!forceReload && wasAlreadyLoaded)
-            {
-                return new ToolResult<object>()
-                {
-                    Success = true,
-                    Data = $"Solution '{currentPath}' is already loaded - no changes made. Pass forceReload:true to discard in-memory state and re-open it from disk."
-                };
-            }
-
-            await _workspaceManager.LoadSolutionAsync(solutionPath, baseRepoDir, cancellationToken: cancellationToken);
-            var solutionRoot = _workspaceManager.GetSolutionRoot();
-            if (solutionRoot != null)
-            {
-                // "reloaded" only when this was genuinely the same solution as before -> forceReload
-                // on a first load or a switch to a different solution is just an ordinary load.
-                var isReload = forceReload && wasAlreadyLoaded;
-                var verb = isReload ? "reloaded" : "loaded";
-                var reloadNote = isReload
-                    ? " In-memory analysis state was discarded and rebuilt from what's on disk now - any edits made by tools since the last load are reflected; anything else is unaffected."
-                    : "";
-                return new ToolResult<object>()
-                {
-                    Success = true,
-                    Data = $"Solution {verb}: {solutionPath}.{reloadNote}{BuildPostLoadHint(solutionRoot)}"
-                };
-            }
-            else
-            {
-                return new ToolResult<object>()
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed: Workspace root is null after loading '{solutionPath}'.")
-                };
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "LoadSolution failed for '{SolutionPath}'", solutionPath);
-            // Not routed through ToolErrorMapper: its SolutionNotLoaded branch would
-            // say "call LoadSolution first" from inside LoadSolution's own catch block, which is
-            // circular and useless here -> the exception (e.g. ToolNotFoundException for a bad path)
-            // already says what actually went wrong.
-            var codeAndMessage = ex is ToolException toolEx
-                ? (toolEx.ErrorCode, toolEx.Message)
-                : (ToolErrorCode.Exception, $"failed unexpectedly ({ex.GetType().Name}): {ex.Message}");
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(codeAndMessage.Item1, $"LoadSolution '{solutionPath}' {codeAndMessage.Item2}")
-            };
-        }
-    }
-
-    // True only when solutionPath is rooted AND string-matches (case-insensitively, via FilePathWrapper's
-    // canonicalized separators) the currently tracked SolutionPath. A relative path never matches ->
-    // ResolveSolutionPath's private multi-candidate disk search is the only reliable way to know
-    // what a relative path resolves to, and duplicating it here isn't worth it for a fast-path check.
-    private bool IsAlreadyLoadedPath(string solutionPath, out string? currentPath)
-    {
-        currentPath = _workspaceManager.SolutionPath;
-        if (currentPath is null || !Path.IsPathRooted(solutionPath))
-        {
-            return false;
-        }
-
-        var solutionRootForCompare = _workspaceManager.GetSolutionRoot();
-        var requested = new FilePathWrapper(solutionPath, solutionRootForCompare);
-        var current = new FilePathWrapper(currentPath, solutionRootForCompare);
-        return string.Equals(requested.Absolute, current.Absolute, StringComparison.OrdinalIgnoreCase);
-    }
-
-    // Subdirectories ProjectDoc reads/writes under docs/, paired with the docType value that
-    // maps to each -> see SentinelDocumentationTools.ProjectDoc.
-    private static readonly (string Dir, string DocType)[] ProjectDocSubdirs = [("plans", "plan"), ("handoffs", "handoff"), ("completed", "completed_work"), ("documentation", "documentation"),];
-    // Surfaces docs/ and Solution-Folder content right after a solution loads, so an agent
-    // doesn't have to burn a round of (fruitless) SearchSolutionText calls to discover a plan,
-    // handoff, or other doc file the solution already has waiting for it.
-    private string BuildPostLoadHint(string solutionRoot)
-    {
-        var parts = new List<string>();
-        var solutionItems = _workspaceManager.GetSolutionFolderItems();
-        if (solutionItems.Count > 0)
-        {
-            parts.Add($"{solutionItems.Count} file(s) attached via Solution Folders in the .sln (not visible to SearchSolutionText - list them with ListSolutionItems(kind: solutionItems)).");
-        }
-
-        var docsRoot = Path.Combine(solutionRoot, "docs");
-        foreach (var (dir, docType) in ProjectDocSubdirs)
-        {
-            var fullDir = Path.Combine(docsRoot, dir);
-            if (!Directory.Exists(fullDir))
-            {
-                continue;
-            }
-
-            var count = Directory.GetFiles(fullDir).Length;
-            if (count > 0)
-            {
-                parts.Add($"docs/{dir}/ has {count} file(s) - read with ProjectDoc(action: read, docType: {docType}, name: \"<filename>\").");
-            }
-        }
-
-        return parts.Count > 0 ? " " + string.Join(" ", parts) : "";
-    }
+        => _projectManagement.LoadSolution(reason, solutionPath, baseRepoDir, forceReload, cancellationToken);
 
     // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to SentinelAdminTools.cs,
     // gated behind the "Admin" mode -> see docs/current/ideas/external-drift-hard-blocker.md.
@@ -1417,40 +1057,21 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "RetryFailedChanges")]
     [Produces(DataTag.ResultOnly)]
     [Description("Retries failed file writes using server-cached content - no need to re-send file contents. specificFiles limits to a subset. retryCount defaults to 3.")]
-    public async Task<ToolResult<object>> RetryFailedChanges(
+    public Task<ToolResult<object>> RetryFailedChanges(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: false)] List<string>? specificFiles = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] List<string>? specificFiles = null,
+        [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            return new ToolResult<object>()
-            {
-                Success = true,
-                Data = await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount, cancellationToken)
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "RetryFailedChanges failed");
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "RetryFailedChanges")
-            };
-        }
-    }
+        => _fileEdit.RetryFailedChanges(reason, specificFiles, retryCount, cancellationToken);
 
     // WriteBlobForApplyAsync moved to OperationBlobHelper.WriteBlobForApplyAsync (Decision 7 step 1).
     [McpServerTool(Name = "GetDiagnostics")]
     [Produces(DataTag.Report)]
     [Description("Gets compiler diagnostics for a file, project, or the whole solution.")]
-    public async Task<ToolResult<object>> GetDiagnostics(
+    public Task<ToolResult<object>> GetDiagnostics(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("file/project: also pass scopeName. solution: scopeName is ignored.")]
         [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] ToolScope scope = ToolScope.solution,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for scope=file (as a filePath) and
-        // scope=project (as a projectName), ignored for scope=solution.
         [Description("Required for scope=file (a filePath) or scope=project (a projectName). Ignored for scope=solution.")]
         string? scopeName = null,
         [Description("Groups results by diagnostic ID and returns counts instead of the raw list.")]
@@ -1460,137 +1081,25 @@ public class SentinelWorkspaceTools
         [Description("Caps the number of groups returned. Only used when summarize=true.")]
         [ToolOptionAttribute(ToolOptionTag.TopN)] int topN = 20,
         [Description("noBuild (default): diagnostics only. quickBuild/fullBuild: additionally runs a build check (see Build tool) and attaches it as BuildVerification.")]
-        BuildVerifyLevel verify = BuildVerifyLevel.noBuild, // RequestContext<CallToolRequestParams> requestParams = null,
+        BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            EngineResultWrapper<DiagnosticSummary> result;
-            DiagnosticSummary summary;
-            if (scope == ToolScope.file)
-            {
-                if (string.IsNullOrEmpty(scopeName))
-                {
-                    return new ToolResult<object>()
-                    {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "scopeName (filePath) is required when scope=file.")
-                    };
-                }
-
-                result = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
-                summary = result.Data;
-            }
-            else if (scope == ToolScope.project)
-            {
-                if (string.IsNullOrEmpty(scopeName))
-                {
-                    return new ToolResult<object>()
-                    {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "scopeName (projectName) is required when scope=project.")
-                    };
-                }
-
-                result = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
-                summary = result.Data;
-            }
-            else if (scope == ToolScope.solution)
-            {
-                result = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
-                summary = result.Data;
-            }
-            else
-            {
-                return new ToolResult<object>()
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"Unhandled scope '{scope}'.")
-                };
-            }
-
-            BuildResult? buildVerification = null;
-            if (verify != BuildVerifyLevel.noBuild)
-            {
-                var buildRun = verify == BuildVerifyLevel.fullBuild
-                    ? await _buildEngine.RunFullBuildAsync(cancellationToken)
-                    : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
-                buildRun.TryGetData(out buildVerification);
-            }
-
-            if (!summarize)
-            {
-                return new ToolResult<object>()
-                {
-                    Success = true,
-                    Data = result.Data with { BuildVerification = buildVerification },
-                    Findings = result.Findings
-                };
-            }
-
-            var relevant = result.Data.Details.Where(d => d.Severity is "Error" or "Warning").ToList();
-            var groups = relevant.GroupBySeverity(topN);
-            return new ToolResult<object>()
-            {
-                Success = true,
-                Data = new DiagnosticsSummaryResult(TotalIssues: relevant.Count, Errors: summary.Errors, Warnings: summary.Warnings, TopIssues: groups, BuildVerification: buildVerification),
-                Findings = result.Findings
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GetDiagnostics ({Scope}) failed", scope);
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetDiagnostics")
-            };
-        }
-    }
+        => _buildTest.GetDiagnostics(reason, scope, scopeName, summarize, maxDetails, topN, verify, cancellationToken);
     [McpServerTool(Name = "Build")]
     [Produces(DataTag.Report)]
     [Description("Compiles the loaded solution and reports errors/warnings. level=quickBuild uses in-memory Roslyn diagnostics (fast, same check GetDiagnostics does). level=fullBuild shells out to `dotnet build` (slower, catches MSBuild-only failures - NuGet restore, resource copy, post-build events - that quickBuild can't see). Returns BuildSucceeded, ExitCode, ErrorCount/WarningCount, capped Errors/Warnings lists, ErrorSummary/WarningSummary (grouped by diagnostic Id, uncapped, for spotting one cause behind many errors), Duration.")]
-    public async Task<ToolResult<object>> Build(
+    public Task<ToolResult<object>> Build(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
         ToolScope scope = ToolScope.solution,
         string? scopeName = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var rateLimitError = _workspaceManager.CheckRateLimit("Build", 10);
-            if (rateLimitError is not null)
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.BuildFailed, rateLimitError) };
-            }
-
-            var result = level == BuildVerifyLevel.fullBuild
-                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails)
-                : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
-
-            if (!result.TryGetData(out var buildResult))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.BuildFailed, result.Error?.Message ?? "Build failed unexpectedly."), Findings = result.Findings };
-            }
-
-            var buildToolResult = await ToolResult<object>.ForPossiblyLargeDataAsync(
-                buildResult, _workspaceManager.GetSolutionRoot(), "BuildResult", ResultWrapperType.Raw,
-                workspaceVersion: _workspaceManager.WorkspaceVersion, cancellationToken: cancellationToken);
-            return buildToolResult with { Findings = result.Findings };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Build ({Level}) failed", level);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Build failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and dotnet is on PATH. Details: {ex.Message}") };
-        }
-    }
+        => _buildTest.Build(reason, level, scope, scopeName, maxDetails, cancellationToken);
 
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]
     [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). resultsType defaults to \"failed\" so a clean run stays a short summary with no per-test list; pass \"all\" to see every test's outcome. Set summary=true to omit the Results list entirely (just counts + FailureSummary), regardless of resultsType. filter is passed through to `dotnet test --filter` - an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests.")]
-    public async Task<ToolResult<object>> RunTest(
+    public Task<ToolResult<object>> RunTest(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         ToolScope scope = ToolScope.solution,
         string? scopeName = null,
@@ -1600,35 +1109,7 @@ public class SentinelWorkspaceTools
         int timeoutSeconds = 600,
         [Description("If true, omit the per-test Results list from the response entirely - only counts and FailureSummary are returned, independent of resultsType.")] bool summary = false,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var rateLimitError = _workspaceManager.CheckRateLimit("RunTest", 10);
-            if (rateLimitError is not null)
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.TestRunFailed, rateLimitError) };
-            }
-
-            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, cancellationToken);
-
-            if (!result.TryGetData(out var testRunResult))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? "Test run failed unexpectedly."), Findings = result.Findings };
-            }
-
-            if (!testRunResult.RunCompleted)
-            {
-                return new ToolResult<object>() { Success = false, Data = testRunResult, Error = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
-            }
-
-            return new ToolResult<object>() { Success = true, Data = testRunResult, WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "RunTest failed");
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RunTest failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and dotnet is on PATH. Details: {ex.Message}") };
-        }
-    }
+        => _buildTest.RunTest(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, cancellationToken);
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: none of projectName/docCommentId/symbolName/line/column is
     // individually required -> the tool needs exactly one full resolution strategy: (projectName +
     // docCommentId), or symbolName (optionally with contextSnippet/lineBefore/lineAfter), or
@@ -1637,7 +1118,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "SafeDeleteUnusedSymbol")]
     [Produces(DataTag.ResultOnly)]
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Distinction from RemoveMember: this tool refuses if ANY usage is found; RemoveMember checks for callers/implementations but allows skipPrecheck. Returns changeId.")]
-    public async Task<ToolResult<object>> SafeDeleteUnusedSymbol(
+    public Task<ToolResult<object>> SafeDeleteUnusedSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Preferred resolution path, together with docCommentId - as returned by LocateSymbol/FindReferences. The most reliable and accurate way to identify the target.")] string projectName = "",
@@ -1650,193 +1131,30 @@ public class SentinelWorkspaceTools
         [Description("Legacy fallback resolution path if neither of the above is available - 1-based line of the declaration site. Both line and column are required together.")]
         [Consumes(DataTag.StartLine, required: false)] int line = 0,
         [Description("Legacy fallback resolution path - 1-based column of the declaration site. Both line and column are required together.")]
-        [Consumes(DataTag.Offset, required: false)] int column = 0, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.Offset, required: false)] int column = 0,
         CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        async Task<ToolResult<object>> ApplyAndRespondAsync(DocumentEditResult result)
-        {
-            if (string.IsNullOrEmpty(result.UpdatedText))
-            {
-                return new ToolResult<object>()
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}")
-                };
-            }
-
-            var changes = new Dictionary<FilePathWrapper, string>
-            {
-                [filePathResolved] = result.UpdatedText
-            };
-            var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken);
-            if (!apply.Success)
-            {
-                var reason = apply.ValidationResult is not null ? $"introduces new compiler errors - change not applied. Fix diagnostics and retry: {apply.ValidationResult.Diagnostics.ToJson()}" : $"failed to write to disk: {apply.Summary}";
-                return new ToolResult<object>()
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol {reason}")
-                };
-            }
-
-            var changeId = Guid.NewGuid().ToString("n")[..8];
-            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "safe_delete_unused_symbol", apply, changeId, cancellationToken);
-            return new ToolResult<object>()
-            {
-                Success = true,
-                Data = new AppliedChangeSummary(changeId, [filePathResolved], $"Deleted unused symbol in {Path.GetFileName(filePathResolved)}.", false)
-            };
-        }
-
-        try
-        {
-            // Primary path: handle-based resolution (docCommentId + projectName, from LocateSymbol/
-            // FindReferences). sessionId is intentionally not exposed on this tool's surface -> it is
-            // never obtainable through any tool an agent can call, so requiring it would make this
-            // path permanently unsatisfiable; ResolveFromWireAsync already treats an absent sessionId
-            // as "not stale" (nothing to compare against), so omitting it here is correct, not a
-            // workaround.
-            if (!string.IsNullOrEmpty(docCommentId) && !string.IsNullOrEmpty(projectName))
-            {
-                SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(string.Empty, projectName, docCommentId, cancellationToken);
-                if (!resolution.Resolved)
-                {
-                    return new ToolResult<object>
-                    {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception, resolution.Error!.Message)
-                    };
-                }
-
-                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePathResolved, resolution.Symbol!, cancellationToken);
-                return await ApplyAndRespondAsync(result);
-            }
-
-            // Fallback: symbolName + contextSnippet-based resolution. Added because the tool's own
-            // description previously promised this path while the implementation silently ignored
-            // contextSnippet/lineBefore/lineAfter entirely, leaving callers with no way to identify a
-            // target by anything other than a raw line/column pair (see the next branch) -> and no
-            // tool exposes a column, only a line, making that pair effectively unobtainable too.
-            if (!string.IsNullOrEmpty(symbolName))
-            {
-                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                return await ApplyAndRespondAsync(result);
-            }
-
-            // Fallback: line/column-based resolution (legacy path) -> requires a precise column, which
-            // no other tool surfaces; prefer symbolName+contextSnippet above when possible.
-            if (line > 0 && column > 0)
-            {
-                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePathResolved, line, column, cancellationToken);
-                return await ApplyAndRespondAsync(result);
-            }
-
-            // No valid parameters provided
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, "SafeDeleteUnusedSymbol requires one of: (projectName, docCommentId) for handle-based resolution, (symbolName, optionally with contextSnippet/lineBefore/lineAfter) for name-based resolution, or (line, column) for legacy line/column-based resolution.")
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePathWrapper}' at {Line}:{Column} or handle {ProjectName}/{DocCommentId}", filePathResolved, line, column, projectName, docCommentId);
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SafeDeleteUnusedSymbol")
-            };
-        }
-    }
+        => _projectManagement.SafeDeleteUnusedSymbol(reason, filepath, projectName, docCommentId, symbolName, contextSnippet, lineBefore, lineAfter, line, column, cancellationToken);
 
     [McpServerTool(Name = "CreateProject")]
     [Produces(DataTag.ResultOnly)]
     [Description("Creates a new project and adds it to the current solution. projectType defaults to console.")]
-    public async Task<ToolResult<object>> CreateProject(
+    public Task<ToolResult<object>> CreateProject(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [ExternalInputRequired(DataTag.ProjectName, required: true)] string projectName, [ExternalInputRequired(DataTag.ProjectType)] string projectType = "console", // RequestContext<CallToolRequestParams> requestParams = null,
+        [ExternalInputRequired(DataTag.ProjectName, required: true)] string projectName,
+        [ExternalInputRequired(DataTag.ProjectType)] string projectType = "console",
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var result = await _solutionManagementEngine.CreateProjectAsync(projectName, projectType, cancellationToken);
-            return new ToolResult<object>()
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "CreateProject failed for '{ProjectName}'", projectName);
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateProject")
-            };
-        }
-    }
+        => _projectManagement.CreateProject(reason, projectName, projectType, cancellationToken);
 
     [McpServerTool(Name = "SplitProjectByFolder")]
     [Produces(DataTag.ResultOnly)]
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
-    public async Task<ToolResult<object>> SplitProjectByFolder(
+    public Task<ToolResult<object>> SplitProjectByFolder(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.ProjectName, required: true)] string sourceProjectName, [ExternalInputRequired(DataTag.ClassName, required: true)] string folderName, [ExternalInputRequired(DataTag.ProjectName, required: true)] string targetProjectName, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.ProjectName, required: true)] string sourceProjectName,
+        [ExternalInputRequired(DataTag.ClassName, required: true)] string folderName,
+        [ExternalInputRequired(DataTag.ProjectName, required: true)] string targetProjectName,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var result = await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName, cancellationToken);
-            return new ToolResult<object>()
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SplitProjectByFolder failed for '{SourceProjectName}'", sourceProjectName);
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SplitProjectByFolder")
-            };
-        }
-    }
-
-    // Shared by ReadFile/GetMethodSource/GetFileOutline's document-not-found path. Models that
-    // guess a wrong-but-plausible path (most often a missing subfolder) were observed retrying the
-    // identical wrong path 2-3 times before giving up, even when ListSolutionItems's own earlier
-    // output already showed the real path -> the plain "file not found" message gave them nothing to
-    // act on. Searching the solution for files sharing the requested filename turns most of these
-    // into a one-shot redirect; when nothing matches by filename either, the message issues an
-    // explicit, unhedged directive rather than a suggestion, since softer phrasing ("consider
-    // calling X") was observed not changing the model's next action.
-    private static ResultError BuildFileNotFoundError(Solution solution, string normalizedPath)
-    {
-        var requestedFileName = Path.GetFileName(normalizedPath);
-        var candidates = solution.Projects
-            .SelectMany(p => p.Documents)
-            .Where(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFileName(d.FilePath), requestedFileName, StringComparison.OrdinalIgnoreCase))
-            .Select(d => d.FilePath!)
-            .Distinct()
-            .Take(5)
-            .ToList();
-
-        if (candidates.Count > 0)
-        {
-            return new ResultError("FileNotFound",
-                $"'{requestedFileName}' does not exist at '{normalizedPath}'. A file with this name exists at a different path. " +
-                $"You MUST retry with the correct path:\n" +
-                string.Join("\n", candidates.Select(c => $"  - {c}")));
-        }
-
-        return new ResultError("FileNotFound",
-            $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). " +
-            "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.");
-    }
+        => _projectManagement.SplitProjectByFolder(reason, sourceProjectName, folderName, targetProjectName, cancellationToken);
 
     // ── Phase 1 -> Low-level fallback tools ──────────────────────────────────
     [McpServerTool(Name = "GetMethodSource")]
@@ -1854,138 +1172,13 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "ReadFile")]
     [Produces(DataTag.SourceCode)]
     [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file - useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/largeresults and returned as a resultId (see GetMethodSource) instead of inline text.")]
-    public async Task<ToolResult<object>> ReadFile(
+    public Task<ToolResult<object>> ReadFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null, [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null,
+        [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null,
         CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-            var normalizedPath = Path.GetFullPath(filePathResolved);
-            var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
-
-            SourceText sourceText;
-            if (document != null)
-            {
-                sourceText = await document.GetTextAsync(cancellationToken);
-            }
-            else
-            {
-                // WriteFile writes any file to disk regardless of extension or whether it belongs
-                // to a loaded project -> non-.cs files, and .cs files outside every project's globs,
-                // never become tracked Documents (PersistentWorkspaceManager only syncs .cs files
-                // belonging to a resolvable project into CurrentSolution). Fall back to a raw disk
-                // read so ReadFile can see everything WriteFile is able to write.
-                var diskContent = await FileIoHelper.ReadAllTextIfExistsAsync(filePathResolved, cancellationToken);
-                if (diskContent == null)
-                {
-                    return new ToolResult<object>()
-                    {
-                        Success = false,
-                        Error = BuildFileNotFoundError(solution, normalizedPath)
-                    };
-                }
-
-                sourceText = SourceText.From(diskContent);
-            }
-
-            var totalLines = sourceText.Lines.Count;
-            if (startLine.HasValue || endLine.HasValue)
-            {
-                int from = Math.Max(1, startLine ?? 1);
-                int to = Math.Min(totalLines, endLine ?? totalLines);
-                if (from > totalLines || from > to)
-                {
-                    return new ToolResult<object>()
-                    {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, $"ReadFile: requested range {from}-{to} is out of bounds for a {totalLines}-line file.")
-                    };
-                }
-
-                var start = sourceText.Lines[from - 1].Start;
-                var end = sourceText.Lines[to - 1].EndIncludingLineBreak;
-                var slice = sourceText.ToString(TextSpan.FromBounds(start, end));
-                return new ToolResult<object>()
-                {
-                    Success = true,
-                    Data = new
-                    {
-                        filePath = (string)filePathResolved,
-                        startLine = from,
-                        endLine = to,
-                        totalLines,
-                        source = slice
-                    },
-                    WorkspaceVersion = _workspaceManager.WorkspaceVersion,
-                };
-            }
-
-            var fullText = sourceText.ToString();
-            var textBytes = System.Text.Encoding.UTF8.GetByteCount(fullText);
-            const int thresholdBytes = LargeResultHelper.OffloadThresholdBytes;
-            var solutionRoot = _workspaceManager.GetSolutionRoot();
-            if (textBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
-            {
-                var fullResult = new FileSourceResult { FilePath = (string)filePathResolved, StartLine = 1, EndLine = totalLines, TotalLines = totalLines, Source = fullText };
-                var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.FileSource, cancellationToken);
-
-                // GetFileOutline never offloads its own result (it has no size threshold of its
-                // own), so fileOutline.LargeResult is always null here -> the outline's Data is what
-                // we want to surface either way. LargeResultInfo itself must stay on the top-level
-                // LargeResult property (per ToolResult<T>'s "exactly one of Data/Error/LargeResult"
-                // contract), not nested inside Data, or callers checking result.LargeResult (as
-                // GetLargeResult-following clients and tests do) will see null and miss the offload.
-                object? outlineData = null;
-                try
-                {
-                    var fileOutline = await _readNav.GetFileOutline(reason: reason, filePathResolved, cancellationToken);
-                    outlineData = fileOutline.Data;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePathResolved);
-                }
-
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need, or use GetFileOutline to get the constructors, methods, helpers, members, enums, fields, properties, etc of a file without reading the entire file."),
-                    Data = new
-                    {
-                        totalLines,
-                        fileOutline = outlineData
-                    },
-                    WorkspaceVersion = _workspaceManager.WorkspaceVersion,
-                };
-            }
-
-            return new ToolResult<object>()
-            {
-                Success = true,
-                Data = new
-                {
-                    filePath = (string)filePathResolved,
-                    startLine = 1,
-                    endLine = totalLines,
-                    totalLines,
-                    source = fullText
-                },
-                WorkspaceVersion = _workspaceManager.WorkspaceVersion,
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ReadFile failed for '{FilePathWrapper}'", filePathResolved);
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReadFile")
-            };
-        }
-    }
+        => _fileEdit.ReadFile(reason, filepath, startLine, endLine, cancellationToken);
 
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
@@ -2040,245 +1233,29 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "UndoLastApply")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: ApplyDiff, refactoring-tool writes, and batch-first tools.")]
-    public async Task<ToolResult<object>> UndoLastApply(
+    public Task<ToolResult<object>> UndoLastApply(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.OperationId, required: true)] string changeId, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.OperationId, required: true)] string changeId,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var solutionRoot = _workspaceManager.GetSolutionRoot();
-            var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
-            if (blobPath == null)
-            {
-                return new ToolResult<object>()
-                {
-                    Success = false,
-                    // Deliberately does not say "ensure the apply completed successfully" -> the
-                    // old wording did, and it misdiagnosed every real occurrence: in both
-                    // recorded cases (run 20260910-013550-398, and the SyncTypeAndFilename
-                    // blocker) the apply had completed and the files were on disk. The blob was
-                    // missing, not the change. Tools now withhold the changeId rather than issue
-                    // an unusable one, so reaching this at all means the id is from another
-                    // session, a different solution, or was mistyped.
-                    Error = new ResultError("NoOperationBlobFound",
-                        $"No operation blob found for changeId '{changeId}' under .roslynsentinel/operations/. " +
-                        "This does not mean the change failed - it may well be on disk. It means no undo record " +
-                        "exists for that id here. Check the id against the value the applying tool returned, and " +
-                        "that this is the same server session and solution; a changeId from an earlier session or " +
-                        "a different solution root will not resolve. If the applying tool reported the change as " +
-                        "'not reversible', there is no undo record to find and the change must be reverted manually.")
-                };
-            }
-
-            var json = await File.ReadAllTextAsync(blobPath);
-            var doc = JsonSerializer.Deserialize<JsonElement>(json);
-            var revertable = doc.GetProperty("items").EnumerateArray().Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!).Where(r => r.Outcome == ItemRecordOutcome.Succeeded && r.BeforeSource != null).ToList();
-            if (revertable.Count == 0)
-            {
-                return new ToolResult<object>()
-                {
-                    Success = false,
-                    // Same misdiagnosis as NoOperationBlobFound above: the blob exists, so the
-                    // apply plainly ran. What's absent is a pre-image to restore -> see
-                    // docs/current/blockers/blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md,
-                    // where a rename recorded no BeforeSource and this message sent the
-                    // investigation after the apply instead of after the blob's contents.
-                    Error = new ResultError("NoReversibleItems",
-                        $"The operation blob for changeId '{changeId}' was found, but none of its items carry the " +
-                        "original file contents needed to revert. The change itself completed - this is a gap in " +
-                        "what was recorded, not a failed apply, and it is most common for operations that renamed " +
-                        "or created files rather than editing them in place. Revert manually (e.g. via version " +
-                        $"control); GetOperationDetail(changeId: \"{changeId}\") shows exactly which files were touched.")
-                };
-            }
-
-            var failed = new List<string>();
-            var revertChanges = new Dictionary<FilePathWrapper, string>();
-            foreach (var item in revertable)
-            {
-                // Security: only revert files under the solution root to prevent path traversal.
-                if (solutionRoot != null && !item.FilePath.StartsWith(solutionRoot, StringComparison.OrdinalIgnoreCase))
-                {
-                    failed.Add($"{item.FilePath}: outside solution root, skipped");
-                    continue;
-                }
-
-                revertChanges[item.FilePath] = item.BeforeSource!;
-            }
-
-            var reverted = new List<string>();
-            var noOpFiles = new List<string>();
-            if (revertChanges.Count > 0)
-            {
-                // Route through the shared chokepoint (ApplyProposedChangesAsync) rather than
-                // writing directly, so an undo gets the same rollback-on-partial-failure and
-                // FileSystemWatcher loop suppression as a forward apply -> a revert that bypassed
-                // this previously looked like an external edit to the watcher.
-                var revertResult = await _workspaceManager.ApplyProposedChangesAsync(
-                    revertChanges, rollbackOnPartialFailure: true, cancellationToken: cancellationToken);
-                // ApplyProposedChangesAsync reports a no-op write (pre-apply content already
-                // matched what we're reverting to, byte-for-byte or after whitespace
-                // normalization) as succeeded, since nothing needed to change -> but that is
-                // indistinguishable to a caller from a real write unless NoOpFiles is checked
-                // separately. Without this, "Reverted N files" was reported even when the revert
-                // never touched disk, which was observed this session to cause real confusion: a
-                // file believed reverted was provably unchanged.
-                var noOpSet = new HashSet<string>(revertResult.NoOpFiles ?? [], StringComparer.OrdinalIgnoreCase);
-                foreach (var path in revertResult.SucceededFiles)
-                {
-                    if (noOpSet.Contains(path))
-                    {
-                        noOpFiles.Add(path);
-                    }
-                    else
-                    {
-                        reverted.Add(path);
-                    }
-                }
-                foreach (var (path, error) in revertResult.FailedFiles)
-                {
-                    failed.Add($"{path}: {error}");
-                }
-            }
-
-            var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
-            var noOpPart = noOpFiles.Count > 0
-                ? $" ({noOpFiles.Count} already matched pre-apply state - no change needed: {string.Join(", ", noOpFiles)})"
-                : "";
-            return new ToolResult<object>()
-            {
-                Success = true,
-                Data = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{failedPart}"
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "UndoLastApply failed for '{ChangeId}'", changeId);
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UndoLastApply")
-            };
-        }
-    }
-
-    // ── 8. GetWorkspaceHealthAsync ─────────────────────────────────────────────────
-    // Reads actual workspace/solution state directly rather than inferring health from
-    // environment probes (e.g. MSBuild path existence), which can false-negative a fully
-    // operational workspace with a loaded solution.
-    /// <summary>
-    /// Returns a targeted workspace health report based on actual solution state -> the sole
-    /// health-check tool now that the older, less reliable <c>Diagnose</c> tool has been removed.
-    /// </summary>
-    public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken cancellationToken = default)
-    {
-        _ = cancellationToken;
-        // Use CurrentSolution (sync, no throw) rather than GetCurrentSolutionAsync
-        // to distinguish "no solution loaded" from "workspace error"
-        Solution? currentSolution;
-        try
-        {
-            currentSolution = _workspaceManager.CurrentSolution;
-        }
-        catch (Exception ex)
-        {
-            // Workspace itself threw -> genuinely non-operational
-            return Task.FromResult(new WorkspaceHealthReport(IsOperational: false, HasLoadedSolution: false, LoadedSolutionPath: null, ProjectCount: 0, DocumentCount: 0, LoadErrors: [$"Workspace exception: {ex.Message}"], Summary: $"Workspace is NOT operational: {ex.Message}"));
-        }
-
-        var loadErrors = _workspaceManager.GetWorkspaceLoadErrors();
-        if (currentSolution == null)
-        {
-            // No solution is loaded -> but the workspace itself is operational. Surface an
-            // MSBuild-missing note here (and only here): once a solution has loaded
-            // successfully, MSBuildFound is moot and flagging it would just reintroduce the
-            // false-negative behavior this tool replaced Diagnose to fix.
-            var msbuildNote = _workspaceManager.GetHealthComponents().MsBuildFound ? "" : " No MSBuild installation was detected - LoadSolution may fail; install Visual Studio, Build Tools, or the .NET SDK.";
-            return Task.FromResult(new WorkspaceHealthReport(IsOperational: true, HasLoadedSolution: false, LoadedSolutionPath: null, ProjectCount: 0, DocumentCount: 0, LoadErrors: loadErrors, Summary: "Workspace is operational. No solution is currently loaded. " + "Call LoadSolution to load a .sln or .csproj file." + msbuildNote));
-        }
-
-        var projectCount = currentSolution.ProjectIds.Count;
-        var documentCount = currentSolution.Projects.SelectMany(p => p.Documents).Count();
-        var solutionPath = currentSolution.FilePath ?? _workspaceManager.SolutionPath;
-        var status = _workspaceManager.GetWorkspaceStatus();
-        return Task.FromResult(new WorkspaceHealthReport(IsOperational: true, HasLoadedSolution: true, LoadedSolutionPath: solutionPath, ProjectCount: projectCount, DocumentCount: documentCount, LoadErrors: loadErrors, Summary: $"Workspace operational. {projectCount} project(s) loaded, " + $"{documentCount} document(s). " + (loadErrors.Count > 0 ? $"{loadErrors.Count} load warning(s) recorded (non-fatal)." : "No load errors.") + (status.RequiresReload ? $" {status.StaleDocumentCount} file(s) changed on disk since the last load - call LoadSolution to refresh." : ""), StaleDocumentCount: status.StaleDocumentCount, RequiresReload: status.RequiresReload, SampleStaleFiles: status.SampleStaleFiles));
-    }
+        => _fileEdit.UndoLastApply(reason, changeId, cancellationToken);
 
     // ── 8. GetWorkspaceHealth ─────────────────────────────────────────────────
     [McpServerTool(Name = "GetWorkspaceHealth")]
     [Produces(DataTag.ResultOnly)]
     [Description("Targeted workspace health check - reads actual workspace/solution state directly rather than environment probes. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary, StaleDocumentCount, RequiresReload, SampleStaleFiles. IsOperational=true + HasLoadedSolution=false means no solution loaded yet - not an error. RequiresReload=true means files changed on disk since the last LoadSolution call. verify=quickBuild/fullBuild additionally runs a build check and attaches it as BuildVerification.")]
-    public async Task<ToolResult<object>> GetWorkspaceHealth(
+    public Task<ToolResult<object>> GetWorkspaceHealth(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-    // RequestContext<CallToolRequestParams> requestParams = null,
-    BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
+        BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
-    {
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("GetWorkspaceHealth called");
-        }
-
-        try
-        {
-            var result = await GetWorkspaceHealthAsync();
-
-            if (verify != BuildVerifyLevel.noBuild)
-            {
-                var buildResult = verify == BuildVerifyLevel.fullBuild
-                    ? await _buildEngine.RunFullBuildAsync(cancellationToken)
-                    : await _buildEngine.RunQuickBuildAsync(ToolScope.solution, null, 50, cancellationToken);
-                if (buildResult.TryGetData(out var data))
-                {
-                    result = result with { BuildVerification = data };
-                }
-            }
-
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GetWorkspaceHealth failed");
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetWorkspaceHealth")
-            };
-        }
-    }
+        => _healthMisc.GetWorkspaceHealth(reason, verify, cancellationToken);
 
     [McpServerTool(Name = "ListProjectFrameworkTargets")]
     [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value. No parameters.")]
-    public async Task<ToolResult<object>> ListProjectFrameworkTargets(
+    public Task<ToolResult<object>> ListProjectFrameworkTargets(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var result = await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync(cancellationToken);
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GetProjectFrameworkSummary failed");
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetProjectFrameworkSummary")
-            };
-        }
-    }
+        => _projectManagement.ListProjectFrameworkTargets(reason, cancellationToken);
 
     // ── get_large_result ────────────────────────────────────────────────────────
 
