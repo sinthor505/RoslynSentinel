@@ -4,7 +4,7 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
-## `Git` tool missing worktree/stash/tag/single-commit-show/arbitrary-ref-diff — forces a shell fallback — partially started
+## `Git` tool missing worktree/stash/tag — forces a shell fallback — partially started
 
 Raised 2026-09-12 while wiring the dog-fooding enforcement hook
 (`.claude/hooks/enforce-dogfood.ps1`). **Re-verified against source 2026-09-14 (Phase 5 of
@@ -14,10 +14,17 @@ updated. See `CLOSED.md` for what shipped. Re-audit any TODO entry against
 `GetFileOutline`/`GetMethodSource` on the actual tool before trusting its text, per CLAUDE.md's
 root-cause discipline — this file drifted from source for at least one prior session.
 
-`Git` currently implements `status`, `log`, `diff`, `stage`/`add`, `unstage`, `commit`, `revert`,
-`branch`, `checkout`, `push`, `fetch`, `pull`.
+**2026-09-18: `show`, arbitrary-ref `diff` (`refA..refB`/`refA...refB`), `diff`/`show` against a
+commit with no parent, `log` path/ref scoping + full commit body, and `pull --rebase` all shipped —
+see `CLOSED.md`.**
 
-Still missing, in rough priority order:
+`Git` currently implements `status`, `log` (with optional `branchName` ref-scoping and
+`paths`/`files` path-scoping, full `%B` commit body), `diff` (`working`/`staged`/a single
+hash/`refA..refB`/`refA...refB` range, first-commit-safe via the empty-tree fallback), `show` (one
+commit's metadata + diff, same range/first-commit handling as `diff`), `stage`/`add`, `unstage`,
+`commit`, `revert`, `branch`, `checkout`, `push`, `fetch`, `pull` (plain merge or `--rebase`).
+
+Still missing:
 
 - **`worktree`** (add / list / remove) — PlanStepRunner drives worktrees directly, so this is the
   gap with the most existing in-repo usage, and the one place where a wrong path silently produces
@@ -29,8 +36,6 @@ Still missing, in rough priority order:
 - **`stash`** (push / pop / list) and **`tag`** — lower priority, occasional use. Also undesigned
   API shape (e.g. does `stash pop` need a conflict-handling story analogous to `revert`'s
   `noCommit`?) — same "don't guess" caution as worktree, lower urgency.
-- **`show`** for a single commit, and `diff` between two arbitrary refs (today `target` takes
-  `working`/`staged`/a single hash, not `refA..refB`).
 
 Why it matters beyond convenience: each uncovered operation is a permanent, sanctioned hole in the
 dog-fooding chokepoint, so those code paths never get exercised and never surface the bugs that

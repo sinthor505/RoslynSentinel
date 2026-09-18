@@ -99,6 +99,27 @@ public class GitDiffResult
     }
 }
 
+public class GitShowResult
+{
+    public bool Success
+    {
+        get; set;
+    }
+    public string Hash { get; set; } = "";
+    public string Author { get; set; } = "";
+    public string Date { get; set; } = "";
+    public string Message { get; set; } = "";
+    public string Diff { get; set; } = "";
+    public int FilesChanged
+    {
+        get; set;
+    }
+    public string? Error
+    {
+        get; set;
+    }
+}
+
 public class GitCommitResult
 {
     public bool Success
@@ -365,18 +386,18 @@ public class SentinelGitTools
     };
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool covering status, log, diff, staging, commit, revert, branch, checkout, push, fetch, and pull.")]
+    [Description("Unified git tool covering status, log, diff, show, staging, commit, revert, branch, checkout, push, fetch, and pull.")]
     public async Task<object> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Which git operation to run.")]
         GitOperation operation,
         [Description("log: number of commits to return (max 100).")]
         int count = 20,
-        [Description("diff: \"working\" (unstaged), \"staged\", or a commit hash.")]
+        [Description("diff/show: \"working\" (unstaged), \"staged\", a commit hash, or a range (\"refA..refB\" or \"refA...refB\"). show: a single commit hash or ref (range not applicable).")]
         string target = "working",
-        [Description("diff: repo-relative paths to restrict the diff to, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array - call once per file if you need per-file results.")]
+        [Description("diff/show/log: repo-relative paths to restrict to, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array - call once per file if you need per-file results.")]
         string? paths = null,
-        [Description("diff: byte cap on the returned diff (max 524288).")]
+        [Description("diff/show: byte cap on the returned diff (max 524288).")]
         int maxBytes = 65536,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
         [Description("commit: the commit message. Required for operation=commit unless amend=true, in which case omitting it keeps HEAD's existing message.")]
@@ -391,7 +412,7 @@ public class SentinelGitTools
         [Description("revert: true stages the revert without committing; call Git(operation: commit) to finalize.")]
         bool noCommit = false,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: branchName is required for operation=checkout; optional for operation=branch (omit to list).
-        [Description("branch/checkout: the branch to create, delete, or switch to. branch: omit to list all branches instead. checkout: required.")]
+        [Description("branch/checkout: the branch to create, delete, or switch to. branch: omit to list all branches instead. checkout: required. log: optional ref/branch to start the log from instead of HEAD.")]
         string? branchName = null,
         [Description("branch: base ref for a newly created branch (defaults to HEAD). checkout: base ref for a new branch, only used together with createBranch=true.")]
         string? startPoint = null,
@@ -403,6 +424,8 @@ public class SentinelGitTools
         string remoteName = "origin",
         [Description("push: true also sets the pushed branch's upstream tracking (git push -u).")]
         bool setUpstream = false,
+        [Description("pull: true rebases the current branch onto the remote instead of merging (git pull --rebase).")]
+        bool rebase = false,
         [Description("commit: true amends HEAD instead of creating a new commit (git commit --amend). message becomes optional when amend=true - omit it to keep HEAD's existing message (--no-edit), or pass one to replace it.")]
         bool amend = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -428,8 +451,9 @@ public class SentinelGitTools
         return operation switch
         {
             GitOperation.status => await StatusAsync(gitRoot, cancellationToken),
-            GitOperation.log => await LogAsync(gitRoot, count, cancellationToken),
+            GitOperation.log => await LogAsync(gitRoot, count, branchName, resolvedPaths, cancellationToken),
             GitOperation.diff => await DiffAsync(gitRoot, target, resolvedPaths, maxBytes, cancellationToken),
+            GitOperation.show => await ShowAsync(gitRoot, target, resolvedPaths, maxBytes, cancellationToken),
             GitOperation.stage or GitOperation.add => await StageAsync(gitRoot, scope ?? GitStageScope.tracked, resolvedPaths, cancellationToken),
             GitOperation.unstage => await UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
             GitOperation.commit => await CommitAsync(gitRoot, message, scope, resolvedPaths, amend, cancellationToken),
@@ -438,7 +462,7 @@ public class SentinelGitTools
             GitOperation.checkout => await CheckoutAsync(gitRoot, branchName, createBranch, startPoint, cancellationToken),
             GitOperation.push => await PushAsync(gitRoot, remoteName, setUpstream, cancellationToken),
             GitOperation.fetch => await FetchAsync(gitRoot, remoteName, cancellationToken),
-            GitOperation.pull => await PullAsync(gitRoot, remoteName, cancellationToken),
+            GitOperation.pull => await PullAsync(gitRoot, remoteName, rebase, cancellationToken),
             _ => (object)new { Success = false, Error = $"Unknown operation '{operation}'." }
         };
     }
@@ -521,25 +545,39 @@ public class SentinelGitTools
         }
     }
 
-    private async Task<GitLogResult> LogAsync(string gitRoot, int count, CancellationToken cancellationToken)
+    private async Task<GitLogResult> LogAsync(
+        string gitRoot, int count, string? refName, string? paths, CancellationToken cancellationToken)
     {
         count = Math.Clamp(count, 1, 100);
         try
         {
-            // Unit separator (ASCII 31) used as field delimiter -> safe in commit messages.
-            const string sep = "\x1f";
-            var format = $"%H{sep}%h{sep}%an{sep}%aI{sep}%s";
+            // Unit separator (ASCII 31) delimits fields; record separator (ASCII 30) delimits
+            // commits -> %B (full body) can itself contain embedded newlines, so a plain '\n' split
+            // is not safe once the body is multi-line.
+            const string fieldSep = "\x1f";
+            const string recordSep = "\x1e";
+            var format = $"%H{fieldSep}%h{fieldSep}%an{fieldSep}%aI{fieldSep}%B{recordSep}";
 
-            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot,
-                ["log", $"--max-count={count}", $"--format={format}"], cancellationToken);
+            var args = new List<string> { "log", $"--max-count={count}", $"--format={format}" };
+            if (!string.IsNullOrWhiteSpace(refName))
+                args.Add(refName);
+            if (!string.IsNullOrWhiteSpace(paths))
+            {
+                args.Add("--");
+                foreach (var p in paths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    args.Add(p);
+            }
+
+            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (exitCode != 0)
                 return new GitLogResult { Success = false, Error = stderr.Trim() };
 
             var commits = new List<GitCommitEntry>();
-            foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            foreach (var record in stdout.Split(recordSep, StringSplitOptions.RemoveEmptyEntries))
             {
-                var parts = line.Split(sep);
+                var trimmedRecord = record.TrimStart('\n', '\r');
+                var parts = trimmedRecord.Split(fieldSep);
                 if (parts.Length < 5) continue;
                 commits.Add(new GitCommitEntry
                 {
@@ -547,7 +585,7 @@ public class SentinelGitTools
                     ShortHash = parts[1],
                     Author = parts[2],
                     Date = parts[3],
-                    Message = parts[4],
+                    Message = parts[4].Trim('\n', '\r'),
                 });
             }
 
@@ -559,6 +597,12 @@ public class SentinelGitTools
             return new GitLogResult { Success = false, Error = $"Git log failed: {ex.Message}" };
         }
     }
+
+    // The well-known, always-valid hash of git's empty tree object - same in every repository,
+    // since it depends only on the (fixed) serialization of "a tree with zero entries." Used as
+    // the diff base for a commit that has no parent (git's own `git diff <hash>^ <hash>` fails
+    // with "unknown revision" in exactly that case, since `^` has nothing to resolve to).
+    private const string EmptyTreeHash = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
     private async Task<GitDiffResult> DiffAsync(
         string gitRoot, string target, string? paths, int maxBytes, CancellationToken cancellationToken)
@@ -572,10 +616,20 @@ public class SentinelGitTools
             {
                 args.Add("--cached");
             }
+            else if (target.Contains("...", StringComparison.Ordinal) || target.Contains("..", StringComparison.Ordinal))
+            {
+                // A caller-supplied range (refA..refB or refA...refB) - pass straight through as a
+                // single arg, exactly like the git CLI accepts it, rather than trying to split and
+                // reinterpret it ourselves.
+                args.Add(target);
+            }
             else if (target != "working")
             {
-                // Show what a specific commit changed (diff against its parent).
-                args.Add($"{target}^");
+                // Show what a specific commit changed (diff against its parent), falling back to
+                // the empty tree when the commit has no parent (e.g. a repo's very first commit) -
+                // `<target>^` does not resolve there and git would otherwise fail the whole call.
+                var (parentExit, _, _) = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"{target}^"], cancellationToken);
+                args.Add(parentExit == 0 ? $"{target}^" : EmptyTreeHash);
                 args.Add(target);
             }
 
@@ -604,6 +658,67 @@ public class SentinelGitTools
         {
             _logger.LogError(ex, "Git diff failed (target={Target})", target);
             return new GitDiffResult { Success = false, Error = $"Git diff failed: {ex.Message}" };
+        }
+    }
+
+    /// <summary>
+    /// Shows one commit's metadata (hash/author/date/full body) plus the diff it introduced -
+    /// equivalent to <c>git show &lt;target&gt;</c>. Falls back to the empty tree for a diff base
+    /// when <paramref name="target"/> has no parent (a repo's first commit), same as DiffAsync.
+    /// </summary>
+    private async Task<GitShowResult> ShowAsync(
+        string gitRoot, string target, string? paths, int maxBytes, CancellationToken cancellationToken)
+    {
+        maxBytes = Math.Clamp(maxBytes, 1024, 524288);
+        try
+        {
+            const string fieldSep = "\x1f";
+            var format = $"%H{fieldSep}%h{fieldSep}%an{fieldSep}%aI{fieldSep}%B";
+
+            var (metaExit, metaStdout, metaStderr) = await RunGitAsync(
+                gitRoot, ["show", $"--format={format}", "--no-patch", target], cancellationToken);
+            if (metaExit != 0)
+                return new GitShowResult { Success = false, Error = metaStderr.Trim() };
+
+            var metaParts = metaStdout.TrimEnd('\n', '\r').Split(fieldSep);
+            if (metaParts.Length < 5)
+                return new GitShowResult { Success = false, Error = $"Could not parse commit metadata for '{target}'." };
+
+            var (parentExit, _, _) = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"{target}^"], cancellationToken);
+            var diffArgs = new List<string> { "diff", parentExit == 0 ? $"{target}^" : EmptyTreeHash, target };
+            if (!string.IsNullOrWhiteSpace(paths))
+            {
+                diffArgs.Add("--");
+                foreach (var p in paths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    diffArgs.Add(p);
+            }
+
+            var (diffExit, diffStdout, diffStderr) = await RunGitAsync(gitRoot, [.. diffArgs], cancellationToken);
+            if (diffExit != 0)
+                return new GitShowResult { Success = false, Error = diffStderr.Trim() };
+
+            var filesChanged = diffStdout.Split('\n')
+                .Count(l => l.StartsWith("diff --git", StringComparison.Ordinal));
+
+            var diff = diffStdout.Length > maxBytes
+                ? diffStdout[..maxBytes] + $"\n... (truncated at {maxBytes} bytes)"
+                : diffStdout;
+
+            return new GitShowResult
+            {
+                Success = true,
+                Hash = metaParts[0],
+                Author = metaParts[2],
+                Date = metaParts[3],
+                Message = metaParts[4].Trim('\n', '\r'),
+                Diff = diff,
+                FilesChanged = filesChanged,
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Git show failed (target={Target})", target);
+            return new GitShowResult { Success = false, Error = $"Git show failed: {ex.Message}" };
         }
     }
 
@@ -1003,16 +1118,17 @@ public class SentinelGitTools
     }
 
     /// <summary>
-    /// Pulls (fetch + merge, git's default) the current branch from <paramref name="remoteName"/>.
-    /// No <c>--rebase</c>/<c>--force</c> options exposed yet -> a plain merge pull is the
-    /// least-surprising default and never rewrites local commits.
+    /// Pulls the current branch from <paramref name="remoteName"/> - a plain merge (git's default)
+    /// unless <paramref name="rebase"/> is set. No <c>--force</c> exposed -> pull never force-rewrites
+    /// remote-tracking state.
     /// </summary>
     private async Task<GitRemoteResult> PullAsync(
-        string gitRoot, string remoteName, CancellationToken cancellationToken)
+        string gitRoot, string remoteName, bool rebase, CancellationToken cancellationToken)
     {
         try
         {
-            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, ["pull", remoteName], cancellationToken);
+            var args = rebase ? new List<string> { "pull", "--rebase", remoteName } : new List<string> { "pull", remoteName };
+            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, [.. args], cancellationToken);
             var detail = string.Join("\n", new[] { stdout.Trim(), stderr.Trim() }.Where(s => s.Length > 0));
             if (exitCode != 0)
                 return new GitRemoteResult { Success = false, Operation = "pull", Error = detail.Length > 0 ? detail : $"git pull exited with code {exitCode}" };

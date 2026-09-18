@@ -10,6 +10,7 @@ public enum GitOperation
     status,
     log,
     diff,
+    show,
     stage,
     add,
     unstage,

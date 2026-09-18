@@ -5,6 +5,38 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## `Git` tool: show, diff range/first-commit, log path/ref/body, pull --rebase — closed (2026-09-18)
+
+User-approved "5 easy items" batch closing part of the still-open `Git` TODO gaps (worktree/stash/
+tag remain, see current `TODO.md`). All implemented in
+`RoslynSentinel.Server.Basic/SentinelGitTools.cs`, built to 0 errors, live-verified against this
+repo's own history after a server restart (the live process was stale relative to source for the
+first verification attempt — not a defect, see `blocking_error_live_server_stale_after_enum_addition.md`):
+
+- **`diff` range + first-commit support**: `target` now accepts `refA..refB`/`refA...refB` (passed
+  through to `git diff` as-is) in addition to `working`/`staged`/a single commit hash. A single-hash
+  `target` with no parent (repo's first commit) now falls back to git's well-known empty-tree hash
+  (`4b825dc642cb6eb9a060e54bf8d69288fbee4904`) instead of failing on `<target>^`.
+- **`show` operation**: new `GitOperation.show` + `ShowAsync`, returns one commit's hash/author/
+  date/full body (`%B`) plus the diff it introduced, same range/first-commit-safe base-selection
+  logic as `diff`. New `GitShowResult` type.
+- **`log` path/ref scoping + full body**: `LogAsync` now accepts an optional ref (reusing the
+  existing `branchName` param) to start from instead of HEAD, and optional path-scoping (reusing
+  `paths`/`files`, consistent with `diff`/`stage`). Format string switched from `%s` (subject only)
+  to `%B` (full body) using a two-level ASCII separator scheme (unit separator `\x1f` for fields,
+  record separator `\x1e` for commit boundaries), since a multi-line body can contain embedded
+  newlines that a plain `\n`-split would misparse.
+- **`pull --rebase`**: new `rebase` bool param on `Git()`, passed through to `PullAsync` which adds
+  `--rebase` to the git invocation when set. Default (`false`) is unchanged plain-merge pull.
+
+Also fixed along the way (not a `Git` tool defect, but worth recording): the first `ModifyEnum`
+attempt to add `GitOperation.show` was mis-called — `values` is documented as the enum's *complete*
+target member list, not an add-only list, so passing just `"show"` correctly told the tool to
+delete the other 13 members, which then correctly failed compilation against `SentinelGitTools.cs`'s
+dispatch switch. Not a tool bug; see `docs/current/ideas/idea_modifyenum_error_should_surface_implied_removals.md`
+for the follow-on idea (the error message should name the implied removals so this mistake is
+obvious in one read instead of requiring 16 lines of CS0117 to be reverse-engineered).
+
 ## `Git` tool: branch/checkout/push/fetch/pull implemented; stage untracked-files/silent-alias bugs fixed — closed (2026-09-14)
 
 Split off the stale `Git` TODO entry (see current `TODO.md`'s rewritten version for what's still
