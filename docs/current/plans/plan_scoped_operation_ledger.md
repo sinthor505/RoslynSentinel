@@ -348,21 +348,64 @@ Original plan bullets, for the record:
   touched multiple sites under one `changeId`); resolving the last entry releases the breaker
   automatically.
 
-## Decision 6 - `UndoLastApply` / re-tripping integration
+## Decision 6 - `UndoLastApply` / re-tripping integration - DONE
 
-- `UndoLastApply`'s existing implementation gets one addition: after undoing a change, call
-  `((IScopedOperationLedger)workspaceManager).RecordUndo(changeId)` unconditionally - per the
-  proposal doc, this needs no special case distinguishing "undid the original move" from "undid a
-  fix," the ledger sorts that out from which entries carry the given `changeId`.
-  - Undoing the original move's `changeId` should cascade-invalidate every entry that depends on it.
-  - Undoing a later fix's `changeId` flips just that entry (or entries) back to `IsFixed: false` and
-    re-trips the scoped breaker if it had already released.
-- Test: open a ledger, resolve all entries (breaker releases), undo the last fix -> breaker re-trips;
-  undo the original move -> ledger's dependent entries are invalidated/cleared per whatever cascade
-  behavior gets implemented (finalize the exact user-visible shape of "invalidated" during this step
-  - the proposal doc says this "falls out of ledger semantics for free" but doesn't specify the exact
-  API surface for an invalidated-vs-fixed entry; decide and document here rather than leaving it
-  implicit).
+- Design correction found during implementation: the proposal doc's claim that cascade-invalidation
+  "falls out of ledger semantics for free" from `RecordUndo(changeId)` matching `entry.ChangeId` is
+  **not actually true** as `ScopedOperationLedgerEngine` was built through Decision 5.
+  `CallSiteLedgerEntry.ChangeId` starts `null` and is only ever set by `RecordFix` (the *fix's* own
+  changeId) - the ledger had no record anywhere of the changeId that *opened* it (the original
+  move's `apply.ChangeId` from `MoveMember`). So `RecordUndo(moveChangeId)` against the
+  Decision-5-era engine would match zero entries and silently no-op instead of cascading - verified
+  by reading `ScopedOperationLedgerEngine.RecordUndo` and `TryOpen` source directly before writing
+  any test, not inferred from the proposal doc's description.
+  - Fix: `IScopedOperationLedger.TryOpen` gained an optional `string? openingChangeId = null`
+    parameter; `ScopedOperationLedgerEngine` stores it in a new `_openingChangeId` field (cleared by
+    `TryRelease`). `RecordUndo(changeId)` now checks `changeId == _openingChangeId` first - if true,
+    it flips **every** entry back to `IsFixed = false` regardless of that entry's own `ChangeId`
+    (including entries already individually fixed by a *different* changeId); otherwise it falls
+    back to the original per-entry `entry.ChangeId == changeId` match, unchanged from Decision 5.
+  - "Invalidated" decided to mean exactly "unresolved again" (`IsFixed = false`), reusing the
+    existing state rather than adding a third entry state - simplest option that still re-trips
+    `IsBlocked`, and per-entry data (`BrokenExpression`, `SuggestedFix`, etc.) stays intact for
+    whoever re-resolves it, which a "cleared" entry would have lost.
+  - `SentinelAdvancedRefactoringTools.MoveMember` now passes `apply.ChangeId` (the move's own
+    changeId, already in scope right before the `TryOpen` call) as `openingChangeId`.
+  - `WorkspaceFileEditImpl.UndoLastApply` calls
+    `((IScopedOperationLedger)_workspaceManager).RecordUndo(changeId)` unconditionally after a
+    successful revert - a no-op when no ledger is open or `changeId` matches nothing tracked, same
+    pattern as the proposal doc intended, just now backed by real opening-changeId tracking.
+- Second defect caught only by running the full solution, not just the new fixture:
+  `RoslynSentinel.Tests.Battery.UndoLastApplyTests` uses `FakeWorkspaceManager`, which implemented
+  none of `IScopedOperationLedger` - `UndoLastApply`'s new unconditional
+  `((IScopedOperationLedger)_workspaceManager).RecordUndo(...)` cast threw `InvalidCastException`
+  (caught by the method's own try/catch, surfacing as `Success = false`) on every fake-backed test,
+  including ones with nothing to do with the ledger. Fixed by giving `FakeWorkspaceManager` a real
+  (not throw-stub) `IScopedOperationLedger` implementation - same rationale already documented next
+  to its existing `IUnrecoverableBreaker.Trip` implementation: a cross-cutting interface that a
+  newly-unconditional call site now touches on every invocation cannot be a `NotImplementedException`
+  stub without breaking every fake-backed test that exercises that call site, whether or not the
+  test cares about the ledger.
+- Tests added to `ScopedOperationLedgerBlockingTests.cs` (exercises `TryOpen`/`RecordFix`/
+  `RecordUndo`/`TryRelease` directly against a real `PersistentWorkspaceManager`, no file I/O
+  needed for these two):
+  - `RecordUndo_OfFixChangeId_ReTripsBreakerAfterRelease` - resolve the only entry (breaker
+    releases via `TryRelease`), undo that fix's own changeId, assert the entry is unresolved again
+    and `TryRelease` now fails.
+  - `RecordUndo_OfOpeningChangeId_InvalidatesEveryEntryEvenIfAlreadyFixed` - two entries, fix one,
+    undo the *opening* changeId, assert both entries (including the already-fixed one) are
+    unresolved and `TryRelease` fails.
+  - Full `RoslynSentinel.Tests.Battery.UndoLastApplyTests` fixture (6 tests, including the
+    real-revert-against-`PersistentWorkspaceManager` test) also re-run and passing after the
+    `FakeWorkspaceManager` fix.
+- Full-solution test run after both fixes: 2454/2567 passed, 19 failed - all 19 pre-existing/
+  environmental (15 ModelEval `LM Studio request failed with BadRequest` - no LM Studio server
+  running this session; 2 `TaskCapableClient` sync/async equivalence failures; 1
+  `T5_GetLargeResult_ReadsFile_PagingWorks_TotalRecordsMatchesT4` NullReferenceException; 1
+  `McpServerStatus_Call_PopulatesStructuredContent_MatchingTextContent`, the documented
+  full-solution-only flaky test) - none touch ledger code and none regressed by this decision's
+  changes; `RoslynSentinel.Tests.Battery` went from 2 failures (before the `FakeWorkspaceManager`
+  fix, one being the `UndoLastApply` regression) to 1 (just the flaky test).
 
 ## Explicitly out of scope for this plan
 

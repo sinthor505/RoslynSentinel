@@ -6,7 +6,7 @@ public class ScopedOperationLedgerEngine : IScopedOperationLedger
     private string? _openOperationName;
     private List<LedgerEntryBase>? _entries;
 
-    public bool TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason)
+    public bool TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason, string? openingChangeId = null)
     {
         lock (_lock)
         {
@@ -18,6 +18,7 @@ public class ScopedOperationLedgerEngine : IScopedOperationLedger
 
             _openOperationName = operationName;
             _entries = [.. entries];
+            _openingChangeId = openingChangeId;
             rejectionReason = null;
             return true;
         }
@@ -86,10 +87,17 @@ public class ScopedOperationLedgerEngine : IScopedOperationLedger
                 return;
             }
 
+            // Undoing the changeId that opened the ledger invalidates the whole thing: the
+            // operation these entries were tracking no longer exists, so every entry (including
+            // ones already individually fixed) goes back to unresolved rather than just the one
+            // matching this changeId - there is nothing left for a per-entry fix to have resolved
+            // against. This is the only place "invalidated" has a concrete meaning in this engine:
+            // it reuses IsFixed=false (re-trips IsBlocked) rather than a separate entry state.
+            var isOpeningChangeId = changeId == _openingChangeId;
             for (var i = 0; i < _entries.Count; i++)
             {
                 var entry = _entries[i];
-                if (entry.ChangeId == changeId)
+                if (isOpeningChangeId || entry.ChangeId == changeId)
                 {
                     _entries[i] = entry switch
                     {
@@ -117,6 +125,7 @@ public class ScopedOperationLedgerEngine : IScopedOperationLedger
 
             _entries = null;
             _openOperationName = null;
+            _openingChangeId = null;
             return true;
         }
     }
@@ -128,4 +137,8 @@ public class ScopedOperationLedgerEngine : IScopedOperationLedger
             return _entries is null ? [] : [.. _entries];
         }
     }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    private string? _openingChangeId;
 }

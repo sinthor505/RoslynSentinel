@@ -12,7 +12,7 @@ namespace RoslynSentinel.Tests.Fakes;
 // NotImplementedException - extend as a test actually needs a member. If a test needs a real
 // on-disk solution instead (actual file I/O, MSBuild load, watcher behavior), use
 // RoslynSentinel.Tests.TestSolutionFixture (backed by PersistentWorkspaceManager) instead of this class.
-public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
+public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger
 {
     public Solution? CurrentSolution { get; private set; }
 
@@ -123,4 +123,24 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     }
 
     public void TrackSymbol(string agentHandle, SymbolHandle handle) => throw new NotImplementedException();
+
+    // IScopedOperationLedger: really implemented (not a throw-stub) for the same reason as
+    // IUnrecoverableBreaker.Trip above - UndoLastApply now calls RecordUndo unconditionally on
+    // every successful revert, so any fake-backed apply/undo test would otherwise crash with
+    // InvalidCastException the moment FakeWorkspaceManager didn't implement this interface at all.
+    // No ledger is ever opened through this fake, so every member here is a safe no-op / empty read.
+    bool IScopedOperationLedger.TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason, string? openingChangeId)
+    {
+        rejectionReason = "FakeWorkspaceManager does not support the scoped operation ledger.";
+        return false;
+    }
+    bool IScopedOperationLedger.IsBlocked(FilePathWrapper filePath, out string? blockReason)
+    {
+        blockReason = null;
+        return false;
+    }
+    void IScopedOperationLedger.RecordFix(IReadOnlyList<string> entryIds, string changeId) { }
+    void IScopedOperationLedger.RecordUndo(string changeId) { }
+    bool IScopedOperationLedger.TryRelease() => false;
+    IReadOnlyList<LedgerEntryBase> IScopedOperationLedger.GetOpenEntries() => [];
 }

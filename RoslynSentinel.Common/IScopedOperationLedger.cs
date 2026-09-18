@@ -2,7 +2,7 @@ namespace RoslynSentinel.Common;
 
 public interface IScopedOperationLedger
 {
-    bool TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason);
+    bool TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason, string? openingChangeId = null);
     bool IsBlocked(FilePathWrapper filePath, out string? blockReason);
     void RecordFix(IReadOnlyList<string> entryIds, string changeId);
     void RecordUndo(string changeId);

@@ -497,7 +497,7 @@ public class SentinelAdvancedRefactoringTools
             if (!dryRun && result.PendingLedgerEntries is { Count: > 0 } pendingEntries)
             {
                 var opened = ((IScopedOperationLedger)_workspaceManager).TryOpen(
-                    result.PendingLedgerOperationName ?? "MoveMember", pendingEntries, out var rejectionReason);
+                    result.PendingLedgerOperationName ?? "MoveMember", pendingEntries, out var rejectionReason, apply.ChangeId);
                 summaryNote += opened
                     ? $" Opened a scoped operation ledger with {pendingEntries.Count} unresolved call site(s) - resolve them before making unrelated changes."
                     : $" WARNING: {pendingEntries.Count} call site(s) could not be automatically rewritten, and a ledger could not be opened to track them ({rejectionReason}). Fix them manually: " +

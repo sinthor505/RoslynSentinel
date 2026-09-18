@@ -135,4 +135,109 @@ public class ScopedOperationLedgerBlockingTests
         Assert.That(await File.ReadAllTextAsync(unrelatedFile), Is.EqualTo(unrelatedOriginal),
             "the refused write must not have reached disk");
     }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    [Test]
+    public void RecordUndo_OfFixChangeId_ReTripsBreakerAfterRelease()
+    {
+        // Resolve the only entry (breaker releases), then undo that fix's own changeId ->
+        // the entry goes back to unresolved and the ledger must be open (blocking) again.
+        var opened = Ledger.TryOpen(
+            "MoveMember_Test",
+            [
+                new CallSiteLedgerEntry
+                {
+                    EntryId = "entry-1",
+                    FilePath = "C:\\fake\\Caller.cs",
+                    Line = 1,
+                    BrokenExpression = "classCLocalVarA.Foo()",
+                    OldStaticType = "ClassA",
+                    Status = CallSiteStatus.Ambiguous,
+                }
+            ],
+            out var rejectionReason,
+            openingChangeId: "move-change-id");
+        Assert.That(opened, Is.True, rejectionReason);
+
+        Ledger.RecordFix(["entry-1"], "fix-change-id");
+        Assert.That(Ledger.TryRelease(), Is.True, "all entries fixed -> release should succeed");
+
+        // TryRelease cleared the ledger, so there's nothing left to undo against - reopen to
+        // exercise the re-trip in a state where the ledger is actually still open.
+        Ledger.TryOpen(
+            "MoveMember_Test",
+            [
+                new CallSiteLedgerEntry
+                {
+                    EntryId = "entry-1",
+                    FilePath = "C:\\fake\\Caller.cs",
+                    Line = 1,
+                    BrokenExpression = "classCLocalVarA.Foo()",
+                    OldStaticType = "ClassA",
+                    Status = CallSiteStatus.Ambiguous,
+                }
+            ],
+            out _,
+            openingChangeId: "move-change-id-2");
+        Ledger.RecordFix(["entry-1"], "fix-change-id-2");
+        Assert.That(Ledger.GetOpenEntries().Single().IsFixed, Is.True);
+
+        Ledger.RecordUndo("fix-change-id-2");
+
+        Assert.That(Ledger.GetOpenEntries().Single().IsFixed, Is.False,
+            "undoing the fix's own changeId must flip the entry back to unresolved");
+        Assert.That(Ledger.TryRelease(), Is.False, "an unresolved entry must keep the breaker tripped");
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    [Test]
+    public void RecordUndo_OfOpeningChangeId_InvalidatesEveryEntryEvenIfAlreadyFixed()
+    {
+        // Undoing the move that created the ledger (not one of its per-entry fixes) invalidates
+        // the whole ledger's worth of tracking: every entry - including ones already individually
+        // fixed - goes back to unresolved, since the operation they were tracking no longer exists.
+        var opened = Ledger.TryOpen(
+            "MoveMember_Test",
+            [
+                new CallSiteLedgerEntry
+                {
+                    EntryId = "entry-1",
+                    FilePath = "C:\\fake\\Caller1.cs",
+                    Line = 1,
+                    BrokenExpression = "classCLocalVarA.Foo()",
+                    OldStaticType = "ClassA",
+                    Status = CallSiteStatus.Ambiguous,
+                },
+                new CallSiteLedgerEntry
+                {
+                    EntryId = "entry-2",
+                    FilePath = "C:\\fake\\Caller2.cs",
+                    Line = 5,
+                    BrokenExpression = "classCLocalVarB.Foo()",
+                    OldStaticType = "ClassA",
+                    Status = CallSiteStatus.Ambiguous,
+                }
+            ],
+            out var rejectionReason,
+            openingChangeId: "move-change-id");
+        Assert.That(opened, Is.True, rejectionReason);
+
+        Ledger.RecordFix(["entry-1"], "fix-change-id");
+        var entries = Ledger.GetOpenEntries();
+        Assert.That(entries.Single(e => e.EntryId == "entry-1").IsFixed, Is.True);
+        Assert.That(entries.Single(e => e.EntryId == "entry-2").IsFixed, Is.False);
+
+        Ledger.RecordUndo("move-change-id");
+
+        var afterUndo = Ledger.GetOpenEntries();
+        Assert.Multiple(() =>
+        {
+            Assert.That(afterUndo.Single(e => e.EntryId == "entry-1").IsFixed, Is.False,
+                "even the already-fixed entry must be invalidated when the opening move is undone");
+            Assert.That(afterUndo.Single(e => e.EntryId == "entry-2").IsFixed, Is.False);
+        });
+        Assert.That(Ledger.TryRelease(), Is.False, "invalidated entries must keep the breaker tripped");
+    }
 }

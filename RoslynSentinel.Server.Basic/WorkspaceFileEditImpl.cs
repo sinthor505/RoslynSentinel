@@ -130,6 +130,12 @@ public class WorkspaceFileEditImpl
                 }
             }
 
+            // Unconditional: the ledger itself sorts out whether changeId matches an individual
+            // fix's entry or the changeId that opened the ledger (cascades to every entry in that
+            // case) - see ScopedOperationLedgerEngine.RecordUndo. A no-op when no ledger is open
+            // or changeId matches nothing tracked.
+            ((IScopedOperationLedger)_workspaceManager).RecordUndo(changeId);
+
             var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
             var noOpPart = noOpFiles.Count > 0
                 ? $" ({noOpFiles.Count} already matched pre-apply state - no change needed: {string.Join(", ", noOpFiles)})"

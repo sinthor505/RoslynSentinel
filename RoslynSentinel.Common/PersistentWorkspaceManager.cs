@@ -2293,7 +2293,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     // -- IScopedOperationLedger -- pass-through to the injected engine; see ScopedOperationLedgerEngine.
 
-    public bool TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason) => _ledger.TryOpen(operationName, entries, out rejectionReason);
+    public bool TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason, string? openingChangeId = null) => _ledger.TryOpen(operationName, entries, out rejectionReason, openingChangeId);
     public bool IsBlocked(FilePathWrapper filePath, out string? blockReason) => _ledger.IsBlocked(filePath, out blockReason);
     public void RecordFix(IReadOnlyList<string> entryIds, string changeId) => _ledger.RecordFix(entryIds, changeId);
     public void RecordUndo(string changeId) => _ledger.RecordUndo(changeId);
