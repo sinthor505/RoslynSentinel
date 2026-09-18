@@ -11,22 +11,22 @@ namespace RoslynSentinel.Server.Basic;
 public class SentinelRefactoringTools
 {
     private readonly RefactoringEngine _refactoringEngine;
-    private readonly StandardRefactoringEngine _standardRefactoringEngine;
+    //private readonly StandardRefactoringEngine _standardRefactoringEngine;
     // private readonly AdvancedStructuralEngine _advancedStructuralEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly MappingEngine _mappingEngine;
-    private readonly SemanticRefactoringLibrary _semanticRefactoringLibrary;
-    private readonly GranularRefactoringEngine _granularRefactoringEngine;
+    //private readonly SemanticRefactoringLibrary _semanticRefactoringLibrary;
+    //private readonly GranularRefactoringEngine _granularRefactoringEngine;
     // private readonly AdvancedLogicEngine _advancedLogicEngine;
     // private readonly RefinementEngine _refinementEngine;
     // private readonly AdvancedTypeEngine _advancedTypeEngine;
-    private readonly CodeStyleEngine _codeStyleEngine;
-    private readonly CodeFlowEngine _codeFlowEngine;
+    //private readonly CodeStyleEngine _codeStyleEngine;
+    //private readonly CodeFlowEngine _codeFlowEngine;
     // private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
     // private readonly LogicOptimizationEngine _logicOptimizationEngine;
     // private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
-    private readonly CodeGenerationEngine _codeGenerationEngine;
+    //private readonly CodeGenerationEngine _codeGenerationEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
@@ -43,22 +43,22 @@ public class SentinelRefactoringTools
 
     public SentinelRefactoringTools(
         RefactoringEngine refactoringEngine,
-        StandardRefactoringEngine standardRefactoringEngine,
+        //StandardRefactoringEngine standardRefactoringEngine,
         MappingEngine mappingEngine,
-        SemanticRefactoringLibrary semanticRefactoringLibrary,
-        GranularRefactoringEngine granularRefactoringEngine,
+    //    SemanticRefactoringLibrary semanticRefactoringLibrary,
+    //    GranularRefactoringEngine granularRefactoringEngine,
     // AdvancedLogicEngine advancedLogicEngine,
     // RefinementEngine refinementEngine,
     // AdvancedTypeEngine advancedTypeEngine,
     StructuralRefinementEngine structuralRefinementEngine,
-    CodeStyleEngine codeStyleEngine,
-        CodeFlowEngine codeFlowEngine,
+        //CodeStyleEngine codeStyleEngine,
+        //    CodeFlowEngine codeFlowEngine,
         // AdvancedRefactoringEngine advancedRefactoringEngine,
         // LogicOptimizationEngine logicOptimizationEngine,
         // ModernizationEngine modernizationEngine,
         // OutParamRefactoringEngine outParamRefactoringEngine,
         MsToolAugmentEngine augmentEngine,
-        CodeGenerationEngine codeGenerationEngine,
+    //    CodeGenerationEngine codeGenerationEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         IWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
@@ -66,21 +66,21 @@ public class SentinelRefactoringTools
         ILogger<SentinelRefactoringTools> logger)
     {
         _refactoringEngine = refactoringEngine;
-        _standardRefactoringEngine = standardRefactoringEngine;
+        //_standardRefactoringEngine = standardRefactoringEngine;
         _mappingEngine = mappingEngine;
-        _semanticRefactoringLibrary = semanticRefactoringLibrary;
-        _granularRefactoringEngine = granularRefactoringEngine;
+        //_semanticRefactoringLibrary = semanticRefactoringLibrary;
+        //_granularRefactoringEngine = granularRefactoringEngine;
         // _advancedLogicEngine = advancedLogicEngine;
         // _refinementEngine = refinementEngine;
         // _advancedTypeEngine = advancedTypeEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
-        _codeStyleEngine = codeStyleEngine;
-        _codeFlowEngine = codeFlowEngine;
+        //_codeStyleEngine = codeStyleEngine;
+        //_codeFlowEngine = codeFlowEngine;
         //_advancedRefactoringEngine = advancedRefactoringEngine;
         // _logicOptimizationEngine = logicOptimizationEngine;
         // _outParamRefactoringEngine = outParamRefactoringEngine;
         _msToolAugmentEngine = augmentEngine;
-        _codeGenerationEngine = codeGenerationEngine;
+        //_codeGenerationEngine = codeGenerationEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
@@ -88,18 +88,7 @@ public class SentinelRefactoringTools
         _logger = logger;
     }
 
-    private static string PreviewFileContent(string content)
-    {
-        var lines = content.Split('\n');
-        if (lines.Length <= 20)
-        {
-            return content;
-        }
-
-        var head = lines.Take(10);
-        var tail = lines.TakeLast(10);
-        return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
-    }
+    // PreviewFileContent moved to RefactoringToolHelpers.PreviewFileContent (Decision 7 step 1).
 
     /// <summary>
     /// Guards against staging an unintended empty-file overwrite: when a document-edit engine
@@ -115,32 +104,14 @@ public class SentinelRefactoringTools
     /// the server had faulted. Run 20260910-013550-398 hit this via a generic containerName ->
     /// see docs/current/feedback_agent_friendly_error_messages.md.
     /// </remarks>
-    private static ToolResult<object>? RequireUpdatedText(DocumentEditResult updated, string operationName, FilePathWrapper filePath)
-    {
-        if (!string.IsNullOrEmpty(updated.UpdatedText))
-        {
-            return null;
-        }
-
-        return new ToolResult<object>
-        {
-            Success = false,
-            Error = new ResultError(ErrorCodeFor(updated.Outcome),
-                $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {updated.Message}")
-        };
-    }
+    // RequireUpdatedText moved to RefactoringToolHelpers.RequireUpdatedText (Decision 7 step 1).
 
     /// <summary>
     /// Maps a document-edit outcome to the error code the agent sees. Shared so the
     /// <c>Member(replace)</c> path, which builds its own message, cannot drift from
     /// <see cref="RequireUpdatedText"/> on the code.
     /// </summary>
-    private static string ErrorCodeFor(EditOutcome outcome) => outcome switch
-    {
-        EditOutcome.TargetNotFound or EditOutcome.DocumentNotFound => ToolErrorCode.NotFound,
-        EditOutcome.SourceInvalid => ToolErrorCode.InvalidArgument,
-        _ => ToolErrorCode.Exception
-    };
+    // ErrorCodeFor moved to RefactoringToolHelpers.ErrorCodeFor (Decision 7 step 1).
 
     /// <summary>
     /// Validates proposed changes against the current in-memory solution and, unless
@@ -671,7 +642,7 @@ public class SentinelRefactoringTools
                         EditOutcome.TargetNotFound => $"Member: member '{memberName}' not found in '{filePathResolved}'.",
                         _ => $"Member: no changes produced for '{memberName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}"
                     };
-                    return new ToolResult<object> { Success = false, Error = new ResultError(ErrorCodeFor(result.Outcome), errorReason) };
+                    return new ToolResult<object> { Success = false, Error = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result.Outcome), errorReason) };
                 }
 
                 var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
@@ -780,7 +751,7 @@ public class SentinelRefactoringTools
                 var topLevelResult = await _refactoringEngine.AddTopLevelTypeAsync(filePathResolved, newMemberSource, namespaceName, cancellationToken);
                 if (!autoStage)
                     return new ToolResult<object>() { Success = true, Data = topLevelResult.ToJsonSummary() };
-                if (RequireUpdatedText(topLevelResult, "Member", filePathResolved) is { } topLevelGuardResult)
+                if (RefactoringToolHelpers.RequireUpdatedText(topLevelResult, "Member", filePathResolved) is { } topLevelGuardResult)
                     return topLevelGuardResult;
 
                 var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
@@ -909,7 +880,7 @@ public class SentinelRefactoringTools
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            if (RequireUpdatedText(updated, "Member", filePathResolved) is { } guardResult)
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "Member", filePathResolved) is { } guardResult)
                 return guardResult;
 
             var addNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
@@ -985,7 +956,7 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            if (RequireUpdatedText(updated, "UsingDirective", filePathResolved) is { } guardResult)
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "UsingDirective", filePathResolved) is { } guardResult)
                 return guardResult;
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
@@ -1052,7 +1023,7 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            if (RequireUpdatedText(updated, "ModifyEnum", filePathResolved) is { } guardResult)
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyEnum", filePathResolved) is { } guardResult)
                 return guardResult;
 
             var description = string.IsNullOrEmpty(updated.Message)
@@ -1100,7 +1071,7 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            if (RequireUpdatedText(updated, "ChangeAccessibility", filePathResolved) is { } guardResult)
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ChangeAccessibility", filePathResolved) is { } guardResult)
                 return guardResult;
 
             var accessibilityKeyword = accessibility switch
@@ -1170,7 +1141,7 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            if (RequireUpdatedText(updated, "SummaryComment", filePathResolved) is { } guardResult)
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "SummaryComment", filePathResolved) is { } guardResult)
                 return guardResult;
 
             var description = operation == AddRemoveViewAction.add
@@ -1275,7 +1246,7 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            if (RequireUpdatedText(updated, "ConstructorParameter", filePathResolved) is { } guardResult)
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ConstructorParameter", filePathResolved) is { } guardResult)
                 return guardResult;
 
             var description = operation == AddRemoveViewAction.add
@@ -1373,7 +1344,7 @@ public class SentinelRefactoringTools
             if (operation == AddRemoveViewAction.add)
             {
                 updated = await _refactoringEngine.AddMethodParameterAsync(filePathResolved, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken, nullDefault);
-                if (RequireUpdatedText(updated, "MethodSignature", filePathResolved) is { } addGuardResult)
+                if (RefactoringToolHelpers.RequireUpdatedText(updated, "MethodSignature", filePathResolved) is { } addGuardResult)
                     return addGuardResult;
                 changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             }
@@ -1385,7 +1356,7 @@ public class SentinelRefactoringTools
                     return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: {updated.Message}") };
                 }
 
-                if (RequireUpdatedText(updated, "MethodSignature", filePathResolved) is { } removeGuardResult)
+                if (RefactoringToolHelpers.RequireUpdatedText(updated, "MethodSignature", filePathResolved) is { } removeGuardResult)
                     return removeGuardResult;
                 changes = updated.Changes;
             }
@@ -1636,7 +1607,7 @@ public class SentinelRefactoringTools
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            if (RequireUpdatedText(updated, "ModifyAttribute", filePathResolved) is { } guardResult)
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyAttribute", filePathResolved) is { } guardResult)
                 return guardResult;
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
@@ -1744,7 +1715,7 @@ public class SentinelRefactoringTools
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            if (RequireUpdatedText(updated, "ModifyModifier", filePathResolved) is { } guardResult)
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyModifier", filePathResolved) is { } guardResult)
                 return guardResult;
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
@@ -1840,7 +1811,7 @@ public class SentinelRefactoringTools
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            if (RequireUpdatedText(updated, "ModifyBaseType", filePathResolved) is { } guardResult)
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyBaseType", filePathResolved) is { } guardResult)
                 return guardResult;
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };

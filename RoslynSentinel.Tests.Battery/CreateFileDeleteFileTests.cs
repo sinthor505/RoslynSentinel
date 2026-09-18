@@ -424,10 +424,20 @@ public class CreateFileDeleteFileTests
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
         var refactoringTools = new SentinelRefactoringTools(
-            refactoringEngine, standardRefactoringEngine, mappingEngine, semanticRefactoringLibrary,
-            granularRefactoringEngine, structuralRefinementEngine, codeStyleEngine, codeFlowEngine,
-            msToolAugmentEngine, codeGenerationEngine, symbolNavigationEngine, workspaceManager,
-            validationEngine, config, NullLogger<SentinelRefactoringTools>.Instance);
+            refactoringEngine,
+            //standardRefactoringEngine,
+            mappingEngine, //semanticRefactoringLibrary,
+                           //granularRefactoringEngine,
+            structuralRefinementEngine,
+            //codeStyleEngine,
+            //codeFlowEngine,
+            msToolAugmentEngine,
+            //codeGenerationEngine, 
+            symbolNavigationEngine,
+            workspaceManager,
+            validationEngine,
+            config,
+            NullLogger<SentinelRefactoringTools>.Instance);
 
         var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
         var newFile = Path.Combine(existingProjectDir, "Populated.cs");

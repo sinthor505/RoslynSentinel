@@ -35,8 +35,12 @@ public record MethodAttributeInfo
 /// <summary>
 /// Plain implementation class for the read/navigation slice of workspace tools: GetMethodSource,
 /// GetFileOutline, ListAll, SearchSolutionText, GetOperationDetail, GetLargeResult. Method bodies
-/// are verbatim moves from SentinelWorkspaceTools -> see docs/current/plan_split_workspace_refactoring_tools_for_di.md
+/// are verbatim moves from SentinelWorkspaceTools -> see docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md
 /// (Decision 1-Amendment). Not an [McpServerToolType]; the MCP surface lives in WorkspaceReadNavigationTools.
+///
+/// SentinelWorkspaceTools.cs still holds the six live/registered copies of these tools (each with a
+/// short comment pointing back here); this class is the shared implementation both
+/// WorkspaceReadNavigationTools and SentinelWorkspaceTools delegate to.
 /// </summary>
 public class WorkspaceReadNavigationImpl
 {

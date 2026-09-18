@@ -704,7 +704,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T19 – large-result offload message contains get_large_result and OperationId; no read_file
+    // T19 – large-result offload message contains GetLargeResult and OperationId; no ReadFile
     // ══════════════════════════════════════════════════════════════════════════
 
     // Flaky under full/parallel test runs (fails intermittently in the full Asyncify suite,
@@ -726,10 +726,10 @@ public class Svc
         var largeResult = result!.LargeResult!;
         Assert.That(largeResult.Message, Is.Not.Null.And.Not.Empty,
             "LargeResult.Message must be populated for agent guidance.");
-        Assert.That(largeResult.Message, Does.Contain("get_large_result"),
+        Assert.That(largeResult.Message, Does.Contain("GetLargeResult"),
             "Message must name the correct recovery tool.");
-        Assert.That(largeResult.Message, Does.Not.Contain("read_file"),
-            "Message must not reference the non-existent read_file tool.");
+        Assert.That(largeResult.Message, Does.Not.Contain("ReadFile"),
+            "Message must not reference the non-existent ReadFile tool.");
         Assert.That(largeResult.Message, Does.Contain(largeResult.ResultId),
             "Message must embed the ResultId so the agent can copy it directly.");
     }

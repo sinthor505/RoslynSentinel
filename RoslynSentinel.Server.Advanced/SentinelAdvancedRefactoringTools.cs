@@ -26,19 +26,19 @@ public sealed record ChangeSignatureParameterInput(
 public class SentinelAdvancedRefactoringTools
 {
     private readonly RefactoringEngine _refactoringEngine;
-    private readonly StandardRefactoringEngine _standardRefactoringEngine;
+    //private readonly StandardRefactoringEngine _standardRefactoringEngine;
     private readonly AdvancedStructuralEngine _advancedStructuralEngine;
     private readonly MappingEngine _mappingEngine;
     private readonly SemanticRefactoringLibrary _semanticRefactoringLibrary;
     private readonly GranularRefactoringEngine _granularRefactoringEngine;
-    private readonly AdvancedLogicEngine _advancedLogicEngine;
+    //private readonly AdvancedLogicEngine _advancedLogicEngine;
     private readonly RefinementEngine _refinementEngine;
     private readonly AdvancedTypeEngine _advancedTypeEngine;
-    private readonly CodeStyleEngine _codeStyleEngine;
-    private readonly CodeFlowEngine _codeFlowEngine;
-    private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
-    private readonly LogicOptimizationEngine _logicOptimizationEngine;
-    private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
+    //private readonly CodeStyleEngine _codeStyleEngine;
+    //private readonly CodeFlowEngine _codeFlowEngine;
+    //private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
+    //private readonly LogicOptimizationEngine _logicOptimizationEngine;
+    //private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
     private readonly MsToolAugmentEngine _augmentEngine;
     private readonly CodeGenerationEngine _codeGenerationEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
@@ -49,20 +49,20 @@ public class SentinelAdvancedRefactoringTools
 
     public SentinelAdvancedRefactoringTools(
         RefactoringEngine refactoringEngine,
-        StandardRefactoringEngine standardRefactoringEngine,
+        //StandardRefactoringEngine standardRefactoringEngine,
         AdvancedStructuralEngine advancedStructuralEngine,
         MappingEngine mappingEngine,
         SemanticRefactoringLibrary semanticRefactoringLibrary,
         GranularRefactoringEngine granularRefactoringEngine,
-        AdvancedLogicEngine advancedLogicEngine,
+        //AdvancedLogicEngine advancedLogicEngine,
         RefinementEngine refinementEngine,
         AdvancedTypeEngine advancedTypeEngine,
-        CodeStyleEngine codeStyleEngine,
-        CodeFlowEngine codeFlowEngine,
-        AdvancedRefactoringEngine advancedRefactoringEngine,
-        LogicOptimizationEngine logicOptimizationEngine,
+        //CodeStyleEngine codeStyleEngine,
+        //CodeFlowEngine codeFlowEngine,
+        //AdvancedRefactoringEngine advancedRefactoringEngine,
+        //LogicOptimizationEngine logicOptimizationEngine,
         ModernizationEngine modernizationEngine,
-        OutParamRefactoringEngine outParamRefactoringEngine,
+        //OutParamRefactoringEngine outParamRefactoringEngine,
         MsToolAugmentEngine augmentEngine,
         CodeGenerationEngine codeGenerationEngine,
         SymbolNavigationEngine symbolNavigationEngine,
@@ -72,19 +72,19 @@ public class SentinelAdvancedRefactoringTools
         ILogger<SentinelAdvancedRefactoringTools> logger)
     {
         _refactoringEngine = refactoringEngine;
-        _standardRefactoringEngine = standardRefactoringEngine;
+        //_standardRefactoringEngine = standardRefactoringEngine;
         _advancedStructuralEngine = advancedStructuralEngine;
         _mappingEngine = mappingEngine;
         _semanticRefactoringLibrary = semanticRefactoringLibrary;
         _granularRefactoringEngine = granularRefactoringEngine;
-        _advancedLogicEngine = advancedLogicEngine;
+        //_advancedLogicEngine = advancedLogicEngine;
         _refinementEngine = refinementEngine;
         _advancedTypeEngine = advancedTypeEngine;
-        _codeStyleEngine = codeStyleEngine;
-        _codeFlowEngine = codeFlowEngine;
-        _advancedRefactoringEngine = advancedRefactoringEngine;
-        _logicOptimizationEngine = logicOptimizationEngine;
-        _outParamRefactoringEngine = outParamRefactoringEngine;
+        //_codeStyleEngine = codeStyleEngine;
+        //_codeFlowEngine = codeFlowEngine;
+        //_advancedRefactoringEngine = advancedRefactoringEngine;
+        //_logicOptimizationEngine = logicOptimizationEngine;
+        //_outParamRefactoringEngine = outParamRefactoringEngine;
         _augmentEngine = augmentEngine;
         _codeGenerationEngine = codeGenerationEngine;
         _symbolNavigationEngine = symbolNavigationEngine;

@@ -20,6 +20,13 @@ god-classes into cohesive sub-classes so future model-eval tests can compose sma
 DI-registered tool sets (e.g. ~10-14 tools) instead of relying on a hand-rolled request filter or
 fake stub schemas.
 
+**2026-09-17 addendum:** a separate coupling audit (grep first pass, then MCP-`FindReferences`-
+verified) found `SentinelSymbolTools` has the identical over-injection disease documented below for
+the two classes this plan already covers, and that the "Workspace" umbrella as originally scoped in
+Decision 1 still bundles file-content concerns (read/nav, snippet editing) alongside genuine
+solution/workspace-lifecycle concerns. See "Addendum A" and "Addendum B" at the end of this document.
+Everything above this addendum is the original, unmodified plan.
+
 ## Facts confirmed by reading the actual files (via GetFileOutline + grep, not assumption)
 
 - `SentinelWorkspaceTools.cs`: 3177 lines, 24 live `[McpServerTool]` methods. 13-arg constructor:
@@ -100,10 +107,6 @@ GranularRefactoringEngine, CodeStyleEngine, CodeFlowEngine, CodeGenerationEngine
 all 3 new classes — call out explicitly in the commit message as intentional cleanup, not
 oversight. `PreviewFileContent`/`RequireUpdatedText` (pure statics) move to a new
 `RefactoringToolHelpers` static class.
-
-Every new class keeps its own thin `ValidateAndApplyAsync`/`BuildDiffAsync` wrapper delegating to
-the existing `ValidateAndApplyHelper` static (same 1-line-wrapper shape as today, just present in
-more files).
 
 ## Decision 1-Amendment — Separate MCP surface from implementation (`*Tools` / `*Impl` pairs)
 
@@ -406,6 +409,10 @@ same call doesn't double-register. Only call `mcpBuilder.WithTools<WorkspaceRead
 under `WorkspaceReadNav` specifically — `WorkspaceFileIO` alone should not expose
 GetFileOutline/ListAll/etc. as separate MCP tools, only use the instance internally.
 
+**Superseded by Addendum B below**: Addendum B changes "Workspace" from an umbrella over all 5
+split classes to an umbrella over only `WorkspaceProjectManagementTools`/`WorkspaceBuildTestTools`/
+`WorkspaceHealthMiscTools`. Read Addendum B before implementing this decision.
+
 ## Decision 5 — Shared ActiveModes constant (optional cleanup, do last)
 
 New `RoslynSentinel.Tests.ModelEval/CommonActiveModes.cs`:
@@ -486,11 +493,14 @@ Each step is its own commit boundary; build to 0 errors before proceeding
    drop the 6 dead engine deps from them (keep them accepted-but-unforwarded in the facade
    constructor), rewrite `SentinelRefactoringTools.cs` as facade. **Build checkpoint.**
 
-4. **Update `ServiceRegistrationExtensionsBasic.cs`** per Decision 4's exact if-block structure.
-   **Build checkpoint**, then run `dotnet test` on `RoslynSentinel.Tests.Battery`,
-   `.Advanced`, `.Basic`, `.Asyncify` (the 4 projects with direct-construction call sites) to
-   confirm facade delegation preserves runtime behavior, not just compile-time shape — a
-   build-only check wouldn't catch a dropped-parameter delegation bug.
+3.5. **Split `SentinelSymbolTools`** — see Addendum A. Same `*Tools`/`*Impl` pattern, same
+   facade-preservation approach. **Build checkpoint.**
+
+4. **Update `ServiceRegistrationExtensionsBasic.cs`** per Decision 4's exact if-block structure
+   **as amended by Addendum B**. **Build checkpoint**, then run `dotnet test` on
+   `RoslynSentinel.Tests.Battery`, `.Advanced`, `.Basic`, `.Asyncify` (the 4 projects with
+   direct-construction call sites) to confirm facade delegation preserves runtime behavior, not
+   just compile-time shape — a build-only check wouldn't catch a dropped-parameter delegation bug.
 
 5. **Optional, own commit**: add `CommonActiveModes.cs`, update the 7 ModelEval files
    (Decision 5). Build checkpoint.
@@ -533,6 +543,7 @@ return types verbatim. A full domain-type boundary (impl returns plain types/thr
     `WorkspaceHealthMiscTools.cs`/`Impl.cs`
   - `RefactoringSignatureTools.cs`/`Impl.cs`, `RefactoringStructuralTools.cs`/`Impl.cs`,
     `RefactoringExtractionDocsTools.cs`/`Impl.cs`
+  - Per Addendum A: `SymbolNavigationTools.cs`/`Impl.cs`, `SymbolRelationshipTools.cs`/`Impl.cs`
 - `RoslynSentinel.Tests.ModelEval/CommonActiveModes.cs` (optional, Decision 5)
 - `RoslynSentinel.Tests.ModelEval/GraniteMinimalToolsetTests.cs` (optional, Decision 6 — only if
   requested as a follow-up)
@@ -541,6 +552,7 @@ return types verbatim. A full domain-type boundary (impl returns plain types/thr
 
 - `RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs` → becomes thin facade
 - `RoslynSentinel.Server.Basic/SentinelRefactoringTools.cs` → becomes thin facade
+- `RoslynSentinel.Server.Basic/SentinelSymbolTools.cs` → becomes thin facade (Addendum A)
 - `RoslynSentinel.Server.Basic/ServiceRegistrationExtensionsBasic.cs` → new mode-string if-blocks
 - 7 files in `RoslynSentinel.Tests.ModelEval/` (optional, Decision 5)
 
@@ -556,3 +568,114 @@ return types verbatim. A full domain-type boundary (impl returns plain types/thr
 - `dotnet test` on `RoslynSentinel.Tests.Battery`/`.Advanced`/`.Basic`/`.Asyncify` after step 4 to
   confirm facade delegation is behaviorally correct, not just compiling.
 - Build to 0 errors, then commit immediately — one commit per numbered step above, not batched.
+
+---
+
+## Addendum A (2026-09-17) — SentinelSymbolTools has the same disease, MCP-verified
+
+`SentinelSymbolTools.cs` (584 lines, 7 `[McpServerTool]` methods: LocateSymbol, InspectSymbol,
+QuerySymbolRelationships, GetBestInsertionPoint, PreviewRenameImpact, FindReferences, GetTypeInfo)
+was not part of this plan's original scope but was found, during a broader tool-class coupling
+audit, to have the identical over-injection shape as the two classes above — worse, in fact: 11
+injected engines plus a discarded `SentinelConfiguration` constructor parameter (accepted, never
+assigned to a field) for only 7 tools.
+
+**Verified via `FindReferences` against the real compiled symbols** (not grep — each of the
+following was checked with `mcp__.../FindReferences(symbolName: "_fieldName",
+filepath: "SentinelSymbolTools.cs", kind: callers)` and returned exactly one hit, the constructor
+assignment itself, with zero use anywhere else in the class body):
+
+- `_inventoryEngine` (`InventoryEngine`) — dead.
+- `_analysisEngine` (`AnalysisEngine`, 2423 lines in its own file) — dead.
+- `_dependencyEngine` (`DependencyEngine`) — dead.
+- `_projectStructureEngine` (`ProjectStructureEngine`) — dead.
+- `_projectConsistencyEngine` (`ProjectConsistencyEngine`) — dead.
+- `SentinelConfiguration` ctor parameter — accepted, no backing field at all.
+
+Confirmed genuinely used (each has 3+ real call sites in method bodies, not just the constructor):
+`_discoveryEngine`, `_symbolNavigationEngine`, `_semanticSearchEngine`, `_impactAnalyzer`.
+
+### Class split
+
+Two new classes (7 tools split roughly by "resolve/inspect a symbol" vs. "query relationships/
+usages across the solution" — small enough that a 3-way split isn't warranted):
+
+- **`SymbolNavigationTools.cs`** (3 tools) — LocateSymbol, InspectSymbol, GetTypeInfo.
+  Deps: SymbolNavigationEngine, IWorkspaceManager, ILogger.
+- **`SymbolRelationshipTools.cs`** (4 tools) — QuerySymbolRelationships, GetBestInsertionPoint,
+  PreviewRenameImpact, FindReferences.
+  Deps: DiscoveryEngine, SemanticSearchEngine, ImpactAnalyzer, SymbolNavigationEngine,
+  IWorkspaceManager, ILogger.
+
+Both follow the same `*Tools`/`*Impl` pair shape as Decision 1-Amendment (MCP surface vs.
+implementation), and `SentinelSymbolTools.cs` becomes a legacy facade under Decision 3's same
+reasoning: unknown call-site count in test projects not yet audited for this class specifically —
+treat it as "assume test call sites exist, preserve the constructor signature" by default rather
+than re-verifying assumption-free, since the facade is cheap regardless.
+
+The 5 dead engines and the discarded `SentinelConfiguration` param are dropped entirely from both
+new classes (not carried forward even as accepted-but-unused) — call this out explicitly in the
+commit message as intentional cleanup, matching how `SentinelRefactoringTools`'s 6 dead engines
+were already handled in Decision 1's main body (accepted-but-unforwarded only in the *facade*, per
+Decision 3, to keep existing full-arity test constructors compiling; never present in the new split
+classes).
+
+### Mode-string wiring
+
+New mode strings under the same flat convention as Decision 4: `SymbolNavigation`, `SymbolRelationship`.
+The existing "Workspace" umbrella block already registers `SentinelSymbolTools` today (see Decision
+4's code sample) — that registration is unaffected; the facade continues to satisfy it.
+
+## Addendum B (2026-09-17) — Narrow "Workspace" to true solution/workspace-lifecycle scope
+
+Prompted by direct correction during the coupling audit: *"SentinelWorkspaceTools definitely needs
+to be decomposed into its interfaces — all the symbol tools etc should be moved out.
+SentinelWorkspaceTools should only deal with solution/workspace issues."*
+
+Decision 1 already extracts `WorkspaceReadNavigationTools` (file/symbol read+navigation) and
+`WorkspaceFileEditTools` (snippet/diff editing) as their own classes — that structural split does
+not change. What changes is **Decision 4's umbrella registration**: as originally written, the
+"Workspace" mode string registers all 5 split classes (file-edit, build-test, project-management,
+read-nav, health-misc) as one bundle, which still conflates file-content concerns with
+workspace-lifecycle concerns at the mode-string level even though the class split itself already
+separated them.
+
+**Revised grouping:**
+
+- **"Workspace" umbrella** now registers only the genuine solution/workspace-lifecycle classes:
+  `WorkspaceProjectManagementTools` (load/list/create/split solution & project), `WorkspaceBuildTestTools`
+  (build/test/diagnostics), `WorkspaceHealthMiscTools` (health/features). These three are the only
+  classes whose reason for existing is "the workspace as a whole," not "a file's content."
+  `SentinelWorkspaceTools` the facade class keeps its name (external MCP tool names are unaffected —
+  this is a registration-grouping change, not a rename) but its internal composition drops
+  `WorkspaceFileEditTools`/`WorkspaceReadNavigationTools`.
+- **New "WorkspaceFileContent" umbrella** registers `WorkspaceFileEditTools` +
+  `WorkspaceReadNavigationTools` together — file read/navigate/edit is its own coherent concern,
+  independent of solution lifecycle. A caller who only needs file I/O (e.g. a minimal-toolset
+  model-eval run) no longer has to pull in solution/build/test tools to get `ReadFile`/`ApplyDiff`,
+  and vice versa.
+- The fine-grained per-class mode strings from Decision 4 (`WorkspaceFileIO`, `WorkspaceBuildTest`,
+  `WorkspaceProjectManagement`, `WorkspaceReadNav`, `WorkspaceHealthMisc`) are unchanged — they
+  already provide the narrowest opt-in granularity; only the two *umbrella* strings' composition
+  changes.
+
+**Why this way and not a `SentinelWorkspaceTools` rename or breaking split**: per Decision 3's
+already-established reasoning, the facade class name and its full-arity constructor must stay
+stable for the 18 existing direct-construction test call sites and Advanced's `typeof()` smoke
+check. Narrowing what "Workspace" *registers* (a DI/mode-string concern) achieves the requested
+scope correction without touching either of those stability guarantees — the facade class still
+exists and still accepts the same constructor shape, it just no longer needs to be
+reached-for when the actual need is file content, not workspace lifecycle.
+
+**Effect on existing ModelEval tests**: the 7 files using `{"Refactor", "Workspace"}` today would
+lose `ReadFile`/`ApplyDiff`/etc. if "Workspace" narrows and they don't also add
+"WorkspaceFileContent" — this is a real behavior change for existing test fixtures, not just an
+internal reorganization. **Do not implement Decision 4's if-blocks with this narrowing until each
+of the 7 `RoslynSentinel.Tests.ModelEval` files (plus `TranscriptReplayTests.cs` and
+`PlanImplementVerifyAgentTests.cs`) has been checked against which tools it actually exercises**,
+and updated to add "WorkspaceFileContent" alongside "Workspace" wherever a test calls
+`ReadFile`/`ApplyDiff`/`ApplyUnifiedDiff`/`WriteFile`/`DeleteFile`/`UndoLastApply`/
+`RetryFailedChanges`/`GetMethodSource`/`GetFileOutline`/`ListAll`/`SearchSolutionText`/
+`GetOperationDetail`/`GetLargeResult`. Treat this check as part of Decision 7 step 4, not a
+follow-up — an untested silent tool-availability regression in ModelEval fixtures is exactly the
+kind of failure this repo's root-cause discipline exists to catch before it does, not after.

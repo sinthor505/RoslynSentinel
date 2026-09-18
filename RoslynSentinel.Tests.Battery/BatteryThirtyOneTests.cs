@@ -5,8 +5,6 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
 
@@ -57,16 +55,27 @@ public class BatteryThirtyOneTests
             NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine());
 
         _tools = new SentinelAdvancedRefactoringTools(
-            _refactoringEngine, _standardRefactoringEngine, _advancedStructuralEngine,
-            _mappingEngine, _semanticRefactoringLibrary, _granularRefactoringEngine,
-            _advancedLogicEngine, _refinementEngine, _advancedTypeEngine,
-            _codeStyleEngine, _codeFlowEngine,
-            _advancedRefactoringEngine, _logicOptimizationEngine, _modernizationEngine,
-            new OutParamRefactoringEngine(_workspaceManager),
+            _refactoringEngine,
+            //new StandardRefactoringEngine(_workspaceManager),
+            new AdvancedStructuralEngine(_workspaceManager),
+            new MappingEngine(_workspaceManager),
+            new SemanticRefactoringLibrary(_workspaceManager),
+            new GranularRefactoringEngine(_workspaceManager),
+            //new AdvancedLogicEngine(_workspaceManager),
+            new RefinementEngine(_workspaceManager),
+            new AdvancedTypeEngine(_workspaceManager),
+            //new CodeStyleEngine(_workspaceManager, _config),
+            //new CodeFlowEngine(_workspaceManager),
+            //new AdvancedRefactoringEngine(_workspaceManager),
+            //new LogicOptimizationEngine(_workspaceManager),
+            new ModernizationEngine(_workspaceManager, _config),
+            //new OutParamRefactoringEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),
             new CodeGenerationEngine(_workspaceManager),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager, _validationEngine, _config,
+            _workspaceManager,
+            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
+            _config,
             NullLogger<SentinelAdvancedRefactoringTools>.Instance);
     }
 

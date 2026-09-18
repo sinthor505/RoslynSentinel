@@ -45,6 +45,16 @@ public record ProjectInfoEntry(string Name, string? FilePath);
 public record ProjectFilesAndDependencies(string ProjectName, List<string> Files, ProjectDependencyReport Dependencies);
 /// <summary>Combined payload for ListSolutionItems(kind: all): everything the other kinds return in one call, deduplicated by file where applicable.</summary>
 public record SolutionItemsAllResult(List<ProjectInfoEntry> Projects, List<SolutionItemFile> SolutionItems, List<ProjectFilesAndDependencies> ProjectDetails);
+/// <summary>
+/// God-class MCP surface for workspace tools. Six of its tool methods -&gt; GetMethodSource,
+/// GetFileOutline, ListAll, SearchSolutionText, GetOperationDetail, GetLargeResult -&gt; are thin
+/// delegates to <see cref="WorkspaceReadNavigationTools"/> (field <c>_readNav</c>), which itself
+/// delegates to <see cref="WorkspaceReadNavigationImpl"/> for the actual logic. That pair is a
+/// trial slice of a larger planned split of this class -&gt; see
+/// docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md. This class remains the one
+/// actually registered/reachable over MCP for those six tool names until that plan's Decision 4/
+/// Decision 7 step 4 (fine-grained mode-string wiring) lands.
+/// </summary>
 [McpServerToolType]
 public class SentinelWorkspaceTools
 {
@@ -730,7 +740,7 @@ public class SentinelWorkspaceTools
                                 "[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
-                    await WriteBlobForApplyAsync("replace_snippet", result);
+                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result);
                     var strippedResult = result with { PreImages = null };
                     object responseData = returnDiff
                         ? new
@@ -984,7 +994,7 @@ public class SentinelWorkspaceTools
                         "[COMPILER ERROR]\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                 };
-            await WriteBlobForApplyAsync("replace_snippet_batch", result);
+            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result);
             var strippedResult = result with { PreImages = null };
             object responseData = returnDiff
                 ? new
@@ -1106,7 +1116,7 @@ public class SentinelWorkspaceTools
                 };
             }
 
-            await WriteBlobForApplyAsync("create_file", result);
+            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "create_file", result);
             var strippedResult = result with { PreImages = null };
             return new ToolResult<object>()
             {
@@ -1169,7 +1179,7 @@ public class SentinelWorkspaceTools
                         Success = false,
                         Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {confirmedResult.ValidationResult.Diagnostics.ToJson()}")
                     };
-                await WriteBlobForApplyAsync("apply_diff", confirmedResult);
+                await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", confirmedResult);
                 var strippedConfirmedResult = confirmedResult with { PreImages = null };
                 object confirmedResponseData = returnDiff
                     ? new
@@ -1235,7 +1245,7 @@ public class SentinelWorkspaceTools
                                 "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
-                    await WriteBlobForApplyAsync("apply_diff", result);
+                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result);
                     // PreImages (full pre-edit file content) is dropped from the default response -
                     // it's already captured in the undo blob written above (GetOperationDetail/
                     // UndoLastApply can retrieve it) and was the single largest contributor to
@@ -1343,7 +1353,7 @@ public class SentinelWorkspaceTools
                                     "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
                                     await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                             };
-                        await WriteBlobForApplyAsync("apply_diff", result);
+                        await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result);
                         var strippedDiffResult = result with { PreImages = null };
                         object diffResponseData = returnDiff
                             ? new
@@ -1431,56 +1441,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    /// <summary>
-    /// Writes a forensic blob for a completed apply so undo_last_apply can revert it.
-    /// Uses pre-images from ApplyChangesResult.PreImages (populated by ApplyProposedChangesAsync).
-    /// blobChangeId: if provided, uses this id for the blob filename; if null, mints a fresh id.
-    /// </summary>
-    /// <remarks>
-    /// Never throws: the apply already succeeded and the files are on disk, so failing the call
-    /// would report a landed edit as failed and invite a retry. On failure it instead trips the
-    /// unrecoverable breaker, which refuses every subsequent mutating call this session -> the
-    /// previous behaviour was a log-only warning that no caller and no transcript ever saw.
-    /// Returns the result so callers can suppress their own undo advice; the trip happens here
-    /// regardless, so a caller that ignores it still cannot proceed.
-    /// </remarks>
-    internal async Task<BlobWriteResult> WriteBlobForApplyAsync(string toolName, ApplyChangesResult result, string? blobChangeId = null, // RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
-    {
-        if (result.SucceededFiles.Count == 0)
-        {
-            return BlobWriteResult.NotNeeded("no files written - blob not needed");
-        }
-
-        var changeId = blobChangeId ?? Guid.NewGuid().ToString("n")[..8];
-        var items = result.SucceededFiles.Select(f =>
-        {
-            string? before = null;
-            result.PreImages?.TryGetValue(f, out before);
-            return new OperationItemRecord
-            {
-                FilePath = f,
-                Outcome = ItemRecordOutcome.Succeeded,
-                BeforeSource = before,
-            };
-        }).ToList();
-        var blob = await OperationBlobWriter.WriteAsync(
-            toolName, changeId, items, _workspaceManager.GetSolutionRoot(), _logger, cancellationToken);
-
-        if (blob.IsIntegrityFailure)
-        {
-            // Files landed with no undo record. OperationBlobWriter has already logged the
-            // exception at Error; the trip is what makes it consequential rather than advisory.
-            ((IUnrecoverableBreaker)_workspaceManager).Trip(
-                toolName, changeId, blob.Diagnostic ?? "the operation blob could not be written");
-        }
-        else if (blob.Written && _logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("Forensic blob written: {BlobName} (changeId={ChangeId})", blob.FileName, changeId);
-        }
-
-        return blob;
-    }
+    // WriteBlobForApplyAsync moved to OperationBlobHelper.WriteBlobForApplyAsync (Decision 7 step 1).
     [McpServerTool(Name = "GetDiagnostics")]
     [Produces(DataTag.Report)]
     [Description("Gets compiler diagnostics for a file, project, or the whole solution.")]
@@ -1720,7 +1681,7 @@ public class SentinelWorkspaceTools
             }
 
             var changeId = Guid.NewGuid().ToString("n")[..8];
-            await WriteBlobForApplyAsync("safe_delete_unused_symbol", apply, changeId, cancellationToken);
+            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "safe_delete_unused_symbol", apply, changeId, cancellationToken);
             return new ToolResult<object>()
             {
                 Success = true,

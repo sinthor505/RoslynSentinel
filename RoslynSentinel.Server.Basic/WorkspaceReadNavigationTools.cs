@@ -20,6 +20,10 @@ namespace RoslynSentinel.Server.Basic;
 /// are the ones in SentinelWorkspaceTools.cs, which is what MCP clients actually call. This is not
 /// dead code or an accidental duplicate; it is the intended shape once Decision 4/Decision 7 step 4
 /// finish wiring the fine-grained mode strings.
+///
+/// The six methods this pairs with in SentinelWorkspaceTools.cs (the ones actually reachable over
+/// MCP today) are: GetMethodSource, GetFileOutline, ListAll, SearchSolutionText,
+/// GetOperationDetail, GetLargeResult - each carries its own short comment there pointing back here.
 /// </summary>
 [McpServerToolType]
 public class WorkspaceReadNavigationTools
