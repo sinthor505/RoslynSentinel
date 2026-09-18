@@ -63,6 +63,23 @@ public class RefactoringStructuralImpl
             dryRun, returnDiff, progress, removePaths, cancellationToken,
             describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
 
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private static string DescribeMemberOutcome(DocumentEditResult updated, string fallbackLabel)
+    {
+        // The engine's Message is set to e.g. "// Added FieldDeclaration '_foo'." on success - strip
+        // the leading comment marker and trailing period so it composes into the tool-layer sentence.
+        var message = updated.Message?.Trim();
+        if (string.IsNullOrEmpty(message))
+        {
+            return fallbackLabel;
+        }
+
+        var trimmed = message.TrimStart('/', ' ').TrimEnd('.');
+        return trimmed.Length > 0 ? trimmed : fallbackLabel;
+    }
+
+
     private async Task<ToolResult<object>> ModifyModifierBatch(List<ModifierEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
     {
         if (edits.Count > MaxModifierFamilyEditsPerBatch)
@@ -631,19 +648,19 @@ public class RefactoringStructuralImpl
             else if (string.IsNullOrEmpty(position) || position == "end")
             {
                 updated = await _refactoringEngine.AddMemberAsync(filePathResolved, containerName, newMemberSource!, contextSnippet, lineBefore, lineAfter);
-                description = $"Added new member to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+                description = $"{DescribeMemberOutcome(updated, "Added new member")} to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
             else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
             {
                 var afterMemberName = position.Substring("after:".Length);
                 updated = await _refactoringEngine.InsertMemberAfterAsync(filePathResolved, containerName, afterMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter);
-                description = $"Inserted new member after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+                description = $"{DescribeMemberOutcome(updated, "Inserted new member")} after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
             else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
             {
                 var beforeMemberName = position.Substring("before:".Length);
                 updated = await _refactoringEngine.InsertMemberBeforeAsync(filePathResolved, containerName, beforeMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter);
-                description = $"Inserted new member before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+                description = $"{DescribeMemberOutcome(updated, "Inserted new member")} before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
             else
             {

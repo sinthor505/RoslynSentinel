@@ -65,6 +65,67 @@ public class RefactoringEngine
         return normalized.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
     }
 
+
+    /// <summary>
+    /// SyntaxFactory.ParseMemberDeclaration parses only the FIRST declaration in a multi-declaration
+    /// string and silently discards the rest - it does not throw and the returned node's FullSpan
+    /// covers the whole input (the unconsumed text is folded in as SkippedTokensTrivia, not left as
+    /// unconsumed suffix), so comparing span lengths against the input length can never detect this.
+    /// The one reliable signal is ContainsDiagnostics: a second declaration's leading token (e.g.
+    /// "private") is unexpected inside the first declaration's grammar and is reported as CS1073
+    /// ("Unexpected token"). See blocking_error_member_addmember_silent_partial_write.md and
+    /// blocking_error_member_addmember_silently_drops_second_declaration.md.
+    /// </summary>
+    private static string? DetectTrailingUnparsedDeclaration(string source, MemberDeclarationSyntax parsed)
+    {
+        if (!parsed.ContainsDiagnostics)
+        {
+            return null;
+        }
+
+        // Reconstructing preview text from SkippedTokensTrivia loses the original inter-token
+        // whitespace (each skipped token's own trivia isn't preserved the same way), so locate the
+        // skipped region's offset in the original source string instead and slice from there -
+        // that keeps the preview readable instead of "privatereadonlyint_b;...".
+        var firstSkippedTokenStart = parsed.DescendantTrivia(descendIntoTrivia: true)
+            .Where(t => t.IsKind(SyntaxKind.SkippedTokensTrivia))
+            .SelectMany(t => t.GetStructure()!.DescendantTokens())
+            .Select(tok => (int?)tok.SpanStart)
+            .FirstOrDefault();
+
+        var trailingPreview = firstSkippedTokenStart is int offset && offset < source.Length
+            ? source[offset..].Trim()
+            : string.Empty;
+
+        var extraDeclaration = trailingPreview.Length > 0 ? SyntaxFactory.ParseMemberDeclaration(trailingPreview) : null;
+        return extraDeclaration != null
+            ? $"The source contains more than one declaration; only the first ({parsed.Kind()}) would be used and the rest silently dropped. Split into separate calls, one declaration per call. First dropped declaration starts with: \"{trailingPreview[..Math.Min(80, trailingPreview.Length)]}\"."
+            : $"The source does not parse as a single valid declaration ({parsed.Kind()}, with parse errors): {string.Join("; ", parsed.GetDiagnostics().Select(d => d.GetMessage()))}";
+    }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    private static string DescribeParsedMember(MemberDeclarationSyntax member)
+    {
+        var kind = member.Kind().ToString().Replace("Declaration", string.Empty);
+        var names = member switch
+        {
+            BaseTypeDeclarationSyntax type => new[] { type.Identifier.Text },
+            MethodDeclarationSyntax method => new[] { method.Identifier.Text },
+            ConstructorDeclarationSyntax ctor => new[] { ctor.Identifier.Text },
+            PropertyDeclarationSyntax property => new[] { property.Identifier.Text },
+            EventDeclarationSyntax evt => new[] { evt.Identifier.Text },
+            FieldDeclarationSyntax field => field.Declaration.Variables.Select(v => v.Identifier.Text).ToArray(),
+            EventFieldDeclarationSyntax eventField => eventField.Declaration.Variables.Select(v => v.Identifier.Text).ToArray(),
+            _ => Array.Empty<string>()
+        };
+
+        return names.Length == 0
+            ? kind
+            : $"{kind} '{string.Join("', '", names)}'";
+    }
+
+
     public async Task<DocumentEditResult> FormatDocumentAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -106,7 +167,17 @@ public class RefactoringEngine
             return emptyResult;
         }
 
-        var methodDecl = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        // BaseMethodDeclarationSyntax covers both ordinary methods and constructors, so a
+        // constructor target (matched by its class name, same as GetMethodSource/LocateSymbol
+        // already do for ctors) is found here too instead of silently falling through to
+        // emptyResult - see blocking_error_changesignature_silent_noop_on_valid_constructor.md.
+        var methodDecl = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>()
+            .FirstOrDefault(m => m switch
+            {
+                MethodDeclarationSyntax method => method.Identifier.Text == methodName,
+                ConstructorDeclarationSyntax ctor => ctor.Identifier.Text == methodName,
+                _ => false
+            });
         if (methodDecl == null)
         {
             return emptyResult;
@@ -180,10 +251,16 @@ public class RefactoringEngine
                     var span = location.Location.SourceSpan;
                     var refLineNumber = refRoot.SyntaxTree.GetLineSpan(span).StartLinePosition.Line + 1;
                     var token = refRoot.FindToken(span.Start);
-                    var invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
+                    // A constructor reference has no InvocationExpressionSyntax - its call sites are
+                    // `new Foo(...)` (ObjectCreationExpressionSyntax) or `Foo x = new(...)`
+                    // (ImplicitObjectCreationExpressionSyntax). BaseObjectCreationExpressionSyntax
+                    // covers both; ArgumentList is nullable there (e.g. `new Foo { X = 1 }`), unlike
+                    // InvocationExpressionSyntax's non-nullable one.
+                    ExpressionSyntax? invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
+                    invocation ??= token.Parent?.AncestorsAndSelf().OfType<BaseObjectCreationExpressionSyntax>().FirstOrDefault(o => o.ArgumentList != null);
                     if (invocation == null)
                     {
-                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Reference is not a simple invocation expression (e.g. method group or delegate conversion)."));
+                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Reference is not a simple invocation or object-creation expression with an argument list (e.g. method group, delegate conversion, or object-initializer-only construction)."));
                         continue;
                     }
 
@@ -196,8 +273,15 @@ public class RefactoringEngine
 
                     // Map original parameter ordinal -> the argument syntax actually supplied at this call
                     // site (null if the argument was omitted, relying on the parameter's own default).
+                    // The null-forgiving ArgumentList access is safe: the object-creation branch above
+                    // only matches nodes whose ArgumentList is non-null.
                     var argsByOriginalIndex = new ArgumentSyntax?[originalParams.Count];
-                    var arguments = invocation.ArgumentList.Arguments;
+                    var arguments = invocation switch
+                    {
+                        InvocationExpressionSyntax inv => inv.ArgumentList.Arguments,
+                        BaseObjectCreationExpressionSyntax obj => obj.ArgumentList!.Arguments,
+                        _ => throw new NotSupportedException($"ChangeSignatureAsync: unhandled call-site expression type {invocation.GetType().Name}.")
+                    };
                     for (int i = 0; i < arguments.Count; i++)
                     {
                         var arg = arguments[i];
@@ -289,7 +373,6 @@ public class RefactoringEngine
                     }
 
                     var newArguments = SyntaxFactory.SeparatedList(slotArgExpr.Where(a => a != null).Select(a => a!));
-                    var newArgList = invocation.ArgumentList.WithArguments(newArguments);
 
                     if (!pendingDocs.TryGetValue(refDocPath, out var pendingRefDoc))
                     {
@@ -297,7 +380,14 @@ public class RefactoringEngine
                     }
 
                     var pendingRoot = await pendingRefDoc.GetSyntaxRootAsync(cancellationToken);
-                    var targetInvocation = pendingRoot?.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(inv => inv.Span == invocation.Span);
+                    // Re-locate by span in whichever node kind the original call site was; an earlier
+                    // edit to this same document may have shifted spans, so this can legitimately miss.
+                    ExpressionSyntax? targetInvocation = invocation switch
+                    {
+                        InvocationExpressionSyntax => pendingRoot?.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(inv => inv.Span == invocation.Span),
+                        BaseObjectCreationExpressionSyntax => pendingRoot?.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>().FirstOrDefault(obj => obj.Span == invocation.Span),
+                        _ => null
+                    };
                     if (targetInvocation == null)
                     {
                         skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Could not re-locate this call site in the pending document after an earlier edit."));
@@ -305,7 +395,13 @@ public class RefactoringEngine
                     }
 
                     var callSiteEditor = await DocumentEditor.CreateAsync(pendingRefDoc, cancellationToken);
-                    callSiteEditor.ReplaceNode(targetInvocation, targetInvocation.WithArgumentList(newArgList));
+                    ExpressionSyntax rewrittenSite = targetInvocation switch
+                    {
+                        InvocationExpressionSyntax inv => inv.WithArgumentList(inv.ArgumentList.WithArguments(newArguments)),
+                        BaseObjectCreationExpressionSyntax obj => obj.WithArgumentList(obj.ArgumentList!.WithArguments(newArguments)),
+                        _ => throw new NotSupportedException($"ChangeSignatureAsync: unhandled call-site expression type {targetInvocation.GetType().Name}.")
+                    };
+                    callSiteEditor.ReplaceNode(targetInvocation, rewrittenSite);
                     pendingDocs[refDocPath] = callSiteEditor.GetChangedDocument();
                 }
             }
@@ -1154,11 +1250,22 @@ public class RefactoringEngine
             };
         }
 
+        var trailingIssue = DetectTrailingUnparsedDeclaration(newSource, newMember);
+        if (trailingIssue != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = $"// newSource is invalid: {trailingIssue}"
+            };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = "// Member replaced.",
+            Message = $"// Replaced with {DescribeParsedMember(newMember)}.",
             UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken)
         };
     }
@@ -1245,12 +1352,24 @@ public class RefactoringEngine
             };
         }
 
+        var trailingIssue = DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
+        if (trailingIssue != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = $"// newMemberSource is invalid: {trailingIssue}"
+            };
+        }
+
+        var addedDescription = DescribeParsedMember(newMember);
         newMember = newMember.WithAddedByComment("AddMember");
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = "// Member added.",
+            Message = $"// Added {addedDescription}.",
             UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, cancellationToken)
         };
     }
@@ -1300,6 +1419,17 @@ public class RefactoringEngine
             };
         }
 
+        var trailingIssue = DetectTrailingUnparsedDeclaration(newTypeSource, newType);
+        if (trailingIssue != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = $"// newTypeSource is invalid: {trailingIssue}"
+            };
+        }
+
         newType = newType.WithAddedByComment("AddTopLevelType");
 
         var namespaces = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().ToList();
@@ -1338,7 +1468,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                Message = "// Top-level type added.",
+                Message = $"// Added {DescribeParsedMember(newType)}.",
                 UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, targetNamespace, newNamespace, cancellationToken)
             };
         }
@@ -1352,7 +1482,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = "// Top-level type added.",
+            Message = $"// Added {DescribeParsedMember(newType)}.",
             UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
@@ -2585,6 +2715,18 @@ public class RefactoringEngine
             };
         }
 
+        var trailingIssue = DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
+        if (trailingIssue != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = $"// newMemberSource is invalid: {trailingIssue}"
+            };
+        }
+
+        var insertedDescription = DescribeParsedMember(newMember);
         newMember = newMember.WithAddedByComment("InsertMemberAfter");
         if (container is TypeDeclarationSyntax typeDecl)
         {
@@ -2596,6 +2738,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
+                Message = $"// Added {insertedDescription}.",
                 UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
             };
         }
@@ -2666,6 +2809,18 @@ public class RefactoringEngine
             };
         }
 
+        var trailingIssue = DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
+        if (trailingIssue != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = $"// newMemberSource is invalid: {trailingIssue}"
+            };
+        }
+
+        var insertedDescription = DescribeParsedMember(newMember);
         newMember = newMember.WithAddedByComment("InsertMemberBefore");
         if (container is TypeDeclarationSyntax typeDecl)
         {
@@ -2677,6 +2832,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
+                Message = $"// Added {insertedDescription}.",
                 UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
             };
         }

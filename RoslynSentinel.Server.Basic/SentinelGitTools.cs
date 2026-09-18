@@ -381,8 +381,8 @@ public class SentinelGitTools
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
         [Description("commit: the commit message. Required for operation=commit unless amend=true, in which case omitting it keeps HEAD's existing message.")]
         string? message = null,
-        [Description("stage/commit: which files to stage. \"tracked\" (default) stages modifications and deletions of already-tracked files only (git add -u) and does NOT stage new files. \"all\" stages everything in the working tree including untracked files (git add -A). \"listed\" stages exactly the paths you name in files/paths, untracked ones included - use this whenever you know which files you want. Naming files alongside a scope other than \"listed\" is rejected, so a file list can never be silently overridden.")]
-        GitStageScope scope = GitStageScope.tracked,
+        [Description("stage: which files to stage. \"tracked\" (default when omitted) stages modifications and deletions of already-tracked files only (git add -u) and does NOT stage new files. \"all\" stages everything in the working tree including untracked files (git add -A). \"listed\" stages exactly the paths you name in files/paths, untracked ones included - use this whenever you know which files you want. Naming files alongside a scope other than \"listed\" is rejected, so a file list can never be silently overridden. commit: OMIT this to commit exactly what is currently staged (the normal stage-then-commit workflow) - commit does NOT implicitly stage anything when scope is omitted. Pass scope explicitly on a commit call only if you specifically want it to also stage more (tracked/all) before committing, or to narrow the commit to specific paths (listed, with files).")]
+        GitStageScope? scope = null,
         [Description("stage/commit: repo-relative paths to stage, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array - call once per file if you need per-file results. Requires scope=\"listed\". Alias of paths for these operations - pass one or the other, not both.")]
         string? files = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is required when operation=revert, unused otherwise.
@@ -430,7 +430,7 @@ public class SentinelGitTools
             GitOperation.status => await StatusAsync(gitRoot, cancellationToken),
             GitOperation.log => await LogAsync(gitRoot, count, cancellationToken),
             GitOperation.diff => await DiffAsync(gitRoot, target, resolvedPaths, maxBytes, cancellationToken),
-            GitOperation.stage or GitOperation.add => await StageAsync(gitRoot, scope, resolvedPaths, cancellationToken),
+            GitOperation.stage or GitOperation.add => await StageAsync(gitRoot, scope ?? GitStageScope.tracked, resolvedPaths, cancellationToken),
             GitOperation.unstage => await UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
             GitOperation.commit => await CommitAsync(gitRoot, message, scope, resolvedPaths, amend, cancellationToken),
             GitOperation.revert => await RevertAsync(gitRoot, commitHash, noCommit, cancellationToken),
@@ -719,7 +719,7 @@ public class SentinelGitTools
         }
     }
     private async Task<GitCommitResult> CommitAsync(
-        string gitRoot, string? message, GitStageScope scope, string? paths, bool amend, CancellationToken cancellationToken)
+        string gitRoot, string? message, GitStageScope? scope, string? paths, bool amend, CancellationToken cancellationToken)
     {
         // Amend keeps HEAD's message when none is supplied (git commit --amend --no-edit);
         // a plain commit has no prior message to fall back on, so it stays required.
@@ -734,9 +734,19 @@ public class SentinelGitTools
 
         try
         {
-            var stageResult = await StageAsync(gitRoot, scope, paths, cancellationToken);
-            if (!stageResult.Success)
-                return new GitCommitResult { Success = false, Error = stageResult.Error };
+            // scope is only non-null here when the CALLER explicitly passed it to THIS commit
+            // call. Committing must never implicitly re-stage: an earlier defaulted scope of
+            // "tracked" caused CommitAsync to run `git add -u` on every commit that didn't repeat
+            // scope/files, silently sweeping in any other dirty tracked file at commit time and
+            // then committing the whole index with no pathspec (see
+            // blocking_error_git_stage_listed_scope_over_stages_unrequested_file.md). Omitting
+            // scope now means "commit exactly what is already staged" - no pre-stage at all.
+            if (scope is { } explicitScope)
+            {
+                var stageResult = await StageAsync(gitRoot, explicitScope, paths, cancellationToken);
+                if (!stageResult.Success)
+                    return new GitCommitResult { Success = false, Error = stageResult.Error };
+            }
 
             // When specific files were named (scope=listed), restrict the commit itself to those
             // paths via a pathspec. Without this, `git commit -m message` commits the ENTIRE

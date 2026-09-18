@@ -1,3 +1,4 @@
+using Microsoft.CodeAnalysis.CSharp;
 using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Basic;
