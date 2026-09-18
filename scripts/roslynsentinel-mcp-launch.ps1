@@ -12,17 +12,20 @@
     session editing RoslynSentinel's own source couldn't rebuild without disconnecting every sibling
     window mid-session.
 
-    This script gives each window its own instance folder, keyed by %VSCODE_PID% (the parent VS
-    Code window's process ID - stable for that window's life, distinct across windows) plus a short
-    hash of the repo path (so the same C:\Users\Administrator\.mcp.json entry stays correct if
-    invoked from a different clone of this repo). On every launch it:
+    This script gives each launch its own instance folder, keyed by a short random token generated
+    fresh every time this script runs (plus a short hash of the repo path, so the same
+    C:\Users\Administrator\.mcp.json entry stays correct if invoked from a different clone of this
+    repo). On every launch it:
 
-      1. Derives <instance-id> = "<pid>-<repoHash>".
-      2. Sweeps bin-vscode\ for other <instance-id>-shaped folders and deletes each one with its own
+      1. Derives <instance-id> = "<random-token>-<repoHash>".
+      2. Sweeps bin-vscode\ for OTHER <instance-id>-shaped folders and deletes each one with its own
          Remove-Item call (never one bulk delete over bin-vscode\ itself - a locked file from a live
          sibling window would abort or partially corrupt a single recursive delete over the whole
          root; per-folder calls just silently fail on whichever folder is still in use, and get
-         retried on a future launch).
+         retried on a future launch). Because the token is random every launch, this instance never
+         collides with its own predecessor's folder either, so the sweep - not a same-key reuse - is
+         the only cleanup path; a still-running predecessor (this window's old process, or another
+         window's) simply gets swept on ITS next launch instead of blocking this one.
       3. Builds RoslynSentinel.Server.Advanced.csproj directly (not the .slnx - this already skips
          all Tests* projects) into bin-vscode\<instance-id>\Advanced, every launch, unconditionally -
          no mtime/staleness check. MSBuild's own incremental up-to-date check already makes a no-op
@@ -35,6 +38,16 @@
     bin-vscode\Advanced.Http\ (the separate, still-shared standalone HTTP fallback copy managed by
     build.ps1's Invoke-VSCodeServerRestart) is untouched by this script - it never matches the
     <instance-id> naming shape, so the sweep skips it.
+
+    Why not key off %VSCODE_PID%: it looked window-unique but isn't - confirmed 2026-09-18 that
+    VSCODE_PID (and every other VS Code-injected env var, including VSCODE_IPC_HOOK, which also
+    looked promising and also turned out shared) is the single main/browser process ID for the whole
+    VS Code application launch, identical across every window opened from it. Two windows on the
+    same repo would derive the same instance-id and fight over one folder's DLLs as live,
+    simultaneously-running servers, not just during a rebuild race. No VS Code-injected env var
+    reliably distinguishes one window from another, so a random token sidesteps the problem instead
+    of chasing a better key. McpServerStatus's serverBinaryPath (which embeds the instance-id) is how
+    a session confirms which running instance it is actually talking to.
 
 .NOTES
     stdout/stderr must stay completely clean for the stdio JSON-RPC transport once the real server
@@ -64,20 +77,17 @@ $binVscodeRoot = Join-Path $repoRoot 'bin-vscode'
 New-Item -ItemType Directory -Path $binVscodeRoot -Force | Out-Null
 
 #region Instance ID derivation
-$pidSource = $env:VSCODE_PID
-if ([string]::IsNullOrWhiteSpace($pidSource)) {
-    # VSCODE_PID absent (e.g. a manual standalone invocation outside VS Code) - fall back to this
-    # script's own process ID rather than failing outright. Logged below so the fallback is visible
-    # if it's ever hit unexpectedly during real VS Code use.
-    $pidSource = $PID
-    $pidSourceLabel = "own PID (VSCODE_PID not set)"
-}
-else {
-    $pidSourceLabel = "VSCODE_PID"
-}
+# A fresh random token every launch - see .DESCRIPTION for why this replaced %VSCODE_PID% (which
+# turned out shared across every window in one VS Code application launch, not window-unique).
+# 4 random bytes as 8 lowercase hex chars - same shape/length as the repoHash below, collision odds
+# (1 in 2^32 per pair of concurrent launches) are irrelevant here since a same-repo collision just
+# costs one extra sweep-and-retry on next launch, never silent cross-instance corruption.
+$randomBytes = [byte[]]::new(4)
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($randomBytes)
+$instanceToken = -join ($randomBytes | ForEach-Object { $_.ToString('x2') })
 
 # Short, filesystem-safe secondary key so the same C:\Users\Administrator\.mcp.json entry can't
-# collide across different clones of this repo on the same machine - a bare PID alone wouldn't
+# collide across different clones of this repo on the same machine - a bare token alone wouldn't
 # distinguish which repo's server should be running.
 $normalizedRepoRoot = $repoRoot.TrimEnd('\').ToLowerInvariant()
 # [System.Security.Cryptography.SHA256]::HashData is .NET 5+ only - not available under Windows
@@ -92,7 +102,7 @@ finally {
 }
 $repoHash = -join ($repoHashBytes[0..3] | ForEach-Object { $_.ToString('x2') })
 
-$instanceId = "$pidSource-$repoHash"
+$instanceId = "$instanceToken-$repoHash"
 $instanceDir = Join-Path $binVscodeRoot $instanceId
 $outDir = Join-Path $instanceDir 'Advanced'
 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
@@ -103,13 +113,13 @@ function Write-LaunchLog {
     Add-Content -Path $logPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Message"
 }
 
-Write-LaunchLog "Instance ID '$instanceId' derived from $pidSourceLabel='$pidSource', repoHash='$repoHash' (repo: $repoRoot)."
+Write-LaunchLog "Instance ID '$instanceId' derived from random token='$instanceToken', repoHash='$repoHash' (repo: $repoRoot)."
 #endregion
 
 #region Sweep stale instance folders
-# Matches this script's own <pid>-<8-hex-char-hash> shape. Advanced.Http (the shared HTTP fallback
-# copy) never matches this and is left untouched without needing an explicit exclusion.
-$instanceFolderPattern = '^\d+-[0-9a-f]{8}$'
+# Matches this script's own <8-hex-char-token>-<8-hex-char-hash> shape. Advanced.Http (the shared
+# HTTP fallback copy) never matches this and is left untouched without needing an explicit exclusion.
+$instanceFolderPattern = '^[0-9a-f]{8}-[0-9a-f]{8}$'
 
 $sweepCount = 0
 Get-ChildItem -LiteralPath $binVscodeRoot -Directory -ErrorAction SilentlyContinue |
@@ -140,6 +150,21 @@ Write-LaunchLog "Sweep: removed $sweepCount stale instance folder(s)."
 #region Build
 $project = Join-Path $repoRoot 'RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj'
 $exePath = Join-Path $outDir 'RoslynSentinel.Server.Advanced.exe'
+
+# NOTE: a per-instance -p:BaseIntermediateOutputPath override was tried here (to stop concurrent
+# builds from different windows racing on the SHARED obj\ next to each .csproj - only the -o output
+# dir below is per-instance today) and reverted after live testing proved it unsafe as a simple
+# flag: overriding BaseIntermediateOutputPath moves which obj\ path the SDK auto-excludes from the
+# default **/*.cs compile glob, so the OLD default obj\Debug\ and obj\Release\ folders next to each
+# .csproj stop being excluded and their stale generated files (AssemblyInfo.cs etc.) get compiled
+# a second time alongside the new ones - confirmed via CS0579 duplicate-attribute errors in a direct
+# test build, both with and without an accompanying -p:DefaultItemExcludes append (command-line
+# property overrides don't compose with the SDK's own default-excludes computation cleanly). Fixing
+# this properly needs more than a one-line flag - e.g. a Directory.Build.props-level conditional
+# scoped to instance builds, or pre-cleaning the default obj\/bin\ before redirecting - and is
+# tracked separately rather than risking a broken build on every launch. See
+# docs/current/blockers/resolved/blocking_error_loadsolution_missing_msbuild_workspaces_assembly.md
+# for the concurrent-build race this was meant to close.
 
 $previousEap = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'

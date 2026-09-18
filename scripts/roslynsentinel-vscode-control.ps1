@@ -76,7 +76,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 
 $binVscodeRoot = Join-Path $repoRoot 'bin-vscode'
-$instanceFolderPattern = '^\d+-[0-9a-f]{8}$'
+$instanceFolderPattern = '^[0-9a-f]{8}-[0-9a-f]{8}$'
 $httpOutDir = Join-Path $repoRoot 'bin-vscode\Advanced.Http'
 $httpExe = Join-Path $httpOutDir 'RoslynSentinel.Server.Advanced.exe'
 
