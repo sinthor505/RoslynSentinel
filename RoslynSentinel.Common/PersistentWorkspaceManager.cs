@@ -2272,9 +2272,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     }
 
 
-    // Added by AddMember (expected - used for diagnostics)
     private readonly IScopedOperationLedger _ledger;
-
 
     // -- IScopedOperationLedger -- pass-through to the injected engine; see ScopedOperationLedgerEngine.
 
