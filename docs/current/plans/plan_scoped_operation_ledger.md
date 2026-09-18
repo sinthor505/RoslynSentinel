@@ -38,20 +38,27 @@ Decision 1 is DONE (commits `725adf9` docs, `59353b8` code) - `ScopedOperationLe
 `IScopedOperationLedger`, `LedgerEntryBase`/`CallSiteLedgerEntry` all exist, DI-registered, wired into
 `PersistentWorkspaceManager` via pass-through, zero behavior change, full solution build 0 errors.
 
-Before starting Decision 2, note a correction to this plan's own assumption: `ValidateAndApplyAsync`
-(`RoslynSentinel.Common/ValidateAndApplyHelper.cs`) does NOT itself contain an inline
-`_sessionHalted`/`CheckBreaker()` check - `SearchSolutionText` for `IsSessionHalted` and `CheckBreaker(`
-found no call sites inside `ValidateAndApplyHelper.cs`, and no call sites for `IsSessionHalted` anywhere
-under `RoslynSentinel.Server.Advanced/` either. That gate must be enforced somewhere else in the
-dispatch path (possibly a shared attribute/middleware layer wrapping `[McpServerTool]` methods, or
-checked per-tool before `ValidateAndApplyAsync` is even called) - this needs to be located and confirmed
-BEFORE writing Decision 2's `IsBlocked` check, since the plan's precedence requirement ("after the
-_sessionHalted/breaker checks, which must keep winning unconditionally") depends on knowing exactly
-where those checks actually live relative to `ValidateAndApplyAsync`'s call chain. Do not guess at the
-insertion point without finding this first.
+Decision 2 is DONE (commit `f28b459`). Correction to this plan's original assumption, confirmed by a
+dispatched Explore subagent: `ValidateAndApplyHelper.ValidateAndApplyAsync` does NOT itself contain any
+`_sessionHalted`/breaker check, and never did - it delegates to `workspaceManager.ApplyProposedChangesAsync`
+(`ValidateAndApplyHelper.cs:65`), and **that** method is the real chokepoint. Confirmed guard order inside
+`PersistentWorkspaceManager.ApplyProposedChangesAsync` (`PersistentWorkspaceManager.cs:1228`): `_sessionHalted`
+field read (line 1243) -> `_unrecoverableHaltMessage` field read (line 1255-1260) -> **ledger `IsBlocked`
+check (newly added, line ~1265)** -> delete/write overlap refusal -> drift detection (may newly trip
+`_sessionHalted`) -> optional re-validation -> lock -> write. Both existing halts read their backing fields
+directly rather than through `IsSessionHalted()`/`IsTripped()`, which is why the original `SearchSolutionText`
+for those method names found nothing - the enforcement point never calls its own public accessors.
+Separately, the MCP request-filter layer (`ServiceRegistrationExtensionsBasic.cs:594-625`) fast-fails on
+`IUnrecoverableBreaker.IsTripped()` pre-dispatch, but has no equivalent for `_sessionHalted` or the new
+ledger check - noted as a possible follow-up, not required by this plan.
 
-Three MCP tool defects were found and documented tonight while landing Decision 1 (all routed around
-via the overnight narrow-bypass authorization, none blocked further progress):
+`IsBlocked`'s real semantics (confirmed by writing and running `ScopedOperationLedgerBlockingTests.cs`,
+which initially failed against my own wrong assumption): while a ledger is open, its **own** tracked files
+stay writable (that's where `RecordFix`'s resolving edits land) and every **other** file is refused - not
+the reverse. Decisions 3-5 below should be read with this in mind.
+
+Three MCP tool defects were found and documented while landing Decision 1 (all routed around via the
+overnight narrow-bypass authorization, none blocked further progress):
 - `docs/current/blockers/blocking_error_changesignature_silent_noop_on_valid_constructor.md` -
   `ChangeSignature` silently returns `status:"no_changes"` instead of erroring when it can't safely
   rewrite existing call sites.
@@ -61,9 +68,7 @@ via the overnight narrow-bypass authorization, none blocked further progress):
 - (Re-confirmed, not newly filed) `Member(addMember)`'s known multi-declaration `newMemberSource`
   silent-partial-write bug, per the already-open `blocking_error_member_addmember_silent_partial_write.md`.
 
-Given the volume of open questions plus tool-trust issues surfaced tonight, this session paused here
-rather than guess at Decision 2's insertion point. Next step for whoever picks this up: locate the real
-session-halt/breaker gate location first, THEN implement Decision 2.
+Next step: Decision 3 (`MoveMember` dry-run `PreviewCallSite` report).
 
 ## Facts to confirm once the solution loads (not yet verified this session - blocked)
 
@@ -120,20 +125,21 @@ and everything else in this plan depends on it existing.
 does not yet check it. This step should build and pass its own tests with zero behavior change to
 any existing tool.
 
-## Decision 2 - Wire `IsBlocked` into `ValidateAndApplyAsync`
+## Decision 2 - Wire `IsBlocked` into the write chokepoint - DONE (commit `f28b459`)
 
-- `ValidateAndApplyHelper.ValidateAndApplyAsync` (`RoslynSentinel.Common/ValidateAndApplyHelper.cs`)
-  gets one new check, alongside the existing `_sessionHalted`/breaker checks and before the
-  `ValidationEngine.ValidateChangesAsync` call at line 41: for each file in `changes`, ask
-  `((IScopedOperationLedger)workspaceManager).IsBlocked(filePath)`; if any file is blocked by an open
-  ledger it doesn't itself belong to, reject with a `ResultError` naming the open ledger and its
-  remaining unresolved entries (reuse `GetOpenEntries()` for the message body).
-- This check must run *before* the existing `_sessionHalted`/`IUnrecoverableBreaker` checks stay
-  winning unconditionally, per `proposal_nonblocking_validation_mode.md`'s "Open items" note that
-  those two must keep winning regardless of what else changes - confirm this ordering explicitly in
-  code review, don't just assume it falls out naturally.
-- Test: with a ledger manually opened (via the engine's test-only or internal API from Decision 1),
-  confirm `ValidateAndApplyAsync` rejects an unrelated file and accepts one on the ledger.
+The real chokepoint turned out to be `PersistentWorkspaceManager.ApplyProposedChangesAsync`
+(`PersistentWorkspaceManager.cs:1228`), not `ValidateAndApplyHelper.ValidateAndApplyAsync` as this
+plan originally assumed - see "Progress as of 2026-09-18" above for the corrected call chain.
+
+- Implemented: for each target in `changes.Keys.Concat(deletePaths)`, ask `_ledger.IsBlocked(target,
+  out reason)`; if blocked, return a failed `ApplyChangesResult` (not a thrown exception) naming the
+  open ledger operation and the reason.
+- Inserted immediately after the `_unrecoverableHaltMessage` check and before the delete/write overlap
+  refusal - so `_sessionHalted` and the unrecoverable halt both keep winning unconditionally ahead of
+  the ledger check, per `proposal_nonblocking_validation_mode.md`'s ordering requirement.
+- Test: `RoslynSentinel.Tests.Battery/ScopedOperationLedgerBlockingTests.cs`, modeled on
+  `UnrecoverableBreakerTests.cs` - covers no-ledger writes succeeding, a ledger's own tracked file
+  staying writable, and an unrelated file being refused. All 3 pass.
 
 **Still no caller opens a ledger for real** - this step proves the gate works using a
 directly-engineered test ledger, not a real `MoveMember` call yet.
