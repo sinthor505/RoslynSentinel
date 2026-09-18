@@ -56,6 +56,8 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<AsyncBatchEngine>();
         services.AddSingleton<MigrationLedger>();
         services.AddSingleton<CommentingEngine>();
+        services.AddSingleton<ScopedOperationLedgerEngine>();
+        services.AddSingleton<IScopedOperationLedger>(sp => sp.GetRequiredService<ScopedOperationLedgerEngine>());
 
         // LmStudioClient talks to a locally-hosted LM Studio server (OpenAI-compatible
         // /v1/chat/completions). AddHttpClient<LmStudioClient> registers the concrete type keyed

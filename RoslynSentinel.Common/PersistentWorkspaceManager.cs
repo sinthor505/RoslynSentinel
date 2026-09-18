@@ -24,7 +24,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
+public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
@@ -185,9 +185,10 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     // concurrently under NUnit's ParallelScope.Fixtures).
     private static readonly Lock MsBuildRegistrationLock = new();
 
-    public PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger)
+    public PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger, IScopedOperationLedger? ledger = null)
     {
         _logger = logger;
+        _ledger = ledger ?? new ScopedOperationLedgerEngine();
         _debounceTimer = new Timer(OnDebounceTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
         lock (MsBuildRegistrationLock)
@@ -2269,4 +2270,18 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
         return count;
     }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    private readonly IScopedOperationLedger _ledger;
+
+
+    // -- IScopedOperationLedger -- pass-through to the injected engine; see ScopedOperationLedgerEngine.
+
+    public bool TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason) => _ledger.TryOpen(operationName, entries, out rejectionReason);
+    public bool IsBlocked(FilePathWrapper filePath, out string? blockReason) => _ledger.IsBlocked(filePath, out blockReason);
+    public void RecordFix(IReadOnlyList<string> entryIds, string changeId) => _ledger.RecordFix(entryIds, changeId);
+    public void RecordUndo(string changeId) => _ledger.RecordUndo(changeId);
+    public bool TryRelease() => _ledger.TryRelease();
+    public IReadOnlyList<LedgerEntryBase> GetOpenEntries() => _ledger.GetOpenEntries();
 }

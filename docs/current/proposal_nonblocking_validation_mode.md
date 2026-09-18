@@ -155,6 +155,12 @@ would be evidence for a classifier, but should be evidence-driven rather than as
   (`docs/current/proposal_changesymboltype_tool.md`) attacks the same motivating run from the other
   end: make the coordinated multi-file change expressible as a single atomic tool call, so no
   intermediate broken state is needed. Independent of this proposal; either could land first.
+- **`proposal_scoped_operation_ledger.md`** solves a related but distinct problem: a blast-radius
+  operation (e.g. an instance `MoveMember`) that produces a *known, enumerable* set of broken call
+  sites. Rather than relaxing validation, it keeps validation strict but narrows what else is allowed
+  to proceed until every tracked site is resolved — the gate never turns off, only its scope changes.
+  Complementary to this proposal, not an alternative: that ledger design could compose with a
+  non-blocking-mode fix touching several files at once, but neither depends on the other landing first.
 
 ## Open items
 
