@@ -41,6 +41,10 @@ public static class RoslynSentinelServiceExtensionsBasic
         // AddRoslynSentinelHostOptions first keeps its own value -> registering unconditionally
         // here would make the last-wins order depend on which extension the host called last.
         services.TryAddSingleton(new SentinelHostOptions());
+        // TryAdd only so a caller that already registered StoppedByScriptMarker (e.g., ServerStdio.cs
+        // or ServerHttp.cs from a real host) is not overwritten. Test fixtures without that context
+        // get this default stub.
+        services.TryAddSingleton(new StoppedByScriptMarker(WasFound: false, Details: null));
         services.AddSingleton<PersistentWorkspaceManager>();
         services.AddSingleton<IWorkspaceManager>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
         services.AddSingleton<ISolutionProvider>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());

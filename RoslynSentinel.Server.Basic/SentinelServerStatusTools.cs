@@ -36,6 +36,7 @@ public class SentinelServerStatusTools
 
         return new
         {
+            serverPid = Environment.ProcessId,
             sessionHalted = _workspaceManager.IsSessionHalted(),
             solutionPath = _workspaceManager.SolutionPath,
             projectCount = _workspaceManager.ProjectCount,
@@ -106,6 +107,7 @@ public sealed record McpServerStatusStoppedByScript(bool WasFound, string? Detai
 /// method's actual return type.
 /// </summary>
 public sealed record McpServerStatusResult(
+    int ServerPid,
     bool SessionHalted,
     string? SolutionPath,
     int ProjectCount,

@@ -94,7 +94,8 @@ public class McpServerStatusStructuredContentTests
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         Assert.That(deserialized, Is.Not.Null);
-        Assert.That(deserialized!.SessionHalted, Is.False, "A fresh test host should not start in a halted session state.");
+        Assert.That(deserialized!.ServerPid, Is.GreaterThan(0), "ServerPid should be a valid process ID.");
+        Assert.That(deserialized.SessionHalted, Is.False, "A fresh test host should not start in a halted session state.");
         Assert.That(deserialized.Breakers, Is.Not.Null);
         Assert.That(deserialized.ToolSurface, Is.Not.Null);
         Assert.That(deserialized.ToolSurface.ActiveToolClasses, Is.Not.Empty,
