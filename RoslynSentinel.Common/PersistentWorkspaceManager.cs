@@ -1262,6 +1262,23 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             throw new SessionHaltedException(unrecoverableHalt);
         }
 
+        // Scoped operation ledger (see docs/current/proposal_scoped_operation_ledger.md, Decision 2):
+        // while a ledger is open, a target is refused unless it is one of the ledger's own tracked
+        // files (IsBlocked deliberately allows those through, since that's exactly where RecordFix's
+        // resolving edits must land). Unlike the two halts above, this is scoped to specific files
+        // rather than the whole session -> checked per-target, not unconditionally.
+        foreach (var target in changes.Keys.Concat(deletePaths))
+        {
+            if (_ledger.IsBlocked(target, out var ledgerBlockReason))
+            {
+                return new ApplyChangesResult(
+                    Success: false,
+                    SucceededFiles: [],
+                    FailedFiles: new Dictionary<FilePathWrapper, string> { [target] = ledgerBlockReason ?? "Blocked by an open scoped operation ledger entry." },
+                    Summary: $"Refused - '{Path.GetFileName(target)}' has an open scoped operation ledger entry: {ledgerBlockReason}");
+            }
+        }
+
         if (deletePaths.Count > 0 && changes.Keys.Any(deletePaths.Contains))
         {
             var overlap = changes.Keys.Where(deletePaths.Contains).ToList();
