@@ -23,9 +23,13 @@ public abstract record LedgerEntryBase
         get; init;
     }
 }
-// Added by AddTopLevelType (expected - used for diagnostics)
+// Shared by CallSiteLedgerEntry and MoveMember's PreviewCallSite report. Valid rows never become
+// ledger entries (see proposal_scoped_operation_ledger.md), so CallSiteLedgerEntry.Status is never
+// constructed with Valid - it exists here only so PreviewCallSite can reuse this enum instead of a
+// near-duplicate one.
 public enum CallSiteStatus
 {
+    Valid,
     Ambiguous,
     NoCandidateIntroducible,
     NoCandidateBlocked,

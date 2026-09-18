@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 
 using RoslynSentinel.Common;
+using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Advanced;
 
@@ -13,9 +14,12 @@ public class AdvancedStructuralEngine
 {
     private readonly ISolutionProvider _workspaceManager;
 
-    public AdvancedStructuralEngine(ISolutionProvider workspaceManager)
+    private readonly ValidationEngine? _validationEngine;
+
+    public AdvancedStructuralEngine(ISolutionProvider workspaceManager, ValidationEngine? validationEngine = null)
     {
         _workspaceManager = workspaceManager;
+        _validationEngine = validationEngine;
     }
 
     public async Task<DocumentEditResult> ConvertAbstractClassToInterfaceAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
@@ -802,5 +806,204 @@ public class AdvancedStructuralEngine
 
             result[doc.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString();
         }
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    private static ITypeSymbol? GetSymbolType(ISymbol symbol) => symbol switch
+    {
+        IFieldSymbol f => f.Type,
+        IPropertySymbol p => p.Type,
+        IParameterSymbol pa => pa.Type,
+        ILocalSymbol l => l.Type,
+        _ => null
+    };
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    /// <summary>
+    /// Reporting-only preview for moving instance member(s) to a destination that is not an existing
+    /// base type (the one case MoveMemberAsync itself still rejects outright). Does not write anything
+    /// and does not lift MoveMemberAsync's static-only guard -> see
+    /// docs/current/proposal_movemember_instance_callsite_resolution.md sections 1, 5, 6.
+    ///
+    /// For each call site of the member(s) being moved: builds an in-memory trial change set with the
+    /// member relocated but that call site NOT rewritten, runs it through ValidationEngine so the
+    /// compiler's own diagnostics decide whether the site breaks (rather than a hand-rolled prediction),
+    /// then classifies broken sites by scanning for in-scope fields/properties/parameters of the
+    /// destination type via SemanticModel.LookupSymbols (which already respects C# shadowing).
+    /// </summary>
+    public async Task<List<PreviewCallSite>> PreviewInstanceMoveCallSitesAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default)
+    {
+        if (_validationEngine == null)
+        {
+            throw new InvalidOperationException("PreviewInstanceMoveCallSitesAsync requires a ValidationEngine - this AdvancedStructuralEngine instance was constructed without one.");
+        }
+
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null)
+        {
+            throw new ToolNotFoundException($"File '{filePath}' not found.");
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        if (root == null)
+        {
+            throw new ToolNotFoundException($"Failed to get syntax root for '{filePath}'.");
+        }
+
+        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        if (classNode == null)
+        {
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.");
+        }
+
+        var membersToMove = classNode.Members.Where(m =>
+        {
+            if (m is MethodDeclarationSyntax meth)
+            {
+                return memberNames.Contains(meth.Identifier.Text);
+            }
+
+            if (m is PropertyDeclarationSyntax prop)
+            {
+                return memberNames.Contains(prop.Identifier.Text);
+            }
+
+            if (m is FieldDeclarationSyntax field)
+            {
+                return field.Declaration.Variables.Any(v => memberNames.Contains(v.Identifier.Text));
+            }
+
+            return false;
+        }).ToList();
+
+        if (membersToMove.Count == 0)
+        {
+            throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}'.");
+        }
+
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (semanticModel == null)
+        {
+            throw new ToolNotFoundException($"Failed to get semantic model for '{filePath}'.");
+        }
+
+        var memberSymbols = membersToMove
+            .Select(m => semanticModel.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m))
+            .Where(s => s != null)
+            .Cast<ISymbol>()
+            .ToList();
+
+        INamedTypeSymbol? destinationType = null;
+        foreach (var doc in solution.Projects.SelectMany(p => p.Documents))
+        {
+            var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
+            var candidate = docRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            var candidateModel = await doc.GetSemanticModelAsync(cancellationToken);
+            destinationType = candidateModel?.GetDeclaredSymbol(candidate, cancellationToken) as INamedTypeSymbol;
+            if (destinationType != null)
+            {
+                break;
+            }
+        }
+
+        var updatedSourceRoot = root.ReplaceNode(classNode, classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!);
+        var previewChanges = new Dictionary<FilePathWrapper, string>
+        {
+            [filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedSourceRoot).ToFullString()
+        };
+        var validation = await _validationEngine.ValidateChangesAsync(previewChanges, cancellationToken);
+
+        var results = new List<PreviewCallSite>();
+        var movingMemberDeclarationSpans = new HashSet<TextSpan>(membersToMove.Select(m => m.Span));
+
+        foreach (var symbol in memberSymbols)
+        {
+            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+            var locations = references.SelectMany(r => r.Locations)
+                .Where(l => l.Document.FilePath != null)
+                .ToList();
+
+            foreach (var refLocation in locations)
+            {
+                var refDoc = refLocation.Document;
+                var refRoot = await refDoc.GetSyntaxRootAsync(cancellationToken);
+                var refNode = refRoot?.FindNode(refLocation.Location.SourceSpan);
+                var memberAccess = refNode?.Ancestors().OfType<MemberAccessExpressionSyntax>().FirstOrDefault(ma => ma.Name.Span.Contains(refLocation.Location.SourceSpan))
+                    ?? refNode?.Parent as MemberAccessExpressionSyntax;
+
+                var lineSpan = refLocation.Location.GetLineSpan();
+                var callExpression = memberAccess?.ToString() ?? refNode?.ToString() ?? symbol.Name;
+                var isMoveOrderDependent = refNode != null && movingMemberDeclarationSpans.Any(span => span.Contains(refNode.Span));
+
+                var brokenHere = validation.Diagnostics.Any(d => string.Equals(d.FilePath, refDoc.FilePath, StringComparison.OrdinalIgnoreCase) && d.StartLine == lineSpan.StartLinePosition.Line + 1);
+
+                if (!brokenHere)
+                {
+                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Valid, null, null, []));
+                    continue;
+                }
+
+                if (isMoveOrderDependent)
+                {
+                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.MoveOrderDependent,
+                        "This call site is inside a method that is itself being moved in the same batch - whether it can be resolved depends on move order.", null, []));
+                    continue;
+                }
+
+                if (destinationType == null)
+                {
+                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.NoCandidateBlocked,
+                        $"Destination type '{targetClassName}' could not be resolved.", null, []));
+                    continue;
+                }
+
+                var refSemanticModel = await refDoc.GetSemanticModelAsync(cancellationToken);
+                var refCompilation = refSemanticModel?.Compilation;
+                bool sameAssembly = refCompilation != null && SymbolEqualityComparer.Default.Equals(refCompilation.Assembly, destinationType.ContainingAssembly);
+                bool accessible = destinationType.DeclaredAccessibility == Accessibility.Public || sameAssembly;
+
+                if (!accessible)
+                {
+                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.NoCandidateBlocked,
+                        $"Destination type '{targetClassName}' is not accessible from this call site's compilation context.", null, []));
+                    continue;
+                }
+
+                var candidates = refSemanticModel == null || refNode == null
+                    ? new List<string>()
+                    : refSemanticModel.LookupSymbols(refNode.SpanStart)
+                        .Where(s => (s is IFieldSymbol || s is IPropertySymbol || s is IParameterSymbol || s is ILocalSymbol) && SymbolEqualityComparer.Default.Equals(GetSymbolType(s), destinationType))
+                        .Select(s => s.Name)
+                        .Distinct()
+                        .ToList();
+
+                if (candidates.Count == 0)
+                {
+                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.NoCandidateIntroducible,
+                        $"No in-scope reference of type '{targetClassName}' found at this call site. Add a 'using' directive or introduce a field/parameter of that type.", null, []));
+                    continue;
+                }
+
+                if (candidates.Count == 1)
+                {
+                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Valid, null,
+                        $"{candidates[0]}.{symbol.Name}", candidates));
+                    continue;
+                }
+
+                results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Ambiguous,
+                    $"Multiple in-scope references of type '{targetClassName}' found; specify which one via callSiteFixups.", null, candidates));
+            }
+        }
+
+        return results;
     }
 }

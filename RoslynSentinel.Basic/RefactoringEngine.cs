@@ -5925,4 +5925,5 @@ public sealed record ExistingParameterSpec(int OriginalIndex) : SignatureParamet
 /// text (e.g. "TimeSpan.FromSeconds(30)"), parsed via SyntaxFactory.ParseExpression, used both as the
 /// declaration's default value and as the literal fill-in argument inserted at every existing call site.
 /// </summary>
-public sealed record NewParameterSpec(string Name, string Type, string DefaultValueExpression) : SignatureParameterSpec;
+public sealed record NewParameterSpec(string Name, string Type, string DefaultValueExpression) : SignatureParameterSpec;// Added by AddTopLevelType (expected - used for diagnostics)
+public record PreviewCallSite(FilePathWrapper FilePath, int Line, string CallExpression, RoslynSentinel.Common.CallSiteStatus Status, string? BlockReason, string? SuggestedFix, IReadOnlyList<string> Candidates);
