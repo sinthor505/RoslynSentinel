@@ -7,39 +7,18 @@ using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
 
+// LEGACY FACADE — add new tools to the split classes (RefactoringSignatureTools,
+// RefactoringStructuralTools, RefactoringExtractionDocsTools), not here. Preserves the original
+// public constructor signature and all original [McpServerTool] method signatures for the existing
+// 18 direct-construction test call sites and the Advanced typeof() smoke-check, per Decision 3 of
+// docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md. Bodies delegate to internally
+// -constructed instances of the 3 new split classes.
 [McpServerToolType]
 public class SentinelRefactoringTools
 {
-    private readonly RefactoringEngine _refactoringEngine;
-    //private readonly StandardRefactoringEngine _standardRefactoringEngine;
-    // private readonly AdvancedStructuralEngine _advancedStructuralEngine;
-    private readonly StructuralRefinementEngine _structuralRefinementEngine;
-    private readonly MappingEngine _mappingEngine;
-    //private readonly SemanticRefactoringLibrary _semanticRefactoringLibrary;
-    //private readonly GranularRefactoringEngine _granularRefactoringEngine;
-    // private readonly AdvancedLogicEngine _advancedLogicEngine;
-    // private readonly RefinementEngine _refinementEngine;
-    // private readonly AdvancedTypeEngine _advancedTypeEngine;
-    //private readonly CodeStyleEngine _codeStyleEngine;
-    //private readonly CodeFlowEngine _codeFlowEngine;
-    // private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
-    // private readonly LogicOptimizationEngine _logicOptimizationEngine;
-    // private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
-    private readonly MsToolAugmentEngine _msToolAugmentEngine;
-    //private readonly CodeGenerationEngine _codeGenerationEngine;
-    private readonly SymbolNavigationEngine _symbolNavigationEngine;
-    private readonly IWorkspaceManager _workspaceManager;
-    private readonly ValidationEngine _validationEngine;
-    private readonly SentinelConfiguration _config;
-    private readonly ILogger<SentinelRefactoringTools> _logger;
-
-
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    // Reuses ReplaceSnippet's batch cap (SentinelWorkspaceTools.MaxSnippetEditsPerBatch) as a starting
-    // value -> these are keyword/name edits rather than text blocks, so the limit is purely count-based,
-    // not size-derived.
-    private const int MaxModifierFamilyEditsPerBatch = 20;
-
+    private readonly RefactoringSignatureTools _signature;
+    private readonly RefactoringStructuralTools _structural;
+    private readonly RefactoringExtractionDocsTools _extractionDocs;
 
     public SentinelRefactoringTools(
         RefactoringEngine refactoringEngine,
@@ -47,10 +26,10 @@ public class SentinelRefactoringTools
         MappingEngine mappingEngine,
     //    SemanticRefactoringLibrary semanticRefactoringLibrary,
     //    GranularRefactoringEngine granularRefactoringEngine,
-    // AdvancedLogicEngine advancedLogicEngine,
-    // RefinementEngine refinementEngine,
-    // AdvancedTypeEngine advancedTypeEngine,
-    StructuralRefinementEngine structuralRefinementEngine,
+        // AdvancedLogicEngine advancedLogicEngine,
+        // RefinementEngine refinementEngine,
+        // AdvancedTypeEngine advancedTypeEngine,
+        StructuralRefinementEngine structuralRefinementEngine,
         //CodeStyleEngine codeStyleEngine,
         //    CodeFlowEngine codeFlowEngine,
         // AdvancedRefactoringEngine advancedRefactoringEngine,
@@ -65,1843 +44,264 @@ public class SentinelRefactoringTools
         SentinelConfiguration config,
         ILogger<SentinelRefactoringTools> logger)
     {
-        _refactoringEngine = refactoringEngine;
-        //_standardRefactoringEngine = standardRefactoringEngine;
-        _mappingEngine = mappingEngine;
-        //_semanticRefactoringLibrary = semanticRefactoringLibrary;
-        //_granularRefactoringEngine = granularRefactoringEngine;
-        // _advancedLogicEngine = advancedLogicEngine;
-        // _refinementEngine = refinementEngine;
-        // _advancedTypeEngine = advancedTypeEngine;
-        _structuralRefinementEngine = structuralRefinementEngine;
-        //_codeStyleEngine = codeStyleEngine;
-        //_codeFlowEngine = codeFlowEngine;
-        //_advancedRefactoringEngine = advancedRefactoringEngine;
-        // _logicOptimizationEngine = logicOptimizationEngine;
-        // _outParamRefactoringEngine = outParamRefactoringEngine;
-        _msToolAugmentEngine = augmentEngine;
-        //_codeGenerationEngine = codeGenerationEngine;
-        _symbolNavigationEngine = symbolNavigationEngine;
-        _workspaceManager = workspaceManager;
-        _validationEngine = validationEngine;
-        _config = config;
-        _logger = logger;
+        _signature = new RefactoringSignatureTools(refactoringEngine, workspaceManager, validationEngine, symbolNavigationEngine, logger);
+        _structural = new RefactoringStructuralTools(refactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, logger);
+        _extractionDocs = new RefactoringExtractionDocsTools(refactoringEngine, augmentEngine, mappingEngine, symbolNavigationEngine, workspaceManager, validationEngine, logger);
     }
 
-    // PreviewFileContent moved to RefactoringToolHelpers.PreviewFileContent (Decision 7 step 1).
-
-    /// <summary>
-    /// Guards against staging an unintended empty-file overwrite: when a document-edit engine
-    /// method can't locate its target (wrong name, wrong attribute/modifier, etc.), it returns
-    /// Outcome != Modified and leaves UpdatedText at its string.Empty default rather than null ->
-    /// so skipping this check would silently propose replacing the whole file with nothing.
-    /// Returns null when updated.UpdatedText is safe to use as the new file content.
-    /// </summary>
-    /// <remarks>
-    /// The error code is derived from the outcome rather than always being
-    /// <see cref="ToolErrorCode.Exception"/>: a target the engine simply couldn't find is an
-    /// ordinary, caller-correctable condition, and reporting it as an exception told the agent
-    /// the server had faulted. Run 20260910-013550-398 hit this via a generic containerName ->
-    /// see docs/current/feedback_agent_friendly_error_messages.md.
-    /// </remarks>
-    // RequireUpdatedText moved to RefactoringToolHelpers.RequireUpdatedText (Decision 7 step 1).
-
-    /// <summary>
-    /// Maps a document-edit outcome to the error code the agent sees. Shared so the
-    /// <c>Member(replace)</c> path, which builds its own message, cannot drift from
-    /// <see cref="RequireUpdatedText"/> on the code.
-    /// </summary>
-    // ErrorCodeFor moved to RefactoringToolHelpers.ErrorCodeFor (Decision 7 step 1).
-
-    /// <summary>
-    /// Validates proposed changes against the current in-memory solution and, unless
-    /// <paramref name="dryRun"/> is set, writes them straight to disk (write-through -> no
-    /// intermediate staging step). Rolls back any already-written files if a multi-file change
-    /// partially fails, so a change never lands half-applied.
-    /// </summary>
-    private Task<ApplyOutcome> ValidateAndApplyAsync(
-        Dictionary<FilePathWrapper, string> changes,
-        string description,
-        string operationName,
+    [McpServerTool(Name = "RenameSymbol")]
+    public Task<ToolResult<object>> RenameSymbol(
+        ToolCallReason reason,
+        string projectName,
+        string docCommentId,
+        string newName,
+        string sessionId = "",
         bool dryRun = false,
         bool returnDiff = false,
-        IProgress<ProgressNotificationValue>? progress = default,
-        IReadOnlyCollection<FilePathWrapper>? removePaths = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default) =>
-        ValidateAndApplyHelper.ValidateAndApplyAsync(
-            _validationEngine, _workspaceManager, _logger, changes, operationName,
-            dryRun, returnDiff, progress, removePaths, cancellationToken,
-            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
-
-    private Task<string> BuildDiffAsync(Dictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken) =>
-        ValidateAndApplyHelper.BuildDiffAsync(_workspaceManager, changes, cancellationToken);
-
-    internal static string BuildDiffFromPreImages(
-        Dictionary<FilePathWrapper, string> changes,
-        IReadOnlyDictionary<string, string?>? preImages) =>
-        ValidateAndApplyHelper.BuildDiffFromPreImages(changes, preImages);
-
-
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private async Task<ToolResult<object>> ModifyModifierBatch(List<ModifierEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
-    {
-        if (edits.Count > MaxModifierFamilyEditsPerBatch)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument,
-                    $"ModifyModifier: edits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
-            };
-        }
-
-        var perEditErrors = new List<string>();
-        for (int i = 0; i < edits.Count; i++)
-        {
-            if (string.IsNullOrEmpty(edits[i].FilePath))
-            {
-                perEditErrors.Add($"edits[{i}]: filePath is required.");
-            }
-            if (string.IsNullOrEmpty(edits[i].TargetName))
-            {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): targetName is required.");
-            }
-        }
-
-        if (perEditErrors.Count > 0)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyModifier batch rejected before resolving targets:\n" + string.Join("\n", perEditErrors))
-            };
-        }
-
-        var editsByFile = edits
-            .Select((edit, index) => (edit, index))
-            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
-
-        var finalContents = new Dictionary<FilePathWrapper, string>();
-        var touchedFiles = new List<FilePathWrapper>();
-        foreach (var fileGroup in editsByFile)
-        {
-            var filePathResolved = fileGroup.Key;
-            if (!filePathResolved.Validated)
-            {
-                perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? "no solution is loaded." : "path could not be resolved.")}");
-                continue;
-            }
-
-            var engineEdits = fileGroup.Select(pair => (
-                pair.index,
-                pair.edit.TargetName,
-                pair.edit.Modifier.ToString(),
-                pair.edit.Action,
-                pair.edit.ContextSnippet,
-                pair.edit.LineBefore,
-                pair.edit.LineAfter)).ToList();
-
-            var updated = await _refactoringEngine.ApplyModifierBatchAsync(filePathResolved, engineEdits, cancellationToken);
-            if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
-            {
-                perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
-                continue;
-            }
-
-            finalContents[filePathResolved] = updated.UpdatedText;
-            touchedFiles.Add(filePathResolved);
-        }
-
-        if (perEditErrors.Count > 0)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyModifier batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
-            };
-        }
-
-        var apply = await ValidateAndApplyAsync(finalContents, $"Batch-modified {edits.Count} modifier edit(s) across {touchedFiles.Count} file(s).", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
-        if (apply.Error is not null)
-            return new ToolResult<object> { Success = false, Error = apply.Error };
-
-        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, $"Applied {edits.Count} modifier edit(s) across {touchedFiles.Count} file(s).", apply.DryRun, apply.Diff);
-        return new ToolResult<object>() { Success = true, Data = summary };
-    }
-
-
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private async Task<ToolResult<object>> ModifyAttributeBatch(List<AttributeEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
-    {
-        if (edits.Count > MaxModifierFamilyEditsPerBatch)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument,
-                    $"ModifyAttribute: edits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
-            };
-        }
-
-        var perEditErrors = new List<string>();
-        for (int i = 0; i < edits.Count; i++)
-        {
-            if (string.IsNullOrEmpty(edits[i].FilePath))
-            {
-                perEditErrors.Add($"edits[{i}]: filePath is required.");
-            }
-            if (string.IsNullOrEmpty(edits[i].TargetName))
-            {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): targetName is required.");
-            }
-            if (string.IsNullOrEmpty(edits[i].ExistingAttribute))
-            {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): existingAttribute is required.");
-            }
-            if (edits[i].Action == AttributeModifyAction.replace && string.IsNullOrEmpty(edits[i].NewAttribute))
-            {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): newAttribute is required for action 'replace'.");
-            }
-        }
-
-        if (perEditErrors.Count > 0)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute batch rejected before resolving targets:\n" + string.Join("\n", perEditErrors))
-            };
-        }
-
-        var editsByFile = edits
-            .Select((edit, index) => (edit, index))
-            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
-
-        var finalContents = new Dictionary<FilePathWrapper, string>();
-        var touchedFiles = new List<FilePathWrapper>();
-        foreach (var fileGroup in editsByFile)
-        {
-            var filePathResolved = fileGroup.Key;
-            if (!filePathResolved.Validated)
-            {
-                perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? "no solution is loaded." : "path could not be resolved.")}");
-                continue;
-            }
-
-            var engineEdits = fileGroup.Select(pair => (
-                pair.index,
-                pair.edit.TargetName,
-                pair.edit.ExistingAttribute,
-                pair.edit.Action,
-                pair.edit.NewAttribute,
-                pair.edit.ContextSnippet,
-                pair.edit.LineBefore,
-                pair.edit.LineAfter)).ToList();
-
-            var updated = await _refactoringEngine.ApplyAttributeBatchAsync(filePathResolved, engineEdits, cancellationToken);
-            if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
-            {
-                perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
-                continue;
-            }
-
-            finalContents[filePathResolved] = updated.UpdatedText;
-            touchedFiles.Add(filePathResolved);
-        }
-
-        if (perEditErrors.Count > 0)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
-            };
-        }
-
-        var apply = await ValidateAndApplyAsync(finalContents, $"Batch-modified {edits.Count} attribute edit(s) across {touchedFiles.Count} file(s).", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
-        if (apply.Error is not null)
-            return new ToolResult<object> { Success = false, Error = apply.Error };
-
-        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, $"Applied {edits.Count} attribute edit(s) across {touchedFiles.Count} file(s).", apply.DryRun, apply.Diff);
-        return new ToolResult<object>() { Success = true, Data = summary };
-    }
-
-
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private async Task<ToolResult<object>> ModifyBaseTypeBatch(List<BaseTypeEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
-    {
-        if (edits.Count > MaxModifierFamilyEditsPerBatch)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument,
-                    $"ModifyBaseType: edits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
-            };
-        }
-
-        var perEditErrors = new List<string>();
-        for (int i = 0; i < edits.Count; i++)
-        {
-            if (string.IsNullOrEmpty(edits[i].FilePath))
-            {
-                perEditErrors.Add($"edits[{i}]: filePath is required.");
-            }
-            if (string.IsNullOrEmpty(edits[i].TypeName))
-            {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): typeName is required.");
-            }
-            if (string.IsNullOrEmpty(edits[i].BaseTypeName))
-            {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): baseTypeName is required.");
-            }
-        }
-
-        if (perEditErrors.Count > 0)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyBaseType batch rejected before resolving targets:\n" + string.Join("\n", perEditErrors))
-            };
-        }
-
-        var editsByFile = edits
-            .Select((edit, index) => (edit, index))
-            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
-
-        var finalContents = new Dictionary<FilePathWrapper, string>();
-        var touchedFiles = new List<FilePathWrapper>();
-        foreach (var fileGroup in editsByFile)
-        {
-            var filePathResolved = fileGroup.Key;
-            if (!filePathResolved.Validated)
-            {
-                perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? "no solution is loaded." : "path could not be resolved.")}");
-                continue;
-            }
-
-            var engineEdits = fileGroup.Select(pair => (
-                pair.index,
-                pair.edit.TypeName,
-                pair.edit.BaseTypeName,
-                pair.edit.Action,
-                pair.edit.ContextSnippet,
-                pair.edit.LineBefore,
-                pair.edit.LineAfter)).ToList();
-
-            var updated = await _refactoringEngine.ApplyBaseTypeBatchAsync(filePathResolved, engineEdits, cancellationToken);
-            if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
-            {
-                perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
-                continue;
-            }
-
-            finalContents[filePathResolved] = updated.UpdatedText;
-            touchedFiles.Add(filePathResolved);
-        }
-
-        if (perEditErrors.Count > 0)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyBaseType batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
-            };
-        }
-
-        var apply = await ValidateAndApplyAsync(finalContents, $"Batch-modified {edits.Count} base type edit(s) across {touchedFiles.Count} file(s).", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);
-        if (apply.Error is not null)
-            return new ToolResult<object> { Success = false, Error = apply.Error };
-
-        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, $"Applied {edits.Count} base type edit(s) across {touchedFiles.Count} file(s).", apply.DryRun, apply.Diff);
-        return new ToolResult<object>() { Success = true, Data = summary };
-    }
-
-
-    [McpServerTool(Name = "RenameSymbol", UseStructuredContent = true, OutputSchemaType = typeof(RenameSymbolResultEnvelope))]
-    [Produces(DataTag.ChangeId)]
-    [Description("Renames a symbol and all its references across the solution, including mentions in XML doc comments, inline comments, and string literals. Returns changeId and updatedHandle for the renamed symbol, plus residualMentions for any leftover occurrences of the old name that rename couldn't reach (e.g. embedded in an unrelated identifier, or in a non-source file). Does NOT simplify call sites or add/remove using directives - if the rename target's new name needs a namespace not already in scope at a call site, or you want to shorten a fully-qualified reference, use the UsingDirective tool separately.")]
-    public async Task<ToolResult<object>> RenameSymbol(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description(ToolParams.ProjectName)] string projectName,
-        [Description(ToolParams.DocCommentId)][Consumes(DataTag.DocCommentId, required: true)] string docCommentId,
-        [Description("New name for the symbol. Must be a valid C# identifier.")] string newName,
-        [Description(ToolParams.SessionId)] string sessionId = "",
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
-
-        SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(
-            sessionId, projectName, docCommentId, cancellationToken);
-        if (!resolution.Resolved)
-        {
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, resolution.Error!.Message)
-            };
-        }
-
-        RenameSymbolResult result = await _refactoringEngine.RenameSymbolAsync(
-            resolution.Handle, resolution.Symbol!, newName, cancellationToken);
-
-        if (result.Error is not null)
-        {
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, result.Error)
-            };
-        }
-
-        if (result.PendingChanges.Count == 0)
-        {
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception,
-                    $"RenameSymbol produced no file changes for '{result.OldName}' -> '{result.NewName}'.")
-            };
-        }
-
-        var apply = await ValidateAndApplyAsync(
-            result.PendingChanges,
-            $"Rename '{result.OldName}' to '{result.NewName}'.",
-            "RenameSymbol", dryRun, returnDiff, cancellationToken: cancellationToken);
-
-        if (apply.Error is not null)
-            return new ToolResult<object> { Success = false, Error = apply.Error };
-
-        // Deliberately not wired into ForPossiblyLargeDataAsync/MemberChangedContentResult: this
-        // already returns rich custom Data (oldName/newName/residualMentions/updatedHandle) instead
-        // of a bare AppliedChangeSummary, and newName is caller-supplied verbatim -> there is no
-        // separate "new content" fragment the offload mechanism would add value for.
-        return new ToolResult<object>
-        {
-            Success = true,
-            Data = new
-            {
-                changeId = apply.ChangeId,
-                dryRun = apply.DryRun,
-                diff = apply.Diff,
-                oldName = result.OldName,
-                newName = result.NewName,
-                filesChanged = result.PendingChanges.Count,
-                updatedHandle = result.UpdatedHandle is SymbolHandle h
-                    ? new
-                    {
-                        h.SessionId,
-                        h.ProjectName,
-                        h.DocCommentId
-                    }
-                    : null,
-                residualMentions = result.ResidualMentions is { Count: > 0 } rm ? rm : null,
-                residualMentionsNote = result.ResidualMentions is { Count: > 0 }
-                    ? $"'{result.OldName}' still appears in {result.ResidualMentions.Count} place(s) Rename couldn't reach (e.g. embedded in another identifier, or in a non-source file). Review residualMentions."
-                    : null
-            }
-        };
-    }
-
-    [McpServerTool(Name = "GenerateMapping")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Generates a mapping method between fromType and toType. Returns changeId.")]
-    public async Task<ToolResult<object>> GenerateMapping(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [ExternalInputRequired(DataTag.DataType, required: true)] string fromType,
-        [ExternalInputRequired(DataTag.DataType)] string toType,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-            IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
-
-            var result = await _mappingEngine.GenerateMappingAsync(filePathResolved, fromType, toType, cancellationToken);
-            if (string.IsNullOrEmpty(result.UpdatedText))
-                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' -> '{toType}' in '{filePathResolved}'. Ensure both types exist in the solution.") };
-
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
-            var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Generated mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff) };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GenerateMapping failed for '{FromType}' to '{ToType}' in '{FilePathWrapper}'", fromType, toType, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateMapping") };
-        }
-    }
-    // CONDITIONAL-PARAM-REVIEW-REQUIRED: required-param set depends entirely on 'operation' -> add
-    // needs containerName (or, for a brand-new top-level type, newMemberSource alone with no
-    // typedKind); view needs containerName; remove needs memberName; replace needs memberName +
-    // newMemberSource. Within add, exactly one of newMemberSource or typedKind+typedName+typedType
-    // is required. No param besides filepath/operation is universally required, so a model can
-    // supply the wrong subset for its chosen operation and only find out at runtime.
-    [McpServerTool(Name = "Member")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Add (as a raw source member, a generated typed property/field, or a brand-new top-level type), remove, replace, or view a type member (method, property, field, constructor). This is the right choice even for a one-line change inside a member - read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
-    public async Task<ToolResult<object>> Member(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
-        [Consumes(DataTag.Action, required: true)] MemberAction operation,
-        [Description("Required for addMember and addTypedMember, and for view. Not used for addTopLevelType, remove, or replace.")]
-        [Consumes(DataTag.SymbolName, required: false)] string? containerName = null,
-        [Description("addTopLevelType only. Disambiguates which namespace to add the new type to, when the file has more than one. Not used otherwise.")]
-        [ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
-        [Description("Required for remove and replace - the member to target. For overloaded targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-        [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
-        [Description("replace: the full replacement member source (signature + body). addMember: the full raw member source to insert into containerName - use position (\"after:MemberName\"/\"before:MemberName\"/\"end\") to place it. addTopLevelType: the full new type declaration (enum/class/record/struct/interface) - containerName is not used. Not used for addTypedMember, remove, or view.")]
-        [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
-        [Description("addMember only: where to insert - null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\". Not used for addTopLevelType, addTypedMember, remove, replace, or view.")]
-        [ExternalInputRequired(DataTag.Position)] string? position = null,
-        [Description("addTypedMember only (required): which kind to generate - \"property\" or \"field\". Requires typedName+typedType alongside it. To add a whole new method, class, record, struct, or interface, use addMember or addTopLevelType with newMemberSource instead.")]
-        [ExternalInputRequired(DataTag.SymbolKind, required: false)] TypedMemberKind? typedKind = null,
-        [Description("Required for addTypedMember: the generated member's name.")]
-        [ExternalInputRequired(DataTag.SymbolName, required: false)] string? typedName = null,
-        [Description("Required for addTypedMember: the generated member's type.")]
-        [ExternalInputRequired(DataTag.DataType, required: false)] string? typedType = null,
-        [Description(ToolParams.AccessibilityValues + " addTypedMember only.")][ExternalInputRequired(DataTag.Accessibility)] string accessibility = "public",
-        [Description("addTypedMember, typedKind=property only.")][ExternalInputRequired(DataTag.HasSetter)] bool hasSetter = true,
-        [Description("addTypedMember, typedKind=property only.")][ExternalInputRequired(DataTag.IsInit)] bool isInit = false,
-        [Description("addTypedMember, typedKind=field only.")][ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
-        [Description("addTypedMember, typedKind=field only.")][ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
-        [Description("addTypedMember, typedKind=field only: optional initializer expression.")][ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
-        [Description("remove only. When false (default), refuses removal if the member has any callers or implementations (checked the same way as FindReferences(kind: all)). Set true to skip this check and remove unconditionally.")] bool skipPrecheck = false,
-        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            if (operation == MemberAction.view)
-            {
-                if (string.IsNullOrEmpty(containerName))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Member: containerName is required for operation 'view'.") };
-
-                var (outcome, message, members) = await _refactoringEngine.GetContainerMembersAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member: {message}") };
-                return new ToolResult<object>() { Success = true, Data = new { Members = members } };
-            }
-
-            if (operation == MemberAction.replace)
-            {
-                if (string.IsNullOrEmpty(memberName) || string.IsNullOrEmpty(newMemberSource))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Member: memberName and newMemberSource are required for operation 'replace'.") };
-
-                ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-                IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
-
-                var replaceEnumName = await _refactoringEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (replaceEnumName != null)
-                {
-                    var enumReplaced = await _refactoringEngine.ReplaceEnumMemberAsync(filePathResolved, replaceEnumName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                    if (string.IsNullOrEmpty(enumReplaced.UpdatedText))
-                        return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member: {enumReplaced.Message} Retry using ModifyEnum(enumName: \"{replaceEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") };
-
-                    var enumReplaceChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumReplaced.UpdatedText! };
-                    var enumReplaceApply = await ValidateAndApplyAsync(enumReplaceChanges, $"Replaced '{memberName}' in enum '{replaceEnumName}'.", "Member", dryRun, returnDiff, progress, cancellationToken: cancellationToken);
-                    if (enumReplaceApply.Error is not null)
-                        return new ToolResult<object> { Success = false, Error = enumReplaceApply.Error };
-                    return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                        new MemberChangedContentResult
-                        {
-                            Summary = new AppliedChangeSummary(enumReplaceApply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}.", enumReplaceApply.DryRun, enumReplaceApply.Diff),
-                            ChangedContent = newMemberSource
-                        },
-                        _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                        workspaceVersion: _workspaceManager.WorkspaceVersion);
-                }
-
-                var result = await _refactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (string.IsNullOrEmpty(result.UpdatedText))
-                {
-                    string errorReason = result.Outcome switch
-                    {
-                        EditOutcome.DocumentNotFound => $"Member: document '{filePathResolved}' not found in the workspace.",
-                        EditOutcome.SourceInvalid => $"Member: newMemberSource for '{memberName}' is not a valid member declaration. " +
-                            "Provide the full member (signature + body, e.g. 'private decimal Foo() { ... }'), not just a statement or method body fragment.",
-                        EditOutcome.TargetNotFound => $"Member: member '{memberName}' not found in '{filePathResolved}'.",
-                        _ => $"Member: no changes produced for '{memberName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}"
-                    };
-                    return new ToolResult<object> { Success = false, Error = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result.Outcome), errorReason) };
-                }
-
-                var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
-                var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress, cancellationToken: cancellationToken);
-                if (apply.Error is not null)
-                    return new ToolResult<object> { Success = false, Error = apply.Error };
-                return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                    new MemberChangedContentResult
-                    {
-                        Summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff),
-                        ChangedContent = newMemberSource
-                    },
-                    _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                    workspaceVersion: _workspaceManager.WorkspaceVersion);
-            }
-
-            if (operation == MemberAction.remove)
-            {
-                if (string.IsNullOrEmpty(memberName))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Member: memberName is required for operation 'remove'.") };
-
-                if (!skipPrecheck)
-                {
-                    var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
-                    var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
-                    if (callers.Count > 0 || implementations.Count > 0)
-                    {
-                        var parts = new List<string>();
-                        if (callers.Count > 0) parts.Add($"{callers.Count} caller(s)");
-                        if (implementations.Count > 0) parts.Add($"{implementations.Count} implementation(s)");
-                        return new ToolResult<object>
-                        {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.InvalidArgument,
-                                $"Member: '{memberName}' has {string.Join(" and ", parts)} - refusing to remove. " +
-                                "Pass skipPrecheck: true to remove anyway, or resolve the callers/implementations first. " +
-                                $"Callers: {System.Text.Json.JsonSerializer.Serialize(callers)}. " +
-                                $"Implementations: {System.Text.Json.JsonSerializer.Serialize(implementations)}.")
-                        };
-                    }
-                }
-
-                var removeEnumName = await _refactoringEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (removeEnumName != null)
-                {
-                    var enumRemoved = await _refactoringEngine.RemoveEnumMemberAsync(filePathResolved, removeEnumName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                    if (string.IsNullOrEmpty(enumRemoved.UpdatedText))
-                        return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member: {enumRemoved.Message} Retry using ModifyEnum(enumName: \"{removeEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") };
-
-                    var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText! };
-                    var enumRemoveApply = await ValidateAndApplyAsync(enumRemoveChanges, $"Removed '{memberName}' from enum '{removeEnumName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
-                    if (enumRemoveApply.Error is not null)
-                        return new ToolResult<object> { Success = false, Error = enumRemoveApply.Error };
-                    return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(enumRemoveApply.ChangeId, [filePathResolved], $"Removed '{memberName}' from enum '{removeEnumName}' in {Path.GetFileName(filePathResolved)}.", enumRemoveApply.DryRun, enumRemoveApply.Diff, _workspaceManager.WorkspaceVersion) };
-                }
-
-                var result = await _refactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter);
-                if (string.IsNullOrEmpty(result.UpdatedText))
-                    return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member: member '{memberName}' not found in '{filePathResolved}'.") };
-
-                var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
-                var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
-                if (apply.Error is not null)
-                    return new ToolResult<object> { Success = false, Error = apply.Error };
-                return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Removed '{memberName}' from {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
-            }
-
-            // operation is addMember, addTopLevelType, or addTypedMember below.
-            static string RequiredParamsHint(MemberAction op) => op switch
-            {
-                MemberAction.addMember => "Required params for addMember: containerName, newMemberSource. Optional: position.",
-                MemberAction.addTopLevelType => "Required params for addTopLevelType: newMemberSource (the full type declaration). Optional: namespaceName.",
-                MemberAction.addTypedMember => "Required params for addTypedMember: containerName, typedKind, typedName, typedType. Optional: accessibility, hasSetter/isInit (typedKind=property), isReadonly/isStatic/initializer (typedKind=field).",
-                _ => throw new ArgumentOutOfRangeException(nameof(op))
-            };
-
-            static string? IgnoredNonDefaultTypedOnlyParamsNote(MemberAction op, string accessibility, bool hasSetter, bool isInit, bool isReadonly, bool isStatic, string? initializer)
-            {
-                if (op == MemberAction.addTypedMember)
-                    return null;
-
-                var ignored = new List<string>();
-                if (accessibility != "public") ignored.Add($"accessibility={accessibility}");
-                if (!hasSetter) ignored.Add($"hasSetter={hasSetter}");
-                if (isInit) ignored.Add($"isInit={isInit}");
-                if (isReadonly) ignored.Add($"isReadonly={isReadonly}");
-                if (isStatic) ignored.Add($"isStatic={isStatic}");
-                if (initializer != null) ignored.Add($"initializer=\"{initializer}\"");
-
-                return ignored.Count == 0
-                    ? null
-                    : $"informational: {string.Join(", ", ignored)} was supplied but is not used for {op}.";
-            }
-
-            if (operation == MemberAction.addTopLevelType)
-            {
-                if (containerName != null)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is not used for operation 'addTopLevelType' (there is no container - the type is added at the top level). {RequiredParamsHint(operation)} If you meant to add a member to an existing container, use operation 'addMember' instead.") };
-                if (typedKind != null || typedName != null || typedType != null)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedKind/typedName/typedType are not used for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
-                if (position != null)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: position is not used for operation 'addTopLevelType' (the type is always appended). {RequiredParamsHint(operation)}") };
-                if (string.IsNullOrEmpty(newMemberSource))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
-
-                var topLevelResult = await _refactoringEngine.AddTopLevelTypeAsync(filePathResolved, newMemberSource, namespaceName, cancellationToken);
-                if (!autoStage)
-                    return new ToolResult<object>() { Success = true, Data = topLevelResult.ToJsonSummary() };
-                if (RefactoringToolHelpers.RequireUpdatedText(topLevelResult, "Member", filePathResolved) is { } topLevelGuardResult)
-                    return topLevelGuardResult;
-
-                var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
-                var topLevelNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
-                if (topLevelNote != null)
-                    topLevelDescription += " " + topLevelNote;
-
-                var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText! };
-                var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
-                if (topLevelApply.Error is not null)
-                    return new ToolResult<object> { Success = false, Error = topLevelApply.Error };
-                return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                    new MemberChangedContentResult
-                    {
-                        Summary = new AppliedChangeSummary(topLevelApply.ChangeId, [filePathResolved], topLevelDescription, topLevelApply.DryRun, topLevelApply.Diff),
-                        ChangedContent = newMemberSource
-                    },
-                    _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                    workspaceVersion: _workspaceManager.WorkspaceVersion);
-            }
-
-            if (operation == MemberAction.addMember)
-            {
-                if (string.IsNullOrEmpty(containerName))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is required for operation 'addMember'. {RequiredParamsHint(operation)}") };
-                if (string.IsNullOrEmpty(newMemberSource))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addMember'. {RequiredParamsHint(operation)}") };
-                if (typedKind != null || typedName != null || typedType != null)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedKind/typedName/typedType are not used for operation 'addMember' - use addTypedMember instead. {RequiredParamsHint(operation)}") };
-            }
-            else // operation == MemberAction.addTypedMember
-            {
-                if (string.IsNullOrEmpty(containerName))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is required for operation 'addTypedMember'. {RequiredParamsHint(operation)}") };
-                if (typedKind == null)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedKind is required for operation 'addTypedMember'. {RequiredParamsHint(operation)}") };
-                if (string.IsNullOrEmpty(typedName) || string.IsNullOrEmpty(typedType))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedName and typedType are required for operation 'addTypedMember'. {RequiredParamsHint(operation)}") };
-                if (!string.IsNullOrEmpty(newMemberSource))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is not used for operation 'addTypedMember' - use typedKind/typedName/typedType instead. {RequiredParamsHint(operation)}") };
-                if (position != null)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: position is not used for operation 'addTypedMember' (generated members are always appended). {RequiredParamsHint(operation)}") };
-            }
-
-            var hasTypedSpec = operation == MemberAction.addTypedMember;
-
-            if (await _refactoringEngine.IsEnumContainerAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken))
-            {
-                if (hasTypedSpec)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Member: '{containerName}' is an enum - typedKind (property/field generation) doesn't apply. Pass newMemberSource as a bare member token ('Name' or 'Name=IntValue') instead via addMember, or retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly.") };
-
-                string? afterName = position != null && position.StartsWith("after:", StringComparison.OrdinalIgnoreCase) ? position.Substring("after:".Length) : null;
-                string? beforeName = position != null && position.StartsWith("before:", StringComparison.OrdinalIgnoreCase) ? position.Substring("before:".Length) : null;
-                if (position != null && afterName == null && beforeName == null && position != "end")
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
-
-                var enumAdded = await _refactoringEngine.AddEnumMemberAsync(filePathResolved, containerName, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (string.IsNullOrEmpty(enumAdded.UpdatedText))
-                    return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member: {enumAdded.Message} Retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly with the full desired member list if this keeps failing.") };
-
-                if (!autoStage)
-                    return new ToolResult<object>() { Success = true, Data = enumAdded.ToJsonSummary() };
-
-                var enumAddDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-                var enumAddNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
-                if (enumAddNote != null)
-                    enumAddDescription += " " + enumAddNote;
-                var enumAddChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText! };
-                var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
-                if (enumAddApply.Error is not null)
-                    return new ToolResult<object> { Success = false, Error = enumAddApply.Error };
-                return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                    new MemberChangedContentResult
-                    {
-                        Summary = new AppliedChangeSummary(enumAddApply.ChangeId, [filePathResolved], enumAddDescription, enumAddApply.DryRun, enumAddApply.Diff),
-                        ChangedContent = newMemberSource ?? ""
-                    },
-                    _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                    workspaceVersion: _workspaceManager.WorkspaceVersion);
-            }
-
-            DocumentEditResult updated;
-            string description;
-            // Only the raw-source path has the added member's exact text available verbatim
-            // (the caller already supplied it). The typed-generation path (AddPropertyAsync/
-            // AddFieldAsync) builds its source string inside the engine and doesn't return it
-            // separately from the whole-file UpdatedText, so ChangedContent stays null there
-            // rather than duplicating the engine's formatting logic at the tool layer.
-            string? addedMemberSource = hasTypedSpec ? null : newMemberSource;
-            if (hasTypedSpec)
-            {
-                if (typedKind == TypedMemberKind.property)
-                {
-                    updated = await _refactoringEngine.AddPropertyAsync(filePathResolved, containerName, typedName, typedType, accessibility, hasSetter, isInit, contextSnippet, lineBefore, lineAfter);
-                    description = $"Added '{typedType} {typedName}' property to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-                }
-                else
-                {
-                    updated = await _refactoringEngine.AddFieldAsync(filePathResolved, containerName, typedName, typedType, accessibility, isReadonly, isStatic, initializer, contextSnippet, lineBefore, lineAfter);
-                    description = $"Added '{typedType} {typedName}' field to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-                }
-            }
-            else if (string.IsNullOrEmpty(position) || position == "end")
-            {
-                updated = await _refactoringEngine.AddMemberAsync(filePathResolved, containerName, newMemberSource!, contextSnippet, lineBefore, lineAfter);
-                description = $"Added new member to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-            }
-            else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
-            {
-                var afterMemberName = position.Substring("after:".Length);
-                updated = await _refactoringEngine.InsertMemberAfterAsync(filePathResolved, containerName, afterMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter);
-                description = $"Inserted new member after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-            }
-            else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
-            {
-                var beforeMemberName = position.Substring("before:".Length);
-                updated = await _refactoringEngine.InsertMemberBeforeAsync(filePathResolved, containerName, beforeMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter);
-                description = $"Inserted new member before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-            }
-            else
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
-            }
-
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "Member", filePathResolved) is { } guardResult)
-                return guardResult;
-
-            var addNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
-            if (addNote != null)
-                description += " " + addNote;
-
-            var addChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var addApply = await ValidateAndApplyAsync(addChanges, description, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (addApply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = addApply.Error };
-            return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                new MemberChangedContentResult
-                {
-                    Summary = new AppliedChangeSummary(addApply.ChangeId, [filePathResolved], description, addApply.DryRun, addApply.Diff),
-                    ChangedContent = addedMemberSource ?? ""
-                },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                workspaceVersion: _workspaceManager.WorkspaceVersion);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Member ({Operation}) failed for '{ContainerOrMemberName}' in '{FilePathWrapper}'", operation, containerName ?? memberName, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Member") };
-        }
-    }
-    [McpServerTool(Name = "UsingDirective")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view using directives in a file.")]
-    public async Task<ToolResult<object>> UsingDirective(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("add: inserts a using; no-op if already present. remove: deletes the matching using directive. view: lists current using directives (name, isStatic, alias); makes no changes.")]
-        [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add/remove, unused for operation=view.
-        [Description("Required for add/remove. For static usings, prefix with \"static \" (e.g. \"static System.Math\"). Not required for view.")]
-        [Consumes(DataTag.SymbolName, required: false)] string? namespaceName = null,
-        [Description("add only. After inserting, runs Roslyn's Simplifier (semantic-model-based, not text find/replace) over the file to shorten now-redundant fully-qualified references - only reduces a name when doing so introduces no ambiguity.")] bool simplifyExisting = false,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            if (operation == AddRemoveViewAction.view)
-            {
-                var usings = await _refactoringEngine.GetUsingDirectivesAsync(filePathResolved, cancellationToken);
-                return new ToolResult<object>() { Success = true, Data = new { Usings = usings } };
-            }
-
-            if (string.IsNullOrEmpty(namespaceName))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"UsingDirective: namespaceName is required for operation '{operation}'.") };
-            }
-
-            DocumentEditResult updated;
-            string opName;
-            if (operation == AddRemoveViewAction.add)
-            {
-                updated = await _refactoringEngine.AddUsingDirectiveAsync(filePathResolved, namespaceName, simplifyExisting, cancellationToken);
-                opName = "Add";
-            }
-            else
-            {
-                updated = await _refactoringEngine.RemoveUsingDirectiveAsync(filePathResolved, namespaceName, cancellationToken);
-                opName = "Remove";
-            }
-
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "UsingDirective", filePathResolved) is { } guardResult)
-                return guardResult;
-
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            // returnDiff is forced to true here regardless of the caller's own returnDiff flag:
-            // the add path below needs the real before/after diff to populate ChangedContent, not
-            // just to decide whether to include a preview Diff in the summary.
-            var needsDiff = returnDiff || operation == AddRemoveViewAction.add;
-            var apply = await ValidateAndApplyAsync(changes, $"{opName} using {namespaceName}.", "UsingDirective", dryRun, needsDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            var description = operation == AddRemoveViewAction.add
-                ? $"Adds 'using {namespaceName};' to {Path.GetFileName(filePathResolved)}."
-                : $"Removes 'using {namespaceName};' from {Path.GetFileName(filePathResolved)}.";
-            if (operation != AddRemoveViewAction.add)
-            {
-                return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, returnDiff ? apply.Diff : null, _workspaceManager.WorkspaceVersion) };
-            }
-
-            // ChangedContent is derived from the actual before/after document diff (apply.Diff,
-            // built by ValidateAndApplyHelper.BuildDiffFromPreImages) rather than reconstructed
-            // from the caller's namespaceName argument. A hardcoded "using {namespaceName};" could
-            // never reveal any other change bundled into the same write (formatting drift,
-            // accessibility changes, whitespace normalization, etc.) -> the caller had no way to
-            // know from this tool's own result whether something unexpected also changed.
-            return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                new MemberChangedContentResult
-                {
-                    Summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, returnDiff ? apply.Diff : null, _workspaceManager.WorkspaceVersion),
-                    ChangedContent = apply.Diff ?? ""
-                },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                workspaceVersion: _workspaceManager.WorkspaceVersion);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "UsingDirective failed for '{Namespace}' in '{FilePathWrapper}'", namespaceName, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UsingDirective") };
-        }
-    }
-    [McpServerTool(Name = "ModifyEnum")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Replaces an enum's complete member list in one operation. Use GetTypeInfo(typeName, include:\"members\") to see current values first.")]
-    public async Task<ToolResult<object>> ModifyEnum(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string enumName,
-        [Description("Comma-separated list of member names in the desired order (e.g. \"Pending,Shipped,Cancelled\"); append \"=N\" for an explicit value (e.g. \"Archived=99\"). Omitted names are removed, new names are added, explicit values are preserved, and implicit members take the next ordinal from their predecessor - as if hand-typed. Pass the complete list every time, not a delta.")]
-        [ExternalInputRequired(DataTag.SymbolName, required: true)] string values,
-        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var updated = await _refactoringEngine.ModifyEnumAsync(filePathResolved, enumName, values, contextSnippet, lineBefore, lineAfter);
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyEnum", filePathResolved) is { } guardResult)
-                return guardResult;
-
-            var description = string.IsNullOrEmpty(updated.Message)
-                ? $"Sets '{enumName}' members in {Path.GetFileName(filePathResolved)} to match the requested list."
-                : $"'{enumName}' in {Path.GetFileName(filePathResolved)}: {updated.Message}.";
-
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var apply = await ValidateAndApplyAsync(changes, description, "ModifyEnum", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            // No ChangedContent: the new member list is just the caller-supplied `values` string
-            // already passed in verbatim -> same reasoning as ChangeAccessibility/ModifyModifier.
-            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ModifyEnum failed for '{EnumName}' in '{FilePathWrapper}'", enumName, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyEnum") };
-        }
-    }
+        _signature.RenameSymbol(reason, projectName, docCommentId, newName, sessionId, dryRun, returnDiff, requestParams, cancellationToken);
+
+    [McpServerTool(Name = "MethodSignature")]
+    public Task<ToolResult<object>> MethodSignature(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        AddRemoveViewAction operation,
+        string methodName,
+        string? paramName = null,
+        string? paramType = null,
+        string? defaultValue = null,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default,
+        bool nullDefault = false) =>
+        _signature.MethodSignature(reason, filepath, operation, methodName, paramName, paramType, defaultValue, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, nullDefault);
 
     [McpServerTool(Name = "ChangeAccessibility")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Changes the accessibility (private, public, internal, protected, protected internal, private protected) of a type or member to the given target level in one step - replaces whatever accessibility is currently present, so there's no separate remove/add pairing to get wrong. For overloaded members, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. This tool covers accessibility only - use ChangeAccessibility for accessibility, ModifyAttribute for [Attribute] syntax, and ModifyModifier for non-accessibility keywords (virtual/abstract/static/etc.). Returns changeId.")]
-    public async Task<ToolResult<object>> ChangeAccessibility(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility, required: true)] AccessibilityLevel accessibility,
-        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePathResolved, targetName, accessibility, contextSnippet, lineBefore, lineAfter);
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
+    public Task<ToolResult<object>> ChangeAccessibility(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        string targetName,
+        AccessibilityLevel accessibility,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _signature.ChangeAccessibility(reason, filepath, targetName, accessibility, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ChangeAccessibility", filePathResolved) is { } guardResult)
-                return guardResult;
-
-            var accessibilityKeyword = accessibility switch
-            {
-                AccessibilityLevel.protectedInternal => "protected internal",
-                AccessibilityLevel.privateProtected => "private protected",
-                _ => accessibility.ToString()
-            };
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibilityKeyword}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            // No ChangedContent here: the only "new" text is the accessibility keyword itself,
-            // which the caller already passed in verbatim -> echoing it back adds nothing the
-            // caller doesn't already have, unlike a reconstructed multi-part snippet.
-            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Changed accessibility of '{targetName}' to '{accessibilityKeyword}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ChangeAccessibility failed for '{TargetName}' in '{FilePathWrapper}'", targetName, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ChangeAccessibility") };
-        }
-    }
-    [McpServerTool(Name = "SummaryComment")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view a /// <summary> XML doc comment on a type or member. For overloaded targets, combine targetName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-    public async Task<ToolResult<object>> SummaryComment(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("add: adds or replaces the summary, overwriting any existing one. remove: deletes the summary comment if present; no-op if none exists. view: returns the current summary text (or null if none); makes no changes.")]
-        [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
-        [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add, unused for remove/view.
-        [Description("Required for add - the new summary text. Not used for remove/view.")][Consumes(DataTag.SourceCode, required: false)] string? summaryText = null,
-        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.ContainingTypeName)] string? containingTypeName = null,
-        [Description(ToolParams.AutoStage)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            if (operation == AddRemoveViewAction.view)
-            {
-                var (outcome, message, text) = await _refactoringEngine.GetSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
-                if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SummaryComment: {message}") };
-                return new ToolResult<object>() { Success = true, Data = new { SummaryText = text } };
-            }
-
-            if (operation == AddRemoveViewAction.add && string.IsNullOrEmpty(summaryText))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "SummaryComment: summaryText is required for operation 'add'.") };
-            }
-
-            var updated = operation == AddRemoveViewAction.add
-                ? await _refactoringEngine.AddSummaryCommentAsync(filePathResolved, targetName, summaryText!, contextSnippet, lineBefore, lineAfter, containingTypeName)
-                : await _refactoringEngine.RemoveSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
-
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "SummaryComment", filePathResolved) is { } guardResult)
-                return guardResult;
-
-            var description = operation == AddRemoveViewAction.add
-                ? $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePathResolved)}."
-                : $"Removed XML summary comment from '{targetName}' in {Path.GetFileName(filePathResolved)}.";
-
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var apply = await ValidateAndApplyAsync(changes, description, "SummaryComment", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff);
-
-            // add: summaryText is caller-supplied verbatim, echoed back as the added content
-            // (same reasoning as Member(add)'s raw-source path). remove has no new content to show.
-            if (operation != AddRemoveViewAction.add)
-            {
-                return new ToolResult<object>() { Success = true, Data = summary };
-            }
-
-            return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                new MemberChangedContentResult { Summary = summary, ChangedContent = summaryText! },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                workspaceVersion: _workspaceManager.WorkspaceVersion);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SummaryComment failed for '{TargetName}' in '{FilePathWrapper}'", targetName, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SummaryComment") };
-        }
-    }
     [McpServerTool(Name = "ConstructorParameter")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view DI constructor parameters on a class. For classes with the same name in the same file, combine className with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-    public async Task<ToolResult<object>> ConstructorParameter(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("add: creates a private readonly field, parameter, and body assignment in one step; creates a constructor if none exists. remove: deletes the parameter and its assignment statement - the backing field is only deleted if a solution-wide reference check confirms nothing else in the class still uses it, otherwise it's left in place. view: lists current constructor parameters and their inferred backing fields; makes no changes.")]
-        [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
-        [Consumes(DataTag.ClassName, required: true)] string className,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add/remove, unused for operation=view.
-        [Description("Required for add/remove. Not used for view.")]
-        [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add, unused for remove/view.
-        [Description("Required for add. Not used for remove/view.")]
-        [Consumes(DataTag.DataType, required: false)] string? paramType = null,
-        [Description("add only. Overrides the default derived field name (_camelCase); passing fieldName equal to paramName or its underscore-prefixed form both resolve to '_paramName', never a bare name that would collide with the parameter.")]
-        [Consumes(DataTag.SymbolName, required: false)] string? fieldName = null,
-        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            if (operation == AddRemoveViewAction.view)
-            {
-                var (outcome, message, parameters) = await _refactoringEngine.GetConstructorParametersAsync(filePath: filePathResolved, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ConstructorParameter: {message}") };
-                return new ToolResult<object>() { Success = true, Data = new { Parameters = parameters } };
-            }
+    public Task<ToolResult<object>> ConstructorParameter(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        AddRemoveViewAction operation,
+        string className,
+        string? paramName = null,
+        string? paramType = null,
+        string? fieldName = null,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _signature.ConstructorParameter(reason, filepath, operation, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
-            if (string.IsNullOrEmpty(paramName))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"ConstructorParameter: paramName is required for operation '{operation}'.") };
-            }
+    [McpServerTool(Name = "GenerateMapping")]
+    public Task<ToolResult<object>> GenerateMapping(
+        FilePathWrapper filepath,
+        string fromType,
+        string toType,
+        bool dryRun = false,
+        bool returnDiff = false,
+        RequestContext<CallToolRequestParams>? requestParams = null,
+        CancellationToken cancellationToken = default) =>
+        _extractionDocs.GenerateMapping(filepath, fromType, toType, dryRun, returnDiff, requestParams, cancellationToken);
 
-            if (operation == AddRemoveViewAction.add && string.IsNullOrEmpty(paramType))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "ConstructorParameter: paramType is required for operation 'add'.") };
-            }
+    [McpServerTool(Name = "Member")]
+    public Task<ToolResult<object>> Member(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        MemberAction operation,
+        string? containerName = null,
+        string? namespaceName = null,
+        string? memberName = null,
+        string? newMemberSource = null,
+        string? position = null,
+        TypedMemberKind? typedKind = null,
+        string? typedName = null,
+        string? typedType = null,
+        string accessibility = "public",
+        bool hasSetter = true,
+        bool isInit = false,
+        bool isReadonly = false,
+        bool isStatic = false,
+        string? initializer = null,
+        bool skipPrecheck = false,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        RequestContext<CallToolRequestParams>? requestParams = null,
+        CancellationToken cancellationToken = default) =>
+        _structural.Member(reason, filepath, operation, containerName, namespaceName, memberName, newMemberSource, position, typedKind, typedName, typedType,
+            accessibility, hasSetter, isInit, isReadonly, isStatic, initializer, skipPrecheck, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff,
+            requestParams, cancellationToken);
 
-            DocumentEditResult updated;
-            string resolvedFieldName;
-            if (operation == AddRemoveViewAction.add)
-            {
-                updated = await _refactoringEngine.AddConstructorParameterAsync(filePathResolved, className, paramName, paramType!, fieldName, contextSnippet, lineBefore, lineAfter);
-                // updated.Message carries "// paramName='x', fieldName='_x'" on success -> surface the
-                // resolved field name explicitly since it may differ from what the caller passed
-                // (see fieldName/paramName collision disambiguation in AddConstructorParameterAsync).
-                resolvedFieldName = updated.Message is { Length: > 0 } msg
-                    && System.Text.RegularExpressions.Regex.Match(msg, "fieldName='([^']*)'") is { Success: true } m
-                    ? m.Groups[1].Value
-                    : $"_{char.ToLower(paramName[0])}{paramName[1..]}";
-            }
-            else
-            {
-                updated = await _refactoringEngine.RemoveConstructorParameterAsync(filePathResolved, className, paramName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                resolvedFieldName = updated.Message is { Length: > 0 } msg
-                    && System.Text.RegularExpressions.Regex.Match(msg, "fieldName='([^']*)'") is { Success: true } m
-                    ? m.Groups[1].Value
-                    : "";
-            }
+    [McpServerTool(Name = "UsingDirective")]
+    public Task<ToolResult<object>> UsingDirective(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        AddRemoveViewAction operation,
+        string? namespaceName = null,
+        bool simplifyExisting = false,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _extractionDocs.UsingDirective(reason, filepath, operation, namespaceName, simplifyExisting, autoStage, dryRun, returnDiff, cancellationToken);
 
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
+    [McpServerTool(Name = "ModifyEnum")]
+    public Task<ToolResult<object>> ModifyEnum(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        string enumName,
+        string values,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _structural.ModifyEnum(reason, filepath, enumName, values, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ConstructorParameter", filePathResolved) is { } guardResult)
-                return guardResult;
-
-            var description = operation == AddRemoveViewAction.add
-                ? $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePathResolved)}, backed by field '{resolvedFieldName}'."
-                : $"Removed '{paramName}' DI parameter from '{className}' in {Path.GetFileName(filePathResolved)}."
-                    + (updated.Message?.Contains("fieldRemoved='True'") == true ? $" Also removed unused backing field '{resolvedFieldName}'." : "");
-
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var apply = await ValidateAndApplyAsync(changes, description, "ConstructorParameter", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-
-            // Added-parameter text is reconstructed here (paramType/paramName are already known)
-            // rather than extracted from AddConstructorParameterAsync's internal formatting -> same
-            // reasoning as Member(add)'s typed-generation path. Remove has no new content to show.
-            var changedContent = operation == AddRemoveViewAction.add ? $"{paramType} {paramName}" : "";
-            return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                new MemberChangedContentResult
-                {
-                    Summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff),
-                    ChangedContent = changedContent
-                },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                workspaceVersion: _workspaceManager.WorkspaceVersion);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ConstructorParameter failed for '{ClassName}' in '{FilePathWrapper}'", className, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ConstructorParameter") };
-        }
-    }
-    // OutputSchemaType covers the "view" branch's shape only ({ Parameters }) - the add/remove
-    // branches (ToJsonSummary / MemberChangedContentResult offload) are out of scope for this POC.
-    // See proposal_structuredcontent_rollout.md.
-    [McpServerTool(Name = "MethodSignature", UseStructuredContent = true, OutputSchemaType = typeof(MethodSignatureViewResultEnvelope))]
-    [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view a method's parameters (general-purpose - not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-    public async Task<ToolResult<object>> MethodSignature(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("add: appends a new parameter to the end of the parameter list. remove: only the LAST parameter can be removed (paramName must match it) - a deliberate restriction, since removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely; call sites passing the removed argument positionally are updated automatically, but a call site using named arguments (or one that can't be safely re-parsed) causes the whole operation to be refused with no changes made. view: lists current parameters (name, type, default value); makes no changes.")]
-        [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
-        [Consumes(DataTag.MethodName, required: true)] string methodName,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add/remove, unused for operation=view.
-        [Description("Required for add/remove. Not used for view.")]
-        [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add, unused for remove/view.
-        [Description("Required for add. Not used for remove/view.")]
-        [Consumes(DataTag.DataType, required: false)] string? paramType = null,
-        [Description("add only. Optional literal or expression for the new parameter's default value (e.g. \"3\", \"\\\"foo\\\"\") - omit for a required parameter. Do NOT pass the literal string \"null\" here to get a null default - use nullDefault:true instead (some MCP clients corrupt the string \"null\" in transit, silently producing a required parameter instead of one defaulted to null). Mutually exclusive with nullDefault.")]
-        [ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
-        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default,
-        [Description("add only. Sets the new parameter's default to the null literal directly, bypassing defaultValue entirely - use this instead of defaultValue:\"null\". Mutually exclusive with defaultValue.")] bool nullDefault = false)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            if (operation == AddRemoveViewAction.view)
-            {
-                var (outcome, message, parameters) = await _refactoringEngine.GetMethodParametersAsync(filePathResolved, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit or EditOutcome.TargetNotFound)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"MethodSignature: {message}") };
-                return new ToolResult<object>() { Success = true, Data = new { Parameters = parameters } };
-            }
-
-            if (string.IsNullOrEmpty(paramName))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: paramName is required for operation '{operation}'.") };
-            }
-
-            if (operation == AddRemoveViewAction.add && string.IsNullOrEmpty(paramType))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "MethodSignature: paramType is required for operation 'add'.") };
-            }
-
-            if (nullDefault && defaultValue != null)
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "MethodSignature: nullDefault and defaultValue are mutually exclusive - pass only one.") };
-            }
-
-            if (nullDefault && operation != AddRemoveViewAction.add)
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: nullDefault is only valid for operation 'add', not '{operation}'.") };
-            }
-
-            DocumentEditResult updated;
-            Dictionary<FilePathWrapper, string> changes;
-            if (operation == AddRemoveViewAction.add)
-            {
-                updated = await _refactoringEngine.AddMethodParameterAsync(filePathResolved, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken, nullDefault);
-                if (RefactoringToolHelpers.RequireUpdatedText(updated, "MethodSignature", filePathResolved) is { } addGuardResult)
-                    return addGuardResult;
-                changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            }
-            else
-            {
-                updated = await _refactoringEngine.RemoveMethodParameterAsync(filePathResolved, methodName, paramName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (updated.Outcome == EditOutcome.CannotRemove)
-                {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: {updated.Message}") };
-                }
-
-                if (RefactoringToolHelpers.RequireUpdatedText(updated, "MethodSignature", filePathResolved) is { } removeGuardResult)
-                    return removeGuardResult;
-                changes = updated.Changes;
-            }
-
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-
-            var description = operation == AddRemoveViewAction.add
-                ? $"Added parameter '{paramType} {paramName}{(nullDefault ? " = null" : defaultValue != null ? $" = {defaultValue}" : "")}' to '{methodName}' in {Path.GetFileName(filePathResolved)}."
-                : $"Removed parameter '{paramName}' from '{methodName}' in {Path.GetFileName(filePathResolved)}, updating {changes.Count - 1} call site(s).";
-            var apply = await ValidateAndApplyAsync(changes, description, "MethodSignature", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-
-            var changedContent = operation == AddRemoveViewAction.add ? $"{paramType} {paramName}" : "";
-            return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                new MemberChangedContentResult
-                {
-                    Summary = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff),
-                    ChangedContent = changedContent
-                },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                workspaceVersion: _workspaceManager.WorkspaceVersion);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "MethodSignature failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MethodSignature") };
-        }
-    }
+    [McpServerTool(Name = "SummaryComment")]
+    public Task<ToolResult<object>> SummaryComment(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        AddRemoveViewAction operation,
+        string targetName,
+        string? summaryText = null,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        string? containingTypeName = null,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _extractionDocs.SummaryComment(reason, filepath, operation, targetName, summaryText, contextSnippet, lineBefore, lineAfter, containingTypeName, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ExtractLocalVariable")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Extracts an inline expression into a named local variable declaration. exactExpressionText is NOT a search fragment (unlike contextSnippet on other tools) - it must be the WHOLE expression to extract, copied verbatim.")]
-    public async Task<ToolResult<object>> ExtractLocalVariable(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("The exact expression to extract, copied VERBATIM character-for-character from a prior ReadFile/GetMethodSource result - the whole expression, not a shortened/unique fragment. This is NOT a search anchor like contextSnippet on other tools: it must match the target expression's full text exactly (whitespace differences are tolerated, but the expression itself must be complete). A partial expression may still resolve to the nearest enclosing expression rather than the one you intended, silently extracting the wrong span - if in doubt, include the whole expression, not less.")]
-        [Consumes(DataTag.ContextSnippet, required: true)] string exactExpressionText,
-        [Consumes(DataTag.SymbolName)] string variableName,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var result = await _refactoringEngine.ExtractLocalVariableAsync(filePathResolved, exactExpressionText, variableName, lineBefore, lineAfter);
-            if (string.IsNullOrEmpty(result.UpdatedText))
-            {
-                string errorReason = result.Outcome switch
-                {
-                    EditOutcome.DocumentNotFound => $"ExtractLocalVariable: document '{filePathResolved}' not found in the workspace.",
-                    EditOutcome.SourceInvalid => $"ExtractLocalVariable: exactExpressionText not found in '{filePathResolved}'. {result.Message}",
-                    EditOutcome.CannotConvert => $"ExtractLocalVariable: could not extract '{variableName}' in '{filePathResolved}'. {result.Message}",
-                    _ => $"ExtractLocalVariable: no change produced for '{variableName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}"
-                };
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, errorReason) };
-            }
-
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
-            var apply = await ValidateAndApplyAsync(changes, $"Extract local variable '{variableName}'.", "ExtractLocalVariable", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            // Not wired into MemberChangedContentResult: unlike Member/ConstructorParameter, the new
-            // declaration text isn't caller-supplied or separately exposed -> DocumentEditResult only
-            // returns the whole-file UpdatedText, so reconstructing just the new "var x = ..." line
-            // here would mean duplicating ExtractLocalVariableAsync's formatting logic. Revisit only
-            // if that engine method is changed to return the new declaration text alongside UpdatedText.
-            return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Extracted '{variableName}' as a local variable in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff) };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ExtractLocalVariable failed for '{VariableName}' in '{FilePathWrapper}'", variableName, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractLocalVariable") };
-        }
-    }
+    public Task<ToolResult<object>> ExtractLocalVariable(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        string exactExpressionText,
+        string variableName,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _extractionDocs.ExtractLocalVariable(reason, filepath, exactExpressionText, variableName, lineBefore, lineAfter, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ExtractMethodSafe")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Extracts selected statements into a new method with the correct return type inferred from the selection. newMethodName must be a valid C# identifier. exactSourceBlock is NOT a search fragment (unlike contextSnippet on other tools) - the entire range you want extracted must appear in it verbatim, since its matched span IS the extraction boundary; a too-short excerpt silently extracts only that narrower range, not the whole intended block. Written to disk (or staged, per autoStage) like other refactoring tools - not preview-only. Returns changeId.")]
-    // Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent).
-    public async Task<ToolResult<object>> ExtractMethodSafe(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [ExternalInputRequired(DataTag.MethodName, required: true)] string newMethodName,
-        [Description("The exact statements to extract, copied VERBATIM character-for-character from a prior ReadFile/GetMethodSource result - not retyped from memory, not a shortened/unique fragment. This is NOT a search anchor like contextSnippet on other tools: the whole extracted range (every statement, including blank lines/comments within it, exactly as they appear in the file) must be present here, because the matched span directly becomes the extraction boundary. Passing only part of the intended range (e.g. just the first statement) will silently extract only that part, stranding the rest - some ambiguous narrow selections are refused with an error, but do not rely on that guard catching every case; when in doubt, include more of the surrounding block, not less.")]
-        [Consumes(DataTag.ContextSnippet, required: true)] string exactSourceBlock,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("ExtractMethodSafe: {File} method={Name}", filePathResolved, newMethodName);
-        }
-        try
-        {
-            var result = await _msToolAugmentEngine.ExtractMethodSafeAsync(
-                filePathResolved, newMethodName, exactSourceBlock, lineBefore, lineAfter, cancellationToken: cancellationToken);
+    public Task<ToolResult<object>> ExtractMethodSafe(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        string newMethodName,
+        string exactSourceBlock,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _extractionDocs.ExtractMethodSafe(reason, filepath, newMethodName, exactSourceBlock, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
-            if (!result.Success)
-            {
-                return new ToolResult<object>
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe: {result.Error}")
-                };
-            }
-
-            if (!autoStage)
-            {
-                return new ToolResult<object> { Success = true, Data = result };
-            }
-
-            if (string.IsNullOrEmpty(result.UpdatedContent))
-            {
-                return new ToolResult<object>
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe: no change produced for '{filePathResolved}'.")
-                };
-            }
-
-            // Not wired into MemberChangedContentResult: the extracted method's body isn't caller-
-            // supplied or separately exposed -> ExtractMethodSafeAsync's result only carries the
-            // whole-file UpdatedContent, so showing just the new method here would mean duplicating
-            // its formatting/signature-inference logic. Revisit only if that engine method starts
-            // returning the extracted method's text alongside UpdatedContent.
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedContent };
-            var apply = await ValidateAndApplyAsync(changes, $"Extract '{newMethodName}' from '{filePathResolved}'.", "ExtractMethodSafe", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Extracted '{newMethodName}' into a new method in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion)
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ExtractMethodSafe failed for '{NewMethodName}' in '{FilePathWrapper}'", newMethodName, filePathResolved);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractMethodSafe")
-            };
-        }
-    }
     [McpServerTool(Name = "ModifyAttribute")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Adds, replaces, or removes an [Attribute] on a type or member. Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords, not this tool.")]
-    public async Task<ToolResult<object>> ModifyAttribute(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
-        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
-        [Description("For overloaded/duplicate-named targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-        [Consumes(DataTag.SymbolName, required: false)] string? targetName = null,
-        [Description("The attribute to add/replace/remove. May include or omit the surrounding [ ] brackets.")]
-        [ExternalInputRequired(DataTag.AttributeName, required: false)] string? existingAttribute = null,
-        [Consumes(DataTag.Action, required: false)] AttributeModifyAction? action = null,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=replace, unused for add/remove.
-        [Description("Required for action=replace - the attribute to replace existingAttribute with. Not used for add/remove.")]
-        [ExternalInputRequired(DataTag.AttributeName, required: false)] string? newAttribute = null,
-        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AttributeEdits)] List<AttributeEdit>? edits = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(targetName) || !string.IsNullOrEmpty(existingAttribute) || action.HasValue;
-        bool hasBatchEdit = edits != null;
-
-        if (hasSingularEdit && hasBatchEdit)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyAttribute: supply either filepath/targetName/existingAttribute/action or 'edits', not both.")
-            };
-        }
-
-        if (hasBatchEdit)
-        {
-            if (edits!.Count == 0)
-            {
-                return new ToolResult<object>()
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute: 'edits' was supplied but is empty.")
-                };
-            }
-
-            return await ModifyAttributeBatch(edits, dryRun, returnDiff, cancellationToken);
-        }
-
-        if (!filepath.HasValue || string.IsNullOrEmpty(targetName) || string.IsNullOrEmpty(existingAttribute) || !action.HasValue)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyAttribute: 'filepath', 'targetName', 'existingAttribute', and 'action' are all required, unless 'edits' is supplied instead.")
-            };
-        }
-
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath.Value, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            if (action == AttributeModifyAction.replace && string.IsNullOrEmpty(newAttribute))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute: newAttribute is required for action 'replace'.") };
-            }
-
-            DocumentEditResult updated;
-            if (action == AttributeModifyAction.add)
-            {
-                updated = await _refactoringEngine.AddAttributeAsync(filePathResolved, targetName, existingAttribute, contextSnippet, lineBefore, lineAfter);
-            }
-            else if (action == AttributeModifyAction.replace)
-            {
-                updated = await _refactoringEngine.ReplaceAttributeAsync(filePathResolved, targetName, existingAttribute, newAttribute!, contextSnippet, lineBefore, lineAfter);
-            }
-            else if (action == AttributeModifyAction.remove)
-            {
-                updated = await _refactoringEngine.RemoveAttributeAsync(filePathResolved, targetName, existingAttribute, contextSnippet, lineBefore, lineAfter);
-            }
-            else
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled action '{action}'.") };
-            }
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyAttribute", filePathResolved) is { } guardResult)
-                return guardResult;
-
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var apply = await ValidateAndApplyAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"{(action == AttributeModifyAction.add ? "Added" : action == AttributeModifyAction.replace ? "Replaced" : "Removed")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff);
-
-            // add/replace: existingAttribute (add) or newAttribute (replace) already holds the
-            // exact attribute source the caller composed -> echoed back verbatim, same reasoning
-            // as Member(add)'s raw-source path. remove has no new content to show.
-            if (action == AttributeModifyAction.remove)
-            {
-                return new ToolResult<object>() { Success = true, Data = summary };
-            }
-
-            var changedAttribute = action == AttributeModifyAction.add ? existingAttribute : newAttribute;
-            return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                new MemberChangedContentResult { Summary = summary, ChangedContent = changedAttribute ?? "" },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                workspaceVersion: _workspaceManager.WorkspaceVersion);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ModifyAttribute failed for '{TargetName}' in '{FilePathWrapper}'", targetName, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyAttribute") };
-        }
-    }
+    public Task<ToolResult<object>> ModifyAttribute(
+        ToolCallReason reason,
+        FilePathWrapper? filepath = null,
+        string? targetName = null,
+        string? existingAttribute = null,
+        AttributeModifyAction? action = null,
+        string? newAttribute = null,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        List<AttributeEdit>? edits = null,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _structural.ModifyAttribute(reason, filepath, targetName, existingAttribute, action, newAttribute, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = true, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
-    [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a non-accessibility modifier keyword. Action: add or remove. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Does NOT cover accessibility (private/public/etc.) - use ChangeAccessibility for those, or ModifyAttribute for [Attribute] syntax. Returns changeId.")]
-    public async Task<ToolResult<object>> ModifyModifier(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
-        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
-        [Consumes(DataTag.SymbolName, required: false)] string? targetName = null,
-        [ExternalInputRequired(DataTag.Modifier, required: false)] NonAccessibilityModifier? modifier = null,
-        [Consumes(DataTag.Action, required: false)] AddRemoveAction? action = null,
-        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.ModifierEdits)] List<ModifierEdit>? edits = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(targetName) || modifier.HasValue || action.HasValue;
-        bool hasBatchEdit = edits != null;
+    public Task<ToolResult<object>> ModifyModifier(
+        ToolCallReason reason,
+        FilePathWrapper? filepath = null,
+        string? targetName = null,
+        NonAccessibilityModifier? modifier = null,
+        AddRemoveAction? action = null,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        List<ModifierEdit>? edits = null,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _structural.ModifyModifier(reason, filepath, targetName, modifier, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
-        if (hasSingularEdit && hasBatchEdit)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyModifier: supply either filepath/targetName/modifier/action or 'edits', not both.")
-            };
-        }
-
-        if (hasBatchEdit)
-        {
-            if (edits!.Count == 0)
-            {
-                return new ToolResult<object>()
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyModifier: 'edits' was supplied but is empty.")
-                };
-            }
-
-            return await ModifyModifierBatch(edits, dryRun, returnDiff, cancellationToken);
-        }
-
-        if (!filepath.HasValue || string.IsNullOrEmpty(targetName) || !modifier.HasValue || !action.HasValue)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyModifier: 'filepath', 'targetName', 'modifier', and 'action' are all required, unless 'edits' is supplied instead.")
-            };
-        }
-
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath.Value, _workspaceManager.GetSolutionRoot());
-        var modifierText = modifier.Value.ToString();
-        try
-        {
-            DocumentEditResult updated;
-            if (action == AddRemoveAction.add)
-            {
-                updated = await _refactoringEngine.AddModifierAsync(filePathResolved, targetName, modifierText, contextSnippet, lineBefore, lineAfter);
-            }
-            else if (action == AddRemoveAction.remove)
-            {
-                updated = await _refactoringEngine.RemoveModifierAsync(filePathResolved, targetName, modifierText, contextSnippet, lineBefore, lineAfter);
-            }
-            else
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled action '{action}'.") };
-            }
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyModifier", filePathResolved) is { } guardResult)
-                return guardResult;
-
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifierText}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            // No ChangedContent: the only "new" text is the single modifier keyword the caller
-            // already passed in -> same reasoning as ChangeAccessibility.
-            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"{(action == AddRemoveAction.add ? "Added" : "Removed")} '{modifierText}' modifier on '{targetName}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff);
-            return new ToolResult<object>() { Success = true, Data = summary };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ModifyModifier failed for '{TargetName}' in '{FilePathWrapper}'", targetName, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyModifier") };
-        }
-    }
     [McpServerTool(Name = "ModifyBaseType")]
-    [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a base type or interface from a type declaration.")]
-    public async Task<ToolResult<object>> ModifyBaseType(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
-        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
-        [Description("For types with the same name in the same file, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-        [Consumes(DataTag.SymbolName, required: false)] string? typeName = null,
-        [Description("The base type or interface name to add or remove.")] string? baseTypeName = null,
-        [Description("add or remove.")] AddRemoveAction? action = null,
-        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
-        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.BaseTypeEdits)] List<BaseTypeEdit>? edits = null,
-        [Description(ToolParams.AutoStage)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(typeName) || !string.IsNullOrEmpty(baseTypeName) || action.HasValue;
-        bool hasBatchEdit = edits != null;
-
-        if (hasSingularEdit && hasBatchEdit)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyBaseType: supply either filepath/typeName/baseTypeName/action or 'edits', not both.")
-            };
-        }
-
-        if (hasBatchEdit)
-        {
-            if (edits!.Count == 0)
-            {
-                return new ToolResult<object>()
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ModifyBaseType: 'edits' was supplied but is empty.")
-                };
-            }
-
-            return await ModifyBaseTypeBatch(edits, dryRun, returnDiff, cancellationToken);
-        }
-
-        if (!filepath.HasValue || string.IsNullOrEmpty(typeName) || string.IsNullOrEmpty(baseTypeName) || !action.HasValue)
-        {
-            return new ToolResult<object>()
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyBaseType: 'filepath', 'typeName', 'baseTypeName', and 'action' are all required, unless 'edits' is supplied instead.")
-            };
-        }
-
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath.Value, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            DocumentEditResult updated;
-            if (action == AddRemoveAction.add)
-            {
-                updated = await _refactoringEngine.AddBaseTypeAsync(filePathResolved, typeName!, baseTypeName!, contextSnippet, lineBefore, lineAfter);
-            }
-            else if (action == AddRemoveAction.remove)
-            {
-                updated = await _refactoringEngine.RemoveBaseTypeAsync(filePathResolved, typeName!, baseTypeName!, contextSnippet, lineBefore, lineAfter);
-            }
-            else
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled action '{action}'.") };
-            }
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyBaseType", filePathResolved) is { } guardResult)
-                return guardResult;
-
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var apply = await ValidateAndApplyAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            // No ChangedContent: the only "new" text is the base type name the caller already
-            // passed in -> same reasoning as ChangeAccessibility/ModifyModifier.
-            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"{(action == AddRemoveAction.add ? "Added" : "Removed")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff);
-            return new ToolResult<object>() { Success = true, Data = summary };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ModifyBaseType failed for '{TypeName}' in '{FilePathWrapper}'", typeName, filePathResolved);
-            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyBaseType") };
-        }
-    }
+    public Task<ToolResult<object>> ModifyBaseType(
+        ToolCallReason reason,
+        FilePathWrapper? filepath = null,
+        string? typeName = null,
+        string? baseTypeName = null,
+        AddRemoveAction? action = null,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        List<BaseTypeEdit>? edits = null,
+        bool autoStage = true,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _structural.ModifyBaseType(reason, filepath, typeName, baseTypeName, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "SyncTypeAndFilename")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Synchronizes the filename to match the primary type declared in the file.")]
-    public async Task<ToolResult<object>> SyncTypeAndFilename(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
-        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+    public Task<ToolResult<object>> SyncTypeAndFilename(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default) =>
+        _structural.SyncTypeAndFilename(reason, filepath, dryRun, returnDiff, cancellationToken);
 
-        try
-        {
-            var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePathResolved, cancellationToken);
-            if (result.Outcome != EditOutcome.Modified || result.Changes.Count == 0)
-            {
-                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}") };
-            }
 
-            var (newPath, content) = result.Changes.First();
-            if (File.Exists(newPath))
-            {
-                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename: target file '{newPath}' already exists - refusing to overwrite.") };
-            }
-
-            var changes = new Dictionary<FilePathWrapper, string> { [newPath] = content };
-            var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", dryRun, returnDiff, removePaths: [filePathResolved], cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-
-            // dryRun: ValidateAndApplyAsync never wrote newPath, so deleting filePath here would
-            // destroy the original with nothing on disk to replace it. Report the preview as-is.
-            if (apply.DryRun)
-            {
-                return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved, newPath], $"[DryRun] Would rename '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff) };
-            }
-
-            // Only remove the old file after the new one is validated and written, so the
-            // two never coexist as a validated on-disk duplicate of the same type.
-            try
-            {
-                await FileIoHelper.DeleteAsync(filePathResolved, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                // Deliberately not routed through ToolErrorMapper (unlike other catches in this
-                // file): this is a partial-success condition (new file written and validated, only
-                // the old-file delete failed), not a plain failure, and the mapper's generic
-                // "failed unexpectedly" wording would drop the actionable remediation advice below.
-                _logger.LogError(ex, "SyncTypeAndFilename wrote '{NewPath}' but failed to delete old file '{OldPath}'", newPath, filePathResolved);
-                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename wrote '{Path.GetFileName(newPath)}' but failed to delete the old file '{filePathResolved}': {ex.Message}. Delete it manually to avoid a duplicate-type compile error.") };
-            }
-
-            // The old file is gone from disk, but ApplyProposedChangesAsync only ever added the
-            // new Document -> it has no reason to know the old one should be dropped too. Without
-            // this, the old Document stays tracked and the type it declares now exists twice in
-            // the compilation, corrupting symbol resolution for every subsequent call.
-            await _workspaceManager.RemoveDocumentByPathAsync(filePathResolved, cancellationToken);
-
-            // No ChangedContent: this only moves a file to a new name -> the file's content is
-            // byte-for-byte unchanged, so there is no new text to show beyond the summary.
-            return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved, newPath], $"Renamed '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff) };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SyncTypeAndFilename unexpected exception for '{FilePathWrapper}'", filePathResolved);
-            return new ToolResult<object> { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"SyncTypeAndFilename for '{filePathResolved}'") };
-        }
-    }
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    // Thin static wrapper preserved for SentinelWorkspaceTools.cs and SentinelWholeFileWriteTools.cs,
+    // which still call SentinelRefactoringTools.BuildDiffFromPreImages(...) directly - confirmed via
+    // LocateSymbol/ReadFile this is NOT dead code (unlike BuildDiffAsync, which had zero callers
+    // anywhere in the solution). A future cleanup could point those 2 callers at
+    // ValidateAndApplyHelper.BuildDiffFromPreImages directly (per this plan's Decision 1 cross-class
+    // coupling note) and drop this wrapper, but that touches Workspace-side files outside Step 3's scope.
+    internal static string BuildDiffFromPreImages(Dictionary<FilePathWrapper, string> changes, IReadOnlyDictionary<string, string?>? preImages) =>
+        ValidateAndApplyHelper.BuildDiffFromPreImages(changes, preImages);
 }
+
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Named shape mirroring the <c>updatedHandle</c> anonymous object inside
@@ -1911,7 +311,8 @@ public class SentinelRefactoringTools
 public sealed record RenameSymbolUpdatedHandle(
     [property: Produces(DataTag.SessionId)] string SessionId,
     [property: Produces(DataTag.ProjectName)] string ProjectName,
-    [property: Produces(DataTag.DocCommentId)] string DocCommentId);// Added by AddTopLevelType (expected - used for diagnostics)
+    [property: Produces(DataTag.DocCommentId)] string DocCommentId);
+// Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Named shape mirroring the anonymous object <see cref="SentinelRefactoringTools.RenameSymbol"/>
 /// assigns to <c>ToolResult&lt;object&gt;.Data</c> on its applied success path. Primary path only
@@ -1927,7 +328,8 @@ public sealed record RenameSymbolData(
     int FilesChanged,
     RenameSymbolUpdatedHandle? UpdatedHandle,
     IReadOnlyList<ResidualMention>? ResidualMentions,
-    string? ResidualMentionsNote);// Added by AddTopLevelType (expected - used for diagnostics)
+    string? ResidualMentionsNote);
+// Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>ToolResult&lt;object&gt;</c> as actually populated on
 /// <see cref="SentinelRefactoringTools.RenameSymbol"/>'s primary success path, which sets only
@@ -1936,7 +338,8 @@ public sealed record RenameSymbolData(
 /// </summary>
 public sealed record RenameSymbolResultEnvelope(
     bool Success,
-    RenameSymbolData? Data);// Added by AddTopLevelType (expected - used for diagnostics)
+    RenameSymbolData? Data);
+// Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>ToolResult&lt;object&gt;</c> as actually populated on
 /// <see cref="SentinelRefactoringTools.ModifyModifier"/>'s primary (autoStage=true, singular-edit,
@@ -1950,7 +353,8 @@ public sealed record RenameSymbolResultEnvelope(
 /// </summary>
 public sealed record ModifyModifierResultEnvelope(
     bool Success,
-    AppliedChangeSummary? Data);// Added by AddTopLevelType (expected - used for diagnostics)
+    AppliedChangeSummary? Data);
+// Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Named shape mirroring the engine-layer <c>MethodParameterInfo</c> (RoslynSentinel.Basic,
 /// RefactoringEngine.cs) as surfaced by MethodSignature's view branch. Declared here (rather than
@@ -1960,13 +364,15 @@ public sealed record ModifyModifierResultEnvelope(
 public sealed record MethodSignatureParameterInfo(
     [property: Produces(DataTag.SymbolName)] string ParamName,
     [property: Produces(DataTag.DataType)] string ParamType,
-    string? DefaultValue);// Added by AddTopLevelType (expected - used for diagnostics)
+    string? DefaultValue);
+// Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Mirrors the anonymous <c>new { Parameters = parameters }</c> object assigned to Data on
 /// MethodSignature's view branch.
 /// </summary>
 public sealed record MethodSignatureViewData(
-    IReadOnlyList<MethodSignatureParameterInfo> Parameters);// Added by AddTopLevelType (expected - used for diagnostics)
+    IReadOnlyList<MethodSignatureParameterInfo> Parameters);
+// Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>ToolResult&lt;object&gt;</c> as actually populated on
 /// <see cref="SentinelRefactoringTools.MethodSignature"/>'s "view" branch only (operation=view),

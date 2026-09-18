@@ -3852,15 +3852,9 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
     public void TearDown() => _workspaceManager?.Dispose();
 
     private SentinelRefactoringTools CreateTools() => new SentinelRefactoringTools(_engine,
-            new StandardRefactoringEngine(_workspaceManager),
             new MappingEngine(_workspaceManager),
-            new SemanticRefactoringLibrary(_workspaceManager),
-            new GranularRefactoringEngine(_workspaceManager),
             new StructuralRefinementEngine(_workspaceManager, _config),
-            new CodeStyleEngine(_workspaceManager, _config),
-            new CodeFlowEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),
-            new CodeGenerationEngine(_workspaceManager),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,
             new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),

@@ -34,15 +34,9 @@ public class MassiveRefactoringTests
         var modernization = new ModernizationEngine(_workspaceManager, config);
 
         _refactoringTools = new SentinelRefactoringTools(_refactoringEngine,
-            standard,
             mapping,
-            semLib,
-            granular,
             sr,
-            style,
-            codeFlow,
             new MsToolAugmentEngine(_workspaceManager),
-            new CodeGenerationEngine(_workspaceManager),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,
             new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
