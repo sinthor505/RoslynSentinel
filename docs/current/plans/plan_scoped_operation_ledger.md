@@ -68,7 +68,44 @@ overnight narrow-bypass authorization, none blocked further progress):
 - (Re-confirmed, not newly filed) `Member(addMember)`'s known multi-declaration `newMemberSource`
   silent-partial-write bug, per the already-open `blocking_error_member_addmember_silent_partial_write.md`.
 
-Next step: Decision 3 (`MoveMember` dry-run `PreviewCallSite` report).
+Decision 3 is DONE (commit `8ea7557`). `AdvancedStructuralEngine.PreviewInstanceMoveCallSitesAsync`
+implemented as a reporting-only scan - takes an optional `ValidationEngine?` constructor dependency
+(DI auto-resolves it; all 13 existing direct-construction test call sites are unaffected since it's
+an optional parameter). Uses `SemanticModel.LookupSymbols(position)` for the in-scope-candidate scan
+rather than the `FindReferences`/`FindCallers` ctor-parameter-vs-field fix originally cited in the
+"Facts to confirm" section below - that fix turned out to be a different, single-node resolver, not
+reusable for a scope-walk; `LookupSymbols` was confirmed (via a dispatched Explore subagent) to be
+the correct primitive since it natively respects C# shadowing. Accessibility check uses
+`DeclaredAccessibility`/`ContainingAssembly` comparison, not `IsSymbolAccessibleWithin` as the
+proposal doc's section 6 suggested - that member does not exist on `INamedTypeSymbol` in the
+installed Roslyn 5.9.0 (`Microsoft.CodeAnalysis.Workspaces.Common`).
+
+Tests: `RoslynSentinel.Tests.Battery/PreviewInstanceMoveCallSitesTests.cs`, 3 passing
+(`Valid`-with-`SuggestedFix`, `Ambiguous`, `NoCandidateIntroducible`). **`MoveOrderDependent` has no
+test and may be unreachable as currently implemented** - the obvious fixture (a call inside a member
+that's also being moved in the same batch) classifies as `Valid`, not `MoveOrderDependent`: when
+caller and callee move together, the call site's line is removed from the trial compile along with
+its container, so no diagnostic ever fires there and `isMoveOrderDependent` - checked only after
+`brokenHere` is true - is never reached. `NoCandidateBlocked` (inaccessible destination type) also
+has no test yet. Both are open follow-ups for whoever next touches this method, not blocking for
+Decision 4.
+
+Two tool defects found and documented while landing this (see blocker docs, not the
+already-known-and-tracked `Member(addMember)` multi-declaration bug from Decision 1-2 notes above -
+this is a different symptom of adjacent machinery):
+- `docs/current/blockers/blocking_error_member_addmember_silently_drops_second_declaration.md` -
+  `Member(addMember)` silently truncates a `newMemberSource` payload to its first top-level
+  declaration (via `SyntaxFactory.ParseMemberDeclaration`) rather than inserting all declarations or
+  rejecting multi-declaration payloads up front; the resulting compile-check error blames a missing
+  symbol instead of naming the truncation.
+- `docs/current/blockers/blocking_error_self_inflicted_drift_halt_from_edit_tool_on_tracked_cs_file.md` -
+  self-inflicted `SessionHalted` from using the generic `Edit` tool (not MCP) on a tracked test file;
+  recovered in-session via `AcknowledgeExternalFileChanges` (after `ListExternalDiskChanges` confirmed
+  the drift list matched exactly the one file involved) rather than needing an operator stop - noted
+  as a documentation gap, since neither the halt message nor `IsSessionHalted` mentions this recovery
+  path.
+
+Next step: Decision 4 (lift the static-only restriction: auto-resolution + atomic apply of `Valid` rows).
 
 ## Facts to confirm once the solution loads (not yet verified this session - blocked)
 
@@ -144,9 +181,11 @@ plan originally assumed - see "Progress as of 2026-09-18" above for the correcte
 **Still no caller opens a ledger for real** - this step proves the gate works using a
 directly-engineered test ledger, not a real `MoveMember` call yet.
 
-## Decision 3 - `MoveMember` instance-move dry-run: `PreviewCallSite` report
+## Decision 3 - `MoveMember` instance-move dry-run: `PreviewCallSite` report - DONE (commit `8ea7557`)
 
-Implements `proposal_movemember_instance_callsite_resolution.md` sections 1, 5, 6.
+Implements `proposal_movemember_instance_callsite_resolution.md` sections 1, 5, 6. See "Progress as of
+2026-09-18" above for what actually landed vs. this section's original plan (kept below for the
+record of what was intended going in).
 
 - Locate every call site of the member(s) being moved (reuse existing `FindReferences`/call-site
   discovery machinery - do not write a second one).
