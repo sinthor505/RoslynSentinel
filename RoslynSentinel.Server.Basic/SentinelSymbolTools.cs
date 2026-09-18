@@ -9,24 +9,8 @@ namespace RoslynSentinel.Server.Basic;
 [McpServerToolType]
 public class SentinelSymbolTools
 {
-    private readonly ImpactAnalyzer _impactAnalyzer;
-    private readonly SemanticSearchEngine _semanticSearchEngine;
-    //private readonly MetricsEngine _metricsEngine;
-    private readonly InventoryEngine _inventoryEngine;
-    // private readonly DeadCodeEngine _deadCodeEngine;
-    private readonly AnalysisEngine _analysisEngine;
-    // private readonly DocumentationEngine _documentationEngine;
-    private readonly DependencyEngine _dependencyEngine;
-    private readonly ProjectStructureEngine _projectStructureEngine;
-    // private readonly AsyncSafetyEngine _asyncSafetyEngine;
-    // private readonly HealthOrchestrationEngine _healthOrchestrationEngine;
-    // private readonly ArchitecturalEngine _architecturalEngine;
-    private readonly SymbolNavigationEngine _symbolNavigationEngine;
-    // private readonly DependencyInjectionEngine _dependencyInjectionEngine;
-    private readonly DiscoveryEngine _discoveryEngine;
-    private readonly ProjectConsistencyEngine _projectConsistencyEngine;
-    private readonly ISolutionProvider _workspaceManager;
-    private readonly ILogger<SentinelSymbolTools> _logger;
+    private readonly SymbolNavigationTools _navigation;
+    private readonly SymbolRelationshipTools _relationship;
 
     public SentinelSymbolTools(
         ImpactAnalyzer impactAnalyzer,
@@ -49,31 +33,22 @@ public class SentinelSymbolTools
         SentinelConfiguration config,
         ILogger<SentinelSymbolTools> logger)
     {
-        _impactAnalyzer = impactAnalyzer;
-        _semanticSearchEngine = semanticSearchEngine;
-        // _metricsEngine = metricsEngine;
-        _inventoryEngine = inventoryEngine;
-        // _deadCodeEngine = deadCodeEngine;
-        _analysisEngine = analysisEngine;
-        // _documentationEngine = documentationEngine;
-        _dependencyEngine = dependencyEngine;
-        _projectStructureEngine = projectStructureEngine;
-        // _asyncSafetyEngine = asyncSafetyEngine;
-        // _healthOrchestrationEngine = healthOrchestrationEngine;
-        // _architecturalEngine = architecturalEngine;
-        _symbolNavigationEngine = symbolNavigationEngine;
-        // _dependencyInjectionEngine = dependencyInjectionEngine;
-        _discoveryEngine = discoveryEngine;
-        _projectConsistencyEngine = projectConsistencyEngine;
-        _workspaceManager = workspaceManager;
-        _logger = logger;
+        _ = inventoryEngine;
+        _ = analysisEngine;
+        _ = dependencyEngine;
+        _ = projectStructureEngine;
+        _ = projectConsistencyEngine;
+        _ = config;
+        _navigation = new SymbolNavigationTools(symbolNavigationEngine, impactAnalyzer, workspaceManager, logger);
+        _relationship = new SymbolRelationshipTools(discoveryEngine, semanticSearchEngine, symbolNavigationEngine, workspaceManager, logger);
     }
+
     [McpServerTool(Name = "LocateSymbol", UseStructuredContent = true, OutputSchemaType = typeof(LocateSymbolResult))]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.SessionId)]
     [Produces(DataTag.ProjectName)]
     [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text - use SearchSolutionText for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
-    public async Task<ToolResult<object>> LocateSymbol(
+    public Task<ToolResult<object>> LocateSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
         [Description("Restricts the search to one kind of symbol.")]
@@ -86,47 +61,13 @@ public class SentinelSymbolTools
         [ExternalInputRequired(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Description("false enables a prefix/contains search instead of an exact name match.")]
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+        CancellationToken cancellationToken = default) =>
+        _navigation.LocateSymbol(reason, symbolName, symbolKind, containingType, containingNamespace, projectName, filepath, exactMatch, cancellationToken);
 
-        try
-        {
-            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind.ToString(), containingType, containingNamespace, projectName, filePathResolved, exactMatch, cancellationToken);
-            if (result.Count == 0)
-            {
-                return new ToolResult<object>
-                {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
-                        (projectName != null ? $" (project: {projectName})" : "") +
-                        ". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call ListAll for a cheap solution-wide orientation listing if you're not sure of the exact name.")
-                };
-            }
-
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result,
-                TotalRecords = result.Count,
-                WorkspaceVersion = _workspaceManager.WorkspaceVersion
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "LocateSymbol failed for '{SymbolName}'", symbolName);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "LocateSymbol")
-            };
-        }
-    }
     [McpServerTool(Name = "InspectSymbol")]
     [Produces(DataTag.DocCommentId)]
     [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol - if you only have a name, use LocateSymbol first to find the declaring file.")]
-    public async Task<ToolResult<object>> InspectSymbol(
+    public Task<ToolResult<object>> InspectSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
@@ -134,99 +75,14 @@ public class SentinelSymbolTools
         [ToolOption(ToolOptionTag.Aspect)] InspectSymbolAspect aspect,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default
-        )
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        ) =>
+        _navigation.InspectSymbol(reason, filepath, contextSnippet, aspect, lineBefore, lineAfter, cancellationToken);
 
-        try
-        {
-            if (aspect == InspectSymbolAspect.info)
-            {
-                var symbolInfo = await _symbolNavigationEngine.GetSymbolInfoAsync(filePathResolved, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (symbolInfo == null)
-                {
-                    var snippetPreview = contextSnippet.Length > 60 ? contextSnippet[..60] + "…" : contextSnippet;
-                    return new ToolResult<object>
-                    {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception,
-                            $"Could not resolve a symbol in '{filePathResolved}' for contextSnippet \"{snippetPreview}\". " +
-                            "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
-                            "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
-                            "more than one location and lineBefore/lineAfter did not disambiguate. Re-check the snippet " +
-                            "against GetMethodSource/GetFileOutline output, or add lineBefore/lineAfter to pin the match.")
-                    };
-                }
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = symbolInfo
-                };
-            }
-            if (aspect == InspectSymbolAspect.blastRadius)
-            {
-                var result = await _impactAnalyzer.AnalyzeImpactAsync(filePathResolved, contextSnippet, lineBefore, lineAfter);
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = result
-                };
-            }
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled aspect '{aspect}'.")
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "InspectSymbol ({Aspect}) failed in '{FilePathWrapper}'", aspect, filePathResolved);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InspectSymbol")
-            };
-        }
-    }
-
-    /// <summary>
-    /// <see cref="FindUsagesSearchKind"/> kinds resolve to symbol-relationship facts that are
-    /// meaningful for a member (method/property/field/event), not just a type -> <c>objectCreations</c>
-    /// specifically is the exception: it text-matches "new TypeName(...)" sites and is structurally
-    /// incapable of ever matching a member.
-    /// </summary>
-    private static readonly HashSet<string> MemberSymbolKinds = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Method", "Property", "Field", "Event"
-    };
-
-    private async Task<List<object>> RunRelationshipQueryAsync(
-        FindUsagesSearchKind searchKind, string name, string? projectName, FilePathWrapper filepath, bool sortByFrequency, CancellationToken cancellationToken)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-
-        object result = searchKind switch
-        {
-            FindUsagesSearchKind.implementorsOf => await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName, cancellationToken),
-            FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePathResolved, cancellationToken),
-            FindUsagesSearchKind.objectCreations => await _discoveryEngine.FindObjectCreationSitesAsync(name, filePathResolved, projectName, sortByFrequency, cancellationToken),
-            FindUsagesSearchKind.extensionsFor => await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName, cancellationToken),
-            FindUsagesSearchKind.typesWithAttribute => await _semanticSearchEngine.FindTypesByAttributeAsync(name, cancellationToken),
-            FindUsagesSearchKind.methodsByReturnType => await _semanticSearchEngine.FindMethodsByReturnTypeAsync(name, cancellationToken),
-            _ => throw new ArgumentOutOfRangeException(nameof(searchKind), searchKind, "Unhandled searchKind.")
-        };
-
-        // Every FindUsagesSearchKind backing method returns some IEnumerable<T> -> normalize to
-        // List<object> so broaden-on-empty can report a count and label results uniformly
-        // regardless of which kind produced them.
-        return ((System.Collections.IEnumerable)result).Cast<object>().ToList();
-    }
     [McpServerTool(Name = "QuerySymbolRelationships")]
     [Produces(DataTag.Report)]
     [Description("Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites, extension methods, types carrying an attribute, or methods by return type. If the targeted searchKind returns zero results, automatically broadens to all kinds and reports whatever is found. For call-site/override queries on a method or property, use FindReferences instead.")]
-    public async Task<ToolResult<object>> QuerySymbolRelationships(
+    public Task<ToolResult<object>> QuerySymbolRelationships(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string name,
         [Description("Which relationship to query.")]
@@ -235,132 +91,25 @@ public class SentinelSymbolTools
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Description("Ranks results by frequency. Only affects objectCreations.")]
         [ToolOption(ToolOptionTag.Sort)] bool sortByFrequency = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+        CancellationToken cancellationToken = default) =>
+        _relationship.QuerySymbolRelationships(reason, name, searchKind, projectName, filepath, sortByFrequency, cancellationToken);
 
-            if (searchKind == FindUsagesSearchKind.objectCreations)
-            {
-                var resolved = await _symbolNavigationEngine.LocateSymbolAsync(name, "any", projectName: projectName, cancellationToken: cancellationToken);
-                if (resolved.Count > 0 && resolved.All(s => MemberSymbolKinds.Contains(s.SymbolKind)))
-                {
-                    var kindsFound = string.Join(", ", resolved.Select(s => s.SymbolKind).Distinct());
-                    return new ToolResult<object>
-                    {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument,
-                            $"'{name}' resolves to a {kindsFound} ({resolved.Count} declaration(s) found), not a type - " +
-                            "objectCreations only matches 'new TypeName(...)' expressions and is structurally incapable of " +
-                            $"returning anything for a member name. Use FindReferences(symbolName: \"{name}\", kind: callers) " +
-                            "to find call sites, or kind: implementations for overrides.")
-                    };
-                }
-            }
-
-            var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePathResolved, sortByFrequency, cancellationToken);
-            if (results.Count > 0)
-            {
-                return await ToolResult<object>.ForPossiblyLargeDataAsync(
-                    results, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.SymbolRelationshipResultList,
-                    totalRecords: results.Count, cancellationToken: cancellationToken);
-            }
-
-            // Broaden-on-empty: the targeted kind genuinely ran and came back empty (and, for
-            // objectCreations, the semantic guard above didn't already reject it). Re-run the
-            // other 5 kinds so a real "found under a different relationship kind" doesn't get
-            // silently missed just because the caller guessed the wrong one.
-            var otherKinds = Enum.GetValues<FindUsagesSearchKind>().Where(k => k != searchKind).ToList();
-            var broadened = new Dictionary<string, List<object>>();
-            foreach (var otherKind in otherKinds)
-            {
-                try
-                {
-                    var otherResults = await RunRelationshipQueryAsync(otherKind, name, projectName, filePathResolved, sortByFrequency, cancellationToken);
-                    if (otherResults.Count > 0)
-                    {
-                        broadened[otherKind.ToString()] = otherResults;
-                    }
-                }
-                catch
-                {
-                    // A kind that doesn't apply to this name (e.g. throws resolving as a type)
-                    // is just another empty result for broaden-on-empty purposes -> skip it.
-                }
-            }
-
-            if (broadened.Count == 0)
-            {
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = results,
-                    Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " +
-                        "nothing found under any kind. This is a trustworthy 'not found anywhere' signal, not an error."
-                };
-            }
-
-            var totalFound = broadened.Sum(kv => kv.Value.Count);
-            var summary = string.Join("; ", broadened.Select(kv => $"{kv.Value.Count} under '{kv.Key}'"));
-            var broadenedResult = await ToolResult<object>.ForPossiblyLargeDataAsync(
-                broadened, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.BroadenedSymbolRelationshipResults,
-                totalRecords: totalFound, cancellationToken: cancellationToken);
-            return broadenedResult with
-            {
-                Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " +
-                    $"found {totalFound} result(s): {summary}."
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "QuerySymbolRelationships ({Kind}) failed for '{Name}'", searchKind, name);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "QuerySymbolRelationships")
-            };
-        }
-    }
     [McpServerTool(Name = "GetBestInsertionPoint")]
     [Produces(DataTag.StartLine)]
     [Description("Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields -> constructors -> destructors -> properties -> events -> methods -> nested types).")]
-    public async Task<ToolResult<object>> GetBestInsertionPoint(
+    public Task<ToolResult<object>> GetBestInsertionPoint(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.ContainerName)] string containerName,
         [Description("The kind of member being inserted.")]
         [ExternalInputRequired(DataTag.MemberKind)] InsertionMemberKind memberKind,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        _ = cancellationToken;
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        CancellationToken cancellationToken = default) =>
+        _relationship.GetBestInsertionPoint(reason, filepath, containerName, memberKind, cancellationToken);
 
-        try
-        {
-            var result = await _discoveryEngine.FindBestInsertionPointAsync(filePathResolved, containerName, memberKind.ToString());
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GetBestInsertionPoint failed for '{ContainerName}' in '{FilePathWrapper}'", containerName, filePathResolved);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetBestInsertionPoint")
-            };
-        }
-    }
     [McpServerTool(Name = "PreviewRenameImpact")]
     [Produces(DataTag.Report)]
     [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count, plus whether any affected file is a test file. For the full per-location list, use FindReferences.")]
-    public async Task<ToolResult<object>> PreviewRenameImpact(
+    public Task<ToolResult<object>> PreviewRenameImpact(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Together with symbolName, resolves the target when docCommentId isn't known. Use contextSnippet/lineBefore/lineAfter to disambiguate if the name appears more than once.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
@@ -372,35 +121,13 @@ public class SentinelSymbolTools
         string? docCommentId = null,
         [Description(ToolParams.ProjectName)] string? projectName = null,
         [Description(ToolParams.SessionId)] string sessionId = "",
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath ?? string.Empty, _workspaceManager.GetSolutionRoot());
+        CancellationToken cancellationToken = default) =>
+        _relationship.PreviewRenameImpact(reason, filepath, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, sessionId, cancellationToken);
 
-        try
-        {
-            var result = await _discoveryEngine.PreviewRenameImpactAsync(
-                filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, sessionId, cancellationToken);
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "PreviewRenameImpact failed for '{SymbolName}' in '{FilePathWrapper}'", symbolName, filePathResolved);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewRenameImpact")
-            };
-        }
-    }
     [McpServerTool(Name = "FindReferences")]
     [Produces(DataTag.Report)]
     [Description("Finds call sites and/or implementations for a symbol. This is a single-level, flat lookup - for a multi-level call tree use GetCallGraph, for a local variable's read/write/capture sites use TraceVariableLifetime, for a rename-impact summary use PreviewRenameImpact, and for type-relationship queries (implementors, attribute usage, object creation, etc.) use QuerySymbolRelationships.")]
-    public async Task<ToolResult<object>> FindReferences(
+    public Task<ToolResult<object>> FindReferences(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
         [Description("callers: call sites only. implementations: overrides/interface implementations only. all: both, clearly labeled.")]
@@ -410,61 +137,13 @@ public class SentinelSymbolTools
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+        CancellationToken cancellationToken = default) =>
+        _relationship.FindReferences(reason, symbolName, kind, filepath, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
-            if (kind == FindReferencesKind.callers)
-            {
-                var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = result
-                };
-            }
-            if (kind == FindReferencesKind.implementations)
-            {
-                var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = result
-                };
-            }
-            if (kind == FindReferencesKind.all)
-            {
-                var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
-                var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = new { callers, implementations }
-                };
-            }
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled kind '{kind}'.")
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "FindReferences ({Kind}) failed for '{SymbolName}'", kind, symbolName);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FindReferences")
-            };
-        }
-    }
     [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]
     [Description("Returns type information for a type you already know the name of - hierarchy, members, or both. If you're not sure the type exists or need to disambiguate a common name, use LocateSymbol first. To change an enum's values, use ModifyEnum.")]
-    public async Task<ToolResult<object>> GetTypeInfo(
+    public Task<ToolResult<object>> GetTypeInfo(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.DataType)] string typeName,
         [Description("hierarchy: base class chain, interfaces, derived types. members: all public/protected members - for an enum, each value appears as a Field member with its explicit/ordinal value inline in Signature (e.g. \"Status.Active = 1\"), and inherited System.Enum/ValueType noise is excluded automatically. both: hierarchy and members together (default).")]
@@ -472,112 +151,6 @@ public class SentinelSymbolTools
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Description("Excludes inherited members when false. Applies only to include=members or include=both.")]
         [ToolOptionAttribute(ToolOptionTag.Filter)] bool includeInherited = true,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            TypeHierarchyReport? hierarchy = null;
-            List<TypeMemberDetail>? members = null;
-            if (include == TypeInfoInclude.hierarchy || include == TypeInfoInclude.both)
-            {
-                hierarchy = await _symbolNavigationEngine.GetTypeHierarchyAsync(typeName, projectName, cancellationToken);
-                if (hierarchy.Error is not null)
-                {
-                    // GetTypeMembersDetailAsync silently returns an empty list for the same
-                    // "type not found" condition, so surface the hierarchy lookup's explicit
-                    // error here rather than letting either include mode return a bare Success=true.
-                    return new ToolResult<object>
-                    {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
-                    };
-                }
-            }
-            if (include == TypeInfoInclude.members || include == TypeInfoInclude.both)
-            {
-                members = await _symbolNavigationEngine.GetTypeMembersDetailAsync(typeName, projectName, includeInherited);
-            }
-            if (include == TypeInfoInclude.hierarchy)
-            {
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = hierarchy!
-                };
-            }
-            if (include == TypeInfoInclude.members)
-            {
-                var warning = members!.Count == 0
-                    ? $"No members found for '{typeName}'. This can mean the type doesn't exist in the solution - retry with include=hierarchy or include=both to confirm - or that it genuinely has no members."
-                    : null;
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = members!,
-                    Warning = warning
-                };
-            }
-            if (include == TypeInfoInclude.both)
-            {
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = new { Hierarchy = hierarchy, Members = members }
-                };
-            }
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled include '{include}'.")
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GetTypeInfo ({Include}) failed for '{TypeName}'", include, typeName);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTypeInfo")
-            };
-        }
-    }
+        CancellationToken cancellationToken = default) =>
+        _navigation.GetTypeInfo(reason, typeName, include, projectName, includeInherited, cancellationToken);
 }
-// Added by AddTopLevelType (expected - used for diagnostics)
-/// <summary>
-/// Named shape mirroring <c>SymbolLocation</c> (the real per-item type
-/// <c>SymbolNavigationEngine.LocateSymbolAsync</c> returns), used only as part of
-/// <c>LocateSymbolResult</c>'s <c>OutputSchemaType</c> so <see cref="SentinelSymbolTools.LocateSymbol"/>
-/// can advertise a real MCP <c>outputSchema</c>/<c>StructuredContent</c> shape without changing the
-/// method's actual return type. Primary path only - see proposal_structuredcontent_rollout.md.
-/// </summary>
-public sealed record LocatedSymbolInfo(
-    [property: Produces(DataTag.SymbolName)] string SymbolName,
-    [property: Produces(DataTag.DocCommentId)] string? DocCommentId,
-    [property: Produces(DataTag.ProjectName)] string ProjectName,
-    string FullyQualifiedName,
-    [property: Produces(DataTag.SymbolKind)] string SymbolKind,
-    [property: Produces(DataTag.Signature)] string Signature,
-    [property: Produces(DataTag.ContainingType)] string? ContainingType,
-    [property: Produces(DataTag.ContainingNamespace)] string? ContainingNamespace,
-    [property: Produces(DataTag.SourceFilepath)] string? FilePath,
-    int? Line,
-    [property: Produces(DataTag.ContextSnippet)] string? ContextSnippet,
-    [property: Produces(DataTag.Accessibility)] string Accessibility);
-// Added by AddTopLevelType (expected - used for diagnostics)
-/// <summary>
-/// Named shape mirroring the actual <c>ToolResult&lt;object&gt;</c> envelope
-/// <see cref="SentinelSymbolTools.LocateSymbol"/> returns on its primary (match-found) success path
-/// - StructuredContent is populated from the whole method return value, not just its inner
-/// <c>Data</c>, since LocateSymbol (unlike McpServerStatus) returns
-/// <c>Task&lt;ToolResult&lt;object&gt;&gt;</c> rather than a bare object. Used only as
-/// <c>OutputSchemaType</c> so the tool can advertise a real MCP <c>outputSchema</c>/
-/// <c>StructuredContent</c> shape (2026-07-28 protocol) without changing the method's actual return
-/// type. Primary path only (the not-found and exception error paths return a different, error-shaped
-/// envelope with no Data) - see proposal_structuredcontent_rollout.md.
-/// </summary>
-public sealed record LocateSymbolResult(
-    bool Success,
-    IReadOnlyList<LocatedSymbolInfo>? Data,
-    int? TotalRecords,
-    int? WorkspaceVersion);
