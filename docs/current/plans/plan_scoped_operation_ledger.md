@@ -25,14 +25,45 @@ This plan sequences the actual implementation. It does not re-litigate design de
 in the three docs above - where this plan disagrees with or narrows something from those docs, it
 says so explicitly with a reason, rather than silently diverging.
 
-## Blocking precondition (see blocker doc)
+## Blocking precondition (see blocker doc) - RESOLVED 2026-09-18
 
-`docs/current/blockers/blocking_error_loadsolution_missing_msbuild_workspaces_assembly.md`:
-`LoadSolution` currently fails in this session's per-window stdio instance
-(`bin-vscode\32628-d87a019a\Advanced\`) with a `FileNotFoundException` for
-`Microsoft.CodeAnalysis.Workspaces.MSBuild`. No `.cs` work in this plan can proceed through the
-dogfooded MCP path until that's resolved (rebuild or restart of that specific instance). Steps below
-assume it's fixed before Decision 1 starts.
+`docs/current/blockers/resolved/blocking_error_loadsolution_missing_msbuild_workspaces_assembly.md`:
+was a `LoadSolution` `FileNotFoundException` for `Microsoft.CodeAnalysis.Workspaces.MSBuild` in one
+per-window stdio instance. Fixed by a VS Code restart (fresh single-build instance, no race). Decision
+1 below is implemented and committed as of this note.
+
+## Progress as of 2026-09-18 (overnight session)
+
+Decision 1 is DONE (commits `725adf9` docs, `59353b8` code) - `ScopedOperationLedgerEngine`,
+`IScopedOperationLedger`, `LedgerEntryBase`/`CallSiteLedgerEntry` all exist, DI-registered, wired into
+`PersistentWorkspaceManager` via pass-through, zero behavior change, full solution build 0 errors.
+
+Before starting Decision 2, note a correction to this plan's own assumption: `ValidateAndApplyAsync`
+(`RoslynSentinel.Common/ValidateAndApplyHelper.cs`) does NOT itself contain an inline
+`_sessionHalted`/`CheckBreaker()` check - `SearchSolutionText` for `IsSessionHalted` and `CheckBreaker(`
+found no call sites inside `ValidateAndApplyHelper.cs`, and no call sites for `IsSessionHalted` anywhere
+under `RoslynSentinel.Server.Advanced/` either. That gate must be enforced somewhere else in the
+dispatch path (possibly a shared attribute/middleware layer wrapping `[McpServerTool]` methods, or
+checked per-tool before `ValidateAndApplyAsync` is even called) - this needs to be located and confirmed
+BEFORE writing Decision 2's `IsBlocked` check, since the plan's precedence requirement ("after the
+_sessionHalted/breaker checks, which must keep winning unconditionally") depends on knowing exactly
+where those checks actually live relative to `ValidateAndApplyAsync`'s call chain. Do not guess at the
+insertion point without finding this first.
+
+Three MCP tool defects were found and documented tonight while landing Decision 1 (all routed around
+via the overnight narrow-bypass authorization, none blocked further progress):
+- `docs/current/blockers/blocking_error_changesignature_silent_noop_on_valid_constructor.md` -
+  `ChangeSignature` silently returns `status:"no_changes"` instead of erroring when it can't safely
+  rewrite existing call sites.
+- `docs/current/blockers/blocking_error_git_stage_listed_scope_over_stages_unrequested_file.md` -
+  `Git(stage, scope:"listed")` staged a file that was never named in the call, which then landed in
+  the wrong commit.
+- (Re-confirmed, not newly filed) `Member(addMember)`'s known multi-declaration `newMemberSource`
+  silent-partial-write bug, per the already-open `blocking_error_member_addmember_silent_partial_write.md`.
+
+Given the volume of open questions plus tool-trust issues surfaced tonight, this session paused here
+rather than guess at Decision 2's insertion point. Next step for whoever picks this up: locate the real
+session-halt/breaker gate location first, THEN implement Decision 2.
 
 ## Facts to confirm once the solution loads (not yet verified this session - blocked)
 
