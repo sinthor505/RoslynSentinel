@@ -19,6 +19,26 @@ public static class ToolClassRegistry
             // Modernize/Quality/Generation/Asyncify register no classes in Basic today (commented
             // out pending Advanced-only tool classes) -> omitted here since an empty array would
             // be indistinguishable from "mode not recognized" for expansion purposes.
+
+            // Fine-grained sub-modes added by Decision 7 step 4 (docs/current/plans/
+            // plan_split_workspace_refactoring_tools_for_di.md, Decision 4 + Addendum A/B):
+            // independently opt-in-able, none require "Workspace"/"Refactor". "Workspace" itself
+            // already only ever mapped to the 4 facade classes above (never the 5 split classes
+            // directly), so Addendum B's narrowing requires no change here -> the one genuinely
+            // new umbrella is "WorkspaceFileContent" below.
+            ["WorkspaceFileIO"] = ["WorkspaceFileEditTools"],
+            ["WorkspaceBuildTest"] = ["WorkspaceBuildTestTools"],
+            ["WorkspaceProjectManagement"] = ["WorkspaceProjectManagementTools"],
+            ["WorkspaceReadNav"] = ["WorkspaceReadNavigationTools"],
+            ["WorkspaceHealthMisc"] = ["WorkspaceHealthMiscTools"],
+            // New umbrella (Addendum B): file read/navigate/edit as its own coherent concern,
+            // independent of solution/workspace lifecycle ("Workspace" above).
+            ["WorkspaceFileContent"] = ["WorkspaceFileEditTools", "WorkspaceReadNavigationTools"],
+            ["RefactorSignature"] = ["RefactoringSignatureTools"],
+            ["RefactorStructural"] = ["RefactoringStructuralTools"],
+            ["RefactorExtractionDocs"] = ["RefactoringExtractionDocsTools"],
+            ["SymbolNavigation"] = ["SymbolNavigationTools"],
+            ["SymbolRelationship"] = ["SymbolRelationshipTools"],
         };
 
     /// <summary>

@@ -155,12 +155,56 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<SentinelServerStatusTools>();
         mcpBuilder.WithSentinelTools<SentinelServerStatusTools>();
 
+        // Decision 7 step 4: the *Tools/*Impl split classes take a plain (non-generic) ILogger,
+        // not ILogger<T> - previously this only worked because each was constructed with `new`
+        // inside a facade's constructor (e.g. SentinelWorkspaceTools), which passes down its own
+        // ILogger<TFacade> by implicit reference conversion, never asking DI to resolve a plain
+        // ILogger directly. Registering these classes as DI singletons in their own right (the
+        // fine-grained mode-string blocks below) is the first thing that ever asks the container
+        // to resolve ILogger itself - nothing in this solution (including AddLogging()) registers
+        // it, so without this line every one of those registrations throws
+        // InvalidOperationException at first resolution. Resolved once here from ILoggerFactory,
+        // same category name pattern the rest of the server already uses implicitly.
+        services.TryAddSingleton(sp => sp.GetRequiredService<ILoggerFactory>().CreateLogger("RoslynSentinel"));
+
         if (activeToolClasses.Contains("SentinelWorkspaceTools"))
         {
             services.AddSingleton<WorkspaceReadNavigationImpl>();
             services.AddSingleton<WorkspaceReadNavigationTools>();
             services.AddSingleton<SentinelWorkspaceTools>();
             mcpBuilder.WithSentinelTools<SentinelWorkspaceTools>();
+        }
+        // Fine-grained Workspace sub-modes (Decision 7 step 4, Decision 4 + Addendum B) -
+        // independently opt-in-able direct registrations of the split classes, none requiring
+        // "SentinelWorkspaceTools"/"Workspace" itself. WorkspaceReadNavigationImpl/Tools use
+        // TryAddSingleton since the block above may already have registered them.
+        if (activeToolClasses.Contains("WorkspaceFileEditTools"))
+        {
+            services.TryAddSingleton<WorkspaceReadNavigationImpl>();
+            services.TryAddSingleton<WorkspaceReadNavigationTools>();
+            services.AddSingleton<WorkspaceFileEditTools>();
+            mcpBuilder.WithSentinelTools<WorkspaceFileEditTools>();
+        }
+        if (activeToolClasses.Contains("WorkspaceBuildTestTools"))
+        {
+            services.AddSingleton<WorkspaceBuildTestTools>();
+            mcpBuilder.WithSentinelTools<WorkspaceBuildTestTools>();
+        }
+        if (activeToolClasses.Contains("WorkspaceProjectManagementTools"))
+        {
+            services.AddSingleton<WorkspaceProjectManagementTools>();
+            mcpBuilder.WithSentinelTools<WorkspaceProjectManagementTools>();
+        }
+        if (activeToolClasses.Contains("WorkspaceReadNavigationTools"))
+        {
+            services.TryAddSingleton<WorkspaceReadNavigationImpl>();
+            services.TryAddSingleton<WorkspaceReadNavigationTools>();
+            mcpBuilder.WithSentinelTools<WorkspaceReadNavigationTools>();
+        }
+        if (activeToolClasses.Contains("WorkspaceHealthMiscTools"))
+        {
+            services.AddSingleton<WorkspaceHealthMiscTools>();
+            mcpBuilder.WithSentinelTools<WorkspaceHealthMiscTools>();
         }
         if (activeToolClasses.Contains("SentinelDocumentationTools"))
         {
@@ -171,6 +215,18 @@ public static class RoslynSentinelServiceExtensionsBasic
         {
             services.AddSingleton<SentinelSymbolTools>();
             mcpBuilder.WithSentinelTools<SentinelSymbolTools>();
+        }
+        // Fine-grained Symbol sub-modes (Decision 7 step 4, Addendum A) - independently
+        // opt-in-able, neither requires "SentinelSymbolTools"/"Workspace" itself.
+        if (activeToolClasses.Contains("SymbolNavigationTools"))
+        {
+            services.AddSingleton<SymbolNavigationTools>();
+            mcpBuilder.WithSentinelTools<SymbolNavigationTools>();
+        }
+        if (activeToolClasses.Contains("SymbolRelationshipTools"))
+        {
+            services.AddSingleton<SymbolRelationshipTools>();
+            mcpBuilder.WithSentinelTools<SymbolRelationshipTools>();
         }
         if (activeToolClasses.Contains("SentinelGitTools"))
         {
@@ -208,6 +264,23 @@ public static class RoslynSentinelServiceExtensionsBasic
         {
             services.AddSingleton<SentinelRefactoringTools>();
             mcpBuilder.WithSentinelTools<SentinelRefactoringTools>();
+        }
+        // Fine-grained Refactor sub-modes (Decision 7 step 4, Decision 4) - independently
+        // opt-in-able, none require "SentinelRefactoringTools"/"Refactor" itself.
+        if (activeToolClasses.Contains("RefactoringSignatureTools"))
+        {
+            services.AddSingleton<RefactoringSignatureTools>();
+            mcpBuilder.WithSentinelTools<RefactoringSignatureTools>();
+        }
+        if (activeToolClasses.Contains("RefactoringStructuralTools"))
+        {
+            services.AddSingleton<RefactoringStructuralTools>();
+            mcpBuilder.WithSentinelTools<RefactoringStructuralTools>();
+        }
+        if (activeToolClasses.Contains("RefactoringExtractionDocsTools"))
+        {
+            services.AddSingleton<RefactoringExtractionDocsTools>();
+            mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
         }
         if (activeToolClasses.Contains("SentinelAdvancedRefactoringTools"))
         {
