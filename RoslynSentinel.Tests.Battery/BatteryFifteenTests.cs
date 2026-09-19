@@ -89,7 +89,7 @@ public class AsyncOptimizationEngineTests
     [Test]
     public async Task OptimizeToValueTask_UnknownFile_ThrowsException()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        Assert.ThrowsAsync<InvalidOperationException>(
             async () => await _engine.OptimizeToValueTaskAsync("NoSuchFile.cs", "DoWork"),
             "missing file should throw InvalidOperationException");
     }

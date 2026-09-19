@@ -107,7 +107,7 @@ public class MsToolAugmentEngineTests
     public async Task SortAndDeduplicateUsings_UnknownFile_ThrowsException()
     {
         // SortAndDeduplicateUsingsAsync throws InvalidOperationException for unknown files
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        Assert.ThrowsAsync<InvalidOperationException>(
             async () => await _engine.SortAndDeduplicateUsingsAsync("NoSuchFile.cs"),
             "unknown file should throw InvalidOperationException");
     }
@@ -134,7 +134,7 @@ public class ProjectStructureEngineTests
     [Test]
     public async Task FixMismatchedNamespaces_UnknownFile_ThrowsFileNotFound()
     {
-        await Assert.ThrowsAsync<FileNotFoundException>(
+        Assert.ThrowsAsync<FileNotFoundException>(
             async () => await _engine.FixMismatchedNamespacesAsync("NoSuchFile.cs"));
     }
 

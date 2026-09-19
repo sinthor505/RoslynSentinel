@@ -71,7 +71,7 @@ public class BatteryThirtyTwoTests
         SetSource(src, "OrderService.cs");
 
         FluentBuilderResult? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
+        Assert.DoesNotThrowAsync(async () =>
         {
             result = await _codeGenerationEngine.GenerateFluentBuilderAsync("OrderService.cs", "OrderService");
         }, "GenerateFluentBuilderAsync must NOT throw - should return an error result instead");
@@ -98,7 +98,7 @@ public class BatteryThirtyTwoTests
         SetSource(src, "ProductsController.cs");
 
         FluentBuilderResult? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
+        Assert.DoesNotThrowAsync(async () =>
         {
             result = await _codeGenerationEngine.GenerateFluentBuilderAsync("ProductsController.cs", "ProductsController");
         }, "API controller must NOT cause exception - returns error result");
@@ -119,7 +119,7 @@ public class BatteryThirtyTwoTests
         SetSource(src, "BaseValidator.cs");
 
         FluentBuilderResult? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
+        Assert.DoesNotThrowAsync(async () =>
         {
             result = await _codeGenerationEngine.GenerateFluentBuilderAsync("BaseValidator.cs", "BaseValidator");
         });
@@ -135,7 +135,7 @@ public class BatteryThirtyTwoTests
         SetSource(src, "EmptyClass.cs");
 
         FluentBuilderResult? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
+        Assert.DoesNotThrowAsync(async () =>
         {
             result = await _codeGenerationEngine.GenerateFluentBuilderAsync("EmptyClass.cs", "EmptyClass");
         });

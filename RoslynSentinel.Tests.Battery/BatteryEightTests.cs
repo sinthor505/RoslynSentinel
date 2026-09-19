@@ -72,7 +72,7 @@ namespace ExpressRecipe.Services
     public async Task GetCodeInventory_UnknownFile_ThrowsFileNotFound()
     {
         SetSource("public class Foo { }");
-        await Assert.ThrowsAsync<FileNotFoundException>(async () =>
+        Assert.ThrowsAsync<FileNotFoundException>(async () =>
             await _engine.GetCodeInventoryAsync("NonExistent.cs"));
     }
 }
@@ -201,7 +201,7 @@ public class DependencyEngineTests
             [("Test.cs", "public class Foo { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _engine.GetProjectDependenciesAsync("NonExistent", CancellationToken.None));
     }
 
@@ -287,7 +287,7 @@ public class UserService
     {
         SetSource(@"public class Foo { }", "Foo.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _engine.ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
     }
 }

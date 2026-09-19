@@ -29,7 +29,7 @@ public class DependencyInjectionEngineTests
     [Test]
     public async Task AnalyzeDependencies_UnknownFile_ThrowsFileNotFound()
     {
-        await Assert.ThrowsAsync<FileNotFoundException>(
+        Assert.ThrowsAsync<FileNotFoundException>(
             async () => await _engine.AnalyzeDependenciesAsync("NoSuchFile.cs", "MyClass"));
     }
 

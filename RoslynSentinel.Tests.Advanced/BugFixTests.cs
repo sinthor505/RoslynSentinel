@@ -939,7 +939,7 @@ public class Svc : ISvc { public void Foo() {} }";
             SetSource(src, "ProductsController.cs");
             // Must NOT throw
             FluentBuilderResult? result = null;
-            await Assert.DoesNotThrowAsync(async () =>
+            Assert.DoesNotThrowAsync(async () =>
             {
                 result = await _codeGenerationEngine.GenerateFluentBuilderAsync("ProductsController.cs", "ProductsController");
             });
@@ -2523,7 +2523,7 @@ public class Math
                     Assert.Inconclusive("Document not found");
                 }
 
-                await Assert.ThrowsAsync<ToolNotFoundException>(
+                Assert.ThrowsAsync<ToolNotFoundException>(
                     async () => await _refinementEngine.InlineMethodAsync(document.FilePath!, "Add"),
                     "Multi-statement method should fail gracefully via a typed exception, not crash");
             }
@@ -3330,7 +3330,7 @@ public class Service
 
             SetSource(code, "Service.cs");
 
-            await Assert.ThrowsAsync<ToolNotFoundException>(
+            Assert.ThrowsAsync<ToolNotFoundException>(
                 async () => await _refinementEngine.InlineMethodAsync("Service.cs", "Process"),
                 "Multi-statement method should fail gracefully via a typed exception, not crash");
         }
@@ -3908,7 +3908,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
         var tools = CreateAdvancedTools();
         object? result = null;
 
-        await Assert.DoesNotThrowAsync(async () =>
+        Assert.DoesNotThrowAsync(async () =>
             result = await tools.SyncInterface(reason: "test message", "nonexistent.cs", "IGhost", SyncInterfaceAction.sync, "Ghost"));
 
         Assert.That(result, Is.Not.Null,

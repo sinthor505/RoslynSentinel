@@ -221,7 +221,7 @@ public interface IOrderRepository
     public async Task GenerateAsyncOverload_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        Assert.ThrowsAsync<InvalidOperationException>(
             () => _asyncOptimizationEngine.GenerateAsyncOverloadAsync("NonExistent.cs", "GetData"));
     }
 

@@ -1,7 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
 
@@ -80,7 +78,7 @@ public class ToolGapsTests
             "public class C { private readonly System.Threading.SemaphoreSlim _lock = new(1,1); public void DoWork() { int x = 1; } }",
             "C.cs");
         DocumentEditResult? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
+        Assert.DoesNotThrowAsync(async () =>
             result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork", "_lock"));
         Assert.That(result!.Message, Does.StartWith("// Error:"));
     }

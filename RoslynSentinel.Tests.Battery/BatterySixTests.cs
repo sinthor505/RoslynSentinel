@@ -78,7 +78,7 @@ public class Auditor
     {
         SetSource("public class C { }", "Test.cs");
 
-        await Assert.ThrowsAsync<FileNotFoundException>(async () =>
+        Assert.ThrowsAsync<FileNotFoundException>(async () =>
             await _engine.GenerateXmlDocumentationStubsAsync("Missing.cs"));
     }
 
@@ -163,7 +163,7 @@ public class CacheWarmupWorker { public void Initialize() { } }");
     {
         SetSource("public class Foo { }", "Test.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        Assert.ThrowsAsync<InvalidOperationException>(
             async () => await _engine.ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass"));
     }
 

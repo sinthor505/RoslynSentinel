@@ -450,7 +450,7 @@ class C {
     {
         SetSource("class C { void M() {} }");
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        Assert.ThrowsAsync<ArgumentException>(async () =>
             await _granularEngine.RunMicroRefactoringAsync("Test.cs", "nonexistent-refactoring", 1),
             "Unknown refactoring ID should throw ArgumentException with list of known IDs");
     }

@@ -125,7 +125,7 @@ public class Consumer {}";
         SetSource(src, "File.cs");
         // Must not throw
         Dictionary<FilePathWrapper, string>? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
+        Assert.DoesNotThrowAsync(async () =>
         {
             var rawResult = await _advancedStructuralEngine.InlineClassAsync("File.cs", "File.cs", "HelperClass");
             result = rawResult;

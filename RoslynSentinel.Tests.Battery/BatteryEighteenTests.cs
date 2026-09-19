@@ -186,7 +186,7 @@ public class OrderService : IOrderService
     public async Task SortAndDeduplicateUsings_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        Assert.ThrowsAsync<InvalidOperationException>(
             () => _msEngine.SortAndDeduplicateUsingsAsync("NonExistent.cs"));
     }
 

@@ -89,7 +89,7 @@ public class AdvancedRefactoringEngineTests
             [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
 
-        await Assert.ThrowsAsync<FileNotFoundException>(
+        Assert.ThrowsAsync<FileNotFoundException>(
             async () => await _engine.ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs"));
     }
 
@@ -118,7 +118,7 @@ public class Greeter
             [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
 
-        await Assert.ThrowsAsync<FileNotFoundException>(
+        Assert.ThrowsAsync<FileNotFoundException>(
             async () => await _engine.OptimizeTaskWaitAsync("NoSuchFile.cs"));
     }
 }

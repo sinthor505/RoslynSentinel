@@ -258,7 +258,7 @@ public class Service
             [("Service.cs", "public class Service { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        await Assert.ThrowsAsync<FileNotFoundException>(() =>
+        Assert.ThrowsAsync<FileNotFoundException>(() =>
             _engine.FindUnusedPrivateMembersAsync("DoesNotExist.cs", "Service"));
     }
 }

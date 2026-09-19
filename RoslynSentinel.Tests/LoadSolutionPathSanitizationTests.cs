@@ -30,7 +30,7 @@ public class LoadSolutionPathSanitizationTests
         // (single quotes baked into the string itself, not a shell artifact).
         const string quotedPath = "'./Samples/DoesNotExist/DoesNotExist.sln'";
 
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
+        var ex = Assert.ThrowsAsync<ToolNotFoundException>(
             async () => await _workspaceManager.LoadSolutionAsync(quotedPath));
 
         var triedCandidates = ex!.Message.Split("Tried: ")[1];
@@ -47,7 +47,7 @@ public class LoadSolutionPathSanitizationTests
     {
         const string paddedPath = "  ./Samples/DoesNotExist/DoesNotExist.sln  \n";
 
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
+        var ex = Assert.ThrowsAsync<ToolNotFoundException>(
             async () => await _workspaceManager.LoadSolutionAsync(paddedPath));
 
         var triedCandidates = ex!.Message.Split("Tried: ")[1];
@@ -64,7 +64,7 @@ public class LoadSolutionPathSanitizationTests
         {
             var quotedBaseRepoDir = $"\"{tempDir}\"";
 
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
+            var ex = Assert.ThrowsAsync<ToolNotFoundException>(
                 async () => await _workspaceManager.LoadSolutionAsync("Missing.sln", quotedBaseRepoDir));
 
             Assert.That(ex!.Message, Does.Contain(Path.Combine(tempDir, "Missing.sln")),
@@ -90,7 +90,7 @@ public class LoadSolutionPathSanitizationTests
     {
         var nonexistentBaseRepoDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_DoesNotExist_" + Guid.NewGuid());
 
-        var ex = await Assert.ThrowsAsync<ArgumentException>(
+        var ex = Assert.ThrowsAsync<ArgumentException>(
             async () => await _workspaceManager.LoadSolutionAsync("Samples/Foo/Foo.sln", nonexistentBaseRepoDir));
 
         Assert.That(ex!.Message, Does.Contain(nonexistentBaseRepoDir),
@@ -114,7 +114,7 @@ public class LoadSolutionPathSanitizationTests
         {
             var wrappedPath = $"  '{tempFile}'  ";
 
-            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
+            var ex = Assert.ThrowsAsync<ToolNotFoundException>(
                 async () => await _workspaceManager.LoadSolutionAsync(wrappedPath));
 
             Assert.That(ex!.Message, Does.Contain(tempFile).And.Not.Contain("Tried: "),

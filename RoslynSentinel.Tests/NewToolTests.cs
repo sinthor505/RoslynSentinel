@@ -95,7 +95,7 @@ public class NewToolTests
             public class Foo { public int X { get; set; } }
             """);
 
-        var ex = await Assert.ThrowsAsync<ArgumentException>(
+        var ex = Assert.ThrowsAsync<ArgumentException>(
             () => _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "X", "BadDirection"));
         Assert.That(ex?.Message, Does.Contain("direction").IgnoreCase.Or.Contain("BadDirection"));
     }
@@ -134,7 +134,7 @@ public class NewToolTests
             """);
 
         DocumentEditResult? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
+        Assert.DoesNotThrowAsync(async () =>
             result = await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format(\"missing\")"));
         Assert.That(result!.Message, Does.Contain("Error:"));
     }

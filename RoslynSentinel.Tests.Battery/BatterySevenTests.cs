@@ -238,7 +238,7 @@ public class Processor
 {
     public int Calculate(int x) { return x * 2; }
 }");
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        Assert.ThrowsAsync<InvalidOperationException>(
             async () => await _engine.ConvertTupleToClassAsync("Test.cs", "Calculate", "Result"));
     }
 
@@ -264,7 +264,7 @@ public class Product
     {
         SetSource(@"public class Foo { public int Bar { get; set; } }");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        Assert.ThrowsAsync<InvalidOperationException>(
             async () => await _engine.ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string"));
     }
 

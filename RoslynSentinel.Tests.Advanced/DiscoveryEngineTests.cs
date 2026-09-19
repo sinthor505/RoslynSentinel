@@ -288,7 +288,7 @@ public class Model
     {
         SetSource(@"public class A { }");
 
-        await Assert.ThrowsAsync<ArgumentException>(
+        Assert.ThrowsAsync<ArgumentException>(
             async () => await _discoveryEngine.GetPublicApiSurfaceAsync("NonExistentProject"));
     }
 
