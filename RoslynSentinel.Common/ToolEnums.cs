@@ -16,6 +16,7 @@ public enum GitOperation
     unstage,
     commit,
     revert,
+    reset,
     branch,
     checkout,
     push,
@@ -289,4 +290,19 @@ public enum CodemodKind
     add_benchmark_stub, generate_constructor, generate_decorator_class, generate_equality_overrides,
     generate_fluent_builder, generate_path_driven_tests, generate_repository_interface,
     generate_test_scaffold, generate_test_skeleton, generate_to_string_safe
+}
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// How far a <c>reset</c> operation unwinds history. Deliberately excludes <c>hard</c> -- that mode
+/// discards working-tree changes irrecoverably, matching <c>UnstageAsync</c>'s existing precedent of
+/// never exposing a destructive git mode through this tool.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum GitResetMode
+{
+    /// <summary>Move HEAD/branch only; the index and working tree are untouched, so everything the moved-past commit(s) changed reappears as staged. (git reset --soft)</summary>
+    soft,
+
+    /// <summary>Move HEAD/branch and reset the index to match, but leave the working tree untouched, so those changes reappear as unstaged modifications. (git reset --mixed)</summary>
+    mixed
 }

@@ -23,16 +23,15 @@ full 3-tier fallback (loaded solution dir -> `AppContext.BaseDirectory` walk-up 
 with no solution loaded. No test added this pass since no code changed; worth adding the
 no-solution-loaded regression test described in the original plan text if this ever regresses.
 
-## Phase 2 — `Git` tool: add a `reset` operation (soft/mixed only)
-**Doc:** `blocking_error_git_tool_no_soft_reset_operation.md`
-**Files:** `RoslynSentinel.Common/ToolEnums.cs` (`GitOperation` enum), `SentinelGitTools.cs`
+## Phase 2 — `Git` tool: add a `reset` operation (soft/mixed only) — DONE (2026-09-19)
+**Doc:** `blocking_error_git_tool_no_soft_reset_operation.md` — moved to `docs/obsolete/blockers/`;
+see `CLOSED.md`.
 
-Add `reset` to `GitOperation`, plus a `GitResetMode` enum (`soft`/`mixed` — deliberately no `hard`,
-matching this repo's existing pattern of excluding destructive modes by construction, per
-`UnstageAsync`'s own precedent). Wire a `ResetAsync(gitRoot, refName, mode, ct)` dispatching
-`git reset --soft|--mixed <ref>` (default ref `HEAD~1` if omitted). Regression test: commit a file,
-`reset(mode: "soft", ref: "HEAD~1")`, assert `log` no longer shows the commit and `diff --staged`
-shows the file's content restored to the index.
+Implemented as specified: `reset` added to `GitOperation`, new `GitResetMode` enum (`soft`/`mixed`,
+no `hard`), `ResetAsync(gitRoot, refName, mode, ct)` in `SentinelGitTools.cs` dispatching
+`git reset --soft|--mixed <ref>` (`branchName` reused as the ref param, defaults to `HEAD~1`; `mode`
+defaults to `mixed`). Two regression tests added to `SentinelGitToolsSmokeTests.cs` covering both
+modes. Build 0 errors/0 warnings; 5/5 tests passed.
 
 ## Phase 3 — `Git` tool: support targeting a worktree other than the loaded solution's
 **Doc:** `blocking_error_git_tool_cannot_target_other_worktree.md`

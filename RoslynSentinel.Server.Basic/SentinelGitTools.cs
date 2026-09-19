@@ -386,7 +386,7 @@ public class SentinelGitTools
     };
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool covering status, log, diff, show, staging, commit, revert, branch, checkout, push, fetch, and pull.")]
+    [Description("Unified git tool covering status, log, diff, show, staging, commit, revert, reset, branch, checkout, push, fetch, and pull.")]
     public async Task<object> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Which git operation to run.")]
@@ -412,7 +412,7 @@ public class SentinelGitTools
         [Description("revert: true stages the revert without committing; call Git(operation: commit) to finalize.")]
         bool noCommit = false,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: branchName is required for operation=checkout; optional for operation=branch (omit to list).
-        [Description("branch/checkout: the branch to create, delete, or switch to. branch: omit to list all branches instead. checkout: required. log: optional ref/branch to start the log from instead of HEAD.")]
+        [Description("branch/checkout: the branch to create, delete, or switch to. branch: omit to list all branches instead. checkout: required. log: optional ref/branch to start the log from instead of HEAD. reset: the ref to reset to (defaults to \"HEAD~1\" when omitted).")]
         string? branchName = null,
         [Description("branch: base ref for a newly created branch (defaults to HEAD). checkout: base ref for a new branch, only used together with createBranch=true.")]
         string? startPoint = null,
@@ -428,6 +428,8 @@ public class SentinelGitTools
         bool rebase = false,
         [Description("commit: true amends HEAD instead of creating a new commit (git commit --amend). message becomes optional when amend=true - omit it to keep HEAD's existing message (--no-edit), or pass one to replace it.")]
         bool amend = false,
+        [Description("reset: how far to unwind history. \"soft\" moves HEAD/branch only, leaving the index and working tree untouched (everything the moved-past commit(s) changed reappears staged). \"mixed\" also resets the index to match, leaving the working tree untouched (those changes reappear unstaged). No \"hard\" mode is exposed - this can never discard uncommitted working-tree changes. Defaults to \"mixed\" when omitted.")]
+        GitResetMode? mode = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -458,6 +460,7 @@ public class SentinelGitTools
             GitOperation.unstage => await UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
             GitOperation.commit => await CommitAsync(gitRoot, message, scope, resolvedPaths, amend, cancellationToken),
             GitOperation.revert => await RevertAsync(gitRoot, commitHash, noCommit, cancellationToken),
+            GitOperation.reset => await ResetAsync(gitRoot, branchName, mode ?? GitResetMode.mixed, cancellationToken),
             GitOperation.branch => await BranchAsync(gitRoot, branchName, startPoint, deleteBranch, cancellationToken),
             GitOperation.checkout => await CheckoutAsync(gitRoot, branchName, createBranch, startPoint, cancellationToken),
             GitOperation.push => await PushAsync(gitRoot, remoteName, setUpstream, cancellationToken),
@@ -953,15 +956,46 @@ public class SentinelGitTools
             return new GitRevertResult { Success = false, Error = $"Git revert failed: {ex.Message}" };
         }
     }
+
+
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
-    /// Lists branches (default), or creates/deletes one when <paramref name="branchName"/> is
-    /// given. Creation is a plain, non-destructive <c>git branch &lt;name&gt; [startPoint]</c> -> it
-    /// does not switch to the new branch; use <c>checkout</c> for that, optionally with
-    /// <c>createBranch=true</c> to do both in one call. Deletion uses the safe <c>-d</c> form
-    /// (refuses an unmerged branch) rather than <c>-D</c>, so a mistaken delete can't silently
-    /// discard commits.
+    /// Moves HEAD/the current branch to <paramref name="refName"/> without ever touching the working
+    /// tree, so this can never discard uncommitted edits the way <c>git reset --hard</c> would -- only
+    /// <see cref="GitResetMode.soft"/> and <see cref="GitResetMode.mixed"/> are exposed, matching
+    /// <see cref="UnstageAsync"/>'s existing precedent of never surfacing a destructive git mode.
     /// </summary>
+    private async Task<GitStatusResult> ResetAsync(
+        string gitRoot, string? refName, GitResetMode mode, CancellationToken cancellationToken)
+    {
+        var target = string.IsNullOrWhiteSpace(refName) ? "HEAD~1" : refName;
+
+        try
+        {
+            var modeFlag = mode == GitResetMode.soft ? "--soft" : "--mixed";
+            var (exitCode, _, stderr) = await RunGitAsync(gitRoot, ["reset", modeFlag, target], cancellationToken);
+
+            if (exitCode != 0)
+                return new GitStatusResult { Success = false, Error = $"git reset failed: {stderr.Trim()}" };
+
+            return await StatusAsync(gitRoot, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Git reset failed (ref={Ref}, mode={Mode})", target, mode);
+            return new GitStatusResult { Success = false, Error = $"Git reset failed: {ex.Message}" };
+        }
+    }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)/// <summary>
+                                                                   /// Lists branches (default), or creates/deletes one when <paramref name="branchName"/> is
+                                                                   /// given. Creation is a plain, non-destructive <c>git branch &lt;name&gt; [startPoint]</c> -> it
+                                                                   /// does not switch to the new branch; use <c>checkout</c> for that, optionally with
+                                                                   /// <c>createBranch=true</c> to do both in one call. Deletion uses the safe <c>-d</c> form
+                                                                   /// (refuses an unmerged branch) rather than <c>-D</c>, so a mistaken delete can't silently
+                                                                   /// discard commits.
+                                                                   /// </summary>
     private async Task<GitBranchResult> BranchAsync(
         string gitRoot, string? branchName, string? startPoint, bool deleteBranch, CancellationToken cancellationToken)
     {

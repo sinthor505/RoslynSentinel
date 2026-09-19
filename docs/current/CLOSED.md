@@ -5,6 +5,21 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Phase 2 of plan-open-blockers-remediation-v1: `Git(operation: "reset")` (soft/mixed) — closed (2026-09-19)
+
+Added `reset` to `GitOperation` and a new `GitResetMode` enum (`soft`/`mixed` only, no `hard` -
+matches `UnstageAsync`'s existing precedent of never exposing a destructive git mode through this
+tool). New `ResetAsync` (`SentinelGitTools.cs`) runs `git reset --soft|--mixed <ref>`, reusing the
+`branchName` parameter as the target ref (defaults to `HEAD~1` when omitted, consistent with `log`'s
+existing reuse of the same parameter as a start-ref) and a new `mode` parameter (defaults to `mixed`
+when omitted). Wired into `Git`'s dispatch switch and both the tool-level and `branchName`
+`[Description]`s. Two behavioral regression tests added to
+`RoslynSentinel.Tests.Battery/SentinelGitToolsSmokeTests.cs` (`Git_Reset_Soft_...`,
+`Git_Reset_Mixed_...`) asserting actual git-state outcomes (HEAD position, staged/unstaged/
+working-tree content), not just response time like that file's existing 3 tests - `SentinelGitTools`
+had zero behavioral test coverage for any mutating operation before this. Build 0 errors/0 warnings;
+`RoslynSentinel.Tests.Battery` filtered to `SentinelGitToolsSmokeTests` 5/5 passed.
+
 ## Phase 1 of plan-open-blockers-remediation-v1: `Git` loaded-solution precondition — verified already fixed (2026-09-19)
 
 `blocking_error_git_requires_loaded_solution.md`'s Defect 1 (`Git(operation: "status")` failing with

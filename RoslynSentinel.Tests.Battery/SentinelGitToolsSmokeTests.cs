@@ -113,4 +113,48 @@ public class SentinelGitToolsSmokeTests
         Assert.That(result, Is.Not.Null);
         Assert.That(sw.Elapsed, Is.LessThan(ResponseBound), $"Git(diff) took {sw.Elapsed}, expected under {ResponseBound}.");
     }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task Git_Reset_Soft_MovesHeadAndRestagesChangesAsync()
+    {
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "second commit");
+
+        var result = await _gitTools.Git(reason: "test message", GitOperation.reset, mode: GitResetMode.soft);
+
+        Assert.That(result, Is.Not.Null);
+        var status = (GitStatusResult)result;
+        Assert.That(status.Success, Is.True, status.Error);
+        Assert.That(status.Staged.Select(s => s.Path), Does.Contain("README.md"),
+            "git reset --soft should leave the second commit's change staged, not discarded.");
+
+        var log = await _gitTools.Git(reason: "test message", GitOperation.log, count: 5);
+        var logResult = (GitLogResult)log;
+        Assert.That(logResult.Commits.Select(c => c.Message), Does.Not.Contain("second commit"),
+            "git reset --soft should move HEAD past the second commit.");
+    }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task Git_Reset_Mixed_UnstagesButKeepsWorkingTreeChangesAsync()
+    {
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "second commit");
+
+        var result = await _gitTools.Git(reason: "test message", GitOperation.reset, mode: GitResetMode.mixed);
+
+        Assert.That(result, Is.Not.Null);
+        var status = (GitStatusResult)result;
+        Assert.That(status.Success, Is.True, status.Error);
+        Assert.That(status.Staged, Is.Empty, "git reset --mixed should leave nothing staged.");
+        Assert.That(status.Unstaged.Select(s => s.Path), Does.Contain("README.md"),
+            "git reset --mixed should leave the second commit's change unstaged, not discarded.");
+        Assert.That(File.ReadAllText(Path.Combine(_repoDir, "README.md")), Is.EqualTo("second commit content"),
+            "git reset --mixed must never touch the working tree.");
+    }
 }
