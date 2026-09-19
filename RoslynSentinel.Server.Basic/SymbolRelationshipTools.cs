@@ -62,9 +62,8 @@ public class SymbolRelationshipTools
         [Description("Preferred way to identify the target, together with projectName - as returned by LocateSymbol. Unambiguous; no filepath needed.")]
         string? docCommentId = null,
         [Description(ToolParams.ProjectName)] string? projectName = null,
-        [Description(ToolParams.SessionId)] string sessionId = "",
         CancellationToken cancellationToken = default) =>
-        _impl.PreviewRenameImpact(reason, filepath, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, sessionId, cancellationToken);
+        _impl.PreviewRenameImpact(reason, filepath, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken);
 
     [McpServerTool(Name = "FindReferences")]
     [Produces(DataTag.Report)]

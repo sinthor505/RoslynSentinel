@@ -662,7 +662,6 @@ public class DiscoveryEngine
         string? lineAfter = null,
         string? docCommentId = null,
         string? projectName = null,
-        string sessionId = "",
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
@@ -679,7 +678,7 @@ public class DiscoveryEngine
                 throw new ArgumentException("projectName is required when docCommentId is provided.");
             }
 
-            var resolution = await _workspaceManager.ResolveFromWireAsync(sessionId, projectName, docCommentId, cancellationToken);
+            var resolution = await _workspaceManager.ResolveFromWireAsync(projectName, docCommentId, cancellationToken);
             if (!resolution.Resolved)
             {
                 throw new InvalidOperationException(resolution.Error!.Message);

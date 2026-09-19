@@ -239,7 +239,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- RenameSymbol ---
-    // RenameSymbol now takes a SymbolHandle (sessionId, projectName, docCommentId) instead of
+    // RenameSymbol takes a SymbolHandle (projectName, docCommentId) instead of
     // (filepath, methodName, contextSnippet) -> resolve the handle via SymbolNavigationEngine
     // first, matching how an agent would call LocateSymbol before RenameSymbol.
 
@@ -254,7 +254,7 @@ public enum Status { Active = 1, Pending = 2 }
 
         var result = await _tools.RenameSymbol(
             reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
-            newName: "GetDisplayLabel", sessionId: _workspaceManager.SessionId.ToString());
+            newName: "GetDisplayLabel");
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
     }
@@ -265,7 +265,7 @@ public enum Status { Active = 1, Pending = 2 }
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.RenameSymbol(
             reason: "test message", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol",
-            newName: "NewName", sessionId: _workspaceManager.SessionId.ToString());
+            newName: "NewName");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);

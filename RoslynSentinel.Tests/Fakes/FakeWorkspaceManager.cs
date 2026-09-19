@@ -28,7 +28,6 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public int ProjectCount => CurrentSolution?.ProjectIds.Count ?? 0;
     public string? SolutionPath { get; set; }
     public int WorkspaceVersion => 0;
-    public Guid SessionId => Guid.Empty;
 
     public Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
         => throw new NotImplementedException();
@@ -68,7 +67,6 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
         ProjectCount: ProjectCount,
         DocumentCount: CurrentSolution?.Projects.SelectMany(p => p.Documents).Count() ?? 0);
 
-    public bool IsCurrentSession(string sessionId) => throw new NotImplementedException();
     public Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public void RecordBatchOutcome(int succeeded, int failed, int rolledBack, int skipped) => throw new NotImplementedException();
@@ -96,7 +94,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     bool IUnrecoverableBreaker.IsTripped() => _unrecoverableHaltMessage is not null;
     string? IUnrecoverableBreaker.StateMessage() => _unrecoverableHaltMessage;
     public Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<SymbolResolution> ResolveFromWireAsync(string sessionId, string projectName, string docCommentId, CancellationToken cancellationToken) => throw new NotImplementedException();
+    public Task<SymbolResolution> ResolveFromWireAsync(string projectName, string docCommentId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public string CachePendingChangeset(Dictionary<FilePathWrapper, string> changes, int retryCount, bool validateOnApply) => throw new NotImplementedException();

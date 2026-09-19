@@ -2,13 +2,17 @@ namespace RoslynSentinel.Common;
 
 public readonly struct SymbolHandle
 {
-    public string SessionId { get; init; }
-    public string ProjectName { get; init; }
-    public string DocCommentId { get; init; }
-
-    public SymbolHandle(string sessionId, string projectName, string docCommentId)
+    public string ProjectName
     {
-        SessionId = sessionId;
+        get; init;
+    }
+    public string DocCommentId
+    {
+        get; init;
+    }
+
+    public SymbolHandle(string projectName, string docCommentId)
+    {
         ProjectName = projectName;
         DocCommentId = docCommentId;
     }

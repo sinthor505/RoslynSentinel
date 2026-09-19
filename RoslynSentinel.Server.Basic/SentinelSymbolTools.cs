@@ -45,7 +45,6 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "LocateSymbol", UseStructuredContent = true, OutputSchemaType = typeof(LocateSymbolResult))]
     [Produces(DataTag.DocCommentId)]
-    [Produces(DataTag.SessionId)]
     [Produces(DataTag.ProjectName)]
     [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text - use SearchSolutionText for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
     public Task<ToolResult<object>> LocateSymbol(
@@ -120,9 +119,8 @@ public class SentinelSymbolTools
         [Description("Preferred way to identify the target, together with projectName - as returned by LocateSymbol. Unambiguous; no filepath needed.")]
         string? docCommentId = null,
         [Description(ToolParams.ProjectName)] string? projectName = null,
-        [Description(ToolParams.SessionId)] string sessionId = "",
         CancellationToken cancellationToken = default) =>
-        _relationship.PreviewRenameImpact(reason, filepath, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, sessionId, cancellationToken);
+        _relationship.PreviewRenameImpact(reason, filepath, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken);
 
     [McpServerTool(Name = "FindReferences")]
     [Produces(DataTag.Report)]

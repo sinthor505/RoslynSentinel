@@ -193,7 +193,6 @@ public class SymbolRelationshipImpl
         string? lineAfter = null,
         string? docCommentId = null,
         string? projectName = null,
-        string sessionId = "",
         CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath ?? string.Empty, _workspaceManager.GetSolutionRoot());
@@ -201,7 +200,7 @@ public class SymbolRelationshipImpl
         try
         {
             var result = await _discoveryEngine.PreviewRenameImpactAsync(
-                filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, sessionId, cancellationToken);
+                filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,

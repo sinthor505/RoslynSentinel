@@ -55,12 +55,11 @@ public class SentinelRefactoringTools
         string projectName,
         string docCommentId,
         string newName,
-        string sessionId = "",
         bool dryRun = false,
         bool returnDiff = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default) =>
-        _signature.RenameSymbol(reason, projectName, docCommentId, newName, sessionId, dryRun, returnDiff, requestParams, cancellationToken);
+        _signature.RenameSymbol(reason, projectName, docCommentId, newName, dryRun, returnDiff, requestParams, cancellationToken);
 
     [McpServerTool(Name = "MethodSignature")]
     public Task<ToolResult<object>> MethodSignature(

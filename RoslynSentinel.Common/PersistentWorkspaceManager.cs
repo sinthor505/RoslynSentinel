@@ -124,8 +124,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private DateTime _lastLoadedAt = DateTime.MinValue;
     private readonly Timer _debounceTimer;
 
-    public Guid SessionId { get; } = Guid.NewGuid();
-
     /// <summary>
     /// Base repository directory used to resolve relative solution paths passed to <see cref="LoadSolutionAsync"/>.
     /// Defaults to <see cref="AppDomain.CurrentDomain"/>'s base directory when not explicitly set
@@ -1859,33 +1857,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => _symbolResolver.ResolveSymbolAsync(handle, cancellationToken);
     public Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default) => _symbolResolver.ResolveByDocCommentIdAsync(symbolId, projectName, cancellationToken);
 
-    public bool IsCurrentSession(string sessionId)
-    {
-        // An absent sessionId means the caller isn't tracking sessions -> nothing to compare
-        // against, so it can't be stale. Only a non-empty sessionId that doesn't match the
-        // current workspace session counts as stale.
-        return string.IsNullOrEmpty(sessionId) || sessionId == this.SessionId.ToString();
-    }
-
     // v1 -> single integration point for all symbol-accepting tools
     public async Task<SymbolResolution> ResolveFromWireAsync(
-        string sessionId,
         string projectName,
         string docCommentId,
         CancellationToken cancellationToken)
     {
-        if (!this.IsCurrentSession(sessionId))
-        {
-            return new SymbolResolution
-            {
-                Error = new EngineError(
-                    EngineErrorCode.StaleSession,
-                    "Symbol handle is from a prior workspace session. Re-run LocateSymbol.",
-                    DataTag.SymbolHandle)
-            };
-        }
-
-        SymbolHandle handle = new SymbolHandle(sessionId, projectName, docCommentId);
+        SymbolHandle handle = new SymbolHandle(projectName, docCommentId);
         ISymbol? symbol = await this.ResolveSymbolAsync(handle, cancellationToken);
 
         if (symbol is null)

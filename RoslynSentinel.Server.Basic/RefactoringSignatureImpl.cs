@@ -60,7 +60,6 @@ public class RefactoringSignatureImpl
         string projectName,
         string docCommentId,
         string newName,
-        string sessionId = "",
         bool dryRun = false,
         bool returnDiff = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
@@ -70,7 +69,7 @@ public class RefactoringSignatureImpl
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(
-            sessionId, projectName, docCommentId, cancellationToken);
+            projectName, docCommentId, cancellationToken);
         if (!resolution.Resolved)
         {
             return new ToolResult<object>
@@ -128,7 +127,6 @@ public class RefactoringSignatureImpl
                 updatedHandle = result.UpdatedHandle is SymbolHandle h
                     ? new
                     {
-                        h.SessionId,
                         h.ProjectName,
                         h.DocCommentId
                     }

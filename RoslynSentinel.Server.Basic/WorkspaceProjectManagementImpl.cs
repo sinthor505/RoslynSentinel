@@ -485,7 +485,7 @@ public class WorkspaceProjectManagementImpl
         {
             if (!string.IsNullOrEmpty(docCommentId) && !string.IsNullOrEmpty(projectName))
             {
-                SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(string.Empty, projectName, docCommentId, cancellationToken);
+                SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(projectName, docCommentId, cancellationToken);
                 if (!resolution.Resolved)
                 {
                     return new ToolResult<object>

@@ -30,12 +30,11 @@ public class RefactoringSignatureTools
         [Description(ToolParams.ProjectName)] string projectName,
         [Description(ToolParams.DocCommentId)][Consumes(DataTag.DocCommentId, required: true)] string docCommentId,
         [Description("New name for the symbol. Must be a valid C# identifier.")] string newName,
-        [Description(ToolParams.SessionId)] string sessionId = "",
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default) =>
-        _impl.RenameSymbol(reason, projectName, docCommentId, newName, sessionId, dryRun, returnDiff, requestParams, cancellationToken);
+        _impl.RenameSymbol(reason, projectName, docCommentId, newName, dryRun, returnDiff, requestParams, cancellationToken);
 
     // OutputSchemaType covers the "view" branch's shape only ({ Parameters }) - the add/remove
     // branches (ToJsonSummary / MemberChangedContentResult offload) are out of scope for this POC.
