@@ -12,17 +12,16 @@ Ordered by independence and blast radius: isolated single-tool fixes first, the 
 cross-cutting fix last (highest investigation cost, most likely to reveal a shared root cause with
 one of the earlier steps).
 
-## Phase 1 — `Git` tool: drop the loaded-solution precondition for read-only ops
-**Doc:** `blocking_error_git_requires_loaded_solution.md` (Defect 1 only — Defect 2 already fixed)
-**File:** `RoslynSentinel.Server.Basic/SentinelGitTools.cs`
+## Phase 1 — `Git` tool: drop the loaded-solution precondition for read-only ops — DONE (verified 2026-09-19, no code change needed)
+**Doc:** `blocking_error_git_requires_loaded_solution.md` (Defect 1 only — Defect 2 already fixed) —
+moved to `docs/obsolete/blockers/`; see `CLOSED.md`.
 
-`status`/`log`/`diff` don't need the Roslyn workspace, only a git repo root. `TryGetGitRoot`
-(`SentinelGitTools.cs:177`) already walks up from `AppContext.BaseDirectory`/
-`Directory.GetCurrentDirectory` as a fallback when no solution is loaded — confirm this fallback
-path is actually reachable from the public dispatch method for `status`/`log`/`diff`/`commit`
-without an early "no solution loaded" return elsewhere in the call chain, and remove that early
-return if present. Add a test: call `Git(operation: "status")` with no solution loaded, assert
-success against a repo discovered purely from the process's working directory.
+Already fixed by a prior, unrelated commit: `TryGetGitRoot` (`SentinelGitTools.cs:198-239`) has the
+full 3-tier fallback (loaded solution dir -> `AppContext.BaseDirectory` walk-up ->
+`Directory.GetCurrentDirectory` walk-up), and `Git`'s dispatch (`:387-468`) has no early
+"no solution loaded" return for any operation. Live-verified `Git(operation: "status")` succeeds
+with no solution loaded. No test added this pass since no code changed; worth adding the
+no-solution-loaded regression test described in the original plan text if this ever regresses.
 
 ## Phase 2 — `Git` tool: add a `reset` operation (soft/mixed only)
 **Doc:** `blocking_error_git_tool_no_soft_reset_operation.md`

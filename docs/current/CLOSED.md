@@ -5,6 +5,22 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Phase 1 of plan-open-blockers-remediation-v1: `Git` loaded-solution precondition — verified already fixed (2026-09-19)
+
+`blocking_error_git_requires_loaded_solution.md`'s Defect 1 (`Git(operation: "status")` failing with
+"No solution path configured" when no solution is loaded) is no longer reproducible. Read
+`TryGetGitRoot` (`RoslynSentinel.Server.Basic/SentinelGitTools.cs:198-239`) and the `Git` dispatch
+method (`:387-468`) directly: `TryGetGitRoot` already implements the exact 3-tier fallback the plan
+asked for — loaded solution's directory first (if one is loaded), then `AppContext.BaseDirectory`
+walked upward, then `Directory.GetCurrentDirectory()` walked upward — and `Git`'s dispatch has no
+early "no solution loaded" return anywhere; every operation goes through `TryGetGitRoot` uniformly.
+Live-verified: `Git(operation: "status")` succeeds against this repo. This shipped as part of a
+later, unrelated fix (the method's own doc comment references
+`blocking_error_git_tool_commit_reports_clean_tree_worktree.md`, a worktree-drift fix — that file
+does not exist under `docs/current/blockers/` or `docs/obsolete/blockers/`, a dangling doc pointer
+worth fixing next time that area is touched, but not itself a blocker). No code change needed for
+this phase; moved the doc to `docs/obsolete/blockers/`.
+
 ## Blocker-doc sweep: 9 stale/resolved/non-bug writeups archived — closed (2026-09-18)
 
 Triage pass over all 20 files in `docs/current/blockers/` found 9 with nothing left to act on;
