@@ -152,6 +152,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         _unrecoverableBreaker = new UnrecoverableCircuitBreaker(logger);
         _mutationBreaker = new MutationCircuitBreaker(logger);
         _orientationBreaker = new OrientationCircuitBreaker(logger);
+        _symbolResolver = new SymbolResolver(this);
         _debounceTimer = new Timer(OnDebounceTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
         lock (MsBuildRegistrationLock)
@@ -1855,25 +1856,8 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         _trackedSymbols[agentHandle] = handle;
     }
 
-    public async Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken)
-    {
-        var solution = await GetCurrentSolutionAsync(cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name == handle.ProjectName);
-        if (project is null) { return null; }
-        var compilation = await project.GetCompilationAsync(cancellationToken);
-        if (compilation is null) { return null; }
-        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(handle.DocCommentId, compilation);
-        return resolved;
-    }
-    public async Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default)
-    {
-        var solution = await GetCurrentSolutionAsync(cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
-        if (project is null) { return null; }
-        var compilation = await project.GetCompilationAsync(cancellationToken);
-        if (compilation is null) { return null; }
-        return DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolId, compilation);
-    }
+    public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => _symbolResolver.ResolveSymbolAsync(handle, cancellationToken);
+    public Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default) => _symbolResolver.ResolveByDocCommentIdAsync(symbolId, projectName, cancellationToken);
 
     public bool IsCurrentSession(string sessionId)
     {
@@ -1959,4 +1943,8 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     // Added by AddMember (expected - used for diagnostics)
     private readonly ToolCallRateLimiter _rateLimiter = new();
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    private readonly SymbolResolver _symbolResolver;
 }
