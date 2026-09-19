@@ -47,12 +47,17 @@ covering the redirect (`Git_Status_RepoPath_...`) and the mutating-op rejection
 (`Git_Commit_RepoPath_IsRejectedAsync`). Build 0 errors/0 warnings; `SentinelGitToolsSmokeTests`
 7/7 passed.
 
-## Phase 4 — `--list-tools`: verify the fix, retire the doc
-**Doc:** `blocking_error_list_tools_misreports_tool_surface.md` — **not a fix task**, already
-resolved by `cd8c8a9` (`ExtractToolManifest` reads DI-registered `McpServerTool` instances directly,
-PascalCase, all assemblies). Confirm `--list-tools` against a live Advanced-mode build reports the
-full ~118-tool surface (not 54), then move the doc to `docs/obsolete/blockers/`. No code change
-expected; this phase is verification only.
+## Phase 4 — `--list-tools`: verify the fix, retire the doc — DONE (verified 2026-09-19, no code change needed)
+**Doc:** `blocking_error_list_tools_misreports_tool_surface.md` — moved to
+`docs/obsolete/blockers/`; see `CLOSED.md`.
+
+Confirmed at source, not just re-asserted from the plan's claim: `BuildToolManifestFor`
+(`SentinelConsoleMode.cs:37-48`) and `ExtractToolManifest` (`:58-99`) read live DI-registered
+`McpServerTool` instances (PascalCase), with an explicit doc comment citing this blocker doc as
+the reason the old `DiscoverTools` single-assembly reflection pass was replaced. Live-verified
+against the current build: `--mode=all --list-tools` reports `toolCount: 112` in PascalCase (not
+54 snake_case), and `--mode=intelligence --list-tools` (an Advanced-only mode) reports
+`toolCount: 14` (not `[]`).
 
 ## Phase 5 — `SyncTypeAndFilename`: target the caller's specified type, not the first-declared one
 **Doc:** `blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md`

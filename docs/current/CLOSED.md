@@ -5,6 +5,24 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Phase 4 of plan-open-blockers-remediation-v1: `--list-tools` misreport — verified already fixed (2026-09-19)
+
+`blocking_error_list_tools_misreports_tool_surface.md` claimed `--list-tools` scanned only
+`SentinelWorkspaceTools`'s assembly (making every Advanced-only mode print `[]`) and emitted
+snake_case names the server never serves. Verified directly against source and a live binary
+rather than trusting either the doc or the plan's "fixed by cd8c8a9" claim at face value:
+`SentinelConsoleMode.BuildToolManifestFor` (`SentinelConsoleMode.cs:37-48`) has an explicit doc
+comment stating it replaces the old `DiscoverTools` hardcoded single-assembly reflection pass and
+citing this exact blocker doc. It builds a throwaway `ServiceCollection`, runs the real
+registration delegate through it, and calls `ExtractToolManifest` (`:58-99`), which reads
+`services.GetServices<McpServerTool>().Select(t => t.ProtocolTool)` - the live DI-registered
+surface, PascalCase, with a hardcoded-assembly-scan fallback only for the zero-registrations edge
+case. Live-ran `RoslynSentinel.Server.Advanced.dll --mode=all --list-tools`: reports
+`toolCount: 112` in PascalCase (`AcknowledgeExternalFileChanges`, `ApplyDiff`, `GetFileOutline`,
+...), not 54 snake_case names. `--mode=intelligence --list-tools` (an Advanced-only mode) reports
+`toolCount: 14`, not `[]`. Both Defect 1 (wrong assembly) and Defect 2 (wrong casing) confirmed
+fixed. No code change made this pass.
+
 ## Phase 3 of plan-open-blockers-remediation-v1: `Git` `repoPath` for other worktrees — closed (2026-09-19)
 
 Added an optional `repoPath` parameter to `Git`, restricted to the read-only operations
