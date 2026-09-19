@@ -2,7 +2,7 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Basic;
 
 public class SymbolNavigationImpl
 {
@@ -23,7 +23,7 @@ public class SymbolNavigationImpl
         _logger = logger;
     }
 
-    public async Task<ToolResult<object>> LocateSymbol(
+    public async Task<SentinelCallToolResult<object>> LocateSymbol(
         ToolCallReason reason,
         string symbolName,
         SymbolKindFilter symbolKind = SymbolKindFilter.any,
@@ -41,7 +41,7 @@ public class SymbolNavigationImpl
             var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind.ToString(), containingType, containingNamespace, projectName, filePathResolved, exactMatch, cancellationToken);
             if (result.Count == 0)
             {
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
@@ -50,7 +50,7 @@ public class SymbolNavigationImpl
                 };
             }
 
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = true,
                 Data = result,
@@ -61,7 +61,7 @@ public class SymbolNavigationImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "LocateSymbol failed for '{SymbolName}'", symbolName);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "LocateSymbol")
@@ -69,7 +69,7 @@ public class SymbolNavigationImpl
         }
     }
 
-    public async Task<ToolResult<object>> InspectSymbol(
+    public async Task<SentinelCallToolResult<object>> InspectSymbol(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string contextSnippet,
@@ -89,7 +89,7 @@ public class SymbolNavigationImpl
                 if (symbolInfo == null)
                 {
                     var snippetPreview = contextSnippet.Length > 60 ? contextSnippet[..60] + "..." : contextSnippet;
-                    return new ToolResult<object>
+                    return new SentinelCallToolResult<object>
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.Exception,
@@ -100,7 +100,7 @@ public class SymbolNavigationImpl
                             "against GetMethodSource/GetFileOutline output, or add lineBefore/lineAfter to pin the match.")
                     };
                 }
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     Data = symbolInfo
@@ -109,13 +109,13 @@ public class SymbolNavigationImpl
             if (aspect == InspectSymbolAspect.blastRadius)
             {
                 var result = await _impactAnalyzer.AnalyzeImpactAsync(filePathResolved, contextSnippet, lineBefore, lineAfter);
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     Data = result
                 };
             }
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled aspect '{aspect}'.")
@@ -124,7 +124,7 @@ public class SymbolNavigationImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "InspectSymbol ({Aspect}) failed in '{FilePathWrapper}'", aspect, filePathResolved);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InspectSymbol")
@@ -132,7 +132,7 @@ public class SymbolNavigationImpl
         }
     }
 
-    public async Task<ToolResult<object>> GetTypeInfo(
+    public async Task<SentinelCallToolResult<object>> GetTypeInfo(
         ToolCallReason reason,
         string typeName,
         TypeInfoInclude include = TypeInfoInclude.both,
@@ -152,7 +152,7 @@ public class SymbolNavigationImpl
                     // GetTypeMembersDetailAsync silently returns an empty list for the same
                     // "type not found" condition, so surface the hierarchy lookup's explicit
                     // error here rather than letting either include mode return a bare Success=true.
-                    return new ToolResult<object>
+                    return new SentinelCallToolResult<object>
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
@@ -165,7 +165,7 @@ public class SymbolNavigationImpl
             }
             if (include == TypeInfoInclude.hierarchy)
             {
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     Data = hierarchy!
@@ -176,7 +176,7 @@ public class SymbolNavigationImpl
                 var warning = members!.Count == 0
                     ? $"No members found for '{typeName}'. This can mean the type doesn't exist in the solution - retry with include=hierarchy or include=both to confirm - or that it genuinely has no members."
                     : null;
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     Data = members!,
@@ -185,13 +185,13 @@ public class SymbolNavigationImpl
             }
             if (include == TypeInfoInclude.both)
             {
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     Data = new { Hierarchy = hierarchy, Members = members }
                 };
             }
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled include '{include}'.")
@@ -200,7 +200,7 @@ public class SymbolNavigationImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetTypeInfo ({Include}) failed for '{TypeName}'", include, typeName);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTypeInfo")

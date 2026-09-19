@@ -1,6 +1,7 @@
 using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
@@ -23,7 +24,7 @@ public class WorkspaceProjectManagementTools
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
     [Description("Lists projects, files, dependencies, or solution-folder items in the loaded solution.")]
-    public Task<ToolResult<object>> ListSolutionItems(
+    public Task<SentinelCallToolResult<object>> ListSolutionItems(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("files/dependencies: requires projectName. projects/solutionItems: ignore projectName, list every project or every solution-folder item respectively - solutionItems are files attached via the .sln's Solution Folders (e.g. plan/handoff docs), never part of any project's compiled Documents, so SearchSolutionText and kind=files won't find them; read their content with ProjectDoc. all: ignores projectName and returns everything in one call (every project, every solution-folder item, and every project's files and dependencies) - use this for a complete, guaranteed-non-empty view instead of guessing which project or kind to ask for.")]
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
@@ -36,7 +37,7 @@ public class WorkspaceProjectManagementTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.SolutionList)]
     [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution.")]
-    public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
+    public SentinelCallToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Your workspace root - a real project/repo directory, not a drive root or '/'.")] string workspacePath,
         CancellationToken cancellationToken = default)
@@ -45,7 +46,7 @@ public class WorkspaceProjectManagementTools
     [McpServerTool(Name = "LoadSolution")]
     [Produces(DataTag.ResultOnly)]
     [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, omit baseRepoDir and let the server resolve it against its configured base directory - only pass baseRepoDir if you have independently confirmed that exact directory exists on this host; a fabricated/guessed baseRepoDir is rejected with an error rather than silently ignored. If this exact solution is already loaded, this is a no-op by default (no re-read from disk) - pass forceReload:true to discard in-memory state and re-open it from disk.")]
-    public Task<ToolResult<object>> LoadSolution(
+    public Task<SentinelCallToolResult<object>> LoadSolution(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath,
         [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call. Must exist on this host - omit this entirely rather than guessing a value.")] string? baseRepoDir = null,
@@ -56,7 +57,7 @@ public class WorkspaceProjectManagementTools
     [McpServerTool(Name = "CreateProject")]
     [Produces(DataTag.ResultOnly)]
     [Description("Creates a new project and adds it to the current solution. projectType defaults to console.")]
-    public Task<ToolResult<object>> CreateProject(
+    public Task<SentinelCallToolResult<object>> CreateProject(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.ProjectName, required: true)] string projectName,
         [ExternalInputRequired(DataTag.ProjectType)] string projectType = "console",
@@ -66,7 +67,7 @@ public class WorkspaceProjectManagementTools
     [McpServerTool(Name = "SplitProjectByFolder")]
     [Produces(DataTag.ResultOnly)]
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
-    public Task<ToolResult<object>> SplitProjectByFolder(
+    public Task<SentinelCallToolResult<object>> SplitProjectByFolder(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.ProjectName, required: true)] string sourceProjectName,
         [ExternalInputRequired(DataTag.ClassName, required: true)] string folderName,
@@ -77,7 +78,7 @@ public class WorkspaceProjectManagementTools
     [McpServerTool(Name = "ListProjectFrameworkTargets")]
     [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value. No parameters.")]
-    public Task<ToolResult<object>> ListProjectFrameworkTargets(
+    public Task<SentinelCallToolResult<object>> ListProjectFrameworkTargets(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         CancellationToken cancellationToken = default)
         => _impl.ListProjectFrameworkTargets(reason, cancellationToken);
@@ -85,7 +86,7 @@ public class WorkspaceProjectManagementTools
     [McpServerTool(Name = "SafeDeleteUnusedSymbol")]
     [Produces(DataTag.ResultOnly)]
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Distinction from RemoveMember: this tool refuses if ANY usage is found; RemoveMember checks for callers/implementations but allows skipPrecheck. Returns changeId.")]
-    public Task<ToolResult<object>> SafeDeleteUnusedSymbol(
+    public Task<SentinelCallToolResult<object>> SafeDeleteUnusedSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Preferred resolution path, together with docCommentId - as returned by LocateSymbol/FindReferences. The most reliable and accurate way to identify the target.")] string projectName = "",

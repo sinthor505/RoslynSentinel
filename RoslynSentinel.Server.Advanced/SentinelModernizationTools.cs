@@ -62,7 +62,7 @@ public class SentinelModernizationTools
     [McpServerTool(Name = "InvertBooleanLogic")]
     [Produces(DataTag.ResultOnly)]
     [Description("Inverts all usages of a boolean identifier across the solution: wraps each usage with ! and removes double negations. Returns a file -> content map of changed files.")]
-    public async Task<ToolResult<object>> InvertBooleanLogic(
+    public async Task<SentinelCallToolResult<object>> InvertBooleanLogic(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string boolName,
@@ -74,7 +74,7 @@ public class SentinelModernizationTools
         try
         {
             var result = await _advancedLogicEngine.InvertBooleanLogicAsync(filePath, boolName, cancellationToken);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = true,
                 Data = result
@@ -83,7 +83,7 @@ public class SentinelModernizationTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "InvertBooleanLogic failed for '{BoolName}' in '{FilePathWrapper}'", boolName, filePath);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InvertBooleanLogic")

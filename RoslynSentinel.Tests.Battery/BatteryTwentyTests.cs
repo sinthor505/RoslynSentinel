@@ -41,7 +41,7 @@ public class BatteryTwentyTests
             _projectConsistencyEngine, _config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, _diagnosticEngine),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
-            new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)),
+            new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
         _wholeFileWriteTools = new SentinelWholeFileWriteTools(_workspaceManager, _workspaceTools, _validationEngine, _diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
     }
@@ -100,7 +100,7 @@ public class BatteryTwentyTests
     [Test]
     public async Task List_Projects_NoSolution_ReturnsStructuredError()
     {
-        // Tools no longer throw: they return ToolResult with Success=false and a ResultError.
+        // Tools no longer throw: they return SentinelCallToolResult with Success=false and a ResultError.
         var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.projects);
 
         Assert.That(result.Success, Is.False);

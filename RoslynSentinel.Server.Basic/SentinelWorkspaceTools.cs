@@ -3,48 +3,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
-/// <summary>Structural outline entry returned by get_file_outline.</summary>
-public record OutlineItem(string Kind, string Name, string? Container, int StartLine, int EndLine);
-/// <summary>Single solution-wide symbol entry returned by ListAll -> an OutlineItem plus the file it was found in.</summary>
-public record SolutionSymbolEntry(FilePathWrapper FilePath, string Kind, string Name, string? Container, int StartLine, int EndLine);
-/// <summary>Return payload for <c>GetFileOutline</c>.</summary>
-public record FileOutlineResult
-{
-    /// <summary>Scope/truncation metadata for the file. See <see cref="ReadEnvelope"/>.</summary>
-    public ReadEnvelope Envelope { get; init; } = null!;
-    /// <summary>The parsed structural outline.</summary>
-    public List<OutlineItem> Symbols { get; init; } = new();
-}
-/// <summary>Single text-search hit returned by search_solution_text.</summary>
-public record TextSearchMatch(FilePathWrapper filePath, int Line, int Column, string Preview, MatchKind MatchedAs, string? EnclosingMember = null);
-/// <summary>
-/// Return payload for <c>SearchSolutionText</c>: the literal substring matches (always the
-/// complete set) and the regex matches not already present in <see cref="LiteralResults"/> (empty
-/// when the pattern has no regex metacharacters, since every regex match is then also a literal
-/// match). <see cref="RegexOverlapCount"/> is how many regex matches were suppressed as duplicates
-/// of a literal match -> lets a caller tell "regex found nothing extra" apart from "regex found
-/// nothing at all." <see cref="RegexPatternValid"/> is false when <c>pattern</c> doesn't compile
-/// as a regex; <see cref="RegexResults"/> is empty and literal search is unaffected in that case.
-/// </summary>
-public record TextSearchResult(List<TextSearchMatch> LiteralResults, List<TextSearchMatch> RegexResults, int RegexOverlapCount, bool RegexPatternValid);
-/// <summary>
-/// A file attached to the solution via a .sln Solution Folder (ProjectSection(SolutionItems)),
-/// returned by ListSolutionItems(kind: solutionItems). SolutionFolder is the enclosing folder's
-/// display name (e.g. "Solution Items").
-/// </summary>
-public record SolutionItemFile(FilePathWrapper FilePath, string SolutionFolder);
-/// <summary>A project entry returned by ListSolutionItems(kind: projects).</summary>
-public record ProjectInfoEntry(string Name, string? FilePath);
-/// <summary>One project's aggregated files and dependencies, as returned within ListSolutionItems(kind: all).</summary>
-public record ProjectFilesAndDependencies(string ProjectName, List<string> Files, ProjectDependencyReport Dependencies);
-/// <summary>Combined payload for ListSolutionItems(kind: all): everything the other kinds return in one call, deduplicated by file where applicable.</summary>
-public record SolutionItemsAllResult(List<ProjectInfoEntry> Projects, List<SolutionItemFile> SolutionItems, List<ProjectFilesAndDependencies> ProjectDetails);
 /// <summary>
 /// God-class MCP surface for workspace tools. Six of its tool methods -&gt; GetMethodSource,
 /// GetFileOutline, ListAll, SearchSolutionText, GetOperationDetail, GetLargeResult -&gt; are thin
@@ -70,7 +33,7 @@ public class SentinelWorkspaceTools
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelWorkspaceTools> _logger;
-    private readonly WorkspaceReadNavigationTools _readNav;
+    private readonly WorkspaceReadNavigationImpl _readNav;
     private readonly WriteToolAdviceHelper _writeAdvice;
 
 
@@ -100,7 +63,7 @@ public class SentinelWorkspaceTools
             }
     };
 
-    public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationTools readNav, WriteToolAdviceHelper writeAdvice)
+    public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice)
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
@@ -128,7 +91,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
     [Description("Queries or updates feature flags.")]
-    public Task<ToolResult<object>> Features(
+    public Task<SentinelCallToolResult<object>> Features(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("list: returns all feature flags. get: returns only the flags named in names. update: batch-updates the flags named in enabled.")]
         FeaturesAction action,
@@ -145,7 +108,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
     [Description("Lists projects, files, dependencies, or solution-folder items in the loaded solution.")]
-    public Task<ToolResult<object>> ListSolutionItems(
+    public Task<SentinelCallToolResult<object>> ListSolutionItems(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("files/dependencies: requires projectName. projects/solutionItems: ignore projectName, list every project or every solution-folder item respectively - solutionItems are files attached via the .sln's Solution Folders (e.g. plan/handoff docs), never part of any project's compiled Documents, so SearchSolutionText and kind=files won't find them; read their content with ProjectDoc. all: ignores projectName and returns everything in one call (every project, every solution-folder item, and every project's files and dependencies) - use this for a complete, guaranteed-non-empty view instead of guessing which project or kind to ask for.")]
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
@@ -165,7 +128,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.SolutionList)]
     [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution.")]
-    public ToolResult<List<RoslynSentinel.Server.Basic.SolutionFileInfo>> ListWorkspaceSolutions(
+    public SentinelCallToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Your workspace root - a real project/repo directory, not a drive root or '/'.")] string workspacePath,
         CancellationToken cancellationToken = default)
@@ -174,7 +137,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "LoadSolution")]
     [Produces(DataTag.ResultOnly)]
     [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, omit baseRepoDir and let the server resolve it against its configured base directory - only pass baseRepoDir if you have independently confirmed that exact directory exists on this host; a fabricated/guessed baseRepoDir is rejected with an error rather than silently ignored. If this exact solution is already loaded, this is a no-op by default (no re-read from disk) - pass forceReload:true to discard in-memory state and re-open it from disk.")]
-    public Task<ToolResult<object>> LoadSolution(
+    public Task<SentinelCallToolResult<object>> LoadSolution(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath,
         [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call. Must exist on this host - omit this entirely rather than guessing a value.")] string? baseRepoDir = null,
@@ -224,7 +187,7 @@ public class SentinelWorkspaceTools
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
     [Description("Replaces one exact block of text with another in a single file, for localized edits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) instead. For multiple small edits - in the same file or across files - pass 'edits' instead of the singular filepath/oldContent/newContent params. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
-    public async Task<ToolResult<object>> ReplaceSnippet(
+    public async Task<SentinelCallToolResult<object>> ReplaceSnippet(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
     [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
@@ -246,7 +209,7 @@ public class SentinelWorkspaceTools
 
             if (hasSingularEdit && hasBatchEdit)
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.InvalidArgument,
@@ -258,7 +221,7 @@ public class SentinelWorkspaceTools
             {
                 if (edits!.Count == 0)
                 {
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'edits' was supplied but is empty.")
@@ -270,7 +233,7 @@ public class SentinelWorkspaceTools
 
             if (!filepath.HasValue)
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.InvalidArgument,
@@ -281,7 +244,7 @@ public class SentinelWorkspaceTools
             FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath.Value);
             if (!filePathResolved.Validated)
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
@@ -292,7 +255,7 @@ public class SentinelWorkspaceTools
 
             if (string.IsNullOrEmpty(oldContent))
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'oldContent' is required.")
@@ -301,7 +264,7 @@ public class SentinelWorkspaceTools
 
             if (newContent == null)
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'newContent' is required (pass an empty string for a pure deletion).")
@@ -318,7 +281,7 @@ public class SentinelWorkspaceTools
                 // the old text here named WriteFile unconditionally, and in run 398 WriteFile was
                 // gated off, so the one instruction the model was given was unfollowable.
                 var advice = _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet");
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.InvalidArgument,
@@ -334,7 +297,7 @@ public class SentinelWorkspaceTools
                     var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePath == filePathResolved.Absolute);
                     if (document == null)
                     {
-                        return new ToolResult<object>()
+                        return new SentinelCallToolResult<object>()
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
@@ -358,12 +321,12 @@ public class SentinelWorkspaceTools
                     if (action == ProposedChangeAction.validate)
                     {
                         var validationResult = await _validationEngine.ValidateChangesAsync(snippetChanges);
-                        return validationResult.Success ? new ToolResult<object>()
+                        return validationResult.Success ? new SentinelCallToolResult<object>()
                         {
                             Success = true,
                             Data = validationResult
                         }
-                        : new ToolResult<object>()
+                        : new SentinelCallToolResult<object>()
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet validate failed: {validationResult.Diagnostics.ToInfo()}")
@@ -372,7 +335,7 @@ public class SentinelWorkspaceTools
 
                     var result = await _workspaceManager.ApplyProposedChangesAsync(snippetChanges, validateChanges: validateOnApply);
                     if (!result.Success && result.ValidationResult != null)
-                        return new ToolResult<object>()
+                        return new SentinelCallToolResult<object>()
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.Exception,
@@ -389,7 +352,7 @@ public class SentinelWorkspaceTools
                             diff = SentinelRefactoringTools.BuildDiffFromPreImages(snippetChanges, result.PreImages)
                         }
                         : strippedResult;
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = true,
                         Data = responseData
@@ -398,7 +361,7 @@ public class SentinelWorkspaceTools
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePathWrapper}'", action, filePathResolved);
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet {action} for '{filePathResolved}'")
@@ -406,7 +369,7 @@ public class SentinelWorkspaceTools
                 }
             }
 
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.")
@@ -415,7 +378,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReplaceSnippet ({Action}) failed", action);
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReplaceSnippet")
@@ -465,7 +428,7 @@ public class SentinelWorkspaceTools
 
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
-    private async Task<ToolResult<object>> ReplaceSnippetBatch(
+    private async Task<SentinelCallToolResult<object>> ReplaceSnippetBatch(
         List<SnippetEdit> edits,
         ProposedChangeAction action,
         bool validateOnApply,
@@ -474,7 +437,7 @@ public class SentinelWorkspaceTools
     {
         if (edits.Count > MaxSnippetEditsPerBatch)
         {
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = new ResultError(ToolErrorCode.InvalidArgument,
@@ -510,7 +473,7 @@ public class SentinelWorkspaceTools
 
         if (perEditErrors.Count > 0)
         {
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected before anchoring:\n" + string.Join("\n", perEditErrors))
@@ -603,7 +566,7 @@ public class SentinelWorkspaceTools
 
         if (perEditErrors.Count > 0)
         {
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
@@ -614,8 +577,8 @@ public class SentinelWorkspaceTools
         {
             var validationResult = await _validationEngine.ValidateChangesAsync(finalContents);
             return validationResult.Success
-                ? new ToolResult<object>() { Success = true, Data = validationResult }
-                : new ToolResult<object>()
+                ? new SentinelCallToolResult<object>() { Success = true, Data = validationResult }
+                : new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet batch validate failed: {validationResult.Diagnostics.ToInfo()}")
@@ -626,7 +589,7 @@ public class SentinelWorkspaceTools
         {
             var result = await _workspaceManager.ApplyProposedChangesAsync(finalContents, validateChanges: validateOnApply);
             if (!result.Success && result.ValidationResult != null)
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.Exception,
@@ -643,7 +606,7 @@ public class SentinelWorkspaceTools
                     diff = SentinelRefactoringTools.BuildDiffFromPreImages(finalContents, result.PreImages)
                 }
                 : strippedResult;
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = true,
                 Data = responseData
@@ -652,7 +615,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReplaceSnippet batch ({Action}) unexpected exception for {Count} file(s)", action, finalContents.Count);
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet batch {action} for {finalContents.Count} file(s)")
@@ -666,7 +629,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]
     [Description("Creates a new file. Fails if the file already exists - this tool never overwrites or writes free-form whole-file content. Parent directories are created automatically if missing.")]
-    public async Task<ToolResult<object>> CreateFile(
+    public async Task<SentinelCallToolResult<object>> CreateFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Required for .cs files, ignored otherwise. Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery').")] string? namespaceName = null,
@@ -679,7 +642,7 @@ public class SentinelWorkspaceTools
         {
             if (!filePathResolved.Validated)
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
@@ -690,7 +653,7 @@ public class SentinelWorkspaceTools
 
             if (File.Exists(filePathResolved.Absolute))
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePathResolved}' already exists. CreateFile never overwrites - use Member/ReplaceSnippet to edit an existing file.")
@@ -700,7 +663,7 @@ public class SentinelWorkspaceTools
             bool isCSharpFile = filePathResolved.Absolute.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
             if (isCSharpFile && string.IsNullOrWhiteSpace(namespaceName))
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'namespaceName' is required for a .cs file, so the new file starts as a valid compilation unit that Member(add) can populate.")
@@ -709,7 +672,7 @@ public class SentinelWorkspaceTools
 
             if (isCSharpFile && (typeKind == null || string.IsNullOrWhiteSpace(typeName)))
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'typeKind' and 'typeName' are both required for a .cs file, so the new file starts with an empty top-level type that Member(add) can populate members into.")
@@ -737,7 +700,7 @@ public class SentinelWorkspaceTools
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: true, cancellationToken: cancellationToken);
             if (!result.Success && result.ValidationResult != null)
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.Exception,
@@ -749,7 +712,7 @@ public class SentinelWorkspaceTools
 
             if (!result.Success)
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.Exception, $"CreateFile failed to write '{filePathResolved}': {result.Summary}")
@@ -758,7 +721,7 @@ public class SentinelWorkspaceTools
 
             await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "create_file", result);
             var strippedResult = result with { PreImages = null };
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = true,
                 Data = strippedResult,
@@ -772,7 +735,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "CreateFile failed for '{FilePathWrapper}'", filePathResolved);
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateFile")
@@ -786,7 +749,7 @@ public class SentinelWorkspaceTools
     //[McpServerTool(Name = "ApplyDiffWithConfirmationCode")]
     [Produces(DataTag.ChangeId)]
     [Description("Applies or validates a change set. changesetFormat=files -> changes dict filePath->newContent (filepath not used). changesetFormat=diff -> filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) - pass returnDiff=true to get a unified-diff-style preview of what changed instead. IMPORTANT: for changesetFormat=files with action=apply, any file whose content would shrink by more than 50% is rejected with errorCode=ConfirmationRequired - this is a strong signal you submitted only a changed fragment as if it were the whole file, rather than a genuine whole-file rewrite. If the rewrite is really intended, call ApplyDiff again with action=confirmationCode and confirmationCode set to the code from the rejection - do not resend changes/filepath/unifiedDiff on that call, the original changeset is already cached server-side.")]
-    public async Task<ToolResult<object>> ApplyDiffWithConfirmationCode([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePathWrapper, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [ToolOption(ToolOptionTag.ConfirmationCode)][Description("Required when action=confirmationCode. The code returned by a prior apply call that was rejected for exceeding the whole-file-rewrite size threshold. Replays that exact cached changeset - do not also pass changes/filepath/unifiedDiff.")] string? confirmationCode = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> ApplyDiffWithConfirmationCode([ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat, [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action, [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePathWrapper, string>? changes = null, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null, [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [ToolOption(ToolOptionTag.ConfirmationCode)][Description("Required when action=confirmationCode. The code returned by a prior apply call that was rejected for exceeding the whole-file-rewrite size threshold. Replays that exact cached changeset - do not also pass changes/filepath/unifiedDiff.")] string? confirmationCode = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         try
@@ -795,7 +758,7 @@ public class SentinelWorkspaceTools
             {
                 if (string.IsNullOrEmpty(confirmationCode))
                 {
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument, "confirmationCode is required when action=confirmationCode.")
@@ -805,7 +768,7 @@ public class SentinelWorkspaceTools
                 var pending = _workspaceManager.TakePendingChangeset(confirmationCode);
                 if (pending == null)
                 {
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument, $"confirmationCode '{confirmationCode}' is unrecognized or has expired (codes are single-use and expire after 10 minutes). Resubmit the original ApplyDiff(changesetFormat: files, action: apply, ...) call to get a fresh code.")
@@ -814,7 +777,7 @@ public class SentinelWorkspaceTools
 
                 var confirmedResult = await _workspaceManager.ApplyProposedChangesAsync(pending.Value.Changes, pending.Value.RetryCount, validateChanges: pending.Value.ValidateOnApply);
                 if (!confirmedResult.Success && confirmedResult.ValidationResult != null)
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {confirmedResult.ValidationResult.Diagnostics.ToJson()}")
@@ -828,7 +791,7 @@ public class SentinelWorkspaceTools
                         diff = SentinelRefactoringTools.BuildDiffFromPreImages(pending.Value.Changes, confirmedResult.PreImages)
                     }
                     : strippedConfirmedResult;
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = true,
                     Data = confirmedResponseData
@@ -840,7 +803,7 @@ public class SentinelWorkspaceTools
             {
                 if (changes == null)
                 {
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument, "changes is required when changesetFormat=files.")
@@ -866,7 +829,7 @@ public class SentinelWorkspaceTools
                     if (oversizedFile != null)
                     {
                         var code = _workspaceManager.CachePendingChangeset(changes, retryCount, validateOnApply);
-                        return new ToolResult<object>()
+                        return new SentinelCallToolResult<object>()
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.ConfirmationRequired,
@@ -878,7 +841,7 @@ public class SentinelWorkspaceTools
 
                     var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount, validateChanges: validateOnApply);
                     if (!result.Success && result.ValidationResult != null)
-                        return new ToolResult<object>()
+                        return new SentinelCallToolResult<object>()
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.Exception,
@@ -898,7 +861,7 @@ public class SentinelWorkspaceTools
                             diff = SentinelRefactoringTools.BuildDiffFromPreImages(changes, result.PreImages)
                         }
                         : strippedResult;
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = true,
                         Data = responseData
@@ -910,13 +873,13 @@ public class SentinelWorkspaceTools
                     try
                     {
                         var validationResult = await _validationEngine.ValidateChangesAsync(changes);
-                        return validationResult.Success ? new ToolResult<object>()
+                        return validationResult.Success ? new SentinelCallToolResult<object>()
                         {
                             Success = true,
                             Data = validationResult
                         }
 
-                        : new ToolResult<object>()
+                        : new SentinelCallToolResult<object>()
                         {
                             Success = false,
                             Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed: {validationResult.Diagnostics}")
@@ -925,7 +888,7 @@ public class SentinelWorkspaceTools
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "ApplyDiff validate unexpected exception");
-                        return new ToolResult<object>()
+                        return new SentinelCallToolResult<object>()
                         {
                             Success = false,
                             Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff validate")
@@ -937,7 +900,7 @@ public class SentinelWorkspaceTools
             {
                 if (!filePathResolved.Validated && string.IsNullOrEmpty(unifiedDiff))
                 {
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filepath' and 'unifiedDiff' are required when changesetFormat=diff.")
@@ -946,7 +909,7 @@ public class SentinelWorkspaceTools
 
                 if (!filePathResolved.Validated)
                 {
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filepath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
@@ -955,7 +918,7 @@ public class SentinelWorkspaceTools
 
                 if (string.IsNullOrEmpty(unifiedDiff))
                 {
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'unifiedDiff' is required when changesetFormat=diff.")
@@ -970,7 +933,7 @@ public class SentinelWorkspaceTools
                         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePathWrapper == filePathResolved.Absolute);
                         if (document == null)
                         {
-                            return new ToolResult<object>()
+                            return new SentinelCallToolResult<object>()
                             {
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
@@ -986,7 +949,7 @@ public class SentinelWorkspaceTools
                         };
                         var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
                         if (!result.Success && result.ValidationResult != null)
-                            return new ToolResult<object>()
+                            return new SentinelCallToolResult<object>()
                             {
                                 Success = false,
                                 Error = new ResultError(ToolErrorCode.Exception,
@@ -1002,7 +965,7 @@ public class SentinelWorkspaceTools
                                 diff = SentinelRefactoringTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
                             }
                             : strippedDiffResult;
-                        return new ToolResult<object>()
+                        return new SentinelCallToolResult<object>()
                         {
                             Success = true,
                             Data = diffResponseData
@@ -1011,7 +974,7 @@ public class SentinelWorkspaceTools
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePathWrapper}'", filePathResolved);
-                        return new ToolResult<object>()
+                        return new SentinelCallToolResult<object>()
                         {
                             Success = false,
                             Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePathResolved}'")
@@ -1022,13 +985,13 @@ public class SentinelWorkspaceTools
                 if (action == ProposedChangeAction.validate)
                 {
                     var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff);
-                    return validationResult.Success ? new ToolResult<object>()
+                    return validationResult.Success ? new SentinelCallToolResult<object>()
                     {
                         Success = true,
                         Data = validationResult
                     }
 
-                    : new ToolResult<object>()
+                    : new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult.Diagnostics.ToInfo()}")
@@ -1036,7 +999,7 @@ public class SentinelWorkspaceTools
                 }
             }
 
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.")
@@ -1045,7 +1008,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ApplyDiff ({ChangesetFormat}/{Action}) failed", changesetFormat, action);
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff")
@@ -1057,7 +1020,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "RetryFailedChanges")]
     [Produces(DataTag.ResultOnly)]
     [Description("Retries failed file writes using server-cached content - no need to re-send file contents. specificFiles limits to a subset. retryCount defaults to 3.")]
-    public Task<ToolResult<object>> RetryFailedChanges(
+    public Task<SentinelCallToolResult<object>> RetryFailedChanges(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: false)] List<string>? specificFiles = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
@@ -1068,7 +1031,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "GetDiagnostics")]
     [Produces(DataTag.Report)]
     [Description("Gets compiler diagnostics for a file, project, or the whole solution.")]
-    public Task<ToolResult<object>> GetDiagnostics(
+    public Task<SentinelCallToolResult<object>> GetDiagnostics(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("file/project: also pass scopeName. solution: scopeName is ignored.")]
         [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] ToolScope scope = ToolScope.solution,
@@ -1087,7 +1050,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "Build")]
     [Produces(DataTag.Report)]
     [Description("Compiles the loaded solution and reports errors/warnings. level=quickBuild uses in-memory Roslyn diagnostics (fast, same check GetDiagnostics does). level=fullBuild shells out to `dotnet build` (slower, catches MSBuild-only failures - NuGet restore, resource copy, post-build events - that quickBuild can't see). Returns BuildSucceeded, ExitCode, ErrorCount/WarningCount, capped Errors/Warnings lists, ErrorSummary/WarningSummary (grouped by diagnostic Id, uncapped, for spotting one cause behind many errors), Duration.")]
-    public Task<ToolResult<object>> Build(
+    public Task<SentinelCallToolResult<object>> Build(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
         ToolScope scope = ToolScope.solution,
@@ -1099,7 +1062,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]
     [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). resultsType defaults to \"failed\" so a clean run stays a short summary with no per-test list; pass \"all\" to see every test's outcome. Set summary=true to omit the Results list entirely (just counts + FailureSummary), regardless of resultsType. filter is passed through to `dotnet test --filter` - an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests.")]
-    public Task<ToolResult<object>> RunTest(
+    public Task<SentinelCallToolResult<object>> RunTest(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         ToolScope scope = ToolScope.solution,
         string? scopeName = null,
@@ -1118,7 +1081,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "SafeDeleteUnusedSymbol")]
     [Produces(DataTag.ResultOnly)]
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Distinction from RemoveMember: this tool refuses if ANY usage is found; RemoveMember checks for callers/implementations but allows skipPrecheck. Returns changeId.")]
-    public Task<ToolResult<object>> SafeDeleteUnusedSymbol(
+    public Task<SentinelCallToolResult<object>> SafeDeleteUnusedSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Preferred resolution path, together with docCommentId - as returned by LocateSymbol/FindReferences. The most reliable and accurate way to identify the target.")] string projectName = "",
@@ -1138,7 +1101,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "CreateProject")]
     [Produces(DataTag.ResultOnly)]
     [Description("Creates a new project and adds it to the current solution. projectType defaults to console.")]
-    public Task<ToolResult<object>> CreateProject(
+    public Task<SentinelCallToolResult<object>> CreateProject(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.ProjectName, required: true)] string projectName,
         [ExternalInputRequired(DataTag.ProjectType)] string projectType = "console",
@@ -1148,7 +1111,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "SplitProjectByFolder")]
     [Produces(DataTag.ResultOnly)]
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
-    public Task<ToolResult<object>> SplitProjectByFolder(
+    public Task<SentinelCallToolResult<object>> SplitProjectByFolder(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.ProjectName, required: true)] string sourceProjectName,
         [ExternalInputRequired(DataTag.ClassName, required: true)] string folderName,
@@ -1160,7 +1123,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "GetMethodSource")]
     [Produces(DataTag.SourceCode)]
     [Description("Returns the full source text of a named method or constructor, plus a structured list of its attributes. For a constructor, pass the containing class's name (e.g. methodName: \"OrderService\" for `public OrderService(...)`). Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
-    public Task<ToolResult<object>> GetMethodSource(
+    public Task<SentinelCallToolResult<object>> GetMethodSource(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Consumes(DataTag.MethodName, required: true)] string methodName, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -1172,7 +1135,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "ReadFile")]
     [Produces(DataTag.SourceCode)]
     [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file - useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/largeresults and returned as a resultId (see GetMethodSource) instead of inline text.")]
-    public Task<ToolResult<object>> ReadFile(
+    public Task<SentinelCallToolResult<object>> ReadFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null,
@@ -1183,7 +1146,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file - namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
-    public Task<ToolResult<object>> GetFileOutline(
+    public Task<SentinelCallToolResult<object>> GetFileOutline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -1195,7 +1158,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "ListAll")]
     [Produces(DataTag.Report)]
     [Description("Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared anywhere in the loaded solution, one row per symbol with its file, kind, name, container, and line range - the solution-wide equivalent of GetFileOutline. Call this FIRST when you don't already know the exact name of the type/method/field you need - it is cheaper and more reliable than guessing plausible-sounding names and searching for each one individually with SearchSolutionText. Can return a lot of rows on a large solution; narrow with kind and/or projectName first.")]
-    public Task<ToolResult<object>> ListAll(
+    public Task<SentinelCallToolResult<object>> ListAll(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description(ToolParams.ListAllKindValues)][ExternalInputRequired(DataTag.SymbolKind, required: false)] ListAllKind kind = ListAllKind.all,
         [Description("Restricts results to one project. Omit to search the whole solution.")]
@@ -1206,7 +1169,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
     [Description("Searches all source files in the loaded solution for pattern, evaluated BOTH as a literal substring and (if it compiles) as a regex in a single pass - there is no search-mode to choose. Only searches documents that are part of a loaded project's source code (e.g. .cs files). For a known symbol (class/method/field/etc. by name), use LocateSymbol instead - it's semantic, not text-based, so it won't false-positive on comments/strings or miss partial-line matches. If you don't know the exact name you're looking for, call ListAll first - it's cheaper and more reliable than guessing plausible-sounding names and searching for each one individually here. Use ListSolutionItems(kind: solutionItems) to see files attached via the .sln's Solution Folders and other non-project files, use ProjectDoc to read plan/handoff/documentation files directly, and use GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file. Returns literalResults (always the complete literal-substring match set) and regexResults (regex matches not already in literalResults - empty when pattern has no regex metacharacters, since every regex match is then also a literal match), plus regexOverlapCount (matches found both ways) and regexPatternValid (false if pattern doesn't compile as a regex - literal search is unaffected). Each match has file path, 1-based line and column, a preview, and enclosingMember (the name of the method/property/constructor/field/etc. containing the match, or null if the match isn't inside any member).")]
-    public Task<ToolResult<object>> SearchSolutionText(
+    public Task<SentinelCallToolResult<object>> SearchSolutionText(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The text to search for - evaluated both as a literal substring and, if it compiles, as a regex.")]
         [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
@@ -1219,7 +1182,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns a filtered slice of an operation result blob by changeId. offset skips that many filtered items before taking maxItems; pass NextOffset from the previous response to page through the rest. TotalItems reflects the filtered count; HasMorePages is true when more items remain past this page.")]
-    public Task<ToolResult<object>> GetOperationDetail(
+    public Task<SentinelCallToolResult<object>> GetOperationDetail(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [Description("Filters items by outcome or path. Accepts prefix synonyms: fail/err -> failures, warn/skip -> skipped, ok/pass/info/success -> succeeded, roll/revert/undo -> rolledback, manual/manual_review/needs_manual_review -> NeedsManualReview (bridge compiler-error skips), file:<path> to filter by path. Omit for all items. An unrecognised prefix returns an error.")]
@@ -1233,7 +1196,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "UndoLastApply")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: ApplyDiff, refactoring-tool writes, and batch-first tools.")]
-    public Task<ToolResult<object>> UndoLastApply(
+    public Task<SentinelCallToolResult<object>> UndoLastApply(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.OperationId, required: true)] string changeId,
         CancellationToken cancellationToken = default)
@@ -1243,7 +1206,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "GetWorkspaceHealth")]
     [Produces(DataTag.ResultOnly)]
     [Description("Targeted workspace health check - reads actual workspace/solution state directly rather than environment probes. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary, StaleDocumentCount, RequiresReload, SampleStaleFiles. IsOperational=true + HasLoadedSolution=false means no solution loaded yet - not an error. RequiresReload=true means files changed on disk since the last LoadSolution call. verify=quickBuild/fullBuild additionally runs a build check and attaches it as BuildVerification.")]
-    public Task<ToolResult<object>> GetWorkspaceHealth(
+    public Task<SentinelCallToolResult<object>> GetWorkspaceHealth(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
@@ -1252,7 +1215,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "ListProjectFrameworkTargets")]
     [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value. No parameters.")]
-    public Task<ToolResult<object>> ListProjectFrameworkTargets(
+    public Task<SentinelCallToolResult<object>> ListProjectFrameworkTargets(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         CancellationToken cancellationToken = default)
         => _projectManagement.ListProjectFrameworkTargets(reason, cancellationToken);
@@ -1262,7 +1225,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "GetLargeResult")]
     [Produces(DataTag.Report)]
     [Description("Pages through a large result that was written to disk because it exceeded the inline size threshold.")]
-    public Task<ToolResult<object>> GetLargeResult(
+    public Task<SentinelCallToolResult<object>> GetLargeResult(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filepath must be supplied;
         // neither is individually required but the tool fails if both are omitted.

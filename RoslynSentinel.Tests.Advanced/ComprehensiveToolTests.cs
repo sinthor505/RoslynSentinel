@@ -136,7 +136,7 @@ public class ComprehensiveToolTests
             new BuildEngine(_workspaceManager, _diagnosticEngine),
             _symbolNavigationEngine,
             new TestRunEngine(_workspaceManager),
-            new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)),
+            new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
         _intelligenceTools = new SentinelIntelligenceTools(_impactAnalyzer,
             _semanticSearchEngine,

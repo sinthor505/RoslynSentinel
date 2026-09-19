@@ -94,7 +94,7 @@ public class SentinelQualityTools
     [McpServerTool(Name = "GetTestCoverageMap")]
     [Produces(DataTag.Report)]
     [Description("Returns execution paths to cover and test methods that exercise a production method. Finds covering tests by name convention (test method name contains production method name) and by direct call-site presence. Returns BranchesToTest, CoveringTests (test file, method, line), and HasAnyCoverage flag.")]
-    public async Task<ToolResult<object>> GetTestCoverageMap(
+    public async Task<SentinelCallToolResult<object>> GetTestCoverageMap(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
@@ -105,7 +105,7 @@ public class SentinelQualityTools
         try
         {
             var result = await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName, cancellationToken);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = true,
                 Data = result
@@ -114,7 +114,7 @@ public class SentinelQualityTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetTestCoverageMap failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTestCoverageMap")
@@ -125,7 +125,7 @@ public class SentinelQualityTools
     [McpServerTool(Name = "GetMethodComplexity")]
     [Produces(DataTag.Report)]
     [Description("Calculates cyclomatic complexity of a method: 1 + one per if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns complexity score and contributing conditionals. Guide: 1–4 = Low, 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High.")]
-    public async Task<ToolResult<object>> GetMethodComplexity(
+    public async Task<SentinelCallToolResult<object>> GetMethodComplexity(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
@@ -137,7 +137,7 @@ public class SentinelQualityTools
         try
         {
             var result = await _testingEngine.CalculateComplexityAsync(filePath, methodName, cancellationToken);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = true,
                 Data = result
@@ -146,7 +146,7 @@ public class SentinelQualityTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetMethodComplexity failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodComplexity")
@@ -159,7 +159,7 @@ public class SentinelQualityTools
     [McpServerTool(Name = "AnalyzeForeachForLinqConversion")]
     [Produces(DataTag.ResultOnly)]
     [Description("Pre-flight safety check before converting a foreach loop to LINQ: detects mutation of the collection being iterated within the loop body (a common pattern the standard conversion tool produces incorrect code for) using Roslyn's ControlFlowAnalysis and DataFlowAnalysis. Returns IsSafeToConvert and rejection reasons.")]
-    public async Task<ToolResult<object>> AnalyzeForeachForLinqConversion(
+    public async Task<SentinelCallToolResult<object>> AnalyzeForeachForLinqConversion(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Short snippet identifying the foreach statement, e.g. \"foreach (var item in\".")]
@@ -179,7 +179,7 @@ public class SentinelQualityTools
         try
         {
             var result = await _msToolAugmentEngine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = true,
                 Data = result
@@ -188,7 +188,7 @@ public class SentinelQualityTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "AnalyzeForeachForLinqConversion failed in '{File}'", filePath);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeForeachForLinqConversion")
@@ -201,7 +201,7 @@ public class SentinelQualityTools
     [McpServerTool(Name = "AnalyzeSwitchForPatternConversion")]
     [Produces(DataTag.Analysis)]
     [Description("Pre-flight safety check before converting a switch statement to a switch expression: detects variables assigned in more than one case arm, or read later in the method (indicating a dependency on the variable retaining its value across cases) - a pattern the standard conversion tool silently drops, using Roslyn's ControlFlowAnalysis and DataFlowAnalysis. Returns IsSafeToConvert and rejection reasons.")]
-    public async Task<ToolResult<object>> AnalyzeSwitchForPatternConversion(
+    public async Task<SentinelCallToolResult<object>> AnalyzeSwitchForPatternConversion(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Verbatim substring from the switch keyword line, e.g. \"switch (unit)\".")]
@@ -222,7 +222,7 @@ public class SentinelQualityTools
         try
         {
             var result = await _msToolAugmentEngine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = true,
                 Data = result
@@ -231,7 +231,7 @@ public class SentinelQualityTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "AnalyzeSwitchForPatternConversion failed in '{File}'", filePath);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeSwitchForPatternConversion")

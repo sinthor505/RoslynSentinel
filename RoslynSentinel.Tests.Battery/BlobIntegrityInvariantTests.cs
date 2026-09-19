@@ -78,7 +78,7 @@ public class BlobIntegrityInvariantTests
     /// it issued a changeId, that changeId is redeemable. A tool that declines the change passes
     /// trivially, which is correct: the invariant is about issued handles.
     /// </summary>
-    private void AssertChangeIdIsRedeemable(ToolResult<object> result, string toolName)
+    private void AssertChangeIdIsRedeemable(SentinelCallToolResult<object> result, string toolName)
     {
         var changeId = (result.Data as AppliedChangeSummary)?.ChangeId;
         if (string.IsNullOrEmpty(changeId))

@@ -64,7 +64,7 @@ public class SentinelAsyncifyTools
     [Produces(DataTag.MigrationCandidate)]
     [Description("Step 1 of the bridge workflow: flags qualifying methods with [MigrationCandidate] attributes, then reports the results. Full workflow: ScanAsyncMigrationCandidates(summarize: true) -> BridgeAsyncMethods -> UpliftCallers -> PropagateCancellationToken.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName is required when scope=project; filePath is required when scope=file (and skips the flag phase). Enforced at runtime, not by the schema.
-    public async Task<ToolResult<object>> ScanAsyncMigrationCandidates(
+    public async Task<SentinelCallToolResult<object>> ScanAsyncMigrationCandidates(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("solution (default) scans everything; project restricts to one project (projectName required); file restricts to one file (filePath required, flag phase skipped).")]
         ToolScope scope = ToolScope.solution,
@@ -92,7 +92,7 @@ public class SentinelAsyncifyTools
 
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -129,7 +129,7 @@ public class SentinelAsyncifyTools
             }
             catch (ArgumentException ex)
             {
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = false,
                     Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
@@ -137,7 +137,7 @@ public class SentinelAsyncifyTools
             }
             catch (Exception ex)
             {
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = false,
                     Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ScanAsyncMigrationCandidates")
@@ -216,7 +216,7 @@ public class SentinelAsyncifyTools
                                    summaryJson.Length);
             }
 
-            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                 summary,
                 _workspaceManager.GetSolutionRoot(),
                 nameof(MigrationScanSummary),
@@ -234,7 +234,7 @@ public class SentinelAsyncifyTools
             }
             catch (ArgumentException ex)
             {
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = false,
                     Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
@@ -242,7 +242,7 @@ public class SentinelAsyncifyTools
             }
             catch (Exception ex)
             {
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = false,
                     Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ScanAsyncMigrationCandidates")
@@ -263,7 +263,7 @@ public class SentinelAsyncifyTools
 
             if (offloaded)
             {
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     TotalRecords = totalCount,
@@ -282,7 +282,7 @@ public class SentinelAsyncifyTools
             }
 
             // ── inline result ─────────────────────────────────────────────────
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = true,
                 Data = page,
@@ -297,7 +297,7 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "GetAsyncMigrationProgress")]
     [Produces(DataTag.AsyncMigrationProgressReport)]
     [Description("Returns async migration progress statistics: CancellationToken coverage, pending Asyncify-bridge call sites, and async void event handlers.")]
-    public async Task<ToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
+    public async Task<SentinelCallToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Scopes the report to one project. Omit to report on the entire solution.")]
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
@@ -306,7 +306,7 @@ public class SentinelAsyncifyTools
     {
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<AsyncMigrationProgressReport>
+            return new SentinelCallToolResult<AsyncMigrationProgressReport>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -318,7 +318,7 @@ public class SentinelAsyncifyTools
         {
             var report = await _antiPatternEngine
                 .GetAsyncMigrationProgressAsync(projectName, cancellationToken);
-            return new ToolResult<AsyncMigrationProgressReport>
+            return new SentinelCallToolResult<AsyncMigrationProgressReport>
             {
                 Success = true,
                 Data = report
@@ -326,7 +326,7 @@ public class SentinelAsyncifyTools
         }
         catch (Exception ex)
         {
-            return new ToolResult<AsyncMigrationProgressReport>
+            return new SentinelCallToolResult<AsyncMigrationProgressReport>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetAsyncMigrationProgress")
@@ -339,7 +339,7 @@ public class SentinelAsyncifyTools
     // ── FlagAsyncMigrationCandidates: internal use only (not exposed as MCP tool) ──
     // Flagging is now integrated into ScanAsyncMigrationCandidates (autoFlag=true, default).
     // Use scan_migration_candidates for the standard workflow.
-    public async Task<ToolResult<BatchResultSummary>> FlagAsyncMigrationCandidates(
+    public async Task<SentinelCallToolResult<BatchResultSummary>> FlagAsyncMigrationCandidates(
         string scope = "project",
         List<FlagCandidateTarget>? flagTargets = null,
         string? projectName = null,
@@ -355,7 +355,7 @@ public class SentinelAsyncifyTools
 
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -364,7 +364,7 @@ public class SentinelAsyncifyTools
         }
 
         if (scope == "targets" && (flagTargets == null || flagTargets.Count == 0))
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = true,
                 Data = new BatchResultSummary
@@ -391,11 +391,11 @@ public class SentinelAsyncifyTools
                 },
                 progress,
                 cancellationToken);
-            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+            return new SentinelCallToolResult<BatchResultSummary> { Success = true, Data = result };
         }
         catch (Exception ex)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FlagAsyncMigrationCandidates")
@@ -409,7 +409,7 @@ public class SentinelAsyncifyTools
     [Produces(DataTag.BatchResultSummary)]
     [Description("Removes [MigrationCandidate] attributes from methods, optionally filtered by pattern. Does not delete the MigrationCandidateAttribute.cs helper file.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: filePath is required when scope=file; projectName only applies when scope=project (null there means the whole solution). Enforced at runtime, not by the schema.
-    public async Task<ToolResult<BatchResultSummary>> ClearAsyncMigrationCandidateFlags(
+    public async Task<SentinelCallToolResult<BatchResultSummary>> ClearAsyncMigrationCandidateFlags(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("project (default) restricts by projectName (null = entire solution); file restricts to filePath.")]
         ToolScope scope = ToolScope.project,
@@ -426,7 +426,7 @@ public class SentinelAsyncifyTools
     {
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -440,7 +440,7 @@ public class SentinelAsyncifyTools
             if (scope == ToolScope.file)
             {
                 if (string.IsNullOrEmpty(filePath))
-                    return new ToolResult<BatchResultSummary>
+                    return new SentinelCallToolResult<BatchResultSummary>
                     {
                         Success = false,
                         Error = new ResultError(MigrationErrorCode.InvalidArgument,
@@ -484,7 +484,7 @@ public class SentinelAsyncifyTools
                     : $"Removed {engineResult.TotalRemoved} [MigrationCandidate] attribute(s) from {engineResult.FilesModified} file(s). " +
                       $"Run flag_migration_candidates(scope=\"project\", forceRescan=true) to re-score all methods.";
 
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = true,
                 Data = new BatchResultSummary
@@ -508,7 +508,7 @@ public class SentinelAsyncifyTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ClearAsyncMigrationCandidateFlags failed");
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ClearAsyncMigrationCandidateFlags")
@@ -521,7 +521,7 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "BridgeAsyncMethods")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("Step 2 of the bridge workflow: converts each named method to the Asyncify-bridge pattern (a sync wrapper delegating to an async overload). Prefer the Asyncify tool for automatic end-to-end migration; use this only for manual step-by-step control. Full workflow: ScanAsyncMigrationCandidates(summarize: true) -> BridgeAsyncMethods -> UpliftCallers(targets: SuggestedUpliftTargets) -> PropagateCancellationToken.")]
-    public async Task<ToolResult<BridgeAsyncMethodsResult>> BridgeAsyncMethods(
+    public async Task<SentinelCallToolResult<BridgeAsyncMethodsResult>> BridgeAsyncMethods(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("{ FilePathWrapper, MethodNames } entries - MethodNames is required per entry. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
@@ -539,7 +539,7 @@ public class SentinelAsyncifyTools
 
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<BridgeAsyncMethodsResult>
+            return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -548,7 +548,7 @@ public class SentinelAsyncifyTools
         }
 
         if (targets == null || targets.Count == 0)
-            return new ToolResult<BridgeAsyncMethodsResult>
+            return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
                 Success = true,
                 Data = new BridgeAsyncMethodsResult
@@ -565,7 +565,7 @@ public class SentinelAsyncifyTools
                 propagateCancellationTokens,
                 progress,
                 cancellationToken);
-            return new ToolResult<BridgeAsyncMethodsResult>
+            return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
                 Success = true,
                 Data = new BridgeAsyncMethodsResult
@@ -577,7 +577,7 @@ public class SentinelAsyncifyTools
         }
         catch (Exception ex)
         {
-            return new ToolResult<BridgeAsyncMethodsResult>
+            return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "BridgeAsyncMethods")
@@ -590,7 +590,7 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "UpliftCallers")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("Step 3 of the bridge workflow: updates sync callers of each bridge wrapper to call the async overload directly. Pass SuggestedUpliftTargets from BridgeAsyncMethods as targets. Prefer the Asyncify tool for automatic end-to-end migration; use this only for manual step-by-step control.")]
-    public async Task<ToolResult<UpliftCallersResult>> UpliftCallers(
+    public async Task<SentinelCallToolResult<UpliftCallersResult>> UpliftCallers(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("{ BridgedMethodName, ProjectName? } entries - pass SuggestedUpliftTargets from BridgeAsyncMethods directly. Must be non-empty; an empty list is a no-op.")]
         List<UpliftTarget> targets,
@@ -608,7 +608,7 @@ public class SentinelAsyncifyTools
 
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<UpliftCallersResult>
+            return new SentinelCallToolResult<UpliftCallersResult>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -617,7 +617,7 @@ public class SentinelAsyncifyTools
         }
 
         if (targets == null || targets.Count == 0)
-            return new ToolResult<UpliftCallersResult>
+            return new SentinelCallToolResult<UpliftCallersResult>
             {
                 Success = true,
                 Data = new UpliftCallersResult
@@ -639,7 +639,7 @@ public class SentinelAsyncifyTools
                 },
                 progress,
                 cancellationToken);
-            return new ToolResult<UpliftCallersResult>
+            return new SentinelCallToolResult<UpliftCallersResult>
             {
                 Success = true,
                 Data = new UpliftCallersResult
@@ -652,7 +652,7 @@ public class SentinelAsyncifyTools
         }
         catch (Exception ex)
         {
-            return new ToolResult<UpliftCallersResult>
+            return new SentinelCallToolResult<UpliftCallersResult>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UpliftCallers")
@@ -665,7 +665,7 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "PropagateCancellationToken")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("Step 4 of the bridge workflow: threads CancellationToken through async call chains in the specified files. Pass SuggestedPropagateTargets from UpliftCallers as targets. Also usable standalone to clean up CT forwarding in any set of files.")]
-    public async Task<ToolResult<BatchResultSummary>> PropagateCancellationToken(
+    public async Task<SentinelCallToolResult<BatchResultSummary>> PropagateCancellationToken(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("{ FilePathWrapper, MethodNames? } entries - null MethodNames means all eligible methods in the file. Pass SuggestedPropagateTargets from UpliftCallers directly. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
@@ -681,7 +681,7 @@ public class SentinelAsyncifyTools
 
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -690,7 +690,7 @@ public class SentinelAsyncifyTools
         }
 
         if (targets == null || targets.Count == 0)
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = true,
                 Data = new BatchResultSummary { Directive = "targets was empty - no files processed. Pass SuggestedPropagateTargets from UpliftCallers as targets, or specify files explicitly. Prefer the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired }
@@ -702,11 +702,11 @@ public class SentinelAsyncifyTools
                 new BatchTargetInput { Targets = targets, DryRun = dryRun, MaxItems = maxItems },
                 progress,
                 cancellationToken);
-            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+            return new SentinelCallToolResult<BatchResultSummary> { Success = true, Data = result };
         }
         catch (Exception ex)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PropagateCancellationToken")
@@ -720,7 +720,7 @@ public class SentinelAsyncifyTools
     [Produces(DataTag.BatchResultSummary)]
     [Produces(DataTag.CancellationTokenSlot, Preference = 100)]
     [Description("Adds a CancellationToken parameter to async methods that lack one, in the specified files. Independent of the bridge workflow. Differs from PropagateCancellationToken, which threads an existing CT through call chains rather than adding the parameter itself.")]
-    public async Task<ToolResult<BatchResultSummary>> AddCancellationToken(
+    public async Task<SentinelCallToolResult<BatchResultSummary>> AddCancellationToken(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("{ FilePathWrapper, MethodNames? } entries - null MethodNames means all eligible async methods in the file. Must be non-empty; an empty list is a no-op.")]
         List<BatchTarget> targets,
@@ -736,7 +736,7 @@ public class SentinelAsyncifyTools
 
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -745,7 +745,7 @@ public class SentinelAsyncifyTools
         }
 
         if (targets == null || targets.Count == 0)
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = true,
                 Data = new BatchResultSummary { Directive = "targets was empty - no files processed. Specify the files (FilePathWrapper) where CancellationToken parameters should be added. Prefer the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired }
@@ -757,11 +757,11 @@ public class SentinelAsyncifyTools
                 new BatchTargetInput { Targets = targets, DryRun = dryRun, MaxItems = maxItems },
                 progress,
                 cancellationToken);
-            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+            return new SentinelCallToolResult<BatchResultSummary> { Success = true, Data = result };
         }
         catch (Exception ex)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AddCancellationToken")
@@ -774,7 +774,7 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "ExtractEventHandlers")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("Extracts a nominated code block from inside a method into a new private method, using semantic analysis to produce the correct return type. Manual alternative to Asyncify's automatic Phase 0 extraction - use this for a custom extracted method name, partial-body extraction, or a one-off targeted extraction.")]
-    public async Task<ToolResult<BatchResultSummary>> ExtractEventHandlers(
+    public async Task<SentinelCallToolResult<BatchResultSummary>> ExtractEventHandlers(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("{ FilePathWrapper, NewMethodName, ContextSnippet, LineBefore?, LineAfter? } entries. NewMethodName must be a valid C# identifier; ContextSnippet must uniquely identify the code block to extract. Targets in the same file are processed sequentially. Must be non-empty; an empty list is a no-op.")]
         List<HandlerExtractTarget> targets,
@@ -788,7 +788,7 @@ public class SentinelAsyncifyTools
 
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -797,7 +797,7 @@ public class SentinelAsyncifyTools
         }
 
         if (targets == null || targets.Count == 0)
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = true,
                 Data = new BatchResultSummary { Directive = "targets was empty - no handlers extracted. Call scan_migration_candidates(pattern: \"HandlerExtractCandidate\") to find candidates, then pass them as targets. Prefer the asyncify macro for auto-extraction.", DirectiveKind = DirectiveKind.ReviewRequired }
@@ -806,11 +806,11 @@ public class SentinelAsyncifyTools
         try
         {
             var result = await HandlerExtractCore(targets, dryRun, progress, cancellationToken);
-            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+            return new SentinelCallToolResult<BatchResultSummary> { Success = true, Data = result };
         }
         catch (Exception ex)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractEventHandlers")
@@ -823,7 +823,7 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "EventHandlersToAsync")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("Converts all [MigrationCandidate(\"HandlerToAsyncCandidate\")]-flagged methods to the Asyncify-bridge pattern (sync wrapper + async overload). Auto-discovers candidates by pattern; follows ExtractEventHandlers in the event handler migration path.")]
-    public async Task<ToolResult<BatchResultSummary>> EventHandlersToAsync(
+    public async Task<SentinelCallToolResult<BatchResultSummary>> EventHandlersToAsync(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Scopes candidate discovery to one project. Omit to scan the entire solution.")]
         string? projectName = null,
@@ -841,7 +841,7 @@ public class SentinelAsyncifyTools
 
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -853,11 +853,11 @@ public class SentinelAsyncifyTools
         {
             var result = await HandlerToAsyncCore(
                 projectName, dryRun, maxItems, propagateCancellationTokens, progress, cancellationToken);
-            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+            return new SentinelCallToolResult<BatchResultSummary> { Success = true, Data = result };
         }
         catch (Exception ex)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "EventHandlersToAsync")
@@ -875,7 +875,7 @@ public class SentinelAsyncifyTools
         CancellationToken) in a single call. Use BridgeAsyncMethods/UpliftCallers/PropagateCancellationToken
         individually for step-by-step control instead.
         """)]
-    public async Task<ToolResult<BatchResultSummary>> Asyncify(
+    public async Task<SentinelCallToolResult<BatchResultSummary>> Asyncify(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Scopes the run to one project. Omit to process the entire solution.")]
         string? projectName = null,
@@ -907,7 +907,7 @@ public class SentinelAsyncifyTools
 
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -933,11 +933,11 @@ public class SentinelAsyncifyTools
                     MaxIterations = maxIterations,
                 },
                 progress, cancellationToken);
-            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+            return new SentinelCallToolResult<BatchResultSummary> { Success = true, Data = result };
         }
         catch (Exception ex)
         {
-            return new ToolResult<BatchResultSummary>
+            return new SentinelCallToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Asyncify")
@@ -953,7 +953,7 @@ public class SentinelAsyncifyTools
         Failed=0), the circuit breaker opens, or maxLoops is reached. Takes the same parameters as
         Asyncify. Returns AsyncifyLoopResult with per-iteration BatchResultSummary entries and aggregate totals.
         """)]
-    public async Task<ToolResult<AsyncifyLoopResult>> AsyncifyLoop(
+    public async Task<SentinelCallToolResult<AsyncifyLoopResult>> AsyncifyLoop(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Scopes the run to one project. Omit to process the entire solution.")]
         string? projectName = null,
@@ -983,7 +983,7 @@ public class SentinelAsyncifyTools
     {
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<AsyncifyLoopResult>
+            return new SentinelCallToolResult<AsyncifyLoopResult>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -1074,7 +1074,7 @@ public class SentinelAsyncifyTools
         }
         catch (Exception ex)
         {
-            return new ToolResult<AsyncifyLoopResult>
+            return new SentinelCallToolResult<AsyncifyLoopResult>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"AsyncifyLoop iteration {iterations.Count + 1}")
@@ -1107,7 +1107,7 @@ public class SentinelAsyncifyTools
             catch { /* non-fatal */ }
         }
 
-        return new ToolResult<AsyncifyLoopResult>
+        return new SentinelCallToolResult<AsyncifyLoopResult>
         {
             Success = true,
             Data = new AsyncifyLoopResult
@@ -1125,14 +1125,14 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "GetMigrationLedger")]
     [Description("Returns the persisted migration ledger: a cross-run record of every method touched by a migration phase and every idempotency/stale-flag skip. Survives server restarts and accumulates across sessions.")]
-    public ToolResult<LedgerSnapshot> GetMigrationLedger(
+    public SentinelCallToolResult<LedgerSnapshot> GetMigrationLedger(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Filters to entries with at least one operation for this phase: Bridge, BridgeStaleSkip, Uplift, UpliftIdempotentSkip, or CtPropagated. Omit to return all entries.")]
         string? phase = null,
         [Description("Return only methods touched more than once across all runs.")]
         bool repeatedOnly = false)
     {
-        return new ToolResult<LedgerSnapshot>
+        return new SentinelCallToolResult<LedgerSnapshot>
         {
             Success = true,
             Data = _ledger.GetSnapshot(phase, repeatedOnly),
@@ -1145,13 +1145,13 @@ public class SentinelAsyncifyTools
         Use before starting a fresh migration session when prior run history is no longer relevant.
         The run counter is also reset to zero.
         """)]
-    public async Task<ToolResult<LedgerSnapshot>> ResetMigrationLedger(
+    public async Task<SentinelCallToolResult<LedgerSnapshot>> ResetMigrationLedger(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         await _ledger.ResetAsync();
-        return new ToolResult<LedgerSnapshot>
+        return new SentinelCallToolResult<LedgerSnapshot>
         {
             Success = true,
             Data = _ledger.GetSnapshot(),
@@ -3660,10 +3660,10 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "ResetMutationBreaker")]
     [Produces(DataTag.ResultOnly)]
     [Description("Resets the batch-mutation circuit breaker and all failure counters, re-enabling Asyncify/BulkComment-style batch mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker. Unrelated to the SearchSolutionText orientation breaker, which resets itself automatically.")]
-    public ToolResult<object> ResetMutationBreaker([Description(ToolParams.Reason)] ToolCallReason reason)
+    public SentinelCallToolResult<object> ResetMutationBreaker([Description(ToolParams.Reason)] ToolCallReason reason)
     {
         ((IManualCircuitBreaker)_workspaceManager).Reset();
-        return new ToolResult<object>()
+        return new SentinelCallToolResult<object>()
         {
             Success = true,
             Data = "Mutation circuit breaker reset. Failure counters cleared. Batch mutating tools re-enabled."
@@ -3673,9 +3673,9 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "GetMutationBreakerStatus")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns the current batch-mutation circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations. Unrelated to the SearchSolutionText orientation breaker, which resets itself automatically.")]
-    public ToolResult<object> GetMutationBreakerStatus([Description(ToolParams.Reason)] ToolCallReason reason)
+    public SentinelCallToolResult<object> GetMutationBreakerStatus([Description(ToolParams.Reason)] ToolCallReason reason)
     {
-        return new ToolResult<object>()
+        return new SentinelCallToolResult<object>()
         {
             Success = true,
             Data = _workspaceManager.GetBreakerStatus()

@@ -75,14 +75,14 @@ public static class ToolErrorCode
 // ── Envelope ──────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Typed envelope returned by Tool scan tools.
+/// Typed envelope returned by Sentinel tools..
 /// Exactly one of <see cref="Data"/>, <see cref="Error"/>, or <see cref="LargeResult"/> is populated.
 /// </summary>
-public record ToolResult<T>
+public record SentinelCallToolResult<T>
 {
     /// <summary>
     /// Server build identity (assembly version + binary write time). Not settable -> every
-    /// <see cref="ToolResult{T}"/> carries the same value, computed once in <see cref="ServerBuildInfo"/>.
+    /// <see cref="SentinelCallToolResult{T}"/> carries the same value, computed once in <see cref="ServerBuildInfo"/>.
     /// Lets a caller notice a running server predates a source change without checking DLL
     /// timestamps by hand (see docs/current/feedback_stale_server_before_rebuild.md).
     /// </summary>
@@ -93,7 +93,7 @@ public record ToolResult<T>
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Full path to the running server's binary (.dll) on disk. Not settable -> every
-    /// <see cref="ToolResult{T}"/> carries the same value, computed once in <see cref="ServerBuildInfo"/>.
+    /// <see cref="SentinelCallToolResult{T}"/> carries the same value, computed once in <see cref="ServerBuildInfo"/>.
     /// Lets a caller compare the binary's actual location against the repo/worktree path it's
     /// editing -> resolving both which server instance it's talking to (multi-instance ambiguity)
     /// and whether that instance is even in the right repo. See <see cref="ServerVersion"/> and
@@ -102,7 +102,7 @@ public record ToolResult<T>
     public string ServerBinaryPath { get; init; } = ServerBuildInfo.BinaryPath;
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
-    /// Process ID of the running server. Not settable -> every <see cref="ToolResult{T}"/> carries the
+    /// Process ID of the running server. Not settable -> every <see cref="SentinelCallToolResult{T}"/> carries the
     /// same value, computed once in <see cref="ServerBuildInfo"/>. Lets a caller that has already
     /// compared <see cref="ServerBinaryPath"/> across multiple running instances (multi-instance
     /// ambiguity) kill the exact stale process by PID, rather than correlating binary path back to a
@@ -139,23 +139,23 @@ public record ToolResult<T>
     }
 
     /// <summary>
-    /// Builds a <see cref="ToolResult{T}"/> for <paramref name="data"/>, offloading to disk via
+    /// Builds a <see cref="SentinelCallToolResult{T}"/> for <paramref name="data"/>, offloading to disk via
     /// <see cref="LargeResultHelper.StoreLargeResultAsync{T}"/> (populating <see cref="LargeResult"/>
     /// instead of <see cref="Data"/>) when the serialized payload exceeds
     /// <see cref="LargeResultHelper.OffloadThresholdBytes"/>. Use this instead of hand-rolling a
     /// size-check/write-to-disk block per tool (that duplication is what let GetMethodSource and
     /// ReadFile's offload paths silently diverge from GetLargeResult's expected file format).
     /// </summary>
-    public static async Task<ToolResult<T>> ForPossiblyLargeDataAsync(
+    public static async Task<SentinelCallToolResult<T>> ForPossiblyLargeDataAsync(
         T data, string? solutionRoot, string resultType, ResultWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null, CancellationToken cancellationToken = default)
     {
         var stored = await LargeResultHelper.StoreLargeResultAsync(data, solutionRoot, wrapperType, cancellationToken);
         if (!stored.offloaded)
         {
-            return new ToolResult<T> { Success = true, Data = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion };
+            return new SentinelCallToolResult<T> { Success = true, Data = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion };
         }
 
-        return new ToolResult<T>
+        return new SentinelCallToolResult<T>
         {
             Success = true,
             TotalRecords = totalRecords,
@@ -232,7 +232,7 @@ public record ToolResult<T>
 
 // ── Error detail ─────────────────────────────────────────────────────────────
 
-/// <summary>Structured error returned inside <see cref="ToolResult{T}"/>.</summary>
+/// <summary>Structured error returned inside <see cref="SentinelCallToolResult{T}"/>.</summary>
 public record ResultError(
     string ErrorCode,
     string Message,

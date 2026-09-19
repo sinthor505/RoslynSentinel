@@ -112,7 +112,7 @@ public class MigrationScanResultTests
             _workspaceManager,
             NullLogger<SentinelScanTools>.Instance);
 
-        _workspaceTools = new SentinelWorkspaceTools(_workspaceManager, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)),
+        _workspaceTools = new SentinelWorkspaceTools(_workspaceManager, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
 
         // Create a temp dir so GetSolutionRoot() returns a valid path for file-write tests.
@@ -141,15 +141,15 @@ public class MigrationScanResultTests
     }
 
     /// <summary>
-    /// Adapts a plain <see cref="ToolResult{object}"/> to a typed <see cref="MigrationEnvelope{T}"/>.
+    /// Adapts a plain <see cref="SentinelCallToolResult{object}"/> to a typed <see cref="MigrationEnvelope{T}"/>.
     /// The migration-scan-result-handling spec (v2) this test file was written against expected
     /// scan tools to return a nested envelope (Data = MigrationEnvelope&lt;T&gt;). The shipped
     /// implementation flattens that: Success/Error/TotalRecords/HasMorePages/LargeResult all live
-    /// directly on the outer ToolResult&lt;object&gt;, and Data is the plain T. Rather than rewrite
+    /// directly on the outer SentinelCallToolResult&lt;object&gt;, and Data is the plain T. Rather than rewrite
     /// every assertion in this file against the outer result, wrap it back into the shape the
     /// tests already expect.
     /// </summary>
-    private static MigrationEnvelope<T> Wrap<T>(ToolResult<object> raw) where T : class
+    private static MigrationEnvelope<T> Wrap<T>(SentinelCallToolResult<object> raw) where T : class
     {
         return new MigrationEnvelope<T>
         {

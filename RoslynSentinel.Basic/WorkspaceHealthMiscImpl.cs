@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Basic;
 
 /// <summary>
 /// Plain DI-constructed implementation backing WorkspaceHealthMiscTools. Method bodies moved
@@ -29,7 +29,7 @@ public class WorkspaceHealthMiscImpl
         return $"Updated {updates.Count} features.";
     }
 
-    public async Task<ToolResult<object>> Features(ToolCallReason reason, FeaturesAction action,
+    public async Task<SentinelCallToolResult<object>> Features(ToolCallReason reason, FeaturesAction action,
         List<string>? names = null, List<KeyValuePair<string, bool>>? enabled = null,
         int delaySeconds = 0, CancellationToken cancellationToken = default)
     {
@@ -42,10 +42,10 @@ public class WorkspaceHealthMiscImpl
 
             return action switch
             {
-                FeaturesAction.list => new ToolResult<object> { Success = true, Data = _config.GetFeatureStatuses() },
-                FeaturesAction.get => new ToolResult<object> { Success = true, Data = _config.GetFeatureStatuses(names) },
-                FeaturesAction.update => new ToolResult<object> { Success = true, Data = UpdateFeaturesInternal(enabled ?? []) },
-                _ => new ToolResult<object>
+                FeaturesAction.list => new SentinelCallToolResult<object> { Success = true, Data = _config.GetFeatureStatuses() },
+                FeaturesAction.get => new SentinelCallToolResult<object> { Success = true, Data = _config.GetFeatureStatuses(names) },
+                FeaturesAction.update => new SentinelCallToolResult<object> { Success = true, Data = UpdateFeaturesInternal(enabled ?? []) },
+                _ => new SentinelCallToolResult<object>
                 {
                     Success = false,
                     Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: list, get, update.")
@@ -55,7 +55,7 @@ public class WorkspaceHealthMiscImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "Features ({Action}) failed", action);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Features")
@@ -93,7 +93,7 @@ public class WorkspaceHealthMiscImpl
         return Task.FromResult(new WorkspaceHealthReport(IsOperational: true, HasLoadedSolution: true, LoadedSolutionPath: solutionPath, ProjectCount: projectCount, DocumentCount: documentCount, LoadErrors: loadErrors, Summary: $"Workspace operational. {projectCount} project(s) loaded, " + $"{documentCount} document(s). " + (loadErrors.Count > 0 ? $"{loadErrors.Count} load warning(s) recorded (non-fatal)." : "No load errors.") + (status.RequiresReload ? $" {status.StaleDocumentCount} file(s) changed on disk since the last load - call LoadSolution to refresh." : ""), StaleDocumentCount: status.StaleDocumentCount, RequiresReload: status.RequiresReload, SampleStaleFiles: status.SampleStaleFiles));
     }
 
-    public async Task<ToolResult<object>> GetWorkspaceHealth(ToolCallReason reason, BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
+    public async Task<SentinelCallToolResult<object>> GetWorkspaceHealth(ToolCallReason reason, BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
     {
         if (_logger.IsEnabled(LogLevel.Information))
@@ -116,7 +116,7 @@ public class WorkspaceHealthMiscImpl
                 }
             }
 
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = true,
                 Data = result
@@ -125,7 +125,7 @@ public class WorkspaceHealthMiscImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetWorkspaceHealth failed");
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetWorkspaceHealth")

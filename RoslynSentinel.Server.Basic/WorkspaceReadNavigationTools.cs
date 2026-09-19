@@ -37,7 +37,7 @@ public class WorkspaceReadNavigationTools
     [McpServerTool(Name = "GetMethodSource")]
     [Produces(DataTag.SourceCode)]
     [Description("Returns the full source text of a named method or constructor, plus a structured list of its attributes.")]
-    public Task<ToolResult<object>> GetMethodSource(
+    public Task<SentinelCallToolResult<object>> GetMethodSource(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Method or constructor name. For a constructor, pass the containing class's name (e.g. \"OrderService\" for `public OrderService(...)`). Case-sensitive with case-insensitive fallback; returns the first match for overloaded names.")]
@@ -48,7 +48,7 @@ public class WorkspaceReadNavigationTools
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file - namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
-    public Task<ToolResult<object>> GetFileOutline(
+    public Task<SentinelCallToolResult<object>> GetFileOutline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         CancellationToken cancellationToken = default)
@@ -57,7 +57,7 @@ public class WorkspaceReadNavigationTools
     [McpServerTool(Name = "ListAll")]
     [Produces(DataTag.Report)]
     [Description("Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared in the loaded solution, one row per symbol with its file, kind, name, container, and line range. Call this first when you don't already know the exact name of a type/method/field.")]
-    public Task<ToolResult<object>> ListAll(
+    public Task<SentinelCallToolResult<object>> ListAll(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Restricts results to one symbol kind. Defaults to all kinds.")]
         [ExternalInputRequired(DataTag.SymbolKind, required: false)] ListAllKind kind = ListAllKind.all,
@@ -69,7 +69,7 @@ public class WorkspaceReadNavigationTools
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
     [Description("Searches source files in the loaded solution for a pattern, evaluated both as a literal substring and (if it compiles) as a regex in one pass. Returns literalResults (all literal-substring matches) and regexResults (additional regex-only matches), plus regexOverlapCount and regexPatternValid. Each match has file, line, column, a preview, and the enclosing member name. For a known symbol name, LocateSymbol is more precise. If you don't know the exact name, call ListAll first.")]
-    public Task<ToolResult<object>> SearchSolutionText(
+    public Task<SentinelCallToolResult<object>> SearchSolutionText(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Text to search for, matched both as a literal substring and as a regex.")]
         [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
@@ -82,7 +82,7 @@ public class WorkspaceReadNavigationTools
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns a filtered, paged slice of an operation result blob by changeId.")]
-    public Task<ToolResult<object>> GetOperationDetail(
+    public Task<SentinelCallToolResult<object>> GetOperationDetail(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [Description("Filters items by outcome or path. Accepts prefixes fail/err (failures), warn/skip (skipped), ok/pass/info/success (succeeded), roll/revert/undo (rolled back), manual (needs manual review); or file:<path> to filter by path. Omit for all items.")]
@@ -96,7 +96,7 @@ public class WorkspaceReadNavigationTools
     [McpServerTool(Name = "GetLargeResult")]
     [Produces(DataTag.Report)]
     [Description("Pages through a large result that was written to disk because it exceeded the inline size threshold.")]
-    public Task<ToolResult<object>> GetLargeResult(
+    public Task<SentinelCallToolResult<object>> GetLargeResult(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filepath must be supplied;
         // neither is individually required but the tool fails if both are omitted.

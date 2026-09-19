@@ -443,7 +443,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             // _workspaceLoadErrors populated but returned normally, so a bad path silently reported
             // success with an empty CurrentSolution. Surface it as a real failure instead -> the
             // LoadSolution tool wrapper's catch block already turns a thrown ToolException into a
-            // correct Success=false ToolResult.
+            // correct Success=false SentinelCallToolResult.
             if (CurrentSolution == null || CurrentSolution.ProjectIds.Count == 0)
             {
                 var detail = _workspaceLoadErrors.Count > 0

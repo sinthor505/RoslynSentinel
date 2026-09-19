@@ -25,7 +25,7 @@ public class RefactoringSignatureTools
     [McpServerTool(Name = "RenameSymbol", UseStructuredContent = true, OutputSchemaType = typeof(RenameSymbolResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Renames a symbol and all its references across the solution, including mentions in XML doc comments, inline comments, and string literals. Returns changeId and updatedHandle for the renamed symbol, plus residualMentions for any leftover occurrences of the old name that rename couldn't reach (e.g. embedded in an unrelated identifier, or in a non-source file). Does NOT simplify call sites or add/remove using directives - if the rename target's new name needs a namespace not already in scope at a call site, or you want to shorten a fully-qualified reference, use the UsingDirective tool separately.")]
-    public Task<ToolResult<object>> RenameSymbol(
+    public Task<SentinelCallToolResult<object>> RenameSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description(ToolParams.ProjectName)] string projectName,
         [Description(ToolParams.DocCommentId)][Consumes(DataTag.DocCommentId, required: true)] string docCommentId,
@@ -42,7 +42,7 @@ public class RefactoringSignatureTools
     [McpServerTool(Name = "MethodSignature", UseStructuredContent = true, OutputSchemaType = typeof(MethodSignatureViewResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view a method's parameters (general-purpose - not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-    public Task<ToolResult<object>> MethodSignature(
+    public Task<SentinelCallToolResult<object>> MethodSignature(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("add: appends a new parameter to the end of the parameter list. remove: only the LAST parameter can be removed (paramName must match it) - a deliberate restriction, since removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely; call sites passing the removed argument positionally are updated automatically, but a call site using named arguments (or one that can't be safely re-parsed) causes the whole operation to be refused with no changes made. view: lists current parameters (name, type, default value); makes no changes.")]
@@ -69,7 +69,7 @@ public class RefactoringSignatureTools
     [McpServerTool(Name = "ChangeAccessibility")]
     [Produces(DataTag.ChangeId)]
     [Description("Changes the accessibility (private, public, internal, protected, protected internal, private protected) of a type or member to the given target level in one step - replaces whatever accessibility is currently present, so there's no separate remove/add pairing to get wrong. For overloaded members, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. This tool covers accessibility only - use ChangeAccessibility for accessibility, ModifyAttribute for [Attribute] syntax, and ModifyModifier for non-accessibility keywords (virtual/abstract/static/etc.). Returns changeId.")]
-    public Task<ToolResult<object>> ChangeAccessibility(
+    public Task<SentinelCallToolResult<object>> ChangeAccessibility(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
@@ -86,7 +86,7 @@ public class RefactoringSignatureTools
     [McpServerTool(Name = "ConstructorParameter")]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view DI constructor parameters on a class. For classes with the same name in the same file, combine className with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-    public Task<ToolResult<object>> ConstructorParameter(
+    public Task<SentinelCallToolResult<object>> ConstructorParameter(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("add: creates a private readonly field, parameter, and body assignment in one step; creates a constructor if none exists. remove: deletes the parameter and its assignment statement - the backing field is only deleted if a solution-wide reference check confirms nothing else in the class still uses it, otherwise it's left in place. view: lists current constructor parameters and their inferred backing fields; makes no changes.")]

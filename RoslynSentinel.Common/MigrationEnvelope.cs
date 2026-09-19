@@ -15,7 +15,7 @@ public static class MigrationErrorCode
 /// Typed envelope returned by migration scan tools.
 /// Exactly one of <see cref="Data"/>, <see cref="Error"/>, or <see cref="LargeResult"/> is populated.
 /// </summary>
-public record MigrationEnvelope<T> : ToolResult<T> where T : class
+public record MigrationEnvelope<T> : SentinelCallToolResult<T> where T : class
 {
 
 }

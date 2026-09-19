@@ -1,8 +1,9 @@
 using System.Text.Json;
+
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Basic;
 
 /// <summary>
 /// Plain DI-constructed implementation backing WorkspaceFileEditTools. Method bodies moved
@@ -24,21 +25,21 @@ public class WorkspaceFileEditImpl
 {
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger _logger;
-    private readonly WorkspaceReadNavigationTools _readNav;
+    private readonly WorkspaceReadNavigationImpl _readNav;
 
-    public WorkspaceFileEditImpl(IWorkspaceManager workspaceManager, WorkspaceReadNavigationTools readNav, ILogger logger)
+    public WorkspaceFileEditImpl(IWorkspaceManager workspaceManager, WorkspaceReadNavigationImpl readNav, ILogger logger)
     {
         _workspaceManager = workspaceManager;
         _readNav = readNav;
         _logger = logger;
     }
 
-    public async Task<ToolResult<object>> RetryFailedChanges(ToolCallReason reason, List<string>? specificFiles = null,
+    public async Task<SentinelCallToolResult<object>> RetryFailedChanges(ToolCallReason reason, List<string>? specificFiles = null,
         int retryCount = 3, CancellationToken cancellationToken = default)
     {
         try
         {
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = true,
                 Data = await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount, cancellationToken)
@@ -47,7 +48,7 @@ public class WorkspaceFileEditImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "RetryFailedChanges failed");
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "RetryFailedChanges")
@@ -55,7 +56,7 @@ public class WorkspaceFileEditImpl
         }
     }
 
-    public async Task<ToolResult<object>> UndoLastApply(ToolCallReason reason, string changeId, CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> UndoLastApply(ToolCallReason reason, string changeId, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -63,7 +64,7 @@ public class WorkspaceFileEditImpl
             var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
             if (blobPath == null)
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError("NoOperationBlobFound",
@@ -81,7 +82,7 @@ public class WorkspaceFileEditImpl
             var revertable = doc.GetProperty("items").EnumerateArray().Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!).Where(r => r.Outcome == ItemRecordOutcome.Succeeded && r.BeforeSource != null).ToList();
             if (revertable.Count == 0)
             {
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = false,
                     Error = new ResultError("NoReversibleItems",
@@ -140,7 +141,7 @@ public class WorkspaceFileEditImpl
             var noOpPart = noOpFiles.Count > 0
                 ? $" ({noOpFiles.Count} already matched pre-apply state - no change needed: {string.Join(", ", noOpFiles)})"
                 : "";
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = true,
                 Data = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{failedPart}"
@@ -149,7 +150,7 @@ public class WorkspaceFileEditImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "UndoLastApply failed for '{ChangeId}'", changeId);
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UndoLastApply")
@@ -181,7 +182,7 @@ public class WorkspaceFileEditImpl
             "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.");
     }
 
-    public async Task<ToolResult<object>> ReadFile(ToolCallReason reason, FilePathWrapper filepath, int? startLine = null,
+    public async Task<SentinelCallToolResult<object>> ReadFile(ToolCallReason reason, FilePathWrapper filepath, int? startLine = null,
         int? endLine = null, CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -201,7 +202,7 @@ public class WorkspaceFileEditImpl
                 var diskContent = await FileIoHelper.ReadAllTextIfExistsAsync(filePathResolved, cancellationToken);
                 if (diskContent == null)
                 {
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = BuildFileNotFoundError(solution, normalizedPath)
@@ -218,7 +219,7 @@ public class WorkspaceFileEditImpl
                 int to = Math.Min(totalLines, endLine ?? totalLines);
                 if (from > totalLines || from > to)
                 {
-                    return new ToolResult<object>()
+                    return new SentinelCallToolResult<object>()
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument, $"ReadFile: requested range {from}-{to} is out of bounds for a {totalLines}-line file.")
@@ -228,7 +229,7 @@ public class WorkspaceFileEditImpl
                 var start = sourceText.Lines[from - 1].Start;
                 var end = sourceText.Lines[to - 1].EndIncludingLineBreak;
                 var slice = sourceText.ToString(TextSpan.FromBounds(start, end));
-                return new ToolResult<object>()
+                return new SentinelCallToolResult<object>()
                 {
                     Success = true,
                     Data = new
@@ -263,7 +264,7 @@ public class WorkspaceFileEditImpl
                     _logger.LogWarning(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePathResolved);
                 }
 
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need, or use GetFileOutline to get the constructors, methods, helpers, members, enums, fields, properties, etc of a file without reading the entire file."),
@@ -276,7 +277,7 @@ public class WorkspaceFileEditImpl
                 };
             }
 
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = true,
                 Data = new
@@ -293,7 +294,7 @@ public class WorkspaceFileEditImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReadFile failed for '{FilePathWrapper}'", filePathResolved);
-            return new ToolResult<object>()
+            return new SentinelCallToolResult<object>()
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReadFile")

@@ -44,7 +44,7 @@ public class SentinelCommentingTools
         """)]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName required for scope=project, filePath required
     // for scope=file; neither is individually required by the schema (enforced at runtime instead).
-    public async Task<ToolResult<CommentingResult>> BulkComment(
+    public async Task<SentinelCallToolResult<CommentingResult>> BulkComment(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("solution (default): the whole loaded solution. project: restrict to one project, projectName required. file: restrict to a single file, filePath required.")]
         ToolScope scope = ToolScope.solution,
@@ -63,7 +63,7 @@ public class SentinelCommentingTools
     {
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new ToolResult<CommentingResult>
+            return new SentinelCallToolResult<CommentingResult>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -73,7 +73,7 @@ public class SentinelCommentingTools
 
         if (scope == ToolScope.project && string.IsNullOrEmpty(projectName))
         {
-            return new ToolResult<CommentingResult>
+            return new SentinelCallToolResult<CommentingResult>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.InvalidArgument, "projectName is required when scope=project.")
@@ -82,7 +82,7 @@ public class SentinelCommentingTools
 
         if (scope == ToolScope.file && string.IsNullOrEmpty(filePath))
         {
-            return new ToolResult<CommentingResult>
+            return new SentinelCallToolResult<CommentingResult>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.InvalidArgument, "filePath is required when scope=file.")
@@ -92,7 +92,7 @@ public class SentinelCommentingTools
         var halt = _workspaceManager.CheckBreaker();
         if (halt != null)
         {
-            return new ToolResult<CommentingResult>
+            return new SentinelCallToolResult<CommentingResult>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.Exception,
@@ -103,11 +103,11 @@ public class SentinelCommentingTools
         try
         {
             var result = await RunAsync(scope, projectName, filePath, dryRun, maxMembers, maxRuntimeSeconds, cancellationToken);
-            return new ToolResult<CommentingResult> { Success = true, Data = result };
+            return new SentinelCallToolResult<CommentingResult> { Success = true, Data = result };
         }
         catch (Exception ex)
         {
-            return new ToolResult<CommentingResult>
+            return new SentinelCallToolResult<CommentingResult>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "BulkComment")

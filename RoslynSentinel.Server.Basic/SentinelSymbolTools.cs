@@ -47,7 +47,7 @@ public class SentinelSymbolTools
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
     [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text - use SearchSolutionText for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
-    public Task<ToolResult<object>> LocateSymbol(
+    public Task<SentinelCallToolResult<object>> LocateSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
         [Description("Restricts the search to one kind of symbol.")]
@@ -66,7 +66,7 @@ public class SentinelSymbolTools
     [McpServerTool(Name = "InspectSymbol")]
     [Produces(DataTag.DocCommentId)]
     [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol - if you only have a name, use LocateSymbol first to find the declaring file.")]
-    public Task<ToolResult<object>> InspectSymbol(
+    public Task<SentinelCallToolResult<object>> InspectSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
@@ -81,7 +81,7 @@ public class SentinelSymbolTools
     [McpServerTool(Name = "QuerySymbolRelationships")]
     [Produces(DataTag.Report)]
     [Description("Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites, extension methods, types carrying an attribute, or methods by return type. If the targeted searchKind returns zero results, automatically broadens to all kinds and reports whatever is found. For call-site/override queries on a method or property, use FindReferences instead.")]
-    public Task<ToolResult<object>> QuerySymbolRelationships(
+    public Task<SentinelCallToolResult<object>> QuerySymbolRelationships(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string name,
         [Description("Which relationship to query.")]
@@ -96,7 +96,7 @@ public class SentinelSymbolTools
     [McpServerTool(Name = "GetBestInsertionPoint")]
     [Produces(DataTag.StartLine)]
     [Description("Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields -> constructors -> destructors -> properties -> events -> methods -> nested types).")]
-    public Task<ToolResult<object>> GetBestInsertionPoint(
+    public Task<SentinelCallToolResult<object>> GetBestInsertionPoint(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.ContainerName)] string containerName,
@@ -108,7 +108,7 @@ public class SentinelSymbolTools
     [McpServerTool(Name = "PreviewRenameImpact")]
     [Produces(DataTag.Report)]
     [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count, plus whether any affected file is a test file. For the full per-location list, use FindReferences.")]
-    public Task<ToolResult<object>> PreviewRenameImpact(
+    public Task<SentinelCallToolResult<object>> PreviewRenameImpact(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Together with symbolName, resolves the target when docCommentId isn't known. Use contextSnippet/lineBefore/lineAfter to disambiguate if the name appears more than once.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
@@ -125,7 +125,7 @@ public class SentinelSymbolTools
     [McpServerTool(Name = "FindReferences")]
     [Produces(DataTag.Report)]
     [Description("Finds call sites and/or implementations for a symbol. This is a single-level, flat lookup - for a multi-level call tree use GetCallGraph, for a local variable's read/write/capture sites use TraceVariableLifetime, for a rename-impact summary use PreviewRenameImpact, and for type-relationship queries (implementors, attribute usage, object creation, etc.) use QuerySymbolRelationships.")]
-    public Task<ToolResult<object>> FindReferences(
+    public Task<SentinelCallToolResult<object>> FindReferences(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
         [Description("callers: call sites only. implementations: overrides/interface implementations only. all: both, clearly labeled.")]
@@ -141,7 +141,7 @@ public class SentinelSymbolTools
     [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]
     [Description("Returns type information for a type you already know the name of - hierarchy, members, or both. If you're not sure the type exists or need to disambiguate a common name, use LocateSymbol first. To change an enum's values, use ModifyEnum.")]
-    public Task<ToolResult<object>> GetTypeInfo(
+    public Task<SentinelCallToolResult<object>> GetTypeInfo(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.DataType)] string typeName,
         [Description("hierarchy: base class chain, interfaces, derived types. members: all public/protected members - for an enum, each value appears as a Field member with its explicit/ordinal value inline in Signature (e.g. \"Status.Active = 1\"), and inherited System.Enum/ValueType noise is excluded automatically. both: hierarchy and members together (default).")]

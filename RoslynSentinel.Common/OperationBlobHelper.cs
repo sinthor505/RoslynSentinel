@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Shared static helper for writing the forensic operation blob that undo_last_apply relies on.

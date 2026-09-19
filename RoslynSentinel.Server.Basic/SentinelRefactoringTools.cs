@@ -50,7 +50,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool(Name = "RenameSymbol")]
-    public Task<ToolResult<object>> RenameSymbol(
+    public Task<SentinelCallToolResult<object>> RenameSymbol(
         ToolCallReason reason,
         string projectName,
         string docCommentId,
@@ -62,7 +62,7 @@ public class SentinelRefactoringTools
         _signature.RenameSymbol(reason, projectName, docCommentId, newName, dryRun, returnDiff, requestParams, cancellationToken);
 
     [McpServerTool(Name = "MethodSignature")]
-    public Task<ToolResult<object>> MethodSignature(
+    public Task<SentinelCallToolResult<object>> MethodSignature(
         ToolCallReason reason,
         FilePathWrapper filepath,
         AddRemoveViewAction operation,
@@ -81,7 +81,7 @@ public class SentinelRefactoringTools
         _signature.MethodSignature(reason, filepath, operation, methodName, paramName, paramType, defaultValue, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, nullDefault);
 
     [McpServerTool(Name = "ChangeAccessibility")]
-    public Task<ToolResult<object>> ChangeAccessibility(
+    public Task<SentinelCallToolResult<object>> ChangeAccessibility(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string targetName,
@@ -96,7 +96,7 @@ public class SentinelRefactoringTools
         _signature.ChangeAccessibility(reason, filepath, targetName, accessibility, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ConstructorParameter")]
-    public Task<ToolResult<object>> ConstructorParameter(
+    public Task<SentinelCallToolResult<object>> ConstructorParameter(
         ToolCallReason reason,
         FilePathWrapper filepath,
         AddRemoveViewAction operation,
@@ -114,7 +114,7 @@ public class SentinelRefactoringTools
         _signature.ConstructorParameter(reason, filepath, operation, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "GenerateMapping")]
-    public Task<ToolResult<object>> GenerateMapping(
+    public Task<SentinelCallToolResult<object>> GenerateMapping(
         FilePathWrapper filepath,
         string fromType,
         string toType,
@@ -125,7 +125,7 @@ public class SentinelRefactoringTools
         _extractionDocs.GenerateMapping(filepath, fromType, toType, dryRun, returnDiff, requestParams, cancellationToken);
 
     [McpServerTool(Name = "Member")]
-    public Task<ToolResult<object>> Member(
+    public Task<SentinelCallToolResult<object>> Member(
         ToolCallReason reason,
         FilePathWrapper filepath,
         MemberAction operation,
@@ -157,7 +157,7 @@ public class SentinelRefactoringTools
             requestParams, cancellationToken);
 
     [McpServerTool(Name = "UsingDirective")]
-    public Task<ToolResult<object>> UsingDirective(
+    public Task<SentinelCallToolResult<object>> UsingDirective(
         ToolCallReason reason,
         FilePathWrapper filepath,
         AddRemoveViewAction operation,
@@ -170,7 +170,7 @@ public class SentinelRefactoringTools
         _extractionDocs.UsingDirective(reason, filepath, operation, namespaceName, simplifyExisting, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyEnum")]
-    public Task<ToolResult<object>> ModifyEnum(
+    public Task<SentinelCallToolResult<object>> ModifyEnum(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string enumName,
@@ -185,7 +185,7 @@ public class SentinelRefactoringTools
         _structural.ModifyEnum(reason, filepath, enumName, values, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "SummaryComment")]
-    public Task<ToolResult<object>> SummaryComment(
+    public Task<SentinelCallToolResult<object>> SummaryComment(
         ToolCallReason reason,
         FilePathWrapper filepath,
         AddRemoveViewAction operation,
@@ -202,7 +202,7 @@ public class SentinelRefactoringTools
         _extractionDocs.SummaryComment(reason, filepath, operation, targetName, summaryText, contextSnippet, lineBefore, lineAfter, containingTypeName, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ExtractLocalVariable")]
-    public Task<ToolResult<object>> ExtractLocalVariable(
+    public Task<SentinelCallToolResult<object>> ExtractLocalVariable(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string exactExpressionText,
@@ -215,7 +215,7 @@ public class SentinelRefactoringTools
         _extractionDocs.ExtractLocalVariable(reason, filepath, exactExpressionText, variableName, lineBefore, lineAfter, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ExtractMethodSafe")]
-    public Task<ToolResult<object>> ExtractMethodSafe(
+    public Task<SentinelCallToolResult<object>> ExtractMethodSafe(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string newMethodName,
@@ -229,7 +229,7 @@ public class SentinelRefactoringTools
         _extractionDocs.ExtractMethodSafe(reason, filepath, newMethodName, exactSourceBlock, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyAttribute")]
-    public Task<ToolResult<object>> ModifyAttribute(
+    public Task<SentinelCallToolResult<object>> ModifyAttribute(
         ToolCallReason reason,
         FilePathWrapper? filepath = null,
         string? targetName = null,
@@ -247,7 +247,7 @@ public class SentinelRefactoringTools
         _structural.ModifyAttribute(reason, filepath, targetName, existingAttribute, action, newAttribute, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = true, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
-    public Task<ToolResult<object>> ModifyModifier(
+    public Task<SentinelCallToolResult<object>> ModifyModifier(
         ToolCallReason reason,
         FilePathWrapper? filepath = null,
         string? targetName = null,
@@ -264,7 +264,7 @@ public class SentinelRefactoringTools
         _structural.ModifyModifier(reason, filepath, targetName, modifier, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyBaseType")]
-    public Task<ToolResult<object>> ModifyBaseType(
+    public Task<SentinelCallToolResult<object>> ModifyBaseType(
         ToolCallReason reason,
         FilePathWrapper? filepath = null,
         string? typeName = null,
@@ -281,7 +281,7 @@ public class SentinelRefactoringTools
         _structural.ModifyBaseType(reason, filepath, typeName, baseTypeName, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "SyncTypeAndFilename")]
-    public Task<ToolResult<object>> SyncTypeAndFilename(
+    public Task<SentinelCallToolResult<object>> SyncTypeAndFilename(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string? targetTypeName = null,
@@ -315,7 +315,7 @@ public sealed record RenameSymbolUpdatedHandle(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Named shape mirroring the anonymous object <see cref="SentinelRefactoringTools.RenameSymbol"/>
-/// assigns to <c>ToolResult&lt;object&gt;.Data</c> on its applied success path. Primary path only
+/// assigns to <c>SentinelCallToolResult&lt;object&gt;.Data</c> on its applied success path. Primary path only
 /// (the resolution-failed / no-pending-changes / apply-failed error paths return a different,
 /// error-shaped envelope with no Data) - see proposal_structuredcontent_rollout.md.
 /// </summary>
@@ -331,7 +331,7 @@ public sealed record RenameSymbolData(
     string? ResidualMentionsNote);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Envelope shape mirroring <c>ToolResult&lt;object&gt;</c> as actually populated on
+/// Envelope shape mirroring <c>SentinelCallToolResult&lt;object&gt;</c> as actually populated on
 /// <see cref="SentinelRefactoringTools.RenameSymbol"/>'s primary success path, which sets only
 /// <c>Success</c> and <c>Data</c> (not TotalRecords/WorkspaceVersion/etc). Primary path only -
 /// see proposal_structuredcontent_rollout.md.
@@ -341,7 +341,7 @@ public sealed record RenameSymbolResultEnvelope(
     RenameSymbolData? Data);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Envelope shape mirroring <c>ToolResult&lt;object&gt;</c> as actually populated on
+/// Envelope shape mirroring <c>SentinelCallToolResult&lt;object&gt;</c> as actually populated on
 /// <see cref="SentinelRefactoringTools.ModifyModifier"/>'s primary (autoStage=true, singular-edit,
 /// non-batch) success path, which sets only <c>Success</c> and <c>Data</c>. Deliberately does not
 /// cover the batch (edits != null), autoStage=false, or error branches - see
@@ -374,7 +374,7 @@ public sealed record MethodSignatureViewData(
     IReadOnlyList<MethodSignatureParameterInfo> Parameters);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Envelope shape mirroring <c>ToolResult&lt;object&gt;</c> as actually populated on
+/// Envelope shape mirroring <c>SentinelCallToolResult&lt;object&gt;</c> as actually populated on
 /// <see cref="SentinelRefactoringTools.MethodSignature"/>'s "view" branch only (operation=view),
 /// which sets only <c>Success</c> and <c>Data = new { Parameters }</c>. The add/remove branches
 /// (both the non-autoStage ToJsonSummary shape and the autoStage applied-with-offload

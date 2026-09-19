@@ -30,7 +30,7 @@ public class RefactoringExtractionDocsTools
     [McpServerTool(Name = "GenerateMapping")]
     [Produces(DataTag.ChangeId)]
     [Description("Generates a mapping method between fromType and toType. Returns changeId.")]
-    public Task<ToolResult<object>> GenerateMapping(
+    public Task<SentinelCallToolResult<object>> GenerateMapping(
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [ExternalInputRequired(DataTag.DataType, required: true)] string fromType,
         [ExternalInputRequired(DataTag.DataType)] string toType,
@@ -43,7 +43,7 @@ public class RefactoringExtractionDocsTools
     [McpServerTool(Name = "UsingDirective")]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view using directives in a file.")]
-    public Task<ToolResult<object>> UsingDirective(
+    public Task<SentinelCallToolResult<object>> UsingDirective(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("add: inserts a using; no-op if already present. remove: deletes the matching using directive. view: lists current using directives (name, isStatic, alias); makes no changes.")]
@@ -61,7 +61,7 @@ public class RefactoringExtractionDocsTools
     [McpServerTool(Name = "SummaryComment")]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view a /// <summary> XML doc comment on a type or member. For overloaded targets, combine targetName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
-    public Task<ToolResult<object>> SummaryComment(
+    public Task<SentinelCallToolResult<object>> SummaryComment(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("add: adds or replaces the summary, overwriting any existing one. remove: deletes the summary comment if present; no-op if none exists. view: returns the current summary text (or null if none); makes no changes.")]
@@ -82,7 +82,7 @@ public class RefactoringExtractionDocsTools
     [McpServerTool(Name = "ExtractLocalVariable")]
     [Produces(DataTag.ChangeId)]
     [Description("Extracts an inline expression into a named local variable declaration. exactExpressionText is NOT a search fragment (unlike contextSnippet on other tools) - it must be the WHOLE expression to extract, copied verbatim.")]
-    public Task<ToolResult<object>> ExtractLocalVariable(
+    public Task<SentinelCallToolResult<object>> ExtractLocalVariable(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("The exact expression to extract, copied VERBATIM character-for-character from a prior ReadFile/GetMethodSource result - the whole expression, not a shortened/unique fragment. This is NOT a search anchor like contextSnippet on other tools: it must match the target expression's full text exactly (whitespace differences are tolerated, but the expression itself must be complete). A partial expression may still resolve to the nearest enclosing expression rather than the one you intended, silently extracting the wrong span - if in doubt, include the whole expression, not less.")]
@@ -99,7 +99,7 @@ public class RefactoringExtractionDocsTools
     [Produces(DataTag.ChangeId)]
     [Description("Extracts selected statements into a new method with the correct return type inferred from the selection. newMethodName must be a valid C# identifier. exactSourceBlock is NOT a search fragment (unlike contextSnippet on other tools) - the entire range you want extracted must appear in it verbatim, since its matched span IS the extraction boundary; a too-short excerpt silently extracts only that narrower range, not the whole intended block. Written to disk (or staged, per autoStage) like other refactoring tools - not preview-only. Returns changeId.")]
     // Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent).
-    public Task<ToolResult<object>> ExtractMethodSafe(
+    public Task<SentinelCallToolResult<object>> ExtractMethodSafe(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string newMethodName,

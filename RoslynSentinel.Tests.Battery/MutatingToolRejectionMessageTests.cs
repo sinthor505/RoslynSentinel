@@ -62,11 +62,11 @@ public class MutatingToolRejectionMessageTests
             new BuildEngine(workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
-            new WorkspaceReadNavigationTools(new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance)),
+            new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 
-    private static void AssertRoutedThroughLookupHelper(ToolResult<object> result)
+    private static void AssertRoutedThroughLookupHelper(SentinelCallToolResult<object> result)
     {
         Assert.That(result.Success, Is.False, "the rename-desync edit should be rejected by pre-apply validation");
         Assert.That(result.Error, Is.Not.Null);

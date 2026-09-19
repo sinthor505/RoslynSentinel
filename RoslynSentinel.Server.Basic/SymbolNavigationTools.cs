@@ -24,7 +24,7 @@ public class SymbolNavigationTools
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
     [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text - use SearchSolutionText for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
-    public Task<ToolResult<object>> LocateSymbol(
+    public Task<SentinelCallToolResult<object>> LocateSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
         [Description("Restricts the search to one kind of symbol.")]
@@ -43,7 +43,7 @@ public class SymbolNavigationTools
     [McpServerTool(Name = "InspectSymbol")]
     [Produces(DataTag.DocCommentId)]
     [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol - if you only have a name, use LocateSymbol first to find the declaring file.")]
-    public Task<ToolResult<object>> InspectSymbol(
+    public Task<SentinelCallToolResult<object>> InspectSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
@@ -58,7 +58,7 @@ public class SymbolNavigationTools
     [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]
     [Description("Returns type information for a type you already know the name of - hierarchy, members, or both. If you're not sure the type exists or need to disambiguate a common name, use LocateSymbol first. To change an enum's values, use ModifyEnum.")]
-    public Task<ToolResult<object>> GetTypeInfo(
+    public Task<SentinelCallToolResult<object>> GetTypeInfo(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.DataType)] string typeName,
         [Description("hierarchy: base class chain, interfaces, derived types. members: all public/protected members - for an enum, each value appears as a Field member with its explicit/ordinal value inline in Signature (e.g. \"Status.Active = 1\"), and inherited System.Enum/ValueType noise is excluded automatically. both: hierarchy and members together (default).")]
@@ -92,11 +92,11 @@ public sealed record LocatedSymbolInfo(
     [property: Produces(DataTag.Accessibility)] string Accessibility);
 
 /// <summary>
-/// Named shape mirroring the actual <c>ToolResult&lt;object&gt;</c> envelope
+/// Named shape mirroring the actual <c>SentinelCallToolResult&lt;object&gt;</c> envelope
 /// <see cref="SymbolNavigationTools.LocateSymbol"/> returns on its primary (match-found) success path
 /// - StructuredContent is populated from the whole method return value, not just its inner
 /// <c>Data</c>, since LocateSymbol (unlike McpServerStatus) returns
-/// <c>Task&lt;ToolResult&lt;object&gt;&gt;</c> rather than a bare object. Used only as
+/// <c>Task&lt;SentinelCallToolResult&lt;object&gt;&gt;</c> rather than a bare object. Used only as
 /// <c>OutputSchemaType</c> so the tool can advertise a real MCP <c>outputSchema</c>/
 /// <c>StructuredContent</c> shape (2026-07-28 protocol) without changing the method's actual return
 /// type. Primary path only (the not-found and exception error paths return a different, error-shaped

@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Basic;
 
 /// <summary>
 /// Shared static helpers for the refactoring tool classes: file-content preview truncation, the
@@ -51,14 +51,14 @@ public static class RefactoringToolHelpers
     /// the server had faulted. Run 20260910-013550-398 hit this via a generic containerName ->
     /// see docs/current/feedback_agent_friendly_error_messages.md.
     /// </remarks>
-    public static ToolResult<object>? RequireUpdatedText(DocumentEditResult updated, string operationName, FilePathWrapper filePath)
+    public static SentinelCallToolResult<object>? RequireUpdatedText(DocumentEditResult updated, string operationName, FilePathWrapper filePath)
     {
         if (!string.IsNullOrEmpty(updated.UpdatedText))
         {
             return null;
         }
 
-        return new ToolResult<object>
+        return new SentinelCallToolResult<object>
         {
             Success = false,
             Error = new ResultError(ErrorCodeFor(updated.Outcome),

@@ -2,7 +2,7 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Basic;
 
 public class SymbolRelationshipImpl
 {
@@ -59,7 +59,7 @@ public class SymbolRelationshipImpl
         return ((System.Collections.IEnumerable)result).Cast<object>().ToList();
     }
 
-    public async Task<ToolResult<object>> QuerySymbolRelationships(
+    public async Task<SentinelCallToolResult<object>> QuerySymbolRelationships(
         ToolCallReason reason,
         string name,
         FindUsagesSearchKind searchKind,
@@ -78,7 +78,7 @@ public class SymbolRelationshipImpl
                 if (resolved.Count > 0 && resolved.All(s => MemberSymbolKinds.Contains(s.SymbolKind)))
                 {
                     var kindsFound = string.Join(", ", resolved.Select(s => s.SymbolKind).Distinct());
-                    return new ToolResult<object>
+                    return new SentinelCallToolResult<object>
                     {
                         Success = false,
                         Error = new ResultError(ToolErrorCode.InvalidArgument,
@@ -93,7 +93,7 @@ public class SymbolRelationshipImpl
             var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePathResolved, sortByFrequency, cancellationToken);
             if (results.Count > 0)
             {
-                return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                     results, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.SymbolRelationshipResultList,
                     totalRecords: results.Count, cancellationToken: cancellationToken);
             }
@@ -123,7 +123,7 @@ public class SymbolRelationshipImpl
 
             if (broadened.Count == 0)
             {
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     Data = results,
@@ -134,7 +134,7 @@ public class SymbolRelationshipImpl
 
             var totalFound = broadened.Sum(kv => kv.Value.Count);
             var summary = string.Join("; ", broadened.Select(kv => $"{kv.Value.Count} under '{kv.Key}'"));
-            var broadenedResult = await ToolResult<object>.ForPossiblyLargeDataAsync(
+            var broadenedResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                 broadened, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.BroadenedSymbolRelationshipResults,
                 totalRecords: totalFound, cancellationToken: cancellationToken);
             return broadenedResult with
@@ -146,7 +146,7 @@ public class SymbolRelationshipImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "QuerySymbolRelationships ({Kind}) failed for '{Name}'", searchKind, name);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "QuerySymbolRelationships")
@@ -154,7 +154,7 @@ public class SymbolRelationshipImpl
         }
     }
 
-    public async Task<ToolResult<object>> GetBestInsertionPoint(
+    public async Task<SentinelCallToolResult<object>> GetBestInsertionPoint(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string containerName,
@@ -167,7 +167,7 @@ public class SymbolRelationshipImpl
         try
         {
             var result = await _discoveryEngine.FindBestInsertionPointAsync(filePathResolved, containerName, memberKind.ToString());
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = true,
                 Data = result
@@ -176,7 +176,7 @@ public class SymbolRelationshipImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetBestInsertionPoint failed for '{ContainerName}' in '{FilePathWrapper}'", containerName, filePathResolved);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetBestInsertionPoint")
@@ -184,7 +184,7 @@ public class SymbolRelationshipImpl
         }
     }
 
-    public async Task<ToolResult<object>> PreviewRenameImpact(
+    public async Task<SentinelCallToolResult<object>> PreviewRenameImpact(
         ToolCallReason reason,
         string? filepath = null,
         string? symbolName = null,
@@ -201,7 +201,7 @@ public class SymbolRelationshipImpl
         {
             var result = await _discoveryEngine.PreviewRenameImpactAsync(
                 filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = true,
                 Data = result
@@ -210,7 +210,7 @@ public class SymbolRelationshipImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "PreviewRenameImpact failed for '{SymbolName}' in '{FilePathWrapper}'", symbolName, filePathResolved);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewRenameImpact")
@@ -218,7 +218,7 @@ public class SymbolRelationshipImpl
         }
     }
 
-    public async Task<ToolResult<object>> FindReferences(
+    public async Task<SentinelCallToolResult<object>> FindReferences(
         ToolCallReason reason,
         string symbolName,
         FindReferencesKind kind,
@@ -235,7 +235,7 @@ public class SymbolRelationshipImpl
             if (kind == FindReferencesKind.callers)
             {
                 var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     Data = result
@@ -244,7 +244,7 @@ public class SymbolRelationshipImpl
             if (kind == FindReferencesKind.implementations)
             {
                 var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     Data = result
@@ -254,13 +254,13 @@ public class SymbolRelationshipImpl
             {
                 var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
                 var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
-                return new ToolResult<object>
+                return new SentinelCallToolResult<object>
                 {
                     Success = true,
                     Data = new { callers, implementations }
                 };
             }
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled kind '{kind}'.")
@@ -269,7 +269,7 @@ public class SymbolRelationshipImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "FindReferences ({Kind}) failed for '{SymbolName}'", kind, symbolName);
-            return new ToolResult<object>
+            return new SentinelCallToolResult<object>
             {
                 Success = false,
                 Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FindReferences")

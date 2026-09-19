@@ -352,7 +352,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     catch (Exception ex)
                     {
                         // Every tool in this codebase catches its own exceptions and returns a
-                        // ToolResult with Success=false instead of throwing (see
+                        // SentinelCallToolResult with Success=false instead of throwing (see
                         // docs/current/feedback_agent_friendly_error_messages.md), so reaching here
                         // means an exception escaped that path entirely -> e.g. the MCP SDK's own
                         // argument-binding failure (a required parameter missing from the call), or
@@ -370,7 +370,7 @@ public static class RoslynSentinelServiceExtensionsBasic
 
             // Domain-failure -> protocol-error sync: every tool in this codebase (by design, see
             // docs/current/feedback_agent_friendly_error_messages.md) catches its own exceptions
-            // and returns a ToolResult<T>/ApplyChangesResult/etc. with Success=false instead of
+            // and returns a SentinelCallToolResult<T>/ApplyChangesResult/etc. with Success=false instead of
             // throwing, so the MCP SDK's own exception-based IsError detection never fires for a
             // domain-level failure. Set IsError=true whenever the serialized response body's
             // top-level "success" field is false, so a client relying on the protocol-level flag
@@ -407,7 +407,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     }
                     catch (System.Text.Json.JsonException)
                     {
-                        // Response text isn't JSON (or isn't a ToolResult-shaped object) -> leave IsError as-is.
+                        // Response text isn't JSON (or isn't a SentinelCallToolResult-shaped object) -> leave IsError as-is.
                     }
                     catch (Exception ex)
                     {

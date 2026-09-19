@@ -35,7 +35,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "Member")]
     [Produces(DataTag.ChangeId)]
     [Description("Add (as a raw source member, a generated typed property/field, or a brand-new top-level type), remove, replace, or view a type member (method, property, field, constructor). This is the right choice even for a one-line change inside a member - read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
-    public Task<ToolResult<object>> Member(
+    public Task<SentinelCallToolResult<object>> Member(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
@@ -78,7 +78,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "ModifyEnum")]
     [Produces(DataTag.ChangeId)]
     [Description("Replaces an enum's complete member list in one operation. Use GetTypeInfo(typeName, include:\"members\") to see current values first.")]
-    public Task<ToolResult<object>> ModifyEnum(
+    public Task<SentinelCallToolResult<object>> ModifyEnum(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
@@ -96,7 +96,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
     [Description("Adds, replaces, or removes an [Attribute] on a type or member. Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords, not this tool.")]
-    public Task<ToolResult<object>> ModifyAttribute(
+    public Task<SentinelCallToolResult<object>> ModifyAttribute(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
@@ -121,7 +121,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = true, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a non-accessibility modifier keyword. Action: add or remove. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Does NOT cover accessibility (private/public/etc.) - use ChangeAccessibility for those, or ModifyAttribute for [Attribute] syntax. Returns changeId.")]
-    public Task<ToolResult<object>> ModifyModifier(
+    public Task<SentinelCallToolResult<object>> ModifyModifier(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
@@ -141,7 +141,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "ModifyBaseType")]
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a base type or interface from a type declaration.")]
-    public Task<ToolResult<object>> ModifyBaseType(
+    public Task<SentinelCallToolResult<object>> ModifyBaseType(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
@@ -162,7 +162,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "SyncTypeAndFilename")]
     [Produces(DataTag.ResultOnly)]
     [Description("Synchronizes the filename to match a type declared in the file.")]
-    public Task<ToolResult<object>> SyncTypeAndFilename(
+    public Task<SentinelCallToolResult<object>> SyncTypeAndFilename(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("The top-level type in the file to sync the filename to. Omit to default to the first non-nested type declared in the file (fine for the common single-type-per-file case). Name it explicitly to get a specific result when the file declares more than one top-level type - without it, whichever type happens to be declared first wins, which is not necessarily the file's conceptual main type.")]
