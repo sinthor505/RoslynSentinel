@@ -18,7 +18,7 @@ public record ExtractMethodResult(bool Success, string? ErrorMessage, string? Be
 public record UsingDirectiveInfo(string Name, bool IsStatic, string? Alias);
 public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string LineText);
 public record SkippedCallSite(FilePathWrapper FilePath, int LineNumber, string Reason);
-public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites);
+public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null);
 public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePathWrapper, string> PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null, List<ResidualMention>? ResidualMentions = null)
 {
     public string ToToolResponse()
@@ -183,6 +183,51 @@ public class RefactoringEngine
             return emptyResult;
         }
 
+        // ChangeSignature only edits the single symbol it's invoked on - it never walks to/from
+        // the other side of an interface boundary. Refuse early with a clear error naming the
+        // interface/implementers instead of a half-applied change surfacing CS0535 later. See
+        // blocking_error_changesignature_interface_implementation_no_cascade.md.
+        var declaredSymbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
+        if (declaredSymbol != null)
+        {
+            if (declaredSymbol.ContainingType.TypeKind == TypeKind.Interface)
+            {
+                var implementations = await SymbolFinder.FindImplementationsAsync(declaredSymbol, solution, null, cancellationToken);
+                var implementers = implementations.OfType<IMethodSymbol>()
+                    .Select(m => m.ContainingType.ToDisplayString())
+                    .Distinct()
+                    .ToList();
+                if (implementers.Count > 0)
+                {
+                    return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>(),
+                        $"'{methodName}' is declared on interface '{declaredSymbol.ContainingType.ToDisplayString()}', implemented by: " +
+                        $"{string.Join(", ", implementers)}. ChangeSignature refuses this outright - it cannot cascade across the " +
+                        "interface/implementer boundary, and calling it again on the interface or on any implementer hits this same " +
+                        "refusal. Edit the interface's and every implementer's parameter list directly instead (ApplyDiff/ReplaceSnippet " +
+                        "with validateOnApply:false on each), then run one terminal Build to converge.");
+                }
+            }
+            else
+            {
+                var implementedInterfaceMembers = declaredSymbol.ContainingType.AllInterfaces
+                    .SelectMany(i => i.GetMembers().OfType<IMethodSymbol>())
+                    .Where(im => SymbolEqualityComparer.Default.Equals(declaredSymbol.ContainingType.FindImplementationForInterfaceMember(im), declaredSymbol)
+                              || declaredSymbol.ExplicitInterfaceImplementations.Contains(im, SymbolEqualityComparer.Default))
+                    .Select(im => $"{im.ContainingType.ToDisplayString()}.{im.Name}")
+                    .Distinct()
+                    .ToList();
+                if (implementedInterfaceMembers.Count > 0)
+                {
+                    return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>(),
+                        $"'{methodName}' implements {string.Join(", ", implementedInterfaceMembers)}. ChangeSignature refuses this " +
+                        "outright - it cannot cascade across the interface/implementer boundary, and calling it again on the interface " +
+                        "or on any implementer hits this same refusal. Edit the interface's and every implementer's parameter list " +
+                        "directly instead (ApplyDiff/ReplaceSnippet with validateOnApply:false on each), then run one terminal Build " +
+                        "to converge.");
+                }
+            }
+        }
+
         var originalParams = methodDecl.ParameterList.Parameters.ToList();
         if (originalParams.Count == 0 || parameters.Count == 0)
         {
@@ -226,10 +271,9 @@ public class RefactoringEngine
         var pendingDocs = new Dictionary<FilePathWrapper, Document> { [filePath] = updatedDeclarationDoc };
         var skippedCallSites = new List<SkippedCallSite>();
 
-        var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
-        if (symbol != null)
+        if (declaredSymbol != null)
         {
-            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+            var references = await SymbolFinder.FindReferencesAsync(declaredSymbol, solution, cancellationToken);
             foreach (var reference in references)
             {
                 foreach (var location in reference.Locations)
@@ -2350,7 +2394,8 @@ public class RefactoringEngine
 
     /// <summary>
     /// Sets an enum's complete member list in one pass -> covers add, remove, and reorder.
-    /// <paramref name = "values"/> is a comma-separated "Name[=IntValue]" list in the desired final
+    /// <paramref name = "values"/> is a comma-separated "Name[=IntValue]" list (or a JSON array of
+    /// such strings - both shapes are accepted) in the desired final
     /// order. Members whose name is retained keep their existing explicit value unless the caller
     /// supplies an override; members omitted from <paramref name = "values"/> are removed; names not
     /// currently present are added (in the position given). The returned DocumentEditResult.Message
@@ -2414,7 +2459,18 @@ public class RefactoringEngine
 
         var enumDecl = (EnumDeclarationSyntax)enumNode;
         var requested = new List<(string Name, int? Value)>();
-        foreach (var raw in values.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        var parsedValues = DelimitedListParser.ParseStringOrJsonArrayToList(values, out var valuesError);
+        if (valuesError != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Cannot edit: {valuesError}"
+            };
+        }
+
+        foreach (var raw in parsedValues!)
         {
             var token = raw.Trim();
             var eq = token.IndexOf('=');

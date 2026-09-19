@@ -82,7 +82,7 @@ public class RefactoringStructuralTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
-        [Description("Comma-separated list of member names in the desired order (e.g. \"Pending,Shipped,Cancelled\"); append \"=N\" for an explicit value (e.g. \"Archived=99\"). Omitted names are removed, new names are added, explicit values are preserved, and implicit members take the next ordinal from their predecessor - as if hand-typed. Pass the complete list every time, not a delta.")]
+        [Description("List of member names in the desired order, either a comma-separated string (e.g. \"Pending,Shipped,Cancelled\") or a JSON array of strings (e.g. [\"Pending\",\"Shipped\",\"Cancelled\"]) - both are accepted; append \"=N\" for an explicit value (e.g. \"Archived=99\"). Omitted names are removed, new names are added, explicit values are preserved, and implicit members take the next ordinal from their predecessor - as if hand-typed. Pass the complete list every time, not a delta.")]
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string values,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,

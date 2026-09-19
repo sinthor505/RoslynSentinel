@@ -145,7 +145,7 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "ChangeSignature")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Reorders, adds, and removes method parameters and updates all call sites across the solution (including named-argument and omitted-optional-argument call sites). To add a parameter, supply name/type/defaultValue instead of originalIndex; the literal default value is also inserted at every existing call site. To remove a parameter, simply omit its originalIndex from the list.")]
+    [Description("Reorders, adds, and removes method parameters and updates all call sites across the solution (including named-argument and omitted-optional-argument call sites). To add a parameter, supply name/type/defaultValue instead of originalIndex; the literal default value is also inserted at every existing call site. To remove a parameter, simply omit its originalIndex from the list. Does NOT cascade across an interface/implementer boundary: targeting an interface method or one that implements an interface member is refused outright (retrying on the interface or any implementer hits the same refusal) - the error names every interface/implementer whose parameter list must instead be edited directly (ApplyDiff/ReplaceSnippet with validateOnApply:false), then Build once to converge.")]
     public async Task<ToolResult<object>> ChangeSignature(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
@@ -180,6 +180,9 @@ public class SentinelAdvancedRefactoringTools
             }
 
             var result = await _refactoringEngine.ChangeSignatureAsync(filePath, methodName, specs);
+            if (result.Error is not null)
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, result.Error) };
+
             var changes = result.Changes;
             if (!autoStage)
                 return new ToolResult<object>() { Success = true, Data = new { Changes = changes, result.SkippedCallSites } };

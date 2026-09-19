@@ -411,7 +411,7 @@ public class SentinelGitTools
         int count = 20,
         [Description("diff/show: \"working\" (unstaged), \"staged\", a commit hash, or a range (\"refA..refB\" or \"refA...refB\"). show: a single commit hash or ref (range not applicable).")]
         string target = "working",
-        [Description("diff/show/log: repo-relative paths to restrict to, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array - call once per file if you need per-file results.")]
+        [Description("diff/show/log: repo-relative paths to restrict to. Either ONE comma-separated string (e.g. \"a.cs,b.cs\") or a JSON array of strings (e.g. [\"a.cs\",\"b.cs\"]) - both are accepted, call once per file if you need per-file results.")]
         string? paths = null,
         [Description("diff/show: byte cap on the returned diff (max 524288).")]
         int maxBytes = 65536,
@@ -420,7 +420,7 @@ public class SentinelGitTools
         string? message = null,
         [Description("stage: which files to stage. \"tracked\" (default when omitted) stages modifications and deletions of already-tracked files only (git add -u) and does NOT stage new files. \"all\" stages everything in the working tree including untracked files (git add -A). \"listed\" stages exactly the paths you name in files/paths, untracked ones included - use this whenever you know which files you want. Naming files alongside a scope other than \"listed\" is rejected, so a file list can never be silently overridden. commit: OMIT this to commit exactly what is currently staged (the normal stage-then-commit workflow) - commit does NOT implicitly stage anything when scope is omitted. Pass scope explicitly on a commit call only if you specifically want it to also stage more (tracked/all) before committing, or to narrow the commit to specific paths (listed, with files).")]
         GitStageScope? scope = null,
-        [Description("stage/commit: repo-relative paths to stage, as ONE comma-separated string (e.g. \"a.cs,b.cs\"), not a JSON array - call once per file if you need per-file results. Requires scope=\"listed\". Alias of paths for these operations - pass one or the other, not both.")]
+        [Description("stage/commit: repo-relative paths to stage. Either ONE comma-separated string (e.g. \"a.cs,b.cs\") or a JSON array of strings (e.g. [\"a.cs\",\"b.cs\"]) - both are accepted, call once per file if you need per-file results. Requires scope=\"listed\". Alias of paths for these operations - pass one or the other, not both.")]
         string? files = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is required when operation=revert, unused otherwise.
         [Description("revert: the commit to revert (full or short hash, from log). Required for operation=revert.")]
@@ -594,9 +594,12 @@ public class SentinelGitTools
                 args.Add(refName);
             if (!string.IsNullOrWhiteSpace(paths))
             {
+                var parsedPaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
+                if (pathsError != null)
+                    return new GitLogResult { Success = false, Error = pathsError };
+
                 args.Add("--");
-                foreach (var p in paths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    args.Add(p);
+                args.AddRange(parsedPaths!);
             }
 
             var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, [.. args], cancellationToken);
@@ -666,9 +669,12 @@ public class SentinelGitTools
 
             if (!string.IsNullOrWhiteSpace(paths))
             {
+                var parsedPaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
+                if (pathsError != null)
+                    return new GitDiffResult { Success = false, Error = pathsError };
+
                 args.Add("--");
-                foreach (var p in paths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    args.Add(p);
+                args.AddRange(parsedPaths!);
             }
 
             var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, [.. args], cancellationToken);
@@ -719,9 +725,12 @@ public class SentinelGitTools
             var diffArgs = new List<string> { "diff", parentExit == 0 ? $"{target}^" : EmptyTreeHash, target };
             if (!string.IsNullOrWhiteSpace(paths))
             {
+                var parsedPaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
+                if (pathsError != null)
+                    return new GitShowResult { Success = false, Error = pathsError };
+
                 diffArgs.Add("--");
-                foreach (var p in paths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    diffArgs.Add(p);
+                diffArgs.AddRange(parsedPaths!);
             }
 
             var (diffExit, diffStdout, diffStderr) = await RunGitAsync(gitRoot, [.. diffArgs], cancellationToken);
@@ -800,8 +809,10 @@ public class SentinelGitTools
                 case GitStageScope.listed:
                     // `git add -- <paths>` stages untracked paths as well as tracked modifications,
                     // which is what "stage exactly these" has to mean to be useful.
-                    var filePaths = paths!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    stageArgs = ["add", "--", .. filePaths];
+                    var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
+                    if (pathsError != null)
+                        return new GitStatusResult { Success = false, Error = pathsError };
+                    stageArgs = ["add", "--", .. filePaths!];
                     break;
                 case GitStageScope.tracked:
                 default:
@@ -843,8 +854,10 @@ public class SentinelGitTools
             }
             else
             {
-                var filePaths = paths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                resetArgs = ["reset", "--", .. filePaths];
+                var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
+                if (pathsError != null)
+                    return new GitStatusResult { Success = false, Error = pathsError };
+                resetArgs = ["reset", "--", .. filePaths!];
             }
 
             var (resetExit, _, resetErr) = await RunGitAsync(gitRoot, resetArgs, cancellationToken);
@@ -909,8 +922,10 @@ public class SentinelGitTools
             string[] commitArgs;
             if (scope == GitStageScope.listed && !string.IsNullOrWhiteSpace(paths))
             {
-                var filePaths = paths!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                commitArgs = ["commit", .. messageArgs, "--", .. filePaths];
+                var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
+                if (pathsError != null)
+                    return new GitCommitResult { Success = false, Error = pathsError };
+                commitArgs = ["commit", .. messageArgs, "--", .. filePaths!];
             }
             else
             {

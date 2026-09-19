@@ -400,38 +400,132 @@ public class DiffEngine
         sb.AppendLine("--- Original");
         sb.AppendLine("+++ Modified");
 
-        // Simple line-by-line diff (not a full LCS algorithm, but sufficient for previewing changes)
+        // Trim the common prefix/suffix so only the actually-differing middle section goes
+        // through the LCS matcher below. Bounds the O(n*m) table to the size of the real edit
+        // (e.g. one line dropped from a multi-line parameter list) instead of the whole file, and
+        // - unlike the old blind index-zip - lets identical lines outside that region resync
+        // exactly instead of every later hunk pairing against the wrong original line.
+        // See blocking_error_changesignature_dryrun_diff_corruption_multiparam_reorder.md.
+        int prefixLen = 0;
+        int maxPrefix = Math.Min(oldLines.Length, newLines.Length);
+        while (prefixLen < maxPrefix && oldLines[prefixLen] == newLines[prefixLen])
+        {
+            prefixLen++;
+        }
+
+        int suffixLen = 0;
+        int maxSuffix = maxPrefix - prefixLen;
+        while (suffixLen < maxSuffix &&
+               oldLines[oldLines.Length - 1 - suffixLen] == newLines[newLines.Length - 1 - suffixLen])
+        {
+            suffixLen++;
+        }
+
+        var oldMiddle = oldLines[prefixLen..(oldLines.Length - suffixLen)];
+        var newMiddle = newLines[prefixLen..(newLines.Length - suffixLen)];
+
+        // The LCS table is O(n*m) cells; cap it so a diff whose differing region spans most of a
+        // very large file falls back to the old best-effort pairing (O(n+m)) instead of
+        // allocating an unbounded int[,].
+        const long MaxLcsCells = 16_000_000;
+        var matches = (long)oldMiddle.Length * newMiddle.Length <= MaxLcsCells
+            ? ComputeLcsMatches(oldMiddle, newMiddle)
+            : null;
+
         int oldIdx = 0;
         int newIdx = 0;
 
-        while (oldIdx < oldLines.Length || newIdx < newLines.Length)
+        void EmitMismatch()
         {
-            if (oldIdx < oldLines.Length && newIdx < newLines.Length && oldLines[oldIdx] == newLines[newIdx])
+            sb.AppendLine($"@@ -{prefixLen + oldIdx + 1} +{prefixLen + newIdx + 1} @@");
+            if (oldIdx < oldMiddle.Length)
             {
-                // Lines are identical
+                sb.AppendLine($"-{oldMiddle[oldIdx]}");
+                oldIdx++;
+            }
+            if (newIdx < newMiddle.Length)
+            {
+                sb.AppendLine($"+{newMiddle[newIdx]}");
+                newIdx++;
+            }
+        }
+
+        if (matches != null)
+        {
+            foreach (var (matchOld, matchNew) in matches)
+            {
+                while (oldIdx < matchOld || newIdx < matchNew)
+                {
+                    EmitMismatch();
+                }
                 oldIdx++;
                 newIdx++;
             }
-            else
+            while (oldIdx < oldMiddle.Length || newIdx < newMiddle.Length)
             {
-                // Lines differ - find the next match to determine if it's an insertion or deletion
-                sb.AppendLine($"@@ -{oldIdx + 1} +{newIdx + 1} @@");
-
-                // For simplicity in this tool, we show the removal then the addition
-                if (oldIdx < oldLines.Length)
+                EmitMismatch();
+            }
+        }
+        else
+        {
+            // Fallback for a very large differing region: the original naive index-by-index
+            // pairing, scoped to the trimmed middle section.
+            while (oldIdx < oldMiddle.Length || newIdx < newMiddle.Length)
+            {
+                if (oldIdx < oldMiddle.Length && newIdx < newMiddle.Length && oldMiddle[oldIdx] == newMiddle[newIdx])
                 {
-                    sb.AppendLine($"-{oldLines[oldIdx]}");
                     oldIdx++;
-                }
-                if (newIdx < newLines.Length)
-                {
-                    sb.AppendLine($"+{newLines[newIdx]}");
                     newIdx++;
+                }
+                else
+                {
+                    EmitMismatch();
                 }
             }
         }
 
         return sb.ToString();
+    }
+    /// <summary>
+    /// Longest-common-subsequence line matches between <paramref name="oldLines"/> and
+    /// <paramref name="newLines"/>, as ascending (oldIndex, newIndex) pairs of equal lines that a
+    /// correct diff should treat as unchanged/resync points.
+    /// </summary>
+    private static List<(int OldIdx, int NewIdx)> ComputeLcsMatches(string[] oldLines, string[] newLines)
+    {
+        int n = oldLines.Length;
+        int m = newLines.Length;
+        var dp = new int[n + 1, m + 1];
+        for (int i = n - 1; i >= 0; i--)
+        {
+            for (int j = m - 1; j >= 0; j--)
+            {
+                dp[i, j] = oldLines[i] == newLines[j]
+                    ? dp[i + 1, j + 1] + 1
+                    : Math.Max(dp[i + 1, j], dp[i, j + 1]);
+            }
+        }
+
+        var matches = new List<(int, int)>();
+        int a = 0, b = 0;
+        while (a < n && b < m)
+        {
+            if (oldLines[a] == newLines[b])
+            {
+                matches.Add((a, b));
+                a++;
+                b++;
+            }
+            else if (dp[a + 1, b] >= dp[a, b + 1])
+            {
+                a++;
+            }
+            else
+            {
+                b++;
+            }
+        }
+        return matches;
     }
 }
 // Added by AddTopLevelType (expected - used for diagnostics)
