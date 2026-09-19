@@ -5,6 +5,35 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Phase 8 of plan-open-blockers-remediation-v1: `GetLargeResult` typed-branch re-offload loop — fixed, closed (2026-09-19)
+
+Generalized the `Raw` branch's shrink-and-verify pattern (`8b14a86f`) to every remaining list-shaped
+`GetLargeResult` switch branch in `WorkspaceReadNavigationImpl.cs` via a new shared
+`ShrinkListToFit<T>` helper: each branch now halves its candidate page until the serialized page
+verifiably fits under `LargeResultHelper.OffloadThresholdBytes`, instead of a bare
+`Skip(offset).Take(limit)` with no size check. Applied to `MigrationCandidateFindingList`,
+`ApiSurfaceEntryList`, `SolutionSymbolEntryList`, `CodeInventoryReport`, `BreakingChangeList`,
+`ProjectFileList`, `ProjectInfoList`, `SolutionItemFileList`, and `SymbolRelationshipResultList`;
+`TextSearchMatchList` got its own halving loop across its two independent result lists. As a
+complementary backstop, `ServiceRegistrationExtensionsBasic.cs`'s generic large-result offload
+filter now exempts `GetLargeResult`'s own response from re-wrapping, so a single still-oversized
+record fails loudly instead of looping under a new `resultId` forever.
+
+New regression test `TypedBranchOffload_GetLargeResultFirstCall_ReturnsDataNotAnotherOffloadEnvelope`
+(`RoslynSentinel.Tests.Battery/LargeResultOffloadFilterTests.cs`) seeds 400 interface implementations
+to force an offload through the `SymbolRelationshipResultList` branch (via `QuerySymbolRelationships`
+`searchKind: implementorsOf`) and confirms the first `GetLargeResult` call now returns real `data`,
+not another offload envelope. Full `LargeResultOffloadFilterTests` suite 3/3 passed; build 0 errors.
+Doc moved to `docs/obsolete/blockers/`.
+
+While writing this test, discovered a separate, previously-unknown defect (not part of this fix):
+`QuerySymbolRelationships(searchKind: attributeUsages)` throws unhandled
+`InvalidOperationException: Sequence contains no elements` for freshly-added attribute usages, from
+an unguarded `.First()` in `DiscoveryEngine.FindAttributeUsagesAsync` (`DiscoveryEngine.cs:828`) when
+the target symbol can't be re-resolved. Routed the new test around it via `implementorsOf` instead
+(which resolves via a different, symbol-based lookup with no dependency on that path). Written up
+separately as `blocking_error_findattributeusages_first_throws_on_unresolved_target.md` — still open.
+
 ## Phase 7 of plan-open-blockers-remediation-v1: `ChangeAccessibilityAsync` doc-comment trivia loss — already fixed, closed (2026-09-19)
 
 `ChangeAccessibilityAsync` (`RoslynSentinel.Basic/RefactoringEngine.cs:3639`) routes through

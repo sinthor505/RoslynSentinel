@@ -924,12 +924,17 @@ public class WorkspaceReadNavigationImpl
                     {
                         var findings = JsonSerializer.Deserialize<List<MigrationCandidateFinding>>(all.Data.ToString(), _jsonOptions)
                             ?? [];
+                        // limit/offset were previously accepted but never applied -> the full
+                        // on-disk list was returned regardless of the requested page.
+                        var requested = Math.Min(limit, Math.Max(0, findings.Count - offset));
+                        var page = ShrinkListToFit(findings.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            // limit/offset were previously accepted but never applied -> the full
-                            // on-disk list was returned regardless of the requested page.
-                            Data = findings.Skip(offset).Take(limit).ToList()
+                            Data = page,
+                            Warning = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
                         };
                         break;
                     }
@@ -938,10 +943,15 @@ public class WorkspaceReadNavigationImpl
                     {
                         var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
                             ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, entries.Count - offset));
+                        var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = entries.Skip(offset).Take(limit).ToList()
+                            Data = page,
+                            Warning = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
                         };
                         break;
                     }
@@ -949,10 +959,15 @@ public class WorkspaceReadNavigationImpl
                     {
                         var entries = JsonSerializer.Deserialize<List<SolutionSymbolEntry>>(all.Data.ToString(), _jsonOptions)
                             ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, entries.Count - offset));
+                        var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = entries.Skip(offset).Take(limit).ToList()
+                            Data = page,
+                            Warning = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
                         };
                         break;
                     }
@@ -960,10 +975,15 @@ public class WorkspaceReadNavigationImpl
                     {
                         var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
                             ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, entries.Count - offset));
+                        var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = entries.Skip(offset).Take(limit).ToList()
+                            Data = page,
+                            Warning = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
                         };
                         break;
                     }
@@ -1019,24 +1039,52 @@ public class WorkspaceReadNavigationImpl
                     {
                         var changes = JsonSerializer.Deserialize<List<BreakingChange>>(all.Data.ToString(), _jsonOptions)
                             ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, changes.Count - offset));
+                        var page = ShrinkListToFit(changes.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = changes.Skip(offset).Take(limit).ToList()
+                            Data = page,
+                            Warning = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
                         };
                         break;
                     }
                 case ResultWrapperType.TextSearchMatchList:
                     {
                         var searchResult = JsonSerializer.Deserialize<TextSearchResult>(all.Data.ToString(), _jsonOptions);
+                        if (searchResult is null)
+                        {
+                            result = new ToolResult<object> { Success = true, Data = null };
+                            break;
+                        }
+
+                        var requestedLiteral = searchResult.LiteralResults.Skip(offset).Take(limit).ToList();
+                        var requestedRegex = searchResult.RegexResults.Skip(offset).Take(limit).ToList();
+                        var literalPage = requestedLiteral;
+                        var regexPage = requestedRegex;
+                        const int envelopeOverheadBytes = 256;
+                        while (literalPage.Count + regexPage.Count > 0 &&
+                               JsonSerializer.Serialize(searchResult with { LiteralResults = literalPage, RegexResults = regexPage }, _jsonOptions).Length
+                                   > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
+                        {
+                            if (literalPage.Count >= regexPage.Count && literalPage.Count > 0)
+                                literalPage = literalPage.Take(Math.Max(0, literalPage.Count / 2)).ToList();
+                            else if (regexPage.Count > 0)
+                                regexPage = regexPage.Take(Math.Max(0, regexPage.Count / 2)).ToList();
+                            else
+                                break;
+                        }
+
+                        var shrunk = literalPage.Count < requestedLiteral.Count || regexPage.Count < requestedRegex.Count;
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = searchResult is null ? null : searchResult with
-                            {
-                                LiteralResults = searchResult.LiteralResults.Skip(offset).Take(limit).ToList(),
-                                RegexResults = searchResult.RegexResults.Skip(offset).Take(limit).ToList()
-                            }
+                            Data = searchResult with { LiteralResults = literalPage, RegexResults = regexPage },
+                            Warning = shrunk
+                                ? $"Page shrunk to {literalPage.Count} literal + {regexPage.Count} regex record(s) to stay under the size threshold. Call again with offset: {offset + Math.Max(literalPage.Count, regexPage.Count)} to continue."
+                                : null
                         };
                         break;
                     }
@@ -1044,10 +1092,15 @@ public class WorkspaceReadNavigationImpl
                     {
                         var files = JsonSerializer.Deserialize<List<string>>(all.Data.ToString(), _jsonOptions)
                             ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, files.Count - offset));
+                        var page = ShrinkListToFit(files.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = files.Skip(offset).Take(limit).ToList()
+                            Data = page,
+                            Warning = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
                         };
                         break;
                     }
@@ -1055,10 +1108,15 @@ public class WorkspaceReadNavigationImpl
                     {
                         var projects = JsonSerializer.Deserialize<List<ProjectInfoEntry>>(all.Data.ToString(), _jsonOptions)
                             ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, projects.Count - offset));
+                        var page = ShrinkListToFit(projects.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = projects.Skip(offset).Take(limit).ToList()
+                            Data = page,
+                            Warning = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
                         };
                         break;
                     }
@@ -1066,10 +1124,15 @@ public class WorkspaceReadNavigationImpl
                     {
                         var solutionItems = JsonSerializer.Deserialize<List<SolutionItemFile>>(all.Data.ToString(), _jsonOptions)
                             ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, solutionItems.Count - offset));
+                        var page = ShrinkListToFit(solutionItems.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = solutionItems.Skip(offset).Take(limit).ToList()
+                            Data = page,
+                            Warning = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
                         };
                         break;
                     }
@@ -1091,10 +1154,15 @@ public class WorkspaceReadNavigationImpl
                         // ObjectCreationSite, ExtensionMethodInfo, SearchResult) - pass through as raw
                         // JSON nodes instead of a single concrete record type.
                         var items = (all.Data as JsonArray) ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, items.Count - offset));
+                        var page = ShrinkListToFit(items.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = items.Skip(offset).Take(limit).ToList()
+                            Data = page,
+                            Warning = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
                         };
                         break;
                     }
@@ -1170,5 +1238,30 @@ public class WorkspaceReadNavigationImpl
                               "Failed to read scan file.", ex.Message)
             };
         }
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    // Mirrors the Raw branch's worst-case-then-shrink loop (see the ResultWrapperType.Raw case in
+    // GetLargeResult) so every list-shaped switch branch there gets the same guarantee: the page
+    // this method hands back can never itself be large enough for the generic offload filter
+    // (ServiceRegistrationExtensionsBasic.cs's "Generic large-result offload backstop") to re-catch
+    // it and wrap it under a brand-new resultId, which would otherwise hand the caller an
+    // unterminating fetch/still-too-big/re-offload loop - see
+    // docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md. Halves the
+    // candidate page until the actual serialized size (not a guess) fits under
+    // OffloadThresholdBytes minus a fixed envelope overhead, verifying by real serialization the
+    // same way the Raw branch does, since element size varies too much across the ~10 record types
+    // this feeds to bound analytically.
+    private static List<T> ShrinkListToFit<T>(List<T> candidatePage, JsonSerializerOptions jsonOptions)
+    {
+        const int envelopeOverheadBytes = 256;
+        var page = candidatePage;
+        while (page.Count > 1 && JsonSerializer.Serialize(page, jsonOptions).Length > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
+        {
+            page = page.Take(Math.Max(1, page.Count / 2)).ToList();
+        }
+
+        return page;
     }
 }

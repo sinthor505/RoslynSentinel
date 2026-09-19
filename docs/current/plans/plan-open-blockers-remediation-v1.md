@@ -111,23 +111,22 @@ comment -> `ChangeAccessibility` -> `ReadFile`) confirmed the comment survives. 
 `cancellationToken: default` regression checked clean too - the one real call site correctly threads
 the token; it was confined to an abandoned worktree and never merged.
 
-## Phase 8 — `GetLargeResult`: generalize the Raw-branch shrink-and-verify fix to the other 14+ typed branches
-**Doc:** `blocking_error_getlargeresult_typed_branch_reoffload_loop.md`
-**File:** `RoslynSentinel.Server.Basic/WorkspaceReadNavigationImpl.cs:919-1103+`
+## Phase 8 — `GetLargeResult`: generalize the Raw-branch shrink-and-verify fix to the other 14+ typed branches — DONE (2026-09-19)
+**Doc:** `blocking_error_getlargeresult_typed_branch_reoffload_loop.md` — moved to
+`docs/obsolete/blockers/`; see `CLOSED.md`.
 
-Confirmed still open: every non-`Raw` branch (`SymbolRelationshipResultList` at line 1084 and ~13
-siblings) does a bare `.Skip(offset).Take(limit).ToList()` with no serialized-size verification,
-while the `Raw` branch (lines 874-898, fixed by `8b14a86f`) halves its candidate page until it
-verifiably fits under `OffloadThresholdBytes`. Extract that shrink-and-verify loop into a shared
-helper parameterized over "candidate list + serialize + check size", apply it to every remaining
-switch branch. Alternative/complementary fix per the doc: exempt `GetLargeResult`'s own response
-from the generic re-offload filter (`ServiceRegistrationExtensionsBasic.cs:390-409`) and fail loudly
-with a "your requested page is still too large, try a smaller limit" error instead of silently
-re-wrapping under a new `resultId` — implement this as a backstop even if the shrink-loop
-generalization is also done, since a single oversized record could still defeat shrinking alone.
-Test: reuse or adapt `LargeResultOffloadFilterTests.cs` (added by `8b14a86f`) with a
-`SymbolRelationshipResultList`-shaped fixture large enough to trigger the original bug, assert a
-single `GetLargeResult` call now returns actual records rather than another offload envelope.
+Both fixes from the doc implemented: (1) a new shared `ShrinkListToFit<T>` helper generalizes the
+`Raw` branch's shrink-and-verify loop to every remaining list-shaped `GetLargeResult` switch branch
+in `WorkspaceReadNavigationImpl.cs` (9 branches plus a bespoke two-list variant for
+`TextSearchMatchList`); (2) `GetLargeResult`'s own response is now exempted from the generic
+re-offload filter (`ServiceRegistrationExtensionsBasic.cs`) as a backstop against a single
+still-oversized record. New regression test in `LargeResultOffloadFilterTests.cs` (seeds 400
+interface implementations, forces an offload via `implementorsOf`, confirms the first
+`GetLargeResult` call returns real data) - full suite 3/3 passed, build 0 errors. Side finding: a
+separate, previously-unknown `FindAttributeUsagesAsync` crash (unguarded `.First()` on an unresolved
+symbol lookup) was discovered and written up as its own open blocker doc rather than fixed here, and
+the test was written to avoid depending on it - see
+`blocking_error_findattributeusages_first_throws_on_unresolved_target.md`.
 
 ## Sequencing notes
 

@@ -470,6 +470,21 @@ public static class RoslynSentinelServiceExtensionsBasic
                 {
                     var result = await next(context, cancellationToken);
 
+                    // GetLargeResult's own switch branches (WorkspaceReadNavigationImpl.cs) already
+                    // shrink-and-verify every list-shaped page against this exact threshold before
+                    // returning, specifically so this filter could never re-catch that response. If
+                    // one still slips past that (e.g. a single oversized record a page of 1 can't
+                    // shrink below), re-wrapping it under a brand-new resultId here would silently
+                    // hand the caller another offload envelope pointing at itself - an
+                    // unterminating fetch/still-too-big/re-offload loop with no visible way out. Skip
+                    // re-offload for this tool specifically and let its own oversized response pass
+                    // through as-is: a legible "still too big" is better than an invisible loop. See
+                    // docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md.
+                    if (context.Params?.Name == "GetLargeResult")
+                    {
+                        return result;
+                    }
+
                     try
                     {
                         if (result.Content is null)
