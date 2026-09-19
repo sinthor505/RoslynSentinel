@@ -5,6 +5,20 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Session halt from out-of-band `rm` mid-spike — closed by policy change, not a code fix (2026-09-18)
+
+`blocking_error_session_halt_from_out_of_band_rm_mid_spike.md` closed per operator decision: the
+underlying trigger was a self-inflicted dog-fooding violation (a `.cs` file created via `Write`
+instead of `CreateFile`, then deleted via shell `rm` instead of `DeleteFile`), not an environment
+defect in the drift-detection/halt mechanism itself. `CLAUDE.md`'s dog-fooding policy was updated so
+this class of incident (an out-of-band file write or shell tool use on a `.cs` file) is handled by
+reporting it and continuing, rather than by writing a blocker doc and stopping the turn - see the
+"Recovering from an accidental bypass" note added to the dog-fooding section. The environment
+questions the doc raised (drift-detection scope, `IsSessionHalted` staleness, missing recovery
+pointer in the halt message) were not independently investigated or fixed; if they resurface as a
+genuine tool-side defect (not caused by an out-of-band violation), they should get their own new
+blocker doc rather than reopening this one.
+
 ## `FindAttributeUsagesAsync` throws on unresolved attribute target — fixed, closed (2026-09-18)
 
 Root cause traced to source: `DiscoveryEngine.FindAttributeUsagesAsync` (`DiscoveryEngine.cs:813-817`)

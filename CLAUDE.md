@@ -50,6 +50,16 @@ not the policy — it cannot see intent, and reading a `.cs` with `Read` still v
 even though nothing stops it. If the hook ever blocks something genuinely necessary, say so and stop;
 do not reword the command to slip past it.
 
+**Recovering from an accidental bypass.** If you catch yourself having used `Read`/`Edit`/`Write`/
+`Bash` on a `.cs` file, or a shell git command, when an MCP tool should have been used instead: that
+is a self-inflicted process violation, not a tool defect. Report it in your response (so the pattern
+gets noticed if it recurs) and continue the task — do not write a `docs/current/blockers/` doc and
+do not stop the turn. A blocker doc is for the environment failing the agent; this is the reverse.
+The one exception is if the bypass itself caused a *new* tool-side symptom you can't explain (e.g. a
+mutating tool now fails, or reports state inconsistent with what's on disk) — that residual effect
+gets the normal tool-failure treatment above, scoped to the actual anomaly rather than the violation
+that triggered it.
+
 ## Failure doctrine: the environment is responsible
 
 This is the governing frame for interpreting **every** model-eval run, PlanStepRunner step, and
