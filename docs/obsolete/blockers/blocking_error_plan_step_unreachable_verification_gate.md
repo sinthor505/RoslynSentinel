@@ -146,3 +146,30 @@ This changes the diagnosis:
   (test-authoring tooling gap) is downgraded from "needed to unblock this step" to "still a real
   gap, but not the blocker for this specific step" since a `ReadFile`-based path was already
   sufficient in practice.
+
+## Amendment 2026-09-19 (Phase 7 of plan-open-blockers-remediation-v1.md): trivia-loss bug already fixed, both regressions checked clean
+
+`ChangeAccessibilityAsync` now lives at `RoslynSentinel.Basic/RefactoringEngine.cs:3639` (moved from
+`~3109` by intervening commits) and routes through `RoslynFormattingHelper.ReplaceNodeFormattedAsync`
+(`RoslynSentinel.Common/RoslynFormattingHelper.cs:53-81`, part of the `255363d7` consolidation this
+doc's sibling already covers). That helper's doc comment explicitly cites this exact bug: it
+transplants `oldNode.GetLeadingTrivia()` onto the replacement node by default
+(`TriviaEditIntent.PreserveOld`) specifically because a freshly built `WithModifiers` token list has
+no knowledge of the original doc comment, and explains the prior trivia-count/shape heuristic mistake
+this replaced. A `RunTest` of `ChangeAccessibility_PreservesLeadingDocComment`
+(`RoslynSentinel.Tests.Basic/CodeEditingTests.cs:1034`) passed (1/1). Independently live-repro'd per
+this doc's own instruction not to just trust the citation: created a scratch file with an `internal
+class` containing a doc-commented `private void DoWork()`, called `ChangeAccessibility(target:
+DoWork, accessibility: internal)`, and `ReadFile`'d the result - the doc comment was fully intact,
+only the modifier token changed. No fix needed; this bug is already resolved.
+
+Also checked the unrelated `cancellationToken: default` regression this doc flagged at turn 30 of the
+halted run: `SearchSolutionText` for `RemoveSummaryCommentAsync` found its one real call site at
+`RefactoringExtractionDocsImpl.cs:211`, which correctly passes the threaded `cancellationToken`
+parameter, not a literal `default`. The regression was confined to the abandoned/halted worktree
+(`RoslynSentinel-TestRuns\PlanStepRunner\20260912-223709-796\...`) and never merged to master -
+nothing to fix here either.
+
+The plan-wording gap (option 1/3 above, about the two unreachable named verification methods) is a
+`docs/testing/` plan-authoring fix, not a `RoslynSentinel` source fix, and is left for whoever
+next revises that plan-step file - out of scope for this remediation plan's code-focused phases.

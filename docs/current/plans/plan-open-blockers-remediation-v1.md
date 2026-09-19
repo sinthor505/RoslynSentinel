@@ -99,24 +99,17 @@ symptoms reproduces; the doc's own "Amendment" section already flagged its mecha
 and the likeliest explanation is the unrelated in-memory-workspace-flush artifact from commit
 `255363d7` it describes, misattributed to these two tools. No code change made.
 
-## Phase 7 — Trivia-loss bug: `ChangeAccessibilityAsync` drops doc comments via `Formatter.FormatAsync`
-**Doc:** `blocking_error_plan_step_unreachable_verification_gate.md` (the confirmed-real bug within
-it — the plan-wording half is a docs/testing fix, not in scope here)
-**File:** `RoslynSentinel.Basic/RefactoringEngine.cs` (`ChangeAccessibilityAsync`, `~line 3109`) and
-whatever shared `FormattingHelper`/`Formatter.FormatAsync` call path it now routes through post
-`255363d7`
+## Phase 7 — Trivia-loss bug: `ChangeAccessibilityAsync` drops doc comments via `Formatter.FormatAsync` — DONE (verified 2026-09-19, already fixed, no code change needed)
+**Doc:** `blocking_error_plan_step_unreachable_verification_gate.md` — moved to
+`docs/obsolete/blockers/`; see `CLOSED.md`.
 
-Two independent runs reproduced the same result (doc comment lost after a `ChangeAccessibility`-
-family edit) via two different fix attempts, but neither confirmed root cause with a debugger —
-only the reachable `ReadFile`-around-the-edit method was used. Before fixing: use that same
-`ReadFile`-before/after method around each stage of the pipeline (pre-format node, post-format node)
-to confirm whether trivia loss happens during the initial edit or during `Formatter.FormatAsync`
-specifically (both runs suspected the latter but did not confirm it). Once localized, fix by
-preserving leading trivia explicitly across the formatting call rather than trusting
-`Formatter.FormatAsync` to retain it. Also fix the unrelated regression noted in the same doc: a
-`cancellationToken: default` named argument silently introduced at the `RemoveSummaryCommentAsync`
-call site during the failed repro attempt, discarding a real token — grep for it and confirm it
-didn't get committed; if it did, restore proper token threading.
+`ChangeAccessibilityAsync` now routes through `RoslynFormattingHelper.ReplaceNodeFormattedAsync`
+(`RoslynSentinel.Common/RoslynFormattingHelper.cs:53-81`), which transplants the old node's leading
+trivia onto the replacement by default - its own doc comment cites this exact prior bug. `RunTest`
+of `ChangeAccessibility_PreservesLeadingDocComment` passed, and an independent live repro (doc
+comment -> `ChangeAccessibility` -> `ReadFile`) confirmed the comment survives. The
+`cancellationToken: default` regression checked clean too - the one real call site correctly threads
+the token; it was confined to an abandoned worktree and never merged.
 
 ## Phase 8 — `GetLargeResult`: generalize the Raw-branch shrink-and-verify fix to the other 14+ typed branches
 **Doc:** `blocking_error_getlargeresult_typed_branch_reoffload_loop.md`

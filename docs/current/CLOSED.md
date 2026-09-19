@@ -5,6 +5,23 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Phase 7 of plan-open-blockers-remediation-v1: `ChangeAccessibilityAsync` doc-comment trivia loss — already fixed, closed (2026-09-19)
+
+`ChangeAccessibilityAsync` (`RoslynSentinel.Basic/RefactoringEngine.cs:3639`) routes through
+`RoslynFormattingHelper.ReplaceNodeFormattedAsync` (`RoslynSentinel.Common/RoslynFormattingHelper.cs:53-81`),
+which transplants the old node's leading trivia onto the replacement by default
+(`TriviaEditIntent.PreserveOld`) precisely to prevent a freshly-built `WithModifiers` token list from
+losing the original doc comment - its doc comment cites this exact bug and the trivia-count heuristic
+mistake it replaced. `RunTest` of `ChangeAccessibility_PreservesLeadingDocComment` passed (1/1), and
+an independent live repro (doc-commented private method -> `ChangeAccessibility(internal)` ->
+`ReadFile`) confirmed the comment survives intact. The doc's secondary flagged regression
+(`cancellationToken: default` at a `RemoveSummaryCommentAsync` call site) was also checked and found
+clean - the one real call site (`RefactoringExtractionDocsImpl.cs:211`) correctly threads the real
+token; that regression was confined to an abandoned worktree and never merged. No code change made.
+Doc moved to `docs/obsolete/blockers/`; the plan-wording half (two unreachable named verification
+methods in a `docs/testing/` plan-step file) is left open for that doc's own maintainer, out of scope
+for this remediation plan.
+
 ## Phase 6 of plan-open-blockers-remediation-v1: `UsingDirective` accessibility-widening / `UndoLastApply` false-success — not reproducible, closed (2026-09-19)
 
 Neither symptom in `blocking_error_formattinghelper_cs0103_missing_formatting_using.md` reproduces
