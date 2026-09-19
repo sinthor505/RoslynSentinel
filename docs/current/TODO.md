@@ -4,6 +4,27 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `Member(replace)` sub-findings left open by the blank-line/newline fix (2026-09-18)
+
+Split out of `blocking_error_member_replace_strips_blank_line_between_adjacent_members.md` when that
+doc's primary symptom (inserted members losing separating blank lines/newlines) was archived as
+fixed via `RoslynFormattingHelper.InsertMemberFormattedAsync`. Two sub-findings from that doc's repro
+were explicitly left unresolved and are carried forward here rather than lost with the archive:
+
+1. **Silent no-op on `Member(replace)`**: a `replace` call against `ServerBuildInfo`'s constructor
+   (`containerName`/`memberName`/`contextSnippet` targeting) returned `"status":"applied"`, but an
+   immediate re-read showed no file content had changed at all (confirmed via the harness's own
+   "file unchanged since your last Read" signal). Not traced to source - open question is whether
+   `contextSnippet` matching silently matched nothing, or the write was computed correctly but never
+   persisted. Needs someone to trace the `Member` write path (`ValidateAndApplyHelper.ValidateAndApplyAsync`
+   -> `ApplyProposedChangesAsync`) with a minimal repro.
+2. **`CS0542` on top-level-type addressing**: `Member(replace, containerName: <namespace>,
+   memberName: <TopLevelClassName>, ...)` - i.e. addressing a top-level class by its containing
+   namespace instead of a containing type - produced `'X': member names cannot be the same as their
+   enclosing type` instead of replacing the class body. Not disambiguated whether this addressing
+   combination is meant to be supported at all, or whether it's a genuine insertion/targeting bug
+   that nests new content into the class instead of replacing it wholesale.
+
 ## `Git` tool missing worktree/stash/tag — forces a shell fallback — partially started
 
 Raised 2026-09-12 while wiring the dog-fooding enforcement hook

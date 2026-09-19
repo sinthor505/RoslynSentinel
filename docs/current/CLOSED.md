@@ -5,6 +5,19 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## `Member` add/replace collapses blank line/newline between adjacent members — fixed, closed (2026-09-18)
+
+Root cause: `AddMemberAsync`/`InsertMemberAfterAsync`/`InsertMemberBeforeAsync`
+(`RoslynSentinel.Basic/RefactoringEngine.cs`) annotated the *whole container* (class/struct/etc.) for
+`Formatter.FormatAsync` instead of just the new/target member, so every sibling got reformatted as a
+side effect. Fixed via new `RoslynFormattingHelper.InsertMemberFormattedAsync`
+(`RoslynSentinel.Common/RoslynFormattingHelper.cs`), scoped to the single inserted member like the
+existing `RemoveNodeFormattedAsync`/`ChangeAccessibilityAsync`. 3 regression tests added in
+`RoslynSentinel.Tests.Basic/CodeEditingTests.cs`; build 0 errors/0 warnings. Doc moved to
+`docs/obsolete/blockers/`. Two sub-findings from the same doc's repro (`Member(replace)` silent no-op;
+`CS0542` on top-level-type addressing via namespace-as-containerName) were left unresolved and carried
+forward to `TODO.md` rather than archived with the primary fix.
+
 ## Phase 8 of plan-open-blockers-remediation-v1: `GetLargeResult` typed-branch re-offload loop — fixed, closed (2026-09-19)
 
 Generalized the `Raw` branch's shrink-and-verify pattern (`8b14a86f`) to every remaining list-shaped
