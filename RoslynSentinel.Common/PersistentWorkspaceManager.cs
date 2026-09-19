@@ -171,15 +171,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private bool _orientationBreakerOpen;
     private int _consecutiveZeroMatchSearches;
 
-    // ── Unrecoverable breaker state ───────────────────────────────────────────
-    // A server-integrity fault: a change landed on disk but its operation blob did not, so the
-    // changeId returned to the agent can never be undone. Once tripped this stays tripped for the
-    // life of the process -> there is deliberately no reset path (see IUnrecoverableBreaker). Its
-    // own lock rather than sharing _breakerLock: the two breakers are independent, and this one
-    // must remain readable from the request filter even while a batch outcome is being recorded.
-    private readonly Lock _unrecoverableBreakerLock = new();
-    private string? _unrecoverableHaltMessage;
-
     // Guards MSBuildLocator.RegisterInstance, which is process-global and not safe to call
     // from more than one thread at a time (e.g. multiple test fixtures constructing this type
     // concurrently under NUnit's ParallelScope.Fixtures).
@@ -189,6 +180,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     {
         _logger = logger;
         _ledger = ledger ?? new ScopedOperationLedgerEngine();
+        _unrecoverableBreaker = new UnrecoverableCircuitBreaker(logger);
         _debounceTimer = new Timer(OnDebounceTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
         lock (MsBuildRegistrationLock)
@@ -1252,11 +1244,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         // which is the same forget-a-call-site mode this whole change exists to close. Read-only
         // tools never reach this method, so they stay available with nothing to maintain.
         // The request filter adds a matching IsError at the protocol level; this is the guarantee.
-        string? unrecoverableHalt;
-        lock (_unrecoverableBreakerLock)
-        {
-            unrecoverableHalt = _unrecoverableHaltMessage;
-        }
+        string? unrecoverableHalt = _unrecoverableBreaker.StateMessage();
         if (unrecoverableHalt is not null)
         {
             throw new SessionHaltedException(unrecoverableHalt);
@@ -1968,46 +1956,12 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// Records an unrecoverable blob-integrity fault. Not reversible: see
     /// <see cref="IUnrecoverableBreaker"/> for why no reset exists.
     /// </summary>
-    void IUnrecoverableBreaker.Trip(string toolName, string changeId, string diagnostic)
-    {
-        lock (_unrecoverableBreakerLock)
-        {
-            if (_unrecoverableHaltMessage is not null)
-            {
-                // Keep the first trip. A later fault is almost certainly downstream of this one,
-                // and the earliest diagnostic is the one closest to the root cause.
-                return;
-            }
+    void IUnrecoverableBreaker.Trip(string toolName, string changeId, string diagnostic) =>
+        _unrecoverableBreaker.Trip(toolName, changeId, diagnostic);
 
-            _unrecoverableHaltMessage =
-                $"The server recorded an unrecoverable operation-blob integrity failure while applying '{toolName}' " +
-                $"(changeId {changeId}): {diagnostic}. Changes may have been written to disk without an undo record, " +
-                "so UndoLastApply cannot reverse them. All mutating tools are disabled for the remainder of this " +
-                "session; there is no way to clear this from here. Stop, restart the server, and have an operator " +
-                "review the server log before making further changes.";
-        }
+    bool IUnrecoverableBreaker.IsTripped() => _unrecoverableBreaker.IsTripped();
 
-        _logger.LogError(
-            "UNRECOVERABLE breaker TRIPPED by {ToolName} (changeId {ChangeId}): {Diagnostic}. " +
-            "A change may have applied with no undo record. All mutating tools are now disabled for this process.",
-            toolName, changeId, diagnostic);
-    }
-
-    bool IUnrecoverableBreaker.IsTripped()
-    {
-        lock (_unrecoverableBreakerLock)
-        {
-            return _unrecoverableHaltMessage is not null;
-        }
-    }
-
-    string? IUnrecoverableBreaker.StateMessage()
-    {
-        lock (_unrecoverableBreakerLock)
-        {
-            return _unrecoverableHaltMessage;
-        }
-    }
+    string? IUnrecoverableBreaker.StateMessage() => _unrecoverableBreaker.StateMessage();
 
     /// <summary>True when the mutating-tools breaker is currently open.</summary>
     bool IManualCircuitBreaker.IsTripped()
@@ -2299,4 +2253,8 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     public void RecordUndo(string changeId) => _ledger.RecordUndo(changeId);
     public bool TryRelease() => _ledger.TryRelease();
     public IReadOnlyList<LedgerEntryBase> GetOpenEntries() => _ledger.GetOpenEntries();
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    private readonly UnrecoverableCircuitBreaker _unrecoverableBreaker;
 }
