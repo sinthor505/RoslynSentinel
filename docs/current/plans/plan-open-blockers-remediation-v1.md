@@ -85,25 +85,19 @@ Four new tests (2 in `UndoLastApplyTests.cs`, 2 in `BatteryTwentyFourTests.cs`);
 16/16, full solution 2461/2574 (19 pre-existing unrelated failures, confirmed via `git status`
 scope).
 
-## Phase 6 — `UsingDirective`: stop silently widening accessibility
-**Doc:** `blocking_error_formattinghelper_cs0103_missing_formatting_using.md` (the still-open half —
-CS0103 itself and the `ChangedContent` reporting gap are already fixed by prior commits)
-**File:** wherever `UsingDirective(operation: "add")` is implemented (confirm exact file via
-`LocateSymbol`/`GetMethodSource` at plan-execution time, not guessed here)
+## Phase 6 — `UsingDirective`: stop silently widening accessibility — DONE (verified 2026-09-19, not reproducible, no code change needed)
+**Doc:** `blocking_error_formattinghelper_cs0103_missing_formatting_using.md` — moved to
+`docs/obsolete/blockers/`; see `CLOSED.md`.
 
-Reproduce: add a using directive to a file whose top-level type/members have narrower accessibility
-than `public`, confirm whether accessibility still gets silently widened as an unrequested
-side-effect. If confirmed, the fix is almost certainly in whatever formatting/re-emit step
-`UsingDirective` shares with the `FormattingHelper` consolidation (commit `255363d7`) — check
-whether it round-trips modifiers through a path that defaults them wide rather than preserving the
-original declaration's modifiers. This is now a narrower, better-scoped repro than the original
-doc's context (which was entangled with the now-fixed CS0103 and an unexplained flush-to-disk
-mechanism) — re-derive fresh rather than trying to replay the original incident.
-
-Also independently verify `UndoLastApply`'s reported false-positive success (reverted a file that a
-follow-up diff showed byte-for-byte unchanged) — if reproducible outside that incident's specific
-sequence, this is a second, more general defect in `UndoLastApply`'s success reporting and should be
-tracked as its own finding rather than folded into this one silently.
+Read `RefactoringEngine.AddUsingDirectiveAsync` (`RoslynSentinel.Basic/RefactoringEngine.cs:2217-2276`)
+directly: it only calls `root.AddUsings(...)` and a `Formatter.FormatAsync` scoped to the new using
+node's own `SyntaxAnnotation` (or `Simplifier.Annotation`-tagged nodes under `simplifyExisting`) - no
+path touches modifier lists on any type or member. Live repro on a fresh `internal static class`
+with `private static` field/method confirmed all three modifiers unchanged after `UsingDirective(add)`,
+and `UndoLastApply` on that changeId restored the file byte-for-byte. Neither of the doc's two
+symptoms reproduces; the doc's own "Amendment" section already flagged its mechanism as unconfirmed,
+and the likeliest explanation is the unrelated in-memory-workspace-flush artifact from commit
+`255363d7` it describes, misattributed to these two tools. No code change made.
 
 ## Phase 7 — Trivia-loss bug: `ChangeAccessibilityAsync` drops doc comments via `Formatter.FormatAsync`
 **Doc:** `blocking_error_plan_step_unreachable_verification_gate.md` (the confirmed-real bug within

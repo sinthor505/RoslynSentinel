@@ -135,6 +135,33 @@ Per CLAUDE.md's failure doctrine, both are environment defects, not something to
 silently — do not treat `UsingDirective` as side-effect-free, and do not trust `UndoLastApply`'s
 success report without an independent diff check, until these are fixed or better understood.
 
+## Amendment 2026-09-19 (Phase 6 of plan-open-blockers-remediation-v1.md): neither symptom reproduces fresh
+
+Re-derived a clean repro rather than replaying the original incident, per the plan doc's own
+instruction. Read `RefactoringEngine.AddUsingDirectiveAsync` (`RoslynSentinel.Basic/RefactoringEngine.cs:2217-2276`)
+directly: it only calls `root.AddUsings(...)` and `Formatter.FormatAsync(editedDocument, annotation, ...)`
+scoped to the newly-added using node's own `SyntaxAnnotation` (or, under `simplifyExisting`, nodes
+tagged by `Simplifier.Annotation`). No code path touches `SyntaxTokenList` modifiers on any type or
+member declaration. There is no mechanism in this method by which adding a using could widen
+accessibility.
+
+Live-verified with a fresh scratch file (`internal static class` containing a `private static`
+field and a `private static` method): called `UsingDirective(operation: "add", namespaceName:
+"System.Collections.Generic")`, then `ReadFile` on the result. All three modifiers
+(`internal`/`private`/`private`) were unchanged; the only diff was the inserted using line and a
+blank line. Then called `UndoLastApply(changeId: ...)` on that same change and `ReadFile` again —
+content was restored byte-for-byte identical to the pre-edit original.
+
+**Conclusion: both symptoms in this doc's original report (accessibility widening by
+`UsingDirective`, false-positive-success by `UndoLastApply`) fail to reproduce today.** This doc
+already flagged the mechanism as unconfirmed ("most likely leftover from whatever process produced
+commit `255363d7`... never written to disk for every file it touched... being traced separately").
+That unconfirmed theory is the most likely explanation: an unrelated in-memory-workspace flush
+artifact from the `255363d7` incident, misattributed to the two tools that happened to be called
+around the same time, not a defect in either tool itself. No code change made. Retiring this doc;
+if either symptom resurfaces, open a fresh blocker doc with its own repro rather than reopening this
+one, since the original incident's specific sequence can no longer be reconstructed.
+
 **Current build state:** 0 errors, confirmed by a full solution `Build` call after the above
 sequence completed. The solution *does* build clean right now — but via an unexplained,
 unintentional mechanism, not via a deliberate, understood fix. Whoever picks this up should not

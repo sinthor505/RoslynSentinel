@@ -5,6 +5,21 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Phase 6 of plan-open-blockers-remediation-v1: `UsingDirective` accessibility-widening / `UndoLastApply` false-success — not reproducible, closed (2026-09-19)
+
+Neither symptom in `blocking_error_formattinghelper_cs0103_missing_formatting_using.md` reproduces
+against current source. Read `RefactoringEngine.AddUsingDirectiveAsync`
+(`RoslynSentinel.Basic/RefactoringEngine.cs:2217-2276`) directly: it only calls `root.AddUsings(...)`
+and a `Formatter.FormatAsync` scoped to the new using node's own annotation (or, under
+`simplifyExisting`, `Simplifier.Annotation`-tagged nodes) - no code path there touches any type or
+member's modifier list. Live repro on a fresh `internal static class` with `private static` members
+confirmed: adding a using left all three modifiers unchanged, and `UndoLastApply` on that change
+restored the file byte-for-byte to its pre-edit content. No code change made - the original doc
+already flagged its own mechanism as unconfirmed, and the most likely explanation is the unrelated
+in-memory-workspace-flush artifact from commit `255363d7` that the doc's "Amendment" section
+describes, misattributed to the two tools that happened to be called around the same time. Doc moved
+to `docs/obsolete/blockers/`; reopen as a fresh doc with its own repro if either symptom resurfaces.
+
 ## Phase 5 of plan-open-blockers-remediation-v1: `SyncTypeAndFilename` wrong-type targeting + `UndoLastApply` rename recovery — closed (2026-09-19)
 
 Both sub-problems fixed. **Symptom 1** (picked the first-declared type, not the caller's intended
