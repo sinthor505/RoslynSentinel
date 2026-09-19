@@ -144,15 +144,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private readonly ConcurrentDictionary<string, ConcurrentQueue<long>> _rateLimitWindows = new();
     private static readonly Dictionary<string, int> DefaultRateLimits = LoadRateLimits();
 
-    // ── Orientation breaker state ─────────────────────────────────────────────
-    // Independent from the mutating-tools breaker above: trips after repeated zero-match
-    // SearchSolutionText calls, auto-resets on the next successful allowlisted call. See
-    // IAutomaticCircuitBreaker.
-    private const int OrientationBreakerTripThreshold = 3;
-    private readonly Lock _orientationBreakerLock = new();
-    private bool _orientationBreakerOpen;
-    private int _consecutiveZeroMatchSearches;
-
     // Guards MSBuildLocator.RegisterInstance, which is process-global and not safe to call
     // from more than one thread at a time (e.g. multiple test fixtures constructing this type
     // concurrently under NUnit's ParallelScope.Fixtures).
@@ -164,6 +155,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         _ledger = ledger ?? new ScopedOperationLedgerEngine();
         _unrecoverableBreaker = new UnrecoverableCircuitBreaker(logger);
         _mutationBreaker = new MutationCircuitBreaker(logger);
+        _orientationBreaker = new OrientationCircuitBreaker(logger);
         _debounceTimer = new Timer(OnDebounceTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
         lock (MsBuildRegistrationLock)
@@ -1897,66 +1889,16 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// Records a SearchSolutionText outcome; trips after OrientationBreakerTripThreshold
     /// consecutive zero-match calls. Returns true only on the call that flips the breaker open.
     /// </summary>
-    public bool RecordSearchOutcome(int matchCount)
-    {
-        lock (_orientationBreakerLock)
-        {
-            if (matchCount > 0)
-            {
-                _consecutiveZeroMatchSearches = 0;
-                return false;
-            }
-
-            _consecutiveZeroMatchSearches++;
-            if (_consecutiveZeroMatchSearches >= OrientationBreakerTripThreshold && !_orientationBreakerOpen)
-            {
-                _orientationBreakerOpen = true;
-                _logger.LogWarning(
-                    "Orientation breaker TRIPPED after {Count} consecutive zero-match SearchSolutionText calls.",
-                    _consecutiveZeroMatchSearches);
-                return true;
-            }
-
-            return false;
-        }
-    }
+    public bool RecordSearchOutcome(int matchCount) => _orientationBreaker.RecordSearchOutcome(matchCount);
 
     /// <summary>True when the orientation breaker is currently restricting tool calls to the orienting allowlist.</summary>
-    bool IAutomaticCircuitBreaker.IsTripped()
-    {
-        lock (_orientationBreakerLock)
-        {
-            return _orientationBreakerOpen;
-        }
-    }
+    bool IAutomaticCircuitBreaker.IsTripped() => _orientationBreaker.IsTripped();
 
     /// <summary>Directive describing the orientation breaker's tripped state; null when not tripped.</summary>
-    string? IAutomaticCircuitBreaker.StateMessage()
-    {
-        lock (_orientationBreakerLock)
-        {
-            if (!_orientationBreakerOpen)
-            {
-                return null;
-            }
-
-            return $"SearchSolutionText is DISABLED after {_consecutiveZeroMatchSearches} consecutive calls returned " +
-                   "no matches. It will not run again until one of the tools below succeeds. You MUST call " +
-                   "ListAll(kind: all) or ListSolutionItems(kind: all) now - browse the returned list for what " +
-                   "you're looking for. GetFileOutline and ReadFile are also available once you have a real path " +
-                   "from that list.";
-        }
-    }
+    string? IAutomaticCircuitBreaker.StateMessage() => _orientationBreaker.StateMessage();
 
     /// <summary>Clears the orientation breaker and its zero-match streak. Called automatically by the request filter -> no manual reset tool.</summary>
-    void IAutomaticCircuitBreaker.Reset()
-    {
-        lock (_orientationBreakerLock)
-        {
-            _orientationBreakerOpen = false;
-            _consecutiveZeroMatchSearches = 0;
-        }
-    }
+    void IAutomaticCircuitBreaker.Reset() => _orientationBreaker.Reset();
 
     public FilePathWrapper SetFilePath(string? filepath)
     {
@@ -2087,4 +2029,8 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     // Added by AddMember (expected - used for diagnostics)
     private readonly MutationCircuitBreaker _mutationBreaker;
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    private readonly OrientationCircuitBreaker _orientationBreaker;
 }
