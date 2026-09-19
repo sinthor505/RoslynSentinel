@@ -5,6 +5,24 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Phase 3 of plan-open-blockers-remediation-v1: `Git` `repoPath` for other worktrees — closed (2026-09-19)
+
+Added an optional `repoPath` parameter to `Git`, restricted to the read-only operations
+(`status`/`log`/`diff`/`show`) - lets an agent inspect a different git repo/worktree (e.g. a
+PlanStepRunner `Worktree/` folder) without a shell escape. `TryGetGitRoot`
+(`SentinelGitTools.cs`) gained a priority-0 resolution tier: when `repoPath` is supplied it's
+validated via the existing `FindRepositoryRoot` walk-up (already handles linked worktrees via
+`.git`-file detection) and used directly, ahead of the loaded-solution/base-directory fallbacks.
+A guard at the top of `Git`'s dispatch rejects `repoPath` combined with any mutating operation
+(stage/commit/revert/reset/branch/checkout/push/fetch/pull) with a structured error naming the
+allowed operations, rather than silently ignoring it or letting it redirect a write - keeps the
+write chokepoint meaningful. Tool-level `[Description]` and `repoPath`'s own `[Description]`
+both document the read-only-only scope. Two regression tests added to
+`SentinelGitToolsSmokeTests.cs`: `Git_Status_RepoPath_TargetsADifferentRepoThanTheLoadedSolutionAsync`
+(a second independent temp repo's real state is returned, proving the redirect works) and
+`Git_Commit_RepoPath_IsRejectedAsync` (repoPath + a mutating op is rejected). Build 0 errors/0
+warnings; `SentinelGitToolsSmokeTests` 7/7 passed.
+
 ## Phase 2 of plan-open-blockers-remediation-v1: `Git(operation: "reset")` (soft/mixed) — closed (2026-09-19)
 
 Added `reset` to `GitOperation` and a new `GitResetMode` enum (`soft`/`mixed` only, no `hard` -

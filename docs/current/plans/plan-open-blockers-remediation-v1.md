@@ -33,17 +33,19 @@ no `hard`), `ResetAsync(gitRoot, refName, mode, ct)` in `SentinelGitTools.cs` di
 defaults to `mixed`). Two regression tests added to `SentinelGitToolsSmokeTests.cs` covering both
 modes. Build 0 errors/0 warnings; 5/5 tests passed.
 
-## Phase 3 — `Git` tool: support targeting a worktree other than the loaded solution's
-**Doc:** `blocking_error_git_tool_cannot_target_other_worktree.md`
-**File:** `SentinelGitTools.cs`
+## Phase 3 — `Git` tool: support targeting a worktree other than the loaded solution's — DONE (2026-09-19)
+**Doc:** `blocking_error_git_tool_cannot_target_other_worktree.md` — moved to
+`docs/obsolete/blockers/`; see `CLOSED.md`.
 
-Add an optional `repoPath`/`workingDirectory` parameter to `status`/`log`/`diff` (read-only ops
-only — mutating ops stay scoped to the loaded solution to keep the write chokepoint meaningful).
-When supplied, `TryGetGitRoot` should validate the path resolves to a real git repo/worktree and use
-it directly instead of the loaded-solution/base-directory fallbacks from Phase 1. This is the
-long-term fix for the PlanStepRunner worktree-inspection gap that currently forces a shell
-exception. Test: point `Git(operation: "status", repoPath: <a second worktree fixture>)` at a repo
-different from the loaded solution's, assert it reports that worktree's real state.
+Implemented as specified: optional `repoPath` parameter added to `Git`, accepted only for the
+read-only operations (`status`/`log`/`diff`/`show`) — a guard in the dispatch body rejects it for
+any mutating operation with a structured error naming the allowed ops, keeping the write
+chokepoint meaningful. `TryGetGitRoot` (`SentinelGitTools.cs`) gained a priority-0 tier that
+validates `repoPath` via the existing `FindRepositoryRoot` walk-up (already worktree-aware) ahead
+of the Phase 1 fallback chain. Two regression tests added to `SentinelGitToolsSmokeTests.cs`
+covering the redirect (`Git_Status_RepoPath_...`) and the mutating-op rejection
+(`Git_Commit_RepoPath_IsRejectedAsync`). Build 0 errors/0 warnings; `SentinelGitToolsSmokeTests`
+7/7 passed.
 
 ## Phase 4 — `--list-tools`: verify the fix, retire the doc
 **Doc:** `blocking_error_list_tools_misreports_tool_surface.md` — **not a fix task**, already

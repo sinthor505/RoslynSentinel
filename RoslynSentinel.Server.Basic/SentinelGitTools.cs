@@ -195,8 +195,24 @@ public class SentinelGitTools
     /// checkout) instead of the worktree -> a plausible, well-formed, wrong answer with no error.
     /// See docs/current/blockers/blocking_error_git_tool_commit_reports_clean_tree_worktree.md.
     /// </summary>
-    private string? TryGetGitRoot(out string error)
+    private string? TryGetGitRoot(out string error, string? repoPath = null)
     {
+        // 0. An explicit repoPath override (status/log/diff/show only - see Git's own parameter
+        //    description). Takes priority over everything else: a caller who names a specific
+        //    worktree meant that one, not whatever the loaded solution happens to point at.
+        if (!string.IsNullOrWhiteSpace(repoPath))
+        {
+            var fromRepoPath = FindRepositoryRoot(repoPath);
+            if (fromRepoPath is not null)
+            {
+                error = "";
+                return fromRepoPath;
+            }
+
+            error = $"repoPath '{repoPath}' does not resolve to a git repository or worktree (no .git entry found walking up from it). Double-check the path - it must be a real directory that is itself inside a git working tree.";
+            return null;
+        }
+
         // 1. The loaded solution's directory, if there is one. This is the caller's most recent
         //    explicit signal of which repo/worktree they mean, via LoadSolution.
         var solutionRoot = _workspaceManager.GetSolutionRoot();
@@ -386,7 +402,7 @@ public class SentinelGitTools
     };
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool covering status, log, diff, show, staging, commit, revert, reset, branch, checkout, push, fetch, and pull.")]
+    [Description("Unified git tool covering status, log, diff, show, staging, commit, revert, reset, branch, checkout, push, fetch, and pull. status/log/diff/show can target a different repo/worktree via repoPath instead of the loaded solution's.")]
     public async Task<object> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Which git operation to run.")]
@@ -430,10 +446,22 @@ public class SentinelGitTools
         bool amend = false,
         [Description("reset: how far to unwind history. \"soft\" moves HEAD/branch only, leaving the index and working tree untouched (everything the moved-past commit(s) changed reappears staged). \"mixed\" also resets the index to match, leaving the working tree untouched (those changes reappear unstaged). No \"hard\" mode is exposed - this can never discard uncommitted working-tree changes. Defaults to \"mixed\" when omitted.")]
         GitResetMode? mode = null,
+        [Description("status/log/diff/show only: an absolute path to a different git repo or worktree to operate on instead of the loaded solution's - e.g. a PlanStepRunner Worktree/ folder. Must resolve to a real git repo/worktree (a bad path is rejected, not silently ignored). Mutating operations (stage/commit/revert/reset/branch/checkout/push/fetch/pull) always stay scoped to the loaded solution regardless of this parameter, to keep the write chokepoint meaningful.")]
+        string? repoPath = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        var gitRoot = TryGetGitRoot(out var rootError);
+        var isReadOnlyOperation = operation is GitOperation.status or GitOperation.log or GitOperation.diff or GitOperation.show;
+        if (!string.IsNullOrWhiteSpace(repoPath) && !isReadOnlyOperation)
+        {
+            return new
+            {
+                Success = false,
+                Error = $"repoPath is only supported for status/log/diff/show - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation."
+            };
+        }
+
+        var gitRoot = TryGetGitRoot(out var rootError, isReadOnlyOperation ? repoPath : null);
         if (gitRoot is null)
             return new { Success = false, Error = rootError };
 

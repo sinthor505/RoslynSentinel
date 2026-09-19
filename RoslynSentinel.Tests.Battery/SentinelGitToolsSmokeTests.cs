@@ -157,4 +157,57 @@ public class SentinelGitToolsSmokeTests
         Assert.That(File.ReadAllText(Path.Combine(_repoDir, "README.md")), Is.EqualTo("second commit content"),
             "git reset --mixed must never touch the working tree.");
     }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task Git_Status_RepoPath_TargetsADifferentRepoThanTheLoadedSolutionAsync()
+    {
+        var otherRepoDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelGitSmoke_Other_" + Guid.NewGuid());
+        Directory.CreateDirectory(otherRepoDir);
+        try
+        {
+            RunGit(otherRepoDir, "init");
+            RunGit(otherRepoDir, "config", "user.email", "test@example.com");
+            RunGit(otherRepoDir, "config", "user.name", "Test");
+            File.WriteAllText(Path.Combine(otherRepoDir, "OTHER.md"), "other repo");
+            RunGit(otherRepoDir, "add", "-A");
+            RunGit(otherRepoDir, "commit", "-m", "other repo initial commit");
+            File.WriteAllText(Path.Combine(otherRepoDir, "OTHER.md"), "other repo, modified");
+
+            // _gitTools' own loaded-solution repo (_repoDir) is clean at this point - if repoPath were
+            // ignored and the tool fell back to _repoDir, this would incorrectly come back clean too.
+            var result = await _gitTools.Git(reason: "test message", GitOperation.status, repoPath: otherRepoDir);
+
+            Assert.That(result, Is.Not.Null);
+            var status = (GitStatusResult)result;
+            Assert.That(status.Success, Is.True, status.Error);
+            Assert.That(status.IsClean, Is.False, "the other repo has an uncommitted change and should not report clean.");
+            Assert.That(status.Unstaged.Select(s => s.Path), Does.Contain("OTHER.md"));
+        }
+        finally
+        {
+            foreach (var file in Directory.EnumerateFiles(otherRepoDir, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
+            Directory.Delete(otherRepoDir, recursive: true);
+        }
+    }
+
+
+    [Test]
+    public async Task Git_Commit_RepoPath_IsRejectedAsync()
+    {
+        var result = await _gitTools.Git(reason: "test message", GitOperation.commit, message: "should be rejected", repoPath: _repoDir);
+
+        Assert.That(result, Is.Not.Null);
+        // The repoPath/mutating-op guard returns an anonymous { Success, Error } object, not a
+        // GitStatusResult - read it via reflection rather than assuming a concrete type.
+        var successProperty = result.GetType().GetProperty("Success");
+        Assert.That(successProperty, Is.Not.Null);
+        Assert.That(successProperty!.GetValue(result), Is.EqualTo(false),
+            "repoPath must only be accepted for status/log/diff/show - mutating operations should stay scoped to the loaded solution.");
+    }
 }
