@@ -5,6 +5,45 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Blocker-doc sweep: 9 stale/resolved/non-bug writeups archived — closed (2026-09-18)
+
+Triage pass over all 20 files in `docs/current/blockers/` found 9 with nothing left to act on;
+moved to `docs/obsolete/blockers/`. Docs with a genuinely open sub-finding (tracked either in
+`docs/current/plans/plan-open-blockers-remediation-v1.md` or elsewhere) were deliberately left in
+`docs/current/blockers/` even when their headline symptom was fixed — see that plan's Phase 6/7 for
+the still-open halves of the `FormattingHelper` CS0103 doc and the unreachable-verification-gate doc.
+
+- `blocking_error_buildps1_relocated_reporoot_path_math_broken.md` — doc's own header already said
+  RESOLVED 2026-09-15 (path-math fix applied across 4 scripts after `scripts/` relocation).
+- `blocking_error_git_stage_scope_schema_stale_server.md` — confirmed via source read: `Git`'s
+  `stage`/`commit` already use `scope` (not `stageAll`) end-to-end; was a stale-live-process
+  symptom, not a source defect. Same root cause class as the enum-staleness doc below.
+- `blocking_error_live_server_stale_after_enum_addition.md` — process-lifecycle finding (a
+  long-lived server process can't pick up a newly-recompiled enum member without a restart), not a
+  code bug; the `Git` branch/checkout/push/fetch/pull fix it was found alongside verified correct
+  via an isolated standalone build.
+- `blocking_error_self_inflicted_drift_halt_from_edit_tool_on_tracked_cs_file.md` — self-inflicted
+  (used `Edit` on a tracked `.cs` file, tripping the drift guard correctly); resolved in-session via
+  `AcknowledgeExternalFileChanges`.
+- `finding_agent_no_terminal_step8_deviation.md` / `finding_applydiff_size_threshold_local_model.md`
+  — both explicitly labeled informational findings (test-plan-authoring and model-eval-reliability
+  observations), no RoslynSentinel code defect in either.
+- `blocking_error_getdiagnostics_10_phase3_diffhunkanalyzer.md`, `blocking_error_runtest_01_baseline.md`,
+  `blocking_error_searchsolutiontext_11_final_verification.md` — auto-generated PlanStepRunner
+  repeated-failure-breaker templates from 2026-09-11/12 runs; on inspection each reflects either a
+  plan-content/prompt-content bug (a non-string `reason` value, a deliberate 3x-no-match orientation
+  probe) rather than a tool defect, and none was ever filled in past its auto-written template.
+
+Left in place (real open sub-findings, do not re-archive without re-checking the plan doc first):
+`blocking_error_formattinghelper_cs0103_missing_formatting_using.md` (Phase 6 — `UsingDirective`
+accessibility-widening + `UndoLastApply` false-success reporting),
+`blocking_error_plan_step_unreachable_verification_gate.md` (Phase 7 — trivia-loss bug),
+`blocking_error_member_replace_strips_blank_line_between_adjacent_members.md` (insertion-formatting
+bug fixed this session; `Member(replace)` silent-no-op sub-finding still open, only tracked in
+memory as `project_member_replace_drops_leading_blank_line_and_verify_gap`),
+`blocking_error_session_halt_from_out_of_band_rm_mid_spike.md` (feeds the already-tracked
+`SessionHalted` TODO.md entry — drift-detection scope and message-recovery-pointer gaps still open).
+
 ## `Git` tool: show, diff range/first-commit, log path/ref/body, pull --rebase — closed (2026-09-18)
 
 User-approved "5 easy items" batch closing part of the still-open `Git` TODO gaps (worktree/stash/
