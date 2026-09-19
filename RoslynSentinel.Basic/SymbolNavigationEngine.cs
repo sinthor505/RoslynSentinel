@@ -322,6 +322,13 @@ public class SymbolNavigationEngine
             "property" => symbol is IPropertySymbol,
             "field" => symbol is IFieldSymbol,
             "event" => symbol is IEventSymbol,
+            "class" => symbol is INamedTypeSymbol { TypeKind: TypeKind.Class },
+            "interface" => symbol is INamedTypeSymbol { TypeKind: TypeKind.Interface },
+            "record" => symbol is INamedTypeSymbol { IsRecord: true },
+            "struct" => symbol is INamedTypeSymbol { TypeKind: TypeKind.Struct },
+            "enum" => symbol is INamedTypeSymbol { TypeKind: TypeKind.Enum },
+            "constructor" => symbol is IMethodSymbol { MethodKind: MethodKind.Constructor },
+            "parameter" => symbol is IParameterSymbol,
             _ => true   // "any" or unrecognised - include everything
         };
     }

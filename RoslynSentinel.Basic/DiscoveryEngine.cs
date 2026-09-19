@@ -810,11 +810,15 @@ public class DiscoveryEngine
                         FieldDeclarationSyntax f => ("Field",
                             f.Declaration.Variables.FirstOrDefault()?.Identifier.Text ?? "",
                             f.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? ""),
-                        ClassDeclarationSyntax c => ("Class", c.Identifier.Text, ""),
-                        InterfaceDeclarationSyntax i => ("Interface", i.Identifier.Text, ""),
-                        RecordDeclarationSyntax r => ("Record", r.Identifier.Text, ""),
-                        StructDeclarationSyntax s => ("Struct", s.Identifier.Text, ""),
-                        EnumDeclarationSyntax e => ("Enum", e.Identifier.Text, ""),
+                        // containingType: null (not "") for top-level declarations -- LocateSymbolAsync's
+                        // filter only activates on a non-null containingType, and a top-level type's
+                        // symbol.ContainingType is itself null, so passing "" here filtered out every
+                        // top-level attribute-usage site (null != "").
+                        ClassDeclarationSyntax c => ("Class", c.Identifier.Text, c.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text),
+                        InterfaceDeclarationSyntax i => ("Interface", i.Identifier.Text, i.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text),
+                        RecordDeclarationSyntax r => ("Record", r.Identifier.Text, r.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text),
+                        StructDeclarationSyntax s => ("Struct", s.Identifier.Text, s.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text),
+                        EnumDeclarationSyntax e => ("Enum", e.Identifier.Text, e.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text),
                         ParameterSyntax param => ("Parameter", param.Identifier.Text,
                             param.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? ""),
                         ConstructorDeclarationSyntax ctor => ("Constructor", ctor.Identifier.Text,
@@ -823,9 +827,10 @@ public class DiscoveryEngine
                     };
 
                     var symbolLocation = await _symbolNavigationEngine.LocateSymbolAsync(targetName, kind, containingType, null, null, docPath, true).ConfigureAwait(false);
+                    var located = symbolLocation.FirstOrDefault();
 
                     var line = attr.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                    results.Add(new AttributeUsageSite(bare, attr.ArgumentList?.Arguments.Select(a => a.ToString()).ToArray() ?? Array.Empty<string>(), symbolLocation.First().DocCommentId ?? string.Empty, kind, targetName, containingType, symbolLocation.First()?.ContainingNamespace ?? string.Empty, symbolLocation.First().ProjectName, docPath, line));
+                    results.Add(new AttributeUsageSite(bare, attr.ArgumentList?.Arguments.Select(a => a.ToString()).ToArray() ?? Array.Empty<string>(), located?.DocCommentId ?? string.Empty, kind, targetName, containingType ?? "", located?.ContainingNamespace ?? string.Empty, located?.ProjectName ?? string.Empty, docPath, line));
                 }
             }
         }

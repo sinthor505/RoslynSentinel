@@ -689,4 +689,33 @@ public class OrderService : IOrderService
         Assert.That(result.Success, Is.True);
         Assert.That(result.Warning, Does.Contain("nothing found under any kind"));
     }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Test]
+    public async Task QuerySymbolRelationships_AttributeUsages_TopLevelClassTarget_ReturnsMatchNotCrash()
+    {
+        // Regression test for blocking_error_findattributeusages_first_throws_on_unresolved_target.md:
+        // FindAttributeUsagesAsync used to pass containingType: "" (empty string) for every top-level
+        // type declaration, but LocateSymbolAsync's containingType filter only activates when the
+        // argument is non-null - and a top-level type's own symbol.ContainingType is null, so "" != null
+        // always excluded it, leaving LocateSymbolAsync's result empty and an unguarded .First() call
+        // throwing InvalidOperationException for every single top-level attribute usage.
+        const string source = @"
+using System;
+namespace TestProj;
+
+public class ProbeAttribute : Attribute { }
+
+[Probe]
+public class AttributedTarget { }
+";
+        SetSource(source, "AttributeProbe.cs");
+
+        var result = await _symbolTools.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages);
+
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+        var sites = (result.Data as System.Collections.IEnumerable)?.Cast<object>().ToList();
+        Assert.That(sites, Is.Not.Null.And.Count.EqualTo(1));
+    }
 }

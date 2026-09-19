@@ -5,6 +5,34 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## `FindAttributeUsagesAsync` throws on unresolved attribute target — fixed, closed (2026-09-18)
+
+Root cause traced to source: `DiscoveryEngine.FindAttributeUsagesAsync` (`DiscoveryEngine.cs:813-817`)
+passed `containingType: ""` (empty string) for every top-level type declaration (Class/Interface/
+Record/Struct/Enum), but `SymbolNavigationEngine.LocateSymbolAsync`'s `containingType` filter
+(`SymbolNavigationEngine.cs:225`) only activates when the argument is non-null - and a top-level
+type's own `symbol.ContainingType` is itself `null`, so `null != ""` excluded every single top-level
+attribute usage from the result, leaving `LocateSymbolAsync` empty and an unguarded `.First()` call
+at `DiscoveryEngine.cs:828` throwing `InvalidOperationException: Sequence contains no elements`.
+
+Fixed: those 5 branches now compute a real `containingType` (via `Ancestors().OfType<TypeDeclarationSyntax>()`,
+`null` when genuinely top-level, a real name when nested - previously always `""` even when nested)
+instead of a hardcoded `""`. Hardened the two `.First()` calls to `FirstOrDefault()` with explicit
+null-coalescing fallbacks so a genuine future zero-match degrades to reduced enrichment instead of
+crashing the whole query. Also fixed the related secondary finding: `MatchesKindFilter`
+(`SymbolNavigationEngine.cs:316-327`) didn't recognize the PascalCase kind strings
+`FindAttributeUsagesAsync` passes (`"Class"`, `"Interface"`, etc.), making the `kind` argument inert;
+added matching cases for `class`/`interface`/`record`/`struct`/`enum`/`constructor`/`parameter`.
+
+New regression test `QuerySymbolRelationships_AttributeUsages_TopLevelClassTarget_ReturnsMatchNotCrash`
+(`RoslynSentinel.Tests.Battery/BatteryTwentyTwoTests.cs`) seeds a top-level attribute-decorated class
+and confirms the query succeeds with one match instead of crashing - the two pre-existing
+`attributeUsages` tests in that file only ever exercised the zero-match/broaden-on-empty path, which
+is why this was never caught. `RoslynSentinel.Tests.Battery` full suite 991/995 passed (0 failed, 4
+pre-existing skips); `RoslynSentinel.Tests.Basic` 264/266 passed, the 2 failures pre-existing and
+unrelated (`Member(add)` on enum containers, see `docs/current/issue_member_add_silent_persistence.md`).
+Build 0 errors. Doc moved to `docs/obsolete/blockers/`.
+
 ## `Member` add/replace collapses blank line/newline between adjacent members — fixed, closed (2026-09-18)
 
 Root cause: `AddMemberAsync`/`InsertMemberAfterAsync`/`InsertMemberBeforeAsync`
