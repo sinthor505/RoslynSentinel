@@ -1283,4 +1283,73 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         var result = await _modernizationEngine.ConvertToPatternAsync("NonExistent.cs");
         Assert.That(result, Is.Not.Null);
     }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    // Regression test for blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md
+    // Symptom 1: without targetTypeName, SyncTypeAndFilename picked whichever type happened to be
+    // declared first, not necessarily the one the caller actually wanted. This reproduces that
+    // shape - targetTypeName must be able to select the LAST-declared type.
+    [Test]
+    public async Task SyncTypeAndFilename_TargetTypeName_SelectsNonFirstDeclaredTypeAsync()
+    {
+        const string mismatchedSource = "namespace TestProj;\n\npublic class HelperResult\n{\n    public bool Ok { get; set; }\n}\n\npublic class MainService\n{\n    public int Id { get; set; }\n}\n";
+        var tempDir = Path.Combine(Path.GetTempPath(), "SyncTypeAndFilenameTargetTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var oldPath = Path.Combine(tempDir, "Mismatched.cs");
+
+            var solution = TestSolutionBuilder.CreateSolutionWithProject(
+                "TestProj", Path.Combine(tempDir, "TestProj.csproj"),
+                [("Mismatched.cs", mismatchedSource, oldPath)]);
+            _workspaceManager.SetTestSolution(solution);
+
+            var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "MainService");
+
+            Assert.That(result.Success, Is.True, $"Expected rename to succeed; error: {result.Error?.Message}");
+            var summary = (AppliedChangeSummary)result.Data!;
+            Assert.That(summary.AffectedFiles, Has.Some.Matches<FilePathWrapper>(p => p.Absolute.Contains("MainService.cs")),
+                "Should target MainService (explicitly named), not HelperResult (first-declared).");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    // Companion negative case: an unknown targetTypeName must fail with an actionable error naming
+    // the types that actually exist in the file, not silently fall back to the first-declared type.
+    [Test]
+    public async Task SyncTypeAndFilename_UnknownTargetTypeName_ReturnsActionableErrorAsync()
+    {
+        const string mismatchedSource = "namespace TestProj;\n\npublic class HelperResult\n{\n    public bool Ok { get; set; }\n}\n\npublic class MainService\n{\n    public int Id { get; set; }\n}\n";
+        var tempDir = Path.Combine(Path.GetTempPath(), "SyncTypeAndFilenameTargetTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var oldPath = Path.Combine(tempDir, "Mismatched.cs");
+            File.WriteAllText(oldPath, mismatchedSource);
+
+            var solution = TestSolutionBuilder.CreateSolutionWithProject(
+                "TestProj", Path.Combine(tempDir, "TestProj.csproj"),
+                [("Mismatched.cs", mismatchedSource, oldPath)]);
+            _workspaceManager.SetTestSolution(solution);
+
+            var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "DoesNotExist");
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Error!.Message, Does.Contain("DoesNotExist"));
+            Assert.That(result.Error!.Message, Does.Contain("HelperResult"));
+            Assert.That(result.Error!.Message, Does.Contain("MainService"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
 }

@@ -241,4 +241,48 @@ public class UndoLastApplyTests
         Assert.That((string)result.Data!, Does.Contain(targetFile));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(currentContent));
     }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    // Regression test for blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md
+    // Symptom 2: SyncTypeAndFilename used to delete the old file via a bare FileIoHelper.DeleteAsync
+    // call outside ApplyProposedChangesAsync's tracked delete path, so the old path's content was
+    // never captured as a pre-image anywhere and UndoLastApply could only ever report
+    // NoReversibleItems for a rename changeId. Now that the delete goes through deletePaths, its
+    // pre-image is captured like any other tracked delete, so a rename changeId should be fully
+    // revertible: old file restored.
+    [Test]
+    public async Task UndoLastApply_RealRevert_RestoresRenamedFileFromSyncTypeAndFilenameAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        const string widgetSource = "namespace ContosoOrders;\n\npublic class Widget\n{\n    public int Id { get; set; }\n}\n";
+        await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Core", "Mismatched.cs"), widgetSource);
+
+        var config = new SentinelConfiguration();
+        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, new DiffEngine());
+        var refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, workspaceManager, config);
+        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var structuralTools = new RefactoringStructuralTools(refactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, NullLogger<RefactoringStructuralTools>.Instance);
+
+        var oldPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Mismatched.cs");
+        var newPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Widget.cs");
+
+        var renameResult = await structuralTools.SyncTypeAndFilename(reason: "test message", oldPath);
+        Assert.That(renameResult.Success, Is.True, $"Expected rename to succeed; error: {renameResult.Error?.Message}");
+        var changeId = ((AppliedChangeSummary)renameResult.Data!).ChangeId;
+
+        Assert.That(File.Exists(oldPath), Is.False, "Old file should be gone after the rename.");
+        Assert.That(File.Exists(newPath), Is.True, "New file should exist after the rename.");
+
+        var undoResult = await workspaceTools.UndoLastApply(reason: "test message", changeId: changeId!);
+
+        Assert.That(undoResult.Success, Is.True, $"Expected undo to succeed; error: {undoResult.Error?.Message}");
+        Assert.That(File.Exists(oldPath), Is.True, "Old file should be restored by UndoLastApply.");
+        Assert.That(await File.ReadAllTextAsync(oldPath), Is.EqualTo(widgetSource));
+    }
 }

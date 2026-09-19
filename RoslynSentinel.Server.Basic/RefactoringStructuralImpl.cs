@@ -57,10 +57,11 @@ public class RefactoringStructuralImpl
         bool returnDiff = false,
         IProgress<ProgressNotificationValue>? progress = default,
         IReadOnlyCollection<FilePathWrapper>? removePaths = null,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null) =>
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
-            dryRun, returnDiff, progress, removePaths, cancellationToken,
+            dryRun, returnDiff, progress, removePaths, cancellationToken, deletePaths,
             describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
 
 
@@ -1040,6 +1041,7 @@ public class RefactoringStructuralImpl
     public async Task<ToolResult<object>> SyncTypeAndFilename(
         ToolCallReason reason,
         FilePathWrapper filepath,
+        string? targetTypeName = null,
         bool dryRun = false,
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
@@ -1048,7 +1050,7 @@ public class RefactoringStructuralImpl
 
         try
         {
-            var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePathResolved, cancellationToken);
+            var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePathResolved, targetTypeName, cancellationToken);
             if (result.Outcome != EditOutcome.Modified || result.Changes.Count == 0)
             {
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}") };
@@ -1060,39 +1062,27 @@ public class RefactoringStructuralImpl
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename: target file '{newPath}' already exists - refusing to overwrite.") };
             }
 
+            // deletePaths (not removePaths) so the old file's delete goes through
+            // ApplyProposedChangesAsync's tracked delete path: that's what captures its pre-image
+            // content into the operation blob, which is what makes UndoLastApply able to actually
+            // restore a rename instead of reporting NoReversibleItems for it. It also removes the
+            // old Document from the workspace itself, so a separate RemoveDocumentByPathAsync call
+            // is no longer needed afterward. Passing filePathResolved in BOTH removePaths and
+            // deletePaths would ask ValidateChangesAsync to RemoveDocument the same path twice
+            // against its own candidate solution, throwing InvalidOperationException on the second
+            // attempt (deletePaths already covers pre-validate exclusion via ValidateAndApplyHelper's
+            // allRemovePaths merge) -> removePaths is intentionally omitted here.
             var changes = new Dictionary<FilePathWrapper, string> { [newPath] = content };
-            var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", dryRun, returnDiff, removePaths: [filePathResolved], cancellationToken: cancellationToken);
+            var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", dryRun, returnDiff, cancellationToken: cancellationToken, deletePaths: [filePathResolved]);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
 
-            // dryRun: ValidateAndApplyAsync never wrote newPath, so deleting filePath here would
-            // destroy the original with nothing on disk to replace it. Report the preview as-is.
+            // dryRun: ValidateAndApplyAsync never wrote newPath or deleted filePath. Report the
+            // preview as-is.
             if (apply.DryRun)
             {
                 return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved, newPath], $"[DryRun] Would rename '{Path.GetFileName(filePathResolved)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff) };
             }
-
-            // Only remove the old file after the new one is validated and written, so the
-            // two never coexist as a validated on-disk duplicate of the same type.
-            try
-            {
-                await FileIoHelper.DeleteAsync(filePathResolved, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                // Deliberately not routed through ToolErrorMapper (unlike other catches in this
-                // file): this is a partial-success condition (new file written and validated, only
-                // the old-file delete failed), not a plain failure, and the mapper's generic
-                // "failed unexpectedly" wording would drop the actionable remediation advice below.
-                _logger.LogError(ex, "SyncTypeAndFilename wrote '{NewPath}' but failed to delete old file '{OldPath}'", newPath, filePathResolved);
-                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename wrote '{Path.GetFileName(newPath)}' but failed to delete the old file '{filePathResolved}': {ex.Message}. Delete it manually to avoid a duplicate-type compile error.") };
-            }
-
-            // The old file is gone from disk, but ApplyProposedChangesAsync only ever added the
-            // new Document -> it has no reason to know the old one should be dropped too. Without
-            // this, the old Document stays tracked and the type it declares now exists twice in
-            // the compilation, corrupting symbol resolution for every subsequent call.
-            await _workspaceManager.RemoveDocumentByPathAsync(filePathResolved, cancellationToken);
 
             // No ChangedContent: this only moves a file to a new name -> the file's content is
             // byte-for-byte unchanged, so there is no new text to show beyond the summary.

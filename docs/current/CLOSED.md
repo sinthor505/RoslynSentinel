@@ -5,6 +5,41 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Phase 5 of plan-open-blockers-remediation-v1: `SyncTypeAndFilename` wrong-type targeting + `UndoLastApply` rename recovery — closed (2026-09-19)
+
+Both sub-problems fixed. **Symptom 1** (picked the first-declared type, not the caller's intended
+one): `StructuralRefinementEngine.SyncTypeAndFilenameAsync` (`RoslynSentinel.Basic`) gained an
+optional `targetTypeName` parameter - when supplied, matches it against the file's top-level type
+declarations explicitly instead of `.FirstOrDefault()` on declaration order; an unmatched name
+returns an actionable error naming every top-level type actually present in the file. When
+omitted, first-declared stays the default (now documented as a real default for the common
+single-type-per-file case, not an accident). Wired through all 4 call-site layers in one atomic
+edit (`RefactoringStructuralImpl.SyncTypeAndFilename`, `RefactoringStructuralTools` - the
+MCP-attributed tool surface - and the legacy `SentinelRefactoringTools` facade). **Symptom 2**
+(`UndoLastApply` reported `NoReversibleItems` for a rename changeId even though the apply
+succeeded and a solution was loaded): traced to `SyncTypeAndFilename` deleting the old file via a
+bare `FileIoHelper.DeleteAsync` call *outside* `ApplyProposedChangesAsync`'s tracked delete path -
+`deletePaths` (an existing, already-wired mechanism) captures a deleted file's pre-image content
+into the operation blob at `PersistentWorkspaceManager.cs:1350` and removes its `Document`
+automatically, but `SyncTypeAndFilename` was never using it, so the old file's content was
+structurally unrecordable. Fix: route the old-path delete through `deletePaths` instead
+(`ValidateAndApplyAsync`'s private wrapper in `RefactoringStructuralImpl.cs` gained a `deletePaths`
+passthrough), which also let the now-redundant manual `RemoveDocumentByPathAsync` call be deleted.
+Caught and fixed a duplication bug during implementation: passing the same path in both
+`removePaths` (validation-time candidate-solution exclusion) and `deletePaths` (apply-time tracked
+delete) caused `ValidateChangesAsync` to call `RemoveDocument` on the same already-removed document
+twice, throwing `InvalidOperationException` - fixed by dropping the now-redundant `removePaths`
+arg, since `deletePaths` already covers the validation-time exclusion via
+`ValidateAndApplyHelper`'s `allRemovePaths` merge. Four new regression tests: two in
+`UndoLastApplyTests.cs` proving a `SyncTypeAndFilename` rename changeId is now actually revertible
+via `UndoLastApply` (old file restored), two in `BatteryTwentyFourTests.cs` proving `targetTypeName`
+selects a non-first-declared type and that an unknown name errors with the real type list. Build 0
+errors/0 warnings; targeted suite (`SyncTypeAndFilename`/`UndoLastApply`) 16/16 passed; full
+solution suite 2461/2574 passed, 19 pre-existing failures all unrelated (15 LM Studio
+`BadRequest` in ModelEval requiring a live model server, 2 `InsertMemberBefore_OnEnum`, 2
+`TaskCapableClient` polling-equivalence - none touch the files this phase changed, confirmed via
+`git status`).
+
 ## Phase 4 of plan-open-blockers-remediation-v1: `--list-tools` misreport — verified already fixed (2026-09-19)
 
 `blocking_error_list_tools_misreports_tool_surface.md` claimed `--list-tools` scanned only

@@ -285,10 +285,11 @@ public class SentinelRefactoringTools
     public Task<ToolResult<object>> SyncTypeAndFilename(
         ToolCallReason reason,
         FilePathWrapper filepath,
+        string? targetTypeName = null,
         bool dryRun = false,
         bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _structural.SyncTypeAndFilename(reason, filepath, dryRun, returnDiff, cancellationToken);
+        _structural.SyncTypeAndFilename(reason, filepath, targetTypeName, dryRun, returnDiff, cancellationToken);
 
 
     // Added by InsertMemberAfter (expected - used for diagnostics)

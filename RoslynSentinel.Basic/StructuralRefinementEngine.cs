@@ -41,19 +41,42 @@ public class StructuralRefinementEngine
     }
 
     /// <summary>
-    /// Synchronizes the filename to match the primary type declared in the file.
+    /// Synchronizes the filename to match a type declared in the file. When <paramref name="targetTypeName"/>
+    /// is omitted, defaults to the first non-nested type declared in the file -> a real default for the
+    /// common single-type-per-file case, not an accidental fallback, but not necessarily the file's
+    /// conceptual "primary" type when several top-level types share a file. Pass targetTypeName to name
+    /// the type explicitly instead of relying on declaration order.
     /// Uses staging mechanism (returns change ID) instead of direct file writes.
     /// </summary>
-    public async Task<DocumentEditResult> SyncTypeAndFilenameAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SyncTypeAndFilenameAsync(FilePathWrapper filePath, string? targetTypeName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
 
-        // Find PRIMARY type (first non-nested type in file)
-        var primaryType = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+        var topLevelTypes = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
             .Where(t => t.Parent is not BaseTypeDeclarationSyntax) // Not nested
-            .FirstOrDefault();
+            .ToList() ?? [];
+
+        BaseTypeDeclarationSyntax? primaryType;
+        if (targetTypeName != null)
+        {
+            primaryType = topLevelTypes.FirstOrDefault(t => t.Identifier.Text == targetTypeName);
+            if (primaryType == null)
+            {
+                var available = topLevelTypes.Count == 0 ? "none" : string.Join(", ", topLevelTypes.Select(t => t.Identifier.Text));
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"No top-level type named '{targetTypeName}' found in '{filePath}'. Top-level types present: {available}."
+                };
+            }
+        }
+        else
+        {
+            primaryType = topLevelTypes.FirstOrDefault();
+        }
 
         if (primaryType == null)
         {

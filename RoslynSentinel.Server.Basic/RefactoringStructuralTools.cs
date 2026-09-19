@@ -161,12 +161,14 @@ public class RefactoringStructuralTools
 
     [McpServerTool(Name = "SyncTypeAndFilename")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Synchronizes the filename to match the primary type declared in the file.")]
+    [Description("Synchronizes the filename to match a type declared in the file.")]
     public Task<ToolResult<object>> SyncTypeAndFilename(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Description("The top-level type in the file to sync the filename to. Omit to default to the first non-nested type declared in the file (fine for the common single-type-per-file case). Name it explicitly to get a specific result when the file declares more than one top-level type - without it, whichever type happens to be declared first wins, which is not necessarily the file's conceptual main type.")]
+        string? targetTypeName = null,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.SyncTypeAndFilename(reason, filepath, dryRun, returnDiff, cancellationToken);
+        _impl.SyncTypeAndFilename(reason, filepath, targetTypeName, dryRun, returnDiff, cancellationToken);
 }

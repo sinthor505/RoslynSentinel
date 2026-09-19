@@ -59,25 +59,31 @@ against the current build: `--mode=all --list-tools` reports `toolCount: 112` in
 54 snake_case), and `--mode=intelligence --list-tools` (an Advanced-only mode) reports
 `toolCount: 14` (not `[]`).
 
-## Phase 5 — `SyncTypeAndFilename`: target the caller's specified type, not the first-declared one
-**Doc:** `blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md`
-**File:** `RoslynSentinel.Basic/StructuralRefinementEngine.cs:47-77`
+## Phase 5 — `SyncTypeAndFilename`: target the caller's specified type, not the first-declared one — DONE (2026-09-19)
+**Doc:** `blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md` —
+moved to `docs/obsolete/blockers/`; see `CLOSED.md`.
 
-Two sub-problems, confirmed independent (per the doc's own "confirmed NOT the cause" section):
+Both sub-problems fixed, and turned out to share a real root cause worth recording: renames were
+never recordable because the old-file delete happened outside the one write path that captures
+delete pre-images.
 
-1. `SyncTypeAndFilenameAsync(filePathWrapper, ct)` takes no type-identifying parameter at all — it
-   can't target a caller-specified type even in principle. Extend the signature (or the calling
-   `Member`/dedicated tool surface) to accept a `docCommentId`/type name, matched against candidate
-   `BaseTypeDeclarationSyntax` nodes explicitly rather than `.FirstOrDefault()` on declaration order.
-   If no explicit target is given, keep current first-declared behavior as the default but document
-   it as a default, not an accident.
-2. `UndoLastApply` reports `NoReversibleItems` for the changeIds this tool returns. Trace whether
-   file-rename operations produce a reversible blob at all (vs. only text-edit changeIds) in the
-   apply-blob writer this tool shares with other write-path tools. If renames are structurally
-   unrecordable today, either make them recordable or have `UndoLastApply` return a specific
-   "renames aren't undoable via changeId, use ___" error instead of the generic
-   solution-not-loaded-shaped message — don't leave a caller unable to tell "wrong changeId" from
-   "this class of change was never undoable."
+1. Added optional `targetTypeName` to `SyncTypeAndFilenameAsync` and threaded it through all 4
+   call-site layers (engine, impl, MCP-attributed tool class, legacy facade). Matches explicitly
+   against top-level `BaseTypeDeclarationSyntax` nodes; unmatched name errors with the real list of
+   types present. Omitted stays first-declared (documented as an intentional default).
+2. `UndoLastApply`'s `NoReversibleItems` was a correct symptom of a real gap, not a lookup bug:
+   `SyncTypeAndFilename` deleted the old file via a bare `FileIoHelper.DeleteAsync` outside
+   `ApplyProposedChangesAsync`'s `deletePaths` mechanism, so the old file's pre-image content was
+   never captured anywhere. Fixed by routing the delete through `deletePaths` (already-existing,
+   already-wired machinery used by other tools) instead of a manual post-apply delete - this also
+   removed the need for a separate `RemoveDocumentByPathAsync` call. Found and fixed a duplication
+   bug while wiring this: passing the old path in both `removePaths` and `deletePaths` made
+   `ValidateChangesAsync` call `RemoveDocument` on an already-removed document twice
+   (`InvalidOperationException`) - resolved by dropping the redundant `removePaths` arg.
+
+Four new tests (2 in `UndoLastApplyTests.cs`, 2 in `BatteryTwentyFourTests.cs`); targeted suite
+16/16, full solution 2461/2574 (19 pre-existing unrelated failures, confirmed via `git status`
+scope).
 
 ## Phase 6 — `UsingDirective`: stop silently widening accessibility
 **Doc:** `blocking_error_formattinghelper_cs0103_missing_formatting_using.md` (the still-open half —
