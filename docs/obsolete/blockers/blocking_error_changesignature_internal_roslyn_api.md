@@ -1,8 +1,24 @@
 # `ChangeSignature` real-Roslyn-engine migration blocked — the entire change-signature pipeline in Microsoft.CodeAnalysis(.CSharp).Features 5.9.0 is `internal`
 
-**Status:** OPEN — found 2026-09-13, while implementing
-`docs/current/proposal_changesignature_full_roslyn_service.md`. Stopped per CLAUDE.md's "a tool/API
-failure is a blocking finding" doctrine; no workaround attempted.
+**Status:** CLOSED 2026-09-19 — resolved via option 1 below (kept the hand-rolled engine, fixed its
+two known call-site gaps). Found 2026-09-13 while implementing
+`docs/current/proposal_changesignature_full_roslyn_service.md`; driving Roslyn's real internal
+change-signature service was confirmed not implementable (see finding below), and no workaround was
+attempted, per CLAUDE.md's "a tool/API failure is a blocking finding" doctrine.
+
+**Resolution:** `docs/current/proposal_changesignature_full_roslyn_service.md`'s "IMPLEMENTED
+(2026-09-13)" section shows `RefactoringEngine.ChangeSignatureAsync` was extended with
+semantic-model-driven call-site resolution (`SemanticModel.GetSymbolInfo` + `SyntaxGenerator`/
+`DocumentEditor`, all public APIs) instead of the abandoned internal-service path. Both named-argument
+and optional/`params` call sites are now rewritten correctly instead of skipped, confirmed by the two
+rewritten tests `ChangeSignature_CallSiteWithNamedArgument_IsHandledCorrectly` and
+`ChangeSignature_CallSiteWithFewerArgsThanParameters_IsHandledCorrectly` (both passing). The one
+remaining skip case (`RefactoringEngine.cs` "materialize gap" algorithm: a kept parameter's argument
+was omitted at a call site, a later argument forces it to be materialized, and the original parameter
+has no default value to synthesize one from) is structural, not a bug — there is no value anywhere to
+put in that slot, so `SkippedCallSite` is the only correct outcome. Re-verified against current source
+2026-09-19: no other skip path exists in the call-site rewrite loop beyond "no enclosing
+invocation/object-creation found" (also structural - nothing to rewrite) and this one.
 
 ## What was being attempted
 

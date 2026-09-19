@@ -5,6 +5,31 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## ChangeSignature named-argument and optional/params call-site gaps — already fixed 2026-09-13, blocker doc closed 2026-09-19
+
+`blocking_error_changesignature_internal_roslyn_api.md` was left OPEN after driving Roslyn's real
+internal change-signature service (Microsoft.CodeAnalysis(.CSharp).Features 5.9.0) was confirmed not
+implementable (every type in that pipeline is `internal`, gated by a `RestrictedInternalsVisibleTo`
+allowlist of Microsoft's own assemblies only - no workaround exists or was attempted). The doc's own
+option 1 ("keep the hand-rolled engine, incrementally fix its two specific known gaps") was pursued
+separately and completed the same day (2026-09-13), per
+`docs/current/proposal_changesignature_full_roslyn_service.md`'s "IMPLEMENTED" section:
+`RefactoringEngine.ChangeSignatureAsync` (`RoslynSentinel.Basic/RefactoringEngine.cs`) now resolves
+each call site's bound arguments via the semantic model
+(`SemanticModel.GetSymbolInfo(invocation).Symbol as IMethodSymbol`) instead of positional-syntax
+matching, so both previously-skipped cases - named arguments and omitted optional/`params` arguments -
+are rewritten correctly. Verified 2026-09-19 by re-reading the current call-site rewrite loop and
+confirming `ChangeSignature_CallSiteWithNamedArgument_IsHandledCorrectly` and
+`ChangeSignature_CallSiteWithFewerArgsThanParameters_IsHandledCorrectly` both pass. The blocker doc
+itself just never had its stale `Status: OPEN` header corrected once the fallback path landed - moved
+to `docs/obsolete/blockers/` with the status updated in place.
+
+One skip case remains and is correct, not a gap: if a kept parameter's argument was omitted at a call
+site and a later parameter's explicit argument forces it to be materialized, but the original
+parameter has no default value, there is no value anywhere to synthesize - `SkippedCallSite` is the
+only sound outcome. Confirmed no other skip path exists beyond this and "no enclosing
+invocation/object-creation found" (also structural).
+
 ## Session halt from out-of-band `rm` mid-spike — closed by policy change, not a code fix (2026-09-18)
 
 `blocking_error_session_halt_from_out_of_band_rm_mid_spike.md` closed per operator decision: the
