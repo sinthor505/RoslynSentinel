@@ -988,10 +988,14 @@ public class RefactoringEngine
 
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var oldName = symbol.Name;
+        // RenameInComments/RenameInStrings are deliberately left false: Roslyn's renamer would
+        // otherwise rewrite any comment/string-literal token containing the old identifier as a
+        // substring, even when it is not a genuine symbol reference (see
+        // docs/current/blockers/blocking_error_renamesymbol_corrupts_unrelated_string_literals.md).
         var renameOptions = new Microsoft.CodeAnalysis.Rename.SymbolRenameOptions
         {
-            RenameInComments = true,
-            RenameInStrings = true,
+            RenameInComments = false,
+            RenameInStrings = false,
         };
         var updated = await Microsoft.CodeAnalysis.Rename.Renamer.RenameSymbolAsync(solution, symbol, renameOptions, newName, cancellationToken);
         var pendingChanges = new Dictionary<FilePathWrapper, string>();
@@ -1020,7 +1024,8 @@ public class RefactoringEngine
     /// that Roslyn's rename couldn't reach -> e.g. the old name embedded as a substring of an unrelated
     /// identifier (like a test method named ...OldNameDoesNotBlock), or occurrences in non-source files
     /// (docs, config) that aren't part of any project's compilation and so were never visited by the
-    /// rename engine even with RenameInComments/RenameInStrings enabled.
+    /// rename engine. RenameInComments/RenameInStrings are off (see RenameSymbolAsync), so comment and
+    /// string-literal text is never rewritten by the rename itself and can still surface here.
     /// </summary>
     private async Task<List<ResidualMention>> FindResidualMentionsAsync(Solution updated, string oldName, CancellationToken cancellationToken)
     {

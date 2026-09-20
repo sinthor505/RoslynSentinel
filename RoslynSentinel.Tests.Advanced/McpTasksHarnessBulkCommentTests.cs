@@ -231,7 +231,7 @@ public class McpTasksHarnessBulkCommentTests
         var block = contentArray.EnumerateArray().First();
         var text = block.GetProperty("text").GetString()!;
         using var parsed = JsonDocument.Parse(text);
-        return parsed.RootElement.GetProperty("data").Clone();
+        return parsed.RootElement.GetProperty("successDetails").Clone();
     }
 
     private static string SerializeContent(CallToolResult result) =>
