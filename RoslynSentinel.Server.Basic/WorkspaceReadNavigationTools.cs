@@ -104,10 +104,12 @@ public class WorkspaceReadNavigationTools
         [Consumes(DataTag.ResultId)] string? resultId = null,
         [Description("Path to a largeresult_*.json file under .roslynsentinel/largeresults. Required if resultId is omitted.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
-        [Description("Maximum number of records to return.")]
+        [Description("Maximum number of records to return. Ignored when paging a Raw/offloaded text result - use charLimit instead.")]
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
-        [Description("Number of records to skip before taking limit.")]
+        [Description("Number of records (or, for a Raw/offloaded text result, characters) to skip before taking the next page.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
+        [Description("Maximum number of characters to return when paging a Raw/offloaded text result (e.g. from ReadFile or the generic size-limit backstop). Ignored for every other result type, which use limit instead. Defaults to a size-appropriate window when omitted.")]
+        [ToolOption(ToolOptionTag.CharLimit)] int? charLimit = null,
         CancellationToken cancellationToken = default)
-        => _impl.GetLargeResult(reason, resultId, filepath, limit, offset, cancellationToken);
+        => _impl.GetLargeResult(reason, resultId, filepath, limit, offset, charLimit: charLimit, cancellationToken: cancellationToken);
 }

@@ -211,8 +211,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument,
                         "ReplaceSnippet: supply either filepath/oldContent/newContent or 'edits', not both.")
                 };
             }
@@ -223,8 +223,8 @@ public class SentinelWorkspaceTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'edits' was supplied but is empty.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'edits' was supplied but is empty.")
                     };
                 }
 
@@ -235,8 +235,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument,
                         "ReplaceSnippet: 'filepath' is required (it names the single file oldContent/newContent applies to), unless 'edits' is supplied instead.")
                 };
             }
@@ -246,8 +246,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
+                    IsSuccess = false,
+                    ErrorDetails = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
                         ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ReplaceSnippet: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
                         : new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'filepath' could not be resolved.")
                 };
@@ -257,8 +257,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'oldContent' is required.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'oldContent' is required.")
                 };
             }
 
@@ -266,8 +266,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'newContent' is required (pass an empty string for a pure deletion).")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'newContent' is required (pass an empty string for a pure deletion).")
                 };
             }
 
@@ -283,8 +283,8 @@ public class SentinelWorkspaceTools
                 var advice = _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet");
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument,
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument,
                         $"ReplaceSnippet: {string.Join("; ", exceeded)}. " + advice.Sentence)
                 };
             }
@@ -299,8 +299,8 @@ public class SentinelWorkspaceTools
                     {
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
                         };
                     }
 
@@ -323,13 +323,13 @@ public class SentinelWorkspaceTools
                         var validationResult = await _validationEngine.ValidateChangesAsync(snippetChanges);
                         return validationResult.Success ? new SentinelCallToolResult<object>()
                         {
-                            Success = true,
-                            Data = validationResult
+                            IsSuccess = true,
+                            SuccessDetails = validationResult
                         }
                         : new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet validate failed: {validationResult.Diagnostics.ToInfo()}")
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet validate failed: {validationResult.Diagnostics.ToInfo()}")
                         };
                     }
 
@@ -337,8 +337,8 @@ public class SentinelWorkspaceTools
                     if (!result.Success && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception,
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.Exception,
                                 "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                 "[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
@@ -354,8 +354,8 @@ public class SentinelWorkspaceTools
                         : strippedResult;
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = true,
-                        Data = responseData
+                        IsSuccess = true,
+                        SuccessDetails = responseData
                     };
                 }
                 catch (Exception ex)
@@ -363,16 +363,16 @@ public class SentinelWorkspaceTools
                     _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePathWrapper}'", action, filePathResolved);
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet {action} for '{filePathResolved}'")
+                        IsSuccess = false,
+                        ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet {action} for '{filePathResolved}'")
                     };
                 }
             }
 
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.")
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.")
             };
         }
         catch (Exception ex)
@@ -380,8 +380,8 @@ public class SentinelWorkspaceTools
             _logger.LogError(ex, "ReplaceSnippet ({Action}) failed", action);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReplaceSnippet")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReplaceSnippet")
             };
         }
     }
@@ -439,8 +439,8 @@ public class SentinelWorkspaceTools
         {
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument,
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument,
                     $"ReplaceSnippet: edits has {edits.Count} entries (limit {MaxSnippetEditsPerBatch}). Split into multiple calls.")
             };
         }
@@ -475,8 +475,8 @@ public class SentinelWorkspaceTools
         {
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected before anchoring:\n" + string.Join("\n", perEditErrors))
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected before anchoring:\n" + string.Join("\n", perEditErrors))
             };
         }
 
@@ -568,8 +568,8 @@ public class SentinelWorkspaceTools
         {
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
             };
         }
 
@@ -577,11 +577,11 @@ public class SentinelWorkspaceTools
         {
             var validationResult = await _validationEngine.ValidateChangesAsync(finalContents);
             return validationResult.Success
-                ? new SentinelCallToolResult<object>() { Success = true, Data = validationResult }
+                ? new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = validationResult }
                 : new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet batch validate failed: {validationResult.Diagnostics.ToInfo()}")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet batch validate failed: {validationResult.Diagnostics.ToInfo()}")
                 };
         }
 
@@ -591,8 +591,8 @@ public class SentinelWorkspaceTools
             if (!result.Success && result.ValidationResult != null)
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception,
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.Exception,
                         "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors - no changes were written. Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
@@ -608,8 +608,8 @@ public class SentinelWorkspaceTools
                 : strippedResult;
             return new SentinelCallToolResult<object>()
             {
-                Success = true,
-                Data = responseData
+                IsSuccess = true,
+                SuccessDetails = responseData
             };
         }
         catch (Exception ex)
@@ -617,8 +617,8 @@ public class SentinelWorkspaceTools
             _logger.LogError(ex, "ReplaceSnippet batch ({Action}) unexpected exception for {Count} file(s)", action, finalContents.Count);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet batch {action} for {finalContents.Count} file(s)")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet batch {action} for {finalContents.Count} file(s)")
             };
         }
     }
@@ -644,8 +644,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
+                    IsSuccess = false,
+                    ErrorDetails = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
                         ? new ResultError(ToolErrorCode.SolutionNotLoaded, "CreateFile: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
                         : new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'filepath' is required.")
                 };
@@ -655,8 +655,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePathResolved}' already exists. CreateFile never overwrites - use Member/ReplaceSnippet to edit an existing file.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePathResolved}' already exists. CreateFile never overwrites - use Member/ReplaceSnippet to edit an existing file.")
                 };
             }
 
@@ -665,8 +665,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'namespaceName' is required for a .cs file, so the new file starts as a valid compilation unit that Member(add) can populate.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'namespaceName' is required for a .cs file, so the new file starts as a valid compilation unit that Member(add) can populate.")
                 };
             }
 
@@ -674,8 +674,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'typeKind' and 'typeName' are both required for a .cs file, so the new file starts with an empty top-level type that Member(add) can populate members into.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'typeKind' and 'typeName' are both required for a .cs file, so the new file starts with an empty top-level type that Member(add) can populate members into.")
                 };
             }
 
@@ -702,8 +702,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception,
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.Exception,
                         "CreateFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
@@ -714,8 +714,8 @@ public class SentinelWorkspaceTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"CreateFile failed to write '{filePathResolved}': {result.Summary}")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.Exception, $"CreateFile failed to write '{filePathResolved}': {result.Summary}")
                 };
             }
 
@@ -723,8 +723,8 @@ public class SentinelWorkspaceTools
             var strippedResult = result with { PreImages = null };
             return new SentinelCallToolResult<object>()
             {
-                Success = true,
-                Data = strippedResult,
+                IsSuccess = true,
+                SuccessDetails = strippedResult,
                 Findings = _writeAdvice.IsExposed("WriteFile")
                     ? [new Finding("CreateFile",
                         "WriteFile is also available on this server and can create a file with its full body " +
@@ -737,8 +737,8 @@ public class SentinelWorkspaceTools
             _logger.LogError(ex, "CreateFile failed for '{FilePathWrapper}'", filePathResolved);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateFile")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateFile")
             };
         }
     }
@@ -760,8 +760,8 @@ public class SentinelWorkspaceTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "confirmationCode is required when action=confirmationCode.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "confirmationCode is required when action=confirmationCode.")
                     };
                 }
 
@@ -770,17 +770,17 @@ public class SentinelWorkspaceTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, $"confirmationCode '{confirmationCode}' is unrecognized or has expired (codes are single-use and expire after 10 minutes). Resubmit the original ApplyDiff(changesetFormat: files, action: apply, ...) call to get a fresh code.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"confirmationCode '{confirmationCode}' is unrecognized or has expired (codes are single-use and expire after 10 minutes). Resubmit the original ApplyDiff(changesetFormat: files, action: apply, ...) call to get a fresh code.")
                     };
                 }
 
                 var confirmedResult = await _workspaceManager.ApplyProposedChangesAsync(pending.Value.Changes, pending.Value.RetryCount, validateChanges: pending.Value.ValidateOnApply);
-                if (!confirmedResult.Success && confirmedResult.ValidationResult != null)
+                if (!confirmedResult.IsSuccess && confirmedResult.ValidationResult != null)
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {confirmedResult.ValidationResult.Diagnostics.ToJson()}")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {confirmedResult.ValidationResult.Diagnostics.ToJson()}")
                     };
                 await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", confirmedResult);
                 var strippedConfirmedResult = confirmedResult with { PreImages = null };
@@ -793,8 +793,8 @@ public class SentinelWorkspaceTools
                     : strippedConfirmedResult;
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = true,
-                    Data = confirmedResponseData
+                    IsSuccess = true,
+                    SuccessDetails = confirmedResponseData
                 };
             }
 
@@ -805,8 +805,8 @@ public class SentinelWorkspaceTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "changes is required when changesetFormat=files.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "changes is required when changesetFormat=files.")
                     };
                 }
 
@@ -831,8 +831,8 @@ public class SentinelWorkspaceTools
                         var code = _workspaceManager.CachePendingChangeset(changes, retryCount, validateOnApply);
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.ConfirmationRequired,
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.ConfirmationRequired,
                                 $"File '{oversizedFile}' would shrink by {oversizedPercent:P0}, exceeding the {LargeShrinkRejectionThreshold:P0} threshold for a files-format apply. " +
                                 "This usually means only a changed fragment was submitted instead of the complete file content - use changesetFormat=diff for a partial edit instead. " +
                                 $"If a whole-file rewrite to this size is genuinely intended, call ApplyDiff again with action=confirmationCode and confirmationCode=\"{code}\" to apply the exact changeset just submitted (no need to resend changes). This code expires in 10 minutes.")
@@ -840,11 +840,11 @@ public class SentinelWorkspaceTools
                     }
 
                     var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount, validateChanges: validateOnApply);
-                    if (!result.Success && result.ValidationResult != null)
+                    if (!result.IsSuccess && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception,
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.Exception,
                                 "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
@@ -863,8 +863,8 @@ public class SentinelWorkspaceTools
                         : strippedResult;
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = true,
-                        Data = responseData
+                        IsSuccess = true,
+                        SuccessDetails = responseData
                     };
                 }
 
@@ -873,16 +873,16 @@ public class SentinelWorkspaceTools
                     try
                     {
                         var validationResult = await _validationEngine.ValidateChangesAsync(changes);
-                        return validationResult.Success ? new SentinelCallToolResult<object>()
+                        return validationResult.IsSuccess ? new SentinelCallToolResult<object>()
                         {
-                            Success = true,
-                            Data = validationResult
+                            IsSuccess = true,
+                            SuccessDetails = validationResult
                         }
 
                         : new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed: {validationResult.Diagnostics}")
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed: {validationResult.Diagnostics}")
                         };
                     }
                     catch (Exception ex)
@@ -890,8 +890,8 @@ public class SentinelWorkspaceTools
                         _logger.LogError(ex, "ApplyDiff validate unexpected exception");
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff validate")
+                            IsSuccess = false,
+                            ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff validate")
                         };
                     }
                 }
@@ -902,8 +902,8 @@ public class SentinelWorkspaceTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filepath' and 'unifiedDiff' are required when changesetFormat=diff.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filepath' and 'unifiedDiff' are required when changesetFormat=diff.")
                     };
                 }
 
@@ -911,8 +911,8 @@ public class SentinelWorkspaceTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filepath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filepath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
                     };
                 }
 
@@ -920,8 +920,8 @@ public class SentinelWorkspaceTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'unifiedDiff' is required when changesetFormat=diff.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'unifiedDiff' is required when changesetFormat=diff.")
                     };
                 }
 
@@ -935,8 +935,8 @@ public class SentinelWorkspaceTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                                IsSuccess = false,
+                                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
                             };
                         }
 
@@ -948,11 +948,11 @@ public class SentinelWorkspaceTools
                             [targetPath] = newContent
                         };
                         var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
-                        if (!result.Success && result.ValidationResult != null)
+                        if (!result.IsSuccess && result.ValidationResult != null)
                             return new SentinelCallToolResult<object>()
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception,
+                                IsSuccess = false,
+                                ErrorDetails = new ResultError(ToolErrorCode.Exception,
                                     "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
                                     await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                             };
@@ -967,8 +967,8 @@ public class SentinelWorkspaceTools
                             : strippedDiffResult;
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = true,
-                            Data = diffResponseData
+                            IsSuccess = true,
+                            SuccessDetails = diffResponseData
                         };
                     }
                     catch (Exception ex)
@@ -976,8 +976,8 @@ public class SentinelWorkspaceTools
                         _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePathWrapper}'", filePathResolved);
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePathResolved}'")
+                            IsSuccess = false,
+                            ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePathResolved}'")
                         };
                     }
                 }
@@ -985,24 +985,24 @@ public class SentinelWorkspaceTools
                 if (action == ProposedChangeAction.validate)
                 {
                     var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff);
-                    return validationResult.Success ? new SentinelCallToolResult<object>()
+                    return validationResult.IsSuccess ? new SentinelCallToolResult<object>()
                     {
-                        Success = true,
-                        Data = validationResult
+                        IsSuccess = true,
+                        SuccessDetails = validationResult
                     }
 
                     : new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult.Diagnostics.ToInfo()}")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult.Diagnostics.ToInfo()}")
                     };
                 }
             }
 
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.")
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.")
             };
         }
         catch (Exception ex)
@@ -1010,8 +1010,8 @@ public class SentinelWorkspaceTools
             _logger.LogError(ex, "ApplyDiff ({ChangesetFormat}/{Action}) failed", changesetFormat, action);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff")
             };
         }
     }
@@ -1233,14 +1233,16 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.ResultId)] string? resultId = null,
         [Description("Path to a largeresult_*.json file under .roslynsentinel/largeresults. Required if resultId is omitted.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
-        [Description("Maximum number of records to return.")]
+        [Description("Maximum number of records to return. Ignored when paging a Raw/offloaded text result - use charLimit instead.")]
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
-        [Description("Number of records to skip before taking limit.")]
+        [Description("Number of records (or, for a Raw/offloaded text result, characters) to skip before taking the next page.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
+        [Description("Maximum number of characters to return when paging a Raw/offloaded text result (e.g. from ReadFile or the generic size-limit backstop). Ignored for every other result type, which use limit instead. Defaults to a size-appropriate window when omitted.")]
+        [ToolOption(ToolOptionTag.CharLimit)] int? charLimit = null,
         CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        return _readNav.GetLargeResult(reason, resultId, filePathResolved, limit, offset, cancellationToken);
+        return _readNav.GetLargeResult(reason, resultId, filePathResolved, limit, offset, charLimit: charLimit, cancellationToken: cancellationToken);
     }
 
 

@@ -126,7 +126,7 @@ public class LargeResultOffloadFilterTests
         // Round-trip: GetLargeResult must be able to read the offloaded payload back, and the
         // reassembled text (paged, since Raw pages by byte-window) must contain the real caller
         // list the filter swapped out -> not just replay the pointer. Each page is requested with
-        // limit == OffloadThresholdBytes (the value the tool's own "continue reading" warning
+        // charLimit == OffloadThresholdBytes (the value the tool's own "continue reading" warning
         // suggests) to confirm the fix in WorkspaceReadNavigationImpl.GetLargeResult's Raw branch:
         // the effective window is capped below OffloadThresholdBytes to reserve headroom for the
         // JSON envelope, so a full page can never itself be large enough to be re-offloaded by this
@@ -139,16 +139,21 @@ public class LargeResultOffloadFilterTests
         {
             var page = await _client.CallToolAsync(
                 "GetLargeResult",
-                new Dictionary<string, object?> { ["reason"] = "test message", ["resultId"] = resultId, ["offset"] = offset.Value, ["limit"] = RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes }!,
+                new Dictionary<string, object?> { ["reason"] = "test message", ["resultId"] = resultId, ["offset"] = offset.Value, ["charLimit"] = RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes }!,
                 cancellationToken: TestContext.CurrentContext.CancellationToken);
             Assert.That(page.IsError, Is.Not.True);
 
             var pageBlocks = page.Content.OfType<TextContentBlock>().ToList();
             Assert.That(pageBlocks, Has.Count.EqualTo(1));
             using var pageDoc = JsonDocument.Parse(pageBlocks[0].Text);
-            Assert.That(pageDoc.RootElement.TryGetProperty("data", out _), Is.True,
-                $"GetLargeResult's own response must never itself be large enough to be re-offloaded (page was: {pageBlocks[0].Text})");
-            var data = pageDoc.RootElement.GetProperty("data");
+            // GetLargeResult is explicitly excluded from the generic offload-pointer wrapper (see
+            // ServiceRegistrationExtensionsBasic.cs's "if (context.Params?.Name == \"GetLargeResult\")
+            // { return result; }" - docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md),
+            // so its own response is never re-shaped into {offloaded, data}; it always returns its
+            // native {successDetails: {...}} shape directly, even when that response is itself large.
+            Assert.That(pageDoc.RootElement.TryGetProperty("successDetails", out _), Is.True,
+                $"GetLargeResult must return its native successDetails shape, not an offload pointer (page was: {pageBlocks[0].Text})");
+            var data = pageDoc.RootElement.GetProperty("successDetails");
             reassembled.Append(data.GetProperty("text").GetString());
 
             offset = data.TryGetProperty("nextOffset", out var next) && next.ValueKind != JsonValueKind.Null
@@ -258,7 +263,11 @@ public class LargeResultOffloadFilterTests
         var pageBlocks = page.Content.OfType<TextContentBlock>().ToList();
         Assert.That(pageBlocks, Has.Count.EqualTo(1));
         using var pageDoc = JsonDocument.Parse(pageBlocks[0].Text);
-        Assert.That(pageDoc.RootElement.TryGetProperty("data", out var data), Is.True,
+        // GetLargeResult is explicitly excluded from the generic offload-pointer wrapper (see
+        // ServiceRegistrationExtensionsBasic.cs's "if (context.Params?.Name == \"GetLargeResult\")
+        // { return result; }"), so its own response is never re-shaped into {offloaded, data}; it
+        // always returns its native {successDetails: [...]} shape directly.
+        Assert.That(pageDoc.RootElement.TryGetProperty("successDetails", out var data), Is.True,
             $"GetLargeResult's first call on a typed (non-Raw) branch must return actual records, not another offload envelope. Got: {pageBlocks[0].Text}");
         Assert.That(data.ValueKind, Is.EqualTo(JsonValueKind.Array));
         Assert.That(data.GetArrayLength(), Is.GreaterThan(0), "The returned page must contain at least one real record.");

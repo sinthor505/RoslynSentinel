@@ -1,4 +1,4 @@
-﻿namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Common;
 
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Parameter, AllowMultiple = true)]
 public sealed class ToolOptionAttribute : Attribute
@@ -53,5 +53,6 @@ public enum ToolOptionTag
     SearchMode,
     ConfirmationCode,
     OldContent,
-    NewContent
+    NewContent,
+    CharLimit
 }

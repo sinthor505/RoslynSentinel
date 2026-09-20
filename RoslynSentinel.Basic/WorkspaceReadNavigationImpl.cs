@@ -108,8 +108,8 @@ public class WorkspaceReadNavigationImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = BuildFileNotFoundError(solution, normalizedPath)
+                    IsSuccess = false,
+                    ErrorDetails = BuildFileNotFoundError(solution, normalizedPath)
                 };
             }
 
@@ -118,8 +118,8 @@ public class WorkspaceReadNavigationImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError("SyntaxRootNotFound", "Syntax root not found.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError("SyntaxRootNotFound", "Syntax root not found.")
                 };
             }
 
@@ -131,8 +131,8 @@ public class WorkspaceReadNavigationImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError("MethodNotFound", $"Method or constructor '{methodName}' not found in '{filePathResolved}'.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError("MethodNotFound", $"Method or constructor '{methodName}' not found in '{filePathResolved}'.")
                 };
             }
 
@@ -159,9 +159,9 @@ public class WorkspaceReadNavigationImpl
                 var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.MethodSource, cancellationToken);
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
+                    IsSuccess = true,
                     LargeResult = new LargeResultInfo(resultType: "MethodSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: methodBytes, totalRecords: 1, message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " + $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."),
-                    Data = new
+                    SuccessDetails = new
                     {
                         envelope,
                         signature,
@@ -173,8 +173,8 @@ public class WorkspaceReadNavigationImpl
 
             return new SentinelCallToolResult<object>()
             {
-                Success = true,
-                Data = new MethodSourceResult
+                IsSuccess = true,
+                SuccessDetails = new MethodSourceResult
                 {
                     Envelope = envelope,
                     Signature = signature,
@@ -189,8 +189,8 @@ public class WorkspaceReadNavigationImpl
             _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePathResolved);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodSource")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodSource")
             };
         }
     }
@@ -210,8 +210,8 @@ public class WorkspaceReadNavigationImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = BuildFileNotFoundError(solution, normalizedPath)
+                    IsSuccess = false,
+                    ErrorDetails = BuildFileNotFoundError(solution, normalizedPath)
                 };
             }
 
@@ -220,8 +220,8 @@ public class WorkspaceReadNavigationImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError("SyntaxRootNotFound", "Syntax root not found.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError("SyntaxRootNotFound", "Syntax root not found.")
                 };
             }
 
@@ -234,8 +234,8 @@ public class WorkspaceReadNavigationImpl
 
             return new SentinelCallToolResult<object>()
             {
-                Success = true,
-                Data = new FileOutlineResult { Envelope = envelope, Symbols = items },
+                IsSuccess = true,
+                SuccessDetails = new FileOutlineResult { Envelope = envelope, Symbols = items },
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion
             };
         }
@@ -244,8 +244,8 @@ public class WorkspaceReadNavigationImpl
             _logger.LogError(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePathResolved);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetFileOutline")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetFileOutline")
             };
         }
     }
@@ -400,8 +400,8 @@ public class WorkspaceReadNavigationImpl
             _logger.LogError(ex, "ListAll failed (kind={Kind}, projectName={ProjectName})", kind, projectName);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ListAll")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ListAll")
             };
         }
     }
@@ -531,7 +531,7 @@ public class WorkspaceReadNavigationImpl
                 totalRecords: literalResults.Count + regexResults.Count,
                 workspaceVersion: _workspaceManager.WorkspaceVersion,
                 cancellationToken: cancellationToken);
-            return searchResult with { Warning = warning };
+            return searchResult with { WarningDetails = warning };
         }
         catch (NoSearchMatchesException ex)
         {
@@ -540,8 +540,8 @@ public class WorkspaceReadNavigationImpl
                 : Array.Empty<Finding>();
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SearchSolutionText"),
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SearchSolutionText"),
                 Findings = findings
             };
         }
@@ -550,8 +550,8 @@ public class WorkspaceReadNavigationImpl
             _logger.LogError(ex, "SearchSolutionText failed for '{Pattern}'", pattern);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SearchSolutionText")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SearchSolutionText")
             };
         }
     }
@@ -669,8 +669,8 @@ public class WorkspaceReadNavigationImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"No operation blob found for changeId '{changeId}'. Verify the changeId, or check that a solution is loaded.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"No operation blob found for changeId '{changeId}'. Verify the changeId, or check that a solution is loaded.")
                 };
             }
 
@@ -692,8 +692,8 @@ public class WorkspaceReadNavigationImpl
                     {
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown filter \"{filter}\". Accepted prefixes: fail/err -> failures, warn/skip -> skipped, ok/pass/info/success -> succeeded, roll/revert/undo -> rolledback. Use file:<path> to filter by path, or omit for all items.")
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown filter \"{filter}\". Accepted prefixes: fail/err -> failures, warn/skip -> skipped, ok/pass/info/success -> succeeded, roll/revert/undo -> rolledback. Use file:<path> to filter by path, or omit for all items.")
                         };
                     }
 
@@ -708,9 +708,9 @@ public class WorkspaceReadNavigationImpl
             var hasMore = nextOffset < filteredList.Count;
             return new SentinelCallToolResult<object>()
             {
-                Success = true,
+                IsSuccess = true,
                 HasMorePages = hasMore,
-                Data = new OperationDetailResult
+                SuccessDetails = new OperationDetailResult
                 {
                     ChangeId = changeId,
                     BlobName = Path.GetFileName(blobPath),
@@ -728,8 +728,8 @@ public class WorkspaceReadNavigationImpl
             _logger.LogError(ex, "GetOperationDetail failed for '{ChangeId}'", changeId);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetOperationDetail")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetOperationDetail")
             };
         }
     }
@@ -781,7 +781,7 @@ public class WorkspaceReadNavigationImpl
         string? filepath = null,
         int limit = 50,
         int offset = 0,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, int? charLimit = null)
     {
         FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
         var solutionRoot = _workspaceManager.GetSolutionRoot();
@@ -820,8 +820,8 @@ public class WorkspaceReadNavigationImpl
         {
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = new ResultError("Exception",
+                IsSuccess = false,
+                ErrorDetails = new ResultError("Exception",
                                            "Result file not found. Supply a valid resultId or filePath pointing to a largeresult_*.json file in the largeresults directory.")
             };
         }
@@ -839,8 +839,8 @@ public class WorkspaceReadNavigationImpl
             {
                 return new SentinelCallToolResult<object>
                 {
-                    Success = false,
-                    Error = new ResultError("Exception", "Result file has no Data payload - it may be corrupt.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError("Exception", "Result file has no SuccessDetails payload - it may be corrupt.")
                 };
             }
 
@@ -849,11 +849,12 @@ public class WorkspaceReadNavigationImpl
             // the filter that wrote it only ever saw opaque serialized text, never a typed value -> so
             // the list-shaped Skip(offset).Take(limit) paging every other case below uses does not
             // apply. Instead this pages over the stored raw text itself as a byte/char window, sized
-            // and offset by the caller's limit/offset (reinterpreted as a character count and
-            // position for this case only), capped so a single response can never itself exceed
-            // OffloadThresholdBytes. Without this cap, returning the whole stored payload here would
-            // let the very filter that offloaded it catch this response on the way back out and
-            // re-offload it under a new resultId -> an unbounded fetch/still-too-big/re-offload loop.
+            // and offset by the caller's charLimit/offset (a dedicated character-count parameter,
+            // distinct from limit's record-count meaning used by every other case below), capped so
+            // a single response can never itself exceed OffloadThresholdBytes. Without this cap,
+            // returning the whole stored payload here would let the very filter that offloaded it
+            // catch this response on the way back out and re-offload it under a new resultId -> an
+            // unbounded fetch/still-too-big/re-offload loop.
             if (all.Type == ResultWrapperType.Raw)
             {
                 var rawText = all.Data.ToString();
@@ -877,7 +878,7 @@ public class WorkspaceReadNavigationImpl
                 // quote-dense the stored content is.
                 const int envelopeOverheadBytes = 256;
                 var worstCaseMaxSlice = Math.Max(1, (LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes) / 2);
-                var requestedWindow = limit > 0 && limit < worstCaseMaxSlice ? limit : worstCaseMaxSlice;
+                var requestedWindow = charLimit is > 0 && charLimit < worstCaseMaxSlice ? charLimit.Value : worstCaseMaxSlice;
                 var length = Math.Min(requestedWindow, rawText.Length - start);
 
                 object BuildRawPage(int candidateLength)
@@ -906,12 +907,12 @@ public class WorkspaceReadNavigationImpl
 
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = pageData,
+                    IsSuccess = true,
+                    SuccessDetails = pageData,
                     TotalRecords = rawText.Length,
                     HasMorePages = hasMoreRaw,
-                    Warning = hasMoreRaw
-                        ? $"Raw result truncated to a {length}-char window. Call GetLargeResult(resultId, offset: {nextOffset}) to continue reading."
+                    WarningDetails = hasMoreRaw
+                        ? $"Raw result truncated to a {length}-char window. Call GetLargeResult(resultId, offset: {nextOffset}, charLimit: <N>) to continue reading."
                         : null
                 };
             }
@@ -930,9 +931,9 @@ public class WorkspaceReadNavigationImpl
                         var page = ShrinkListToFit(findings.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = page,
-                            Warning = page.Count < requested
+                            IsSuccess = true,
+                            SuccessDetails = page,
+                            WarningDetails = page.Count < requested
                                 ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
                                 : null
                         };
@@ -947,9 +948,9 @@ public class WorkspaceReadNavigationImpl
                         var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = page,
-                            Warning = page.Count < requested
+                            IsSuccess = true,
+                            SuccessDetails = page,
+                            WarningDetails = page.Count < requested
                                 ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
                                 : null
                         };
@@ -963,9 +964,9 @@ public class WorkspaceReadNavigationImpl
                         var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = page,
-                            Warning = page.Count < requested
+                            IsSuccess = true,
+                            SuccessDetails = page,
+                            WarningDetails = page.Count < requested
                                 ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
                                 : null
                         };
@@ -979,9 +980,9 @@ public class WorkspaceReadNavigationImpl
                         var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = page,
-                            Warning = page.Count < requested
+                            IsSuccess = true,
+                            SuccessDetails = page,
+                            WarningDetails = page.Count < requested
                                 ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
                                 : null
                         };
@@ -994,8 +995,8 @@ public class WorkspaceReadNavigationImpl
                         var methodSource = JsonSerializer.Deserialize<MethodSourceResult>(all.Data.ToString(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = methodSource
+                            IsSuccess = true,
+                            SuccessDetails = methodSource
                         };
                         break;
                     }
@@ -1006,8 +1007,8 @@ public class WorkspaceReadNavigationImpl
                         var migrationScanSummary = JsonSerializer.Deserialize<MigrationScanSummary>(all.Data.ToString(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = migrationScanSummary
+                            IsSuccess = true,
+                            SuccessDetails = migrationScanSummary
                         };
                         break;
                     }
@@ -1018,8 +1019,8 @@ public class WorkspaceReadNavigationImpl
                         var fileSource = JsonSerializer.Deserialize<FileSourceResult>(all.Data.ToString(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = fileSource
+                            IsSuccess = true,
+                            SuccessDetails = fileSource
                         };
                         break;
                     }
@@ -1030,8 +1031,8 @@ public class WorkspaceReadNavigationImpl
                         var memberChangedContent = JsonSerializer.Deserialize<MemberChangedContentResult>(all.Data.ToString(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = memberChangedContent
+                            IsSuccess = true,
+                            SuccessDetails = memberChangedContent
                         };
                         break;
                     }
@@ -1043,9 +1044,9 @@ public class WorkspaceReadNavigationImpl
                         var page = ShrinkListToFit(changes.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = page,
-                            Warning = page.Count < requested
+                            IsSuccess = true,
+                            SuccessDetails = page,
+                            WarningDetails = page.Count < requested
                                 ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
                                 : null
                         };
@@ -1056,7 +1057,7 @@ public class WorkspaceReadNavigationImpl
                         var searchResult = JsonSerializer.Deserialize<TextSearchResult>(all.Data.ToString(), _jsonOptions);
                         if (searchResult is null)
                         {
-                            result = new SentinelCallToolResult<object> { Success = true, Data = null };
+                            result = new SentinelCallToolResult<object> { IsSuccess = true, SuccessDetails = null };
                             break;
                         }
 
@@ -1066,7 +1067,11 @@ public class WorkspaceReadNavigationImpl
                         var regexPage = requestedRegex;
                         const int envelopeOverheadBytes = 256;
                         while (literalPage.Count + regexPage.Count > 0 &&
-                               JsonSerializer.Serialize(searchResult with { LiteralResults = literalPage, RegexResults = regexPage }, _jsonOptions).Length
+                               JsonSerializer.Serialize(searchResult with
+                               {
+                                   LiteralResults = literalPage,
+                                   RegexResults = regexPage
+                               }, _jsonOptions).Length
                                    > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
                         {
                             if (literalPage.Count >= regexPage.Count && literalPage.Count > 0)
@@ -1080,9 +1085,9 @@ public class WorkspaceReadNavigationImpl
                         var shrunk = literalPage.Count < requestedLiteral.Count || regexPage.Count < requestedRegex.Count;
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = searchResult with { LiteralResults = literalPage, RegexResults = regexPage },
-                            Warning = shrunk
+                            IsSuccess = true,
+                            SuccessDetails = searchResult with { LiteralResults = literalPage, RegexResults = regexPage },
+                            WarningDetails = shrunk
                                 ? $"Page shrunk to {literalPage.Count} literal + {regexPage.Count} regex record(s) to stay under the size threshold. Call again with offset: {offset + Math.Max(literalPage.Count, regexPage.Count)} to continue."
                                 : null
                         };
@@ -1096,9 +1101,9 @@ public class WorkspaceReadNavigationImpl
                         var page = ShrinkListToFit(files.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = page,
-                            Warning = page.Count < requested
+                            IsSuccess = true,
+                            SuccessDetails = page,
+                            WarningDetails = page.Count < requested
                                 ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
                                 : null
                         };
@@ -1112,9 +1117,9 @@ public class WorkspaceReadNavigationImpl
                         var page = ShrinkListToFit(projects.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = page,
-                            Warning = page.Count < requested
+                            IsSuccess = true,
+                            SuccessDetails = page,
+                            WarningDetails = page.Count < requested
                                 ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
                                 : null
                         };
@@ -1128,9 +1133,9 @@ public class WorkspaceReadNavigationImpl
                         var page = ShrinkListToFit(solutionItems.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = page,
-                            Warning = page.Count < requested
+                            IsSuccess = true,
+                            SuccessDetails = page,
+                            WarningDetails = page.Count < requested
                                 ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
                                 : null
                         };
@@ -1143,8 +1148,8 @@ public class WorkspaceReadNavigationImpl
                         var solutionItemsAll = JsonSerializer.Deserialize<SolutionItemsAllResult>(all.Data.ToString(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = solutionItemsAll
+                            IsSuccess = true,
+                            SuccessDetails = solutionItemsAll
                         };
                         break;
                     }
@@ -1158,9 +1163,9 @@ public class WorkspaceReadNavigationImpl
                         var page = ShrinkListToFit(items.Skip(offset).Take(limit).ToList(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = page,
-                            Warning = page.Count < requested
+                            IsSuccess = true,
+                            SuccessDetails = page,
+                            WarningDetails = page.Count < requested
                                 ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
                                 : null
                         };
@@ -1174,8 +1179,8 @@ public class WorkspaceReadNavigationImpl
                             ?? [];
                         result = new SentinelCallToolResult<object>
                         {
-                            Success = true,
-                            Data = broadenedMap
+                            IsSuccess = true,
+                            SuccessDetails = broadenedMap
                         };
                         break;
                     }
@@ -1183,8 +1188,8 @@ public class WorkspaceReadNavigationImpl
                     {
                         return new SentinelCallToolResult<object>
                         {
-                            Success = false,
-                            Error = new ResultError("Exception",
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError("Exception",
                                           "Unknown scan result type.")
                         };
                     }
@@ -1205,7 +1210,7 @@ public class WorkspaceReadNavigationImpl
             else if (all.Type is ResultWrapperType.BroadenedSymbolRelationshipResults)
             {
                 // Map-shaped, not a flat list - report the number of relationship kinds that had
-                // results (matching the in-band Warning summary), not a paged item count.
+                // results (matching the in-band WarningDetails summary), not a paged item count.
                 totalRecords = all.Data?.AsObject().Count ?? 0;
                 hasMorePages = false;
             }
@@ -1220,11 +1225,11 @@ public class WorkspaceReadNavigationImpl
 
             return new SentinelCallToolResult<object>
             {
-                Success = true,
+                IsSuccess = true,
                 // Unwrap: `result` is itself a SentinelCallToolResult<object> built above per ResultWrapperType.
-                // Returning it as-is here double-wraps the payload (Data.Data instead of Data),
+                // Returning it as-is here double-wraps the payload (SuccessDetails.SuccessDetails instead of SuccessDetails),
                 // which doesn't match every other tool's flat SentinelCallToolResult<object> shape.
-                Data = result.Data,
+                SuccessDetails = result.SuccessDetails,
                 TotalRecords = totalRecords,
                 HasMorePages = hasMorePages,
             };
@@ -1233,8 +1238,8 @@ public class WorkspaceReadNavigationImpl
         {
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = new ResultError("Exception",
+                IsSuccess = false,
+                ErrorDetails = new ResultError("Exception",
                               "Failed to read scan file.", ex.Message)
             };
         }
