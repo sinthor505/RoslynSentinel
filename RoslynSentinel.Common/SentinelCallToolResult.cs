@@ -75,7 +75,7 @@ public static class ToolErrorCode
 // ── Envelope ──────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Typed envelope returned by Sentinel tools..
+/// Typed envelope returned by Tool scan tools.
 /// Exactly one of <see cref="Data"/>, <see cref="Error"/>, or <see cref="LargeResult"/> is populated.
 /// </summary>
 public record SentinelCallToolResult<T>
