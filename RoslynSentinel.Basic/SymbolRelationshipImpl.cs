@@ -154,7 +154,7 @@ public class SymbolRelationshipImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> GetBestInsertionPoint(
+    public async Task<SentinelCallToolResult<BestInsertionResult, ResultError>> GetBestInsertionPoint(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string containerName,
@@ -167,7 +167,7 @@ public class SymbolRelationshipImpl
         try
         {
             var result = await _discoveryEngine.FindBestInsertionPointAsync(filePathResolved, containerName, memberKind.ToString());
-            return new SentinelCallToolResult<object>
+            return new SentinelCallToolResult<BestInsertionResult, ResultError>
             {
                 IsSuccess = true,
                 SuccessDetails = result
@@ -176,7 +176,7 @@ public class SymbolRelationshipImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetBestInsertionPoint failed for '{ContainerName}' in '{FilePathWrapper}'", containerName, filePathResolved);
-            return new SentinelCallToolResult<object>
+            return new SentinelCallToolResult<BestInsertionResult, ResultError>
             {
                 IsSuccess = false,
                 ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetBestInsertionPoint")

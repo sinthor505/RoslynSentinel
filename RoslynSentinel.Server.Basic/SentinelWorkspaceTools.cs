@@ -128,7 +128,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.SolutionList)]
     [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution.")]
-    public SentinelCallToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
+    public SentinelCallToolResult<List<SolutionFileInfo>, ResultError> ListWorkspaceSolutions(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Your workspace root - a real project/repo directory, not a drive root or '/'.")] string workspacePath,
         CancellationToken cancellationToken = default)
@@ -1123,7 +1123,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "GetMethodSource")]
     [Produces(DataTag.SourceCode)]
     [Description("Returns the full source text of a named method or constructor, plus a structured list of its attributes. For a constructor, pass the containing class's name (e.g. methodName: \"OrderService\" for `public OrderService(...)`). Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
-    public Task<SentinelCallToolResult<object>> GetMethodSource(
+    public Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSource(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Consumes(DataTag.MethodName, required: true)] string methodName, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -1146,7 +1146,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file - namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
-    public Task<SentinelCallToolResult<object>> GetFileOutline(
+    public Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -1206,7 +1206,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "GetWorkspaceHealth")]
     [Produces(DataTag.ResultOnly)]
     [Description("Targeted workspace health check - reads actual workspace/solution state directly rather than environment probes. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary, StaleDocumentCount, RequiresReload, SampleStaleFiles. IsOperational=true + HasLoadedSolution=false means no solution loaded yet - not an error. RequiresReload=true means files changed on disk since the last LoadSolution call. verify=quickBuild/fullBuild additionally runs a build check and attaches it as BuildVerification.")]
-    public Task<SentinelCallToolResult<object>> GetWorkspaceHealth(
+    public Task<SentinelCallToolResult<WorkspaceHealthReport, ResultError>> GetWorkspaceHealth(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
@@ -1215,7 +1215,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "ListProjectFrameworkTargets")]
     [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value. No parameters.")]
-    public Task<SentinelCallToolResult<object>> ListProjectFrameworkTargets(
+    public Task<SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>> ListProjectFrameworkTargets(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         CancellationToken cancellationToken = default)
         => _projectManagement.ListProjectFrameworkTargets(reason, cancellationToken);

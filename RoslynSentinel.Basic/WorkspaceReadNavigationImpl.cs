@@ -93,7 +93,7 @@ public class WorkspaceReadNavigationImpl
             "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.");
     }
 
-    public async Task<SentinelCallToolResult<object>> GetMethodSource(
+    public async Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSource(
         ToolCallReason reason,
         string filepath, string methodName,
         CancellationToken cancellationToken = default)
@@ -106,7 +106,7 @@ public class WorkspaceReadNavigationImpl
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
             if (document == null)
             {
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<MethodSourceResult, ResultError>()
                 {
                     IsSuccess = false,
                     ErrorDetails = BuildFileNotFoundError(solution, normalizedPath)
@@ -116,7 +116,7 @@ public class WorkspaceReadNavigationImpl
             var root = await document.GetSyntaxRootAsync();
             if (root == null)
             {
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<MethodSourceResult, ResultError>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError("SyntaxRootNotFound", "Syntax root not found.")
@@ -129,7 +129,7 @@ public class WorkspaceReadNavigationImpl
             var method = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.Ordinal)) ?? root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.OrdinalIgnoreCase));
             if (method == null)
             {
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<MethodSourceResult, ResultError>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError("MethodNotFound", $"Method or constructor '{methodName}' not found in '{filePathResolved}'.")
@@ -157,21 +157,16 @@ public class WorkspaceReadNavigationImpl
             {
                 var fullResult = new MethodSourceResult { Envelope = envelope, Signature = signature, Source = methodSource, Attributes = attributes };
                 var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.MethodSource, cancellationToken);
-                return new SentinelCallToolResult<object>
+                return new SentinelCallToolResult<MethodSourceResult, ResultError>
                 {
                     IsSuccess = true,
                     LargeResult = new LargeResultInfo(resultType: "MethodSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: methodBytes, totalRecords: 1, message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " + $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."),
-                    SuccessDetails = new
-                    {
-                        envelope,
-                        signature,
-                        attributes
-                    },
+                    SuccessDetails = new MethodSourceResult { Envelope = envelope, Signature = signature, Attributes = attributes },
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }
 
-            return new SentinelCallToolResult<object>()
+            return new SentinelCallToolResult<MethodSourceResult, ResultError>()
             {
                 IsSuccess = true,
                 SuccessDetails = new MethodSourceResult
@@ -187,7 +182,7 @@ public class WorkspaceReadNavigationImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePathResolved);
-            return new SentinelCallToolResult<object>()
+            return new SentinelCallToolResult<MethodSourceResult, ResultError>()
             {
                 IsSuccess = false,
                 ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodSource")
@@ -195,7 +190,7 @@ public class WorkspaceReadNavigationImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> GetFileOutline(
+    public async Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutline(
         ToolCallReason reason,
         string filepath,
         CancellationToken cancellationToken = default)
@@ -208,7 +203,7 @@ public class WorkspaceReadNavigationImpl
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
             if (document == null)
             {
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<FileOutlineResult, ResultError>()
                 {
                     IsSuccess = false,
                     ErrorDetails = BuildFileNotFoundError(solution, normalizedPath)
@@ -218,7 +213,7 @@ public class WorkspaceReadNavigationImpl
             var root = await document.GetSyntaxRootAsync();
             if (root == null)
             {
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<FileOutlineResult, ResultError>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError("SyntaxRootNotFound", "Syntax root not found.")
@@ -232,7 +227,7 @@ public class WorkspaceReadNavigationImpl
             var fileByteCount = System.Text.Encoding.UTF8.GetByteCount(fileText.ToString());
             var envelope = ReadEnvelopeBuilder.Build(fileLineCount, fileByteCount, returnedFromLine: 1, returnedToLine: fileLineCount);
 
-            return new SentinelCallToolResult<object>()
+            return new SentinelCallToolResult<FileOutlineResult, ResultError>()
             {
                 IsSuccess = true,
                 SuccessDetails = new FileOutlineResult { Envelope = envelope, Symbols = items },
@@ -242,7 +237,7 @@ public class WorkspaceReadNavigationImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePathResolved);
-            return new SentinelCallToolResult<object>()
+            return new SentinelCallToolResult<FileOutlineResult, ResultError>()
             {
                 IsSuccess = false,
                 ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetFileOutline")

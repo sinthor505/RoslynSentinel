@@ -93,7 +93,7 @@ public class WorkspaceHealthMiscImpl
         return Task.FromResult(new WorkspaceHealthReport(IsOperational: true, HasLoadedSolution: true, LoadedSolutionPath: solutionPath, ProjectCount: projectCount, DocumentCount: documentCount, LoadErrors: loadErrors, Summary: $"Workspace operational. {projectCount} project(s) loaded, " + $"{documentCount} document(s). " + (loadErrors.Count > 0 ? $"{loadErrors.Count} load warning(s) recorded (non-fatal)." : "No load errors.") + (status.RequiresReload ? $" {status.StaleDocumentCount} file(s) changed on disk since the last load - call LoadSolution to refresh." : ""), StaleDocumentCount: status.StaleDocumentCount, RequiresReload: status.RequiresReload, SampleStaleFiles: status.SampleStaleFiles));
     }
 
-    public async Task<SentinelCallToolResult<object>> GetWorkspaceHealth(ToolCallReason reason, BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
+    public async Task<SentinelCallToolResult<WorkspaceHealthReport, ResultError>> GetWorkspaceHealth(ToolCallReason reason, BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
     {
         if (_logger.IsEnabled(LogLevel.Information))
@@ -116,7 +116,7 @@ public class WorkspaceHealthMiscImpl
                 }
             }
 
-            return new SentinelCallToolResult<object>
+            return new SentinelCallToolResult<WorkspaceHealthReport, ResultError>
             {
                 IsSuccess = true,
                 SuccessDetails = result
@@ -125,7 +125,7 @@ public class WorkspaceHealthMiscImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetWorkspaceHealth failed");
-            return new SentinelCallToolResult<object>
+            return new SentinelCallToolResult<WorkspaceHealthReport, ResultError>
             {
                 IsSuccess = false,
                 ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetWorkspaceHealth")

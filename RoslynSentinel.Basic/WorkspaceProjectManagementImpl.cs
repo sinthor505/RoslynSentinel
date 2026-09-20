@@ -207,12 +207,12 @@ public class WorkspaceProjectManagementImpl
         }
     }
 
-    public SentinelCallToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(ToolCallReason reason, string workspacePath, CancellationToken cancellationToken = default)
+    public SentinelCallToolResult<List<SolutionFileInfo>, ResultError> ListWorkspaceSolutions(ToolCallReason reason, string workspacePath, CancellationToken cancellationToken = default)
     {
         workspacePath = FilePathWrapper.NormalizeWirePath(workspacePath);
         if (!Directory.Exists(workspacePath))
         {
-            return new SentinelCallToolResult<List<SolutionFileInfo>>
+            return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
                 IsSuccess = false,
                 ErrorDetails = new ResultError("InvalidArgument", $"Directory not found: '{workspacePath}'")
@@ -226,7 +226,7 @@ public class WorkspaceProjectManagementImpl
                 pathRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
                 StringComparison.OrdinalIgnoreCase))
         {
-            return new SentinelCallToolResult<List<SolutionFileInfo>>
+            return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
                 IsSuccess = false,
                 ErrorDetails = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' resolves to the drive root '{pathRoot}'. Pass a real project/repo directory instead - scanning an entire drive is not supported.")
@@ -244,7 +244,7 @@ public class WorkspaceProjectManagementImpl
                     files.Add(new SolutionFileInfo(Path: path, Format: Path.GetExtension(path).TrimStart('.').ToLowerInvariant()));
                     if (files.Count > ListWorkspaceSolutionsMaxFilesWalked)
                     {
-                        return new SentinelCallToolResult<List<SolutionFileInfo>>
+                        return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
                         {
                             IsSuccess = false,
                             ErrorDetails = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' contains more than {ListWorkspaceSolutionsMaxFilesWalked} matching files - this looks like too broad a root. Pass a narrower project/repo directory instead.")
@@ -254,7 +254,7 @@ public class WorkspaceProjectManagementImpl
             }
 
             files.Sort((a, b) => string.CompareOrdinal(a.Path, b.Path));
-            return new SentinelCallToolResult<List<SolutionFileInfo>>
+            return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
                 IsSuccess = true,
                 SuccessDetails = files,
@@ -268,7 +268,7 @@ public class WorkspaceProjectManagementImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "ListWorkspaceSolutions failed for '{WorkspacePath}'", workspacePath);
-            return new SentinelCallToolResult<List<SolutionFileInfo>>
+            return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
                 IsSuccess = false,
                 ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ListWorkspaceSolutions failed unexpectedly ({ex.GetType().Name}) while scanning '{workspacePath}'. Details: {ex.Message}")
@@ -419,12 +419,12 @@ public class WorkspaceProjectManagementImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> ListProjectFrameworkTargets(ToolCallReason reason, CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>> ListProjectFrameworkTargets(ToolCallReason reason, CancellationToken cancellationToken = default)
     {
         try
         {
             var result = await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync(cancellationToken);
-            return new SentinelCallToolResult<object>
+            return new SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>
             {
                 IsSuccess = true,
                 SuccessDetails = result
@@ -433,7 +433,7 @@ public class WorkspaceProjectManagementImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetProjectFrameworkSummary failed");
-            return new SentinelCallToolResult<object>
+            return new SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>
             {
                 IsSuccess = false,
                 ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetProjectFrameworkSummary")

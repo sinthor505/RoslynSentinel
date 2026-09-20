@@ -328,7 +328,64 @@ task-vs-sync content-equivalence assertions in `TaskCapableClient` tests. None o
 - Both open questions above (`Findings` scalar-vs-list, offload trigger threshold-gated vs. eager)
   remain open and unresolved.
 
-**Next planned step: Phase 2** - the `TSuccess`/`TError` two-generic-parameter pilot on
-`GetMethodSource` and `MoveMember`, per the plan file
-`C:\Users\Administrator\.claude\plans\inherited-orbiting-toucan.md`'s "Phase 2" section. Not yet
-started; design detail for Phase 2 lives in that plan file, not here.
+**Phase 2 (the `TSuccess`/`TError` two-generic-parameter proof of concept) is COMPLETE**, per the
+plan file `C:\Users\Administrator\.claude\plans\inherited-orbiting-toucan.md`'s "Phase 2" section.
+`SentinelCallToolResult<T>` was split into a two-generic-parameter base,
+`SentinelCallToolResult<TSuccess, TError>`, with `SentinelCallToolResult<T> : SentinelCallToolResult<T,
+ResultError>` as a thin derived record fixing `TError` to the existing shared error shape - this
+keeps all ~22 untouched tool files source/wire-compatible while letting a tool opt into the
+two-parameter base directly once it has one fixed success DTO on every return path.
+
+**Pilot 1 - `GetMethodSource`:** converted cleanly to `SentinelCallToolResult<MethodSourceResult,
+ResultError>`. The large-result offload branch's anonymous `{ envelope, signature, attributes }`
+type was also replaced with the same `MethodSourceResult` record used on the normal path, so the
+method has exactly one true success shape on every branch. Both MCP delegate registrations
+(`RoslynSentinel.Server.Basic/WorkspaceReadNavigationTools.cs` and `SentinelWorkspaceTools.cs`)
+updated in lockstep. Live smoke-tested on both the success and error paths.
+
+**Pilot 2 - `MoveMember` - abandoned, not implemented.** `MoveMember`
+(`RoslynSentinel.Server.Advanced/SentinelAdvancedRefactoringTools.cs`) and its substitute candidate
+`ChangeSignature` were both found to have an `autoStage` parameter that makes their success path
+return two genuinely different shapes (an anonymous preview type when `autoStage=false` vs.
+`AppliedChangeSummary` when `autoStage=true`) - a single closed C# generic return type cannot
+represent this. `SkippedCallSites` (the original motivating example for proving `TError`) was
+confirmed to never coincide with a hard failure (`IsSuccess=false`) in either method, so it was
+never actually a `TError` case to prove in the first place - it's a `TSuccess`-shaping question.
+Resolving branching-success-shape tools is left as an open design question for any future wider
+rollout (variant-splitting into two tools, a union/discriminated DTO, or leaving the tool on
+`object`), not resolved by this proposal.
+
+**Follow-on: 5 additional read-only lookup/inventory tools converted**, identified as low-risk
+because each already had a single fixed named DTO on every success return, no anonymous types, and
+plain `ResultError` throughout - the same shape that made Pilot 1 clean:
+
+- `ListWorkspaceSolutions` -> `SentinelCallToolResult<List<SolutionFileInfo>, ResultError>`
+- `GetFileOutline` -> `Task<SentinelCallToolResult<FileOutlineResult, ResultError>>`
+- `GetBestInsertionPoint` -> `Task<SentinelCallToolResult<BestInsertionResult, ResultError>>`
+- `GetWorkspaceHealth` -> `Task<SentinelCallToolResult<WorkspaceHealthReport, ResultError>>`
+- `ListProjectFrameworkTargets` -> `Task<SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>>`
+
+All 5 have dual MCP tool registrations (one in a dormant split-out `*Tools.cs` file, one in the
+live `SentinelWorkspaceTools.cs`/`SentinelSymbolTools.cs` monolith), both updated together in one
+atomic `ReplaceSnippet` batch (20 edits across 10 files). Build clean (0 errors). Live smoke-tested
+all 5 via their MCP entry points - each returns `isSuccess: true` with `successDetails` shaped as
+its real DTO. `RunTest`: same 6 pre-existing failures as before this change (2 GUID-mismatch
+assertions, 2 enum `AddMemberAsync` rejection-message assertions tracked in
+`docs/current/issue_member_add_silent_persistence.md`, 2 stale `GetProperty("data")` assertions in
+`StructuredContentDataTagTests.cs` left over from Phase 1's `Data` -> `SuccessDetails` rename,
+unrelated to `LocateSymbol`/`ModifyModifier` themselves) - no new failures, no regressions.
+
+**Explicitly not done / deferred:** disqualified candidates from the same survey - `GetTypeInfo`,
+`InspectSymbol`, `FindReferences`, `QuerySymbolRelationships`, `GetCallGraph`, `ListSolutionItems`
+(all branch into different success shapes depending on a parameter, same disqualifying pattern as
+`MoveMember`/`ChangeSignature`), and `DescribeScanDetectors` (one branch returns a bare string in
+`SuccessDetails` despite `IsSuccess=true`). `GetPublicApiSurface` was flagged as messy (heavy
+LargeResult-offload branching) but not hard-disqualified - not attempted. `LocateSymbol` is
+single-shape but already has `OutputSchemaType` wired on its `[McpServerTool]` attribute - flagged
+as worth checking for interaction effects before converting, not attempted. Four Advanced-only
+tools with no dual-registration concern (`GetSolutionMetrics`, `GetDiRegistrations`,
+`TraceVariableLifetime`, `GetComprehensiveHealthReport`) were named as likely-easy candidates but
+not independently verified or converted.
+
+Wider rollout to the remaining ~15-20 tool files (per the original plan's explicit stop condition)
+has not been requested or approved beyond what's listed above.

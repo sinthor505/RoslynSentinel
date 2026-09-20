@@ -36,7 +36,7 @@ public class WorkspaceHealthMiscTools
     [McpServerTool(Name = "GetWorkspaceHealth")]
     [Produces(DataTag.ResultOnly)]
     [Description("Targeted workspace health check - reads actual workspace/solution state directly rather than environment probes. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary, StaleDocumentCount, RequiresReload, SampleStaleFiles. IsOperational=true + HasLoadedSolution=false means no solution loaded yet - not an error. RequiresReload=true means files changed on disk since the last LoadSolution call. verify=quickBuild/fullBuild additionally runs a build check and attaches it as BuildVerification.")]
-    public Task<SentinelCallToolResult<object>> GetWorkspaceHealth(
+    public Task<SentinelCallToolResult<WorkspaceHealthReport, ResultError>> GetWorkspaceHealth(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)

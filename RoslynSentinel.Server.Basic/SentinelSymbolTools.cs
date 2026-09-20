@@ -96,7 +96,7 @@ public class SentinelSymbolTools
     [McpServerTool(Name = "GetBestInsertionPoint")]
     [Produces(DataTag.StartLine)]
     [Description("Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields -> constructors -> destructors -> properties -> events -> methods -> nested types).")]
-    public Task<SentinelCallToolResult<object>> GetBestInsertionPoint(
+    public Task<SentinelCallToolResult<BestInsertionResult, ResultError>> GetBestInsertionPoint(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.ContainerName)] string containerName,

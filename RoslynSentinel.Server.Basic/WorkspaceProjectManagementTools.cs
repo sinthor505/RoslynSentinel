@@ -37,7 +37,7 @@ public class WorkspaceProjectManagementTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.SolutionList)]
     [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution.")]
-    public SentinelCallToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
+    public SentinelCallToolResult<List<SolutionFileInfo>, ResultError> ListWorkspaceSolutions(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Your workspace root - a real project/repo directory, not a drive root or '/'.")] string workspacePath,
         CancellationToken cancellationToken = default)
@@ -78,7 +78,7 @@ public class WorkspaceProjectManagementTools
     [McpServerTool(Name = "ListProjectFrameworkTargets")]
     [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value. No parameters.")]
-    public Task<SentinelCallToolResult<object>> ListProjectFrameworkTargets(
+    public Task<SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>> ListProjectFrameworkTargets(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         CancellationToken cancellationToken = default)
         => _impl.ListProjectFrameworkTargets(reason, cancellationToken);
