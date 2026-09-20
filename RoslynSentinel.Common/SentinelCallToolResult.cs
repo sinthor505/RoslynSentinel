@@ -39,7 +39,7 @@ public static class ServerBuildInfo
     }
 }
 
-// ── Error codes ───────────────────────────────────────────────────────────────
+// ── ErrorDetails codes ───────────────────────────────────────────────────────────────
 public static class ToolErrorCode
 {
     public const string SolutionNotLoaded = "SolutionNotLoaded";
@@ -76,7 +76,7 @@ public static class ToolErrorCode
 
 /// <summary>
 /// Typed envelope returned by Tool scan tools.
-/// Exactly one of <see cref="Data"/>, <see cref="Error"/>, or <see cref="LargeResult"/> is populated.
+/// Exactly one of <see cref="SuccessDetails"/>, <see cref="ErrorDetails"/>, or <see cref="LargeResult"/> is populated.
 /// </summary>
 public record SentinelCallToolResult<T>
 {
@@ -86,29 +86,7 @@ public record SentinelCallToolResult<T>
     /// Lets a caller notice a running server predates a source change without checking DLL
     /// timestamps by hand (see docs/current/feedback_stale_server_before_rebuild.md).
     /// </summary>
-    public string ServerVersion { get; init; } = ServerBuildInfo.Version;
-
-    /// <summary>Build timestamp (UTC) of the running server binary. See <see cref="ServerVersion"/>.</summary>
-    public DateTime ServerBuildTimeUtc { get; init; } = ServerBuildInfo.BuildTimeUtc;
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    /// <summary>
-    /// Full path to the running server's binary (.dll) on disk. Not settable -> every
-    /// <see cref="SentinelCallToolResult{T}"/> carries the same value, computed once in <see cref="ServerBuildInfo"/>.
-    /// Lets a caller compare the binary's actual location against the repo/worktree path it's
-    /// editing -> resolving both which server instance it's talking to (multi-instance ambiguity)
-    /// and whether that instance is even in the right repo. See <see cref="ServerVersion"/> and
-    /// docs/current/feedback_stale_server_before_rebuild.md.
-    /// </summary>
-    public string ServerBinaryPath { get; init; } = ServerBuildInfo.BinaryPath;
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    /// <summary>
-    /// Process ID of the running server. Not settable -> every <see cref="SentinelCallToolResult{T}"/> carries the
-    /// same value, computed once in <see cref="ServerBuildInfo"/>. Lets a caller that has already
-    /// compared <see cref="ServerBinaryPath"/> across multiple running instances (multi-instance
-    /// ambiguity) kill the exact stale process by PID, rather than correlating binary path back to a
-    /// live process by hand. See <see cref="ServerVersion"/> and <see cref="ServerBinaryPath"/>.
-    /// </summary>
-    public int ServerPid { get; init; } = ServerBuildInfo.Pid;
+    public ServerInfo ServerInfo { get; init; } = new();
 
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
@@ -122,7 +100,7 @@ public record SentinelCallToolResult<T>
 
 
     /// <summary>True when the operation completed without error.</summary>
-    public bool Success
+    public bool IsSuccess
     {
         get; init;
     }
@@ -133,7 +111,7 @@ public record SentinelCallToolResult<T>
     /// property accessor, which isn't possible. Callers that might produce an oversized payload
     /// should use <see cref="ForPossiblyLargeDataAsync"/> instead of setting this directly.
     /// </summary>
-    public T? Data
+    public T? SuccessDetails
     {
         get; init;
     }
@@ -141,25 +119,26 @@ public record SentinelCallToolResult<T>
     /// <summary>
     /// Builds a <see cref="SentinelCallToolResult{T}"/> for <paramref name="data"/>, offloading to disk via
     /// <see cref="LargeResultHelper.StoreLargeResultAsync{T}"/> (populating <see cref="LargeResult"/>
-    /// instead of <see cref="Data"/>) when the serialized payload exceeds
+    /// instead of <see cref="SuccessDetails"/>) when the serialized payload exceeds
     /// <see cref="LargeResultHelper.OffloadThresholdBytes"/>. Use this instead of hand-rolling a
     /// size-check/write-to-disk block per tool (that duplication is what let GetMethodSource and
     /// ReadFile's offload paths silently diverge from GetLargeResult's expected file format).
     /// </summary>
     public static async Task<SentinelCallToolResult<T>> ForPossiblyLargeDataAsync(
-        T data, string? solutionRoot, string resultType, ResultWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null, CancellationToken cancellationToken = default)
+        T data, string? solutionRoot, string resultType, ResultWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null, string? statusMessage = null, CancellationToken cancellationToken = default)
     {
         var stored = await LargeResultHelper.StoreLargeResultAsync(data, solutionRoot, wrapperType, cancellationToken);
         if (!stored.offloaded)
         {
-            return new SentinelCallToolResult<T> { Success = true, Data = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion };
+            return new SentinelCallToolResult<T> { IsSuccess = true, SuccessDetails = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion, StatusMessage = statusMessage };
         }
 
         return new SentinelCallToolResult<T>
         {
-            Success = true,
+            IsSuccess = true,
             TotalRecords = totalRecords,
             WorkspaceVersion = workspaceVersion,
+            StatusMessage = statusMessage,
             LargeResult = new LargeResultInfo(
                 resultType: resultType,
                 writtenToFile: true,
@@ -172,17 +151,14 @@ public record SentinelCallToolResult<T>
         };
     }
 
-    /// <summary>Error details. Non-null when <see cref="Success"/> is false.</summary>
-    public ResultError? Error
+    /// <summary>ErrorDetails details. Non-null when <see cref="IsSuccess"/> is false.</summary>
+    public ResultError? ErrorDetails
     {
         get; init;
     }
 
     /// <summary>Non-fatal observations surfaced alongside the result. Empty when there are none.</summary>
     public IReadOnlyList<Finding> Findings { get; init; } = [];
-
-    /// <summary>Machine-readable directive paired with any free-form directive prose this result carries.</summary>
-    public DirectiveKind DirectiveKind { get; init; } = DirectiveKind.Proceed;
 
     /// <summary>
     /// Present when the result exceeded the inline-size threshold and was written to disk.
@@ -212,7 +188,7 @@ public record SentinelCallToolResult<T>
     /// Optional non-fatal hint surfaced alongside a successful result (e.g. a likely-mistaken
     /// argument value). Null when there is nothing noteworthy to flag.
     /// </summary>
-    public string? Warning
+    public string? WarningDetails
     {
         get; init;
     }
@@ -228,9 +204,16 @@ public record SentinelCallToolResult<T>
     {
         get; init;
     }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    public string? StatusMessage
+    {
+        get; init;
+    }
 }
 
-// ── Error detail ─────────────────────────────────────────────────────────────
+// ── ErrorDetails detail ─────────────────────────────────────────────────────────────
 
 /// <summary>Structured error returned inside <see cref="SentinelCallToolResult{T}"/>.</summary>
 public record ResultError(
@@ -321,5 +304,18 @@ public sealed class ToolOptionsResult
     {
         get; set;
     }
+}
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Groups the running server's build identity (version, build time, binary path, PID) under a
+/// single nested field instead of 4 flat top-level properties. See <see cref="ServerBuildInfo"/>
+/// for how each value is computed.
+/// </summary>
+public record ServerInfo
+{
+    public string Version { get; init; } = ServerBuildInfo.Version;
+    public DateTime BuildTimeUtc { get; init; } = ServerBuildInfo.BuildTimeUtc;
+    public string BinaryPath { get; init; } = ServerBuildInfo.BinaryPath;
+    public int Pid { get; init; } = ServerBuildInfo.Pid;
 }
 

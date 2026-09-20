@@ -468,7 +468,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 15 -> Data quality invariants across all new engines
+    // 15 -> SuccessDetails quality invariants across all new engines
     // =========================================================================
 
     [Test]

@@ -456,14 +456,14 @@ public class SentinelGitTools
         {
             return new
             {
-                Success = false,
-                Error = $"repoPath is only supported for status/log/diff/show - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation."
+                IsSuccess = false,
+                ErrorDetails = $"repoPath is only supported for status/log/diff/show - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation."
             };
         }
 
         var gitRoot = TryGetGitRoot(out var rootError, isReadOnlyOperation ? repoPath : null);
         if (gitRoot is null)
-            return new { Success = false, Error = rootError };
+            return new { IsSuccess = false, ErrorDetails = rootError };
 
         // `files` and `paths` name the same concept; `paths` is the git-native spelling that `diff`
         // already used, so `files` stays an accepted alias rather than breaking callers. Setting
@@ -472,8 +472,8 @@ public class SentinelGitTools
         {
             return new
             {
-                Success = false,
-                Error = "Both 'files' and 'paths' were supplied - they are aliases for the same list and must not be combined. Pass just one of them (either spelling is accepted)."
+                IsSuccess = false,
+                ErrorDetails = "Both 'files' and 'paths' were supplied - they are aliases for the same list and must not be combined. Pass just one of them (either spelling is accepted)."
             };
         }
         var resolvedPaths = !string.IsNullOrWhiteSpace(files) ? files : paths;
@@ -494,7 +494,7 @@ public class SentinelGitTools
             GitOperation.push => await PushAsync(gitRoot, remoteName, setUpstream, cancellationToken),
             GitOperation.fetch => await FetchAsync(gitRoot, remoteName, cancellationToken),
             GitOperation.pull => await PullAsync(gitRoot, remoteName, rebase, cancellationToken),
-            _ => (object)new { Success = false, Error = $"Unknown operation '{operation}'." }
+            _ => (object)new { IsSuccess = false, ErrorDetails = $"Unknown operation '{operation}'." }
         };
     }
 

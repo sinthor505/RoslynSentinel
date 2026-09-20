@@ -459,7 +459,7 @@ public class DiffEngineTests
         // IsContextOrRemovalLine) -- ApplyDiffCore's if/else-if chain simply has no branch for it, so
         // the apply still succeeds structurally, but DiffHunkAnalyzer.Analyze flags it via
         // MalformedLines, which is exactly the drift ApplyUnifiedDiff's ReviewRequired directive
-        // exists to surface even though Success stays true.
+        // exists to surface even though IsSuccess stays true.
         var nl = Environment.NewLine;
         var oldText = SourceText.From("line1" + nl + "line2" + nl + "line3");
         var diff = "@@ -1,3 +1,4 @@\n line1\nunmarked\n line2\n line3";

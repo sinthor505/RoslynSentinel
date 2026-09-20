@@ -43,14 +43,14 @@ public class PathDrivenTestEngine
         if (document == null)
         {
             return new PathDrivenTestReport(methodName, filePath, "?", 0, [],
-                $"// Error: File not found: {filePath}");
+                $"// ErrorDetails: File not found: {filePath}");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new PathDrivenTestReport(methodName, filePath, "?", 0, [],
-                "// Error: Could not parse syntax root.");
+                "// ErrorDetails: Could not parse syntax root.");
         }
 
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
@@ -60,7 +60,7 @@ public class PathDrivenTestEngine
         if (methods.Count == 0)
         {
             return new PathDrivenTestReport(methodName, filePath, "?", 0, [],
-                $"// Error: Method '{methodName}' not found in {filePath}.");
+                $"// ErrorDetails: Method '{methodName}' not found in {filePath}.");
         }
 
         var method = methods.Count == 1

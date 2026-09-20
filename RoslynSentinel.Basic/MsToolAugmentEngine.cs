@@ -1302,7 +1302,7 @@ public class MsToolAugmentEngine
     //
     // ── Known issue / fix history -> read this before touching anything below ──
     // This tool has repeatedly shipped "technically succeeded, semantically wrong"
-    // bugs: it returns Success=true, compiles clean, and passes existing tests,
+    // bugs: it returns IsSuccess=true, compiles clean, and passes existing tests,
     // while quietly producing the wrong extraction. Every case so far was found by
     // a live agent run, not by the existing test suite, because the sample/test
     // code never exercised the exact resulting shape. Treat a green build/test run
@@ -1360,7 +1360,7 @@ public class MsToolAugmentEngine
     // contextSnippet should cover) over guessing a narrower scope than the caller
     // likely intended. When diagnosing a NEW report of "ExtractMethodSafe did
     // something weird," reproduce with a real dotnet build first -> GetDiagnostics'
-    // error *count* is not enough, and neither is the tool's own Success flag.
+    // error *count* is not enough, and neither is the tool's own IsSuccess flag.
 
     /// <summary>
     /// Extract a block of statements into a new private method using semantic

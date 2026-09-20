@@ -1,13 +1,13 @@
 // Battery #32 -> Regression tests for GenerateFluentBuilder: error result (not exception) on DI/POCO-less classes
 // Bug fixed: GenerateFluentBuilderAsync used to throw InvalidOperationException on classes with no
-// settable public properties. The fix returns a FluentBuilderResult with a non-empty Error field.
+// settable public properties. The fix returns a FluentBuilderResult with a non-empty ErrorDetails field.
 //
 // Tests in this battery:
 //   1. DI service class (no settable props) -> returns error result, does NOT throw
 //   2. API controller class (no settable props) -> returns error result, does NOT throw
 //   3. Abstract class with no props -> returns error result, does NOT throw
 //   4. Empty class -> returns error result with class name in the error
-//   5. Error message contains expected guidance (class name, "DI-injected", "settable public properties")
+//   5. ErrorDetails message contains expected guidance (class name, "DI-injected", "settable public properties")
 //   6. POCO class WITH settable properties -> no error, valid builder generated
 //   7. Record with primary constructor -> no error, valid builder generated
 //   8. Class with init-only properties -> no error, valid builder generated
@@ -78,7 +78,7 @@ public class BatteryThirtyTwoTests
 
         Assert.That(result, Is.Not.Null, "Result must not be null");
         Assert.That(result!.Error, Is.Not.Null.And.Not.Empty,
-            "DI service class with no settable properties should produce a non-empty Error field");
+            "DI service class with no settable properties should produce a non-empty ErrorDetails field");
     }
 
     [Test]
@@ -104,7 +104,7 @@ public class BatteryThirtyTwoTests
         }, "API controller must NOT cause exception - returns error result");
 
         Assert.That(result!.Error, Is.Not.Null.And.Not.Empty,
-            "Controller class (no settable props) must have non-empty Error");
+            "Controller class (no settable props) must have non-empty ErrorDetails");
     }
 
     [Test]
@@ -145,7 +145,7 @@ public class BatteryThirtyTwoTests
     }
 
     // =========================================================================
-    // Error message content validation
+    // ErrorDetails message content validation
     // =========================================================================
 
     [Test]
@@ -161,7 +161,7 @@ public class BatteryThirtyTwoTests
         var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("MySpecialService.cs", "MySpecialService");
 
         Assert.That(result.Error, Does.Contain("MySpecialService"),
-            "Error message should include the target class name for context");
+            "ErrorDetails message should include the target class name for context");
     }
 
     [Test]
@@ -177,7 +177,7 @@ public class BatteryThirtyTwoTests
         var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("RepoService.cs", "RepoService");
 
         Assert.That(result.Error, Does.Contain("DI-injected").Or.Contain("DI injected").Or.Contain("dependency inject"),
-            "Error should mention DI injection to guide the user");
+            "ErrorDetails should mention DI injection to guide the user");
     }
 
     [Test]
@@ -193,7 +193,7 @@ public class BatteryThirtyTwoTests
         var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("SomeHandler.cs", "SomeHandler");
 
         Assert.That(result.Error, Does.Contain("settable public properties").Or.Contain("public properties"),
-            "Error should explain what is needed (settable public properties)");
+            "ErrorDetails should explain what is needed (settable public properties)");
     }
 
     // =========================================================================

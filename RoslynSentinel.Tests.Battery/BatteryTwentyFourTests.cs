@@ -256,7 +256,7 @@ public enum Status { Active = 1, Pending = 2 }
             reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
             newName: "GetDisplayLabel");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsSuccess, Is.True);
     }
 
     [Test]
@@ -267,8 +267,8 @@ public enum Status { Active = 1, Pending = 2 }
             reason: "test message", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol",
             newName: "NewName");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
     }
 
     // --- MoveAllTypesToFilesInProject ---
@@ -323,8 +323,8 @@ public enum Status { Active = 1, Pending = 2 }
 
         var result = await _tools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
 
-        Assert.That(result.Success, Is.True);
-        var memberChangedContent = (MemberChangedContentResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var memberChangedContent = (MemberChangedContentResult)result.SuccessDetails!;
 
         // The added using line must be present in the diff...
         Assert.That(memberChangedContent.ChangedContent, Does.Contain("using System.Linq;"));
@@ -349,7 +349,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Status", newMemberSource: "Cancelled");
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsSuccess, Is.True);
     }
 
     [Test]
@@ -357,7 +357,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "Pending", skipPrecheck: true);
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsSuccess, Is.True);
     }
 
     [Test]
@@ -365,7 +365,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "Pending", newMemberSource: "InProgress=2");
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsSuccess, Is.True);
     }
 
     [Test]
@@ -373,7 +373,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.view, "Status");
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsSuccess, Is.True);
     }
 
     // --- InsertMemberAfter ---
@@ -463,12 +463,12 @@ public enum Status { Active = 1, Pending = 2 }
         var versionBeforeAnyMutation = _workspaceManager.WorkspaceVersion;
 
         var first = await _tools.ChangeAccessibility(reason: "test message", "Order.cs", "OrderId", AccessibilityLevel.@internal);
-        var firstSummary = (AppliedChangeSummary)first.Data!;
+        var firstSummary = (AppliedChangeSummary)first.SuccessDetails!;
         Assert.That(firstSummary.WorkspaceVersion, Is.Not.Null);
         Assert.That(firstSummary.WorkspaceVersion, Is.GreaterThan(versionBeforeAnyMutation));
 
         var second = await _tools.ChangeAccessibility(reason: "test message", "Order.cs", "CustomerName", AccessibilityLevel.@internal);
-        var secondSummary = (AppliedChangeSummary)second.Data!;
+        var secondSummary = (AppliedChangeSummary)second.SuccessDetails!;
         Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion!),
             "A second mutation must stamp a strictly higher version than the first.");
     }
@@ -565,7 +565,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.view, "GetLabel");
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
     }
 
     [Test]
@@ -573,7 +573,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool");
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
     }
 
     [Test]
@@ -583,7 +583,7 @@ public enum Status { Active = 1, Pending = 2 }
             ("Order.cs", SimpleSource),
             ("Caller.cs", "namespace TestProj;\npublic class Caller { public string Use(Order o) => o.GetStatus(); }"));
         var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool", defaultValue: "false");
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
     }
 
     [Test]
@@ -596,7 +596,7 @@ public enum Status { Active = 1, Pending = 2 }
             ("Order.cs", orderSourceWithRename),
             ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
         var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
     }
 
     [Test]
@@ -604,9 +604,9 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(RefactorSource, "Animal.cs");
         var result = await _tools.MethodSignature(reason: "test message", "Animal.cs", AddRemoveViewAction.remove, "Process", "a");
-        Assert.That(result.Success, Is.False, "Removing a non-trailing parameter must be refused, not silently applied.");
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.Message, Does.Contain("last parameter"));
+        Assert.That(result.IsSuccess, Is.False, "Removing a non-trailing parameter must be refused, not silently applied.");
+        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("last parameter"));
     }
 
     [Test]
@@ -619,9 +619,9 @@ public enum Status { Active = 1, Pending = 2 }
             ("Order.cs", orderSourceWithRename),
             ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(first: \"a\", last: \"b\"); }"));
         var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
-        Assert.That(result.Success, Is.False, "A named-argument call site cannot be safely rewritten and must refuse the whole operation.");
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.Message, Does.Contain("named arguments"));
+        Assert.That(result.IsSuccess, Is.False, "A named-argument call site cannot be safely rewritten and must refuse the whole operation.");
+        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("named arguments"));
     }
 
     // --- WrapInRegion ---
@@ -677,9 +677,9 @@ public enum Status { Active = 1, Pending = 2 }
 
             Assert.That(File.Exists(oldPath), Is.True, "dryRun must never delete the original file, even when validation fails.");
             Assert.That(File.Exists(newPath), Is.False, "dryRun must never write the renamed file.");
-            if (result.Success)
+            if (result.IsSuccess)
             {
-                var data = (AppliedChangeSummary)result.Data!;
+                var data = (AppliedChangeSummary)result.SuccessDetails!;
                 Assert.That(data.DryRun, Is.True);
             }
         }
@@ -712,7 +712,7 @@ public enum Status { Active = 1, Pending = 2 }
 
             var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath);
 
-            Assert.That(result.Success, Is.True, $"Expected rename to succeed; error: {result.Error?.Message}");
+            Assert.That(result.IsSuccess, Is.True, $"Expected rename to succeed; error: {result.ErrorDetails?.Message}");
             Assert.That(File.Exists(oldPath), Is.False, "Old file should be deleted after a successful rename.");
             Assert.That(File.Exists(newPath), Is.True, "New file should exist after a successful rename.");
 
@@ -862,8 +862,8 @@ public enum Status { Active = 1, Pending = 2 }
         // runner's CWD) -> without it, a stray file left by a prior run makes the diff spuriously
         // empty since the on-disk "before" already matches the freshly-computed "after".
         var result = await _advTools.InlineClass(reason: "test message", "Helper.cs", "Owner.cs", "Helper", dryRun: true, returnDiff: true);
-        Assert.That(result.Success, Is.True, result.Error?.Message);
-        var summary = (AppliedChangeSummary)result.Data!;
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        var summary = (AppliedChangeSummary)result.SuccessDetails!;
         Assert.That(summary.AffectedFiles.Select(f => f.ToString()), Has.Some.Contains("Owner.cs"));
         Assert.That(summary.Diff, Does.Contain("Value"));
         Assert.That(summary.Diff, Does.Contain("Go"));
@@ -965,7 +965,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
-        Assert.That(result.Success, Is.True, "GetLabel has no callers in SimpleSource - default precheck must let it through.");
+        Assert.That(result.IsSuccess, Is.True, "GetLabel has no callers in SimpleSource - default precheck must let it through.");
     }
 
     [Test]
@@ -987,9 +987,9 @@ public enum Status { Active = 1, Pending = 2 }
 
         var result = await _tools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName");
 
-        Assert.That(result.Success, Is.False, "A member with a real caller must be refused by default.");
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.Message, Does.Contain("caller"));
+        Assert.That(result.IsSuccess, Is.False, "A member with a real caller must be refused by default.");
+        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("caller"));
     }
 
     [Test]
@@ -1016,7 +1016,7 @@ public enum Status { Active = 1, Pending = 2 }
 
         var result = await _tools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName", skipPrecheck: true);
 
-        Assert.That(result.Success, Is.False, "The engine's own caller check still applies even with skipPrecheck: true.");
+        Assert.That(result.IsSuccess, Is.False, "The engine's own caller check still applies even with skipPrecheck: true.");
     }
 
     [Test]
@@ -1043,12 +1043,12 @@ public enum Status { Active = 1, Pending = 2 }
         """, "Greeter.cs");
 
         var refused = await _tools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet");
-        Assert.That(refused.Success, Is.False, "An interface member's implementation must be caught by the default precheck.");
-        Assert.That(refused.Error!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
+        Assert.That(refused.IsSuccess, Is.False, "An interface member's implementation must be caught by the default precheck.");
+        Assert.That(refused.ErrorDetails!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
 
         var result = await _tools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet", skipPrecheck: true);
-        Assert.That(result.Success, Is.False, "Removing an interface's sole implementation still breaks compilation - the separate compile-validation safety net catches it.");
-        Assert.That(result.Error!.Message, Does.Contain("does not implement interface member"),
+        Assert.That(result.IsSuccess, Is.False, "Removing an interface's sole implementation still breaks compilation - the separate compile-validation safety net catches it.");
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("does not implement interface member"),
             "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped.");
     }
 
@@ -1077,7 +1077,7 @@ public enum Status { Active = 1, Pending = 2 }
             """));
 
         var result = await _tools.Member(reason: "test message", "Dog.cs", MemberAction.remove, memberName: "Speak");
-        Assert.That(result.Success, Is.True, "An override with no callers and nothing overriding it in turn must succeed under the default precheck.");
+        Assert.That(result.IsSuccess, Is.True, "An override with no callers and nothing overriding it in turn must succeed under the default precheck.");
     }
 
     // --- ReplaceConstructorWithFactory ---
@@ -1244,8 +1244,8 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         SetSource("public class C {}", "Test.cs");
         var result = await _tools.ExtractLocalVariable(reason: "test message", "NonExistent.cs", "GetLabel", "label");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
     }
 
     // --- ConvertToSwitch ---
@@ -1307,8 +1307,8 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
             var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "MainService");
 
-            Assert.That(result.Success, Is.True, $"Expected rename to succeed; error: {result.Error?.Message}");
-            var summary = (AppliedChangeSummary)result.Data!;
+            Assert.That(result.IsSuccess, Is.True, $"Expected rename to succeed; error: {result.ErrorDetails?.Message}");
+            var summary = (AppliedChangeSummary)result.SuccessDetails!;
             Assert.That(summary.AffectedFiles, Has.Some.Matches<FilePathWrapper>(p => p.Absolute.Contains("MainService.cs")),
                 "Should target MainService (explicitly named), not HelperResult (first-declared).");
         }
@@ -1341,10 +1341,10 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
             var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "DoesNotExist");
 
-            Assert.That(result.Success, Is.False);
-            Assert.That(result.Error!.Message, Does.Contain("DoesNotExist"));
-            Assert.That(result.Error!.Message, Does.Contain("HelperResult"));
-            Assert.That(result.Error!.Message, Does.Contain("MainService"));
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.ErrorDetails!.Message, Does.Contain("DoesNotExist"));
+            Assert.That(result.ErrorDetails!.Message, Does.Contain("HelperResult"));
+            Assert.That(result.ErrorDetails!.Message, Does.Contain("MainService"));
         }
         finally
         {

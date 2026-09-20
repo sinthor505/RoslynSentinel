@@ -96,8 +96,8 @@ public class SentinelIntelligenceTools
             var result = await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath, offset, limit, timeoutSeconds, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -105,8 +105,8 @@ public class SentinelIntelligenceTools
             _logger.LogError(ex, "GetComprehensiveHealthReport failed");
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetComprehensiveHealthReport")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetComprehensiveHealthReport")
             };
         }
     }
@@ -126,8 +126,8 @@ public class SentinelIntelligenceTools
             var result = await _metricsEngine.GetSolutionMetricsAsync(projectName, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -135,8 +135,8 @@ public class SentinelIntelligenceTools
             _logger.LogError(ex, "GetSolutionMetrics failed");
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetSolutionMetrics")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetSolutionMetrics")
             };
         }
     }
@@ -169,8 +169,8 @@ public class SentinelIntelligenceTools
             _logger.LogError(ex, "GetCodeInventory failed for '{FilePathWrapper}'", filePath);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetCodeInventory")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetCodeInventory")
             };
         }
     }
@@ -195,8 +195,8 @@ public class SentinelIntelligenceTools
             var result = await _dependencyInjectionEngine.FindDiRegistrationsAsync(projectName, filePath, lifetimeFilter, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -204,8 +204,8 @@ public class SentinelIntelligenceTools
             _logger.LogError(ex, "GetDiRegistrations failed");
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetDiRegistrations")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetDiRegistrations")
             };
         }
     }
@@ -235,16 +235,16 @@ public class SentinelIntelligenceTools
                 {
                     return new SentinelCallToolResult<object>
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                             "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
                             "Use GetFileOutline to list available methods in the file.")
                     };
                 }
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = fwd
+                    IsSuccess = true,
+                    SuccessDetails = fwd
                 };
             }
             if (direction == "reverse")
@@ -254,16 +254,16 @@ public class SentinelIntelligenceTools
                 {
                     return new SentinelCallToolResult<object>
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                         "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
                         "Use GetFileOutline to list available methods in the file.")
                     };
                 }
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = rev
+                    IsSuccess = true,
+                    SuccessDetails = rev
                 };
             }
             if (direction == "tree")
@@ -271,14 +271,14 @@ public class SentinelIntelligenceTools
                 var result = await _analysisEngine.GenerateCallTreeAsync(filePath, methodName, maxDepth);
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = result
+                    IsSuccess = true,
+                    SuccessDetails = result
                 };
             }
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"Unknown direction '{direction}'. Valid values: forward, reverse, tree.")
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Unknown direction '{direction}'. Valid values: forward, reverse, tree.")
             };
         }
         catch (Exception ex)
@@ -286,8 +286,8 @@ public class SentinelIntelligenceTools
             _logger.LogError(ex, "GetCallGraph ({Direction}) failed for '{MethodName}'", direction, methodName);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetCallGraph")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetCallGraph")
             };
         }
     }
@@ -308,8 +308,8 @@ public class SentinelIntelligenceTools
             var result = await _projectStructureEngine.PreviewMoveFileToNamespaceFolderAsync(filePath, cancellationToken);
             return new SentinelCallToolResult<string>
             {
-                Success = true,
-                Data = result.ToJsonSummary()
+                IsSuccess = true,
+                SuccessDetails = result.ToJsonSummary()
             };
         }
         catch (Exception ex)
@@ -317,8 +317,8 @@ public class SentinelIntelligenceTools
             _logger.LogError(ex, "PreviewMoveFileToNamespaceFolder failed for '{FilePathWrapper}'", filePath);
             return new SentinelCallToolResult<string>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewMoveFileToNamespaceFolder")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewMoveFileToNamespaceFolder")
             };
         }
     }
@@ -343,8 +343,8 @@ public class SentinelIntelligenceTools
             var result = await _symbolNavigationEngine.TraceVariableLifetimeAsync(filePath, variableName, lineNumber, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -352,8 +352,8 @@ public class SentinelIntelligenceTools
             _logger.LogError(ex, "TraceVariableLifetime failed for '{VariableName}' in '{FilePathWrapper}'", variableName, filePath);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "TraceVariableLifetime")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "TraceVariableLifetime")
             };
         }
     }

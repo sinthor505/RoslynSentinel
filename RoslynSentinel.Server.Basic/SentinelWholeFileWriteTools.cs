@@ -47,8 +47,8 @@ public class SentinelWholeFileWriteTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"WriteFile: '{filePathResolved}' already exists. Use operation=ReplaceFile to overwrite an existing file.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"WriteFile: '{filePathResolved}' already exists. Use operation=ReplaceFile to overwrite an existing file.")
                 };
             }
 
@@ -56,8 +56,8 @@ public class SentinelWholeFileWriteTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"WriteFile: '{filePathResolved}' does not exist. Use operation=CreateFile to create a new file.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"WriteFile: '{filePathResolved}' does not exist. Use operation=CreateFile to create a new file.")
                 };
             }
 
@@ -73,8 +73,8 @@ public class SentinelWholeFileWriteTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception,
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.Exception,
                         "WriteFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                 };
@@ -84,8 +84,8 @@ public class SentinelWholeFileWriteTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"WriteFile failed to write '{filePathResolved}': {result.Summary}")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.Exception, $"WriteFile failed to write '{filePathResolved}': {result.Summary}")
                 };
             }
 
@@ -93,8 +93,8 @@ public class SentinelWholeFileWriteTools
             var strippedResult = result with { PreImages = null };
             return new SentinelCallToolResult<object>()
             {
-                Success = true,
-                Data = strippedResult
+                IsSuccess = true,
+                SuccessDetails = strippedResult
             };
         }
         catch (Exception ex)
@@ -102,8 +102,8 @@ public class SentinelWholeFileWriteTools
             _logger.LogError(ex, "WriteFile failed for '{FilePathWrapper}'", filePathResolved);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"WriteFile for '{filePathResolved}'")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"WriteFile for '{filePathResolved}'")
             };
         }
     }
@@ -122,8 +122,8 @@ public class SentinelWholeFileWriteTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"DeleteFile: '{filePathResolved}' does not exist.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"DeleteFile: '{filePathResolved}' does not exist.")
                 };
             }
 
@@ -135,8 +135,8 @@ public class SentinelWholeFileWriteTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"DeleteFile failed to delete '{filePathResolved}': {result.Summary}")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.Exception, $"DeleteFile failed to delete '{filePathResolved}': {result.Summary}")
                 };
             }
 
@@ -144,8 +144,8 @@ public class SentinelWholeFileWriteTools
             var strippedResult = result with { PreImages = null };
             return new SentinelCallToolResult<object>()
             {
-                Success = true,
-                Data = strippedResult
+                IsSuccess = true,
+                SuccessDetails = strippedResult
             };
         }
         catch (Exception ex)
@@ -153,8 +153,8 @@ public class SentinelWholeFileWriteTools
             _logger.LogError(ex, "DeleteFile failed for '{FilePathWrapper}'", filePathResolved);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"DeleteFile for '{filePathResolved}'")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"DeleteFile for '{filePathResolved}'")
             };
         }
     }
@@ -321,8 +321,8 @@ public class SentinelWholeFileWriteTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "changes is required when changesetFormat=files.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "changes is required when changesetFormat=files.")
                     };
                 }
 
@@ -358,8 +358,8 @@ public class SentinelWholeFileWriteTools
                     {
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.ConfirmationRequired,
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.ConfirmationRequired,
                                 oversizedIsCommentCollapse
                                     ? $"File '{oversizedFile}' would have {oversizedPercent:P0} of its active code lines turned into comments, exceeding the {LargeShrinkRejectionThreshold:P0} threshold for a files-format apply. " +
                                       "This usually means the intended change (or a partial rewrite) was commented out instead of actually being edited or removed, rather than a genuine intentional deletion. If this is a genuine intentional removal of this code, re-submit ApplyDiff with the complete file content included in 'changes'. For a partial edit, use changesetFormat=diff instead."
@@ -372,8 +372,8 @@ public class SentinelWholeFileWriteTools
                     if (!result.Success && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception,
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.Exception,
                                 "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
@@ -392,8 +392,8 @@ public class SentinelWholeFileWriteTools
                         : strippedResult;
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = true,
-                        Data = responseData
+                        IsSuccess = true,
+                        SuccessDetails = responseData
                     };
                 }
 
@@ -404,14 +404,14 @@ public class SentinelWholeFileWriteTools
                         var validationResult = await _validationEngine.ValidateChangesAsync(resolvedChanges);
                         return validationResult.Success ? new SentinelCallToolResult<object>()
                         {
-                            Success = true,
-                            Data = validationResult
+                            IsSuccess = true,
+                            SuccessDetails = validationResult
                         }
 
                         : new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed: {validationResult.Diagnostics}")
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed: {validationResult.Diagnostics}")
                         };
                     }
                     catch (Exception ex)
@@ -419,8 +419,8 @@ public class SentinelWholeFileWriteTools
                         _logger.LogError(ex, "ApplyDiff validate unexpected exception");
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff validate")
+                            IsSuccess = false,
+                            ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff validate")
                         };
                     }
                 }
@@ -431,8 +431,8 @@ public class SentinelWholeFileWriteTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyDiff: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyDiff: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
                     };
                 }
 
@@ -440,8 +440,8 @@ public class SentinelWholeFileWriteTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filepath' and 'unifiedDiff' are required when changesetFormat=diff.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filepath' and 'unifiedDiff' are required when changesetFormat=diff.")
                     };
                 }
 
@@ -449,8 +449,8 @@ public class SentinelWholeFileWriteTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filepath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filepath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
                     };
                 }
 
@@ -458,8 +458,8 @@ public class SentinelWholeFileWriteTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'unifiedDiff' is required when changesetFormat=diff.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'unifiedDiff' is required when changesetFormat=diff.")
                     };
                 }
 
@@ -473,8 +473,8 @@ public class SentinelWholeFileWriteTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                                IsSuccess = false,
+                                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
                             };
                         }
 
@@ -489,8 +489,8 @@ public class SentinelWholeFileWriteTools
                         if (!result.Success && result.ValidationResult != null)
                             return new SentinelCallToolResult<object>()
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception,
+                                IsSuccess = false,
+                                ErrorDetails = new ResultError(ToolErrorCode.Exception,
                                     "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                     await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                             };
@@ -499,8 +499,8 @@ public class SentinelWholeFileWriteTools
                         object diffResponseData = BuildDiffApplyResponseData(strippedDiffResult, diffReport, returnDiff, diffChanges, result.PreImages);
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = true,
-                            Data = diffResponseData
+                            IsSuccess = true,
+                            SuccessDetails = diffResponseData
                         };
                     }
                     catch (Exception ex)
@@ -508,8 +508,8 @@ public class SentinelWholeFileWriteTools
                         _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePathWrapper}'", filePathResolved);
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePathResolved}'")
+                            IsSuccess = false,
+                            ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePathResolved}'")
                         };
                     }
                 }
@@ -519,22 +519,22 @@ public class SentinelWholeFileWriteTools
                     var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff);
                     return validationResult.Success ? new SentinelCallToolResult<object>()
                     {
-                        Success = true,
-                        Data = validationResult
+                        IsSuccess = true,
+                        SuccessDetails = validationResult
                     }
 
                     : new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult.Diagnostics.ToInfo()}")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult.Diagnostics.ToInfo()}")
                     };
                 }
             }
 
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.")
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.")
             };
         }
         catch (Exception ex)
@@ -542,8 +542,8 @@ public class SentinelWholeFileWriteTools
             _logger.LogError(ex, "ApplyDiff ({ChangesetFormat}/{Action}) failed", changesetFormat, action);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff")
             };
         }
     }
@@ -580,8 +580,8 @@ public class SentinelWholeFileWriteTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
+                    IsSuccess = false,
+                    ErrorDetails = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
                         ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyUnifiedDiff: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
                         : new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'filepath' is required (it names the single file the unifiedDiff applies to).")
                 };
@@ -591,8 +591,8 @@ public class SentinelWholeFileWriteTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'unifiedDiff' is required.")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'unifiedDiff' is required.")
                 };
             }
 
@@ -606,8 +606,8 @@ public class SentinelWholeFileWriteTools
                     {
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
                         };
                     }
 
@@ -622,8 +622,8 @@ public class SentinelWholeFileWriteTools
                     if (!result.Success && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
-                            Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception,
+                            IsSuccess = false,
+                            ErrorDetails = new ResultError(ToolErrorCode.Exception,
                                 "ApplyUnifiedDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
@@ -632,12 +632,11 @@ public class SentinelWholeFileWriteTools
                     object diffResponseData = BuildDiffApplyResponseData(strippedDiffResult, diffReport, returnDiff, diffChanges, result.PreImages);
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = true,
-                        Data = diffResponseData,
+                        IsSuccess = true,
+                        SuccessDetails = diffResponseData,
                         Findings = diffReport.HasFindings
                             ? new[] { new Finding("DiffHunkAnalyzer", diffReport.Describe(), FindingSeverity.Warning) }
                             : Array.Empty<Finding>(),
-                        DirectiveKind = diffReport.HasFindings ? DirectiveKind.ReviewRequired : DirectiveKind.Proceed
                     };
                 }
                 catch (Exception ex)
@@ -645,8 +644,8 @@ public class SentinelWholeFileWriteTools
                     _logger.LogError(ex, "ApplyUnifiedDiff apply unexpected exception for '{FilePathWrapper}'", filePathResolved);
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyUnifiedDiff apply for '{filePathResolved}'")
+                        IsSuccess = false,
+                        ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyUnifiedDiff apply for '{filePathResolved}'")
                     };
                 }
             }
@@ -656,21 +655,21 @@ public class SentinelWholeFileWriteTools
                 var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff);
                 return validationResult.Success ? new SentinelCallToolResult<object>()
                 {
-                    Success = true,
-                    Data = validationResult
+                    IsSuccess = true,
+                    SuccessDetails = validationResult
                 }
 
                 : new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"ApplyUnifiedDiff validate failed: {validationResult.Diagnostics.ToInfo()}")
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ApplyUnifiedDiff validate failed: {validationResult.Diagnostics.ToInfo()}")
                 };
             }
 
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.")
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.")
             };
         }
         catch (Exception ex)
@@ -678,8 +677,8 @@ public class SentinelWholeFileWriteTools
             _logger.LogError(ex, "ApplyUnifiedDiff ({Action}) failed", action);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyUnifiedDiff")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyUnifiedDiff")
             };
         }
     }

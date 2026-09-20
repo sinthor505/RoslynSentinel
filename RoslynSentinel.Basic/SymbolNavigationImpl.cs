@@ -43,8 +43,8 @@ public class SymbolNavigationImpl
             {
                 return new SentinelCallToolResult<object>
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
                         ". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call ListAll for a cheap solution-wide orientation listing if you're not sure of the exact name.")
                 };
@@ -52,8 +52,8 @@ public class SymbolNavigationImpl
 
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result,
+                IsSuccess = true,
+                SuccessDetails = result,
                 TotalRecords = result.Count,
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion
             };
@@ -63,8 +63,8 @@ public class SymbolNavigationImpl
             _logger.LogError(ex, "LocateSymbol failed for '{SymbolName}'", symbolName);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "LocateSymbol")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "LocateSymbol")
             };
         }
     }
@@ -91,8 +91,8 @@ public class SymbolNavigationImpl
                     var snippetPreview = contextSnippet.Length > 60 ? contextSnippet[..60] + "..." : contextSnippet;
                     return new SentinelCallToolResult<object>
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception,
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.Exception,
                             $"Could not resolve a symbol in '{filePathResolved}' for contextSnippet \"{snippetPreview}\". " +
                             "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
                             "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
@@ -102,8 +102,8 @@ public class SymbolNavigationImpl
                 }
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = symbolInfo
+                    IsSuccess = true,
+                    SuccessDetails = symbolInfo
                 };
             }
             if (aspect == InspectSymbolAspect.blastRadius)
@@ -111,14 +111,14 @@ public class SymbolNavigationImpl
                 var result = await _impactAnalyzer.AnalyzeImpactAsync(filePathResolved, contextSnippet, lineBefore, lineAfter);
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = result
+                    IsSuccess = true,
+                    SuccessDetails = result
                 };
             }
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled aspect '{aspect}'.")
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled aspect '{aspect}'.")
             };
         }
         catch (Exception ex)
@@ -126,8 +126,8 @@ public class SymbolNavigationImpl
             _logger.LogError(ex, "InspectSymbol ({Aspect}) failed in '{FilePathWrapper}'", aspect, filePathResolved);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InspectSymbol")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InspectSymbol")
             };
         }
     }
@@ -151,11 +151,11 @@ public class SymbolNavigationImpl
                 {
                     // GetTypeMembersDetailAsync silently returns an empty list for the same
                     // "type not found" condition, so surface the hierarchy lookup's explicit
-                    // error here rather than letting either include mode return a bare Success=true.
+                    // error here rather than letting either include mode return a bare IsSuccess=true.
                     return new SentinelCallToolResult<object>
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
                     };
                 }
             }
@@ -167,8 +167,8 @@ public class SymbolNavigationImpl
             {
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = hierarchy!
+                    IsSuccess = true,
+                    SuccessDetails = hierarchy!
                 };
             }
             if (include == TypeInfoInclude.members)
@@ -178,23 +178,23 @@ public class SymbolNavigationImpl
                     : null;
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = members!,
-                    Warning = warning
+                    IsSuccess = true,
+                    SuccessDetails = members!,
+                    WarningDetails = warning
                 };
             }
             if (include == TypeInfoInclude.both)
             {
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = new { Hierarchy = hierarchy, Members = members }
+                    IsSuccess = true,
+                    SuccessDetails = new { Hierarchy = hierarchy, Members = members }
                 };
             }
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled include '{include}'.")
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled include '{include}'.")
             };
         }
         catch (Exception ex)
@@ -202,8 +202,8 @@ public class SymbolNavigationImpl
             _logger.LogError(ex, "GetTypeInfo ({Include}) failed for '{TypeName}'", include, typeName);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTypeInfo")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTypeInfo")
             };
         }
     }

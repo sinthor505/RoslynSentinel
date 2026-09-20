@@ -1,6 +1,6 @@
 // ReadFile -> SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap flagged
 // branches: document == null, startLine/endLine slicing, out-of-range slice, offload threshold).
-// Data is returned as an anonymous object (not a named record) for the non-offload paths. Anonymous
+// SuccessDetails is returned as an anonymous object (not a named record) for the non-offload paths. Anonymous
 // type properties are internal to the declaring assembly, so `dynamic` binding fails cross-assembly
 // here -> use reflection (GetProperty) instead.
 
@@ -65,8 +65,8 @@ public class ReadFileTests
     {
         var result = await _tools.ReadFile(reason: "test message", _documentPath);
 
-        Assert.That(result.Success, Is.True);
-        var data = result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = result.SuccessDetails!;
         Assert.That((string)GetProp(data, "source")!, Does.Contain("line1"));
         Assert.That((string)GetProp(data, "source")!, Does.Contain("line5"));
         Assert.That((int)GetProp(data, "totalLines")!, Is.EqualTo(6));
@@ -79,8 +79,8 @@ public class ReadFileTests
 
         var result = await _tools.ReadFile(reason: "test message", missingPath);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("FileNotFound"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("FileNotFound"));
     }
 
     [Test]
@@ -98,8 +98,8 @@ public class ReadFileTests
         {
             var result = await _tools.ReadFile(reason: "test message", onDiskOnlyPath);
 
-            Assert.That(result.Success, Is.True, result.Error?.Message);
-            Assert.That((string)GetProp(result.Data!, "source")!, Is.EqualTo(content));
+            Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+            Assert.That((string)GetProp(result.SuccessDetails!, "source")!, Is.EqualTo(content));
         }
         finally
         {
@@ -112,8 +112,8 @@ public class ReadFileTests
     {
         var result = await _tools.ReadFile(reason: "test message", _documentPath, startLine: 2, endLine: 3);
 
-        Assert.That(result.Success, Is.True);
-        var data = result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = result.SuccessDetails!;
         Assert.That((string)GetProp(data, "source")!, Does.Contain("line2"));
         Assert.That((string)GetProp(data, "source")!, Does.Contain("line3"));
         Assert.That((string)GetProp(data, "source")!, Does.Not.Contain("line4"));
@@ -126,8 +126,8 @@ public class ReadFileTests
     {
         var result = await _tools.ReadFile(reason: "test message", _documentPath, startLine: 100, endLine: 200);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]
@@ -146,7 +146,7 @@ public class ReadFileTests
 
         var result = await _tools.ReadFile(reason: "test message", bigDocPath);
 
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.LargeResult, Is.Not.Null);
         Assert.That(result.LargeResult!.ResultType, Is.EqualTo("FileSource"));
     }

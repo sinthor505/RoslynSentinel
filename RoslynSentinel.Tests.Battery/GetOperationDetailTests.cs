@@ -82,8 +82,8 @@ public class GetOperationDetailTests
     {
         var result = await _tools.GetOperationDetail(reason: "test message", changeId: "nonexistent-change-id");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]
@@ -98,8 +98,8 @@ public class GetOperationDetailTests
 
         var result = await _tools.GetOperationDetail(reason: "test message", changeId: changeId);
 
-        Assert.That(result.Success, Is.True);
-        var data = (OperationDetailResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (OperationDetailResult)result.SuccessDetails!;
         Assert.That(data.TotalItems, Is.EqualTo(2));
         Assert.That(data.Items, Has.Count.EqualTo(2));
     }
@@ -116,8 +116,8 @@ public class GetOperationDetailTests
 
         var result = await _tools.GetOperationDetail(reason: "test message", changeId, filter: "fail");
 
-        Assert.That(result.Success, Is.True);
-        var data = (OperationDetailResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (OperationDetailResult)result.SuccessDetails!;
         Assert.That(data.TotalItems, Is.EqualTo(1));
         Assert.That(data.Items[0].FilePath, Does.Contain("Bar.cs"));
     }
@@ -134,8 +134,8 @@ public class GetOperationDetailTests
 
         var result = await _tools.GetOperationDetail(reason: "test message", changeId, filter: "file:Foo.cs");
 
-        Assert.That(result.Success, Is.True);
-        var data = (OperationDetailResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (OperationDetailResult)result.SuccessDetails!;
         Assert.That(data.TotalItems, Is.EqualTo(1));
         Assert.That(data.Items[0].FilePath, Does.Contain("Foo.cs"));
     }
@@ -152,15 +152,15 @@ public class GetOperationDetailTests
         });
 
         var firstPage = await _tools.GetOperationDetail(reason: "test message", changeId, maxItems: 2);
-        var firstData = (OperationDetailResult)firstPage.Data!;
+        var firstData = (OperationDetailResult)firstPage.SuccessDetails!;
         Assert.That(firstData.Items, Has.Count.EqualTo(2));
         Assert.That(firstPage.HasMorePages, Is.True);
         Assert.That(firstData.NextOffset, Is.EqualTo(2));
 
         var secondPage = await _tools.GetOperationDetail(reason: "test message", changeId, maxItems: 2, offset: firstData.NextOffset!.Value);
-        var secondData = (OperationDetailResult)secondPage.Data!;
+        var secondData = (OperationDetailResult)secondPage.SuccessDetails!;
 
-        Assert.That(secondPage.Success, Is.True);
+        Assert.That(secondPage.IsSuccess, Is.True);
         Assert.That(secondData.Items, Has.Count.EqualTo(1));
         Assert.That(secondData.Items[0].FilePath, Does.Contain("C.cs"));
         Assert.That(secondPage.HasMorePages, Is.False);
@@ -178,8 +178,8 @@ public class GetOperationDetailTests
 
         var result = await _tools.GetOperationDetail(reason: "test message", changeId, offset: 10);
 
-        Assert.That(result.Success, Is.True);
-        var data = (OperationDetailResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (OperationDetailResult)result.SuccessDetails!;
         Assert.That(data.Items, Is.Empty);
         Assert.That(result.HasMorePages, Is.False);
     }
@@ -195,7 +195,7 @@ public class GetOperationDetailTests
 
         var result = await _tools.GetOperationDetail(reason: "test message", changeId, filter: "bogus");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 }

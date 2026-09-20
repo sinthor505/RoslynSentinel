@@ -327,7 +327,7 @@ public class ConvertToSwitchTests
     {
         if (statusCode == 200)
         {
-            Console.WriteLine(""Success"");
+            Console.WriteLine(""IsSuccess"");
         }
         else if (statusCode == 201)
         {

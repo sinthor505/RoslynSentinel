@@ -92,10 +92,10 @@ public class NamespacePathMismatchTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Test 3 -> Error: DuplicateTypeAtMismatchedPath
+    // Test 3 -> ErrorDetails: DuplicateTypeAtMismatchedPath
     // FileA is in Services\ but declares TestProj.Orders and type Foo.
     // FileB is elsewhere and declares TestProj.Services with the same type Foo.
-    // -> FileA should be an Error with ConflictingFiles pointing to FileB.
+    // -> FileA should be an ErrorDetails with ConflictingFiles pointing to FileB.
     // ─────────────────────────────────────────────────────────────────────────────
     [Test]
     public async Task DuplicateTypeAtMismatchedPath_ProducesError()
@@ -109,7 +109,7 @@ public class NamespacePathMismatchTests
 
         var report = await _engine.FindNamespacePathMismatchesAsync(solution, null);
 
-        Assert.That(report.Errors, Is.Not.Empty, "Expected at least one Error finding");
+        Assert.That(report.Errors, Is.Not.Empty, "Expected at least one ErrorDetails finding");
 
         var error = report.Errors.Find(e => e.Reason == "DuplicateTypeAtMismatchedPath");
         Assert.That(error, Is.Not.Null, "Expected a DuplicateTypeAtMismatchedPath error");

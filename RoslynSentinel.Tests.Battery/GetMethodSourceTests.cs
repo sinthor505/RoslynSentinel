@@ -60,8 +60,8 @@ public class GetMethodSourceTests
     {
         var result = await _tools.GetMethodSource(reason: "test message", _documentPath, "Bar");
 
-        Assert.That(result.Success, Is.True);
-        var data = (MethodSourceResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (MethodSourceResult)result.SuccessDetails!;
         Assert.That(data.Source, Does.Contain("return x + 1;"));
         Assert.That(data.Signature, Does.Contain("Bar"));
         Assert.That(data.Envelope, Is.Not.Null);
@@ -85,8 +85,8 @@ public class GetMethodSourceTests
 
         var result = await _tools.GetMethodSource(reason: "test message", ctorDocPath, "WithCtor");
 
-        Assert.That(result.Success, Is.True);
-        var data = (MethodSourceResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (MethodSourceResult)result.SuccessDetails!;
         Assert.That(data.Source, Does.Contain("public WithCtor(int x)"));
     }
 
@@ -97,8 +97,8 @@ public class GetMethodSourceTests
 
         var result = await _tools.GetMethodSource(reason: "test message", missingPath, "Bar");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("FileNotFound"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("FileNotFound"));
     }
 
     [Test]
@@ -106,8 +106,8 @@ public class GetMethodSourceTests
     {
         var result = await _tools.GetMethodSource(reason: "test message", _documentPath, "NoSuchMethod");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("MethodNotFound"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("MethodNotFound"));
     }
 
     [Test]
@@ -115,8 +115,8 @@ public class GetMethodSourceTests
     {
         var result = await _tools.GetMethodSource(reason: "test message", _documentPath, "bar");
 
-        Assert.That(result.Success, Is.True);
-        var data = (MethodSourceResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (MethodSourceResult)result.SuccessDetails!;
         Assert.That(data.Signature, Does.Contain("Bar"));
     }
 
@@ -137,7 +137,7 @@ public class GetMethodSourceTests
 
         var result = await _tools.GetMethodSource(reason: "test message", bigDocPath, "Huge");
 
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.LargeResult, Is.Not.Null);
         Assert.That(result.LargeResult!.ResultType, Is.EqualTo("MethodSource"));
     }

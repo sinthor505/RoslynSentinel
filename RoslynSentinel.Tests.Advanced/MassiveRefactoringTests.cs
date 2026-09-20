@@ -89,9 +89,9 @@ public class MassiveRefactoringTests
         SetSource($"public class C{id} {{ public void M{id}() {{}} }}", $"C{id}.cs");
         var result = await _advancedRefactoringTools.ExtractMembers(reason: "test message", $"C{id}.cs", $"C{id}", ExtractAsType.@interface, $"IC{id}", autoStage: false);
 
-        // With autoStage:false the tool returns Data = new { Changes = Dictionary<FilePathWrapper, string> }.
-        Assert.That(result.Success, Is.True, result.Error?.Message);
-        var changes = result.Data!.GetType().GetProperty("Changes")!.GetValue(result.Data)
+        // With autoStage:false the tool returns SuccessDetails = new { Changes = Dictionary<FilePathWrapper, string> }.
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        var changes = result.SuccessDetails!.GetType().GetProperty("Changes")!.GetValue(result.SuccessDetails)
             as Dictionary<FilePathWrapper, string>;
         Assert.That(changes, Is.Not.Null.And.Not.Empty);
     }
@@ -115,7 +115,7 @@ public class MassiveRefactoringTests
         var result = await _refactoringTools.RenameSymbol(
             reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
             newName: $"NewM{id}");
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsSuccess, Is.True);
         var json = System.Text.Json.JsonSerializer.Serialize(result);
         Assert.That(json, Contains.Substring($"NewM{id}"));
     }
@@ -132,8 +132,8 @@ public class MassiveRefactoringTests
         var result = await _advancedRefactoringTools.MoveType(reason: "test message", $"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
 
         // Dictionary keys are FilePathWrapper, not string, since the server split.
-        Assert.That(result.Success, Is.True, result.Error?.Message);
-        var data = (Dictionary<FilePathWrapper, string>?)result.Data;
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        var data = (Dictionary<FilePathWrapper, string>?)result.SuccessDetails;
         Assert.That(data?.Count, Is.GreaterThan(1));
     }
 }

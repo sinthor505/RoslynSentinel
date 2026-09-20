@@ -199,7 +199,7 @@ public class Simple {
         var result = await _engine.AnalyzeMethodControlFlowAsync("DoesNotExist.cs", "SomeMethod");
 
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty, "Unknown file should produce an error result");
-        Assert.That(result.Error, Does.Contain("not found"), "Error should mention file not found");
+        Assert.That(result.Error, Does.Contain("not found"), "ErrorDetails should mention file not found");
     }
 }
 

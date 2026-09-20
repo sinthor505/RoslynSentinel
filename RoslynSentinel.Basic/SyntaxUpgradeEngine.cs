@@ -196,7 +196,7 @@ public class SyntaxUpgradeEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// Error: {snippetError}"
+                Message = $"// ErrorDetails: {snippetError}"
             };
         }
 

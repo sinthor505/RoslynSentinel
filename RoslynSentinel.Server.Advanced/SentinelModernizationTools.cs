@@ -76,8 +76,8 @@ public class SentinelModernizationTools
             var result = await _advancedLogicEngine.InvertBooleanLogicAsync(filePath, boolName, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -85,8 +85,8 @@ public class SentinelModernizationTools
             _logger.LogError(ex, "InvertBooleanLogic failed for '{BoolName}' in '{FilePathWrapper}'", boolName, filePath);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InvertBooleanLogic")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InvertBooleanLogic")
             };
         }
     }

@@ -59,8 +59,8 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
-        var data = (TestRunResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        var data = (TestRunResult)result.SuccessDetails!;
         Assert.That(data.RunSucceeded, Is.False);
         Assert.That(data.PassedCount, Is.EqualTo(2));
         Assert.That(data.FailedCount, Is.EqualTo(1));
@@ -78,9 +78,9 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.project, scopeName: "DoesNotExist");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("TestRunFailed"));
-        Assert.That(result.Error!.Message, Does.Contain("DoesNotExist"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("TestRunFailed"));
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("DoesNotExist"));
     }
 
     [Test]
@@ -93,9 +93,9 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.file);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("TestRunFailed"));
-        Assert.That(result.Error!.Message, Does.Contain("scope=file"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("TestRunFailed"));
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("scope=file"));
     }
 
     // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun) ->
@@ -112,8 +112,8 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~AlwaysFails", timeoutSeconds: 120);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
-        var data = (TestRunResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        var data = (TestRunResult)result.SuccessDetails!;
         Assert.That(data.TotalCount, Is.EqualTo(1));
         Assert.That(data.FailedCount, Is.EqualTo(1));
     }
@@ -135,8 +135,8 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~NoSuchTestNameAnywhere", timeoutSeconds: 120);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
-        var data = (TestRunResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        var data = (TestRunResult)result.SuccessDetails!;
         Assert.That(data.TotalCount, Is.EqualTo(0));
         Assert.That(data.Detail, Does.Contain("matched filter"));
     }
@@ -180,8 +180,8 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.skipped, timeoutSeconds: 120);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
-        var data = (TestRunResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        var data = (TestRunResult)result.SuccessDetails!;
         Assert.That(data.FailedCount, Is.EqualTo(6), "FailureSummary/FailedCount reflect the full run regardless of the resultsType filter applied to Results.");
         Assert.That(data.FailureSummary, Is.Not.Empty);
         Assert.That(data.FailureSummary[0].Count, Is.EqualTo(5), "the shared-message group of 5 must sort first (descending by Count).");
@@ -199,8 +199,8 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.failed, timeoutSeconds: 120);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
-        var data = (TestRunResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        var data = (TestRunResult)result.SuccessDetails!;
         Assert.That(data.Results, Is.Not.Empty);
         Assert.That(data.Results, Has.All.Matches<TestCaseResult>(r => r?.Outcome == TestOutcome.Failed));
     }
@@ -216,8 +216,8 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.all, summary: true, timeoutSeconds: 120);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
-        var data = (TestRunResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        var data = (TestRunResult)result.SuccessDetails!;
         Assert.That(data.Results, Is.Empty);
         Assert.That(data.FailedCount, Is.EqualTo(1));
         Assert.That(data.FailureSummary, Is.Not.Empty);
@@ -231,8 +231,8 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.Not.EqualTo("Exception"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.Not.EqualTo("Exception"));
     }
 
     [Test]
@@ -253,8 +253,8 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("TestRunFailed"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("TestRunFailed"));
     }
 
     [Test]
@@ -272,7 +272,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
         var after = Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx");
         var newLeftovers = after.Where(f => !before.Contains(f)).ToList();
         Assert.That(newLeftovers, Is.Empty, "no new roslynsentinel_runtest_*.trx file should remain after RunTest completes.");

@@ -257,7 +257,7 @@ public class TranscriptReplayTests
         try
         {
             using var doc = JsonDocument.Parse(resultText);
-            return doc.RootElement.TryGetProperty("success", out var successProp)
+            return doc.RootElement.TryGetProperty("isSuccess", out var successProp)
                 && successProp.ValueKind == JsonValueKind.False;
         }
         catch (JsonException)

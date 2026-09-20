@@ -28,7 +28,7 @@ public class CodeFlowEngine
                 {
                     Outcome = EditOutcome.DocumentNotFound,
                     FilePath = filePath,
-                    Message = $"// Error: File '{filePath}' not found."
+                    Message = $"// ErrorDetails: File '{filePath}' not found."
                 };
             }
 
@@ -39,7 +39,7 @@ public class CodeFlowEngine
                 {
                     Outcome = EditOutcome.CannotEdit,
                     FilePath = filePath,
-                    Message = $"// Error: Failed to get syntax root for '{filePath}'."
+                    Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
                 };
             }
 
@@ -51,7 +51,7 @@ public class CodeFlowEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = $"// Error: Method '{methodName}' not found or has no body."
+                    Message = $"// ErrorDetails: Method '{methodName}' not found or has no body."
                 };
             }
 
@@ -113,7 +113,7 @@ public class CodeFlowEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// Error: {ex.Message}"
+                Message = $"// ErrorDetails: {ex.Message}"
             };
         }
     }

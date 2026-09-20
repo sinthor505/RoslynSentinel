@@ -80,7 +80,7 @@ public class BlobIntegrityInvariantTests
     /// </summary>
     private void AssertChangeIdIsRedeemable(SentinelCallToolResult<object> result, string toolName)
     {
-        var changeId = (result.Data as AppliedChangeSummary)?.ChangeId;
+        var changeId = (result.SuccessDetails as AppliedChangeSummary)?.ChangeId;
         if (string.IsNullOrEmpty(changeId))
         {
             return;

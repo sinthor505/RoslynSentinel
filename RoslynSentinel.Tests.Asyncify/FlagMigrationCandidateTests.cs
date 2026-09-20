@@ -17,7 +17,7 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   - convert_to_async_bridge strips [MigrationCandidate] automatically.
 ///   - FindMigrationCandidatesAsync returns flagged methods with correct fields.
 ///   - FindMigrationCandidatesAsync pattern filter works correctly.
-///   - Error cases: file not found, method not found.
+///   - ErrorDetails cases: file not found, method not found.
 /// </summary>
 [TestFixture]
 public class FlagMigrationCandidateTests
@@ -59,7 +59,7 @@ namespace Avaal.Service
 {
     public class TripService
     {
-        public System.Data.DataTable GetTrips(int id) => null;
+        public System.SuccessDetails.DataTable GetTrips(int id) => null;
     }
 }", "TripService.cs");
 
@@ -401,7 +401,7 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // Error cases
+    // ErrorDetails cases
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]

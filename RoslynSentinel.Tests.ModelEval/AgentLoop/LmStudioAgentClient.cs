@@ -213,7 +213,7 @@ public sealed class LmStudioAgentClient
                 case "response.failed":
                 case "error":
                     {
-                        _logger.LogWarning("LM Studio streaming error event: {Data}", data);
+                        _logger.LogWarning("LM Studio streaming error event: {SuccessDetails}", data);
                         throw new InvalidOperationException($"LM Studio returned a streaming error event: {data}");
                     }
             }

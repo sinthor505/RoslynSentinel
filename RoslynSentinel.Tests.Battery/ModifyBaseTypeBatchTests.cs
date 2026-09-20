@@ -84,7 +84,7 @@ public class ModifyBaseTypeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
 
         var newContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
         Assert.Multiple(() =>
@@ -114,7 +114,7 @@ public class ModifyBaseTypeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
 
         var firstContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
         var secondContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, SecondFixtureRelativePath));
@@ -146,7 +146,7 @@ public class ModifyBaseTypeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.Success, Is.False);
+        Assert.That(result.IsSuccess, Is.False);
 
         var afterContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
         Assert.That(afterContent, Is.EqualTo(beforeContent));
@@ -173,7 +173,7 @@ public class ModifyBaseTypeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.Success, Is.False);
+        Assert.That(result.IsSuccess, Is.False);
 
         var afterContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
         Assert.That(afterContent, Is.EqualTo(beforeContent));
@@ -198,8 +198,8 @@ public class ModifyBaseTypeBatchTests
             edits: [new BaseTypeEdit { FilePath = FixtureRelativePath, TypeName = "BaseTypeBatchTargetB", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.remove }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.Message, Does.Contain("not both"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("not both"));
     }
 
 
@@ -216,8 +216,8 @@ public class ModifyBaseTypeBatchTests
             reason: "batch test neither supplied",
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.Message, Does.Contain("edits"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("edits"));
     }
 
 
@@ -235,8 +235,8 @@ public class ModifyBaseTypeBatchTests
             edits: [],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.Message, Does.Contain("empty"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("empty"));
     }
 
 
@@ -255,7 +255,7 @@ public class ModifyBaseTypeBatchTests
 
         var result = await tools.ModifyBaseType(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.Message, Does.Contain("20"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("20"));
     }
 }

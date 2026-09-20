@@ -74,9 +74,9 @@ public class ApplyDiffSizeGuardTests
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = fragment });
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
-        Assert.That(result.Error!.Message, Does.Contain("re-submit"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("re-submit"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
     }
 
@@ -103,9 +103,9 @@ public class ApplyDiffSizeGuardTests
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = commentedOut });
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
-        Assert.That(result.Error!.Message, Does.Contain("active code lines"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("active code lines"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
     }
 
@@ -136,15 +136,15 @@ public class ApplyDiffSizeGuardTests
             ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePathWrapper, string> { [targetFile] = fragment },
             validateOnApply: false);
-        Assert.That(rejected.Success, Is.False);
+        Assert.That(rejected.IsSuccess, Is.False);
 
-        var code = ExtractConfirmationCode(rejected.Error!.Message);
+        var code = ExtractConfirmationCode(rejected.ErrorDetails!.Message);
 
         var confirmed = await tools.ApplyDiffWithConfirmationCode(
             ChangesetFormat.files, ProposedChangeAction.confirmationCode,
             confirmationCode: code);
 
-        Assert.That(confirmed.Success, Is.True, confirmed.Error?.Message);
+        Assert.That(confirmed.IsSuccess, Is.True, confirmed.ErrorDetails?.Message);
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(fragment));
     }
 
@@ -160,8 +160,8 @@ public class ApplyDiffSizeGuardTests
             ChangesetFormat.files, ProposedChangeAction.confirmationCode,
             confirmationCode: "not-a-real-code");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]
@@ -174,8 +174,8 @@ public class ApplyDiffSizeGuardTests
 
         var result = await tools.ApplyDiffWithConfirmationCode(ChangesetFormat.files, ProposedChangeAction.confirmationCode);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]
@@ -191,14 +191,14 @@ public class ApplyDiffSizeGuardTests
             ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePathWrapper, string> { [targetFile] = "using System;\n" },
             validateOnApply: false);
-        var code = ExtractConfirmationCode(rejected.Error!.Message);
+        var code = ExtractConfirmationCode(rejected.ErrorDetails!.Message);
 
         var firstReplay = await tools.ApplyDiffWithConfirmationCode(ChangesetFormat.files, ProposedChangeAction.confirmationCode, confirmationCode: code);
-        Assert.That(firstReplay.Success, Is.True, firstReplay.Error?.Message);
+        Assert.That(firstReplay.IsSuccess, Is.True, firstReplay.ErrorDetails?.Message);
 
         var secondReplay = await tools.ApplyDiffWithConfirmationCode(ChangesetFormat.files, ProposedChangeAction.confirmationCode, confirmationCode: code);
-        Assert.That(secondReplay.Success, Is.False);
-        Assert.That(secondReplay.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(secondReplay.IsSuccess, Is.False);
+        Assert.That(secondReplay.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
     */
 
@@ -221,7 +221,7 @@ public class ApplyDiffSizeGuardTests
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = lightlyModified });
 
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsSuccess, Is.True);
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(lightlyModified));
     }
 
@@ -244,7 +244,7 @@ public class ApplyDiffSizeGuardTests
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [newFilePath] = content });
 
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsSuccess, Is.True);
         Assert.That(await File.ReadAllTextAsync(newFilePath), Is.EqualTo(content));
     }
 

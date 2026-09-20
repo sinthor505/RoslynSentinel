@@ -93,7 +93,7 @@ public class ThreadSafetyEngineTests
 
         Assert.That(result.UpdatedText, Does.Contain("lock"), "Method body should be wrapped in a lock statement");
         Assert.That(result.UpdatedText, Does.Contain("_lock"), "A lock object field should be added");
-        Assert.That(result.UpdatedText!, Does.Not.StartWith("// Error:"), "Should not return an error comment");
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ErrorDetails:"), "Should not return an error comment");
     }
 
     [Test]
@@ -105,7 +105,7 @@ public class ThreadSafetyEngineTests
 
         var result = await _engine.MakeMethodThreadSafeAsync("DoesNotExist.cs", "Inc");
 
-        Assert.That(result.Message, Does.StartWith("// Error:"), "Unknown file should return error comment");
+        Assert.That(result.Message, Does.StartWith("// ErrorDetails:"), "Unknown file should return error comment");
     }
 
     [Test]
@@ -117,8 +117,8 @@ public class ThreadSafetyEngineTests
 
         var result = await _engine.MakeMethodThreadSafeAsync("Counter.cs", "NonExistentMethod");
 
-        Assert.That(result.Message, Does.StartWith("// Error:"), "Unknown method should return error comment");
-        Assert.That(result.Message, Does.Contain("NonExistentMethod"), "Error should mention the missing method name");
+        Assert.That(result.Message, Does.StartWith("// ErrorDetails:"), "Unknown method should return error comment");
+        Assert.That(result.Message, Does.Contain("NonExistentMethod"), "ErrorDetails should mention the missing method name");
     }
 }
 

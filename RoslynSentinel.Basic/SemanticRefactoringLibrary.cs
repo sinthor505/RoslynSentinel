@@ -189,7 +189,7 @@ public class SemanticRefactoringLibrary
             return new DocumentEditResult()
             {
                 Outcome = EditOutcome.DocumentNotFound,
-                Message = "// Error: File not found in the loaded solution.",
+                Message = "// ErrorDetails: File not found in the loaded solution.",
                 FilePath = filePath
             };
         }
@@ -204,7 +204,7 @@ public class SemanticRefactoringLibrary
             {
                 Outcome = EditOutcome.TargetNotFound,
                 UpdatedText = root?.ToFullString() ?? "",
-                Message = "// Error: Class or property not found.",
+                Message = "// ErrorDetails: Class or property not found.",
                 FilePath = filePath
             };
         }
@@ -236,7 +236,7 @@ public class SemanticRefactoringLibrary
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// Error: File not found in the loaded solution.", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// ErrorDetails: File not found in the loaded solution.", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -246,7 +246,7 @@ public class SemanticRefactoringLibrary
         var nodes = root?.DescendantNodes(span).Where(n => n is StatementSyntax && n.Parent is BlockSyntax).Cast<StatementSyntax>().ToList();
         if (nodes == null || nodes.Count == 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// Error: No statements found in the specified range.", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// ErrorDetails: No statements found in the specified range.", FilePath = filePath };
         }
 
         var firstNode = nodes[0];
@@ -284,7 +284,7 @@ public class SemanticRefactoringLibrary
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// Error: File not found in the loaded solution.", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// ErrorDetails: File not found in the loaded solution.", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -317,7 +317,7 @@ public class SemanticRefactoringLibrary
 
             if (nodes.Count == 0)
             {
-                return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// Error: No statements found at the snippet location.", FilePath = filePath };
+                return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// ErrorDetails: No statements found at the snippet location.", FilePath = filePath };
             }
 
             var firstNode = nodes[0];

@@ -190,7 +190,7 @@ public class Target {}";
 
         Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return __error__ key");
         var errorContent = result["__error__"];
-        Assert.That(errorContent, Does.Contain("NonExistent"), "Error should mention the missing class");
+        Assert.That(errorContent, Does.Contain("NonExistent"), "ErrorDetails should mention the missing class");
     }
 
     [Test]
@@ -276,7 +276,7 @@ public class Recipient { public int Existing; }";
 
         // Regression: was silently returning original content with no indication of failure
         Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Should return error comment when method not found");
-        Assert.That(result.Message!, Does.Contain("NoSuchMethod"), "Error should mention the method name");
+        Assert.That(result.Message!, Does.Contain("NoSuchMethod"), "ErrorDetails should mention the method name");
     }
 
     [Test]
@@ -287,7 +287,7 @@ public class Recipient { public int Existing; }";
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "GetValue");
 
         Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Zero-param method cannot become indexer");
-        Assert.That(result.Message!, Does.Contain("GetValue"), "Error should name the method");
+        Assert.That(result.Message!, Does.Contain("GetValue"), "ErrorDetails should name the method");
     }
 
     [Test]
@@ -298,7 +298,7 @@ public class Recipient { public int Existing; }";
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
         Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Two-param method cannot become indexer");
-        Assert.That(result.Message!, Does.Contain("Get"), "Error should name the method");
+        Assert.That(result.Message!, Does.Contain("Get"), "ErrorDetails should name the method");
     }
 
     [Test]
@@ -309,7 +309,7 @@ public class Recipient { public int Existing; }";
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
         Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Static method cannot become indexer");
-        Assert.That(result.Message!, Does.Contain("static"), "Error should mention static");
+        Assert.That(result.Message!, Does.Contain("static"), "ErrorDetails should mention static");
     }
 
     [Test]

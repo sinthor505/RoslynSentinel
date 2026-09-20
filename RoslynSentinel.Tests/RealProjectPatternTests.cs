@@ -11,14 +11,14 @@ namespace RoslynSentinel.Tests;
 /// across 4 services (InventoryService, ShoppingService, RecipeService, MealPlanningService).
 ///
 /// Files targeted:
-///   1.  InventoryService/Data/InventoryRepository.cs
+///   1.  InventoryService/SuccessDetails/InventoryRepository.cs
 ///   2.  InventoryService/Services/LowStockMonitorWorker.cs      [duplicate using]
 ///   3.  InventoryService/Services/InventoryItemService.cs        [TimeSpan constants]
-///   4.  ShoppingService/Data/ShoppingRepository.Lists.cs
+///   4.  ShoppingService/SuccessDetails/ShoppingRepository.Lists.cs
 ///   5.  ShoppingService/Services/ShoppingOptimizationService.cs  [foreach, switch]
-///   6.  RecipeService/Data/RecipeRepository.cs
+///   6.  RecipeService/SuccessDetails/RecipeRepository.cs
 ///   7.  RecipeService/Services/AllergenDetectionService.cs       [foreach + add]
-///   8.  MealPlanningService/Data/MealPlanningRepository.cs
+///   8.  MealPlanningService/SuccessDetails/MealPlanningRepository.cs
 ///   9.  MealPlanningService/Services/MealSuggestionService.cs    [internal static class]
 ///  10.  MealPlanningService/Services/NutritionSummaryService.cs  [sealed+init props, string.Format]
 ///
@@ -54,7 +54,7 @@ public class RealProjectPatternTests
 
     // ══════════════════════════════════════════════════════════════════════════
     // 1. SortAndDeduplicateUsingsAsync -> Pattern from LowStockMonitorWorker.cs
-    //    Real bug: `using ExpressRecipe.InventoryService.Data;` appears TWICE
+    //    Real bug: `using ExpressRecipe.InventoryService.SuccessDetails;` appears TWICE
     //    at lines 1–2. The standard sort_usings only sorts, remove_unused_usings
     //    won't remove a "used" duplicate. SortAndDeduplicateUsingsAsync fixes both.
     // ══════════════════════════════════════════════════════════════════════════
@@ -64,8 +64,8 @@ public class RealProjectPatternTests
     public async Task SortAndDeduplicate_DuplicateUsingFromLowStockWorker_RemovesDuplicate()
     {
         // Exact pattern from LowStockMonitorWorker.cs -> two identical using directives
-        const string source = @"using ExpressRecipe.InventoryService.Data;
-using ExpressRecipe.InventoryService.Data;
+        const string source = @"using ExpressRecipe.InventoryService.SuccessDetails;
+using ExpressRecipe.InventoryService.SuccessDetails;
 using ExpressRecipe.InventoryService.Models;
 using ExpressRecipe.InventoryService.Logging;
 using System.Net.Http.Json;
@@ -79,15 +79,15 @@ public class LowStockMonitorWorker { }";
         var result = await _engine.SortAndDeduplicateUsingsAsync("LowStockMonitorWorker.cs");
 
         Assert.That(result.RemovedDuplicates, Is.EqualTo(1),
-            "Exactly 1 duplicate should be removed (Data using appears twice)");
+            "Exactly 1 duplicate should be removed (SuccessDetails using appears twice)");
         Assert.That(result.OriginalCount, Is.EqualTo(5),
             "Original had 5 using directives (including the duplicate)");
-        // Verify Data namespace appears exactly once in output
+        // Verify SuccessDetails namespace appears exactly once in output
         var dataCount = result.UpdatedContent
             .Split('\n')
-            .Count(l => l.TrimStart().StartsWith("using ExpressRecipe.InventoryService.Data;"));
+            .Count(l => l.TrimStart().StartsWith("using ExpressRecipe.InventoryService.SuccessDetails;"));
         Assert.That(dataCount, Is.EqualTo(1),
-            "After dedup, Data namespace must appear exactly once");
+            "After dedup, SuccessDetails namespace must appear exactly once");
     }
 
     [Test]
@@ -95,7 +95,7 @@ public class LowStockMonitorWorker { }";
     public async Task SortAndDeduplicate_SystemUsingsFirstPolicy_ExpressRecipePattern()
     {
         // Mixed ordering from ExpressRecipe service pattern
-        const string source = @"using ExpressRecipe.InventoryService.Data;
+        const string source = @"using ExpressRecipe.InventoryService.SuccessDetails;
 using ExpressRecipe.InventoryService.Models;
 using System.Net.Http.Json;
 using System.Collections.Generic;
@@ -329,7 +329,7 @@ public class Service
         Assert.That(result.Success, Is.False,
             "Must fail for non-existent field");
         Assert.That(result.Error, Does.Contain("NonExistentField"),
-            "Error must reference the missing field name");
+            "ErrorDetails must reference the missing field name");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -683,7 +683,7 @@ public class C { }";
     public async Task SortAndDeduplicate_ThreeNamespaceGroups_SortedSystemFirst()
     {
         // Common pattern: ExpressRecipe services have all 3 groups
-        const string source = @"using ExpressRecipe.RecipeService.Data;
+        const string source = @"using ExpressRecipe.RecipeService.SuccessDetails;
 using Microsoft.Extensions.Logging;
 using System.Threading;
 using System.Collections.Generic;
@@ -716,7 +716,7 @@ namespace Test; public class C { }";
     public async Task GenerateToStringSafe_PartialClass_HandledGracefullyOrSucceeds()
     {
         const string source = @"
-namespace ExpressRecipe.InventoryService.Data;
+namespace ExpressRecipe.InventoryService.SuccessDetails;
 public partial class InventoryRepository
 {
     public string ConnectionString { get; set; }

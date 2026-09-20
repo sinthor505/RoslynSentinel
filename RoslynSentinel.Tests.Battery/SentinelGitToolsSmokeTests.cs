@@ -203,9 +203,9 @@ public class SentinelGitToolsSmokeTests
         var result = await _gitTools.Git(reason: "test message", GitOperation.commit, message: "should be rejected", repoPath: _repoDir);
 
         Assert.That(result, Is.Not.Null);
-        // The repoPath/mutating-op guard returns an anonymous { Success, Error } object, not a
+        // The repoPath/mutating-op guard returns an anonymous { IsSuccess, ErrorDetails } object, not a
         // GitStatusResult - read it via reflection rather than assuming a concrete type.
-        var successProperty = result.GetType().GetProperty("Success");
+        var successProperty = result.GetType().GetProperty("IsSuccess");
         Assert.That(successProperty, Is.Not.Null);
         Assert.That(successProperty!.GetValue(result), Is.EqualTo(false),
             "repoPath must only be accepted for status/log/diff/show - mutating operations should stay scoped to the loaded solution.");

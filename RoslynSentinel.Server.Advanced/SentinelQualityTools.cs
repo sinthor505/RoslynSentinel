@@ -107,8 +107,8 @@ public class SentinelQualityTools
             var result = await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -116,8 +116,8 @@ public class SentinelQualityTools
             _logger.LogError(ex, "GetTestCoverageMap failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTestCoverageMap")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTestCoverageMap")
             };
         }
     }
@@ -139,8 +139,8 @@ public class SentinelQualityTools
             var result = await _testingEngine.CalculateComplexityAsync(filePath, methodName, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -148,8 +148,8 @@ public class SentinelQualityTools
             _logger.LogError(ex, "GetMethodComplexity failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodComplexity")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodComplexity")
             };
         }
     }
@@ -181,8 +181,8 @@ public class SentinelQualityTools
             var result = await _msToolAugmentEngine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -190,8 +190,8 @@ public class SentinelQualityTools
             _logger.LogError(ex, "AnalyzeForeachForLinqConversion failed in '{File}'", filePath);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeForeachForLinqConversion")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeForeachForLinqConversion")
             };
         }
     }
@@ -224,8 +224,8 @@ public class SentinelQualityTools
             var result = await _msToolAugmentEngine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -233,8 +233,8 @@ public class SentinelQualityTools
             _logger.LogError(ex, "AnalyzeSwitchForPatternConversion failed in '{File}'", filePath);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeSwitchForPatternConversion")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeSwitchForPatternConversion")
             };
         }
     }

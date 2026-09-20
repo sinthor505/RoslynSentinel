@@ -443,7 +443,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             // _workspaceLoadErrors populated but returned normally, so a bad path silently reported
             // success with an empty CurrentSolution. Surface it as a real failure instead -> the
             // LoadSolution tool wrapper's catch block already turns a thrown ToolException into a
-            // correct Success=false SentinelCallToolResult.
+            // correct IsSuccess=false SentinelCallToolResult.
             if (CurrentSolution == null || CurrentSolution.ProjectIds.Count == 0)
             {
                 var detail = _workspaceLoadErrors.Count > 0
@@ -855,7 +855,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {
-                _logger.LogError(ex, "Error refreshing workspace.");
+                _logger.LogError(ex, "ErrorDetails refreshing workspace.");
             }
         }
         finally
@@ -1290,7 +1290,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 if (preImage == newContent)
                 {
                     _logger.LogWarning("Skipping no-op write for {FilePathWrapper}: proposed content is identical to existing content.", filePath);
-                    Debug.WriteLine($"[Warning] Skipping no-op write for {filePath}: proposed content is identical to existing content.");
+                    Debug.WriteLine($"[WarningDetails] Skipping no-op write for {filePath}: proposed content is identical to existing content.");
                     succeeded.Add(filePath);
                     noOp.Add(filePath);
                     continue;
@@ -1407,7 +1407,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             // per-file write loop above. If some files failed after others already succeeded,
             // restore the succeeded files to their pre-images so the change doesn't land
             // half-applied. Best-effort: a rollback write failure is logged, not thrown -> the
-            // caller already sees Success=false and can inspect Summary/FailedFiles.
+            // caller already sees IsSuccess=false and can inspect Summary/FailedFiles.
             var rolledBack = new List<string>();
             if (rollbackOnPartialFailure && failed.Count > 0 && succeeded.Count > 0)
             {

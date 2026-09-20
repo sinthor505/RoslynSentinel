@@ -93,8 +93,8 @@ public class UndoLastApplyTests
     {
         var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test message", "nonexistent-change-id");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("NoOperationBlobFound"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("NoOperationBlobFound"));
     }
 
     [Test]
@@ -108,8 +108,8 @@ public class UndoLastApplyTests
 
         var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test message", changeId);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("NoReversibleItems"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("NoReversibleItems"));
     }
 
     [Test]
@@ -123,8 +123,8 @@ public class UndoLastApplyTests
 
         var result = await _fakeWorkspaceTools.UndoLastApply(reason: "test message", changeId);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo("NoReversibleItems"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("NoReversibleItems"));
     }
 
     [Test]
@@ -142,9 +142,9 @@ public class UndoLastApplyTests
         // revertChanges ends up empty (item skipped as outside solution root), so
         // ApplyProposedChangesAsync is never called -> reaches the tool's success path with 0
         // reverted files and a recorded failure, entirely on the fake.
-        Assert.That(result.Success, Is.True);
-        Assert.That((string)result.Data!, Does.Contain("Reverted 0 files"));
-        Assert.That((string)result.Data!, Does.Contain("outside solution root, skipped"));
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That((string)result.SuccessDetails!, Does.Contain("Reverted 0 files"));
+        Assert.That((string)result.SuccessDetails!, Does.Contain("outside solution root, skipped"));
     }
 
     [Test]
@@ -189,8 +189,8 @@ public class UndoLastApplyTests
 
         var result = await workspaceTools.UndoLastApply(reason: "test message", changeId: changeId);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That((string)result.Data!, Does.Contain("Reverted 1 files"));
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That((string)result.SuccessDetails!, Does.Contain("Reverted 1 files"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent));
     }
     // Added by InsertMemberAfter (expected - used for diagnostics)
@@ -235,10 +235,10 @@ public class UndoLastApplyTests
 
         var result = await workspaceTools.UndoLastApply(reason: "test message", changeId: changeId);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That((string)result.Data!, Does.Contain("Reverted 0 files"));
-        Assert.That((string)result.Data!, Does.Contain("already matched pre-apply state"));
-        Assert.That((string)result.Data!, Does.Contain(targetFile));
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That((string)result.SuccessDetails!, Does.Contain("Reverted 0 files"));
+        Assert.That((string)result.SuccessDetails!, Does.Contain("already matched pre-apply state"));
+        Assert.That((string)result.SuccessDetails!, Does.Contain(targetFile));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(currentContent));
     }
 
@@ -273,15 +273,15 @@ public class UndoLastApplyTests
         var newPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Widget.cs");
 
         var renameResult = await structuralTools.SyncTypeAndFilename(reason: "test message", oldPath);
-        Assert.That(renameResult.Success, Is.True, $"Expected rename to succeed; error: {renameResult.Error?.Message}");
-        var changeId = ((AppliedChangeSummary)renameResult.Data!).ChangeId;
+        Assert.That(renameResult.IsSuccess, Is.True, $"Expected rename to succeed; error: {renameResult.ErrorDetails?.Message}");
+        var changeId = ((AppliedChangeSummary)renameResult.SuccessDetails!).ChangeId;
 
         Assert.That(File.Exists(oldPath), Is.False, "Old file should be gone after the rename.");
         Assert.That(File.Exists(newPath), Is.True, "New file should exist after the rename.");
 
         var undoResult = await workspaceTools.UndoLastApply(reason: "test message", changeId: changeId!);
 
-        Assert.That(undoResult.Success, Is.True, $"Expected undo to succeed; error: {undoResult.Error?.Message}");
+        Assert.That(undoResult.IsSuccess, Is.True, $"Expected undo to succeed; error: {undoResult.ErrorDetails?.Message}");
         Assert.That(File.Exists(oldPath), Is.True, "Old file should be restored by UndoLastApply.");
         Assert.That(await File.ReadAllTextAsync(oldPath), Is.EqualTo(widgetSource));
     }

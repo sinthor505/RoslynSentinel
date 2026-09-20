@@ -73,8 +73,8 @@ public class RefactoringSignatureImpl
         {
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, resolution.Error!.Message)
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.Exception, resolution.Error!.Message)
             };
         }
 
@@ -85,8 +85,8 @@ public class RefactoringSignatureImpl
         {
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, result.Error)
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.Exception, result.Error)
             };
         }
 
@@ -94,8 +94,8 @@ public class RefactoringSignatureImpl
         {
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.Exception,
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.Exception,
                     $"RenameSymbol produced no file changes for '{result.OldName}' -> '{result.NewName}'.")
             };
         }
@@ -106,16 +106,16 @@ public class RefactoringSignatureImpl
             "RenameSymbol", dryRun, returnDiff, cancellationToken: cancellationToken);
 
         if (apply.Error is not null)
-            return new SentinelCallToolResult<object> { Success = false, Error = apply.Error };
+            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorDetails = apply.Error };
 
         // Deliberately not wired into ForPossiblyLargeDataAsync/MemberChangedContentResult: this
-        // already returns rich custom Data (oldName/newName/residualMentions/updatedHandle) instead
+        // already returns rich custom SuccessDetails (oldName/newName/residualMentions/updatedHandle) instead
         // of a bare AppliedChangeSummary, and newName is caller-supplied verbatim -> there is no
         // separate "new content" fragment the offload mechanism would add value for.
         return new SentinelCallToolResult<object>
         {
-            Success = true,
-            Data = new
+            IsSuccess = true,
+            SuccessDetails = new
             {
                 changeId = apply.ChangeId,
                 dryRun = apply.DryRun,
@@ -162,28 +162,28 @@ public class RefactoringSignatureImpl
             {
                 var (outcome, message, parameters) = await _refactoringEngine.GetMethodParametersAsync(filePathResolved, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit or EditOutcome.TargetNotFound)
-                    return new SentinelCallToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"MethodSignature: {message}") };
-                return new SentinelCallToolResult<object>() { Success = true, Data = new { Parameters = parameters } };
+                    return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.Exception, $"MethodSignature: {message}") };
+                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new { Parameters = parameters } };
             }
 
             if (string.IsNullOrEmpty(paramName))
             {
-                return new SentinelCallToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: paramName is required for operation '{operation}'.") };
+                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: paramName is required for operation '{operation}'.") };
             }
 
             if (operation == AddRemoveViewAction.add && string.IsNullOrEmpty(paramType))
             {
-                return new SentinelCallToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "MethodSignature: paramType is required for operation 'add'.") };
+                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "MethodSignature: paramType is required for operation 'add'.") };
             }
 
             if (nullDefault && defaultValue != null)
             {
-                return new SentinelCallToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "MethodSignature: nullDefault and defaultValue are mutually exclusive - pass only one.") };
+                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "MethodSignature: nullDefault and defaultValue are mutually exclusive - pass only one.") };
             }
 
             if (nullDefault && operation != AddRemoveViewAction.add)
             {
-                return new SentinelCallToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: nullDefault is only valid for operation 'add', not '{operation}'.") };
+                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: nullDefault is only valid for operation 'add', not '{operation}'.") };
             }
 
             DocumentEditResult updated;
@@ -200,7 +200,7 @@ public class RefactoringSignatureImpl
                 updated = await _refactoringEngine.RemoveMethodParameterAsync(filePathResolved, methodName, paramName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (updated.Outcome == EditOutcome.CannotRemove)
                 {
-                    return new SentinelCallToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: {updated.Message}") };
+                    return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: {updated.Message}") };
                 }
 
                 if (RefactoringToolHelpers.RequireUpdatedText(updated, "MethodSignature", filePathResolved) is { } removeGuardResult)
@@ -210,7 +210,7 @@ public class RefactoringSignatureImpl
 
             if (!autoStage)
             {
-                return new SentinelCallToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = updated.ToJsonSummary() };
             }
 
             var description = operation == AddRemoveViewAction.add
@@ -218,7 +218,7 @@ public class RefactoringSignatureImpl
                 : $"Removed parameter '{paramName}' from '{methodName}' in {Path.GetFileName(filePathResolved)}, updating {changes.Count - 1} call site(s).";
             var apply = await ValidateAndApplyAsync(changes, description, "MethodSignature", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
-                return new SentinelCallToolResult<object> { Success = false, Error = apply.Error };
+                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorDetails = apply.Error };
 
             var changedContent = operation == AddRemoveViewAction.add ? $"{paramType} {paramName}" : "";
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
@@ -228,12 +228,12 @@ public class RefactoringSignatureImpl
                     ChangedContent = changedContent
                 },
                 _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                workspaceVersion: _workspaceManager.WorkspaceVersion);
+                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "MethodSignature failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePathResolved);
-            return new SentinelCallToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MethodSignature") };
+            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MethodSignature") };
         }
     }
 
@@ -256,7 +256,7 @@ public class RefactoringSignatureImpl
             var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePathResolved, targetName, accessibility, contextSnippet, lineBefore, lineAfter);
             if (!autoStage)
             {
-                return new SentinelCallToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = updated.ToJsonSummary() };
             }
 
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ChangeAccessibility", filePathResolved) is { } guardResult)
@@ -271,16 +271,16 @@ public class RefactoringSignatureImpl
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibilityKeyword}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
-                return new SentinelCallToolResult<object> { Success = false, Error = apply.Error };
+                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorDetails = apply.Error };
             // No ChangedContent here: the only "new" text is the accessibility keyword itself,
             // which the caller already passed in verbatim -> echoing it back adds nothing the
             // caller doesn't already have, unlike a reconstructed multi-part snippet.
-            return new SentinelCallToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Changed accessibility of '{targetName}' to '{accessibilityKeyword}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Changed accessibility of '{targetName}' to '{accessibilityKeyword}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ChangeAccessibility failed for '{TargetName}' in '{FilePathWrapper}'", targetName, filePathResolved);
-            return new SentinelCallToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ChangeAccessibility") };
+            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ChangeAccessibility") };
         }
     }
 
@@ -307,18 +307,18 @@ public class RefactoringSignatureImpl
             {
                 var (outcome, message, parameters) = await _refactoringEngine.GetConstructorParametersAsync(filePath: filePathResolved, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
-                    return new SentinelCallToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ConstructorParameter: {message}") };
-                return new SentinelCallToolResult<object>() { Success = true, Data = new { Parameters = parameters } };
+                    return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ConstructorParameter: {message}") };
+                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new { Parameters = parameters } };
             }
 
             if (string.IsNullOrEmpty(paramName))
             {
-                return new SentinelCallToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"ConstructorParameter: paramName is required for operation '{operation}'.") };
+                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"ConstructorParameter: paramName is required for operation '{operation}'.") };
             }
 
             if (operation == AddRemoveViewAction.add && string.IsNullOrEmpty(paramType))
             {
-                return new SentinelCallToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "ConstructorParameter: paramType is required for operation 'add'.") };
+                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ConstructorParameter: paramType is required for operation 'add'.") };
             }
 
             DocumentEditResult updated;
@@ -345,7 +345,7 @@ public class RefactoringSignatureImpl
 
             if (!autoStage)
             {
-                return new SentinelCallToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = updated.ToJsonSummary() };
             }
 
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ConstructorParameter", filePathResolved) is { } guardResult)
@@ -359,7 +359,7 @@ public class RefactoringSignatureImpl
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, description, "ConstructorParameter", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
-                return new SentinelCallToolResult<object> { Success = false, Error = apply.Error };
+                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorDetails = apply.Error };
 
             // Added-parameter text is reconstructed here (paramType/paramName are already known)
             // rather than extracted from AddConstructorParameterAsync's internal formatting -> same
@@ -372,12 +372,12 @@ public class RefactoringSignatureImpl
                     ChangedContent = changedContent
                 },
                 _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
-                workspaceVersion: _workspaceManager.WorkspaceVersion);
+                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ConstructorParameter failed for '{ClassName}' in '{FilePathWrapper}'", className, filePathResolved);
-            return new SentinelCallToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ConstructorParameter") };
+            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ConstructorParameter") };
         }
     }
 }

@@ -343,7 +343,7 @@ public class SentinelDocumentationTools
     }
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
-    [Description("Reads, writes, appends, or lists project doc files under docs/ (or docs/current/ if it exists). A bare filename or wrong extension falls back to a basename search; if that substitutes a different file than requested, the result's Warning field names both.")]
+    [Description("Reads, writes, appends, or lists project doc files under docs/ (or docs/current/ if it exists). A bare filename or wrong extension falls back to a basename search; if that substitutes a different file than requested, the result's WarningDetails field names both.")]
     public object ProjectDoc(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("read, write, append (completed_work only), or list.")]

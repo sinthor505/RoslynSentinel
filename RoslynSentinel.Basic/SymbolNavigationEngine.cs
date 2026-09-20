@@ -146,7 +146,7 @@ public class SymbolNavigationEngine
     /// can be passed directly to inspect_symbol, find_references, get_call_graph, rename_symbol,
     /// and all other filePath-gated tools -> eliminating the search_solution_text bootstrap step.
     ///
-    /// symbolName: simple or fully-qualified name (e.g. "GetById" or "Acme.Data.Repo.GetById").
+    /// symbolName: simple or fully-qualified name (e.g. "GetById" or "Acme.SuccessDetails.Repo.GetById").
     /// symbolKind: optional filter -> "type", "method", "property", "field", "event", or "any" (default).
     /// projectName: optional -> restricts the search to a single project.
     /// exactMatch: true (default) for exact name match; false for prefix/contains (discovery mode).
@@ -1815,7 +1815,7 @@ public class SymbolNavigationEngine
             ? $"method: {enclosingMethod.Identifier.Text}"
             : "unknown scope";
 
-        // Data flow analysis on the enclosing method body
+        // SuccessDetails flow analysis on the enclosing method body
         bool definitelyAssigned = false, alwaysAssigned = false, capturedInClosure = false;
         if (enclosingMethod?.Body != null)
         {

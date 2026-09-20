@@ -95,12 +95,12 @@ public sealed record LocatedSymbolInfo(
 /// Named shape mirroring the actual <c>SentinelCallToolResult&lt;object&gt;</c> envelope
 /// <see cref="SymbolNavigationTools.LocateSymbol"/> returns on its primary (match-found) success path
 /// - StructuredContent is populated from the whole method return value, not just its inner
-/// <c>Data</c>, since LocateSymbol (unlike McpServerStatus) returns
+/// <c>SuccessDetails</c>, since LocateSymbol (unlike McpServerStatus) returns
 /// <c>Task&lt;SentinelCallToolResult&lt;object&gt;&gt;</c> rather than a bare object. Used only as
 /// <c>OutputSchemaType</c> so the tool can advertise a real MCP <c>outputSchema</c>/
 /// <c>StructuredContent</c> shape (2026-07-28 protocol) without changing the method's actual return
 /// type. Primary path only (the not-found and exception error paths return a different, error-shaped
-/// envelope with no Data) - see proposal_structuredcontent_rollout.md.
+/// envelope with no SuccessDetails) - see proposal_structuredcontent_rollout.md.
 /// </summary>
 public sealed record LocateSymbolResult(
     bool Success,

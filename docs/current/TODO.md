@@ -4,6 +4,25 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `Member`'s three divergent declaration-kind dispatch tables — proposal only, not implemented
+
+**Found:** 2026-09-20, surfaced while root-causing the third `Member(remove)` "false not found"
+incident (`blockers/resolved/blocking_error_member_remove_false_not_found.md`). Full proposal:
+[proposal_unify_member_lookup_paths.md](proposal_unify_member_lookup_paths.md).
+
+**What:** `GetMemberName` (`RefactoringEngine.cs:5292-5314`), `GetContainerMembersAsync`'s inline
+switch (`RefactoringEngine.cs:5570-5578`), and `FindImplementationsForMemberAsync`'s dispatch
+(`SymbolNavigationEngine.cs:1634-1641`) each independently enumerate which
+`MemberDeclarationSyntax` kinds they recognize, and all three currently disagree with each other
+(different kind sets, different fallback behavior for an unrecognized kind). `e120b68` fixed one
+gap in one of the three (fields, in the third table); nothing stops the same shape of bug
+recurring in a kind/table combination not yet hit by a live repro.
+
+**Suggested approach:** extract one shared `DescribeMemberDeclaration`/`GetDeclaredSymbolForMember`
+helper into `RefactoringToolHelpers.cs` and migrate all three call sites onto it — see the proposal
+doc for the exact signature, open questions (should the shared default throw or return null?), and
+regression-test plan. Not started; a refactor, not a quick patch.
+
 ## `Member(replace)` sub-findings left open by the blank-line/newline fix (2026-09-18)
 
 Split out of `blocking_error_member_replace_strips_blank_line_between_adjacent_members.md` when that

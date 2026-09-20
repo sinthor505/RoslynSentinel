@@ -396,7 +396,7 @@ public class SwitchConversionAdvancedTests
         var result = await _engine.ConvertSwitchToPatternSafeAsync("Test.cs", "switch (code)");
 
         Assert.That(result.Success, Is.True,
-            $"Return-per-case switch should convert successfully. Error: {result.Error}");
+            $"Return-per-case switch should convert successfully. ErrorDetails: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("return"),
             "Converted output must contain a return statement");
         Assert.That(result.UpdatedContent, Does.Contain("switch"),
@@ -421,7 +421,7 @@ public class SwitchConversionAdvancedTests
         Assert.That(result.Success, Is.False,
             "File absent from workspace must cause conversion to fail");
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
-            "Error message must explain the failure cause");
+            "ErrorDetails message must explain the failure cause");
     }
 
     [Test]
@@ -467,6 +467,6 @@ public class SwitchConversionAdvancedTests
             "Known limitation: throw-only switch cannot be converted to switch expression by this tool version");
         Assert.That(conversion.Error, Does.Contain("Could not determine replacement form")
                                           .Or.Contain("Manual conversion required"),
-            "Error message must be explicit - users need to know WHY the conversion was rejected");
+            "ErrorDetails message must be explicit - users need to know WHY the conversion was rejected");
     }
 }

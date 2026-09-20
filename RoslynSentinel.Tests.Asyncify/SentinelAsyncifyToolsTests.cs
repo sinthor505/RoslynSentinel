@@ -134,9 +134,9 @@ public class SentinelAsyncifyToolsTests
     {
         var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -150,9 +150,9 @@ public class SentinelAsyncifyToolsTests
 
         var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message");
 
-        Assert.That(result.Success, Is.True);
-        var findings = result.Data as List<MigrationCandidateFinding>;
-        Assert.That(findings, Is.Not.Null, "Data should be List<MigrationCandidateFinding> for summarize=false.");
+        Assert.That(result.IsSuccess, Is.True);
+        var findings = result.SuccessDetails as List<MigrationCandidateFinding>;
+        Assert.That(findings, Is.Not.Null, "SuccessDetails should be List<MigrationCandidateFinding> for summarize=false.");
         Assert.That(findings!.Any(f => f.MethodName == "loadList"), Is.True,
             "loadList should be found as a migration candidate.");
         var finding = findings!.First(f => f.MethodName == "loadList");
@@ -172,9 +172,9 @@ public class SentinelAsyncifyToolsTests
 
         var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", summarize: true);
 
-        Assert.That(result.Success, Is.True);
-        var summary = result.Data as MigrationScanSummary;
-        Assert.That(summary, Is.Not.Null, "Data should be MigrationScanSummary for summarize=true.");
+        Assert.That(result.IsSuccess, Is.True);
+        var summary = result.SuccessDetails as MigrationScanSummary;
+        Assert.That(summary, Is.Not.Null, "SuccessDetails should be MigrationScanSummary for summarize=true.");
         Assert.That(summary!.TotalCandidates, Is.GreaterThanOrEqualTo(1));
 
         var expectedBuckets = new[] { "<0", "0-25", "26-50", "51-75", "76plus" };
@@ -196,8 +196,8 @@ public class SentinelAsyncifyToolsTests
 
         var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", minScore: 100);
 
-        Assert.That(result.Success, Is.True);
-        var findings = result.Data as List<MigrationCandidateFinding>;
+        Assert.That(result.IsSuccess, Is.True);
+        var findings = result.SuccessDetails as List<MigrationCandidateFinding>;
         Assert.That(findings, Is.Not.Null);
         Assert.That(findings!.Count, Is.EqualTo(0),
             "minScore=100 should filter out loadList which has Score=50.");
@@ -213,9 +213,9 @@ public class SentinelAsyncifyToolsTests
     {
         var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -235,10 +235,10 @@ public class Svc
 
         var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message");
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Error, Is.Null);
-        Assert.That(result.Data, Is.Not.Null);
-        Assert.That(result.Data!.TotalAsyncMethods, Is.GreaterThanOrEqualTo(0));
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.ErrorDetails, Is.Null);
+        Assert.That(result.SuccessDetails, Is.Not.Null);
+        Assert.That(result.SuccessDetails!.TotalAsyncMethods, Is.GreaterThanOrEqualTo(0));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -252,9 +252,9 @@ public class Svc
             scope: "targets",
             flagTargets: []);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -268,10 +268,10 @@ public class Svc
 
         var result = await _asyncifyTools.BridgeAsyncMethods(reason: "test message", targets: []);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Data, Is.Not.Null);
-        Assert.That(result.Data!.Summary.Attempted, Is.EqualTo(0));
-        Assert.That(result.Data.SuggestedUpliftTargets, Is.Empty);
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.SuccessDetails, Is.Not.Null);
+        Assert.That(result.SuccessDetails!.Summary.Attempted, Is.EqualTo(0));
+        Assert.That(result.SuccessDetails.SuggestedUpliftTargets, Is.Empty);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -298,12 +298,12 @@ public class Svc
             ],
             dryRun: true);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Data, Is.Not.Null);
-        Assert.That(result.Data!.BreakerOpen, Is.False);
-        Assert.That(result.Data.Succeeded, Is.EqualTo(1),
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.SuccessDetails, Is.Not.Null);
+        Assert.That(result.SuccessDetails!.BreakerOpen, Is.False);
+        Assert.That(result.SuccessDetails.Succeeded, Is.EqualTo(1),
             "loadList should be flagged (DryRun=true - changes computed but not written).");
-        Assert.That(result.Data.Failed, Is.EqualTo(0));
+        Assert.That(result.SuccessDetails.Failed, Is.EqualTo(0));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -320,10 +320,10 @@ public class Svc
             targets: [new BatchTarget { FilePath = "RegionForm.cs", MethodNames = ["loadList"] }],
             dryRun: true);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Data, Is.Not.Null);
-        Assert.That(result.Data!.Summary.Attempted, Is.EqualTo(1));
-        Assert.That(result.Data.Summary.Failed, Is.EqualTo(0));
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.SuccessDetails, Is.Not.Null);
+        Assert.That(result.SuccessDetails!.Summary.Attempted, Is.EqualTo(1));
+        Assert.That(result.SuccessDetails.Summary.Failed, Is.EqualTo(0));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -345,10 +345,10 @@ public class Svc
             targets: [new BatchTarget { FilePath = "Svc.cs" }],
             dryRun: true);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Data, Is.Not.Null);
-        Assert.That(result.Data!.BreakerOpen, Is.False);
-        Assert.That(result.Data.Failures, Is.Empty.Or.Null);
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.SuccessDetails, Is.Not.Null);
+        Assert.That(result.SuccessDetails!.BreakerOpen, Is.False);
+        Assert.That(result.SuccessDetails.Failures, Is.Empty.Or.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -365,10 +365,10 @@ public class Svc
             targets: [],
             dryRun: true);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Data, Is.Not.Null);
-        Assert.That(result.Data!.Attempted, Is.EqualTo(0));
-        Assert.That(result.Data.BreakerOpen, Is.False);
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.SuccessDetails, Is.Not.Null);
+        Assert.That(result.SuccessDetails!.Attempted, Is.EqualTo(0));
+        Assert.That(result.SuccessDetails.BreakerOpen, Is.False);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -393,12 +393,12 @@ public class Svc
             ],
             dryRun: true);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Data, Is.Not.Null);
-        Assert.That(result.Data!.Failed, Is.EqualTo(1),
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.SuccessDetails, Is.Not.Null);
+        Assert.That(result.SuccessDetails!.Failed, Is.EqualTo(1),
             "An empty ContextSnippet should produce one failed item.");
-        Assert.That(result.Data.Failures, Is.Not.Empty);
-        Assert.That(result.Data.Failures[0].Reason, Does.Contain("ContextSnippet"));
+        Assert.That(result.SuccessDetails.Failures, Is.Not.Empty);
+        Assert.That(result.SuccessDetails.Failures[0].Reason, Does.Contain("ContextSnippet"));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -412,10 +412,10 @@ public class Svc
 
         var result = await _asyncifyTools.UpliftCallers(reason: "test message", targets: []);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Data, Is.Not.Null);
-        Assert.That(result.Data!.Summary.Attempted, Is.EqualTo(0));
-        Assert.That(result.Data.SuggestedPropagateTargets, Is.Empty);
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.SuccessDetails, Is.Not.Null);
+        Assert.That(result.SuccessDetails!.Summary.Attempted, Is.EqualTo(0));
+        Assert.That(result.SuccessDetails.SuggestedPropagateTargets, Is.Empty);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -427,9 +427,9 @@ public class Svc
     {
         var result = await _asyncifyTools.EventHandlersToAsync(reason: "test message");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -441,9 +441,9 @@ public class Svc
     {
         var result = await _asyncifyTools.Asyncify(reason: "test message", maxRuntimeSeconds: 30, maxIterations: 10);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -509,7 +509,7 @@ public static class DataHelper
             dryRun: false,
             propagateCancellationTokens: false);
 
-        Assert.That(result.Success, Is.True, result.Error?.ToString());
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.ToString());
 
         var solution = _workspaceManager.CurrentSolution;
         var doc = solution?.Projects.SelectMany(p => p.Documents)
@@ -560,16 +560,16 @@ public static class DataHelper
 
         var result = await _asyncifyTools.Asyncify(reason: "test message");
 
-        Assert.That(result.Success, Is.True, result.Error?.ToString());
-        Assert.That(result.Data, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.ToString());
+        Assert.That(result.SuccessDetails, Is.Not.Null);
 
-        Assert.That(result.Data!.Succeeded, Is.EqualTo(0),
+        Assert.That(result.SuccessDetails!.Succeeded, Is.EqualTo(0),
             "loadList (Score=49) is below scoreThreshold=50 and must not be bridged.");
 
-        Assert.That(result.Data.MinCandidateScore, Is.EqualTo(49),
+        Assert.That(result.SuccessDetails.MinCandidateScore, Is.EqualTo(49),
             "Phase 2 saw the Score=49 candidate but excluded it - MinCandidateScore should be 49.");
 
-        Assert.That(result.Data.Directive, Does.Contain("scoreThreshold").And.Contain("49"),
+        Assert.That(result.SuccessDetails.Directive, Does.Contain("scoreThreshold").And.Contain("49"),
             "Directive must cite both the scoreThreshold and the candidate's score of 49.");
     }
 
@@ -612,14 +612,14 @@ public static class DataHelper
 
         var result = await _asyncifyTools.Asyncify(reason: "test message");
 
-        Assert.That(result.Success, Is.True, result.Error?.ToString());
-        Assert.That(result.Data, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.ToString());
+        Assert.That(result.SuccessDetails, Is.Not.Null);
 
         // Phase 2 bridges loadList (Score=70 ≥ scoreThreshold=60).
         // Phase 3 uplifts CallerClass.DoWork -> the caller of the bridge wrapper.
-        Assert.That(result.Data!.Succeeded, Is.GreaterThanOrEqualTo(2),
+        Assert.That(result.SuccessDetails!.Succeeded, Is.GreaterThanOrEqualTo(2),
             "Expected ≥ 2 successes: Phase 2 bridge (loadList) + Phase 3 uplift (DoWork). " +
-            $"Directive: {result.Data.Directive}");
+            $"Directive: {result.SuccessDetails.Directive}");
 
         // Verify the workspace reflects both the bridge and the uplift.
         var solution = _workspaceManager.CurrentSolution;
@@ -648,9 +648,9 @@ public static class DataHelper
             dryRun: false,
             propagateCancellationTokens: true);
 
-        Assert.That(result.Success, Is.True, result.Error?.ToString());
-        Assert.That(result.Data, Is.Not.Null);
-        Assert.That(result.Data!.Summary.Succeeded, Is.EqualTo(1),
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.ToString());
+        Assert.That(result.SuccessDetails, Is.Not.Null);
+        Assert.That(result.SuccessDetails!.Summary.Succeeded, Is.EqualTo(1),
             "DoWork should be uplifted as the caller of SyncMethod.");
 
         // Read back the updated document from the in-memory workspace.

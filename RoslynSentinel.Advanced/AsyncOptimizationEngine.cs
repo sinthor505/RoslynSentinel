@@ -114,14 +114,14 @@ public class AsyncOptimizationEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// Error: File not found in the loaded solution.", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// ErrorDetails: File not found in the loaded solution.", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null || methodNode.Body == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = $"// Error: Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = $"// ErrorDetails: Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).", FilePath = filePath };
         }
 
         // This requires complex data flow analysis to ensure no dependencies between awaited tasks.
@@ -1039,7 +1039,7 @@ public class AsyncOptimizationEngine
                 {
                     Outcome = EditOutcome.DocumentNotFound,
                     FilePath = filePath,
-                    Message = $"// Error: File '{filePath}' not found."
+                    Message = $"// ErrorDetails: File '{filePath}' not found."
                 };
             }
 
@@ -1050,7 +1050,7 @@ public class AsyncOptimizationEngine
                 {
                     Outcome = EditOutcome.SourceInvalid,
                     FilePath = filePath,
-                    Message = $"// Error: Failed to get syntax root for '{filePath}'."
+                    Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
                 };
             }
 
@@ -1062,7 +1062,7 @@ public class AsyncOptimizationEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = $"// Error: Method '{methodName}' not found."
+                    Message = $"// ErrorDetails: Method '{methodName}' not found."
                 };
             }
 
@@ -1103,7 +1103,7 @@ public class AsyncOptimizationEngine
                 {
                     Outcome = EditOutcome.CannotEdit,
                     FilePath = filePath,
-                    Message = $"// Error: Return type '{returnTypeStr}' is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>."
+                    Message = $"// ErrorDetails: Return type '{returnTypeStr}' is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>."
                 };
             }
 
@@ -1211,7 +1211,7 @@ public class AsyncOptimizationEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// Error: {ex.Message}"
+                Message = $"// ErrorDetails: {ex.Message}"
             };
         }
     }
@@ -1230,7 +1230,7 @@ public class AsyncOptimizationEngine
             {
                 Outcome = EditOutcome.DocumentNotFound,
                 FilePath = filePath,
-                Message = "// Error: File not found in the loaded solution."
+                Message = "// ErrorDetails: File not found in the loaded solution."
             };
         }
 
@@ -1241,7 +1241,7 @@ public class AsyncOptimizationEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Error: Failed to get syntax root."
+                Message = "// ErrorDetails: Failed to get syntax root."
             };
         }
 
@@ -1253,7 +1253,7 @@ public class AsyncOptimizationEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: Method '{methodName}' not found in file.\n// Tip: method names are case-sensitive. Try the exact name as declared in source."
+                Message = $"// ErrorDetails: Method '{methodName}' not found in file.\n// Tip: method names are case-sensitive. Try the exact name as declared in source."
             };
         }
 
@@ -1428,13 +1428,13 @@ public class AsyncOptimizationEngine
                                .FirstOrDefault();
         if (document == null)
         {
-            return ($"// Error: File '{filePath}' not found in the loaded solution.", modified, skipped);
+            return ($"// ErrorDetails: File '{filePath}' not found in the loaded solution.", modified, skipped);
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return ("// Error: Failed to get syntax root.", modified, skipped);
+            return ("// ErrorDetails: Failed to get syntax root.", modified, skipped);
         }
 
         SemanticModel? semanticModel = null;
@@ -3233,13 +3233,13 @@ internal sealed class MigrationCandidateAttribute : Attribute
                                .FirstOrDefault();
         if (document == null)
         {
-            return ($"// Error: File '{filePath}' not found in the loaded solution.", fileResult);
+            return ($"// ErrorDetails: File '{filePath}' not found in the loaded solution.", fileResult);
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return ("// Error: Failed to get syntax root.", fileResult);
+            return ("// ErrorDetails: Failed to get syntax root.", fileResult);
         }
 
         SemanticModel? semanticModel = null;

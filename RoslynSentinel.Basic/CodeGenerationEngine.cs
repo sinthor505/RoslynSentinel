@@ -187,7 +187,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.DocumentNotFound,
                 FilePath = filePath,
-                Message = $"// Error: File '{filePath}' not found."
+                Message = $"// ErrorDetails: File '{filePath}' not found."
             };
         }
 
@@ -200,7 +200,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: Class '{className}' not found."
+                Message = $"// ErrorDetails: Class '{className}' not found."
             };
         }
 
@@ -867,7 +867,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.DocumentNotFound,
                 FilePath = filePath,
-                Message = $"// Error: File '{filePath}' not found in solution."
+                Message = $"// ErrorDetails: File '{filePath}' not found in solution."
             };
         }
 
@@ -879,7 +879,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Error: Could not load semantic model."
+                Message = "// ErrorDetails: Could not load semantic model."
             };
         }
 
@@ -891,7 +891,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: Class '{className}' not found in file."
+                Message = $"// ErrorDetails: Class '{className}' not found in file."
             };
         }
 
@@ -902,7 +902,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Error: Could not get class symbol."
+                Message = "// ErrorDetails: Could not get class symbol."
             };
         }
 
@@ -915,7 +915,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: Interface '{interfaceName}' not found on class. Ensure the class already declares it implements '{interfaceName}'."
+                Message = $"// ErrorDetails: Interface '{interfaceName}' not found on class. Ensure the class already declares it implements '{interfaceName}'."
             };
         }
 
@@ -1024,7 +1024,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.DocumentNotFound,
                 FilePath = filePath,
-                Message = $"// Error: File '{filePath}' not found in solution."
+                Message = $"// ErrorDetails: File '{filePath}' not found in solution."
             };
         }
 
@@ -1035,7 +1035,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// Error: Failed to get syntax root for '{filePath}'."
+                Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
             };
         }
 
@@ -1061,7 +1061,7 @@ public partial class CodeGenerationEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = $"// Error: {snippetError}"
+                    Message = $"// ErrorDetails: {snippetError}"
                 };
             }
 
@@ -1074,7 +1074,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: Property '{propertyName}' not found."
+                Message = $"// ErrorDetails: Property '{propertyName}' not found."
             };
         }
 
@@ -1251,7 +1251,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.DocumentNotFound,
                 FilePath = filePath,
-                Message = $"// Error: File '{filePath}' not found in solution."
+                Message = $"// ErrorDetails: File '{filePath}' not found in solution."
             };
         }
 
@@ -1262,7 +1262,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// Error: Failed to get syntax root for '{filePath}'."
+                Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
             };
         }
 
@@ -1274,7 +1274,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: {snippetError}"
+                Message = $"// ErrorDetails: {snippetError}"
             };
         }
 
@@ -1289,7 +1289,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Error: No string.Format call found at the given context snippet."
+                Message = "// ErrorDetails: No string.Format call found at the given context snippet."
             };
         }
 
@@ -1300,7 +1300,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Error: string.Format call has no arguments."
+                Message = "// ErrorDetails: string.Format call has no arguments."
             };
         }
 
@@ -1331,7 +1331,7 @@ public partial class CodeGenerationEngine
                 {
                     Outcome = EditOutcome.CannotEdit,
                     FilePath = filePath,
-                    Message = $"// Error: Could not resolve format string constant. Details: {ex.Message}"
+                    Message = $"// ErrorDetails: Could not resolve format string constant. Details: {ex.Message}"
                 };
             }
         }
@@ -1342,7 +1342,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Error: Could not resolve the format string (not a string literal or const string)."
+                Message = "// ErrorDetails: Could not resolve the format string (not a string literal or const string)."
             };
         }
 

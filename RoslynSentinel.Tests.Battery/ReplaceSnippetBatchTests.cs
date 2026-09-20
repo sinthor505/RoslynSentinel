@@ -60,7 +60,7 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = targetFile, OldContent = lastNonEmptyLine, NewContent = lastNonEmptyLine + " // edit-b" },
             ]);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
     }
 
     [Test]
@@ -85,7 +85,7 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = fileB, OldContent = anchorB, NewContent = anchorB + " // touched-b" },
             ]);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
 
         var newContentA = await File.ReadAllTextAsync(fileA);
         var newContentB = await File.ReadAllTextAsync(fileB);
@@ -120,8 +120,8 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = targetFile, OldContent = overlappingFragment, NewContent = "// replaced-fragment" },
             ]);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.Message, Does.Contain("overlap"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("overlap"));
 
         var unchangedContent = await File.ReadAllTextAsync(targetFile);
         Assert.That(unchangedContent, Is.EqualTo(originalContent), "an overlap rejection must not write anything");
@@ -148,7 +148,7 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = fileA, OldContent = "this text does not exist anywhere in the file", NewContent = "irrelevant" },
             ]);
 
-        Assert.That(result.Success, Is.False);
+        Assert.That(result.IsSuccess, Is.False);
 
         var unchangedContentA = await File.ReadAllTextAsync(fileA);
         Assert.That(unchangedContentA, Is.EqualTo(originalContentA),
@@ -174,8 +174,8 @@ public class ReplaceSnippetBatchTests
             newContent: anchor + " // x",
             edits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = anchor + " // y" }]);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.Message, Does.Contain("not both"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("not both"));
     }
 
     [Test]
@@ -191,8 +191,8 @@ public class ReplaceSnippetBatchTests
             ProposedChangeAction.validate,
             edits: []);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.Message, Does.Contain("empty"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("empty"));
     }
 
     [Test]
@@ -213,7 +213,7 @@ public class ReplaceSnippetBatchTests
             ProposedChangeAction.validate,
             edits: edits);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.Message, Does.Contain("20"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("20"));
     }
 }

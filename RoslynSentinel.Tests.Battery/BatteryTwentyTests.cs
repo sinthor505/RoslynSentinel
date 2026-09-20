@@ -82,7 +82,7 @@ public class BatteryTwentyTests
     public async Task Features_GetWithFeatureName_ReturnsResult()
     {
         var result = await _workspaceTools.Features(reason: "test message", FeaturesAction.list);
-        var features = result.Data as System.Collections.IEnumerable;
+        var features = result.SuccessDetails as System.Collections.IEnumerable;
         Assert.That(features, Is.Not.Null);
         Assert.Pass("Features list retrieved successfully.");
     }
@@ -100,11 +100,11 @@ public class BatteryTwentyTests
     [Test]
     public async Task List_Projects_NoSolution_ReturnsStructuredError()
     {
-        // Tools no longer throw: they return SentinelCallToolResult with Success=false and a ResultError.
+        // Tools no longer throw: they return SentinelCallToolResult with IsSuccess=false and a ResultError.
         var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.projects);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
     }
 
     [Test]
@@ -121,9 +121,9 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.files, "NoSuchProject");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.Message, Does.Contain("NoSuchProject"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("NoSuchProject"));
     }
 
     [Test]
@@ -139,8 +139,8 @@ public class BatteryTwentyTests
     {
         var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.solutionItems);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
     }
 
     [Test]
@@ -164,8 +164,8 @@ public class BatteryTwentyTests
 
             var result = await _workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.solutionItems);
 
-            Assert.That(result.Success, Is.True);
-            var items = result.Data as List<SolutionItemFile>;
+            Assert.That(result.IsSuccess, Is.True);
+            var items = result.SuccessDetails as List<SolutionItemFile>;
             Assert.That(items, Is.Not.Null);
             Assert.That(items!.Count, Is.EqualTo(1));
             Assert.That(items[0].FilePath.Relative.Replace('/', '\\'), Is.EqualTo(@"docs\plans\PLAN.md"));
@@ -193,8 +193,8 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.SearchSolutionText(reason: "test message", "Order");
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Warning, Is.Null);
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.WarningDetails, Is.Null);
     }
 
     [Test]
@@ -203,8 +203,8 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.SearchSolutionText(reason: "test message", @"^namespace TestProj");
 
-        Assert.That(result.Success, Is.True, "a pattern with regex metacharacters must still be searched literally, not just as regex");
-        var payload = (TextSearchResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True, "a pattern with regex metacharacters must still be searched literally, not just as regex");
+        var payload = (TextSearchResult)result.SuccessDetails!;
         Assert.That(payload.LiteralResults, Is.Empty, "no literal substring '^namespace TestProj' (with a literal '^') exists in the source");
         Assert.That(payload.RegexResults, Is.Not.Empty, "the same text, interpreted as a regex, should match the namespace declaration line");
     }
@@ -217,8 +217,8 @@ public class BatteryTwentyTests
         // at the same file/line/col -> regexResults should be empty and the overlap reported.
         var result = await _workspaceTools.SearchSolutionText(reason: "test message", "Order");
 
-        Assert.That(result.Success, Is.True);
-        var payload = (TextSearchResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var payload = (TextSearchResult)result.SuccessDetails!;
         Assert.That(payload.LiteralResults, Is.Not.Empty);
         Assert.That(payload.RegexResults, Is.Empty, "a regex match at the same file/line/col as a literal match must be deduped out of regexResults");
         Assert.That(payload.RegexOverlapCount, Is.EqualTo(payload.LiteralResults.Count), "every literal match here is also a regex match, so the overlap count should equal the literal match count");
@@ -230,9 +230,9 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.SearchSolutionText(reason: "test message", "ThisPatternDoesNotAppearAnywhere");
 
-        Assert.That(result.Success, Is.False, "Zero matches in both modes should surface as a failure so the protocol-level IsError filter picks it up.");
-        Assert.That(result.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
-        Assert.That(result.Error?.Message, Does.Contain("ProjectDoc"));
+        Assert.That(result.IsSuccess, Is.False, "Zero matches in both modes should surface as a failure so the protocol-level IsError filter picks it up.");
+        Assert.That(result.ErrorDetails?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
+        Assert.That(result.ErrorDetails?.Message, Does.Contain("ProjectDoc"));
     }
 
     [Test]
@@ -244,8 +244,8 @@ public class BatteryTwentyTests
         SetSource("namespace TestProj; // array like foo[bar\npublic class Order { }", "Test.cs");
         var result = await _workspaceTools.SearchSolutionText(reason: "test message", "foo[bar");
 
-        Assert.That(result.Success, Is.True, "an unclosed '[' is not valid regex, but the literal substring search must still work");
-        var payload = (TextSearchResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True, "an unclosed '[' is not valid regex, but the literal substring search must still work");
+        var payload = (TextSearchResult)result.SuccessDetails!;
         Assert.That(payload.RegexPatternValid, Is.False);
         Assert.That(payload.RegexResults, Is.Empty);
         Assert.That(payload.LiteralResults, Is.Not.Empty);
@@ -270,8 +270,8 @@ public class BatteryTwentyTests
 
         var result = await _workspaceTools.SearchSolutionText(reason: "test message", "return a + b");
 
-        Assert.That(result.Success, Is.True);
-        var payload = (TextSearchResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var payload = (TextSearchResult)result.SuccessDetails!;
         var match = payload.LiteralResults.Single();
         Assert.That(match.EnclosingMember, Is.EqualTo("Add"));
     }
@@ -292,8 +292,8 @@ public class BatteryTwentyTests
 
         var result = await _workspaceTools.SearchSolutionText(reason: "test message", "using System");
 
-        Assert.That(result.Success, Is.True);
-        var payload = (TextSearchResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var payload = (TextSearchResult)result.SuccessDetails!;
         var match = payload.LiteralResults.Single();
         Assert.That(match.EnclosingMember, Is.Null);
     }
@@ -313,7 +313,7 @@ public class BatteryTwentyTests
             _workspaceManager.SetTestSolution(solution);
 
             var before = await _workspaceTools.SearchSolutionText(reason: "test message", "Bar");
-            Assert.That(before.Success, Is.True);
+            Assert.That(before.IsSuccess, Is.True);
             Assert.That(before.WorkspaceVersion, Is.Not.Null);
 
             const string updatedContent = "namespace TestProj; public class Foo { public int Bar() => 2; public int Baz() => 3; }";
@@ -324,7 +324,7 @@ public class BatteryTwentyTests
 
             var after = await _workspaceTools.SearchSolutionText(reason: "test message", "Baz");
 
-            Assert.That(after.Success, Is.True);
+            Assert.That(after.IsSuccess, Is.True);
             Assert.That(after.WorkspaceVersion, Is.Not.Null);
             Assert.That(after.WorkspaceVersion, Is.GreaterThan(before.WorkspaceVersion!),
                 "A read tool's workspaceVersion must increase after a mutation lands, so a caller can tell its earlier response is stale.");
@@ -341,8 +341,8 @@ public class BatteryTwentyTests
     public async Task LoadSolution_NonExistentPath_ReturnsErrorString()
     {
         var result = await _workspaceTools.LoadSolution(reason: "test message", "fake_path.sln");
-        Assert.That(result.Success, Is.False, "nonexistent solution path should not succeed");
-        Assert.That(result.Error?.Message, Is.Not.Null.And.Not.Empty, "should carry an error message");
+        Assert.That(result.IsSuccess, Is.False, "nonexistent solution path should not succeed");
+        Assert.That(result.ErrorDetails?.Message, Is.Not.Null.And.Not.Empty, "should carry an error message");
     }
 
     // --- ListWorkspaceSolutions ---
@@ -361,7 +361,7 @@ public class BatteryTwentyTests
 
             var result = _workspaceTools.ListWorkspaceSolutions(reason: "test message", wrappedPath);
 
-            Assert.That(result.Success, Is.True,
+            Assert.That(result.IsSuccess, Is.True,
                 "A workspacePath wrapped in quotes/whitespace must still resolve to the real directory.");
         }
         finally
@@ -375,8 +375,8 @@ public class BatteryTwentyTests
     {
         var result = _workspaceTools.ListWorkspaceSolutions(reason: "test message", Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_DoesNotExist_" + Guid.NewGuid()));
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails?.ErrorCode, Is.EqualTo("InvalidArgument"));
     }
 
     [Test]
@@ -390,8 +390,8 @@ public class BatteryTwentyTests
 
         var result = _workspaceTools.ListWorkspaceSolutions(reason: "test message", driveRoot);
 
-        Assert.That(result.Success, Is.False, "scanning an entire drive root must be rejected, not attempted");
-        Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
+        Assert.That(result.IsSuccess, Is.False, "scanning an entire drive root must be rejected, not attempted");
+        Assert.That(result.ErrorDetails?.ErrorCode, Is.EqualTo("InvalidArgument"));
     }
 
     [Test]
@@ -401,8 +401,8 @@ public class BatteryTwentyTests
         // untouched, and Directory.Exists("/") is true on Windows (resolves to the current drive).
         var result = _workspaceTools.ListWorkspaceSolutions(reason: "test message", "/");
 
-        Assert.That(result.Success, Is.False, "'/' resolves to a drive root and must be rejected");
-        Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
+        Assert.That(result.IsSuccess, Is.False, "'/' resolves to a drive root and must be rejected");
+        Assert.That(result.ErrorDetails?.ErrorCode, Is.EqualTo("InvalidArgument"));
     }
 
     // --- Diagnose ---
@@ -442,8 +442,8 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyDiff(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
     }
 
     // --- ApplyUnifiedDiff (diff-only sibling of ApplyDiff; filepath+unifiedDiff always required) ---
@@ -463,8 +463,8 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filepath: "", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]
@@ -473,8 +473,8 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filepath: "Test.cs", unifiedDiff: "");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]
@@ -483,8 +483,8 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
     }
 
     [Test]
@@ -552,7 +552,7 @@ public class Order
 
         var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test message", "Test.cs", symbolName: "BuildInternalDebugLabel");
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
     }
 
     [Test]
@@ -563,7 +563,7 @@ public class Order
         var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test message", "Test.cs", symbolName: "BuildInternalDebugLabel",
             contextSnippet: "private string BuildInternalDebugLabel()");
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
     }
 
     [Test]
@@ -573,8 +573,8 @@ public class Order
 
         var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test message", "Test.cs", symbolName: "NoSuchMethod");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error!.Message, Does.Contain("NoSuchMethod"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("NoSuchMethod"));
     }
 
     [Test]
@@ -588,7 +588,7 @@ public class Order
         var docCommentId = "M:TestProj.Order.BuildInternalDebugLabel";
         var result = await _workspaceTools.SafeDeleteUnusedSymbol(reason: "test message", "Test.cs", projectName: "TestProj", docCommentId: docCommentId);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
     }
 
     // --- CreateProject ---
@@ -599,8 +599,8 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.CreateProject(reason: "test message", "NewTestProject");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
     }
 
     [Test]
@@ -627,8 +627,8 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(result.Success, Is.True);
-        var data = (BuildResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (BuildResult)result.SuccessDetails!;
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Succeeded));
         Assert.That(data.ErrorCount, Is.EqualTo(0));
         Assert.That(data.ExitCode, Is.Null, "quickBuild does not run a subprocess.");
@@ -640,8 +640,8 @@ public class Order
         SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(result.Success, Is.True, "The tool call itself succeeds; the build outcome is carried in Data.Outcome.");
-        var data = (BuildResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True, "The tool call itself succeeds; the build outcome is carried in SuccessDetails.Outcome.");
+        var data = (BuildResult)result.SuccessDetails!;
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Failed));
         Assert.That(data.ErrorCount, Is.GreaterThan(0));
     }
@@ -660,8 +660,8 @@ public class Order
 
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(result.Success, Is.True);
-        var data = (BuildResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (BuildResult)result.SuccessDetails!;
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Failed));
         Assert.That(data.ErrorCount, Is.EqualTo(3), "one CS0246 (undeclared type) per file.");
         Assert.That(data.ErrorSummary, Is.Not.Empty);
@@ -677,8 +677,8 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.GetDiagnostics(reason: "test message", ToolScope.solution, verify: BuildVerifyLevel.quickBuild);
 
-        Assert.That(result.Success, Is.True);
-        var data = (DiagnosticSummary)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (DiagnosticSummary)result.SuccessDetails!;
         Assert.That(data.BuildVerification, Is.Not.Null);
         Assert.That(data.BuildVerification!.Outcome, Is.EqualTo(BuildOutcome.Succeeded));
     }
@@ -689,8 +689,8 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.GetWorkspaceHealth(reason: "test message", verify: BuildVerifyLevel.quickBuild);
 
-        Assert.That(result.Success, Is.True);
-        var data = (WorkspaceHealthReport)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (WorkspaceHealthReport)result.SuccessDetails!;
         Assert.That(data.BuildVerification, Is.Not.Null);
     }
     // Added by InsertMemberAfter (expected - used for diagnostics)
@@ -700,9 +700,9 @@ public class Order
         _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateEmptySolution());
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.Message, Does.Contain("ListAll"));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorDetails!.Message, Does.Contain("ListAll"));
     }
 
     [Test]
@@ -711,8 +711,8 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(result.Success, Is.True);
-        var data = (BuildResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (BuildResult)result.SuccessDetails!;
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Succeeded));
         Assert.That(data.ProjectsCompiled, Is.Not.Empty);
         Assert.That(data.ExitCode, Is.Null);
@@ -724,8 +724,8 @@ public class Order
         SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(result.Success, Is.True);
-        var data = (BuildResult)result.Data!;
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (BuildResult)result.SuccessDetails!;
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Failed));
         Assert.That(data.ErrorCount, Is.GreaterThan(0));
         Assert.That(data.ProjectsCompiled, Is.Not.Empty, "it compiled and had errors -- must not collapse into NotRun.");
@@ -741,8 +741,8 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.fullBuild);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
     }
     // --- SplitProjectByFolder ---
 
@@ -752,7 +752,7 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.SplitProjectByFolder(reason: "test message", "TestProj", "NonExistentFolder", "NewProject");
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorDetails, Is.Not.Null);
     }
 }

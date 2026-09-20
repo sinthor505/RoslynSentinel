@@ -159,7 +159,7 @@ public class CodeFlowEngineTests
     public async Task ReduceBlockDepth_UnknownFile_ReturnsErrorComment()
     {
         var result = await _engine.ReduceBlockDepthAsync("NoSuchFile.cs", "Process");
-        Assert.That(result.Message, Does.StartWith("// Error:"), "unknown file should return an error comment string");
+        Assert.That(result.Message, Does.StartWith("// ErrorDetails:"), "unknown file should return an error comment string");
     }
 
     [Test]
@@ -202,7 +202,7 @@ public class Logger
 
         var result = await _engine.ReduceBlockDepthAsync("Logger.cs", "Log");
 
-        Assert.That(result.UpdatedText!, Does.Not.StartWith("// Error:"), "should return source, not error comment");
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ErrorDetails:"), "should return source, not error comment");
         Assert.That(result.UpdatedText, Does.Contain("Log"), "method name should still appear");
     }
 }

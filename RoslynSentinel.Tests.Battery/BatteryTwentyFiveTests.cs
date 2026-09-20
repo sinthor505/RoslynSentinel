@@ -833,7 +833,7 @@ public class RefactoringEngineGapTests
         var result = await _engine.ExtractMethodAsync("Calc.cs", 3, "int sum = a + b;", 3, "int sum = a + b;", "ComputeSum");
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.Success || result.ErrorMessage != null, Is.True, "Should return Success or a descriptive error");
+        Assert.That(result.Success || result.ErrorMessage != null, Is.True, "Should return IsSuccess or a descriptive error");
     }
 
     [Test]

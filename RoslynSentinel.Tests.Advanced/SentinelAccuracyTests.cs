@@ -2121,7 +2121,7 @@ public class C {
     public async Task Flags_SqlConnection_WithoutUsing()
     {
         SetSource(@"
-using Microsoft.Data.SqlClient;
+using Microsoft.SuccessDetails.SqlClient;
 public class C {
     public void M() {
         var conn = new SqlConnection(""...''"");

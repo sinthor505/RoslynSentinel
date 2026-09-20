@@ -567,8 +567,8 @@ public class B29_AllEngines_RealSolution_SmokeTests
             "MakeMethodThreadSafeAsync must not throw even when method is not found.");
         Assert.That(result, Is.Not.Null,
             "Must return non-null (error message string when method not found).");
-        // Engine returns "// Error: Method '...' not found or has no body." for missing methods
-        Assert.That(result, Does.Contain("nonExistentMethodXYZ").Or.StartsWith("// Error"),
+        // Engine returns "// ErrorDetails: Method '...' not found or has no body." for missing methods
+        Assert.That(result, Does.Contain("nonExistentMethodXYZ").Or.StartsWith("// ErrorDetails"),
             "Non-found method must produce a graceful error string.");
     }
 
@@ -627,7 +627,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             result = await engine.GenerateToStringSafeAsync(_realFilePath, _realClassName),
             "GenerateToStringSafeAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
-        // Success OR graceful failure -> either way, result must carry a message
+        // IsSuccess OR graceful failure -> either way, result must carry a message
         if (!result!.Success)
         {
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
@@ -645,9 +645,9 @@ public class B29_AllEngines_RealSolution_SmokeTests
             "EncapsulateFieldSafeAsync must not throw when field is not found.");
         Assert.That(result, Is.Not.Null, "Must return a result object (not null) on field-not-found.");
         Assert.That(result!.Success, Is.False,
-            "Result must be Success=false when field does not exist.");
+            "Result must be IsSuccess=false when field does not exist.");
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
-            "Error property must carry a descriptive message when field not found.");
+            "ErrorDetails property must carry a descriptive message when field not found.");
     }
 
     [Test]
@@ -821,7 +821,7 @@ public class RealSolution_SmokeTests_Battery28
         Assert.That(result, Is.Not.Null);
     }
 
-    // ── Data quality invariants ─────────────────────────────────────────────
+    // ── SuccessDetails quality invariants ─────────────────────────────────────────────
 
     [Test]
     public async Task SecurityAndSafetyEngine_NoFindings_HaveNullFields()

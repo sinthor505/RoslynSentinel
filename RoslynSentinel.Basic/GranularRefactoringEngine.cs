@@ -587,7 +587,7 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: {paramSnippetError}"
+                Message = $"// ErrorDetails: {paramSnippetError}"
             };
         }
 
@@ -805,7 +805,7 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: File '{filePath}' not found."
+                Message = $"// ErrorDetails: File '{filePath}' not found."
             };
         }
 
@@ -816,7 +816,7 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: Failed to get syntax root."
+                Message = $"// ErrorDetails: Failed to get syntax root."
             };
         }
 
@@ -830,7 +830,7 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: Type '{nestedTypeName}' not found."
+                Message = $"// ErrorDetails: Type '{nestedTypeName}' not found."
             };
         }
 
@@ -842,7 +842,7 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: Type '{nestedTypeName}' is already at outer scope. Cannot move to outer scope."
+                Message = $"// ErrorDetails: Type '{nestedTypeName}' is already at outer scope. Cannot move to outer scope."
             };
         }
 
@@ -854,7 +854,7 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Error: Failed to remove nested type '{nestedTypeName}'."
+                Message = $"// ErrorDetails: Failed to remove nested type '{nestedTypeName}'."
             };
         }
 

@@ -1,6 +1,6 @@
 namespace RoslynSentinel.Common;
 
-// ── Error codes ───────────────────────────────────────────────────────────────
+// ── ErrorDetails codes ───────────────────────────────────────────────────────────────
 public static class MigrationErrorCode
 {
     public const string SolutionNotLoaded = "SolutionNotLoaded";

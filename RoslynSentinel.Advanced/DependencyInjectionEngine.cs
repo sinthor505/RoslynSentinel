@@ -324,7 +324,7 @@ public class DependencyInjectionEngine
         "IHtmlLocalizer", "IHtmlLocalizerFactory",
         // Authorization (registered by AddAuthorization())
         "IAuthorizationService", "IAuthorizationPolicyProvider",
-        // Data protection (registered by AddDataProtection())
+        // SuccessDetails protection (registered by AddDataProtection())
         "IDataProtectionProvider", "IDataProtector",
         // Third-party libraries commonly used in .NET projects
         "ILocalStorageService", "ISessionStorageService",  // Blazored.*

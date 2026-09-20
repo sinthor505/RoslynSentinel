@@ -80,8 +80,8 @@ public class SymbolRelationshipImpl
                     var kindsFound = string.Join(", ", resolved.Select(s => s.SymbolKind).Distinct());
                     return new SentinelCallToolResult<object>
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument,
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument,
                             $"'{name}' resolves to a {kindsFound} ({resolved.Count} declaration(s) found), not a type - " +
                             "objectCreations only matches 'new TypeName(...)' expressions and is structurally incapable of " +
                             $"returning anything for a member name. Use FindReferences(symbolName: \"{name}\", kind: callers) " +
@@ -125,9 +125,9 @@ public class SymbolRelationshipImpl
             {
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = results,
-                    Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " +
+                    IsSuccess = true,
+                    SuccessDetails = results,
+                    WarningDetails = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " +
                         "nothing found under any kind. This is a trustworthy 'not found anywhere' signal, not an error."
                 };
             }
@@ -139,7 +139,7 @@ public class SymbolRelationshipImpl
                 totalRecords: totalFound, cancellationToken: cancellationToken);
             return broadenedResult with
             {
-                Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " +
+                WarningDetails = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " +
                     $"found {totalFound} result(s): {summary}."
             };
         }
@@ -148,8 +148,8 @@ public class SymbolRelationshipImpl
             _logger.LogError(ex, "QuerySymbolRelationships ({Kind}) failed for '{Name}'", searchKind, name);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "QuerySymbolRelationships")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "QuerySymbolRelationships")
             };
         }
     }
@@ -169,8 +169,8 @@ public class SymbolRelationshipImpl
             var result = await _discoveryEngine.FindBestInsertionPointAsync(filePathResolved, containerName, memberKind.ToString());
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -178,8 +178,8 @@ public class SymbolRelationshipImpl
             _logger.LogError(ex, "GetBestInsertionPoint failed for '{ContainerName}' in '{FilePathWrapper}'", containerName, filePathResolved);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetBestInsertionPoint")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetBestInsertionPoint")
             };
         }
     }
@@ -203,8 +203,8 @@ public class SymbolRelationshipImpl
                 filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                Success = true,
-                Data = result
+                IsSuccess = true,
+                SuccessDetails = result
             };
         }
         catch (Exception ex)
@@ -212,8 +212,8 @@ public class SymbolRelationshipImpl
             _logger.LogError(ex, "PreviewRenameImpact failed for '{SymbolName}' in '{FilePathWrapper}'", symbolName, filePathResolved);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewRenameImpact")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewRenameImpact")
             };
         }
     }
@@ -237,8 +237,8 @@ public class SymbolRelationshipImpl
                 var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = result
+                    IsSuccess = true,
+                    SuccessDetails = result
                 };
             }
             if (kind == FindReferencesKind.implementations)
@@ -246,8 +246,8 @@ public class SymbolRelationshipImpl
                 var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = result
+                    IsSuccess = true,
+                    SuccessDetails = result
                 };
             }
             if (kind == FindReferencesKind.all)
@@ -256,14 +256,14 @@ public class SymbolRelationshipImpl
                 var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
-                    Data = new { callers, implementations }
+                    IsSuccess = true,
+                    SuccessDetails = new { callers, implementations }
                 };
             }
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled kind '{kind}'.")
+                IsSuccess = false,
+                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled kind '{kind}'.")
             };
         }
         catch (Exception ex)
@@ -271,8 +271,8 @@ public class SymbolRelationshipImpl
             _logger.LogError(ex, "FindReferences ({Kind}) failed for '{SymbolName}'", kind, symbolName);
             return new SentinelCallToolResult<object>
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FindReferences")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FindReferences")
             };
         }
     }

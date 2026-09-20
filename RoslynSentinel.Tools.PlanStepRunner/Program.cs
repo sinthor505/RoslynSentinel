@@ -148,7 +148,7 @@ public static class Program
                 var removeError = git.TryRemoveWorktree(worktreePath);
                 if (removeError is not null)
                 {
-                    Console.WriteLine($"Warning: failed to remove worktree at {worktreePath} after commit - leaving it in place.");
+                    Console.WriteLine($"WarningDetails: failed to remove worktree at {worktreePath} after commit - leaving it in place.");
                     Console.WriteLine($"  {removeError}");
                 }
             }
@@ -420,7 +420,7 @@ public static class Program
         result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Select(c => c.Text).FirstOrDefault() ?? "";
 
     private static bool ContainsFailureMarker(string json) =>
-        json.Contains("\"success\":false", StringComparison.OrdinalIgnoreCase);
+        json.Contains("\"isSuccess\":false", StringComparison.OrdinalIgnoreCase);
 
     private static int? ExtractIntField(string json, string fieldNameWithQuotes)
     {

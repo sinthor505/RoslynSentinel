@@ -352,7 +352,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     catch (Exception ex)
                     {
                         // Every tool in this codebase catches its own exceptions and returns a
-                        // SentinelCallToolResult with Success=false instead of throwing (see
+                        // SentinelCallToolResult with IsSuccess=false instead of throwing (see
                         // docs/current/feedback_agent_friendly_error_messages.md), so reaching here
                         // means an exception escaped that path entirely -> e.g. the MCP SDK's own
                         // argument-binding failure (a required parameter missing from the call), or
@@ -370,10 +370,10 @@ public static class RoslynSentinelServiceExtensionsBasic
 
             // Domain-failure -> protocol-error sync: every tool in this codebase (by design, see
             // docs/current/feedback_agent_friendly_error_messages.md) catches its own exceptions
-            // and returns a SentinelCallToolResult<T>/ApplyChangesResult/etc. with Success=false instead of
+            // and returns a SentinelCallToolResult<T>/ApplyChangesResult/etc. with IsSuccess=false instead of
             // throwing, so the MCP SDK's own exception-based IsError detection never fires for a
             // domain-level failure. Set IsError=true whenever the serialized response body's
-            // top-level "success" field is false, so a client relying on the protocol-level flag
+            // top-level "isSuccess" field is false, so a client relying on the protocol-level flag
             // (rather than parsing the JSON body) sees an accurate signal.
             filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
                 ModelContextProtocol.Protocol.CallToolRequestParams,
@@ -396,7 +396,7 @@ public static class RoslynSentinelServiceExtensionsBasic
 
                                 using var doc = System.Text.Json.JsonDocument.Parse(textBlock.Text);
                                 if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
-                                    doc.RootElement.TryGetProperty("success", out var successProp) &&
+                                    doc.RootElement.TryGetProperty("isSuccess", out var successProp) &&
                                     successProp.ValueKind == System.Text.Json.JsonValueKind.False)
                                 {
                                     result.IsError = true;

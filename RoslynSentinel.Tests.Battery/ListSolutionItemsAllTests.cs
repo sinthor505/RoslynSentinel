@@ -42,7 +42,7 @@ public class ListSolutionItemsAllTests
 
         var result = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
 
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
     }
 
     [Test]
@@ -54,9 +54,9 @@ public class ListSolutionItemsAllTests
         var workspaceTools = BuildTools(workspaceManager);
 
         var result = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
-        Assert.That(result.Success, Is.True, result.Error?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
 
-        var combined = (SolutionItemsAllResult)result.Data!;
+        var combined = (SolutionItemsAllResult)result.SuccessDetails!;
 
         // ContosoOrders sample solution has exactly 2 projects (ContosoOrders.Core, ContosoOrders.Tests).
         Assert.That(combined.Projects, Has.Count.EqualTo(2));
@@ -80,16 +80,16 @@ public class ListSolutionItemsAllTests
         var workspaceTools = BuildTools(workspaceManager);
 
         var allResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
-        var combined = (SolutionItemsAllResult)allResult.Data!;
+        var combined = (SolutionItemsAllResult)allResult.SuccessDetails!;
 
         var projectsResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.projects);
-        var projectsOnly = (List<ProjectInfoEntry>)projectsResult.Data!;
+        var projectsOnly = (List<ProjectInfoEntry>)projectsResult.SuccessDetails!;
         Assert.That(combined.Projects.Select(p => p.Name), Is.EquivalentTo(projectsOnly.Select(p => p.Name)));
 
         foreach (var project in projectsOnly)
         {
             var filesResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.files, projectName: project.Name);
-            var filesOnly = (List<string>)filesResult.Data!;
+            var filesOnly = (List<string>)filesResult.SuccessDetails!;
             var detail = combined.ProjectDetails.Single(d => d.ProjectName == project.Name);
             Assert.That(detail.Files, Is.EquivalentTo(filesOnly));
         }

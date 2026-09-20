@@ -72,7 +72,7 @@ public class Service
         Assert.That(result.UpdatedText!, Does.StartWith("// WARNING:"),
             "Method with 2+ awaits must produce a WARNING comment.");
         Assert.That(result.UpdatedText, Does.Contain("2 await"),
-            "Warning should mention the count of await expressions.");
+            "WarningDetails should mention the count of await expressions.");
     }
 
     [Test]
@@ -99,7 +99,7 @@ public class Service
         Assert.That(result.UpdatedText!, Does.StartWith("// WARNING:"),
             "Method with try/catch must produce a WARNING comment.");
         Assert.That(result.UpdatedText, Does.Contain("try/catch"),
-            "Warning should mention try/catch as the reason.");
+            "WarningDetails should mention try/catch as the reason.");
     }
 
     [Test]

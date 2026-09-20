@@ -193,7 +193,7 @@ public class Config
         Assert.That(result.Success, Is.False,
             "Should return Fail when the type does not exist");
         Assert.That(result.Error, Does.Contain("NonExistentType"),
-            "Error message should identify the missing type");
+            "ErrorDetails message should identify the missing type");
     }
 
     [Test]
@@ -213,7 +213,7 @@ public class Foo
         Assert.That(result.Success, Is.False,
             "Should return Fail when ToString() is already present");
         Assert.That(result.Error, Does.Contain("already"),
-            "Error message should mention the conflict");
+            "ErrorDetails message should mention the conflict");
     }
 
     [Test]
@@ -244,7 +244,7 @@ public class InternalOnly
         Assert.That(result.Success, Is.False,
             "Should return Fail for a non-existent file");
         Assert.That(result.Error, Does.Contain("exist.cs").Or.Contain("not"),
-            "Error should reference the missing file");
+            "ErrorDetails should reference the missing file");
     }
 
     [Test]
@@ -400,7 +400,7 @@ public class C
         Assert.That(result.Success, Is.False,
             "Invalid C# identifier should return Fail");
         Assert.That(result.Error, Does.Contain("123Invalid").Or.Contain("identifier"),
-            "Error should mention the invalid name");
+            "ErrorDetails should mention the invalid name");
     }
 
     [Test]
@@ -436,7 +436,7 @@ public class C
         Assert.That(result.Success, Is.False,
             "File not in solution should return Fail");
         Assert.That(result.Error, Does.Contain("solution").Or.Contain("not found"),
-            "Error should explain the file is not in the loaded solution");
+            "ErrorDetails should explain the file is not in the loaded solution");
     }
 
     [Test]
@@ -857,7 +857,7 @@ public class OrderLine
                  + "accumulator pattern) - must be refused rather than silently extracted. The prior "
                  + "behavior extracted just that one statement into a method called once per "
                  + "iteration, silently dropping the sibling statement and the loop from the "
-                 + "extraction while still reporting Success=true.")]
+                 + "extraction while still reporting IsSuccess=true.")]
     public async Task ExtractMethodSafe_SingleStatementSnippetInsideAccumulatorLoop_RefusesAmbiguousExtraction()
     {
         SetSource(ContosoOrdersLikeSource, "Order.cs");
@@ -869,9 +869,9 @@ public class OrderLine
         Assert.That(result.Success, Is.False,
             "Must refuse rather than silently produce a per-iteration call that drops totalUnits");
         Assert.That(result.Error, Does.Contain("loop"),
-            "Error should explain the loop-body ambiguity");
+            "ErrorDetails should explain the loop-body ambiguity");
         Assert.That(result.Error, Does.Contain("totalUnits"),
-            "Error should name the sibling statement that would be left behind");
+            "ErrorDetails should name the sibling statement that would be left behind");
     }
 
     [Test]
@@ -882,7 +882,7 @@ public class OrderLine
                  + "when block.Parent was itself a loop construct, so this shape slipped through: "
                  + "the tool extracted just 'decimal runningTotal = 0m;' into a method that always "
                  + "returns 0, silently stranding the foreach and totalUnits in the caller while "
-                 + "still reporting Success=true.")]
+                 + "still reporting IsSuccess=true.")]
     public async Task ExtractMethodSafe_SingleStatementSnippetImmediatelyBeforeAccumulatorLoop_RefusesAmbiguousExtraction()
     {
         SetSource(ContosoOrdersLikeSource, "Order.cs");
@@ -894,7 +894,7 @@ public class OrderLine
         Assert.That(result.Success, Is.False,
             "Must refuse rather than silently produce a method that always returns 0 and strands the foreach");
         Assert.That(result.Error, Does.Contain("loop"),
-            "Error should explain the followed-by-a-loop ambiguity");
+            "ErrorDetails should explain the followed-by-a-loop ambiguity");
     }
 
     private const string StringBuilderFlowsIntoSelectionSource = @"

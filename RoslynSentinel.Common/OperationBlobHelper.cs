@@ -50,7 +50,7 @@ public static class OperationBlobHelper
         if (blob.IsIntegrityFailure)
         {
             // Files landed with no undo record. OperationBlobWriter has already logged the
-            // exception at Error; the trip is what makes it consequential rather than advisory.
+            // exception at ErrorDetails; the trip is what makes it consequential rather than advisory.
             ((IUnrecoverableBreaker)workspaceManager).Trip(
                 toolName, changeId, blob.Diagnostic ?? "the operation blob could not be written");
         }

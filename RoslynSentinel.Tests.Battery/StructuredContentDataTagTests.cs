@@ -107,7 +107,7 @@ public class DataTagProbe
         Assert.That(schema.ValueKind, Is.EqualTo(JsonValueKind.Object),
             "The advertised outputSchema should be a real JSON Schema object, not the bare `true` schema.");
 
-        // Data is IReadOnlyList<LocatedSymbolInfo> -> outputSchema.properties.data.items should carry
+        // SuccessDetails is IReadOnlyList<LocatedSymbolInfo> -> outputSchema.properties.data.items should carry
         // x-produces-tag on the DocCommentId-tagged property, proving the McpToolSchemaPatcher rewrite
         // reaches into array-item schemas, not just top-level object properties.
         var dataItemsProps = schema

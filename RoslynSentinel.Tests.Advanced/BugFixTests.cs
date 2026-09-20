@@ -925,7 +925,7 @@ public class Svc : ISvc { public void Foo() {} }";
         [Test]
         public async Task GenerateFluentBuilder_DiClass_ReturnsErrorResult_NotException()
         {
-            // Regression: previously threw InvalidOperationException; now returns FluentBuilderResult with Error.
+            // Regression: previously threw InvalidOperationException; now returns FluentBuilderResult with ErrorDetails.
             const string src = @"public class ProductsController
 {
     private readonly IProductService _svc;
@@ -945,11 +945,11 @@ public class Svc : ISvc { public void Foo() {} }";
             });
             Assert.That(result, Is.Not.Null, "Should return a FluentBuilderResult, not null");
             Assert.That(result!.Error, Is.Not.Null.And.Not.Empty,
-                "Error field should be populated for DI classes with no settable properties");
+                "ErrorDetails field should be populated for DI classes with no settable properties");
             Assert.That(result.Error, Does.Contain("No settable public properties"),
-                "Error should explain that the class has no settable public properties");
+                "ErrorDetails should explain that the class has no settable public properties");
             Assert.That(result.Error, Does.Contain("DI-injected"),
-                "Error should mention DI-injected classes");
+                "ErrorDetails should mention DI-injected classes");
         }
 
         [Test]
@@ -973,7 +973,7 @@ public class Svc : ISvc { public void Foo() {} }";
         [Test]
         public async Task CheckForSqlInjection_ConstInterpolation_IsNotFlagged()
         {
-            const string src = @"using Microsoft.Data.SqlClient;
+            const string src = @"using Microsoft.SuccessDetails.SqlClient;
 public class Repo
 {
     private const string TempTable = ""#tempItems"";
@@ -1935,7 +1935,7 @@ public class OtherClass
                 "MyClass.cs", "Name", "ToFullProperty",
                 contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
 
-            Assert.That(result.Message, Does.Contain("Error:"),
+            Assert.That(result.Message, Does.Contain("ErrorDetails:"),
                 "Should return an error message when contextSnippet is needed to disambiguate but doesn't match");
         }
 
@@ -2280,7 +2280,7 @@ public class MyService
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-52: ReduceBlockDepth -> Server Error Crash (null root reference)
+        // BUG-52: ReduceBlockDepth -> Server ErrorDetails Crash (null root reference)
         // ──────────────────────────────────────────────────────────────────────────
 
         [TestFixture]
@@ -2334,12 +2334,12 @@ public class Processor
 
                 Assert.That(result, Is.Not.Null, "Should return non-null result");
                 Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                Assert.That(result.UpdatedText, Does.Not.Contain("// Error"), "Should not return error");
+                Assert.That(result.UpdatedText, Does.Not.Contain("// ErrorDetails"), "Should not return error");
             }
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // BUG-53: MakeMethodThreadSafe -> Server Error Crash (null root reference)
+        // BUG-53: MakeMethodThreadSafe -> Server ErrorDetails Crash (null root reference)
         // ──────────────────────────────────────────────────────────────────────────
 
         [TestFixture]

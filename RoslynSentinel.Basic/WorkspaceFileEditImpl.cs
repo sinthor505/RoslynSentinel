@@ -41,8 +41,8 @@ public class WorkspaceFileEditImpl
         {
             return new SentinelCallToolResult<object>()
             {
-                Success = true,
-                Data = await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount, cancellationToken)
+                IsSuccess = true,
+                SuccessDetails = await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount, cancellationToken)
             };
         }
         catch (Exception ex)
@@ -50,8 +50,8 @@ public class WorkspaceFileEditImpl
             _logger.LogError(ex, "RetryFailedChanges failed");
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "RetryFailedChanges")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "RetryFailedChanges")
             };
         }
     }
@@ -66,8 +66,8 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError("NoOperationBlobFound",
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError("NoOperationBlobFound",
                         $"No operation blob found for changeId '{changeId}' under .roslynsentinel/operations/. " +
                         "This does not mean the change failed - it may well be on disk. It means no undo record " +
                         "exists for that id here. Check the id against the value the applying tool returned, and " +
@@ -84,8 +84,8 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = false,
-                    Error = new ResultError("NoReversibleItems",
+                    IsSuccess = false,
+                    ErrorDetails = new ResultError("NoReversibleItems",
                         $"The operation blob for changeId '{changeId}' was found, but none of its items carry the " +
                         "original file contents needed to revert. The change itself completed - this is a gap in " +
                         "what was recorded, not a failed apply, and it is most common for operations that renamed " +
@@ -143,8 +143,8 @@ public class WorkspaceFileEditImpl
                 : "";
             return new SentinelCallToolResult<object>()
             {
-                Success = true,
-                Data = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{failedPart}"
+                IsSuccess = true,
+                SuccessDetails = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{failedPart}"
             };
         }
         catch (Exception ex)
@@ -152,8 +152,8 @@ public class WorkspaceFileEditImpl
             _logger.LogError(ex, "UndoLastApply failed for '{ChangeId}'", changeId);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UndoLastApply")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UndoLastApply")
             };
         }
     }
@@ -204,8 +204,8 @@ public class WorkspaceFileEditImpl
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = BuildFileNotFoundError(solution, normalizedPath)
+                        IsSuccess = false,
+                        ErrorDetails = BuildFileNotFoundError(solution, normalizedPath)
                     };
                 }
 
@@ -221,8 +221,8 @@ public class WorkspaceFileEditImpl
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        Success = false,
-                        Error = new ResultError(ToolErrorCode.InvalidArgument, $"ReadFile: requested range {from}-{to} is out of bounds for a {totalLines}-line file.")
+                        IsSuccess = false,
+                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"ReadFile: requested range {from}-{to} is out of bounds for a {totalLines}-line file.")
                     };
                 }
 
@@ -231,8 +231,8 @@ public class WorkspaceFileEditImpl
                 var slice = sourceText.ToString(TextSpan.FromBounds(start, end));
                 return new SentinelCallToolResult<object>()
                 {
-                    Success = true,
-                    Data = new
+                    IsSuccess = true,
+                    SuccessDetails = new
                     {
                         filePath = (string)filePathResolved,
                         startLine = from,
@@ -257,7 +257,7 @@ public class WorkspaceFileEditImpl
                 try
                 {
                     var fileOutline = await _readNav.GetFileOutline(reason: reason, filePathResolved, cancellationToken);
-                    outlineData = fileOutline.Data;
+                    outlineData = fileOutline.SuccessDetails;
                 }
                 catch (Exception ex)
                 {
@@ -266,9 +266,9 @@ public class WorkspaceFileEditImpl
 
                 return new SentinelCallToolResult<object>
                 {
-                    Success = true,
+                    IsSuccess = true,
                     LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need, or use GetFileOutline to get the constructors, methods, helpers, members, enums, fields, properties, etc of a file without reading the entire file."),
-                    Data = new
+                    SuccessDetails = new
                     {
                         totalLines,
                         fileOutline = outlineData
@@ -279,8 +279,8 @@ public class WorkspaceFileEditImpl
 
             return new SentinelCallToolResult<object>()
             {
-                Success = true,
-                Data = new
+                IsSuccess = true,
+                SuccessDetails = new
                 {
                     filePath = (string)filePathResolved,
                     startLine = 1,
@@ -296,8 +296,8 @@ public class WorkspaceFileEditImpl
             _logger.LogError(ex, "ReadFile failed for '{FilePathWrapper}'", filePathResolved);
             return new SentinelCallToolResult<object>()
             {
-                Success = false,
-                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReadFile")
+                IsSuccess = false,
+                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReadFile")
             };
         }
     }

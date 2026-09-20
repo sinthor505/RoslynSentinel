@@ -28,7 +28,7 @@ public class ThreadSafetyEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = $"// Error: File '{filePath}' not found."
+                    Message = $"// ErrorDetails: File '{filePath}' not found."
                 };
             }
 
@@ -39,7 +39,7 @@ public class ThreadSafetyEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = $"// Error: Failed to get syntax root for '{filePath}'."
+                    Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
                 };
             }
 
@@ -50,7 +50,7 @@ public class ThreadSafetyEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = $"// Error: Method '{methodName}' not found or has no body."
+                    Message = $"// ErrorDetails: Method '{methodName}' not found or has no body."
                 };
             }
 
@@ -61,7 +61,7 @@ public class ThreadSafetyEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = $"// Error: Containing type not found for method '{methodName}'."
+                    Message = $"// ErrorDetails: Containing type not found for method '{methodName}'."
                 };
             }
 
@@ -84,7 +84,7 @@ public class ThreadSafetyEngine
                     {
                         Outcome = EditOutcome.TargetNotFound,
                         FilePath = filePath,
-                        Message = $"// Error: Field '{lockFieldName}' already exists but is not of type 'object'. Please supply a different lockFieldName."
+                        Message = $"// ErrorDetails: Field '{lockFieldName}' already exists but is not of type 'object'. Please supply a different lockFieldName."
                     };
                 }
             }
@@ -127,7 +127,7 @@ public class ThreadSafetyEngine
             {
                 Outcome = EditOutcome.Error,
                 FilePath = filePath,
-                Message = $"// Error: {ex.Message}"
+                Message = $"// ErrorDetails: {ex.Message}"
             };
         }
     }
@@ -292,7 +292,7 @@ public class ThreadSafetyEngine
             {
                 Outcome = EditOutcome.Error,
                 FilePath = filePath,
-                Message = $"// Error converting lock to SemaphoreSlim: {ex.Message}"
+                Message = $"// ErrorDetails converting lock to SemaphoreSlim: {ex.Message}"
             };
         }
     }

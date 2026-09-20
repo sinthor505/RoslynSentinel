@@ -94,9 +94,9 @@ public class LoadSolutionPathSanitizationTests
             async () => await _workspaceManager.LoadSolutionAsync("Samples/Foo/Foo.sln", nonexistentBaseRepoDir));
 
         Assert.That(ex!.Message, Does.Contain(nonexistentBaseRepoDir),
-            "Error must name the specific nonexistent baseRepoDir that was rejected.");
+            "ErrorDetails must name the specific nonexistent baseRepoDir that was rejected.");
         Assert.That(ex.Message, Does.Contain("omit baseRepoDir").IgnoreCase.Or.Contain("do not guess").IgnoreCase,
-            "Error must steer the caller toward omitting baseRepoDir rather than guessing another value.");
+            "ErrorDetails must steer the caller toward omitting baseRepoDir rather than guessing another value.");
     }
 
     [Test]
