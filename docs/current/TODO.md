@@ -4,6 +4,45 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `SentinelRefactoringTools` / `RefactoringStructuralTools` split left half-finished — duplicate `SyncTypeAndFilename` MCP tool registration
+
+**Found:** 2026-09-20, while investigating whether `SyncTypeAndFilename` is duplicated.
+
+**What:** `RoslynSentinel.Server.Basic/RefactoringStructuralTools.cs` was created as step 1 of
+`docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md` (Decision 1: split
+`SentinelRefactoringTools` into `RefactoringSignatureTools`, `RefactoringStructuralTools`,
+`RefactoringExtractionDocsTools`). It duplicates 6 methods verbatim from
+`SentinelRefactoringTools.cs` — `Member`, `ModifyEnum`, `ModifyAttribute`, `ModifyModifier`,
+`ModifyBaseType`, `SyncTypeAndFilename` — all still `[McpServerTool]`-attributed with identical
+names/signatures in both classes. `RefactoringStructuralTools` is registered in DI
+(`ServiceRegistrationExtensionsBasic.cs:279-282`, `AddSingleton` + `WithSentinelTools<>()`) under a
+`"RefactorStructural"` mode key (`ToolClassRegistry.cs:38`) that is never enabled by any active
+mode (`ServerStdio.cs`'s `ActiveToolTypes`, `AdvancedModeToToolClasses`, and every mode string
+built anywhere in the repo were grepped — none reference `"RefactorStructural"` or
+`RefactoringStructuralTools`). So today there is no live duplicate registration, but the two
+classes are one config change away from colliding on 6 tool names simultaneously, and the class
+sits as dead-in-production code with real duplicated logic behind it (bugs fixed in one copy, e.g.
+`SyncTypeAndFilename`'s first-declared-type bug, silently do not apply to the other).
+
+The plan's designed end-state (Decision 3) is NOT deleting `RefactoringStructuralTools` — it's
+turning `SentinelRefactoringTools` into a thin legacy facade that internally constructs and
+delegates to `RefactoringStructuralTools` + the other 2 split classes, preserving
+`SentinelRefactoringTools`'s public constructor/method signatures so all 18 existing
+direct-construction test call sites and the 4 `typeof(SentinelRefactoringTools)` reflection sites
+keep compiling untouched. That cutover (and the matching `SentinelWorkspaceTools` -> 5-class split
+in the same plan) was never carried out.
+
+**Suggested approach:** treat as its own implementation pass, not a quick patch — follow
+`plan_split_workspace_refactoring_tools_for_di.md` Decision 3's facade pattern and Decision 7's
+stepwise/incremental-build-checkpoint sequencing. Minimum slice to close the actual duplication
+risk: make `SentinelRefactoringTools`'s `Member`/`ModifyEnum`/`ModifyAttribute`/`ModifyModifier`/
+`ModifyBaseType`/`SyncTypeAndFilename` methods delegate to an internally-held
+`RefactoringStructuralTools` instance instead of containing their own copies, matching the facade
+shape already spec'd in the plan doc. Full plan also covers `RefactoringSignatureTools` and
+`RefactoringExtractionDocsTools`, which have not been independently verified as duplicated or not
+during this pass — check those too before assuming this TODO's scope is limited to
+`SyncTypeAndFilename`'s cluster.
+
 ## `Member`'s three divergent declaration-kind dispatch tables — proposal only, not implemented
 
 **Found:** 2026-09-20, surfaced while root-causing the third `Member(remove)` "false not found"

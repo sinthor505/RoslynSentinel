@@ -1,5 +1,55 @@
 # Split SentinelWorkspaceTools / SentinelRefactoringTools for DI-level tool-set granularity
 
+## Status update (2026-09-20) -- read this before trusting "not implemented" language below
+
+Found while investigating whether `SyncTypeAndFilename` is a duplicated MCP tool
+(see `docs/current/TODO.md`'s entry on the same date). This plan is **much further along than any
+prior doc/memory tracked** -- confirmed against actual source, not assumption:
+
+- **All 8 planned `*Tools`/`*Impl` file pairs already exist and are registered**, both from the
+  main body (Decision 1: `WorkspaceFileEditTools`/`Impl`, `WorkspaceBuildTestTools`/`Impl`,
+  `WorkspaceProjectManagementTools`/`Impl`, `WorkspaceReadNavigationTools`/`Impl`,
+  `WorkspaceHealthMiscTools`/`Impl`, `RefactoringSignatureTools`/`Impl`,
+  `RefactoringStructuralTools`/`Impl`, `RefactoringExtractionDocsTools`/`Impl`) and from
+  **Addendum A** (`SymbolNavigationTools`/`Impl`, `SymbolRelationshipTools`/`Impl` -- Addendum A is
+  also done, not just proposed).
+- Step 1 (shared static helpers) is done: `RoslynSentinel.Common/OperationBlobHelper.cs` and
+  `RoslynSentinel.Basic/RefactoringToolHelpers.cs` both exist and are called from their intended
+  sites (`SentinelWorkspaceTools.cs`, `SentinelWholeFileWriteTools.cs`,
+  `WorkspaceProjectManagementImpl.cs`).
+- Registration (Decision 4) landed via a **different mechanism than this doc specifies**: not raw
+  `activeModes.Contains("WorkspaceFileIO")` string checks in `ServiceRegistrationExtensionsBasic.cs`,
+  but `activeToolClasses.Contains("WorkspaceFileEditTools")` gated by a `ToolClassRegistry.cs`
+  mode-to-class-name dictionary (`BasicModeToToolClasses`/`AdvancedModeToToolClasses`). Every split
+  class from Decision 1 + Addendum A has its own `if (activeToolClasses.Contains("<ClassName>"))`
+  block in `ServiceRegistrationExtensionsBasic.cs` (verified lines 185-309) -- functionally
+  equivalent opt-in granularity, different plumbing than the code sample under Decision 4.
+- **What is NOT done -- this is the actual gap**: the "rewrite as thin facade" half of steps 2/3
+  (Decision 3) is incomplete and inconsistent between the two classes:
+  - `SentinelWorkspaceTools.cs` is a **partial** facade: some methods delegate to the new split
+    classes (`GetDiagnostics`, `Build`, `RunTest`, `SafeDeleteUnusedSymbol`, `CreateProject`,
+    `SplitProjectByFolder`, etc.), but others (`ReplaceSnippet`, `ReplaceSnippetBatch`, `CreateFile`)
+    still contain their full original method bodies inline -- confirmed via `GetFileOutline`
+    (still 1244 lines; `ReplaceSnippet` alone spans lines 182-383).
+  - `SentinelRefactoringTools.cs` has **not been converted to a facade at all** for the 6 structural
+    methods: `Member`, `ModifyEnum`, `ModifyAttribute`, `ModifyModifier`, `ModifyBaseType`,
+    `SyncTypeAndFilename` all still have full independent bodies in `SentinelRefactoringTools.cs`
+    (confirmed at line 284 for `SyncTypeAndFilename`) that duplicate -- not delegate to --
+    `RefactoringStructuralTools.cs`'s copies of the same 6 methods (line 165 for
+    `SyncTypeAndFilename`). Both are live `[McpServerTool]`-attributed methods with identical
+    signatures; only `RefactoringStructuralTools`'s registration mode (`"RefactorStructural"`) is
+    unreachable today, which is the only reason this isn't a live tool-name collision right now.
+  - No equivalent check has been done yet for `RefactoringSignatureTools`/`RefactoringExtractionDocsTools`
+    vs. `SentinelRefactoringTools`, or for `SentinelSymbolTools` vs. its Addendum A split -- treat
+    those as unverified, not confirmed-clean, until someone actually diffs them.
+
+**Practical effect on "Next step"**: Decision 7 steps 1 and 1.5 (helpers, engine-usage audit) and
+the file-creation half of steps 2/3/3.5 are done. The remaining work is finishing the *facade
+delegation* half of steps 2 and 3 (and auditing whether Addendum A's `SentinelSymbolTools` facade
+is similarly incomplete) -- i.e. actually replacing the duplicated method bodies in
+`SentinelWorkspaceTools.cs`/`SentinelRefactoringTools.cs` with one-line delegating calls, per
+Decision 3's design, rather than creating any new files.
+
 ## Context
 
 Model-eval research this session found that tool-schema size itself measurably degrades a local
