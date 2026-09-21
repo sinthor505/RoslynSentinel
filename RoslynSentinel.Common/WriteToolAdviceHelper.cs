@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Common;
 
 /// <summary>
 /// The kind of escape hatch <see cref="WriteToolAdviceHelper"/> selected for an edit that a

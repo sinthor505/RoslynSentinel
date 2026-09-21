@@ -692,13 +692,17 @@ public class SentinelWorkspaceTools
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: true, cancellationToken: cancellationToken);
             if (!result.Success && result.ValidationResult != null)
             {
+                string writeFileHint = _writeAdvice.IsExposed("WriteFile")
+                    ? "\nAlternatively, WriteFile(operation=CreateFile) can create this file with its full, already-correct body in one call, avoiding the empty-scaffold-then-populate sequence entirely."
+                    : "";
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError(ToolErrorCode.Exception,
                         "CreateFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +
-                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
+                        await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken) +
+                        writeFileHint)
                 };
             }
 
