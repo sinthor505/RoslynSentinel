@@ -700,7 +700,7 @@ public class SentinelGitTools
 
     /// <summary>
     /// Shows one commit's metadata (hash/author/date/full body) plus the diff it introduced -
-    /// equivalent to <c>git show &lt;target&gt;</c>. Falls back to the empty tree for a diff base
+    /// equivalent to <c>git show <target></c>. Falls back to the empty tree for a diff base
     /// when <paramref name="target"/> has no parent (a repo's first commit), same as DiffAsync.
     /// </summary>
     private async Task<GitShowResult> ShowAsync(
@@ -1033,7 +1033,7 @@ public class SentinelGitTools
 
     // Added by InsertMemberAfter (expected - used for diagnostics)/// <summary>
                                                                    /// Lists branches (default), or creates/deletes one when <paramref name="branchName"/> is
-                                                                   /// given. Creation is a plain, non-destructive <c>git branch &lt;name&gt; [startPoint]</c> -> it
+                                                                   /// given. Creation is a plain, non-destructive <c>git branch <name> [startPoint]</c> -> it
                                                                    /// does not switch to the new branch; use <c>checkout</c> for that, optionally with
                                                                    /// <c>createBranch=true</c> to do both in one call. Deletion uses the safe <c>-d</c> form
                                                                    /// (refuses an unmerged branch) rather than <c>-D</c>, so a mistaken delete can't silently

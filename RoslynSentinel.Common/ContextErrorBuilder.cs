@@ -88,7 +88,7 @@ public class ContextErrorBuilder
 /// Classifies why a contextSnippet-based lookup failed to resolve to exactly one match, so
 /// <see cref="ContextErrorBuilder"/> can pick the right exception type and wording instead of
 /// each call site hand-rolling its own message. Scoped narrowly to context-snippet/text-anchor
-/// errors only -&gt; does not introduce a parallel <see cref="ToolErrorCode"/> taxonomy.
+/// errors only -> does not introduce a parallel <see cref="ToolErrorCode"/> taxonomy.
 /// </summary>
 public enum SnippetMatchOutcome
 {

@@ -24,7 +24,7 @@ public static class DocPathGuard
     /// Validates and resolves a bare filename within the given docs subdirectory root.
     /// </summary>
     /// <param name="docsSubdirRoot">
-    /// Absolute path to the docs subdirectory (e.g. <c>&lt;solutionRoot&gt;/docs/plans/</c>).
+    /// Absolute path to the docs subdirectory (e.g. <c><solutionRoot>/docs/plans/</c>).
     /// </param>
     /// <param name="filename">
     /// Caller-supplied relative path. May include forward-slash subdirectory segments (matching

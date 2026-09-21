@@ -51,7 +51,7 @@ public static partial class SentinelConsoleMode
     /// Reads <see cref="McpServerTool.ProtocolTool"/> from every registered DI instance. Falls back
     /// to constructing tools directly via <see cref="McpServerTool.Create"/> over all loaded
     /// RoslynSentinel.Server.* assemblies when DI registration returns zero (e.g. singleton factory
-    /// delay or scope mismatch at startup time) -> mirrors what <c>WithSentinelTools&lt;T&gt;()</c> does.
+    /// delay or scope mismatch at startup time) -> mirrors what <c>WithSentinelTools<T>()</c> does.
     /// Shared by <see cref="BuildToolManifestFor"/> and <see cref="WriteStartupDump"/> so the two
     /// can never independently drift.
     /// </summary>
@@ -101,7 +101,7 @@ public static partial class SentinelConsoleMode
     /// <summary>
     /// Prints the tool surface <paramref name="registerTools"/> would expose. Defaults to a
     /// names-only listing; pass <paramref name="full"/> (--full) for the same envelope
-    /// <c>tool_list_&lt;modes&gt;.json</c> carries (name/description/inputSchema).
+    /// <c>tool_list_<modes>.json</c> carries (name/description/inputSchema).
     /// </summary>
     public static void ListTools(
         Func<IMcpServerBuilder, IServiceCollection, IMcpServerBuilder> registerTools,

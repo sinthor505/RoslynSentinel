@@ -5,8 +5,6 @@ using Microsoft.CodeAnalysis.Text;
 
 using ModelContextProtocol;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Advanced;
 
 public class AsyncOptimizationEngine
@@ -361,15 +359,15 @@ public class AsyncOptimizationEngine
     /// <summary>
     /// Converts a synchronous method to the Asyncify-bridge pattern in one atomic step:
     /// <list type="number">
-    ///   <item>Creates an async overload named <c>&lt;methodName&gt;Async</c> with the original
+    ///   <item>Creates an async overload named <c><methodName>Async</c> with the original
     ///         body copied verbatim, <c>CancellationToken cancellationToken = default</c> appended
     ///         as the last parameter, and the <c>async</c> modifier added.
     ///         Expression-bodied methods are converted to block bodies in the async overload
     ///         so that downstream CT-propagation tools can operate on them.</item>
     ///   <item>Replaces the original sync method's body with the bridge call:
-    ///         <c>return &lt;methodName&gt;Async(params…).GetAwaiter().GetResult();</c>
+    ///         <c>return <methodName>Async(params…).GetAwaiter().GetResult();</c>
     ///         (or a bare expression statement for void-returning methods).</item>
-    ///   <item>Adds <c>[Obsolete("Asyncify-bridge: call &lt;methodName&gt;Async instead.", false)]</c>
+    ///   <item>Adds <c>[Obsolete("Asyncify-bridge: call <methodName>Async instead.", false)]</c>
     ///         to the original sync method so that CS0618 warnings at call sites drive incremental
     ///         caller migration.</item>
     /// </list>
@@ -1020,7 +1018,7 @@ public class AsyncOptimizationEngine
     }
 
     /// <summary>
-    /// Converts a method returning Task&lt;List&lt;T&gt;&gt; or List&lt;T&gt; to IAsyncEnumerable&lt;T&gt;.
+    /// Converts a method returning Task<List<T>> or List<T> to IAsyncEnumerable<T>.
     /// Transforms results.Add(x) patterns to yield return x. Falls back to scaffold for complex bodies.
     /// </summary>
     public async Task<DocumentEditResult> ConvertToAsyncEnumerableAsync(

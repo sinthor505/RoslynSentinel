@@ -315,7 +315,7 @@ public sealed record RenameSymbolUpdatedHandle(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Named shape mirroring the anonymous object <see cref="SentinelRefactoringTools.RenameSymbol"/>
-/// assigns to <c>SentinelCallToolResult&lt;object&gt;.SuccessDetails</c> on its applied success path. Primary path only
+/// assigns to <c>SentinelCallToolResult<object>.SuccessDetails</c> on its applied success path. Primary path only
 /// (the resolution-failed / no-pending-changes / apply-failed error paths return a different,
 /// error-shaped envelope with no SuccessDetails) - see proposal_structuredcontent_rollout.md.
 /// </summary>
@@ -331,7 +331,7 @@ public sealed record RenameSymbolData(
     string? ResidualMentionsNote);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Envelope shape mirroring <c>SentinelCallToolResult&lt;object&gt;</c> as actually populated on
+/// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
 /// <see cref="SentinelRefactoringTools.RenameSymbol"/>'s primary success path, which sets only
 /// <c>IsSuccess</c> and <c>SuccessDetails</c> (not TotalRecords/WorkspaceVersion/etc). Primary path only -
 /// see proposal_structuredcontent_rollout.md.
@@ -341,7 +341,7 @@ public sealed record RenameSymbolResultEnvelope(
     RenameSymbolData? Data);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Envelope shape mirroring <c>SentinelCallToolResult&lt;object&gt;</c> as actually populated on
+/// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
 /// <see cref="SentinelRefactoringTools.ModifyModifier"/>'s primary (autoStage=true, singular-edit,
 /// non-batch) success path, which sets only <c>IsSuccess</c> and <c>SuccessDetails</c>. Deliberately does not
 /// cover the batch (edits != null), autoStage=false, or error branches - see
@@ -374,7 +374,7 @@ public sealed record MethodSignatureViewData(
     IReadOnlyList<MethodSignatureParameterInfo> Parameters);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Envelope shape mirroring <c>SentinelCallToolResult&lt;object&gt;</c> as actually populated on
+/// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
 /// <see cref="SentinelRefactoringTools.MethodSignature"/>'s "view" branch only (operation=view),
 /// which sets only <c>IsSuccess</c> and <c>SuccessDetails = new { Parameters }</c>. The add/remove branches
 /// (both the non-autoStage ToJsonSummary shape and the autoStage applied-with-offload

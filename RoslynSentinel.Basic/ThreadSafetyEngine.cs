@@ -304,7 +304,7 @@ public class ThreadSafetyEngine
     ///   if (_field == null) { _field = new X(); }
     /// Without volatile, a second thread may observe the partially-initialized object
     /// or both threads may initialise and one write gets lost.
-    /// Correct alternatives: Lazy&lt;T&gt;, lock, Interlocked.CompareExchange.
+    /// Correct alternatives: Lazy<T>, lock, Interlocked.CompareExchange.
     /// </summary>
     public async Task<List<string>> FindUnsafeLazyInitAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)

@@ -7,7 +7,7 @@ namespace RoslynSentinel.Advanced;
 /// <summary>
 /// Server-orchestrated commenting: seeds every member in scope with a sentinel
 /// <c>[ContentHash("Comment", "00000000")]</c> if it has none, then generates
-/// <c>/// &lt;summary&gt;</c> comments (via an LLM) for every member whose hash doesn't match its
+/// <c>/// <summary></c> comments (via an LLM) for every member whose hash doesn't match its
 /// current content. Progress is a queryable fact (the attributes on disk), not a claim carried in
 /// an agent's own context -> repeated calls resume for free.
 /// </summary>

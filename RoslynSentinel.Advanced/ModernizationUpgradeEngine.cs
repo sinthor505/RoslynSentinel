@@ -16,7 +16,7 @@ public class ModernizationUpgradeEngine
     }
 
     /// <summary>
-    /// Upgrades legacy string parsing to use Span&lt;char&gt; for zero-allocation performance.
+    /// Upgrades legacy string parsing to use Span<char> for zero-allocation performance.
     /// Converts: str.Substring(start, length) -> str.AsSpan(start, length).ToString()
     /// and:      str.Substring(start)         -> str.AsSpan(start).ToString()
     /// Scoped to the named method when methodName is provided; otherwise transforms entire file.

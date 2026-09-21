@@ -40,7 +40,7 @@ public enum GitStageScope
     /// <summary>Stage every change in the working tree, including untracked files (<c>git add -A</c>). Ignores <c>files</c> -> passing both is an error.</summary>
     all,
 
-    /// <summary>Stage exactly the paths named in <c>files</c>, untracked ones included (<c>git add -- &lt;paths&gt;</c>). Requires <c>files</c>.</summary>
+    /// <summary>Stage exactly the paths named in <c>files</c>, untracked ones included (<c>git add -- <paths></c>). Requires <c>files</c>.</summary>
     listed
 }
 

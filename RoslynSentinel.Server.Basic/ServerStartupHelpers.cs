@@ -458,7 +458,7 @@ public static class ServerStartupHelpers
 
     /// <summary>
     /// Checks this instance's own root folder (one level above <see
-    /// cref="AppDomain.CurrentDomain"/>'s BaseDirectory, e.g. bin-vscode\&lt;instance-id&gt;\ for a
+    /// cref="AppDomain.CurrentDomain"/>'s BaseDirectory, e.g. bin-vscode\<instance-id>\ for a
     /// per-window stdio build whose exe lives in ...\Advanced\) for a marker file left by
     /// roslynsentinel-vscode-control.ps1's stopallstdio/stopallhttp/stopalltypes actions, which write
     /// it immediately before calling Stop-Process on this exact process. Consumed (read then deleted)
@@ -494,7 +494,7 @@ public static class ServerStartupHelpers
     // ── DI logger registration ────────────────────────────────────────────────
 
     /// <summary>
-    /// Registers Serilog as the ILoggerFactory / ILogger&lt;T&gt; provider in DI.
+    /// Registers Serilog as the ILoggerFactory / ILogger<T> provider in DI.
     /// Call after <see cref="ConfigureStdioLogging"/> or <see cref="ConfigureHttpLogging"/>.
     /// </summary>
     public static void RegisterSerilogLoggerFactory(IServiceCollection services)

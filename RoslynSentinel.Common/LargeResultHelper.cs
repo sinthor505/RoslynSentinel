@@ -20,7 +20,7 @@ public static class LargeResultHelper
 
     /// <summary>
     /// Serializes <paramref name="data"/> and, if it exceeds <see cref="OffloadThresholdBytes"/>, writes it
-    /// to <c>.roslynsentinel/largeresults/largeresult_&lt;timestamp&gt;_&lt;resultId&gt;.json</c> wrapped in a
+    /// to <c>.roslynsentinel/largeresults/largeresult_<timestamp>_<resultId>.json</c> wrapped in a
     /// <see cref="ResultWrapper"/> tagged with <paramref name="wrapperType"/> so <c>GetLargeResult</c> can
     /// deserialize it back. Callers that skip this and hand-write their own file (as GetMethodSource/
     /// ReadFile once did) produce a file GetLargeResult cannot read - always go through this method
@@ -55,7 +55,7 @@ public static class LargeResultHelper
     /// for callers that only have a final serialized response body -> not a typed value -> such as the
     /// generic MCP request-filter backstop. Unlike <see cref="StoreLargeResultAsync{T}"/>, this never
     /// re-serializes: <paramref name="json"/> is parsed once into a <see cref="JsonNode"/> and wrapped
-    /// as-is. Mirrors the same <c>.roslynsentinel/largeresults/largeresult_&lt;timestamp&gt;_&lt;resultId&gt;.json</c>
+    /// as-is. Mirrors the same <c>.roslynsentinel/largeresults/largeresult_<timestamp>_<resultId>.json</c>
     /// naming convention so <c>GetLargeResult</c>'s existing file-resolution logic finds it unchanged.
     /// Fails closed: if no solution root is available, returns <c>offloaded: false</c> rather than
     /// throwing, so a guardrail can never itself break the call it's guarding.

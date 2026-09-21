@@ -2394,7 +2394,7 @@ public class AnalysisEngine
     }
 
     /// <summary>
-    /// Reads the <c>&lt;RootNamespace&gt;</c> MSBuild property from the project file,
+    /// Reads the <c><RootNamespace></c> MSBuild property from the project file,
     /// falling back to the project name (the .csproj stem).
     /// </summary>
     private static string GetRootNamespace(Project project)

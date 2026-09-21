@@ -654,7 +654,7 @@ public class MsToolAugmentEngine
     /// non-null (e.g. <c>var sb = new StringBuilder();</c>, never reassigned), and the generated
     /// method body then dereferences it without a null check -> producing a live CS8602 warning
     /// that didn't exist before extraction. Only a type explicitly declared/initialized as nullable
-    /// (value types' <c>Nullable&lt;T&gt;</c>, or a reference type whose declared type is itself
+    /// (value types' <c>Nullable<T></c>, or a reference type whose declared type is itself
     /// nullable) should keep the <c>?</c> here; this strips a flow-state-only annotation.
     /// </summary>
     private static string DisplayTypeForExtractedSignature(ITypeSymbol type)

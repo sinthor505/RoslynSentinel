@@ -123,7 +123,7 @@ public record BatchResultSummary : EngineResultBase
     }
     /// <summary>
     /// Actionable diagnostic suggestions, populated automatically when <c>succeeded==0</c> or
-    /// <c>failed&gt;0</c>. Each entry is a self-contained sentence describing a detected pattern
+    /// <c>failed>0</c>. Each entry is a self-contained sentence describing a detected pattern
     /// and the recommended next step. Null when everything succeeded or no patterns were detected.
     /// </summary>
     public List<string>? Suggestions

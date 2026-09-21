@@ -9,8 +9,8 @@ namespace RoslynSentinel.Basic;
 public static class SemanticTypeHelper
 {
     /// <summary>
-    /// Returns true if <paramref name="type"/> is Task, Task&lt;T&gt;, ValueTask, or ValueTask&lt;T&gt;.
-    /// Uses OriginalDefinition so constructed generic types (Task&lt;int&gt;) match correctly.
+    /// Returns true if <paramref name="type"/> is Task, Task<T>, ValueTask, or ValueTask<T>.
+    /// Uses OriginalDefinition so constructed generic types (Task<int>) match correctly.
     /// </summary>
     public static bool IsTaskOrValueTask(ITypeSymbol? type)
     {
@@ -54,7 +54,7 @@ public static class SemanticTypeHelper
 
     /// <summary>
     /// Returns true if <paramref name="type"/> is a lazy, non-materialized sequence
-    /// (IEnumerable&lt;T&gt;, IQueryable&lt;T&gt;, or a LINQ result type that implements IEnumerable).
+    /// (IEnumerable<T>, IQueryable<T>, or a LINQ result type that implements IEnumerable).
     /// Materialized types (List, Array, HashSet, Dictionary, etc.) return false.
     /// </summary>
     public static bool IsNonMaterializedSequence(ITypeSymbol? type)

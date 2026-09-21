@@ -9,11 +9,11 @@ using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
 /// <summary>
-/// God-class MCP surface for workspace tools. Six of its tool methods -&gt; GetMethodSource,
-/// GetFileOutline, ListAll, SearchSolutionText, GetOperationDetail, GetLargeResult -&gt; are thin
+/// God-class MCP surface for workspace tools. Six of its tool methods -> GetMethodSource,
+/// GetFileOutline, ListAll, SearchSolutionText, GetOperationDetail, GetLargeResult -> are thin
 /// delegates to <see cref="WorkspaceReadNavigationTools"/> (field <c>_readNav</c>), which itself
 /// delegates to <see cref="WorkspaceReadNavigationImpl"/> for the actual logic. That pair is a
-/// trial slice of a larger planned split of this class -&gt; see
+/// trial slice of a larger planned split of this class -> see
 /// docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md. This class remains the one
 /// actually registered/reachable over MCP for those six tool names until that plan's Decision 4/
 /// Decision 7 step 4 (fine-grained mode-string wiring) lands.
@@ -187,7 +187,7 @@ public class SentinelWorkspaceTools
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
     [Description("Replaces one exact block of text with another in a single file, for localized edits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) instead. For multiple small edits - in the same file or across files - pass 'edits' instead of the singular filepath/oldContent/newContent params. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
-    public async Task<SentinelCallToolResult<object>> ReplaceSnippet(
+    public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
     [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
@@ -209,7 +209,7 @@ public class SentinelWorkspaceTools
 
             if (hasSingularEdit && hasBatchEdit)
             {
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument,
@@ -221,7 +221,7 @@ public class SentinelWorkspaceTools
             {
                 if (edits!.Count == 0)
                 {
-                    return new SentinelCallToolResult<object>()
+                    return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {
                         IsSuccess = false,
                         ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'edits' was supplied but is empty.")
@@ -233,7 +233,7 @@ public class SentinelWorkspaceTools
 
             if (!filepath.HasValue)
             {
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument,
@@ -244,7 +244,7 @@ public class SentinelWorkspaceTools
             FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath.Value);
             if (!filePathResolved.Validated)
             {
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsSuccess = false,
                     ErrorDetails = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
@@ -255,7 +255,7 @@ public class SentinelWorkspaceTools
 
             if (string.IsNullOrEmpty(oldContent))
             {
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'oldContent' is required.")
@@ -264,7 +264,7 @@ public class SentinelWorkspaceTools
 
             if (newContent == null)
             {
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'newContent' is required (pass an empty string for a pure deletion).")
@@ -281,7 +281,7 @@ public class SentinelWorkspaceTools
                 // the old text here named WriteFile unconditionally, and in run 398 WriteFile was
                 // gated off, so the one instruction the model was given was unfollowable.
                 var advice = _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet");
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument,
@@ -297,7 +297,7 @@ public class SentinelWorkspaceTools
                     var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePath == filePathResolved.Absolute);
                     if (document == null)
                     {
-                        return new SentinelCallToolResult<object>()
+                        return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsSuccess = false,
                             ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
@@ -321,12 +321,12 @@ public class SentinelWorkspaceTools
                     if (action == ProposedChangeAction.validate)
                     {
                         var validationResult = await _validationEngine.ValidateChangesAsync(snippetChanges);
-                        return validationResult.Success ? new SentinelCallToolResult<object>()
+                        return validationResult.Success ? new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsSuccess = true,
-                            SuccessDetails = validationResult
+                            SuccessDetails = new ReplaceSnippetResult(null, validationResult, null)
                         }
-                        : new SentinelCallToolResult<object>()
+                        : new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsSuccess = false,
                             ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet validate failed: {validationResult.Diagnostics.ToInfo()}")
@@ -335,7 +335,7 @@ public class SentinelWorkspaceTools
 
                     var result = await _workspaceManager.ApplyProposedChangesAsync(snippetChanges, validateChanges: validateOnApply);
                     if (!result.Success && result.ValidationResult != null)
-                        return new SentinelCallToolResult<object>()
+                        return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsSuccess = false,
                             ErrorDetails = new ResultError(ToolErrorCode.Exception,
@@ -345,23 +345,19 @@ public class SentinelWorkspaceTools
                         };
                     await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result);
                     var strippedResult = result with { PreImages = null };
-                    object responseData = returnDiff
-                        ? new
-                        {
-                            result = strippedResult,
-                            diff = SentinelRefactoringTools.BuildDiffFromPreImages(snippetChanges, result.PreImages)
-                        }
-                        : strippedResult;
-                    return new SentinelCallToolResult<object>()
+                    string? diffContent = returnDiff
+                        ? SentinelRefactoringTools.BuildDiffFromPreImages(snippetChanges, result.PreImages)
+                        : null;
+                    return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {
                         IsSuccess = true,
-                        SuccessDetails = responseData
+                        SuccessDetails = new ReplaceSnippetResult(strippedResult, null, diffContent)
                     };
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePathWrapper}'", action, filePathResolved);
-                    return new SentinelCallToolResult<object>()
+                    return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {
                         IsSuccess = false,
                         ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet {action} for '{filePathResolved}'")
@@ -369,7 +365,7 @@ public class SentinelWorkspaceTools
                 }
             }
 
-            return new SentinelCallToolResult<object>()
+            return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsSuccess = false,
                 ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.")
@@ -378,7 +374,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReplaceSnippet ({Action}) failed", action);
-            return new SentinelCallToolResult<object>()
+            return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsSuccess = false,
                 ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReplaceSnippet")
@@ -428,7 +424,7 @@ public class SentinelWorkspaceTools
 
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
-    private async Task<SentinelCallToolResult<object>> ReplaceSnippetBatch(
+    private async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippetBatch(
         List<SnippetEdit> edits,
         ProposedChangeAction action,
         bool validateOnApply,
@@ -437,7 +433,7 @@ public class SentinelWorkspaceTools
     {
         if (edits.Count > MaxSnippetEditsPerBatch)
         {
-            return new SentinelCallToolResult<object>()
+            return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsSuccess = false,
                 ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument,
@@ -473,7 +469,7 @@ public class SentinelWorkspaceTools
 
         if (perEditErrors.Count > 0)
         {
-            return new SentinelCallToolResult<object>()
+            return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsSuccess = false,
                 ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected before anchoring:\n" + string.Join("\n", perEditErrors))
@@ -566,7 +562,7 @@ public class SentinelWorkspaceTools
 
         if (perEditErrors.Count > 0)
         {
-            return new SentinelCallToolResult<object>()
+            return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsSuccess = false,
                 ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
@@ -577,8 +573,8 @@ public class SentinelWorkspaceTools
         {
             var validationResult = await _validationEngine.ValidateChangesAsync(finalContents);
             return validationResult.Success
-                ? new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = validationResult }
-                : new SentinelCallToolResult<object>()
+                ? new SentinelCallToolResult<ReplaceSnippetResult>() { IsSuccess = true, SuccessDetails = new ReplaceSnippetResult(null, validationResult, null) }
+                : new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet batch validate failed: {validationResult.Diagnostics.ToInfo()}")
@@ -589,7 +585,7 @@ public class SentinelWorkspaceTools
         {
             var result = await _workspaceManager.ApplyProposedChangesAsync(finalContents, validateChanges: validateOnApply);
             if (!result.Success && result.ValidationResult != null)
-                return new SentinelCallToolResult<object>()
+                return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError(ToolErrorCode.Exception,
@@ -599,23 +595,19 @@ public class SentinelWorkspaceTools
                 };
             await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result);
             var strippedResult = result with { PreImages = null };
-            object responseData = returnDiff
-                ? new
-                {
-                    result = strippedResult,
-                    diff = SentinelRefactoringTools.BuildDiffFromPreImages(finalContents, result.PreImages)
-                }
-                : strippedResult;
-            return new SentinelCallToolResult<object>()
+            string? diffContent = returnDiff
+                ? SentinelRefactoringTools.BuildDiffFromPreImages(finalContents, result.PreImages)
+                : null;
+            return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsSuccess = true,
-                SuccessDetails = responseData
+                SuccessDetails = new ReplaceSnippetResult(strippedResult, null, diffContent)
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReplaceSnippet batch ({Action}) unexpected exception for {Count} file(s)", action, finalContents.Count);
-            return new SentinelCallToolResult<object>()
+            return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsSuccess = false,
                 ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet batch {action} for {finalContents.Count} file(s)")

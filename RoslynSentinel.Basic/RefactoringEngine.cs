@@ -5599,13 +5599,13 @@ public class RefactoringEngine
 
     /// <summary>
     /// Reduces a type name to the bare identifier Roslyn's <c>Identifier.Text</c> exposes, by
-    /// stripping a trailing type-argument list (<c>Foo&lt;T&gt;</c>, <c>Foo&lt;TKey, TValue&gt;</c>)
+    /// stripping a trailing type-argument list (<c>Foo<T></c>, <c>Foo<TKey, TValue></c>)
     /// or backtick arity (<c>Foo`1</c>).
     /// </summary>
     /// <remarks>
     /// Needed because <c>Identifier.Text</c> is already arity-stripped, so comparing it against a
     /// caller's raw string rejected the type's own declared spelling: run 20260910-013550-398 had
-    /// <c>containerName: "EngineResultWrapper&lt;T&gt;"</c> fail and the bare
+    /// <c>containerName: "EngineResultWrapper<T>"</c> fail and the bare
     /// <c>"EngineResultWrapper"</c> succeed on the next turn. Third recorded instance
     /// (cf. project_qwen36_35b_smoketest_and_member_containername_gap). Applied to both sides of
     /// the comparison so all three spellings resolve identically.

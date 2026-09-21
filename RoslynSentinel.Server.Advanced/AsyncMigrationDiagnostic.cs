@@ -2,7 +2,7 @@ namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Analyses the item-level results of any async-migration batch tool and produces plain-English
-/// diagnostic suggestions. Intended to be called whenever succeeded==0 or failed&gt;0 so that
+/// diagnostic suggestions. Intended to be called whenever succeeded==0 or failed>0 so that
 /// agents receive actionable guidance without having to reason over raw counts themselves.
 ///
 /// Design: all batch tools write phase-prefixed Reason strings to their items list

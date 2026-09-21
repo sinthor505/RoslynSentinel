@@ -415,7 +415,7 @@ public static class ContextHelper
     /// <summary>
     /// Cheap nearest-neighbor heuristic for <see cref="DiagnoseNoMatch"/>: shared leading-character
     /// count minus a length-difference penalty. Deliberately NOT full Levenshtein distance (see the
-    /// plan's "Rejected: full sliding-window Levenshtein" section) -&gt; this is O(min(len)) per
+    /// plan's "Rejected: full sliding-window Levenshtein" section) -> this is O(min(len)) per
     /// candidate line rather than O(len1 x len2), which matters when it runs once per filtered
     /// snippet line against every source line in the file. Higher is more similar; can be negative.
     /// </summary>
@@ -448,7 +448,7 @@ public static class ContextHelper
     /// <summary>
     /// "Wholly unrecognized, not a partial-transcription error" case: zero filtered snippet lines
     /// matched anywhere. Only suggests a nearest-neighbor line when it clears
-    /// <paramref name="similarityFloor"/> -&gt; never forces a suggestion onto unrelated content.
+    /// <paramref name="similarityFloor"/> -> never forces a suggestion onto unrelated content.
     /// </summary>
     private static string FormatZeroMatchedDiagnosis(
         (int SourceLineNumber, string SourceLineText, int Score)?[] nearest, int similarityFloor)
@@ -733,7 +733,7 @@ public static class ContextHelper
     }
 
     /// <summary>
-    /// Prepends a <c>// Added by &lt;toolName&gt;</c> leading-trivia comment to a freshly synthesized
+    /// Prepends a <c>// Added by <toolName></c> leading-trivia comment to a freshly synthesized
     /// member declaration, on its own line above any trivia the member already carries (e.g. a
     /// blank-line separator). Intended for tools that insert a brand-new member -> a constructor,
     /// method, property, or field -> so the addition is easy to spot in a diff or code review
@@ -923,20 +923,20 @@ public static class ContextHelper
     /// Handles methods, properties, constructors, indexers, types, and fields.
     /// </summary>
     /// <param name="symbol">The Roslyn symbol to generate documentation for</param>
-    /// <returns>XML documentation string with ///, &lt;summary&gt;, &lt;param&gt;, &lt;returns&gt; tags</returns>
+    /// <returns>XML documentation string with ///, <summary>, <param>, <returns> tags</returns>
     /// <remarks>
     /// Generates standard-level documentation containing:
-    /// - &lt;summary&gt; with placeholder description
-    /// - &lt;param&gt; tags for each parameter (methods only)
-    /// - &lt;returns&gt; tag (for non-void methods)
+    /// - <summary> with placeholder description
+    /// - <param> tags for each parameter (methods only)
+    /// - <returns> tag (for non-void methods)
     /// 
     /// Example output for a method "GetUser(int id, bool active)":
-    /// /// &lt;summary&gt;
+    /// /// <summary>
     /// /// Gets or retrieves the user.
-    /// /// &lt;/summary&gt;
-    /// /// &lt;param name="id"&gt;The unique identifier for the user.&lt;/param&gt;
-    /// /// &lt;param name="active"&gt;A value indicating whether to filter by active status.&lt;/param&gt;
-    /// /// &lt;returns&gt;The requested user object.&lt;/returns&gt;
+    /// /// </summary>
+    /// /// <param name="id">The unique identifier for the user.</param>
+    /// /// <param name="active">A value indicating whether to filter by active status.</param>
+    /// /// <returns>The requested user object.</returns>
     /// </remarks>
     public static string GenerateXmlDocumentation(ISymbol symbol)
     {

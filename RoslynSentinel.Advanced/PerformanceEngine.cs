@@ -1426,7 +1426,7 @@ public class PerformanceEngine
     // a null reference, which can cause surprising equality results and GC pressure.
 
     /// <summary>
-    /// Detects explicit casts of Nullable&lt;T&gt; values to object or dynamic, which cause boxing
+    /// Detects explicit casts of Nullable<T> values to object or dynamic, which cause boxing
     /// and can produce surprising null-equality behavior. Uses the semantic model for accuracy.
     /// </summary>
     public async Task<List<PerformanceIssueReport>> FindImplicitNullableBoxingAsync(

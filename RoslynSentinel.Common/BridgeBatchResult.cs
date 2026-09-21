@@ -51,7 +51,7 @@ public sealed record BridgeBatchResult : EngineResultBase
 
     /// <summary>
     /// Score bucket breakdown of all candidates found, keyed by the same bucket labels as
-    /// <c>scan_migration_candidates</c>: "&lt;0", "0-25", "26-50", "51-75", "76plus".
+    /// <c>scan_migration_candidates</c>: "<0", "0-25", "26-50", "51-75", "76plus".
     /// Populated alongside <see cref="MinCandidateScore"/> when <see cref="StopReason"/> is
     /// <c>"no_candidates"</c>.
     /// </summary>

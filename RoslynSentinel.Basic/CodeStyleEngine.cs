@@ -653,9 +653,9 @@ public class CodeStyleAnalysisEngine
     };
 
     /// <summary>
-    /// Detects public properties whose type is a mutable collection (List&lt;T&gt;, Dictionary, etc.)
+    /// Detects public properties whose type is a mutable collection (List<T>, Dictionary, etc.)
     /// with a public setter. External callers can replace or mutate the entire collection,
-    /// breaking invariants. Prefer IReadOnlyList&lt;T&gt;/IReadOnlyDictionary or init-only setters.
+    /// breaking invariants. Prefer IReadOnlyList<T>/IReadOnlyDictionary or init-only setters.
     /// </summary>
     public async Task<List<string>> FindMutablePublicCollectionPropertiesAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)

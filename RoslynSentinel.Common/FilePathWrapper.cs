@@ -174,7 +174,7 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
 
 /// <summary>
 /// Enables System.Text.Json to serialize <see cref="FilePathWrapper"/> both as a plain JSON string
-/// and as a dictionary property name (required for Dictionary&lt;FilePathWrapper, ...&gt; serialization).
+/// and as a dictionary property name (required for Dictionary<FilePathWrapper, ...> serialization).
 /// </summary>
 public sealed class FilePathJsonConverter : JsonConverter<FilePathWrapper>
 {

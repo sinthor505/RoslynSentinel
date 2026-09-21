@@ -13,7 +13,7 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Registers <see cref="McpServerTool"/> instances the same way
-/// <c>McpServerBuilderExtensions.WithTools&lt;TToolType&gt;</c> does, except it also supplies a
+/// <c>McpServerBuilderExtensions.WithTools<TToolType></c> does, except it also supplies a
 /// <see cref="AIJsonSchemaCreateOptions.TransformSchemaNode"/> that patches up the two known-broken
 /// schema shapes <c>JsonSchemaExporter</c> produces for custom-converter wrapper types.
 /// </summary>
@@ -34,7 +34,7 @@ namespace RoslynSentinel.Common;
 /// in the schema missing a sibling <c>type</c> next to every other parameter's, letting a model supply
 /// a bare float that then failed <see cref="ToolCallReasonJsonConverter"/>'s validation).</item>
 /// </list>
-/// The SDK's own <c>WithTools&lt;T&gt;()</c> never passes a
+/// The SDK's own <c>WithTools<T>()</c> never passes a
 /// <see cref="McpServerToolCreateOptions.SchemaCreateOptions"/> (confirmed by decompiling
 /// ModelContextProtocol.Core 2.2.0's <c>AIFunctionMcpServerTool</c>), so there is no way to plug this
 /// fix in through the SDK's extension method -> this reimplements its registration loop with that one
@@ -117,7 +117,7 @@ public static class McpToolSchemaPatcher
     }
 
     /// <summary>
-    /// Drop-in replacement for <c>IMcpServerBuilder.WithTools&lt;TToolType&gt;()</c> that fixes up
+    /// Drop-in replacement for <c>IMcpServerBuilder.WithTools<TToolType>()</c> that fixes up
     /// any bare-<c>true</c> schema node produced for <typeparamref name="TToolType"/>'s tool methods.
     /// </summary>
     public static IMcpServerBuilder WithSentinelTools<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)] TToolType>(

@@ -9,7 +9,7 @@ public static class CandidateScoreAnalyzer
 {
     /// <summary>
     /// Buckets matching those used by <c>scan_migration_candidates</c>:
-    /// "&lt;0", "0-25", "26-50", "51-75", "76plus".
+    /// "<0", "0-25", "26-50", "51-75", "76plus".
     /// </summary>
     public static Dictionary<string, int> ComputeBuckets(IEnumerable<int> scores)
     {

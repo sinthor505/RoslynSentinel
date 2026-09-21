@@ -13,7 +13,7 @@ namespace RoslynSentinel.Server.Basic;
 /// This class is a trial slice of that plan's DI split, landed ahead of the rest: today it is
 /// registered in DI only as a plain singleton consumed internally by <c>SentinelWorkspaceTools</c>
 /// (field <c>_readNav</c>) -> the plan's Decision 4 mode strings ("WorkspaceReadNav"/"WorkspaceFileIO")
-/// that would call <c>mcpBuilder.WithTools&lt;WorkspaceReadNavigationTools&gt;()</c> and make the
+/// that would call <c>mcpBuilder.WithTools<WorkspaceReadNavigationTools>()</c> and make the
 /// [McpServerTool] attributes below live have not been added to
 /// ServiceRegistrationExtensionsBasic.cs yet. So GetMethodSource/GetFileOutline/GetLargeResult here
 /// are currently NOT reachable over MCP -> the real, registered versions of those three tool names
