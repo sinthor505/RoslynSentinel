@@ -13,7 +13,7 @@ using ModelContextProtocol.Server;
 using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 
-namespace RoslynSentinel.Tests.ModelEval;
+namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
 /// <summary>
 /// Escalation ladder over <see cref="OrderPricingRefactorAgentTests"/>: each fixture in this file
@@ -58,6 +58,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// the starting and expected-ending source text genuinely differs at each rung and a shared
 /// approach would obscure exactly which step failed in a partial-credit result.
 /// </summary>
+[TestFixture]
 [TestFixture]
 public class OrderPricingRefactorChainAgentTests
 {

@@ -13,7 +13,7 @@ using ModelContextProtocol.Server;
 using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 
-namespace RoslynSentinel.Tests.ModelEval;
+namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
 /// <summary>
 /// Tests the plan/implement/verify split proposed after <c>project_scriptedplan_5run_result</c>
@@ -30,6 +30,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// and <see cref="AgentSystemPrompts.CodeReviewer"/> for why an independent model judgment is
 /// required in addition to, not instead of, the mechanical check.
 /// </summary>
+[TestFixture]
 [TestFixture]
 public class PlanImplementVerifyAgentTests
 {

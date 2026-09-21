@@ -12,7 +12,7 @@ using ModelContextProtocol.Protocol;
 using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 
-namespace RoslynSentinel.Tests.ModelEval;
+namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
 /// <summary>
 /// Same fixture, prompt ambiguity, and disambiguating sentence as
@@ -27,6 +27,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// actually complied (turn 1 had zero tool calls) so compliant vs. non-compliant runs can be compared
 /// post-hoc, the same technique used for the reasoning-pattern analysis this test follows up on.
 /// </summary>
+[TestFixture]
 [TestFixture]
 public class PlanThenExecuteAgentTests
 {

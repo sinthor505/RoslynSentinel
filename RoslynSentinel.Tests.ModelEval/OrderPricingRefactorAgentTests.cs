@@ -13,7 +13,7 @@ using ModelContextProtocol.Server;
 using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 
-namespace RoslynSentinel.Tests.ModelEval;
+namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
 /// <summary>
 /// Drives a real LM Studio model through a real in-process MCP server against the
@@ -38,6 +38,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// discount logic"). Reworded step 1 to name the exact expression to factor out and explicitly say
 /// the branching/scaling logic must stay in `CalcDisc`, closing off the broader reading.
 /// </summary>
+[TestFixture]
 [TestFixture]
 public class OrderPricingRefactorAgentTests
 {

@@ -12,7 +12,7 @@ using ModelContextProtocol.Protocol;
 using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 
-namespace RoslynSentinel.Tests.ModelEval;
+namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
 /// <summary>
 /// Drives a real LM Studio model through a real in-process MCP server (same harness construction as
@@ -23,6 +23,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// set to a loaded, tool-calling-capable model -> tests are skipped (not failed) if LM Studio isn't
 /// reachable, since this project exercises a real external model, not a mocked one.
 /// </summary>
+[TestFixture]
 [TestFixture]
 public class WholeFileRewriteAgentTests
 {

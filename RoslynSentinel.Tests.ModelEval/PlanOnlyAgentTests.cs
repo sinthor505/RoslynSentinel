@@ -13,7 +13,7 @@ using ModelContextProtocol.Server;
 using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 
-namespace RoslynSentinel.Tests.ModelEval;
+namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
 /// <summary>
 /// Same fixture/bug/prompt ambiguity as <see cref="WholeFileRewriteAgentTests"/>'s
@@ -29,6 +29,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// this same plan before editing changes the execution-time outcome (the actual anchoring hypothesis
 /// this test alone can't confirm).
 /// </summary>
+[TestFixture]
 [TestFixture]
 public class PlanOnlyAgentTests
 {

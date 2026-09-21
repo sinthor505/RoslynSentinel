@@ -12,7 +12,7 @@ using ModelContextProtocol.Protocol;
 using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 
-namespace RoslynSentinel.Tests.ModelEval;
+namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
 /// <summary>
 /// Runs the same whole-file-rewrite fix task as <see cref="WholeFileRewriteAgentTests"/> against
@@ -25,6 +25,7 @@ namespace RoslynSentinel.Tests.ModelEval;
 /// pass/fail (a size flipping from reliable to unreliable is the expected, useful outcome here, not
 /// a bug in this harness).
 /// </summary>
+[TestFixture]
 [TestFixture]
 public class SizeThresholdAgentTests
 {
