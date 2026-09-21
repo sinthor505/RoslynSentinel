@@ -1,4 +1,4 @@
-﻿namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Result summary returned by the write-through refactoring tools (ValidateAndApplyAsync).
@@ -11,7 +11,9 @@ public record AppliedChangeSummary(
     string Description,
     bool DryRun,
     string? Diff = null,
-    int? WorkspaceVersion = null
+    int? WorkspaceVersion = null,
+    Dictionary<FilePathWrapper, string>? ChangedContent = null,
+    bool Validated = false
 )
 {
     /// <summary>

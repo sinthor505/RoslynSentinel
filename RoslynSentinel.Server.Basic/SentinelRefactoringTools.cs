@@ -81,7 +81,7 @@ public class SentinelRefactoringTools
         _signature.MethodSignature(reason, filepath, operation, methodName, paramName, paramType, defaultValue, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, nullDefault);
 
     [McpServerTool(Name = "ChangeAccessibility")]
-    public Task<SentinelCallToolResult<object>> ChangeAccessibility(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeAccessibility(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string targetName,
@@ -170,7 +170,7 @@ public class SentinelRefactoringTools
         _extractionDocs.UsingDirective(reason, filepath, operation, namespaceName, simplifyExisting, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyEnum")]
-    public Task<SentinelCallToolResult<object>> ModifyEnum(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyEnum(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string enumName,
@@ -215,7 +215,7 @@ public class SentinelRefactoringTools
         _extractionDocs.ExtractLocalVariable(reason, filepath, exactExpressionText, variableName, lineBefore, lineAfter, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ExtractMethodSafe")]
-    public Task<SentinelCallToolResult<object>> ExtractMethodSafe(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ExtractMethodSafe(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string newMethodName,
@@ -229,7 +229,7 @@ public class SentinelRefactoringTools
         _extractionDocs.ExtractMethodSafe(reason, filepath, newMethodName, exactSourceBlock, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyAttribute")]
-    public Task<SentinelCallToolResult<object>> ModifyAttribute(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyAttribute(
         ToolCallReason reason,
         FilePathWrapper? filepath = null,
         string? targetName = null,
@@ -247,7 +247,7 @@ public class SentinelRefactoringTools
         _structural.ModifyAttribute(reason, filepath, targetName, existingAttribute, action, newAttribute, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = true, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
-    public Task<SentinelCallToolResult<object>> ModifyModifier(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifier(
         ToolCallReason reason,
         FilePathWrapper? filepath = null,
         string? targetName = null,
@@ -264,7 +264,7 @@ public class SentinelRefactoringTools
         _structural.ModifyModifier(reason, filepath, targetName, modifier, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyBaseType")]
-    public Task<SentinelCallToolResult<object>> ModifyBaseType(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyBaseType(
         ToolCallReason reason,
         FilePathWrapper? filepath = null,
         string? typeName = null,

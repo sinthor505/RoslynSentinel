@@ -89,10 +89,9 @@ public class MassiveRefactoringTests
         SetSource($"public class C{id} {{ public void M{id}() {{}} }}", $"C{id}.cs");
         var result = await _advancedRefactoringTools.ExtractMembers(reason: "test message", $"C{id}.cs", $"C{id}", ExtractAsType.@interface, $"IC{id}", autoStage: false);
 
-        // With autoStage:false the tool returns SuccessDetails = new { Changes = Dictionary<FilePathWrapper, string> }.
+        // With autoStage:false the tool returns SuccessDetails = AppliedChangeSummary { ChangedContent = Dictionary<FilePathWrapper, string> }.
         Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
-        var changes = result.SuccessDetails!.GetType().GetProperty("Changes")!.GetValue(result.SuccessDetails)
-            as Dictionary<FilePathWrapper, string>;
+        var changes = ((AppliedChangeSummary)result.SuccessDetails!).ChangedContent;
         Assert.That(changes, Is.Not.Null.And.Not.Empty);
     }
 
@@ -133,7 +132,7 @@ public class MassiveRefactoringTests
 
         // Dictionary keys are FilePathWrapper, not string, since the server split.
         Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
-        var data = (Dictionary<FilePathWrapper, string>?)result.SuccessDetails;
+        var data = result.SuccessDetails?.ChangedContent;
         Assert.That(data?.Count, Is.GreaterThan(1));
     }
 }

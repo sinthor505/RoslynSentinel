@@ -163,7 +163,7 @@ public class RefactoringSignatureImpl
                 var (outcome, message, parameters) = await _refactoringEngine.GetMethodParametersAsync(filePathResolved, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit or EditOutcome.TargetNotFound)
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.Exception, $"MethodSignature: {message}") };
-                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new { Parameters = parameters } };
+                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new MethodSignatureViewResult(parameters) };
             }
 
             if (string.IsNullOrEmpty(paramName))
@@ -210,7 +210,21 @@ public class RefactoringSignatureImpl
 
             if (!autoStage)
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = updated.ToJsonSummary() };
+                var noStageDescription = operation == AddRemoveViewAction.add
+                    ? $"Added parameter '{paramType} {paramName}{(nullDefault ? " = null" : defaultValue != null ? $" = {defaultValue}" : "")}' to '{methodName}' in {Path.GetFileName(filePathResolved)}."
+                    : $"Removed parameter '{paramName}' from '{methodName}' in {Path.GetFileName(filePathResolved)}, updating {changes.Count - 1} call site(s).";
+                return new SentinelCallToolResult<object>()
+                {
+                    IsSuccess = true,
+                    SuccessDetails = new AppliedChangeSummary(
+                        ChangeId: null,
+                        AffectedFiles: changes.Keys.ToList(),
+                        Description: noStageDescription,
+                        DryRun: false,
+                        Diff: null,
+                        ChangedContent: changes,
+                        Validated: false)
+                };
             }
 
             var description = operation == AddRemoveViewAction.add
@@ -220,14 +234,9 @@ public class RefactoringSignatureImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsSuccess = false, ErrorDetails = apply.Error };
 
-            var changedContent = operation == AddRemoveViewAction.add ? $"{paramType} {paramName}" : "";
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                new MemberChangedContentResult
-                {
-                    Summary = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff),
-                    ChangedContent = changedContent
-                },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
+                new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true),
+                _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description);
         }
         catch (Exception ex)
@@ -237,7 +246,7 @@ public class RefactoringSignatureImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> ChangeAccessibility(
+    public async Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeAccessibility(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string targetName,
@@ -256,11 +265,31 @@ public class RefactoringSignatureImpl
             var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePathResolved, targetName, accessibility, contextSnippet, lineBefore, lineAfter);
             if (!autoStage)
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = updated.ToJsonSummary() };
+                var noStageAccessibilityKeyword = accessibility switch
+                {
+                    AccessibilityLevel.protectedInternal => "protected internal",
+                    AccessibilityLevel.privateProtected => "private protected",
+                    _ => accessibility.ToString()
+                };
+                var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
+                    ? new Dictionary<FilePathWrapper, string>()
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+                return new SentinelCallToolResult<AppliedChangeSummary>()
+                {
+                    IsSuccess = true,
+                    SuccessDetails = new AppliedChangeSummary(
+                        ChangeId: null,
+                        AffectedFiles: noStageChanges.Keys.ToList(),
+                        Description: $"Change accessibility of '{targetName}' to '{noStageAccessibilityKeyword}'.",
+                        DryRun: false,
+                        Diff: null,
+                        ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges,
+                        Validated: false)
+                };
             }
 
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ChangeAccessibility", filePathResolved) is { } guardResult)
-                return guardResult;
+                return new SentinelCallToolResult<AppliedChangeSummary> { IsSuccess = false, ErrorDetails = guardResult.ErrorDetails };
 
             var accessibilityKeyword = accessibility switch
             {
@@ -271,16 +300,16 @@ public class RefactoringSignatureImpl
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibilityKeyword}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
-                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorDetails = apply.Error };
+                return new SentinelCallToolResult<AppliedChangeSummary> { IsSuccess = false, ErrorDetails = apply.Error };
             // No ChangedContent here: the only "new" text is the accessibility keyword itself,
             // which the caller already passed in verbatim -> echoing it back adds nothing the
             // caller doesn't already have, unlike a reconstructed multi-part snippet.
-            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Changed accessibility of '{targetName}' to '{accessibilityKeyword}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+            return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = true, SuccessDetails = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Changed accessibility of '{targetName}' to '{accessibilityKeyword}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true) };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ChangeAccessibility failed for '{TargetName}' in '{FilePathWrapper}'", targetName, filePathResolved);
-            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ChangeAccessibility") };
+            return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = false, ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ChangeAccessibility") };
         }
     }
 
@@ -308,7 +337,7 @@ public class RefactoringSignatureImpl
                 var (outcome, message, parameters) = await _refactoringEngine.GetConstructorParametersAsync(filePath: filePathResolved, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ConstructorParameter: {message}") };
-                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new { Parameters = parameters } };
+                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new ConstructorParameterViewResult(parameters) };
             }
 
             if (string.IsNullOrEmpty(paramName))
@@ -345,7 +374,25 @@ public class RefactoringSignatureImpl
 
             if (!autoStage)
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = updated.ToJsonSummary() };
+                var noStageDescription = operation == AddRemoveViewAction.add
+                    ? $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePathResolved)}, backed by field '{resolvedFieldName}'."
+                    : $"Removed '{paramName}' DI parameter from '{className}' in {Path.GetFileName(filePathResolved)}."
+                        + (updated.Message?.Contains("fieldRemoved='True'") == true ? $" Also removed unused backing field '{resolvedFieldName}'." : "");
+                var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
+                    ? new Dictionary<FilePathWrapper, string>()
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+                return new SentinelCallToolResult<object>()
+                {
+                    IsSuccess = true,
+                    SuccessDetails = new AppliedChangeSummary(
+                        ChangeId: null,
+                        AffectedFiles: noStageChanges.Keys.ToList(),
+                        Description: noStageDescription,
+                        DryRun: false,
+                        Diff: null,
+                        ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges,
+                        Validated: false)
+                };
             }
 
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ConstructorParameter", filePathResolved) is { } guardResult)
@@ -361,17 +408,9 @@ public class RefactoringSignatureImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsSuccess = false, ErrorDetails = apply.Error };
 
-            // Added-parameter text is reconstructed here (paramType/paramName are already known)
-            // rather than extracted from AddConstructorParameterAsync's internal formatting -> same
-            // reasoning as Member(add)'s typed-generation path. Remove has no new content to show.
-            var changedContent = operation == AddRemoveViewAction.add ? $"{paramType} {paramName}" : "";
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                new MemberChangedContentResult
-                {
-                    Summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff),
-                    ChangedContent = changedContent
-                },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
+                new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true),
+                _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description);
         }
         catch (Exception ex)

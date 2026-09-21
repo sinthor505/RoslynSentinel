@@ -69,7 +69,7 @@ public class RefactoringSignatureTools
     [McpServerTool(Name = "ChangeAccessibility")]
     [Produces(DataTag.ChangeId)]
     [Description("Changes the accessibility (private, public, internal, protected, protected internal, private protected) of a type or member to the given target level in one step - replaces whatever accessibility is currently present, so there's no separate remove/add pairing to get wrong. For overloaded members, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. This tool covers accessibility only - use ChangeAccessibility for accessibility, ModifyAttribute for [Attribute] syntax, and ModifyModifier for non-accessibility keywords (virtual/abstract/static/etc.). Returns changeId.")]
-    public Task<SentinelCallToolResult<object>> ChangeAccessibility(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeAccessibility(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,

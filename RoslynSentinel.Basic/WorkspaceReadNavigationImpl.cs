@@ -1031,6 +1031,18 @@ public class WorkspaceReadNavigationImpl
                         };
                         break;
                     }
+                case ResultWrapperType.AppliedChangeSummaryResult:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // returned inline when the change summary is small enough not to offload.
+                        var appliedChangeSummary = JsonSerializer.Deserialize<AppliedChangeSummary>(all.Data.ToString(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessDetails = appliedChangeSummary
+                        };
+                        break;
+                    }
                 case ResultWrapperType.BreakingChangeList:
                     {
                         var changes = JsonSerializer.Deserialize<List<BreakingChange>>(all.Data.ToString(), _jsonOptions)
@@ -1197,7 +1209,7 @@ public class WorkspaceReadNavigationImpl
             // returning null, since it's the wrong node kind rather than a missing one).
             int totalRecords;
             bool hasMorePages;
-            if (all.Type is ResultWrapperType.MethodSource or ResultWrapperType.FileSource or ResultWrapperType.MigrationScanSummary or ResultWrapperType.MemberChangedContent or ResultWrapperType.SolutionItemsAllResult)
+            if (all.Type is ResultWrapperType.MethodSource or ResultWrapperType.FileSource or ResultWrapperType.MigrationScanSummary or ResultWrapperType.MemberChangedContent or ResultWrapperType.AppliedChangeSummaryResult or ResultWrapperType.SolutionItemsAllResult)
             {
                 totalRecords = 1;
                 hasMorePages = false;

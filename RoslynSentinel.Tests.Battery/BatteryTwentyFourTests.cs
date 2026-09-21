@@ -324,13 +324,13 @@ public enum Status { Active = 1, Pending = 2 }
         var result = await _tools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
 
         Assert.That(result.IsSuccess, Is.True);
-        var memberChangedContent = (MemberChangedContentResult)result.SuccessDetails!;
+        var summary = (AppliedChangeSummary)result.SuccessDetails!;
 
         // The added using line must be present in the diff...
-        Assert.That(memberChangedContent.ChangedContent, Does.Contain("using System.Linq;"));
+        Assert.That(summary.Diff, Does.Contain("using System.Linq;"));
         // ...and so must the unrelated formatting change the fabricated string could never show.
-        Assert.That(memberChangedContent.ChangedContent, Does.Contain("public int OrderId"));
-        Assert.That(memberChangedContent.ChangedContent, Is.Not.EqualTo("using System.Linq;"));
+        Assert.That(summary.Diff, Does.Contain("public int OrderId"));
+        Assert.That(summary.Diff, Is.Not.EqualTo("using System.Linq;"));
     }
     // --- ModifyEnum ---
 

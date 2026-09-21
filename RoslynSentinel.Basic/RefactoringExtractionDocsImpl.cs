@@ -107,7 +107,7 @@ public class RefactoringExtractionDocsImpl
             if (operation == AddRemoveViewAction.view)
             {
                 var usings = await _refactoringEngine.GetUsingDirectivesAsync(filePathResolved, cancellationToken);
-                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new { Usings = usings } };
+                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new UsingDirectiveViewResult(usings) };
             }
 
             if (string.IsNullOrEmpty(namespaceName))
@@ -130,7 +130,24 @@ public class RefactoringExtractionDocsImpl
 
             if (!autoStage)
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = updated.ToJsonSummary() };
+                var noStageDescription = operation == AddRemoveViewAction.add
+                    ? $"Adds 'using {namespaceName};' to {Path.GetFileName(filePathResolved)}."
+                    : $"Removes 'using {namespaceName};' from {Path.GetFileName(filePathResolved)}.";
+                var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
+                    ? new Dictionary<FilePathWrapper, string>()
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+                return new SentinelCallToolResult<object>()
+                {
+                    IsSuccess = true,
+                    SuccessDetails = new AppliedChangeSummary(
+                        ChangeId: null,
+                        AffectedFiles: noStageChanges.Keys.ToList(),
+                        Description: noStageDescription,
+                        DryRun: false,
+                        Diff: null,
+                        ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges,
+                        Validated: false)
+                };
             }
 
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "UsingDirective", filePathResolved) is { } guardResult)
@@ -149,22 +166,22 @@ public class RefactoringExtractionDocsImpl
                 : $"Removes 'using {namespaceName};' from {Path.GetFileName(filePathResolved)}.";
             if (operation != AddRemoveViewAction.add)
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = true, StatusMessage = description, SuccessDetails = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, returnDiff ? apply.Diff : null, _workspaceManager.WorkspaceVersion) };
+                return new SentinelCallToolResult<object>() { IsSuccess = true, StatusMessage = description, SuccessDetails = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, returnDiff ? apply.Diff : null, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true) };
             }
 
-            // ChangedContent is derived from the actual before/after document diff (apply.Diff,
-            // built by ValidateAndApplyHelper.BuildDiffFromPreImages) rather than reconstructed
-            // from the caller's namespaceName argument. A hardcoded "using {namespaceName};" could
-            // never reveal any other change bundled into the same write (formatting drift,
-            // accessibility changes, whitespace normalization, etc.) -> the caller had no way to
-            // know from this tool's own result whether something unexpected also changed.
+            // Diff is populated from the actual before/after document diff (apply.Diff, built by
+            // ValidateAndApplyHelper.BuildDiffFromPreImages) unconditionally here - NOT gated on
+            // the caller's own returnDiff flag, unlike the non-add branch above. needsDiff already
+            // forced ValidateAndApplyAsync to compute apply.Diff for the add path regardless of
+            // returnDiff (see the comment above needsDiff); surfacing it unconditionally is what
+            // used to be guaranteed by the now-retired MemberChangedContentResult wrapper's own
+            // ChangedContent field. A hardcoded "using {namespaceName};" could never reveal any
+            // other change bundled into the same write (formatting drift, accessibility changes,
+            // whitespace normalization, etc.) -> the caller had no way to know from this tool's own
+            // result whether something unexpected also changed.
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                new MemberChangedContentResult
-                {
-                    Summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, returnDiff ? apply.Diff : null, _workspaceManager.WorkspaceVersion),
-                    ChangedContent = apply.Diff ?? ""
-                },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
+                new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true),
+                _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description);
         }
         catch (Exception ex)
@@ -197,7 +214,7 @@ public class RefactoringExtractionDocsImpl
                 var (outcome, message, text) = await _refactoringEngine.GetSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
                 if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorDetails = new ResultError(ToolErrorCode.Exception, $"SummaryComment: {message}") };
-                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new { SummaryText = text } };
+                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = new SummaryCommentViewResult(text) };
             }
 
             if (operation == AddRemoveViewAction.add && string.IsNullOrEmpty(summaryText))
@@ -211,7 +228,24 @@ public class RefactoringExtractionDocsImpl
 
             if (!autoStage)
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessDetails = updated.ToJsonSummary() };
+                var noStageDescription = operation == AddRemoveViewAction.add
+                    ? $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePathResolved)}."
+                    : $"Removed XML summary comment from '{targetName}' in {Path.GetFileName(filePathResolved)}.";
+                var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
+                    ? new Dictionary<FilePathWrapper, string>()
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+                return new SentinelCallToolResult<object>()
+                {
+                    IsSuccess = true,
+                    SuccessDetails = new AppliedChangeSummary(
+                        ChangeId: null,
+                        AffectedFiles: noStageChanges.Keys.ToList(),
+                        Description: noStageDescription,
+                        DryRun: false,
+                        Diff: null,
+                        ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges,
+                        Validated: false)
+                };
             }
 
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "SummaryComment", filePathResolved) is { } guardResult)
@@ -225,7 +259,7 @@ public class RefactoringExtractionDocsImpl
             var apply = await ValidateAndApplyAsync(changes, description, "SummaryComment", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsSuccess = false, ErrorDetails = apply.Error };
-            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff);
+            var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true);
 
             // add: summaryText is caller-supplied verbatim, echoed back as the added content
             // (same reasoning as Member(add)'s raw-source path). remove has no new content to show.
@@ -235,8 +269,8 @@ public class RefactoringExtractionDocsImpl
             }
 
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                new MemberChangedContentResult { Summary = summary, ChangedContent = summaryText! },
-                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ResultWrapperType.MemberChangedContent,
+                summary,
+                _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description);
         }
         catch (Exception ex)
@@ -291,7 +325,7 @@ public class RefactoringExtractionDocsImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> ExtractMethodSafe(
+    public async Task<SentinelCallToolResult<AppliedChangeSummary>> ExtractMethodSafe(
         ToolCallReason reason,
         FilePathWrapper filepath,
         string newMethodName,
@@ -315,7 +349,7 @@ public class RefactoringExtractionDocsImpl
 
             if (!result.Success)
             {
-                return new SentinelCallToolResult<object>
+                return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe: {result.Error}")
@@ -324,12 +358,26 @@ public class RefactoringExtractionDocsImpl
 
             if (!autoStage)
             {
-                return new SentinelCallToolResult<object> { IsSuccess = true, SuccessDetails = result };
+                var noStageChanges = string.IsNullOrEmpty(result.UpdatedContent)
+                    ? new Dictionary<FilePathWrapper, string>()
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedContent };
+                return new SentinelCallToolResult<AppliedChangeSummary>
+                {
+                    IsSuccess = true,
+                    SuccessDetails = new AppliedChangeSummary(
+                        ChangeId: null,
+                        AffectedFiles: noStageChanges.Keys.ToList(),
+                        Description: $"Extract '{newMethodName}' from '{filePathResolved}'.",
+                        DryRun: false,
+                        Diff: null,
+                        ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges,
+                        Validated: false)
+                };
             }
 
             if (string.IsNullOrEmpty(result.UpdatedContent))
             {
-                return new SentinelCallToolResult<object>
+                return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsSuccess = false,
                     ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe: no change produced for '{filePathResolved}'.")
@@ -344,17 +392,17 @@ public class RefactoringExtractionDocsImpl
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedContent };
             var apply = await ValidateAndApplyAsync(changes, $"Extract '{newMethodName}' from '{filePathResolved}'.", "ExtractMethodSafe", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
-                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorDetails = apply.Error };
-            return new SentinelCallToolResult<object>
+                return new SentinelCallToolResult<AppliedChangeSummary> { IsSuccess = false, ErrorDetails = apply.Error };
+            return new SentinelCallToolResult<AppliedChangeSummary>
             {
                 IsSuccess = true,
-                SuccessDetails = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Extracted '{newMethodName}' into a new method in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion)
+                SuccessDetails = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Extracted '{newMethodName}' into a new method in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true)
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ExtractMethodSafe failed for '{NewMethodName}' in '{FilePathWrapper}'", newMethodName, filePathResolved);
-            return new SentinelCallToolResult<object>
+            return new SentinelCallToolResult<AppliedChangeSummary>
             {
                 IsSuccess = false,
                 ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractMethodSafe")

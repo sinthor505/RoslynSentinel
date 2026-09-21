@@ -78,7 +78,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "ModifyEnum")]
     [Produces(DataTag.ChangeId)]
     [Description("Replaces an enum's complete member list in one operation. Use GetTypeInfo(typeName, include:\"members\") to see current values first.")]
-    public Task<SentinelCallToolResult<object>> ModifyEnum(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyEnum(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
@@ -96,7 +96,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
     [Description("Adds, replaces, or removes an [Attribute] on a type or member. Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords, not this tool.")]
-    public Task<SentinelCallToolResult<object>> ModifyAttribute(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyAttribute(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
@@ -121,7 +121,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = true, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a non-accessibility modifier keyword. Action: add or remove. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Does NOT cover accessibility (private/public/etc.) - use ChangeAccessibility for those, or ModifyAttribute for [Attribute] syntax. Returns changeId.")]
-    public Task<SentinelCallToolResult<object>> ModifyModifier(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifier(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
@@ -141,7 +141,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "ModifyBaseType")]
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a base type or interface from a type declaration.")]
-    public Task<SentinelCallToolResult<object>> ModifyBaseType(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyBaseType(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,

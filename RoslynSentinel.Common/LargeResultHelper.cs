@@ -105,6 +105,7 @@ public enum ResultWrapperType
     FileSource,
     MigrationScanSummary,
     MemberChangedContent,
+    AppliedChangeSummaryResult,
     BreakingChangeList,
     TextSearchMatchList,
     ProjectFileList,

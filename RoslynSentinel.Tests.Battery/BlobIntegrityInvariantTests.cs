@@ -78,7 +78,13 @@ public class BlobIntegrityInvariantTests
     /// it issued a changeId, that changeId is redeemable. A tool that declines the change passes
     /// trivially, which is correct: the invariant is about issued handles.
     /// </summary>
-    private void AssertChangeIdIsRedeemable(SentinelCallToolResult<object> result, string toolName)
+    // Generic over TSuccess: this repo's ongoing de-genericization (see
+    // docs/current/blockers/blocking_error_membershaped_success_types_not_unified.md) is moving
+    // tools one at a time from SentinelCallToolResult<object> to SentinelCallToolResult
+    // <AppliedChangeSummary>, so the five tools this invariant covers no longer share one exact
+    // return type. Both shapes carry AppliedChangeSummary as (or via) SuccessDetails, so a single
+    // generic assertion covers either without duplicating the cast logic per shape.
+    private void AssertChangeIdIsRedeemable<TSuccess>(SentinelCallToolResult<TSuccess> result, string toolName)
     {
         var changeId = (result.SuccessDetails as AppliedChangeSummary)?.ChangeId;
         if (string.IsNullOrEmpty(changeId))

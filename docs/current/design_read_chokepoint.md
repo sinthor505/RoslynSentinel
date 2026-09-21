@@ -12,17 +12,19 @@ sites wrote `.cs` files via raw `File.WriteAllTextAsync`, bypassing
 The read side never got the equivalent treatment. `ISolutionProvider.CurrentSolution` and
 `GetCurrentSolutionAsync` hand out the raw Roslyn `Solution` object, and every engine that needs to
 read source text, member lists, or symbols independently decides how to navigate it. A grep for
-direct `CurrentSolution.`/`GetCurrentSolutionAsync` usage currently turns up **over 100 files**,
-including nearly every `*Engine.cs` in both `RoslynSentinel.Basic` and `RoslynSentinel.Advanced`.
-This is the same shape the write side had before unification: a shared resource with no shared gate
-governing how it's consumed. `ISolutionProvider` is a *provider* — it hands out access — not a
-*chokepoint* that answers the actual read question on the caller's behalf.
+direct `CurrentSolution.`/`GetCurrentSolutionAsync` usage currently turns up **84 files** repo-wide
+(re-checked 2026-09-20; count has drifted down from an earlier "100+" as recent extraction commits,
+e.g. `SymbolResolver.cs` on 2026-09-19, pulled logic out of the largest engines), including nearly
+every `*Engine.cs` in both `RoslynSentinel.Basic` and `RoslynSentinel.Advanced`. This is the same
+shape the write side had before unification: a shared resource with no shared gate governing how
+it's consumed. `ISolutionProvider` is a *provider* — it hands out access — not a *chokepoint* that
+answers the actual read question on the caller's behalf.
 
 Today this is latent, not actively causing bugs, because there is exactly one source of truth:
 `ApplyProposedChangesAsync` always writes both `CurrentSolution` (in-memory) and disk together in
-the same call (see `PersistentWorkspaceManager.cs:1220-`) — there is currently no code path that
-updates one without the other. The scattered read access is safe today only because there is
-nothing for it to disagree about.
+the same call (see `PersistentWorkspaceManager.cs:1116-1400`, disk write at line 1363) — there is
+currently no code path that updates one without the other. The scattered read access is safe today
+only because there is nothing for it to disagree about.
 
 That safety is conditional on staying single-source, and it is the precondition a related proposal
 would remove: allowing a tool call to update `CurrentSolution` in memory (staged, speculative edits
@@ -51,16 +53,18 @@ truth) stays unchanged.
 
 - `ISolutionProvider` (`RoslynSentinel.Common/ISolutionProvider.cs`) exposes `CurrentSolution`
   (sync property) and `GetCurrentSolutionAsync` (async, currently just returns `CurrentSolution` or
-  throws `SolutionNotLoadedException` if unset — see `PersistentWorkspaceManager.cs:1120-1125`).
+  throws `SolutionNotLoadedException` if unset — see `PersistentWorkspaceManager.cs:1016-1028`).
   Both return the raw `Solution`.
 - Every engine constructor takes `PersistentWorkspaceManager` (concrete class) or, per
   [[project_iworkspacemanager_segregation_audit]], a narrower interface — but in either case, once
   an engine has a `Solution` handle it navigates it directly: `CurrentSolution.GetDocument(...)`,
   `.Projects.SelectMany(...)`, `.GetDocumentIdsWithFilePath(...)`, etc. There is no intermediate
   layer between "have a `Solution`" and "read specific content from it."
-  `PersistentWorkspaceManager.cs` itself does this internally at ~15+ sites (line references from
-  the current file: 325, 330, 358, 433-448, 526, 533, 760-871, 908-913, 1096-1139, 1169-1195,
-  1600-1668, and more).
+  `PersistentWorkspaceManager.cs` itself does this internally at ~26 sites as of 2026-09-20 (line
+  references from the current file: 300, 403-448, 503, 730-841, 1007, 1016-1035, 1067, 1224,
+  1509-1577, 1662, and more) — the doc's earlier line list (325, 330, 358, 1096-1139, 1600-1668)
+  drifted off real usages after subsequent refactors and has been re-swept here; still the same
+  order of magnitude, "~15+" undercounted slightly.
 - `Solution` is immutable (Roslyn's own design — confirmed in `ISolutionProvider`'s XML doc:
   "callers can apply speculative edits ... without affecting this instance or other callers"), so
   the *object* handed out can't be corrupted by a caller holding it. The ambiguity this document
@@ -171,10 +175,14 @@ rather than folded into feature work:
   `ISolutionProvider` itself. Separate is proposed here to keep `ISolutionProvider`'s existing
   narrow "give me solution metadata" contract intact and let call sites adopt the new read-question
   shape independently, but this is a naming/organization choice, not a load-bearing one.
-- Whether `PersistentWorkspaceManager`'s own ~15+ internal direct `CurrentSolution` accesses should
-  be swept too, or are exempt as "the chokepoint's own internals." Leaning toward: exempt for now
-  (it already has direct access by construction), revisit if staging logic ends up needing the same
-  Committed/IncludeStaged distinction internally.
+- ~~Whether `PersistentWorkspaceManager`'s own internal direct `CurrentSolution` accesses should be
+  swept too~~ — **Resolved 2026-09-20: exempt.** Re-checked as part of this review; nothing since
+  the doc's original writing (no staging design, no internal Committed/IncludeStaged need) has
+  changed the calculus, so the doc's own lean is adopted as the decision rather than left open.
+  `PersistentWorkspaceManager` is `IWorkspaceReader`'s own implementation and has direct access by
+  construction; its ~26 internal sites (see "Current shape" above) are not sweep targets. Revisit
+  only if staging logic is designed and turns out to need the Committed/IncludeStaged distinction
+  internally too.
 - No compiler-enforced guarantee is proposed here either (same caveat the write-side chokepoint
   carries) — this is a convention change backed by a sweep and a reference doc, not a type-system
   guarantee that a future engine can't reintroduce direct access. Worth reconsidering only if that
@@ -182,6 +190,10 @@ rather than folded into feature work:
 
 ## Status
 
-Design proposal only — not yet implemented. Motivated by the same PlanStepRunner run review
+Design proposal only — not yet implemented; re-verified 2026-09-20 (no `IWorkspaceReader`,
+`ReadSource`, or staged-write code exists anywhere in the repo; not scheduled in `TODO.md`). Line
+citations and the file-count figure were refreshed the same day to match `PersistentWorkspaceManager.cs`'s
+post-extraction shape (see "Current shape" above); the design itself is unaffected — the sweep
+described in "Migration path" still has not started. Motivated by the same PlanStepRunner run review
 (`20260911-205633-213`) that produced `docs/current/proposal_changesymboltype_tool.md`, via a
 follow-on discussion about reintroducing staged in-memory writes.

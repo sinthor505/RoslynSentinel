@@ -99,7 +99,7 @@ public class RefactoringExtractionDocsTools
     [Produces(DataTag.ChangeId)]
     [Description("Extracts selected statements into a new method with the correct return type inferred from the selection. newMethodName must be a valid C# identifier. exactSourceBlock is NOT a search fragment (unlike contextSnippet on other tools) - the entire range you want extracted must appear in it verbatim, since its matched span IS the extraction boundary; a too-short excerpt silently extracts only that narrower range, not the whole intended block. Written to disk (or staged, per autoStage) like other refactoring tools - not preview-only. Returns changeId.")]
     // Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent).
-    public Task<SentinelCallToolResult<object>> ExtractMethodSafe(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ExtractMethodSafe(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string newMethodName,
