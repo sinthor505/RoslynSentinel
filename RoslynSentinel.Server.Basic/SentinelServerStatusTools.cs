@@ -25,7 +25,7 @@ public class SentinelServerStatusTools
 
     [McpServerTool(Name = "McpServerStatus", UseStructuredContent = true, OutputSchemaType = typeof(McpServerStatusResult))]
     [Produces(DataTag.ResultOnly)]
-    [Description("Always-available diagnostic snapshot: session-halt state, circuit breaker status, the loaded workspace, and today's active --mode/--include-tools/--exclude-tools resolution. Call this first when another tool is missing, a call fails unexpectedly, or the session seems stuck. No parameters.")]
+    [Description("Diagnostic snapshot: session-halt state, circuit breaker, loaded workspace, active tool-mode resolution.")]
     public object McpServerStatus(CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;

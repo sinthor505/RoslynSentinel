@@ -25,7 +25,7 @@ public class SentinelAdminTools
 
     [McpServerTool(Name = "ListExternalDiskChanges")]
     [Produces(DataTag.FileList)]
-    [Description("Returns files modified on disk since the AI last synced. No parameters.")]
+    [Description("Returns files modified on disk since the agent last synced.")]
     public List<string> ListExternalDiskChanges(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     CancellationToken cancellationToken = default)
@@ -36,7 +36,7 @@ public class SentinelAdminTools
 
     [McpServerTool(Name = "IsSessionHalted")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Returns whether the session-wide fatal drift latch is currently set. No parameters.")]
+    [Description("Returns whether the session-wide fatal drift latch is set.")]
     public bool IsSessionHalted(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     CancellationToken cancellationToken = default)
@@ -47,7 +47,7 @@ public class SentinelAdminTools
 
     [McpServerTool(Name = "AcknowledgeExternalFileChanges")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Clears the external-change list and, if set, the session-wide fatal drift latch, after an operator has reviewed the disk changes. No parameters.")]
+    [Description("Clears the external-change list and fatal drift latch after disk changes are reviewed.")]
     public string AcknowledgeExternalFileChanges(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     CancellationToken cancellationToken = default)
@@ -66,7 +66,7 @@ public class SentinelAdminTools
     // Added by AddMember (expected - used for diagnostics)
     [McpServerTool(Name = "McpServerControl")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Operator-only control of this server process. op='status' reports whether this instance is running normally. op='stop' terminates this server process - VS Code will respawn a fresh instance (via the launch wrapper, which rebuilds) on its next tool call. 'stop' requires confirmServerStop='confirmServerStop' (case-insensitive) or it is refused.")]
+    [Description("Operator-only control of this server process: status or stop (stop requires confirmServerStop).")]
     public string McpServerControl(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         string op,

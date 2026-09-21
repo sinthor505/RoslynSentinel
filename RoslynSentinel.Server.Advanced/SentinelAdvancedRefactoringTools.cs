@@ -145,12 +145,12 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "ChangeSignature")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Reorders, adds, and removes method parameters and updates all call sites across the solution (including named-argument and omitted-optional-argument call sites). To add a parameter, supply name/type/defaultValue instead of originalIndex; the literal default value is also inserted at every existing call site. To remove a parameter, simply omit its originalIndex from the list. Does NOT cascade across an interface/implementer boundary: targeting an interface method or one that implements an interface member is refused outright (retrying on the interface or any implementer hits the same refusal) - the error names every interface/implementer whose parameter list must instead be edited directly (ApplyDiff/ReplaceSnippet with validateOnApply:false), then Build once to converge.")]
+    [Description("Reorders, adds, or removes method parameters and updates all call sites solution-wide. Refuses across an interface/implementer boundary - edit each side directly.")]
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeSignature(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
-        [Description("The desired end-state parameter list, in order. Each entry is either {originalIndex: N} to keep the parameter originally at 0-based index N, or {name, type, defaultValue} to insert a brand-new parameter (defaultValue is literal C# source text, e.g. \"TimeSpan.FromSeconds(30)\", used both as the declaration's default and as the fill-in argument at existing call sites). A parameter is removed by leaving its originalIndex out of the list entirely. Example: [{\"originalIndex\":1},{\"originalIndex\":0},{\"name\":\"timeout\",\"type\":\"TimeSpan\",\"defaultValue\":\"TimeSpan.FromSeconds(30)\"}].")]
+        [Description("The desired end-state parameter list, in order. Each entry is {originalIndex: N} to keep an existing 0-based-index parameter, or {name, type, defaultValue} to insert a new one. Omit an originalIndex to remove that parameter.")]
         [ExternalInputRequired(DataTag.Order, required: true)] ChangeSignatureParameterInput[] parameters,
         [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
@@ -228,7 +228,7 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "ConvertAnonymousToNamed")]
     [Produces(DataTag.ChangeId)]
-    [Description("Converts the first anonymous object creation expression in the file to a formal named class declaration. Validates and writes to disk immediately; dryRun=true to preview without writing.")]
+    [Description("Converts the first anonymous object creation in a file into a named class declaration.")]
     public async Task<SentinelCallToolResult<object>> ConvertAnonymousToNamed(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
@@ -264,7 +264,7 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "InlineClass")]
     [Produces(DataTag.ChangeId)]
-    [Description("Merges all members of a source class into a target class and removes the source class declaration. Works within the same file or across files. Updates all type references throughout the solution. Validates and writes to disk immediately; dryRun=true to preview without writing.")]
+    [Description("Merges a source class's members into a target class and removes the source declaration.")]
     public async Task<SentinelCallToolResult<object>> InlineClass(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string rawSourceFilePath,
@@ -297,12 +297,12 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "MoveAllTypesToFiles")]
     [Produces(DataTag.Report)]
-    [Description("Moves all secondary types (types declared alongside the file's primary type) to their own files.")]
+    [Description("Moves secondary types out of a file into their own files.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: target is required for scope=file (a file path) and scope=project (a project name); ignored for scope=solution. Enforced at runtime, not by the schema.
     public async Task<SentinelCallToolResult<object>> MoveAllTypesToFiles(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.Scope)] ToolScope scope,
-        [Description("Required for scope=file (file path) or scope=project (project name). Ignored for scope=solution.")]
+        [Description("Required for scope=file/project (path or project name).")]
         [ExternalInputRequired(DataTag.SourceFilepath), ExternalInputRequired(DataTag.ProjectName)] string? target = null,
         [Description(ToolParams.AutoStage)]
         [ToolOption(ToolOptionTag.AutoStage)] bool autoStage = true,
@@ -423,9 +423,9 @@ public class SentinelAdvancedRefactoringTools
     public async Task<SentinelCallToolResult<object>> InvertAssignments(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("1-based start line of the range. Provide both startLine and endLine, or use contextSnippet instead.")]
+        [Description("Provide both startLine and endLine, or use contextSnippet instead.")]
         [Consumes(DataTag.StartLine)] int startLine = 0,
-        [Description("1-based end line of the range. Provide both startLine and endLine, or use contextSnippet instead.")]
+        [Description("Provide both startLine and endLine, or use contextSnippet instead.")]
         [Consumes(DataTag.EndLine)] int endLine = 0,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
@@ -477,24 +477,24 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "MoveMember")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Moves one or more methods/properties/fields from a class into a target class as a single atomic change, rewriting call sites solution-wide as needed.")]
+    [Description("Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites.")]
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> MoveMember(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.ClassName, required: true)] string className,
-        [Description("Members to move. Instance members moving anywhere other than an existing base type (pull-up) have their call sites rewritten automatically where unambiguous (autoResolveCallSites); ambiguous or unintroducible call sites must be resolved via callSiteFixups or the whole move is rejected.")]
+        [Description("Members to move.")]
         [Consumes(DataTag.SymbolName, required: true)] string[] memberNames,
-        [Description("Target class name. If it's an existing base type of the source class, members are pulled up. If it's an existing unrelated class, members move there as-is. If no class with this name exists, a new class is synthesized in its own file.")]
+        [Description("Target class name: an existing base type pulls members up; an existing unrelated class receives them as-is; a nonexistent name creates a new class.")]
         [ExternalInputRequired(DataTag.ClassName, required: true)] string targetClassName,
-        [Description("Narrows which class named targetClassName to use, if the name is ambiguous.")]
+        [Description("Narrows which class named targetClassName to use, if ambiguous.")]
         [ExternalInputRequired(DataTag.SourceFilepath)] string? targetFilepath = null,
         [Description(ToolParams.AutoStage)]
         [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        [Description("When moving instance member(s) to a non-base-type destination, automatically rewrite unambiguous call sites (single in-scope candidate of the target type). Defaults to true. Set false to require every call site be resolved manually via callSiteFixups.")]
+        [Description("Auto-rewrites unambiguous call sites when moving instance members (default true). Set false to require manual resolution via callSiteFixups.")]
         bool autoResolveCallSites = true,
-        [Description("Manual resolution for instance-move call sites autoResolveCallSites couldn't resolve (ambiguous or no in-scope candidate). Key is \"FilePath:Line\" (as reported by a dry-run preview); value is either a reference-expression string (e.g. \"_classB\") to use as the new receiver, or the shorthand \"new\" to construct the target type inline (target type must have a public zero-arg constructor).")]
+        [Description("Manual resolution for call sites autoResolveCallSites couldn't handle. Key is \"FilePath:Line\"; value is a receiver expression or \"new\".")]
         Dictionary<string, string>? callSiteFixups = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -566,14 +566,14 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "IntroduceParameterObject")]
     [Produces(DataTag.ChangeId)]
-    [Description("Encapsulates method parameters into a new C# 12 record type, appended to the end of the file. Rewrites parameter references in the method body but leaves call sites for manual follow-up, flagged with a TODO comment.")]
+    [Description("Encapsulates method parameters into a new C# 12 record type; call sites need manual follow-up (flagged with TODO).")]
     public async Task<SentinelCallToolResult<object>> IntroduceParameterObject(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [Description("Name for the generated record type. Defaults to a name derived from the method.")]
         string? newTypeName = null,
-        [Description("Only these parameters are grouped into the record. Defaults to all non-CancellationToken parameters.")]
+        [Description("Parameters to group into the record. Defaults to all non-CancellationToken parameters.")]
         string[]? parameterNames = null,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -616,11 +616,11 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "Introduce")]
     [Produces(DataTag.ChangeId)]
-    [Description("Introduces a named symbol (local variable, private field, parameter, or private constant) from an expression.")]
+    [Description("Introduces a named local variable, field, parameter, or constant from an expression.")]
     public async Task<SentinelCallToolResult<object>> Introduce(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)][Description("The path to the source file.")] FilePathWrapper filepath,
-        [Consumes(DataTag.ContextSnippet, required: true)][Description("A verbatim substring identifying the expression to introduce a symbol from.")] string contextSnippet,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.ContextSnippet, required: true)][Description("Short unique fragment identifying the target when its name alone is ambiguous, copied verbatim from a prior result.")] string contextSnippet,
         [ExternalInputRequired(DataTag.SymbolName)][Description("The name of the new symbol to introduce.")] string newName,
         [ExternalInputRequired(DataTag.SymbolKind)][Description("The kind of symbol to introduce.")] IntroduceAsType newType,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
@@ -697,18 +697,18 @@ public class SentinelAdvancedRefactoringTools
     // solution -> same new-class behavior) and additionally supports moving into an EXISTING class.
     [McpServerTool(Name = "ExtractMembers")]
     [Produces(DataTag.ChangeId)]
-    [Description("Extracts members from a class into a new interface, partial class, or superclass. For moving named members into a class (new or existing), use MoveMember instead.")]
+    [Description("Extracts class members into a new interface, partial class, or superclass.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: newTypeName required for newType=interface/superclass; memberNames required for newType=partial; none individually required by the schema. Enforced at runtime.
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ExtractMembers(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)][Description("The file path of the destination file.")] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)][Description("The name of the class from which to extract members.")] string className,
-        [ExternalInputRequired(DataTag.SymbolKind)][Description("The type of extraction to perform (interface, partial class, or superclass).")] ExtractAsType newType,
-        [ExternalInputRequired(DataTag.SymbolName)][Description("The name of the new type to create when extracting members. Required for interface and superclass.")] string? newTypeName = null,
-        [ExternalInputRequired(DataTag.SymbolName)][Description("The names of the members to extract when extracting to a partial class. Required for partial class.")] string[]? memberNames = null,
-        [ExternalInputRequired(DataTag.SourceFilepath)][Description("The file paths of the classes to extract common members from when extracting to a superclass. Required for superclass.")] FilePathWrapper[]? memberFilePaths = null,
-        [ExternalInputRequired(DataTag.ClassName)][Description("The names of the classes to extract common members from when extracting to a superclass. Required for superclass.")] string[]? classNames = null,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)][Description("Whether to automatically stage the changes.")] bool autoStage = true,
+        [ExternalInputRequired(DataTag.SymbolKind)][Description("Extraction target kind: interface, partial class, or superclass.")] ExtractAsType newType,
+        [ExternalInputRequired(DataTag.SymbolName)][Description("Required for newType=interface/superclass: name of the new type.")] string? newTypeName = null,
+        [ExternalInputRequired(DataTag.SymbolName)][Description("Required for newType=partial class: members to extract.")] string[]? memberNames = null,
+        [ExternalInputRequired(DataTag.SourceFilepath)][Description("Required for newType=superclass: file paths matching classNames.")] FilePathWrapper[]? memberFilePaths = null,
+        [ExternalInputRequired(DataTag.ClassName)][Description("Required for newType=superclass: classes to extract common members from.")] string[]? classNames = null,
+        [ToolOption(ToolOptionTag.AutoStage, required: false)][Description("true (default) = write immediately; false = return content without writing.")] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -830,18 +830,18 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "SyncInterface")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Manages interface/class synchronization: generates stub implementations, syncs missing members from a class into its interface, or verifies implementation coverage.")]
+    [Description("Generates stub implementations, syncs missing members into an interface, or verifies implementation coverage.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: className required for action=implement/sync; not needed for action=verify. Enforced at runtime, not by the schema.
     public async Task<SentinelCallToolResult<object>> SyncInterface(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("The class file. Required for action=implement/sync; ignored for action=verify.")]
+        [Description("Required for action=implement/sync; ignored for verify.")]
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string interfaceName,
-        [Description("implement: generate stub implementations for all unimplemented interface members on className, writing the updated class file. sync: add to interfaceName any public members found on className that are missing from it, writing the updated interface file. verify: report implementation coverage across all implementing classes (optionally scoped by projectName); className not needed.")]
+        [Description("implement: stub unimplemented interface members on className. sync: add className's missing public members to interfaceName. verify: report coverage across implementers (className not needed).")]
         [Consumes(DataTag.Action, required: true)] SyncInterfaceAction action,
         [Description("Required for action=implement/sync.")]
         [Consumes(DataTag.SymbolName)] string? className = null,
-        [Description("Scopes action=verify to one project. Ignored otherwise.")]
+        [Description("Scopes action=verify to one project.")]
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -920,11 +920,11 @@ public class SentinelAdvancedRefactoringTools
     public async Task<SentinelCallToolResult<object>> Inline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("The symbol name to inline. The parameter name when kind=parameter.")]
+        [Description("The symbol to inline (parameter name when kind=parameter).")]
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        [Description("method: inline the method body at all call sites solution-wide (expression-body or single-return methods only). variable: inline a local variable into its usages. field: inline a field's value into its usages. parameter: inline a constant parameter into its method body (methodName required).")]
+        [Description("method: inline body at call sites (expression-body/single-return only). variable/field: inline into usages. parameter: inline a constant parameter (methodName required).")]
         [Consumes(DataTag.SymbolKind, required: true)] InlineKind kind,
-        [Description("Required for kind=parameter: the method declaring the parameter.")]
+        [Description("Required for kind=parameter: the declaring method.")]
         [Consumes(DataTag.SymbolName)] string? methodName = null,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -1006,17 +1006,17 @@ public class SentinelAdvancedRefactoringTools
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> WrapRange(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("1-based start line of the range. Provide both startLine and endLine, or use contextSnippet instead.")]
+        [Description("Provide both startLine and endLine, or use contextSnippet instead.")]
         [Consumes(DataTag.StartLine)] int startLine = 0,
-        [Description("1-based end line of the range. Provide both startLine and endLine, or use contextSnippet instead.")]
+        [Description("Provide both startLine and endLine, or use contextSnippet instead.")]
         [Consumes(DataTag.EndLine)] int endLine = 0,
-        [Description("tryCatch: wrap in a try/catch block. using: wrap in a using block (name required). region: wrap in a #region block (name required).")]
+        [Description("tryCatch/using/region - which block to wrap in (using/region also require name).")]
         [ExternalInputRequired(DataTag.Wrapper)] string wrapper = "",
-        [Description("wrapper=tryCatch: the exception type name, defaults to \"Exception\". wrapper=using: the disposal variable name (required). wrapper=region: the region label (required).")]
+        [Description("tryCatch: exception type name (default \"Exception\"). using: disposal variable name (required). region: region label (required).")]
         [ExternalInputRequired(DataTag.SymbolName)] string? name = null,
-        [Description("wrapper=tryCatch only: the catch block's exception variable name.")]
+        [Description("wrapper=tryCatch only: exception variable name.")]
         [ExternalInputRequired(DataTag.SymbolName)] string catchVariableName = "ex",
-        [Description("wrapper=tryCatch only: statements to place inside the catch block. Defaults to an empty catch body.")]
+        [Description("wrapper=tryCatch only: catch-block statements. Defaults to empty.")]
         [ExternalInputRequired(DataTag.SourceCode)] string? catchBody = null,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
@@ -1242,12 +1242,12 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "MoveType")]
     [Produces(DataTag.ChangeId)]
-    [Description("Moves a type to its own file, or a nested type out to its containing namespace scope.")]
+    [Description("Moves a type to its own file, or a nested type out to its containing namespace.")]
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> MoveType(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string typeName,
-        [Description("ownFile: move the type into its own new .cs file. outerScope: move a nested type out to its containing namespace scope.")]
+        [Description("ownFile: into its own new file. outerScope: nested type out to containing namespace.")]
         string destination,
         [Description(ToolParams.AutoStage)]
         bool autoStage = true,

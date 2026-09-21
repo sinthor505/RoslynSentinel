@@ -71,14 +71,14 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetComprehensiveHealthReport")]
     [Produces(DataTag.Report)]
-    [Description("Generates a paged health report across one or more engines: Structure, Modernization, Performance, Safety, Architecture.")]
+    [Description("Generates a paged health report across one or more engines (Structure, Modernization, Performance, Safety, Architecture).")]
     public async Task<SentinelCallToolResult<object>> GetComprehensiveHealthReport(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("Engines to include. Omit to run all engines.")]
+        [Description("Engines to include. Omit for all.")]
         List<HealthEngineType>? engines = null,
-        [Description("Restricts the report to one project. Omit for the whole solution.")]
+        [Description("Restricts to one project. Omit for the whole solution.")]
         [Consumes(DataTag.ProjectName)] string? projectName = null,
-        [Description("Restricts the report to one file. Omit for the whole solution.")]
+        [Description("Restricts to one file. Omit for the whole solution.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Description("Number of project results to skip before taking limit.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
@@ -113,10 +113,10 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetSolutionMetrics")]
     [Produces(DataTag.Report)]
-    [Description("Returns deep metrics for the entire solution or a single project.")]
+    [Description("Returns deep metrics for the solution or a single project.")]
     public async Task<SentinelCallToolResult<object>> GetSolutionMetrics(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("Restricts metrics to one project. Omit for the whole solution.")]
+        [Description("Restricts to one project. Omit for the whole solution.")]
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -143,7 +143,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetCodeInventory")]
     [Produces(DataTag.Report)]
-    [Description("Returns a structured report of all namespaces, classes, methods, and properties in a file.")]
+    [Description("Returns a structured inventory of namespaces, classes, methods, and properties in a file.")]
     public async Task<SentinelCallToolResult<object>> GetCodeInventory(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
@@ -177,14 +177,14 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetDiRegistrations")]
     [Produces(DataTag.Report)]
-    [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a scoped project/file. Returns service type, implementation type, lifetime, and source location.")]
+    [Description("Scans for DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or a scoped project/file.")]
     public async Task<SentinelCallToolResult<object>> GetDiRegistrations(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("Restricts results to one project. Omit to search the whole solution.")]
+        [Description("Restricts to one project. Omit for the whole solution.")]
         [Consumes(DataTag.ProjectName)] string? projectName = null,
-        [Description("Restricts results to one file. Omit to search the whole solution.")]
+        [Description("Restricts to one file. Omit for the whole solution.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
-        [Description("Filters by lifetime: Singleton, Scoped, or Transient. Omit for all lifetimes.")]
+        [Description("Filters by lifetime (Singleton/Scoped/Transient). Omit for all.")]
         [ToolOption(ToolOptionTag.Filter)] string? lifetimeFilter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -212,12 +212,12 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "GetCallGraph")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Builds a call graph for a method. For a single-level, flat list of callers instead of a multi-level tree, use FindReferences(kind: callers) - cheaper when you don't need depth beyond direct callers.")]
+    [Description("Builds a multi-level call graph for a method.")]
     public async Task<SentinelCallToolResult<object>> GetCallGraph(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
-        [Description("forward: what the method calls, as a CallGraphNode tree. reverse: who calls this method, as a ReverseCallGraphNode tree. tree: a markdown call-tree string.")]
+        [Description("forward: what it calls. reverse: who calls it. tree: markdown call-tree string.")]
         [ToolOption(ToolOptionTag.Direction)] string direction = "forward",
         [Description("Maximum levels of depth to traverse.")]
         [ToolOption(ToolOptionTag.MaxDepth)] int maxDepth = 3,
@@ -294,7 +294,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "PreviewMoveFileToNamespaceFolder")]
     [Produces(DataTag.Report)]
-    [Description("Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves.")]
+    [Description("Returns the folder path a file should reside in based on its declared namespace.")]
     public async Task<SentinelCallToolResult<string>> PreviewMoveFileToNamespaceFolder(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
@@ -325,13 +325,13 @@ public class SentinelIntelligenceTools
 
     [McpServerTool(Name = "TraceVariableLifetime")]
     [Produces(DataTag.Report)]
-    [Description("Traces a local variable or parameter's complete lifetime from declaration through every read, write, ref/out pass, return, and closure capture, across all code paths (loops, conditionals, try/catch) in the enclosing scope. For a method/property/field's usages instead, use FindReferences. Returns TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned, IsCapturedInClosure, and an Accesses list with Line, Column, AccessKind (Declaration/Read/Write/Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.")]
+    [Description("Traces a local variable/parameter's full lifetime: every read, write, ref/out pass, return, and capture across all code paths. Use FindReferences for methods/properties/fields instead.")]
     public async Task<SentinelCallToolResult<object>> TraceVariableLifetime(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Name of the local variable or parameter to trace.")]
         [Consumes(DataTag.SymbolName)] string variableName,
-        [Description("1-based line of the declaration. Disambiguates when the same name is declared more than once in the file.")]
+        [Description("1-based declaration line; disambiguates duplicate names in the file.")]
         [Consumes(DataTag.StartLine)] int lineNumber,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)

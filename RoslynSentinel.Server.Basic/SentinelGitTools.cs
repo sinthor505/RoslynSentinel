@@ -402,51 +402,51 @@ public class SentinelGitTools
     };
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool covering status, log, diff, show, staging, commit, revert, reset, branch, checkout, push, fetch, and pull. status/log/diff/show can target a different repo/worktree via repoPath instead of the loaded solution's.")]
+    [Description("Unified git tool: status, log, diff, show, staging, commit, revert, reset, branch, checkout, push, fetch, pull.")]
     public async Task<object> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Which git operation to run.")]
         GitOperation operation,
         [Description("log: number of commits to return (max 100).")]
         int count = 20,
-        [Description("diff/show: \"working\" (unstaged), \"staged\", a commit hash, or a range (\"refA..refB\" or \"refA...refB\"). show: a single commit hash or ref (range not applicable).")]
+        [Description("diff: \"working\", \"staged\", a commit hash, or a range. show: a single commit hash/ref.")]
         string target = "working",
-        [Description("diff/show/log: repo-relative paths to restrict to. Either ONE comma-separated string (e.g. \"a.cs,b.cs\") or a JSON array of strings (e.g. [\"a.cs\",\"b.cs\"]) - both are accepted, call once per file if you need per-file results.")]
+        [Description("diff/show/log: paths to restrict to (CSV string or JSON array).")]
         string? paths = null,
         [Description("diff/show: byte cap on the returned diff (max 524288).")]
         int maxBytes = 65536,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
-        [Description("commit: the commit message. Required for operation=commit unless amend=true, in which case omitting it keeps HEAD's existing message.")]
+        [Description("Required for operation=commit unless amend=true (then omitting keeps HEAD's message).")]
         string? message = null,
-        [Description("stage: which files to stage. \"tracked\" (default when omitted) stages modifications and deletions of already-tracked files only (git add -u) and does NOT stage new files. \"all\" stages everything in the working tree including untracked files (git add -A). \"listed\" stages exactly the paths you name in files/paths, untracked ones included - use this whenever you know which files you want. Naming files alongside a scope other than \"listed\" is rejected, so a file list can never be silently overridden. commit: OMIT this to commit exactly what is currently staged (the normal stage-then-commit workflow) - commit does NOT implicitly stage anything when scope is omitted. Pass scope explicitly on a commit call only if you specifically want it to also stage more (tracked/all) before committing, or to narrow the commit to specific paths (listed, with files).")]
+        [Description("stage: \"tracked\" (default) stages modified/deleted tracked files only. \"all\" also stages untracked files. \"listed\" stages exactly files/paths. commit: omit to commit exactly what's staged; pass scope only to also stage before committing.")]
         GitStageScope? scope = null,
-        [Description("stage/commit: repo-relative paths to stage. Either ONE comma-separated string (e.g. \"a.cs,b.cs\") or a JSON array of strings (e.g. [\"a.cs\",\"b.cs\"]) - both are accepted, call once per file if you need per-file results. Requires scope=\"listed\". Alias of paths for these operations - pass one or the other, not both.")]
+        [Description("stage/commit: paths to stage (CSV string or JSON array). Requires scope=\"listed\". Alias of paths - pass one, not both.")]
         string? files = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is required when operation=revert, unused otherwise.
-        [Description("revert: the commit to revert (full or short hash, from log). Required for operation=revert.")]
+        [Description("Required for operation=revert: commit hash to revert.")]
         string? commitHash = null,
-        [Description("revert: true stages the revert without committing; call Git(operation: commit) to finalize.")]
+        [Description("revert: true stages without committing; commit separately to finalize.")]
         bool noCommit = false,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: branchName is required for operation=checkout; optional for operation=branch (omit to list).
-        [Description("branch/checkout: the branch to create, delete, or switch to. branch: omit to list all branches instead. checkout: required. log: optional ref/branch to start the log from instead of HEAD. reset: the ref to reset to (defaults to \"HEAD~1\" when omitted).")]
+        [Description("branch/checkout: branch to create/delete/switch to (branch: omit to list all; checkout: required). log: optional start ref. reset: ref to reset to (default HEAD~1).")]
         string? branchName = null,
-        [Description("branch: base ref for a newly created branch (defaults to HEAD). checkout: base ref for a new branch, only used together with createBranch=true.")]
+        [Description("branch/checkout: base ref for a new branch (default HEAD).")]
         string? startPoint = null,
-        [Description("branch: true deletes branchName (git branch -d, refuses if unmerged) instead of creating it. Ignored when branchName is omitted (list mode).")]
+        [Description("branch: true deletes branchName instead of creating it (refuses if unmerged).")]
         bool deleteBranch = false,
-        [Description("checkout: true creates branchName first if it doesn't already exist (git checkout -b), optionally from startPoint.")]
+        [Description("checkout: true creates branchName if missing, optionally from startPoint.")]
         bool createBranch = false,
         [Description("push/fetch/pull: the remote to operate on.")]
         string remoteName = "origin",
-        [Description("push: true also sets the pushed branch's upstream tracking (git push -u).")]
+        [Description("push: true also sets upstream tracking.")]
         bool setUpstream = false,
-        [Description("pull: true rebases the current branch onto the remote instead of merging (git pull --rebase).")]
+        [Description("pull: true rebases instead of merging.")]
         bool rebase = false,
-        [Description("commit: true amends HEAD instead of creating a new commit (git commit --amend). message becomes optional when amend=true - omit it to keep HEAD's existing message (--no-edit), or pass one to replace it.")]
+        [Description("commit: true amends HEAD instead of a new commit; message becomes optional (omit to keep HEAD's message).")]
         bool amend = false,
-        [Description("reset: how far to unwind history. \"soft\" moves HEAD/branch only, leaving the index and working tree untouched (everything the moved-past commit(s) changed reappears staged). \"mixed\" also resets the index to match, leaving the working tree untouched (those changes reappear unstaged). No \"hard\" mode is exposed - this can never discard uncommitted working-tree changes. Defaults to \"mixed\" when omitted.")]
+        [Description("reset: \"soft\" moves HEAD only (changes reappear staged). \"mixed\" (default) also resets the index (changes reappear unstaged). No \"hard\" mode - working tree is never discarded.")]
         GitResetMode? mode = null,
-        [Description("status/log/diff/show only: an absolute path to a different git repo or worktree to operate on instead of the loaded solution's - e.g. a PlanStepRunner Worktree/ folder. Must resolve to a real git repo/worktree (a bad path is rejected, not silently ignored). Mutating operations (stage/commit/revert/reset/branch/checkout/push/fetch/pull) always stay scoped to the loaded solution regardless of this parameter, to keep the write chokepoint meaningful.")]
+        [Description("status/log/diff/show only: an absolute path to a different repo/worktree. Mutating operations always stay scoped to the loaded solution.")]
         string? repoPath = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)

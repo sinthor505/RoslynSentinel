@@ -29,13 +29,13 @@ public class SentinelWholeFileWriteTools
     }
     [McpServerTool(Name = "WriteFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Writes a whole file to disk, creating or fully overwriting it. By default this delta-compiles the edited file plus every project that transitively references it before writing, and rejects the write if that introduces any new compiler error. For a partial edit, use ApplyUnifiedDiff instead. For a change that necessarily spans multiple files (e.g. renaming a method used elsewhere), use RenameSymbol/ChangeSignature to update all call sites atomically, or pass validateOnApply=false on intermediate writes and validate once at the end.")]
+    [Description("Writes a whole file to disk, creating or overwriting it. Use ApplyUnifiedDiff for partial edits.")]
     public async Task<SentinelCallToolResult<object>> WriteFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("CreateFile requires the file NOT to already exist (fails otherwise). ReplaceFile requires the file to already exist (fails otherwise).")]
+        [Description("CreateFile: file must not already exist. ReplaceFile: file must already exist.")]
         [ExternalInputRequired(DataTag.Action)] WriteFileOperation operation,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("Full content of the file. Parent directories are created automatically if missing.")] string content,
+        [Description("Full file content. Parent directories are created automatically.")] string content,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         CancellationToken cancellationToken = default)
     {
@@ -110,7 +110,7 @@ public class SentinelWholeFileWriteTools
 
     [McpServerTool(Name = "DeleteFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Deletes a file from disk. Fails if the file does not exist. Routes through the same write-path chokepoint as every other mutating tool: refused if the file was modified externally since the last sync (see ListExternalDiskChanges/AcknowledgeExternalFileChanges), and undoable via UndoLastApply (the pre-delete content is captured). If the file is a tracked Roslyn Document, it's removed from the in-memory solution as part of the same operation.")]
+    [Description("Deletes a file from disk; fails if it doesn't exist. Undoable via UndoLastApply.")]
     public async Task<SentinelCallToolResult<object>> DeleteFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, CancellationToken cancellationToken = default)
@@ -291,20 +291,20 @@ public class SentinelWholeFileWriteTools
     // subset for its chosen format and only find out at runtime.
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a change set, either as full file contents (changesetFormat=files) or as a unified diff against one file (changesetFormat=diff). For changesetFormat=diff, hunk line numbers are a starting guess - a mismatched position is re-anchored by searching nearby lines, so modest drift from an earlier edit is tolerated. For changesetFormat=files with action=apply, any file that would shrink by more than 50% (by line count or by active/non-comment code lines) is rejected with errorCode=ConfirmationRequired, since that usually signals a partial fragment or a comment-collapse was submitted instead of the full file. By default this also delta-compiles the edited project(s) plus every transitively-referencing project before writing, and rejects the change if it introduces a new compiler error - for a rename or signature change spanning files, prefer RenameSymbol/ChangeSignature, or pass validateOnApply=false on intermediate calls and validate once at the end.")]
+    [Description("Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff (changesetFormat=diff), validating by delta-compile before writing.")]
     public async Task<SentinelCallToolResult<object>> ApplyDiff(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("files: changes is a filePath->newContent dict (filepath/unifiedDiff unused). diff: filepath and unifiedDiff apply to a single file (changes unused).")]
+        [Description("files: use changes (filePath->content map). diff: use filepath+unifiedDiff.")]
         [ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat,
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required when changesetFormat=files, unused otherwise.
-        [Description("Required when changesetFormat=files: filePath->newContent for every file to write.")]
+        [Description("Required for changesetFormat=files: filePath -> newContent map.")]
         [ExternalInputRequired(DataTag.OperationId)] Dictionary<string, string>? changes = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required when changesetFormat=diff, unused otherwise.
-        [Description("Required when changesetFormat=diff: the single file unifiedDiff applies to.")]
+        [Description("Required for changesetFormat=diff.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required when changesetFormat=diff, unused otherwise.
-        [Description("Required when changesetFormat=diff: the unified diff to apply to filepath.")]
+        [Description("Required for changesetFormat=diff.")]
         [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
@@ -560,10 +560,10 @@ public class SentinelWholeFileWriteTools
     // docs/current/design_applyunifieddiff_replace_snippet_v1.md.
     [McpServerTool(Name = "ApplyUnifiedDiff")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a unified diff against a single file. Hunk line numbers are a starting guess - a mismatched position is re-anchored by searching nearby lines, so modest drift from an earlier edit is tolerated. For a whole-file rewrite, use WriteFile(operation=ReplaceFile) instead. By default this also delta-compiles the edited project(s) plus every transitively-referencing project before writing, and rejects the change if it introduces a new compiler error - since this tool only touches one file per call, prefer RenameSymbol/ChangeSignature for a rename or signature change spanning files, or pass validateOnApply=false here and on the other file's edit, then validate once after both are applied.")]
+    [Description("Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby.")]
     public async Task<SentinelCallToolResult<object>> ApplyUnifiedDiff(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("apply: applies the diff. validate: checks it would apply cleanly without writing.")]
+        [Description("apply: writes the change. validate: checks without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         [Description("The single file unifiedDiff applies to.")]
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,

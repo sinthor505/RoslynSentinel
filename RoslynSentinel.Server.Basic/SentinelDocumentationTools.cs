@@ -343,20 +343,20 @@ public class SentinelDocumentationTools
     }
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
-    [Description("Reads, writes, appends, or lists project doc files under docs/ (or docs/current/ if it exists). A bare filename or wrong extension falls back to a basename search; if that substitutes a different file than requested, the result's WarningDetails field names both.")]
+    [Description("Reads, writes, appends, or lists project doc files under docs/.")]
     public object ProjectDoc(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("read, write, append (completed_work only), or list.")]
         DocAction action,
-        [Description("Which doc category to operate on: plan -> plans/, handoff -> handoffs/, completed_work -> completed/ (append-only), documentation -> documentation/, state -> docs/migration-state.yaml (name is ignored).")]
+        [Description("Doc category: plan->plans/, handoff->handoffs/, completed_work->completed/ (append-only), documentation->documentation/, state->migration-state.yaml (name ignored).")]
         DocType docType,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: name is required for every action except when
         // docType=state (which uses a fixed filename) or action=list.
-        [Description("File name or nested relative path (e.g. \"plan-x-steps/01-baseline.md\"), as shown by action=list. A path containing a directory separator is treated as explicit and never substituted. Required for all file-based operations except docType=state.")]
+        [Description("File name or nested relative path, as shown by action=list. Required except for docType=state.")]
         string? name = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: content is required when action=write or action=append,
         // not used otherwise.
-        [Description("File content. Required for action=write or action=append.")]
+        [Description("Required for action=write/append.")]
         string? content = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)

@@ -18,40 +18,26 @@ public static class ToolParams
 
     // Validate-and-apply workflow
     public const string AutoStage =
-        "true (default) -> validates and writes the result to disk immediately; returns changeId to pass to UndoLastApply. " +
-        "false -> returns updated file content without validating or writing.";
+        "true (default) = write immediately; false = return content without writing.";
 
     public const string ValidateOnApply =
-        "true (default) -> delta-compiles the edited project(s) plus every project that transitively " +
-        "references them (so removing/narrowing a public member is caught even if nothing inside the " +
-        "edited project itself calls it) before writing; returns errors without touching disk if new " +
-        "errors found. " +
-        "false -> writes regardless (for intentional intermediate broken-state edits).";
+        "true (default) = reject the write if it introduces a new compiler error.";
 
     public const string DryRun =
-        "true -> validates only; does not write to disk and returns no changeId. " +
-        "false (default) -> validates and writes to disk immediately.";
+        "true = validate only, don't write.";
 
     public const string ReturnDiff =
-        "true -> include a unified-diff-style preview of the change in the response (costs extra context). " +
-        "false (default) -> omit the diff to keep the response minimal.";
+        "true = include a diff preview in the response.";
 
     // Context disambiguation
     public const string ContextSnippet =
-        "Optional. Only needed when the target's name alone is ambiguous (2+ declarations share it). " +
-        "A SHORT, UNIQUE fragment is best - a single distinctive line (e.g. the signature or one " +
-        "statement) is usually enough. Do NOT paste the whole member/type body: a longer excerpt is " +
-        "MORE likely to fail (any formatting difference from the real file breaks the match) for no " +
-        "added benefit, since only uniqueness among same-named candidates is required, not an exact " +
-        "reproduction of the target. Must be copied verbatim from a prior tool result (ReadFile/" +
-        "GetMethodSource/etc.), not retyped from memory. Use lineBefore/lineAfter if a short fragment " +
-        "still isn't unique.";
+        "Short unique fragment identifying the target when its name alone is ambiguous, copied verbatim from a prior result.";
 
     public const string LineBefore =
-        "Line immediately before contextSnippet. Used to disambiguate when the snippet appears multiple times.";
+        "Line before contextSnippet, to disambiguate repeats.";
 
     public const string LineAfter =
-        "Line immediately after contextSnippet. Used to disambiguate when the snippet appears multiple times.";
+        "Line after contextSnippet, to disambiguate repeats.";
 
     public const string OldContent =
         "REQUIRED. Verbatim text to find and replace - copied exactly from a prior tool result " +
@@ -90,8 +76,7 @@ public static class ToolParams
 
     // Transcript review
     public const string Reason =
-        "Required. A brief descriptive phrase (at least 10 characters, must contain a space) for why " +
-        "you're calling this tool right now - helps when reviewing agent transcripts later.";
+        "Why you're calling this now (min 10 chars, must contain a space).";
 
 
     // Added by AddMember (expected - used for diagnostics)
