@@ -2765,6 +2765,13 @@ public class RefactoringEngine
             };
         }
 
+        if (container is not TypeDeclarationSyntax typeDecl)
+        {
+            // Fallback: append (also covers enum containers, which AddMemberAsync rejects loudly
+            // rather than silently no-op'ing - see docs/current/issue_member_add_silent_persistence.md).
+            return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
+        }
+
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
         if (newMember == null)
         {
@@ -2789,23 +2796,17 @@ public class RefactoringEngine
 
         var insertedDescription = DescribeParsedMember(newMember);
         newMember = newMember.WithAddedByComment("InsertMemberAfter");
-        if (container is TypeDeclarationSyntax typeDecl)
+        var membersList = typeDecl.Members.ToList();
+        var idx = membersList.FindIndex(m => GetMemberName(m) == afterMemberName);
+        var insertIndex = idx < 0 ? membersList.Count : idx + 1;
+
+        return new DocumentEditResult
         {
-            var membersList = typeDecl.Members.ToList();
-            var idx = membersList.FindIndex(m => GetMemberName(m) == afterMemberName);
-            var insertIndex = idx < 0 ? membersList.Count : idx + 1;
-
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Modified,
-                FilePath = filePath,
-                Message = $"// Added {insertedDescription}.",
-                UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
-            };
-        }
-
-        // Fallback: append
-        return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = $"// Added {insertedDescription}.",
+            UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
+        };
     }
 
     public async Task<DocumentEditResult> InsertMemberBeforeAsync(FilePathWrapper filePath, string containerName, string beforeMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
@@ -2859,6 +2860,13 @@ public class RefactoringEngine
             };
         }
 
+        if (container is not TypeDeclarationSyntax typeDecl)
+        {
+            // Fallback: append (also covers enum containers, which AddMemberAsync rejects loudly
+            // rather than silently no-op'ing - see docs/current/issue_member_add_silent_persistence.md).
+            return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
+        }
+
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
         if (newMember == null)
         {
@@ -2883,22 +2891,17 @@ public class RefactoringEngine
 
         var insertedDescription = DescribeParsedMember(newMember);
         newMember = newMember.WithAddedByComment("InsertMemberBefore");
-        if (container is TypeDeclarationSyntax typeDecl)
+        var membersList = typeDecl.Members.ToList();
+        var idx = membersList.FindIndex(m => GetMemberName(m) == beforeMemberName);
+        var insertIndex = idx < 0 ? membersList.Count : idx;
+
+        return new DocumentEditResult
         {
-            var membersList = typeDecl.Members.ToList();
-            var idx = membersList.FindIndex(m => GetMemberName(m) == beforeMemberName);
-            var insertIndex = idx < 0 ? membersList.Count : idx;
-
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Modified,
-                FilePath = filePath,
-                Message = $"// Added {insertedDescription}.",
-                UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
-            };
-        }
-
-        return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = $"// Added {insertedDescription}.",
+            UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
+        };
     }
 
     public async Task<DocumentEditResult> AddAttributeAsync(FilePathWrapper filePath, string targetName, string attributeSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)

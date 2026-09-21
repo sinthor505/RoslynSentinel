@@ -113,11 +113,11 @@ public class McpTasksHarnessBulkCommentTests
         Assert.That(syncResult.IsError, Is.Not.True);
         Assert.That(polledResult.IsError, Is.Not.True);
         Assert.That(
-            SerializeContent(polledResult),
-            Is.EqualTo(SerializeContent(syncResult)),
+            McpTasksHarnessTestSupport.SerializeContent(polledResult),
+            Is.EqualTo(McpTasksHarnessTestSupport.SerializeContent(syncResult)),
             "Task-backed and synchronous dryRun calls with identical arguments should return equivalent content.");
 
-        using var doc = JsonDocument.Parse(SerializeContent(polledResult));
+        using var doc = JsonDocument.Parse(McpTasksHarnessTestSupport.SerializeContent(polledResult));
         var data = FindDataElement(doc.RootElement);
         Assert.That(data.GetProperty("dryRun").GetBoolean(), Is.True);
         Assert.That(data.GetProperty("totalMembers").GetInt32(), Is.GreaterThan(0), "ContosoOrders sample should contain commentable members.");
@@ -147,7 +147,7 @@ public class McpTasksHarnessBulkCommentTests
 
         Assert.That(result.IsError, Is.Not.True);
 
-        using var doc = JsonDocument.Parse(SerializeContent(result));
+        using var doc = JsonDocument.Parse(McpTasksHarnessTestSupport.SerializeContent(result));
         var data = FindDataElement(doc.RootElement);
         Assert.That(data.GetProperty("commentedThisCall").GetInt32(), Is.GreaterThan(0), "Expected at least one stale member to be commented against the ContosoOrders sample.");
         Assert.That(_fakeLlmClient.CallCount, Is.GreaterThan(0), "Expected the fake LLM client to have been invoked for real (non-dryRun) work.");
@@ -180,7 +180,7 @@ public class McpTasksHarnessBulkCommentTests
 
         Assert.That(result.IsError, Is.Not.True);
 
-        using var doc = JsonDocument.Parse(SerializeContent(result));
+        using var doc = JsonDocument.Parse(McpTasksHarnessTestSupport.SerializeContent(result));
         var data = FindDataElement(doc.RootElement);
         Assert.That(data.GetProperty("severity").GetString(), Is.EqualTo("ok"),
             "The decoy file should not be mistaken for the real attribute, so seeding/commenting should proceed normally.");
@@ -233,9 +233,6 @@ public class McpTasksHarnessBulkCommentTests
         using var parsed = JsonDocument.Parse(text);
         return parsed.RootElement.GetProperty("successDetails").Clone();
     }
-
-    private static string SerializeContent(CallToolResult result) =>
-        JsonSerializer.Serialize(result.Content);
 
     private static IDictionary<string, JsonElement> ToArguments(IDictionary<string, object?> arguments) =>
         arguments.ToDictionary(kvp => kvp.Key, kvp => JsonSerializer.SerializeToElement(kvp.Value));

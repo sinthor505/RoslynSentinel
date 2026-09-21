@@ -121,8 +121,8 @@ public class McpTasksHarnessTests
 
         Assert.That(polledResult.IsError, Is.Not.True);
         Assert.That(
-            SerializeContent(polledResult),
-            Is.EqualTo(SerializeContent(syncResult)),
+            McpTasksHarnessTestSupport.SerializeContent(polledResult),
+            Is.EqualTo(McpTasksHarnessTestSupport.SerializeContent(syncResult)),
             "Task-backed and synchronous calls to the same tool/arguments should return equivalent content.");
     }
 
@@ -161,9 +161,6 @@ public class McpTasksHarnessTests
 
         Assert.That(status, Is.InstanceOf<CancelledTaskResult>(), "Expected the task to reach Cancelled status after tasks/cancel.");
     }
-
-    private static string SerializeContent(CallToolResult result) =>
-        JsonSerializer.Serialize(result.Content);
 
     private static IDictionary<string, JsonElement> ToArguments(IDictionary<string, object?> arguments) =>
         arguments.ToDictionary(kvp => kvp.Key, kvp => JsonSerializer.SerializeToElement(kvp.Value));

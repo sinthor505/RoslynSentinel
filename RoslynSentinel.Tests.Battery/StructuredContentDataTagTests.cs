@@ -135,7 +135,7 @@ public class DataTagProbe
         var structured = result.StructuredContent!.Value;
         Assert.That(structured.ValueKind, Is.EqualTo(JsonValueKind.Object));
 
-        var dataArray = structured.GetProperty("data");
+        var dataArray = structured.GetProperty("successDetails");
         Assert.That(dataArray.ValueKind, Is.EqualTo(JsonValueKind.Array));
         Assert.That(dataArray.GetArrayLength(), Is.GreaterThan(0));
 
@@ -147,7 +147,7 @@ public class DataTagProbe
         // same underlying call, matching the McpServerStatus spike's cross-check discipline.
         var textBlock = result.Content.OfType<TextContentBlock>().Single();
         using var textDoc = JsonDocument.Parse(textBlock.Text);
-        Assert.That(textDoc.RootElement.GetProperty("data")[0].GetProperty("symbolName").GetString(),
+        Assert.That(textDoc.RootElement.GetProperty("successDetails")[0].GetProperty("symbolName").GetString(),
             Is.EqualTo(first.GetProperty("symbolName").GetString()));
     }
 
@@ -189,14 +189,14 @@ public class DataTagProbe
         var structured = result.StructuredContent!.Value;
         Assert.That(structured.ValueKind, Is.EqualTo(JsonValueKind.Object));
 
-        var data = structured.GetProperty("data");
+        var data = structured.GetProperty("successDetails");
         Assert.That(data.GetProperty("changeId").GetString(), Is.Not.Null.And.Not.Empty,
             "AppliedChangeSummary.ChangeId should be populated on the applied success path.");
         Assert.That(data.GetProperty("status").GetString(), Is.EqualTo("applied"));
 
         var textBlock = result.Content.OfType<TextContentBlock>().Single();
         using var textDoc = JsonDocument.Parse(textBlock.Text);
-        Assert.That(textDoc.RootElement.GetProperty("data").GetProperty("changeId").GetString(),
+        Assert.That(textDoc.RootElement.GetProperty("successDetails").GetProperty("changeId").GetString(),
             Is.EqualTo(data.GetProperty("changeId").GetString()));
     }
 }

@@ -5,6 +5,21 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## McpTasksHarness task-polling tests compared volatile `responseId` — fixed 2026-09-20
+
+`blocking_error_taskpolling_test_responseid_mismatch.md` (moved to `docs/obsolete/blockers/`)
+documented `TaskCapableClient_PollingToCompletion_MatchesSynchronousResult` and
+`TaskCapableClient_PollingToCompletion_DryRunMatchesSynchronousResult` failing full-content JSON
+equality solely because `SentinelCallToolResult<TSuccess, TError>.ResponseId`
+(`RoslynSentinel.Common/SentinelCallToolResult.cs:106`) is a fresh `Guid.NewGuid()` per call, so a
+synchronous call and its task-polled counterpart to the same tool/arguments necessarily differ at
+that one field even when otherwise identical. Fixed by replacing the two test files' duplicated
+`SerializeContent` helpers with a single `McpTasksHarnessTestSupport.SerializeContent`
+(`RoslynSentinel.Tests.Advanced/McpTasksHarnessTestSupport.cs`) that parses each `TextContentBlock`'s
+embedded JSON, removes `responseId`, and re-serializes - keeping the original content-block-array
+shape so `FindDataElement`'s other (non-comparison) callers in `McpTasksHarnessBulkCommentTests.cs`
+are unaffected. All 9 `McpTasksHarness*` tests pass.
+
 ## ChangeSignature named-argument and optional/params call-site gaps — already fixed 2026-09-13, blocker doc closed 2026-09-19
 
 `blocking_error_changesignature_internal_roslyn_api.md` was left OPEN after driving Roslyn's real
