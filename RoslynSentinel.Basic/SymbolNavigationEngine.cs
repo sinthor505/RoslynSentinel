@@ -1485,16 +1485,17 @@ public class SymbolNavigationEngine
             // Defect-3 fix: no filePath supplied -> resolve by name across the solution.
             // When multiple overloads exist, contextSnippet is used to pick one if supplied;
             // otherwise all matching symbols are searched (union of references).
-            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, cancellationToken);
+            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, preferImplementable: false, cancellationToken);
         }
 
         if (symbol == null)
         {
+            var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, cancellationToken);
             throw new InvalidOperationException(
                 $"FindCallers: symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
-                "This is NOT a confirmed zero-references result - the lookup never ran. Verify the name via " +
-                "LocateSymbol/GetFileOutline before treating this as evidence the symbol is unused.");
+                "This is NOT a confirmed zero-references result - the lookup never ran. " + nearMissHint +
+                "Verify the name via LocateSymbol/GetFileOutline before treating this as evidence the symbol is unused.");
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -1662,7 +1663,7 @@ public class SymbolNavigationEngine
         else
         {
             // Defect-3 fix: no filePath -> resolve by name across the solution.
-            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, cancellationToken);
+            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, preferImplementable: true, cancellationToken);
         }
 
         if (symbol == null)
@@ -1689,12 +1690,39 @@ public class SymbolNavigationEngine
 
         if (symbol == null)
         {
+            var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, cancellationToken);
             throw new InvalidOperationException(
                 "FindImplementations: " + (scopedResolutionFailure ??
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                     (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".")) +
-                " This is NOT a confirmed zero-implementations result - the lookup never ran. Verify " +
-                "the name via LocateSymbol/GetFileOutline before treating this as evidence of no implementations.");
+                " This is NOT a confirmed zero-implementations result - the lookup never ran. " + nearMissHint +
+                "Verify the name via LocateSymbol/GetFileOutline before treating this as evidence of no implementations.");
+        }
+
+        // The resolved symbol may still be structurally incapable of having implementations - e.g.
+        // ResolveSymbolByNameAsync's preferImplementable heuristic found no abstract/virtual/override/
+        // interface candidate at all and fell back to a concrete one. SymbolFinder.FindImplementationsAsync
+        // would silently return an empty list for such a symbol, indistinguishable from a genuine
+        // "confirmed zero implementations" answer -> detect it up front and say so explicitly instead.
+        //
+        // Scoped to the by-name path only (filePath blank): when the caller supplies filePath, they
+        // pinned resolution to one specific declaration themselves, so a concrete/non-virtual method
+        // with zero implementations is a trustworthy, non-ambiguous "confirmed zero" answer, not a
+        // symptom of the wrong-candidate disambiguation problem this check exists to catch.
+        var skipStructuralCheck = !string.IsNullOrWhiteSpace(filePath);
+        var isImplementable = symbol.IsAbstract || symbol.IsVirtual || symbol.IsOverride
+            || symbol.ContainingType?.TypeKind == TypeKind.Interface;
+        if (!skipStructuralCheck && !isImplementable)
+        {
+            throw new InvalidOperationException(
+                $"FindImplementations: symbolName '{symbolName}' resolved to {symbol.Kind} " +
+                $"'{symbol.ToDisplayString()}' on {symbol.ContainingType?.TypeKind.ToString().ToLowerInvariant() ?? "an unknown container"} " +
+                $"'{symbol.ContainingType?.Name ?? "?"}', which is concrete, non-virtual, and not an interface " +
+                "member - it is structurally incapable of having implementations, so this is NOT a confirmed " +
+                "zero-implementations result. If you meant the interface/virtual declaration this member " +
+                "implements or overrides, disambiguate with contextSnippet or filepath pointing at that " +
+                "declaration specifically, or call LocateSymbol(exactMatch: true) first to see every " +
+                $"same-named candidate ('{symbolName}') with its containing type and kind.");
         }
 
         var implementations = await SymbolFinder.FindImplementationsAsync(symbol, solution, null, cancellationToken);
@@ -2045,15 +2073,93 @@ public class SymbolNavigationEngine
     }
 
     /// <summary>
+    /// Builds a "Did you mean: ..." hint for a symbolName that resolved to zero candidates anywhere
+    /// in the solution (i.e. ResolveSymbolByNameAsync returned null) - as opposed to
+    /// DescribeNameOnlyCandidates above, which handles the exact-name-found-but-contextSnippet-failed
+    /// case. Runs a case-insensitive substring scan across every project's compilation using
+    /// Compilation.GetSymbolsWithName's predicate overload, so a typo'd or approximately-remembered
+    /// name still surfaces real candidates inline instead of forcing a second LocateSymbol round-trip.
+    /// Only ever called on the already-failing path (symbol == null after every other fallback), so
+    /// this adds no cost to a normal, successful resolution. Capped at 5 suggestions (wider than
+    /// DescribeNameOnlyCandidates's 3, since these hits span the whole solution rather than one file
+    /// and are more likely to include irrelevant noise). Returns an empty string when nothing similar
+    /// is found either, so the caller message degrades to a plain "not found" with no dangling hint.
+    /// </summary>
+    private static async Task<string> DescribeNearMissCandidatesAsync(
+        Solution solution, string symbolName, CancellationToken cancellationToken)
+    {
+        var suggestions = new List<string>();
+
+        foreach (var project in solution.Projects)
+        {
+            if (suggestions.Count >= 5)
+            {
+                break;
+            }
+
+            Compilation? compilation = null;
+            try
+            {
+                compilation = await project.GetCompilationAsync(cancellationToken);
+            }
+            catch (Exception)
+            {
+                // Same "unbuildable project can't be scanned" tolerance as ResolveSymbolByNameAsync -
+                // a near-miss hint is best-effort, not worth failing the whole error message over.
+            }
+
+            if (compilation == null)
+            {
+                continue;
+            }
+
+            var matches = compilation.GetSymbolsWithName(
+                name => name.Contains(symbolName, StringComparison.OrdinalIgnoreCase),
+                SymbolFilter.Member,
+                cancellationToken);
+
+            foreach (var match in matches)
+            {
+                if (suggestions.Count >= 5)
+                {
+                    break;
+                }
+
+                var containingType = match.ContainingType?.Name ?? match.ContainingNamespace?.Name ?? "?";
+                var label = $"{match.Name} ({containingType})";
+                if (!suggestions.Contains(label))
+                {
+                    suggestions.Add(label);
+                }
+            }
+        }
+
+        if (suggestions.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        return $"Did you mean: {string.Join(", ", suggestions)}? ";
+    }
+
+    /// <summary>
     /// Resolves a member symbol by name across the solution without requiring a file path.
     /// Used by FindCallersAsync and FindImplementationsForMemberAsync when filePath is null.
-    /// Prefers class members over interface members to match original disambiguation logic.
     /// When contextSnippet is supplied, it is used to identify the specific overload.
+    ///
+    /// preferImplementable selects which disambiguation heuristic runs when multiple same-named
+    /// candidates are found and contextSnippet doesn't (or can't) narrow them: false prefers class
+    /// members over interface members (FindCallersAsync's need - any resolvable candidate finds the
+    /// same call sites); true prefers a candidate that SymbolFinder.FindImplementationsAsync can
+    /// actually act on - abstract/virtual/override/interface-member - since FindImplementationsForMemberAsync
+    /// otherwise risks resolving to a concrete, non-virtual method that structurally can never have
+    /// implementations, producing an empty result indistinguishable from a genuine zero-implementations answer.
     /// </summary>
     private async Task<ISymbol?> ResolveSymbolByNameAsync(
         Solution solution,
         string symbolName,
         string? contextSnippet,
+        bool preferImplementable,
         CancellationToken cancellationToken = default)
     {
         foreach (var project in solution.Projects)
@@ -2119,9 +2225,13 @@ public class SymbolNavigationEngine
                 }
             }
 
-            // No contextSnippet or snippet resolution failed -> prefer class members over interface members.
-            var preferred = candidates.FirstOrDefault(s =>
-                s.ContainingType?.TypeKind == TypeKind.Class) ?? candidates.FirstOrDefault();
+            // No contextSnippet or snippet resolution failed -> apply the caller-appropriate preference.
+            var preferred = preferImplementable
+                ? candidates.FirstOrDefault(s =>
+                    s.IsAbstract || s.IsVirtual || s.IsOverride || s.ContainingType?.TypeKind == TypeKind.Interface)
+                    ?? candidates.FirstOrDefault()
+                : candidates.FirstOrDefault(s =>
+                    s.ContainingType?.TypeKind == TypeKind.Class) ?? candidates.FirstOrDefault();
 
             if (preferred != null)
             {

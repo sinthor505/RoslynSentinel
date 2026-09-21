@@ -1385,6 +1385,88 @@ public class Consumer
             Assert.That(results, Is.Not.Null, "FindCallersAsync must not throw when interface and class share same method name");
         }
 
+
+        // Added by InsertMemberAfter (expected - used for diagnostics)
+        // ── 9e: FindImplementations -> no filePath, interface/class name collision now resolves to real implementations (regression test for the GetSolutionRoot bug) ───
+
+        [Test]
+        public async Task FindImplementationsForMemberAsync_NoFilePath_ClassInSameFileAsInterface_ReturnsNonEmpty()
+        {
+            const string src = @"using System.Threading.Tasks;
+public interface IFoo { Task<string> GetNameAsync(); }
+public class Foo : IFoo
+{
+    public Task<string> GetNameAsync() => Task.FromResult(""Foo"");
+}";
+            SetSource(src, "Foo.cs");
+            var results = await _navigationEngine.FindImplementationsForMemberAsync(null, "GetNameAsync", contextSnippet: null);
+            Assert.That(results, Is.Not.Empty,
+                "FindImplementationsForMemberAsync must resolve to the interface member (not the concrete class method) when no filePath/contextSnippet is supplied, so it can find Foo.GetNameAsync as a real implementation");
+        }
+
+
+        // Added by InsertMemberAfter (expected - used for diagnostics)
+        // ── 9f: FindCallers -> same collision shape, no regression from the preferImplementable split ───
+
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_ClassInSameFileAsInterface_StillResolves()
+        {
+            const string src = @"using System.Threading.Tasks;
+public interface IFoo { Task<string> GetNameAsync(); }
+public class Foo : IFoo
+{
+    public Task<string> GetNameAsync() => Task.FromResult(""Foo"");
+}
+public class Consumer
+{
+    private readonly IFoo _foo;
+    public Consumer(IFoo foo) { _foo = foo; }
+    public async Task<string> Run() => await _foo.GetNameAsync();
+}";
+            SetSource(src, "Foo.cs");
+            var results = await _navigationEngine.FindCallersAsync(null, "GetNameAsync", contextSnippet: null);
+            Assert.That(results, Is.Not.Null,
+                "FindCallersAsync's preferImplementable:false path must keep resolving via the class candidate exactly as before this change");
+        }
+
+
+        // Added by InsertMemberAfter (expected - used for diagnostics)
+        // ── 9g: FindImplementations -> resolved symbol is structurally incapable of having implementations ───
+
+        [Test]
+        public void FindImplementationsForMemberAsync_NoFilePath_ConcreteNonVirtualNoInterface_ThrowsActionableError()
+        {
+            const string src = @"public class Standalone
+{
+    public void DoWork() { }
+}";
+            SetSource(src, "Standalone.cs");
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await _navigationEngine.FindImplementationsForMemberAsync(null, "DoWork", contextSnippet: null));
+            Assert.That(ex!.Message, Does.Contain("structurally incapable of having implementations"));
+            Assert.That(ex.Message, Does.Contain("DoWork"));
+        }
+
+
+        // Added by InsertMemberAfter (expected - used for diagnostics)
+        // ── 9h: FindImplementations -> zero candidates anywhere now suggests near-miss names ───
+
+        [Test]
+        public void FindImplementationsForMemberAsync_TypoedName_SuggestsNearMissCandidate()
+        {
+            const string src = @"using System.Threading.Tasks;
+public interface IFoo { Task<string> GetSolutionRoot(); }
+public class Foo : IFoo
+{
+    public Task<string> GetSolutionRoot() => Task.FromResult(""root"");
+}";
+            SetSource(src, "Foo.cs");
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await _navigationEngine.FindImplementationsForMemberAsync(null, "GetSolutionRo", contextSnippet: null));
+            Assert.That(ex!.Message, Does.Contain("Did you mean"));
+            Assert.That(ex.Message, Does.Contain("GetSolutionRoot"));
+        }
+
         // ── 9e: FindServicesNotRegistered -> IWebHostEnvironment etc. not flagged ──
 
         [Test]
