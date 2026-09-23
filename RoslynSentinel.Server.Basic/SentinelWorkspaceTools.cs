@@ -227,7 +227,7 @@ public class SentinelWorkspaceTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "confirmationCode is required when action=confirmationCode.")
+                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "confirmationCode is required when action=confirmationCode.")
                     };
                 }
 
@@ -237,7 +237,7 @@ public class SentinelWorkspaceTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"confirmationCode '{confirmationCode}' is unrecognized or has expired (codes are single-use and expire after 10 minutes). Resubmit the original ApplyDiff(changesetFormat: files, action: apply, ...) call to get a fresh code.")
+                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, $"confirmationCode '{confirmationCode}' is unrecognized or has expired (codes are single-use and expire after 10 minutes). Resubmit the original ApplyDiff(changesetFormat: files, action: apply, ...) call to get a fresh code.")
                     };
                 }
 
@@ -246,7 +246,7 @@ public class SentinelWorkspaceTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {confirmedResult.ValidationResult.Diagnostics.ToJson()}")
+                        ErrorData =  new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {confirmedResult.ValidationResult.Diagnostics.ToJson()}")
                     };
                 await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", confirmedResult);
                 var strippedConfirmedResult = confirmedResult with { PreImages = null };
@@ -260,7 +260,7 @@ public class SentinelWorkspaceTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = true,
-                    SuccessDetails = confirmedResponseData
+                    Data = confirmedResponseData
                 };
             }
 
@@ -272,7 +272,7 @@ public class SentinelWorkspaceTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "changes is required when changesetFormat=files.")
+                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "changes is required when changesetFormat=files.")
                     };
                 }
 
@@ -298,7 +298,7 @@ public class SentinelWorkspaceTools
                         return new SentinelCallToolResult<object>()
                         {
                             IsSuccess = false,
-                            ErrorDetails = new ResultError(ToolErrorCode.ConfirmationRequired,
+                            ErrorData =  new ResultError(ToolErrorCode.ConfirmationRequired,
                                 $"File '{oversizedFile}' would shrink by {oversizedPercent:P0}, exceeding the {LargeShrinkRejectionThreshold:P0} threshold for a files-format apply. " +
                                 "This usually means only a changed fragment was submitted instead of the complete file content - use changesetFormat=diff for a partial edit instead. " +
                                 $"If a whole-file rewrite to this size is genuinely intended, call ApplyDiff again with action=confirmationCode and confirmationCode=\"{code}\" to apply the exact changeset just submitted (no need to resend changes). This code expires in 10 minutes.")
@@ -310,7 +310,7 @@ public class SentinelWorkspaceTools
                         return new SentinelCallToolResult<object>()
                         {
                             IsSuccess = false,
-                            ErrorDetails = new ResultError(ToolErrorCode.Exception,
+                            ErrorData =  new ResultError(ToolErrorCode.Exception,
                                 "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
@@ -330,7 +330,7 @@ public class SentinelWorkspaceTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
-                        SuccessDetails = responseData
+                        Data = responseData
                     };
                 }
 
@@ -342,13 +342,13 @@ public class SentinelWorkspaceTools
                         return validationResult.IsSuccess ? new SentinelCallToolResult<object>()
                         {
                             IsSuccess = true,
-                            SuccessDetails = validationResult
+                            Data = validationResult
                         }
 
                         : new SentinelCallToolResult<object>()
                         {
                             IsSuccess = false,
-                            ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed: {validationResult.Diagnostics}")
+                            ErrorData =  new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed: {validationResult.Diagnostics}")
                         };
                     }
                     catch (Exception ex)
@@ -357,7 +357,7 @@ public class SentinelWorkspaceTools
                         return new SentinelCallToolResult<object>()
                         {
                             IsSuccess = false,
-                            ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff validate")
+                            Data =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff validate")
                         };
                     }
                 }
@@ -369,7 +369,7 @@ public class SentinelWorkspaceTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filepath' and 'unifiedDiff' are required when changesetFormat=diff.")
+                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filepath' and 'unifiedDiff' are required when changesetFormat=diff.")
                     };
                 }
 
@@ -378,7 +378,7 @@ public class SentinelWorkspaceTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filepath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
+                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filepath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
                     };
                 }
 
@@ -387,7 +387,7 @@ public class SentinelWorkspaceTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'unifiedDiff' is required when changesetFormat=diff.")
+                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'unifiedDiff' is required when changesetFormat=diff.")
                     };
                 }
 
@@ -402,7 +402,7 @@ public class SentinelWorkspaceTools
                             return new SentinelCallToolResult<object>()
                             {
                                 IsSuccess = false,
-                                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                                ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
                             };
                         }
 
@@ -418,7 +418,7 @@ public class SentinelWorkspaceTools
                             return new SentinelCallToolResult<object>()
                             {
                                 IsSuccess = false,
-                                ErrorDetails = new ResultError(ToolErrorCode.Exception,
+                                ErrorData =  new ResultError(ToolErrorCode.Exception,
                                     "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n[COMPILER ERROR]\n" +
                                     await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                             };
@@ -434,7 +434,7 @@ public class SentinelWorkspaceTools
                         return new SentinelCallToolResult<object>()
                         {
                             IsSuccess = true,
-                            SuccessDetails = diffResponseData
+                            Data = diffResponseData
                         };
                     }
                     catch (Exception ex)
@@ -443,7 +443,7 @@ public class SentinelWorkspaceTools
                         return new SentinelCallToolResult<object>()
                         {
                             IsSuccess = false,
-                            ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePathResolved}'")
+                            Data =  ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePathResolved}'")
                         };
                     }
                 }
@@ -454,13 +454,13 @@ public class SentinelWorkspaceTools
                     return validationResult.IsSuccess ? new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
-                        SuccessDetails = validationResult
+                        Data = validationResult
                     }
 
                     : new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult.Diagnostics.ToInfo()}")
+                        ErrorData =  new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult.Diagnostics.ToInfo()}")
                     };
                 }
             }
@@ -468,7 +468,7 @@ public class SentinelWorkspaceTools
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.")
+                ErrorData =  new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.")
             };
         }
         catch (Exception ex)
@@ -477,7 +477,7 @@ public class SentinelWorkspaceTools
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff")
+                Data =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff")
             };
         }
     }

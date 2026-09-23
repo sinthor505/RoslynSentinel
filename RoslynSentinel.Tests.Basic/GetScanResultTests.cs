@@ -121,9 +121,9 @@ public class GetLargeResultTests
         var result = await _workspaceTools.GetLargeResult(reason: "test message");
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails, Is.Not.Null);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("Result file not found").Or.Contain("resultId").Or.Contain("filePath"),
-            "ErrorDetails should explain that a resultId or filePath is required.");
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.Message, Does.Contain("Result file not found").Or.Contain("resultId").Or.Contain("filePath"),
+            "ErrorData should explain that a resultId or filePath is required.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -136,7 +136,7 @@ public class GetLargeResultTests
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: "00000000000000000000000000000000");
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorData, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -156,11 +156,11 @@ public class GetLargeResultTests
         Assert.That(result.TotalRecords, Is.EqualTo(5), "TotalRecords must match the item count in the file.");
         Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total -> HasMorePages should be true.");
 
-        // GetLargeResult's SuccessDetails is the flat, paged List<MigrationCandidateFinding> -> the same
+        // GetLargeResult's Data is the flat, paged List<MigrationCandidateFinding> -> the same
         // shape every other SentinelCallToolResult<object>-returning tool uses; it used to be double-wrapped
         // in an inner SentinelCallToolResult<object>, which was a bug (fixed alongside these assertions).
-        var returnedFindings = result.SuccessDetails as List<MigrationCandidateFinding>;
-        Assert.That(returnedFindings, Is.Not.Null, "SuccessDetails should be List<MigrationCandidateFinding>.");
+        var returnedFindings = result.SuccessData as List<MigrationCandidateFinding>;
+        Assert.That(returnedFindings, Is.Not.Null, "Data should be List<MigrationCandidateFinding>.");
         Assert.That(returnedFindings!.Any(f => f.MethodName == "loadList_0"), Is.True,
             "loadList_0 should be present in the returned findings.");
     }
@@ -182,8 +182,8 @@ public class GetLargeResultTests
         Assert.That(result.TotalRecords, Is.EqualTo(4));
         Assert.That(result.HasMorePages, Is.False, "limit=10 of 4 total -> HasMorePages should be false.");
 
-        var returnedEntries = result.SuccessDetails as List<ApiSurfaceEntry>;
-        Assert.That(returnedEntries, Is.Not.Null, "SuccessDetails should be List<ApiSurfaceEntry>.");
+        var returnedEntries = result.SuccessData as List<ApiSurfaceEntry>;
+        Assert.That(returnedEntries, Is.Not.Null, "Data should be List<ApiSurfaceEntry>.");
         Assert.That(returnedEntries!.Count, Is.EqualTo(4));
     }
 
@@ -205,8 +205,8 @@ public class GetLargeResultTests
         Assert.That(result.TotalRecords, Is.EqualTo(5));
         Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total -> HasMorePages should be true.");
 
-        var returnedEntries = result.SuccessDetails as List<SolutionSymbolEntry>;
-        Assert.That(returnedEntries, Is.Not.Null, "SuccessDetails should be List<SolutionSymbolEntry> - ListAll's offloaded results must be pageable, not fall through to \"Unknown scan result type\".");
+        var returnedEntries = result.SuccessData as List<SolutionSymbolEntry>;
+        Assert.That(returnedEntries, Is.Not.Null, "Data should be List<SolutionSymbolEntry> - ListAll's offloaded results must be pageable, not fall through to \"Unknown scan result type\".");
         Assert.That(returnedEntries!.Select(e => e.Name), Is.EqualTo(new[] { "Method_0", "Method_1", "Method_2" }));
     }
 
@@ -220,8 +220,8 @@ public class GetLargeResultTests
         var page1 = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 2, offset: 0);
         var page2 = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 2, offset: 2);
 
-        var names1 = ((List<SolutionSymbolEntry>)page1.SuccessDetails!).Select(e => e.Name).ToList();
-        var names2 = ((List<SolutionSymbolEntry>)page2.SuccessDetails!).Select(e => e.Name).ToList();
+        var names1 = ((List<SolutionSymbolEntry>)page1.SuccessData!).Select(e => e.Name).ToList();
+        var names2 = ((List<SolutionSymbolEntry>)page2.SuccessData!).Select(e => e.Name).ToList();
 
         Assert.That(names1, Is.EqualTo(new[] { "Method_0", "Method_1" }));
         Assert.That(names2, Is.EqualTo(new[] { "Method_2", "Method_3" }),
@@ -238,7 +238,7 @@ public class GetLargeResultTests
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(2));
-        Assert.That(result.SuccessDetails, Is.InstanceOf<List<MigrationCandidateFinding>>());
+        Assert.That(result.SuccessData, Is.InstanceOf<List<MigrationCandidateFinding>>());
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -256,7 +256,7 @@ public class GetLargeResultTests
 
         Assert.That(result.IsSuccess, Is.False,
             "A result file outside .roslynsentinel/largeresults/ must be rejected.");
-        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorData, Is.Not.Null);
     }
     // Added by InsertMemberAfter (expected - used for diagnostics)
 
@@ -285,7 +285,7 @@ public class GetLargeResultTests
         Assert.That(result.HasMorePages, Is.False, "The whole stored text fits in one window, so there should be no more pages.");
         Assert.That(result.WarningDetails, Is.Null);
 
-        var text = (string)result.SuccessDetails!.GetType().GetProperty("text")!.GetValue(result.SuccessDetails)!;
+        var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
         using var roundTripped = JsonDocument.Parse(text);
         Assert.That(roundTripped.RootElement.GetProperty("message").GetString(), Is.EqualTo(payload.message),
             "The Raw case must replay the stored JSON text verbatim, not re-shape it.");
@@ -313,8 +313,8 @@ public class GetLargeResultTests
             var page = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: offset.Value, charLimit: LargeResultHelper.OffloadThresholdBytes);
             Assert.That(page.IsSuccess, Is.True);
 
-            var pageDataType = page.SuccessDetails!.GetType();
-            var text = (string)pageDataType.GetProperty("text")!.GetValue(page.SuccessDetails)!;
+            var pageDataType = page.SuccessData!.GetType();
+            var text = (string)pageDataType.GetProperty("text")!.GetValue(page.SuccessData)!;
             reassembled.Append(text);
 
             // A single page must never itself be big enough to re-trigger the offload filter on
@@ -322,7 +322,7 @@ public class GetLargeResultTests
             // resultId in an unbounded fetch/still-too-big/re-offload loop.
             Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.OffloadThresholdBytes));
 
-            offset = (int?)pageDataType.GetProperty("nextOffset")!.GetValue(page.SuccessDetails);
+            offset = (int?)pageDataType.GetProperty("nextOffset")!.GetValue(page.SuccessData);
             pageCount++;
             Assert.That(pageCount, Is.LessThan(10), "Paging should terminate quickly; more pages than this indicates a broken offset/hasMore computation.");
         }
@@ -330,7 +330,7 @@ public class GetLargeResultTests
         Assert.That(pageCount, Is.GreaterThan(1), "A payload larger than one window must take more than one page to read back.");
 
         // The stored wrapper file is written with WriteIndented=true (LargeResultHelper.JsonOptions),
-        // which reformats the nested SuccessDetails payload's whitespace even though StoreRawJsonAsync never
+        // which reformats the nested Data payload's whitespace even though StoreRawJsonAsync never
         // re-shapes its structure - so compare parsed JSON, not raw text bytes.
         using var reassembledDoc = JsonDocument.Parse(reassembled.ToString());
         Assert.That(reassembledDoc.RootElement.GetProperty("data").GetString(), Is.EqualTo(original),
@@ -348,7 +348,7 @@ public class GetLargeResultTests
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: 100_000);
 
         Assert.That(result.IsSuccess, Is.True, "An offset far past the end of the stored text must clamp, not throw a Substring range exception.");
-        var text = (string)result.SuccessDetails!.GetType().GetProperty("text")!.GetValue(result.SuccessDetails)!;
+        var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
         Assert.That(text, Is.Empty);
         Assert.That(result.HasMorePages, Is.False);
     }
@@ -364,7 +364,7 @@ public class GetLargeResultTests
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: 0, charLimit: 50);
 
         Assert.That(result.IsSuccess, Is.True);
-        var text = (string)result.SuccessDetails!.GetType().GetProperty("text")!.GetValue(result.SuccessDetails)!;
+        var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
         Assert.That(text.Length, Is.EqualTo(50), "A charLimit smaller than OffloadThresholdBytes should be honored as the window size, not ignored.");
         Assert.That(result.HasMorePages, Is.True);
     }

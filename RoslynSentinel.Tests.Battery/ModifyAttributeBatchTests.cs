@@ -82,7 +82,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
 
         var newContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
         Assert.Multiple(() =>
@@ -112,7 +112,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
 
         var firstContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
         var secondContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, SecondFixtureRelativePath));
@@ -197,7 +197,7 @@ public class ModifyAttributeBatchTests
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("not both"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
 
@@ -215,7 +215,7 @@ public class ModifyAttributeBatchTests
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("edits"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("edits"));
     }
 
 
@@ -234,7 +234,7 @@ public class ModifyAttributeBatchTests
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("empty"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
 
 
@@ -254,6 +254,6 @@ public class ModifyAttributeBatchTests
         var result = await tools.ModifyAttribute(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("20"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("20"));
     }
 }

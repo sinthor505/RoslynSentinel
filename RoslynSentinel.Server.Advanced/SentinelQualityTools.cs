@@ -108,7 +108,7 @@ public class SentinelQualityTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData =  result
             };
         }
         catch (Exception ex)
@@ -117,7 +117,7 @@ public class SentinelQualityTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTestCoverageMap")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTestCoverageMap")
             };
         }
     }
@@ -140,7 +140,7 @@ public class SentinelQualityTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData =  result
             };
         }
         catch (Exception ex)
@@ -149,7 +149,7 @@ public class SentinelQualityTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodComplexity")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodComplexity")
             };
         }
     }
@@ -182,7 +182,7 @@ public class SentinelQualityTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData =  result
             };
         }
         catch (Exception ex)
@@ -191,7 +191,7 @@ public class SentinelQualityTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeForeachForLinqConversion")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeForeachForLinqConversion")
             };
         }
     }
@@ -225,7 +225,7 @@ public class SentinelQualityTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData =  result
             };
         }
         catch (Exception ex)
@@ -234,7 +234,7 @@ public class SentinelQualityTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeSwitchForPatternConversion")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeSwitchForPatternConversion")
             };
         }
     }

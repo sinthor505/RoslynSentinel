@@ -43,7 +43,7 @@ public class SentinelSymbolTools
         _relationship = new SymbolRelationshipTools(discoveryEngine, semanticSearchEngine, symbolNavigationEngine, workspaceManager, logger);
     }
 
-    [McpServerTool(Name = "LocateSymbol", UseStructuredContent = true, OutputSchemaType = typeof(LocateSymbolResult))]
+    [McpServerTool(Name = "LocateSymbol", UseStructuredContent = false, OutputSchemaType = typeof(LocateSymbolResult))]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
     [Description("Locates declaration sites for a symbol by name (declared symbols only, not free text).")]

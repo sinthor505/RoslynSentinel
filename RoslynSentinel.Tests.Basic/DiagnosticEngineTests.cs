@@ -1,4 +1,3 @@
-using RoslynSentinel.Tests;
 using RoslynSentinel.Tests.Fakes;
 
 namespace RoslynSentinel.Tests.Basic;

@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
@@ -65,7 +63,7 @@ public class WorkspaceProjectManagementImpl
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.SolutionNotLoaded, "No solution loaded. Call LoadSolution first.")
+                        ErrorData = new ResultError(ToolErrorCode.SolutionNotLoaded, "No solution loaded. Call LoadSolution first.")
                     };
                 }
 
@@ -86,7 +84,7 @@ public class WorkspaceProjectManagementImpl
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=files.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=files.")
                     };
                 }
 
@@ -99,7 +97,7 @@ public class WorkspaceProjectManagementImpl
                         return new SentinelCallToolResult<object>()
                         {
                             IsSuccess = false,
-                            ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Project '{projectName}' not found.")
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"Project '{projectName}' not found.")
                         };
                     }
 
@@ -119,7 +117,7 @@ public class WorkspaceProjectManagementImpl
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"List files for project '{projectName}'")
+                        ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"List files for project '{projectName}'")
                     };
                 }
             }
@@ -131,7 +129,7 @@ public class WorkspaceProjectManagementImpl
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=dependencies.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=dependencies.")
                     };
                 }
 
@@ -139,7 +137,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = true,
-                    SuccessDetails = result
+                    SuccessData = result
                 };
             }
 
@@ -193,7 +191,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'.")
+                ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'.")
             };
         }
         catch (Exception ex)
@@ -202,7 +200,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "List")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "List")
             };
         }
     }
@@ -215,7 +213,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
                 IsSuccess = false,
-                ErrorDetails = new ResultError("InvalidArgument", $"Directory not found: '{workspacePath}'")
+                ErrorData = new ResultError("InvalidArgument", $"Directory not found: '{workspacePath}'")
             };
         }
 
@@ -229,7 +227,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
                 IsSuccess = false,
-                ErrorDetails = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' resolves to the drive root '{pathRoot}'. Pass a real project/repo directory instead - scanning an entire drive is not supported.")
+                ErrorData = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' resolves to the drive root '{pathRoot}'. Pass a real project/repo directory instead - scanning an entire drive is not supported.")
             };
         }
 
@@ -247,7 +245,7 @@ public class WorkspaceProjectManagementImpl
                         return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
                         {
                             IsSuccess = false,
-                            ErrorDetails = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' contains more than {ListWorkspaceSolutionsMaxFilesWalked} matching files - this looks like too broad a root. Pass a narrower project/repo directory instead.")
+                            ErrorData = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' contains more than {ListWorkspaceSolutionsMaxFilesWalked} matching files - this looks like too broad a root. Pass a narrower project/repo directory instead.")
                         };
                     }
                 }
@@ -257,7 +255,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
                 IsSuccess = true,
-                SuccessDetails = files,
+                SuccessData = files,
                 TotalRecords = files.Count
             };
         }
@@ -271,7 +269,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
                 IsSuccess = false,
-                ErrorDetails = new ResultError(ToolErrorCode.Exception, $"ListWorkspaceSolutions failed unexpectedly ({ex.GetType().Name}) while scanning '{workspacePath}'. Details: {ex.Message}")
+                ErrorData = new ResultError(ToolErrorCode.Exception, $"ListWorkspaceSolutions failed unexpectedly ({ex.GetType().Name}) while scanning '{workspacePath}'. Data: {ex.Message}")
             };
         }
     }
@@ -331,7 +329,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = true,
-                    SuccessDetails = $"Solution '{currentPath}' is already loaded - no changes made. Pass forceReload:true to discard in-memory state and re-open it from disk."
+                    SuccessData = $"Solution '{currentPath}' is already loaded - no changes made. Pass forceReload:true to discard in-memory state and re-open it from disk."
                 };
             }
 
@@ -347,7 +345,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = true,
-                    SuccessDetails = $"Solution {verb}: {solutionPath}.{reloadNote}{BuildPostLoadHint(solutionRoot)}"
+                    SuccessData = $"Solution {verb}: {solutionPath}.{reloadNote}{BuildPostLoadHint(solutionRoot)}"
                 };
             }
             else
@@ -355,7 +353,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = false,
-                    ErrorDetails = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed: Workspace root is null after loading '{solutionPath}'.")
+                    ErrorData = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed: Workspace root is null after loading '{solutionPath}'.")
                 };
             }
         }
@@ -368,7 +366,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorDetails = new ResultError(codeAndMessage.Item1, $"LoadSolution '{solutionPath}' {codeAndMessage.Item2}")
+                ErrorData = new ResultError(codeAndMessage.Item1, $"LoadSolution '{solutionPath}' {codeAndMessage.Item2}")
             };
         }
     }
@@ -382,7 +380,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData = result
             };
         }
         catch (Exception ex)
@@ -391,7 +389,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateProject")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateProject")
             };
         }
     }
@@ -405,7 +403,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData = result
             };
         }
         catch (Exception ex)
@@ -414,7 +412,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SplitProjectByFolder")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SplitProjectByFolder")
             };
         }
     }
@@ -427,7 +425,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData = result
             };
         }
         catch (Exception ex)
@@ -436,7 +434,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetProjectFrameworkSummary")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetProjectFrameworkSummary")
             };
         }
     }
@@ -454,7 +452,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = false,
-                    ErrorDetails = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}")
+                    ErrorData = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}")
                 };
             }
 
@@ -469,7 +467,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = false,
-                    ErrorDetails = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol {reason}")
+                    ErrorData = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol {reason}")
                 };
             }
 
@@ -478,7 +476,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = true,
-                SuccessDetails = new AppliedChangeSummary(changeId, [filePathResolved], $"Deleted unused symbol in {Path.GetFileName(filePathResolved)}.", false)
+                SuccessData = new AppliedChangeSummary(changeId, [filePathResolved], $"Deleted unused symbol in {Path.GetFileName(filePathResolved)}.", false)
             };
         }
 
@@ -492,7 +490,7 @@ public class WorkspaceProjectManagementImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.Exception, resolution.Error!.Message)
+                        ErrorData = new ResultError(ToolErrorCode.Exception, resolution.Error!.Message)
                     };
                 }
 
@@ -515,7 +513,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, "SafeDeleteUnusedSymbol requires one of: (projectName, docCommentId) for handle-based resolution, (symbolName, optionally with contextSnippet/lineBefore/lineAfter) for name-based resolution, or (line, column) for legacy line/column-based resolution.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "SafeDeleteUnusedSymbol requires one of: (projectName, docCommentId) for handle-based resolution, (symbolName, optionally with contextSnippet/lineBefore/lineAfter) for name-based resolution, or (line, column) for legacy line/column-based resolution.")
             };
         }
         catch (Exception ex)
@@ -524,7 +522,7 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SafeDeleteUnusedSymbol")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SafeDeleteUnusedSymbol")
             };
         }
     }

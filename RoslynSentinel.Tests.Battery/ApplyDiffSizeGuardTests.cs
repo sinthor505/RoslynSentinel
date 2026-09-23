@@ -75,8 +75,8 @@ public class ApplyDiffSizeGuardTests
             changes: new Dictionary<string, string> { [targetFile] = fragment });
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("re-submit"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("re-submit"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
     }
 
@@ -104,8 +104,8 @@ public class ApplyDiffSizeGuardTests
             changes: new Dictionary<string, string> { [targetFile] = commentedOut });
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("active code lines"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("active code lines"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
     }
 
@@ -161,7 +161,7 @@ public class ApplyDiffSizeGuardTests
             confirmationCode: "not-a-real-code");
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]
@@ -175,7 +175,7 @@ public class ApplyDiffSizeGuardTests
         var result = await tools.ApplyDiffWithConfirmationCode(ChangesetFormat.files, ProposedChangeAction.confirmationCode);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]

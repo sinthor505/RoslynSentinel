@@ -70,7 +70,7 @@ public class AsyncWorker
 
     private const string SecuritySource = @"
 using System;
-using System.SuccessDetails.SqlClient;
+using System.Data.SqlClient;
 
 namespace TestProj;
 

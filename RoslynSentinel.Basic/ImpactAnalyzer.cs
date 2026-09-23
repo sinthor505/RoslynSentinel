@@ -163,13 +163,13 @@ public class ImpactAnalyzer
             report.Add($"Variables Declared: {string.Join(", ", dataFlow.VariablesDeclared.Select(v => v.Name))}");
             report.Add($"Read Inside: {string.Join(", ", dataFlow.ReadInside.Select(v => v.Name))}");
             report.Add($"Written Inside: {string.Join(", ", dataFlow.WrittenInside.Select(v => v.Name))}");
-            report.Add($"SuccessDetails Flows In: {string.Join(", ", dataFlow.DataFlowsIn.Select(v => v.Name))}");
-            report.Add($"SuccessDetails Flows Out: {string.Join(", ", dataFlow.DataFlowsOut.Select(v => v.Name))}");
+            report.Add($"SuccessData Flows In: {string.Join(", ", dataFlow.DataFlowsIn.Select(v => v.Name))}");
+            report.Add($"SuccessData Flows Out: {string.Join(", ", dataFlow.DataFlowsOut.Select(v => v.Name))}");
             report.Add($"Always Assigned: {string.Join(", ", dataFlow.AlwaysAssigned.Select(v => v.Name))}");
         }
         else
         {
-            report.Add("SuccessDetails flow analysis failed or could not be determined for the selected range.");
+            report.Add("SuccessData flow analysis failed or could not be determined for the selected range.");
         }
 
         return report;

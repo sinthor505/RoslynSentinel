@@ -173,8 +173,8 @@ public class OrderService : IOrderService
             reason: "test message", detector: SentinelScanTools.DetectorId.unused_references, scope: ToolScope.file, filepath: "Test.cs");
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails, Is.Not.Null);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     // --- GetComprehensiveHealthReport ---
@@ -507,7 +507,7 @@ public class OrderService : IOrderService
         var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "NoSuchMethod99");
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorData, Is.Not.Null);
     }
 
     // --- GetReverseCallGraph (via GetCallGraph "reverse") ---
@@ -527,7 +527,7 @@ public class OrderService : IOrderService
         var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "NoSuchMethod99", "reverse");
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails, Is.Not.Null);
+        Assert.That(result.ErrorData, Is.Not.Null);
     }
 
     // --- MoveFileToNamespaceFolder ---
@@ -638,8 +638,8 @@ public class OrderService : IOrderService
         var result = await _symbolTools.FindReferences(reason: "test message", "ProcessAsync", FindReferencesKind.all, filepath: "Test.cs");
 
         Assert.That(result.IsSuccess, Is.True);
-        Assert.That(result.SuccessDetails, Is.Not.Null);
-        var json = System.Text.Json.JsonSerializer.Serialize(result.SuccessDetails);
+        Assert.That(result.SuccessData, Is.Not.Null);
+        var json = System.Text.Json.JsonSerializer.Serialize(result.SuccessData);
         Assert.That(json, Does.Contain("callers"));
         Assert.That(json, Does.Contain("implementations"));
     }
@@ -662,8 +662,8 @@ public class OrderService : IOrderService
         var result = await _symbolTools.QuerySymbolRelationships(reason: "test message", "ProcessAsync", FindUsagesSearchKind.objectCreations);
 
         Assert.That(result.IsSuccess, Is.False, "objectCreations against a method name must be rejected, not silently return [].");
-        Assert.That(result.ErrorDetails, Is.Not.Null);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("FindReferences"),
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.Message, Does.Contain("FindReferences"),
             "The guard should point the caller at FindReferences instead of objectCreations for a member name.");
     }
 
@@ -714,8 +714,8 @@ public class AttributedTarget { }
 
         var result = await _symbolTools.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
-        var sites = (result.SuccessDetails as System.Collections.IEnumerable)?.Cast<object>().ToList();
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var sites = (result.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
         Assert.That(sites, Is.Not.Null.And.Count.EqualTo(1));
     }
 }

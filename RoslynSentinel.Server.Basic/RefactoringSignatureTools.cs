@@ -2,7 +2,6 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
@@ -22,7 +21,7 @@ public class RefactoringSignatureTools
         _impl = new RefactoringSignatureImpl(refactoringEngine, workspaceManager, validationEngine, symbolNavigationEngine, logger);
     }
 
-    [McpServerTool(Name = "RenameSymbol", UseStructuredContent = true, OutputSchemaType = typeof(RenameSymbolResultEnvelope))]
+    [McpServerTool(Name = "RenameSymbol", UseStructuredContent = false, OutputSchemaType = typeof(RenameSymbolResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Renames a symbol and all its references across the solution, including mentions in XML doc comments, inline comments, and string literals. Returns changeId and updatedHandle for the renamed symbol, plus residualMentions for any leftover occurrences of the old name that rename couldn't reach (e.g. embedded in an unrelated identifier, or in a non-source file). Does NOT simplify call sites or add/remove using directives - if the rename target's new name needs a namespace not already in scope at a call site, or you want to shorten a fully-qualified reference, use the UsingDirective tool separately.")]
     public Task<SentinelCallToolResult<object>> RenameSymbol(
@@ -39,7 +38,7 @@ public class RefactoringSignatureTools
     // OutputSchemaType covers the "view" branch's shape only ({ Parameters }) - the add/remove
     // branches (ToJsonSummary / MemberChangedContentResult offload) are out of scope for this POC.
     // See proposal_structuredcontent_rollout.md.
-    [McpServerTool(Name = "MethodSignature", UseStructuredContent = true, OutputSchemaType = typeof(MethodSignatureViewResultEnvelope))]
+    [McpServerTool(Name = "MethodSignature", UseStructuredContent = false, OutputSchemaType = typeof(MethodSignatureViewResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view a method's parameters (general-purpose - not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
     public Task<SentinelCallToolResult<object>> MethodSignature(

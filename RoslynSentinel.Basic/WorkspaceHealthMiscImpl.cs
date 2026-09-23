@@ -42,13 +42,13 @@ public class WorkspaceHealthMiscImpl
 
             return action switch
             {
-                FeaturesAction.list => new SentinelCallToolResult<object> { IsSuccess = true, SuccessDetails = _config.GetFeatureStatuses() },
-                FeaturesAction.get => new SentinelCallToolResult<object> { IsSuccess = true, SuccessDetails = _config.GetFeatureStatuses(names) },
-                FeaturesAction.update => new SentinelCallToolResult<object> { IsSuccess = true, SuccessDetails = UpdateFeaturesInternal(enabled ?? []) },
+                FeaturesAction.list => new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = _config.GetFeatureStatuses() },
+                FeaturesAction.get => new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = _config.GetFeatureStatuses(names) },
+                FeaturesAction.update => new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = UpdateFeaturesInternal(enabled ?? []) },
                 _ => new SentinelCallToolResult<object>
                 {
                     IsSuccess = false,
-                    ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: list, get, update.")
+                    ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: list, get, update.")
                 }
             };
         }
@@ -58,7 +58,7 @@ public class WorkspaceHealthMiscImpl
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Features")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Features")
             };
         }
     }
@@ -119,7 +119,7 @@ public class WorkspaceHealthMiscImpl
             return new SentinelCallToolResult<WorkspaceHealthReport, ResultError>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData = result
             };
         }
         catch (Exception ex)
@@ -128,7 +128,7 @@ public class WorkspaceHealthMiscImpl
             return new SentinelCallToolResult<WorkspaceHealthReport, ResultError>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetWorkspaceHealth")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetWorkspaceHealth")
             };
         }
     }

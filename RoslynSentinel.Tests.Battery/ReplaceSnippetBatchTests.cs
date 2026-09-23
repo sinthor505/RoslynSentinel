@@ -60,7 +60,7 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = targetFile, OldContent = lastNonEmptyLine, NewContent = lastNonEmptyLine + " // edit-b" },
             ]);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
     }
 
     [Test]
@@ -85,7 +85,7 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = fileB, OldContent = anchorB, NewContent = anchorB + " // touched-b" },
             ]);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
 
         var newContentA = await File.ReadAllTextAsync(fileA);
         var newContentB = await File.ReadAllTextAsync(fileB);
@@ -121,7 +121,7 @@ public class ReplaceSnippetBatchTests
             ]);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("overlap"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("overlap"));
 
         var unchangedContent = await File.ReadAllTextAsync(targetFile);
         Assert.That(unchangedContent, Is.EqualTo(originalContent), "an overlap rejection must not write anything");
@@ -175,7 +175,7 @@ public class ReplaceSnippetBatchTests
             edits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = anchor + " // y" }]);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("not both"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
     [Test]
@@ -192,7 +192,7 @@ public class ReplaceSnippetBatchTests
             edits: []);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("empty"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
 
     [Test]
@@ -214,6 +214,6 @@ public class ReplaceSnippetBatchTests
             edits: edits);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("20"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("20"));
     }
 }

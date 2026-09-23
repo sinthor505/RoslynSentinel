@@ -44,7 +44,7 @@ public class SymbolNavigationImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = false,
-                    ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
+                    ErrorData =  new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
                         ". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call ListAll for a cheap solution-wide orientation listing if you're not sure of the exact name.")
                 };
@@ -53,7 +53,7 @@ public class SymbolNavigationImpl
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessDetails = result,
+                SuccessData = result,
                 TotalRecords = result.Count,
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion
             };
@@ -64,7 +64,7 @@ public class SymbolNavigationImpl
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "LocateSymbol")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "LocateSymbol")
             };
         }
     }
@@ -92,7 +92,7 @@ public class SymbolNavigationImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.Exception,
+                        ErrorData =  new ResultError(ToolErrorCode.Exception,
                             $"Could not resolve a symbol in '{filePathResolved}' for contextSnippet \"{snippetPreview}\". " +
                             "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
                             "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
@@ -103,7 +103,7 @@ public class SymbolNavigationImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessDetails = symbolInfo
+                    SuccessData = symbolInfo
                 };
             }
             if (aspect == InspectSymbolAspect.blastRadius)
@@ -112,13 +112,13 @@ public class SymbolNavigationImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessDetails = result
+                    SuccessData = result
                 };
             }
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled aspect '{aspect}'.")
+                ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled aspect '{aspect}'.")
             };
         }
         catch (Exception ex)
@@ -127,7 +127,7 @@ public class SymbolNavigationImpl
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InspectSymbol")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InspectSymbol")
             };
         }
     }
@@ -155,7 +155,7 @@ public class SymbolNavigationImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
+                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
                     };
                 }
             }
@@ -168,7 +168,7 @@ public class SymbolNavigationImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessDetails = hierarchy!
+                    SuccessData = hierarchy!
                 };
             }
             if (include == TypeInfoInclude.members)
@@ -179,7 +179,7 @@ public class SymbolNavigationImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessDetails = members!,
+                    SuccessData = members!,
                     WarningDetails = warning
                 };
             }
@@ -188,13 +188,13 @@ public class SymbolNavigationImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessDetails = new { Hierarchy = hierarchy, Members = members }
+                    SuccessData = new { Hierarchy = hierarchy, Members = members }
                 };
             }
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled include '{include}'.")
+                ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled include '{include}'.")
             };
         }
         catch (Exception ex)
@@ -203,7 +203,7 @@ public class SymbolNavigationImpl
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTypeInfo")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTypeInfo")
             };
         }
     }

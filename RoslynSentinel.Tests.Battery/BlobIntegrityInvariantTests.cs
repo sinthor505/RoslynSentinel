@@ -82,11 +82,11 @@ public class BlobIntegrityInvariantTests
     // docs/current/blockers/blocking_error_membershaped_success_types_not_unified.md) is moving
     // tools one at a time from SentinelCallToolResult<object> to SentinelCallToolResult
     // <AppliedChangeSummary>, so the five tools this invariant covers no longer share one exact
-    // return type. Both shapes carry AppliedChangeSummary as (or via) SuccessDetails, so a single
+    // return type. Both shapes carry AppliedChangeSummary as (or via) Data, so a single
     // generic assertion covers either without duplicating the cast logic per shape.
     private void AssertChangeIdIsRedeemable<TSuccess>(SentinelCallToolResult<TSuccess> result, string toolName)
     {
-        var changeId = (result.SuccessDetails as AppliedChangeSummary)?.ChangeId;
+        var changeId = (result.SuccessData as AppliedChangeSummary)?.ChangeId;
         if (string.IsNullOrEmpty(changeId))
         {
             return;

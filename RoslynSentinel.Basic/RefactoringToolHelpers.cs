@@ -61,7 +61,7 @@ public static class RefactoringToolHelpers
         return new SentinelCallToolResult<object>
         {
             IsSuccess = false,
-            ErrorDetails = new ResultError(ErrorCodeFor(updated.Outcome),
+            ErrorData =  new ResultError(ErrorCodeFor(updated.Outcome),
                 $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {updated.Message}")
         };
     }

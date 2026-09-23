@@ -69,12 +69,12 @@ public class MutatingToolRejectionMessageTests
     private static void AssertRoutedThroughLookupHelper(SentinelCallToolResult<object> result)
     {
         Assert.That(result.IsSuccess, Is.False, "the rename-desync edit should be rejected by pre-apply validation");
-        Assert.That(result.ErrorDetails, Is.Not.Null);
-        Assert.That(result.ErrorDetails!.Message, Does.Not.Contain("\"Id\":"),
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("\"Id\":"),
             "must not leak the raw ValidationResult.Diagnostics.ToJson() blob to the model");
-        Assert.That(result.ErrorDetails!.Message, Does.Not.Contain("\"Severity\":"),
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("\"Severity\":"),
             "must not leak the raw ValidationResult.Diagnostics.ToJson() blob to the model");
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("does not contain a definition"),
+        Assert.That(result.ErrorData!.Message, Does.Contain("does not contain a definition"),
             "should surface CompilerErrorLookupHelper's human-readable CS1061 guidance");
     }
 

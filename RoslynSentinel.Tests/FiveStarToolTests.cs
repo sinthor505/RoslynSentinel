@@ -214,7 +214,7 @@ public class ExtractConstantSafeStrongTests
         finally { SafeDelete(tempFile); }
     }
 
-    // ── ErrorDetails cases ──────────────────────────────────────────────────────────
+    // ── ErrorData cases ──────────────────────────────────────────────────────────
 
     [Test]
     [Description("Snippet that doesn't appear in the file -> clean human-readable error")]
@@ -236,10 +236,10 @@ public class ExtractConstantSafeStrongTests
             Assert.That(result.Success, Is.False,
                 "Non-existent snippet must produce a failure");
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
-                "ErrorDetails message must be non-empty and human-readable");
+                "ErrorData message must be non-empty and human-readable");
             // The error must be actionable, not a generic .NET exception dump
             Assert.That(result.Error, Does.Not.Contain("StackTrace"),
-                "ErrorDetails must not expose a stack trace to the caller");
+                "ErrorData must not expose a stack trace to the caller");
         }
         finally { SafeDelete(tempFile); }
     }
@@ -253,7 +253,7 @@ public class ExtractConstantSafeStrongTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Does.Contain("missing.cs"),
-            "ErrorDetails must mention the missing file name");
+            "ErrorData must mention the missing file name");
     }
 
     [Test]
@@ -270,7 +270,7 @@ public class ExtractConstantSafeStrongTests
 
             Assert.That(result.Success, Is.False);
             Assert.That(result.Error, Does.Contain("99InvalidName").Or.Contain("identifier"),
-                "ErrorDetails must identify the invalid name");
+                "ErrorData must identify the invalid name");
         }
         finally { SafeDelete(tempFile); }
     }
@@ -439,7 +439,7 @@ public class ConvertStringFormatSmartTests
             "Escaped braces must survive as literal {{ or }} in output");
     }
 
-    // ── ErrorDetails cases ──────────────────────────────────────────────────────────
+    // ── ErrorData cases ──────────────────────────────────────────────────────────
 
     [Test]
     [Description("Snippet pointing to non-Format code -> clean error, not throw")]
@@ -458,7 +458,7 @@ public class ConvertStringFormatSmartTests
         Assert.That(result.Success, Is.False,
             "Non-Format snippet must produce a failure result");
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
-            "ErrorDetails message must be non-empty");
+            "ErrorData message must be non-empty");
     }
 
     [Test]
@@ -481,7 +481,7 @@ public class ConvertStringFormatSmartTests
         Assert.That(result.Success, Is.False,
             "Non-constant format argument must produce a failure result");
         Assert.That(result.Error, Does.Contain("constant").Or.Contain("literal").Or.Contain("resolve"),
-            "ErrorDetails must explain WHY it failed");
+            "ErrorData must explain WHY it failed");
     }
 
     [Test]
@@ -827,7 +827,7 @@ public class FormatDocumentSafeTests
         finally { SafeDelete(tempFile); }
     }
 
-    // ── ErrorDetails cases ──────────────────────────────────────────────────────────
+    // ── ErrorData cases ──────────────────────────────────────────────────────────
 
     [Test]
     [Description("File does not exist -> clean error, not throw")]
@@ -839,7 +839,7 @@ public class FormatDocumentSafeTests
         Assert.That(result.Success, Is.False,
             "Missing file must produce a failure result");
         Assert.That(result.Error, Does.Contain("missing_rs.cs").Or.Contain("nonexistent"),
-            "ErrorDetails must identify the missing path");
+            "ErrorData must identify the missing path");
     }
 
     [Test]

@@ -2,8 +2,6 @@ using System.ComponentModel;
 
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Server.Basic;
 
 public class SentinelServerStatusTools
@@ -23,7 +21,7 @@ public class SentinelServerStatusTools
         _stoppedByScriptMarker = stoppedByScriptMarker;
     }
 
-    [McpServerTool(Name = "McpServerStatus", UseStructuredContent = true, OutputSchemaType = typeof(McpServerStatusResult))]
+    [McpServerTool(Name = "McpServerStatus")]
     [Produces(DataTag.ResultOnly)]
     [Description("Diagnostic snapshot: session-halt state, circuit breaker, loaded workspace, active tool-mode resolution.")]
     public object McpServerStatus(CancellationToken cancellationToken = default)
@@ -34,45 +32,45 @@ public class SentinelServerStatusTools
         var automatic = (IAutomaticCircuitBreaker)_workspaceManager;
         var unrecoverable = (IUnrecoverableBreaker)_workspaceManager;
 
-        return new
+
+        return new SentinelCallToolResult<McpServerStatusResult>
         {
-            serverPid = Environment.ProcessId,
-            sessionHalted = _workspaceManager.IsSessionHalted(),
-            solutionPath = _workspaceManager.SolutionPath,
-            projectCount = _workspaceManager.ProjectCount,
-            workspaceVersion = _workspaceManager.WorkspaceVersion,
-            breakers = new
-            {
-                manual = new
-                {
-                    tripped = manual.IsTripped(),
-                    message = manual.StateMessage()
-                },
-                automatic = new
-                {
-                    tripped = automatic.IsTripped(),
-                    message = automatic.StateMessage()
-                },
-                unrecoverable = new
-                {
-                    tripped = unrecoverable.IsTripped(),
-                    message = unrecoverable.StateMessage()
-                },
-            },
-            toolSurface = new
-            {
-                modeArg = _activeToolSurface.ModeArg,
-                activeModes = _activeToolSurface.ActiveModes,
-                includeTools = _activeToolSurface.IncludeTools,
-                excludeTools = _activeToolSurface.ExcludeTools,
-                activeToolClassCount = _activeToolSurface.ActiveToolClasses.Count,
-                activeToolClasses = _activeToolSurface.ActiveToolClasses,
-            },
-            stoppedByScript = new
-            {
-                wasFound = _stoppedByScriptMarker.WasFound,
-                details = _stoppedByScriptMarker.Details,
-            },
+            IsSuccess = true,
+            StatusMessage = "McpServerStatus executed successfully.",
+            SuccessData = new McpServerStatusResult(
+                ServerPid: Environment.ProcessId,
+                SessionHalted: _workspaceManager.IsSessionHalted(),
+                SolutionPath: _workspaceManager.SolutionPath,
+                ProjectCount: _workspaceManager.ProjectCount,
+                WorkspaceVersion: _workspaceManager.WorkspaceVersion,
+            Breakers: new McpServerStatusBreakers(
+
+                new McpServerStatusBreakerState(
+                    Tripped: manual.IsTripped(),
+                    Message: manual.StateMessage()
+                ),
+                new McpServerStatusBreakerState(
+                    Tripped: automatic.IsTripped(),
+                    Message: automatic.StateMessage()
+                ),
+                new McpServerStatusBreakerState(
+                    Tripped: unrecoverable.IsTripped(),
+                    Message: unrecoverable.StateMessage()
+                )
+            ),
+            ToolSurface: new McpServerStatusToolSurface(
+                ModeArg: _activeToolSurface.ModeArg,
+                ActiveModes: _activeToolSurface.ActiveModes,
+                IncludeTools: _activeToolSurface.IncludeTools,
+                ExcludeTools: _activeToolSurface.ExcludeTools,
+                ActiveToolClassCount: _activeToolSurface.ActiveToolClasses.Count,
+                ActiveToolClasses: _activeToolSurface.ActiveToolClasses
+            ),
+            StoppedByScript: new McpServerStatusStoppedByScript(
+                WasFound: _stoppedByScriptMarker.WasFound,
+                Details: _stoppedByScriptMarker.Details
+            )
+        )
         };
     }
 }

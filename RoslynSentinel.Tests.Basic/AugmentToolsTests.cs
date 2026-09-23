@@ -193,7 +193,7 @@ public class Config
         Assert.That(result.Success, Is.False,
             "Should return Fail when the type does not exist");
         Assert.That(result.Error, Does.Contain("NonExistentType"),
-            "ErrorDetails message should identify the missing type");
+            "ErrorData message should identify the missing type");
     }
 
     [Test]
@@ -213,7 +213,7 @@ public class Foo
         Assert.That(result.Success, Is.False,
             "Should return Fail when ToString() is already present");
         Assert.That(result.Error, Does.Contain("already"),
-            "ErrorDetails message should mention the conflict");
+            "ErrorData message should mention the conflict");
     }
 
     [Test]
@@ -244,7 +244,7 @@ public class InternalOnly
         Assert.That(result.Success, Is.False,
             "Should return Fail for a non-existent file");
         Assert.That(result.Error, Does.Contain("exist.cs").Or.Contain("not"),
-            "ErrorDetails should reference the missing file");
+            "ErrorData should reference the missing file");
     }
 
     [Test]
@@ -400,7 +400,7 @@ public class C
         Assert.That(result.Success, Is.False,
             "Invalid C# identifier should return Fail");
         Assert.That(result.Error, Does.Contain("123Invalid").Or.Contain("identifier"),
-            "ErrorDetails should mention the invalid name");
+            "ErrorData should mention the invalid name");
     }
 
     [Test]
@@ -436,7 +436,7 @@ public class C
         Assert.That(result.Success, Is.False,
             "File not in solution should return Fail");
         Assert.That(result.Error, Does.Contain("solution").Or.Contain("not found"),
-            "ErrorDetails should explain the file is not in the loaded solution");
+            "ErrorData should explain the file is not in the loaded solution");
     }
 
     [Test]
@@ -869,9 +869,9 @@ public class OrderLine
         Assert.That(result.Success, Is.False,
             "Must refuse rather than silently produce a per-iteration call that drops totalUnits");
         Assert.That(result.Error, Does.Contain("loop"),
-            "ErrorDetails should explain the loop-body ambiguity");
+            "ErrorData should explain the loop-body ambiguity");
         Assert.That(result.Error, Does.Contain("totalUnits"),
-            "ErrorDetails should name the sibling statement that would be left behind");
+            "ErrorData should name the sibling statement that would be left behind");
     }
 
     [Test]
@@ -894,7 +894,7 @@ public class OrderLine
         Assert.That(result.Success, Is.False,
             "Must refuse rather than silently produce a method that always returns 0 and strands the foreach");
         Assert.That(result.Error, Does.Contain("loop"),
-            "ErrorDetails should explain the followed-by-a-loop ambiguity");
+            "ErrorData should explain the followed-by-a-loop ambiguity");
     }
 
     private const string StringBuilderFlowsIntoSelectionSource = @"

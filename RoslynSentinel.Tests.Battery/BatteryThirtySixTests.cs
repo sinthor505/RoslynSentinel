@@ -121,7 +121,7 @@ class C {
     {
         SetSingleFile(@"
 class C {
-    string p = ""C:\\SuccessDetails\\file.txt"";
+    string p = ""C:\\Data\\file.txt"";
 }", "Paths.cs");
 
         var results = await _securityEngine.FindHardcodedPathsAsync();
@@ -134,7 +134,7 @@ class C {
     {
         SetSingleFile(@"
 class C {
-    string p = ""C:\\SuccessDetails\\file.txt"";
+    string p = ""C:\\Data\\file.txt"";
 }", "Paths.cs");
 
         // Locate the actual document path from the workspace
@@ -167,7 +167,7 @@ class C { string p = ""C:\\Logs\\app.log""; }")]);
     public async Task CheckForSqlInjection_NullScope_FindsVulnerabilitiesAcrossSolution()
     {
         SetSingleFile(@"
-using System.SuccessDetails;
+using System.Data;
 class Repo {
     void Run(IDbCommand cmd, string id) {
         cmd.ExecuteNonQuery($""SELECT * FROM T WHERE Id = {id}"");
@@ -182,7 +182,7 @@ class Repo {
     public async Task CheckForSqlInjection_ProjectScope_FiltersCorrectly()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("DataProj", [("Repo.cs", @"
-using System.SuccessDetails;
+using System.Data;
 class Repo {
     void Run(IDbCommand cmd, string id) {
         cmd.ExecuteNonQuery($""SELECT * FROM T WHERE Id = {id}"");
@@ -201,7 +201,7 @@ class Repo {
     public async Task CheckForSqlInjection_FileScope_StillWorks()
     {
         SetSingleFile(@"
-using System.SuccessDetails;
+using System.Data;
 class Repo {
     void Run(IDbCommand cmd, string id) {
         cmd.ExecuteNonQuery($""SELECT * FROM T WHERE Id = {id}"");

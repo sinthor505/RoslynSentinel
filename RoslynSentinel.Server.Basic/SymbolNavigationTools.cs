@@ -20,7 +20,7 @@ public class SymbolNavigationTools
         _impl = new SymbolNavigationImpl(symbolNavigationEngine, impactAnalyzer, workspaceManager, logger);
     }
 
-    [McpServerTool(Name = "LocateSymbol", UseStructuredContent = true, OutputSchemaType = typeof(LocateSymbolResult))]
+    [McpServerTool(Name = "LocateSymbol", UseStructuredContent = false, OutputSchemaType = typeof(LocateSymbolResult))]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
     [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text - use SearchSolutionText for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
@@ -95,12 +95,12 @@ public sealed record LocatedSymbolInfo(
 /// Named shape mirroring the actual <c>SentinelCallToolResult<object></c> envelope
 /// <see cref="SymbolNavigationTools.LocateSymbol"/> returns on its primary (match-found) success path
 /// - StructuredContent is populated from the whole method return value, not just its inner
-/// <c>SuccessDetails</c>, since LocateSymbol (unlike McpServerStatus) returns
+/// <c>Data</c>, since LocateSymbol (unlike McpServerStatus) returns
 /// <c>Task<SentinelCallToolResult<object>></c> rather than a bare object. Used only as
 /// <c>OutputSchemaType</c> so the tool can advertise a real MCP <c>outputSchema</c>/
 /// <c>StructuredContent</c> shape (2026-07-28 protocol) without changing the method's actual return
 /// type. Primary path only (the not-found and exception error paths return a different, error-shaped
-/// envelope with no SuccessDetails) - see proposal_structuredcontent_rollout.md.
+/// envelope with no Data) - see proposal_structuredcontent_rollout.md.
 /// </summary>
 public sealed record LocateSymbolResult(
     bool Success,

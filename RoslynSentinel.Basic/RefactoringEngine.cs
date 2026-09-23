@@ -524,7 +524,7 @@ public class RefactoringEngine
             return new ExtractMethodResult(false, "No complete statements found in the selected line range.", null, null, null, null);
         }
 
-        // Data flow analysis to infer parameters and return type
+        // SuccessData flow analysis to infer parameters and return type
         DataFlowAnalysis dataFlow;
         try
         {
@@ -532,7 +532,7 @@ public class RefactoringEngine
         }
         catch (Exception ex)
         {
-            return new ExtractMethodResult(false, $"Data flow analysis failed: {ex.Message}", null, null, null, null);
+            return new ExtractMethodResult(false, $"SuccessData flow analysis failed: {ex.Message}", null, null, null, null);
         }
 
         // Parameters: symbols flowing in -> local vars and non-this method parameters only

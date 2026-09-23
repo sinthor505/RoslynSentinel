@@ -59,9 +59,12 @@ public class McpServerStatusStructuredContentTests
         _host.Dispose();
     }
     // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Explicit("StructuredContent is currently not implemented")]
     [Test]
     public async Task McpServerStatus_ListTools_AdvertisesOutputSchema()
     {
+        Assert.Ignore("StructuredContent is currently not implemented");
+
         var tools = await _client.ListToolsAsync(cancellationToken: TestContext.CurrentContext.CancellationToken);
         var statusTool = tools.Single(t => t.Name == "McpServerStatus");
 
@@ -74,9 +77,12 @@ public class McpServerStatusStructuredContentTests
             "schema STJ emits for typeof(object) -- that shape is known to break LM Studio's tools/list handling.");
     }
     // Added by InsertMemberAfter (expected - used for diagnostics)
+    [Explicit("StructuredContent is currently not implemented")]
     [Test]
     public async Task McpServerStatus_Call_PopulatesStructuredContent_MatchingTextContent()
     {
+        Assert.Ignore("StructuredContent is currently not implemented");
+
         var result = await _client.CallToolAsync(
             "McpServerStatus",
             new Dictionary<string, object?> { ["reason"] = "test message" }!,

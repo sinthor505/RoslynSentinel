@@ -294,7 +294,7 @@ public class NewToolTests
 
         var summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync();
 
-        // We just verify the summary struct is usable and has Details
+        // We just verify the summary struct is usable and has Data
         Assert.That(summary, Is.Not.Null);
         Assert.That(summary.Data.Details, Is.Not.Null);
     }

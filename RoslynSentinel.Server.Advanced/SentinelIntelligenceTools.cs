@@ -97,7 +97,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData =  result
             };
         }
         catch (Exception ex)
@@ -106,7 +106,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetComprehensiveHealthReport")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetComprehensiveHealthReport")
             };
         }
     }
@@ -127,7 +127,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData =  result
             };
         }
         catch (Exception ex)
@@ -136,7 +136,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetSolutionMetrics")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetSolutionMetrics")
             };
         }
     }
@@ -170,7 +170,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetCodeInventory")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetCodeInventory")
             };
         }
     }
@@ -196,7 +196,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData =  result
             };
         }
         catch (Exception ex)
@@ -205,7 +205,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetDiRegistrations")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetDiRegistrations")
             };
         }
     }
@@ -236,7 +236,7 @@ public class SentinelIntelligenceTools
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                        ErrorData =  new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                             "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
                             "Use GetFileOutline to list available methods in the file.")
                     };
@@ -244,7 +244,7 @@ public class SentinelIntelligenceTools
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessDetails = fwd
+                    SuccessData =  fwd
                 };
             }
             if (direction == "reverse")
@@ -255,7 +255,7 @@ public class SentinelIntelligenceTools
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                        ErrorData =  new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                         "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
                         "Use GetFileOutline to list available methods in the file.")
                     };
@@ -263,7 +263,7 @@ public class SentinelIntelligenceTools
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessDetails = rev
+                    SuccessData =  rev
                 };
             }
             if (direction == "tree")
@@ -272,13 +272,13 @@ public class SentinelIntelligenceTools
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessDetails = result
+                    SuccessData =  result
                 };
             }
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = new ResultError(ToolErrorCode.Exception, $"Unknown direction '{direction}'. Valid values: forward, reverse, tree.")
+                ErrorData =  new ResultError(ToolErrorCode.Exception, $"Unknown direction '{direction}'. Valid values: forward, reverse, tree.")
             };
         }
         catch (Exception ex)
@@ -287,7 +287,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetCallGraph")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetCallGraph")
             };
         }
     }
@@ -309,7 +309,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<string>
             {
                 IsSuccess = true,
-                SuccessDetails = result.ToJsonSummary()
+                SuccessData =  result.ToJsonSummary()
             };
         }
         catch (Exception ex)
@@ -318,7 +318,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<string>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewMoveFileToNamespaceFolder")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewMoveFileToNamespaceFolder")
             };
         }
     }
@@ -344,7 +344,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData =  result
             };
         }
         catch (Exception ex)
@@ -353,7 +353,7 @@ public class SentinelIntelligenceTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "TraceVariableLifetime")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "TraceVariableLifetime")
             };
         }
     }

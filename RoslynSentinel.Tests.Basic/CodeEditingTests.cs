@@ -135,7 +135,7 @@ public enum ToolScope
             "Enum containers must be rejected loudly, not silently return the container unchanged " +
             "while reporting Modified (see docs/current/issue_member_add_silent_persistence.md).");
         Assert.That(result.UpdatedText, Is.Null.Or.Empty, "No text should be produced for a rejected edit.");
-        Assert.That(result.Message, Does.Contain("ModifyEnumAsync"), "ErrorDetails should point at the enum-shaped tool.");
+        Assert.That(result.Message, Does.Contain("ModifyEnumAsync"), "ErrorData should point at the enum-shaped tool.");
     }
 
     // ══════════════════════════════════════════════════════════════

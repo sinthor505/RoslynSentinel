@@ -63,7 +63,7 @@ public class ReplaceSnippetSizeGuardTests
             reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: anchor, newContent: newContent);
 
-        Assert.That(result.ErrorDetails?.Message ?? "", Does.Not.Contain("limit"),
+        Assert.That(result.ErrorData?.Message ?? "", Does.Not.Contain("limit"),
             "a mid-size edit must not be rejected for size");
     }
 
@@ -84,10 +84,10 @@ public class ReplaceSnippetSizeGuardTests
             oldContent: anchor, newContent: oversized);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("newContent is 2500 chars"),
+        Assert.That(result.ErrorData!.Message, Does.Contain("newContent is 2500 chars"),
             "the message must name the bound that tripped and the actual value");
-        Assert.That(result.ErrorDetails!.Message, Does.Contain("limit 2000"));
-        Assert.That(result.ErrorDetails!.Message, Does.Not.Contain("oldContent"),
+        Assert.That(result.ErrorData!.Message, Does.Contain("limit 2000"));
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("oldContent"),
             "bounds that were not exceeded must not be mentioned");
     }
 
@@ -109,8 +109,8 @@ public class ReplaceSnippetSizeGuardTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ErrorDetails!.Message, Does.Contain("oldContent is 120 lines"));
-            Assert.That(result.ErrorDetails!.Message, Does.Contain("newContent is 2500 chars"));
+            Assert.That(result.ErrorData!.Message, Does.Contain("oldContent is 120 lines"));
+            Assert.That(result.ErrorData!.Message, Does.Contain("newContent is 2500 chars"));
         });
     }
 
@@ -135,9 +135,9 @@ public class ReplaceSnippetSizeGuardTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ErrorDetails!.Message, Does.Not.Contain("WriteFile"));
-            Assert.That(result.ErrorDetails!.Message, Does.Not.Contain("ApplyUnifiedDiff"));
-            Assert.That(result.ErrorDetails!.Message, Does.Contain("ReplaceSnippet"), "must still state a way forward");
+            Assert.That(result.ErrorData!.Message, Does.Not.Contain("WriteFile"));
+            Assert.That(result.ErrorData!.Message, Does.Not.Contain("ApplyUnifiedDiff"));
+            Assert.That(result.ErrorData!.Message, Does.Contain("ReplaceSnippet"), "must still state a way forward");
         });
     }
 }

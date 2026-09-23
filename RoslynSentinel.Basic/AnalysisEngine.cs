@@ -2104,7 +2104,7 @@ public class AnalysisEngine
         }
 
         // Build a cross-project lookup: fully-qualified-type-name -> list of file paths
-        // Used to detect duplicate type names across mismatched paths (ErrorDetails severity).
+        // Used to detect duplicate type names across mismatched paths (ErrorData severity).
         var typeToFiles = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
         // First pass: collect (document, declaredNamespace, expectedNamespace) for all relevant docs.

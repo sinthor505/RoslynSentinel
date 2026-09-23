@@ -128,7 +128,7 @@ public static class OperationBlobWriter
         }
         catch (Exception ex)
         {
-            // Logged at ErrorDetails with the exception attached: the previous catch discarded it
+            // Logged at ErrorData with the exception attached: the previous catch discarded it
             // entirely, which is why the DirectoryNotFoundException behind the A3 defect never
             // appeared anywhere at all.
             logger?.LogError(ex,

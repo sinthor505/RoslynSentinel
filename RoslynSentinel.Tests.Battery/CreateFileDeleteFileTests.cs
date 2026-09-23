@@ -76,7 +76,7 @@ public class CreateFileDeleteFileTests
         var result = await wholeFileWriteTools.WriteFile(reason: "test message", WriteFileOperation.CreateFile, existingFile, "replacement content");
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(await File.ReadAllTextAsync(existingFile), Is.EqualTo(originalContent));
     }
 
@@ -119,7 +119,7 @@ public class CreateFileDeleteFileTests
         var result = await wholeFileWriteTools.WriteFile(reason: "test message", WriteFileOperation.ReplaceFile, missingFile, "public class X { }");
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(File.Exists(missingFile), Is.False);
     }
 
@@ -165,8 +165,8 @@ public class CreateFileDeleteFileTests
 
         var readResult = await workspaceTools.ReadFile(reason: "test message", newFile);
 
-        Assert.That(readResult.IsSuccess, Is.True, readResult.ErrorDetails?.Message);
-        var data = readResult.SuccessDetails!;
+        Assert.That(readResult.IsSuccess, Is.True, readResult.ErrorData?.Message);
+        var data = readResult.SuccessData!;
         var source = (string)data.GetType().GetProperty("source")!.GetValue(data)!;
         Assert.That(source, Is.EqualTo(content));
     }
@@ -207,7 +207,7 @@ public class CreateFileDeleteFileTests
         var result = await wholeFileWriteTools.DeleteFile(reason: "test message", missingFile);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     [Test]
@@ -298,7 +298,7 @@ public class CreateFileDeleteFileTests
         var result = await workspaceTools.CreateFile(reason: "test message", newFile, typeKind: NewTypeKind.@class, typeName: "Foo");
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(File.Exists(newFile), Is.False);
     }
 
@@ -316,7 +316,7 @@ public class CreateFileDeleteFileTests
         var result = await workspaceTools.CreateFile(reason: "test message", newFile, namespaceName: "MyApp.Bad", typeKind: typeKind, typeName: typeName);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(File.Exists(newFile), Is.False);
     }
 
@@ -334,7 +334,7 @@ public class CreateFileDeleteFileTests
         var result = await workspaceTools.CreateFile(reason: "test message", existingFile, namespaceName: "MyApp.Whatever", typeKind: NewTypeKind.@class, typeName: "Whatever");
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(await File.ReadAllTextAsync(existingFile), Is.EqualTo(originalContent));
     }
 
@@ -350,7 +350,7 @@ public class CreateFileDeleteFileTests
 
         var result = await workspaceTools.CreateFile(reason: "test message", newFile, namespaceName: "MyApp.Nested", typeKind: NewTypeKind.@class, typeName: "Nested");
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
         Assert.That(File.Exists(newFile), Is.True);
     }
 
@@ -366,7 +366,7 @@ public class CreateFileDeleteFileTests
 
         var result = await workspaceTools.CreateFile(reason: "test message", newFile);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
         Assert.That(File.Exists(newFile), Is.True);
         Assert.That(await File.ReadAllTextAsync(newFile), Is.EqualTo(""));
     }
@@ -388,7 +388,7 @@ public class CreateFileDeleteFileTests
 
         var result = await workspaceTools.CreateFile(reason: "test message", newFile, namespaceName: "MyApp.Typed", typeKind: typeKind, typeName: "Foo");
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
         var content = await File.ReadAllTextAsync(newFile);
         Assert.That(content, Is.EqualTo("namespace MyApp.Typed;\n\n" + expectedTypeSource));
 
@@ -442,7 +442,7 @@ public class CreateFileDeleteFileTests
         var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
         var newFile = Path.Combine(existingProjectDir, "Populated.cs");
         var createResult = await workspaceTools.CreateFile(reason: "test message", newFile, namespaceName: "MyApp.Populated", typeKind: NewTypeKind.@class, typeName: "Foo");
-        Assert.That(createResult.IsSuccess, Is.True, createResult.ErrorDetails?.Message);
+        Assert.That(createResult.IsSuccess, Is.True, createResult.ErrorData?.Message);
 
         // The new file isn't part of the loaded Roslyn solution until reloaded from disk -> CreateFile
         // (like WriteFile) writes through disk, it doesn't add a Document to the in-memory workspace itself.
@@ -455,7 +455,7 @@ public class CreateFileDeleteFileTests
             filepath: newFile,
             containerName: "Foo",
             newMemberSource: "public int Value { get; set; }");
-        Assert.That(populateResult.IsSuccess, Is.True, populateResult.ErrorDetails?.Message);
+        Assert.That(populateResult.IsSuccess, Is.True, populateResult.ErrorData?.Message);
 
         // Add a second top-level type -> CreateFile only seeds the first.
         var secondTypeResult = await refactoringTools.Member(
@@ -463,7 +463,7 @@ public class CreateFileDeleteFileTests
             operation: MemberAction.addTopLevelType,
             filepath: newFile,
             newMemberSource: "public class Bar { }");
-        Assert.That(secondTypeResult.IsSuccess, Is.True, secondTypeResult.ErrorDetails?.Message);
+        Assert.That(secondTypeResult.IsSuccess, Is.True, secondTypeResult.ErrorData?.Message);
 
         var content = await File.ReadAllTextAsync(newFile);
         Assert.That(content, Does.Contain("namespace MyApp.Populated"));

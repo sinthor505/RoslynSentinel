@@ -5,8 +5,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public record GenerationResult(FilePathWrapper filePath, string Content);
@@ -1331,7 +1329,7 @@ public partial class CodeGenerationEngine
                 {
                     Outcome = EditOutcome.CannotEdit,
                     FilePath = filePath,
-                    Message = $"// ErrorDetails: Could not resolve format string constant. Details: {ex.Message}"
+                    Message = $"// ErrorDetails: Could not resolve format string constant. Data: {ex.Message}"
                 };
             }
         }

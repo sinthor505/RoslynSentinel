@@ -259,7 +259,7 @@ public class ControlFlowEngine
         if (method.Body == null)
         {
             return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [],
-                "Method has no block body (expression-bodied member). SuccessDetails flow analysis requires a block body.");
+                "Method has no block body (expression-bodied member). SuccessData flow analysis requires a block body.");
         }
 
         var statements = method.Body.Statements;
@@ -278,7 +278,7 @@ public class ControlFlowEngine
 
         if (analysis == null)
         {
-            return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], "SuccessDetails flow analysis failed.");
+            return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], "SuccessData flow analysis failed.");
         }
         else
         {

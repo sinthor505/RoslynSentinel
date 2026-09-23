@@ -150,10 +150,11 @@ public class LargeResultOffloadFilterTests
             // ServiceRegistrationExtensionsBasic.cs's "if (context.Params?.Name == \"GetLargeResult\")
             // { return result; }" - docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md),
             // so its own response is never re-shaped into {offloaded, data}; it always returns its
-            // native {successDetails: {...}} shape directly, even when that response is itself large.
-            Assert.That(pageDoc.RootElement.TryGetProperty("successDetails", out _), Is.True,
-                $"GetLargeResult must return its native successDetails shape, not an offload pointer (page was: {pageBlocks[0].Text})");
-            var data = pageDoc.RootElement.GetProperty("successDetails");
+            // native {successData: {...}} shape directly, even when that response is itself large.
+            pageDoc.RootElement.TryGetProperty("successData", out var successDataProperty);
+            Assert.That(pageDoc.RootElement.TryGetProperty("successData", out _), Is.True,
+                $"GetLargeResult must return its native successData shape, not an offload pointer (page was: {pageBlocks[0].Text})");
+            var data = pageDoc.RootElement.GetProperty("successData");
             reassembled.Append(data.GetProperty("text").GetString());
 
             offset = data.TryGetProperty("nextOffset", out var next) && next.ValueKind != JsonValueKind.Null
@@ -266,8 +267,8 @@ public class LargeResultOffloadFilterTests
         // GetLargeResult is explicitly excluded from the generic offload-pointer wrapper (see
         // ServiceRegistrationExtensionsBasic.cs's "if (context.Params?.Name == \"GetLargeResult\")
         // { return result; }"), so its own response is never re-shaped into {offloaded, data}; it
-        // always returns its native {successDetails: [...]} shape directly.
-        Assert.That(pageDoc.RootElement.TryGetProperty("successDetails", out var data), Is.True,
+        // always returns its native {successData: [...]} shape directly.
+        Assert.That(pageDoc.RootElement.TryGetProperty("successData", out var data), Is.True,
             $"GetLargeResult's first call on a typed (non-Raw) branch must return actual records, not another offload envelope. Got: {pageBlocks[0].Text}");
         Assert.That(data.ValueKind, Is.EqualTo(JsonValueKind.Array));
         Assert.That(data.GetArrayLength(), Is.GreaterThan(0), "The returned page must contain at least one real record.");

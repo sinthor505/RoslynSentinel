@@ -706,7 +706,7 @@ public class RegressionTests
         Assert.That(summary, Is.Not.Null);
         Assert.That(summary.Data.Details, Is.Not.Null);
 
-        // CS0103 ("name does not exist in current context") should appear in Details
+        // CS0103 ("name does not exist in current context") should appear in Data
         // and its count should be >= 3 (one per undefined symbol), OR it should be
         // aggregated into a single entry with count 3.
         var errorCount = summary.Data.Errors + summary.Data.Warnings;

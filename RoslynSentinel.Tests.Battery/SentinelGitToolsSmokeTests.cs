@@ -126,13 +126,13 @@ public class SentinelGitToolsSmokeTests
         var result = await _gitTools.Git(reason: "test message", GitOperation.reset, mode: GitResetMode.soft);
 
         Assert.That(result, Is.Not.Null);
-        var status = (GitStatusResult)result;
-        Assert.That(status.Success, Is.True, status.Error);
+        var status = (GitStatusResult)result.SuccessData;
+        Assert.That(status.Success, Is.True);
         Assert.That(status.Staged.Select(s => s.Path), Does.Contain("README.md"),
             "git reset --soft should leave the second commit's change staged, not discarded.");
 
         var log = await _gitTools.Git(reason: "test message", GitOperation.log, count: 5);
-        var logResult = (GitLogResult)log;
+        var logResult = (GitLogResult)log.SuccessData;
         Assert.That(logResult.Commits.Select(c => c.Message), Does.Not.Contain("second commit"),
             "git reset --soft should move HEAD past the second commit.");
     }
@@ -149,7 +149,7 @@ public class SentinelGitToolsSmokeTests
         var result = await _gitTools.Git(reason: "test message", GitOperation.reset, mode: GitResetMode.mixed);
 
         Assert.That(result, Is.Not.Null);
-        var status = (GitStatusResult)result;
+        var status = (GitStatusResult)result.SuccessData;
         Assert.That(status.Success, Is.True, status.Error);
         Assert.That(status.Staged, Is.Empty, "git reset --mixed should leave nothing staged.");
         Assert.That(status.Unstaged.Select(s => s.Path), Does.Contain("README.md"),
@@ -180,7 +180,9 @@ public class SentinelGitToolsSmokeTests
             var result = await _gitTools.Git(reason: "test message", GitOperation.status, repoPath: otherRepoDir);
 
             Assert.That(result, Is.Not.Null);
-            var status = (GitStatusResult)result;
+            Assert.That(result.IsSuccess, Is.True);
+            Assert.That(result.SuccessData, Is.Not.Null);
+            var status = (GitStatusResult)result.SuccessData;
             Assert.That(status.Success, Is.True, status.Error);
             Assert.That(status.IsClean, Is.False, "the other repo has an uncommitted change and should not report clean.");
             Assert.That(status.Unstaged.Select(s => s.Path), Does.Contain("OTHER.md"));

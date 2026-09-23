@@ -39,7 +39,7 @@ public static class ServerBuildInfo
     }
 }
 
-// ── ErrorDetails codes ───────────────────────────────────────────────────────────────
+// ── ErrorData codes ───────────────────────────────────────────────────────────────
 public static class ToolErrorCode
 {
     public const string SolutionNotLoaded = "SolutionNotLoaded";
@@ -76,11 +76,11 @@ public static class ToolErrorCode
 
 /// <summary>
 /// Typed envelope returned by Tool scan tools.
-/// Exactly one of <see cref="SuccessDetails"/>, <see cref="ErrorDetails"/>, or <see cref="LargeResult"/> is populated.
+/// Exactly one of <see cref="SuccessData"/>, <see cref="ErrorData"/>, or <see cref="LargeResult"/> is populated.
 /// </summary>
 /// <remarks>
-/// Two generic parameters: <typeparamref name="TSuccess"/> for <see cref="SuccessDetails"/>,
-/// <typeparamref name="TError"/> for <see cref="ErrorDetails"/> - most tools only need to vary the
+/// Two generic parameters: <typeparamref name="TSuccess"/> for <see cref="SuccessData"/>,
+/// <typeparamref name="TError"/> for <see cref="ErrorData"/> - most tools only need to vary the
 /// success shape, so <see cref="SentinelCallToolResult{T}"/> (below) fixes TError to the shared
 /// <see cref="ResultError"/> and is what nearly every tool method actually returns. A tool opts into
 /// a structured, non-ResultError error shape by returning this base type directly instead.
@@ -119,13 +119,13 @@ public record SentinelCallToolResult<TSuccess, TError>
     /// should use <see cref="SentinelCallToolResult{T}.ForPossiblyLargeDataAsync"/> instead of
     /// setting this directly.
     /// </summary>
-    public TSuccess? SuccessDetails
+    public TSuccess? SuccessData
     {
         get; init;
     }
 
-    /// <summary>ErrorDetails details. Non-null when <see cref="IsSuccess"/> is false.</summary>
-    public TError? ErrorDetails
+    /// <summary>ErrorData details. Non-null when <see cref="IsSuccess"/> is false.</summary>
+    public TError? ErrorData
     {
         get; init;
     }
@@ -187,7 +187,7 @@ public record SentinelCallToolResult<TSuccess, TError>
 }
 
 /// <summary>
-/// The envelope shape nearly every tool method returns: <see cref="SentinelCallToolResult{TSuccess, TError}.ErrorDetails"/>
+/// The envelope shape nearly every tool method returns: <see cref="SentinelCallToolResult{TSuccess, TError}.ErrorData"/>
 /// fixed to the shared <see cref="ResultError"/> shape, only the success payload varies by <typeparamref name="T"/>.
 /// See <see cref="SentinelCallToolResult{TSuccess, TError}"/> for the two-parameter base a tool can
 /// return directly instead, when its error shape needs to be more than a flat code/message/detail.
@@ -197,7 +197,7 @@ public record SentinelCallToolResult<T> : SentinelCallToolResult<T, ResultError>
     /// <summary>
     /// Builds a <see cref="SentinelCallToolResult{T}"/> for <paramref name="data"/>, offloading to disk via
     /// <see cref="LargeResultHelper.StoreLargeResultAsync{T}"/> (populating <see cref="SentinelCallToolResult{TSuccess, TError}.LargeResult"/>
-    /// instead of <see cref="SentinelCallToolResult{TSuccess, TError}.SuccessDetails"/>) when the serialized payload exceeds
+    /// instead of <see cref="SentinelCallToolResult{TSuccess, TError}.SuccessData"/>) when the serialized payload exceeds
     /// <see cref="LargeResultHelper.OffloadThresholdBytes"/>. Use this instead of hand-rolling a
     /// size-check/write-to-disk block per tool (that duplication is what let GetMethodSource and
     /// ReadFile's offload paths silently diverge from GetLargeResult's expected file format).
@@ -208,7 +208,7 @@ public record SentinelCallToolResult<T> : SentinelCallToolResult<T, ResultError>
         var stored = await LargeResultHelper.StoreLargeResultAsync(data, solutionRoot, wrapperType, cancellationToken);
         if (!stored.offloaded)
         {
-            return new SentinelCallToolResult<T> { IsSuccess = true, SuccessDetails = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion, StatusMessage = statusMessage };
+            return new SentinelCallToolResult<T> { IsSuccess = true, SuccessData = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion, StatusMessage = statusMessage };
         }
 
         return new SentinelCallToolResult<T>
@@ -230,7 +230,7 @@ public record SentinelCallToolResult<T> : SentinelCallToolResult<T, ResultError>
     }
 }
 
-// ── ErrorDetails detail ─────────────────────────────────────────────────────────────
+// ── ErrorData detail ─────────────────────────────────────────────────────────────
 
 /// <summary>Structured error returned inside <see cref="SentinelCallToolResult{T}"/>.</summary>
 public record ResultError(

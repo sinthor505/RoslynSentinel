@@ -180,9 +180,9 @@ public static class ToolErrorMapper
 
         if (workspaceManager.CurrentSolution == null)
         {
-            return (ToolErrorCode.SolutionNotLoaded, $"{context} failed: no solution is loaded. Call LoadSolution first. Details: {ex.Message}");
+            return (ToolErrorCode.SolutionNotLoaded, $"{context} failed: no solution is loaded. Call LoadSolution first. Data: {ex.Message}");
         }
 
-        return (ToolErrorCode.Exception, $"{context} failed unexpectedly ({ex.GetType().Name}). Details: {ex.Message}");
+        return (ToolErrorCode.Exception, $"{context} failed unexpectedly ({ex.GetType().Name}). Data: {ex.Message}");
     }
 }

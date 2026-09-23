@@ -855,7 +855,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {
-                _logger.LogError(ex, "ErrorDetails refreshing workspace.");
+                _logger.LogError(ex, "ErrorData refreshing workspace.");
             }
         }
         finally

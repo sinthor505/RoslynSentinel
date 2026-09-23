@@ -77,7 +77,7 @@ public class SentinelModernizationTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessDetails = result
+                SuccessData =  result
             };
         }
         catch (Exception ex)
@@ -86,7 +86,7 @@ public class SentinelModernizationTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorDetails = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InvertBooleanLogic")
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "InvertBooleanLogic")
             };
         }
     }
