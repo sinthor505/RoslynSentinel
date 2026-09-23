@@ -1,5 +1,5 @@
-// Battery #23 -> SentinelQualityTools
-// Tests all 46 public methods of SentinelQualityTools in-memory via TestSolutionBuilder.
+// Battery #23 -> QualityTools
+// Tests all 46 public methods of QualityTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -23,7 +23,7 @@ public class BatteryTwentyThreeTests
     private DiagnosticEngine _diagnosticEngine;
     private AntiPatternEngine _antiPatternEngine;
     private ThreadSafetyEngine _threadSafetyEngine;
-    private SentinelQualityTools _tools;
+    private QualityTools _tools;
 
     private const string AsyncSource = @"
 using System;
@@ -129,7 +129,7 @@ public class QualityClass
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
         _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
-        _tools = new SentinelQualityTools(_testingEngine,
+        _tools = new QualityTools(_testingEngine,
             _controlFlowEngine,
             _analysisEngine,
             new AntiPatternEngine(_workspaceManager),
@@ -139,7 +139,7 @@ public class QualityClass
             new StackOverflowEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
-            NullLogger<SentinelQualityTools>.Instance);
+            NullLogger<QualityTools>.Instance);
     }
 
     [TearDown]

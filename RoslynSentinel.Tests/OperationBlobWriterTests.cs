@@ -1,6 +1,6 @@
 // OperationBlobWriter's filename sanitization and typed failure result.
 //
-// The A3 defect from run 20260910-013550-398: 17 call sites in SentinelAdvancedRefactoringTools
+// The A3 defect from run 20260910-013550-398: 17 call sites in AdvancedRefactoringTools
 // passed slashed operation names ("WrapRange/region", "Inline/method", …). Path.Combine resolved
 // the blob into a non-existent operations/WrapRange/ subdirectory, the write threw
 // DirectoryNotFoundException, and the catch swallowed it into a return string nobody inspected ->

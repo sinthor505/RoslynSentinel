@@ -3,11 +3,11 @@ namespace RoslynSentinel.Basic;
 /// <summary>
 /// Shared static helpers for the refactoring tool classes: file-content preview truncation, the
 /// empty-updated-text guard, and the error-code mapping it depends on. Extracted verbatim from
-/// SentinelRefactoringTools (see docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md,
+/// RefactoringTools (see docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md,
 /// Decision 7 step 1) - all three were already private static methods with no instance state, so
 /// this is a pure relocation. ErrorCodeFor moved alongside RequireUpdatedText (not itself named in
 /// the plan) because RequireUpdatedText calls it and it cannot stay private on the god-class without
-/// blocking this move; it has one other caller (SentinelRefactoringTools.Member) which now calls it
+/// blocking this move; it has one other caller (RefactoringTools.Member) which now calls it
 /// here instead.
 /// </summary>
 public static class RefactoringToolHelpers

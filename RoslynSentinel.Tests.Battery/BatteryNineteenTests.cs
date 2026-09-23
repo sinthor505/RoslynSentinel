@@ -1,5 +1,5 @@
-// Battery #19 -> SentinelGenerationTools
-// Tests all 13 public methods of SentinelGenerationTools in-memory via TestSolutionBuilder.
+// Battery #19 -> GenerationTools
+// Tests all 13 public methods of GenerationTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -14,7 +14,7 @@ public class BatteryNineteenTests
     private ApiAutomationEngine _apiAutomationEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private ApiIntegrationEngine _apiIntegrationEngine;
-    private SentinelGenerationTools _tools;
+    private GenerationTools _tools;
 
     private const string ControllerSource = @"
 using System.Threading.Tasks;
@@ -67,10 +67,10 @@ public interface IOrderRepository
         _apiAutomationEngine = new ApiAutomationEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _apiIntegrationEngine = new ApiIntegrationEngine(_workspaceManager);
-        _tools = new SentinelGenerationTools(_codeGenerationEngine,
+        _tools = new GenerationTools(_codeGenerationEngine,
             _apiAutomationEngine,
             _workspaceManager,
-            NullLogger<SentinelGenerationTools>.Instance);
+            NullLogger<GenerationTools>.Instance);
     }
 
     [TearDown]

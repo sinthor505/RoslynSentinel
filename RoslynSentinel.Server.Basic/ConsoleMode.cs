@@ -16,7 +16,7 @@ namespace RoslynSentinel.Server.Basic;
 /// <summary>
 /// Handles the --list-tools and --interactive console modes.
 /// </summary>
-public static partial class SentinelConsoleMode
+public static partial class ConsoleMode
 {
     private static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
     private static readonly JsonSerializerOptions CompactJson = new() { WriteIndented = false };

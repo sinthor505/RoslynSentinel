@@ -14,12 +14,12 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class ReplaceSnippetBatchTests
 {
-    private static SentinelWorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
+    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
-        return new SentinelWorkspaceTools(
+        return new WorkspaceTools(
             workspaceManager,
             new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine),
             diffEngine, diagnosticEngine,
@@ -27,7 +27,7 @@ public class ReplaceSnippetBatchTests
             new StructuralRefinementEngine(workspaceManager, config),
             new DependencyEngine(workspaceManager),
             new ProjectConsistencyEngine(workspaceManager),
-            config, NullLogger<SentinelWorkspaceTools>.Instance,
+            config, NullLogger<WorkspaceTools>.Instance,
             new BuildEngine(workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),

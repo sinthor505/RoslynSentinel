@@ -14,4 +14,4 @@ public record SourceTransformResult(
     bool WorkspaceUpdated,
     FilePathWrapper filePath
 );
-// v2 -> ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)
+// v2 -> ScanOptions() now derived from ScanTools.scan_descriptors (single source of truth)

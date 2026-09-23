@@ -8,13 +8,13 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Basic;
 
 [McpServerToolType]
-public class SentinelGitTools
+public class GitTools
 {
     private readonly IGitOperations _gitImpl;
-    private readonly ILogger<SentinelGitTools> _logger;
+    private readonly ILogger<GitTools> _logger;
 
-    public SentinelGitTools(IWorkspaceManager workspaceManager,
-        ILogger<SentinelGitTools> logger)
+    public GitTools(IWorkspaceManager workspaceManager,
+        ILogger<GitTools> logger)
     {
         _logger = logger;
         _gitImpl = new GitImpl(workspaceManager, new NullLogger<GitImpl>());

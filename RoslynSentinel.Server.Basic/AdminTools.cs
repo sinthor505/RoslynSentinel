@@ -14,11 +14,11 @@ namespace RoslynSentinel.Server.Basic;
 // real drift hit should stop the session, not be something the model talks its way past. This
 // class is also the intended home for any future restricted/operator-only tool, not a one-off.
 [McpServerToolType]
-public class SentinelAdminTools
+public class AdminTools
 {
     private readonly IWorkspaceManager _workspaceManager;
 
-    public SentinelAdminTools(IWorkspaceManager workspaceManager)
+    public AdminTools(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

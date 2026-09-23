@@ -70,18 +70,18 @@ public class DocListResult
 // ─── Tool class ──────────────────────────────────────────────────────────────
 
 [McpServerToolType]
-public class SentinelDocumentationTools
+public class DocumentationTools
 {
     private readonly IWorkspaceManager _workspaceManager;
     private readonly SentinelHostOptions _hostOptions;
-    private readonly ILogger<SentinelDocumentationTools> _logger;
+    private readonly ILogger<DocumentationTools> _logger;
 
     private const int MaxDocBytes = 512 * 1024;   // 512 KB
 
-    public SentinelDocumentationTools(
+    public DocumentationTools(
         IWorkspaceManager workspaceManager,
         SentinelHostOptions hostOptions,
-        ILogger<SentinelDocumentationTools> logger)
+        ILogger<DocumentationTools> logger)
     {
         _workspaceManager = workspaceManager;
         _hostOptions = hostOptions;

@@ -72,7 +72,7 @@ public class ServerHttp
         var mcpBuilder = builder.Services.AddMcpServer().WithHttpTransport();
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
+            o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes, includeTools, excludeTools);
 
         var app = builder.Build();
@@ -82,8 +82,8 @@ public class ServerHttp
                         .CreateLogger("RoslynSentinel.HttpHost.Advanced");
 
         app.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger, baseRepoDirectory);
-        SentinelConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
-        SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
+        ConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
+        ConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
 
         if (logger.IsEnabled(LogLevel.Information))
         {

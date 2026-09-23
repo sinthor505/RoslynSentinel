@@ -23,7 +23,7 @@ public class BlobIntegrityInvariantTests
 {
     private TestSolutionFixture _fixture;
     private PersistentWorkspaceManager _workspaceManager;
-    private SentinelAdvancedRefactoringTools _tools;
+    private AdvancedRefactoringTools _tools;
     private string _targetFile;
 
     [SetUp]
@@ -37,7 +37,7 @@ public class BlobIntegrityInvariantTests
         await _workspaceManager.LoadSolutionAsync(_fixture.SolutionPath);
 
         var config = new SentinelConfiguration();
-        _tools = new SentinelAdvancedRefactoringTools(
+        _tools = new AdvancedRefactoringTools(
             new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config),
             //new StandardRefactoringEngine(_workspaceManager),
             new AdvancedStructuralEngine(_workspaceManager),
@@ -59,7 +59,7 @@ public class BlobIntegrityInvariantTests
             _workspaceManager,
             new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
             config,
-            NullLogger<SentinelAdvancedRefactoringTools>.Instance);
+            NullLogger<AdvancedRefactoringTools>.Instance);
 
         _targetFile = Directory
             .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
@@ -165,7 +165,7 @@ public class BlobIntegrityInvariantTests
         // OperationBlobWriterTests). Pinned as a test because the literals are easy to copy from a
         // neighbouring call site, which is how there came to be seventeen of them.
         var toolsSource = Path.Combine(
-            FindRepoRoot(), "RoslynSentinel.Server.Advanced", "SentinelAdvancedRefactoringTools.cs");
+            FindRepoRoot(), "RoslynSentinel.Server.Advanced", "AdvancedRefactoringTools.cs");
         Assert.That(File.Exists(toolsSource), Is.True, $"expected source at {toolsSource}");
 
         var offenders = File.ReadAllLines(toolsSource)

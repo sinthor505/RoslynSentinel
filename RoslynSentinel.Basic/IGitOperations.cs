@@ -1,4 +1,4 @@
-﻿namespace RoslynSentinel.Server.Basic;
+﻿namespace RoslynSentinel.Basic;
 
 public interface IGitOperations
 {

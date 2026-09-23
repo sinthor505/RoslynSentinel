@@ -1642,7 +1642,7 @@ public enum OrderStatus
         Assert.That(added.Outcome, Is.EqualTo(EditOutcome.Modified));
 
         // RefactoringEngine methods read from the workspace's current solution rather than each
-        // other's return values -> in the real tool layer, SentinelRefactoringTools writes
+        // other's return values -> in the real tool layer, RefactoringTools writes
         // UpdatedText back into the workspace between calls, so mirror that here.
         SetSource(added.UpdatedText!, "OrderStatus.cs");
 

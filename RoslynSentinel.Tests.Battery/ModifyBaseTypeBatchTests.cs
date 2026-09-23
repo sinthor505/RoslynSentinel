@@ -6,6 +6,31 @@ namespace RoslynSentinel.Tests.Battery;
 
 public class ModifyBaseTypeBatchTests
 {
+    private IWorkspaceManager _workspaceManager;
+    private SentinelConfiguration _config;
+    private RefactoringEngine _refactoringEngine;
+    private StandardRefactoringEngine _standardRefactoringEngine;
+    private AdvancedStructuralEngine _advancedStructuralEngine;
+    private MappingEngine _mappingEngine;
+    private SemanticRefactoringLibrary _semanticRefactoringLibrary;
+    private GranularRefactoringEngine _granularRefactoringEngine;
+    private AdvancedLogicEngine _advancedLogicEngine;
+    private RefinementEngine _refinementEngine;
+    private AdvancedTypeEngine _advancedTypeEngine;
+    private StructuralRefinementEngine _structuralRefinementEngine;
+    private CodeStyleEngine _codeStyleEngine;
+    private CodeFlowEngine _codeFlowEngine;
+    private AdvancedRefactoringEngine _advancedRefactoringEngine;
+    private LogicOptimizationEngine _logicOptimizationEngine;
+    private ModernizationEngine _modernizationEngine;
+    private DiffEngine _diffEngine;
+    private ValidationEngine _validationEngine;
+    private SymbolNavigationEngine _symbolNavigationEngine;
+    private RefactoringStructuralTools _refactoringStructuralTools;
+    private RefactoringSignatureTools _refactoringSignatureTools;
+    private RefactoringExtractionDocsTools _refactoringExtractionDocsTools;
+    private MsToolAugmentEngine _msToolAugmentEngine;
+
     // Added by AddMember (expected - used for diagnostics)
     private const string FixtureRelativePath = "ContosoOrders.Core/BaseTypeBatchFixture.cs";
 
@@ -41,30 +66,55 @@ public class ModifyBaseTypeBatchTests
     }
     """;
 
-
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private static SentinelRefactoringTools BuildTools(IWorkspaceManager workspaceManager)
+    [SetUp]
+    public void Setup()
     {
-        var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
-        return new SentinelRefactoringTools(
-            new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, workspaceManager, config),
-            //new StandardRefactoringEngine(workspaceManager),
-            new MappingEngine(workspaceManager),
-            //new SemanticRefactoringLibrary(workspaceManager),
-            //new GranularRefactoringEngine(workspaceManager),
-            new StructuralRefinementEngine(workspaceManager, config),
-            //new CodeStyleEngine(workspaceManager, config),
-            //new CodeFlowEngine(workspaceManager),
-            new MsToolAugmentEngine(workspaceManager),
-            //new CodeGenerationEngine(workspaceManager),
-            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine),
-            config,
-            NullLogger<SentinelRefactoringTools>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = new SentinelConfiguration();
+        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+        _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
+        _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+        _mappingEngine = new MappingEngine(_workspaceManager);
+        _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
+        _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
+        _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
+        _refinementEngine = new RefinementEngine(_workspaceManager);
+        _advancedTypeEngine = new AdvancedTypeEngine(_workspaceManager);
+        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
+        _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
+        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
+        _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
+        _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
+        _diffEngine = new DiffEngine();
+        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
+        _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
+        _refactoringStructuralTools = new RefactoringStructuralTools(
+            _refactoringEngine,
+            _structuralRefinementEngine,
+            _symbolNavigationEngine,
+            _workspaceManager,
+            _validationEngine,
+            NullLogger<RefactoringStructuralTools>.Instance);
+        _refactoringSignatureTools = new RefactoringSignatureTools(
+            _refactoringEngine,
+            _workspaceManager,
+            _validationEngine,
+            _symbolNavigationEngine,
+            NullLogger<RefactoringSignatureTools>.Instance);
+        _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(
+            _refactoringEngine,
+            _msToolAugmentEngine,
+            _mappingEngine,
+            _symbolNavigationEngine,
+            _workspaceManager,
+            _validationEngine,
+            NullLogger<RefactoringExtractionDocsTools>.Instance);
     }
 
+    [TearDown]
+    public void TearDown() => _workspaceManager?.Dispose();
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
@@ -73,9 +123,8 @@ public class ModifyBaseTypeBatchTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
 
-        var result = await tools.ModifyBaseType(
+        var result = await _refactoringStructuralTools.ModifyBaseType(
             reason: "batch test same file two edits",
             edits:
             [
@@ -103,9 +152,8 @@ public class ModifyBaseTypeBatchTests
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource, reloadSolution: false);
         await fixture.AddFileToSolution(workspaceManager, SecondFixtureRelativePath, SecondFixtureSource);
-        var tools = BuildTools(workspaceManager);
 
-        var result = await tools.ModifyBaseType(
+        var result = await _refactoringStructuralTools.ModifyBaseType(
             reason: "batch test across two files",
             edits:
             [
@@ -133,11 +181,10 @@ public class ModifyBaseTypeBatchTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
 
         var beforeContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
 
-        var result = await tools.ModifyBaseType(
+        var result = await _refactoringStructuralTools.ModifyBaseType(
             reason: "batch test same node collision",
             edits:
             [
@@ -160,11 +207,10 @@ public class ModifyBaseTypeBatchTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
 
         var beforeContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
 
-        var result = await tools.ModifyBaseType(
+        var result = await _refactoringStructuralTools.ModifyBaseType(
             reason: "batch test target not found",
             edits:
             [
@@ -187,9 +233,8 @@ public class ModifyBaseTypeBatchTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
 
-        var result = await tools.ModifyBaseType(
+        var result = await _refactoringStructuralTools.ModifyBaseType(
             reason: "batch test both supplied",
             filepath: FixtureRelativePath,
             typeName: "BaseTypeBatchTargetA",
@@ -210,9 +255,8 @@ public class ModifyBaseTypeBatchTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
 
-        var result = await tools.ModifyBaseType(
+        var result = await _refactoringStructuralTools.ModifyBaseType(
             reason: "batch test neither supplied",
             dryRun: false, returnDiff: false, cancellationToken: default);
 
@@ -228,9 +272,8 @@ public class ModifyBaseTypeBatchTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
 
-        var result = await tools.ModifyBaseType(
+        var result = await _refactoringStructuralTools.ModifyBaseType(
             reason: "batch test empty edits array",
             edits: [],
             dryRun: false, returnDiff: false, cancellationToken: default);
@@ -247,13 +290,12 @@ public class ModifyBaseTypeBatchTests
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
 
         var edits = Enumerable.Range(0, 21)
             .Select(i => new BaseTypeEdit { FilePath = FixtureRelativePath, TypeName = $"NonexistentType{i}", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.add })
             .ToList();
 
-        var result = await tools.ModifyBaseType(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
+        var result = await _refactoringStructuralTools.ModifyBaseType(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));

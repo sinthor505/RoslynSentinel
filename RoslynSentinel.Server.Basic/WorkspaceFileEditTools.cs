@@ -11,7 +11,7 @@ namespace RoslynSentinel.Server.Basic;
 /// scoped down to the tools actually still live on SentinelWorkspaceTools today
 /// (RetryFailedChanges, UndoLastApply, ReadFile, ReplaceSnippet, CreateFile). ApplyDiff/
 /// ApplyUnifiedDiff/WriteFile/DeleteFile live on the separate, plan-unnamed
-/// SentinelWholeFileWriteTools.cs and are out of scope here.
+/// WholeFileWriteTools.cs and are out of scope here.
 /// </summary>
 [McpServerToolType]
 public class WorkspaceFileEditTools

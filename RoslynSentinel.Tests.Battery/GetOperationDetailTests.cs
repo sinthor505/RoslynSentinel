@@ -20,7 +20,7 @@ public class GetOperationDetailTests
     private static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
 
     private FakeWorkspaceManager _workspaceManager;
-    private SentinelWorkspaceTools _tools;
+    private WorkspaceTools _tools;
     private string _tempDir;
 
     [SetUp]
@@ -39,10 +39,10 @@ public class GetOperationDetailTests
         var structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);
         var dependencyEngine = new DependencyEngine(_workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(_workspaceManager);
-        _tools = new SentinelWorkspaceTools(
+        _tools = new WorkspaceTools(
             _workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
+            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             new BuildEngine(_workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),

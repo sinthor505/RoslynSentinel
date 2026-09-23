@@ -9,7 +9,7 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
-public class SentinelScanTools
+public class ScanTools
 {
     private readonly AnalysisEngine _analysisEngine;
     private readonly SecurityEngine _securityEngine;
@@ -34,9 +34,9 @@ public class SentinelScanTools
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly BreakingChangeEngine _breakingChangeEngine;
     private readonly ISolutionProvider _workspaceManager;
-    private readonly ILogger<SentinelScanTools> _logger;
+    private readonly ILogger<ScanTools> _logger;
 
-    public SentinelScanTools(
+    public ScanTools(
         AnalysisEngine analysisEngine,
         SecurityEngine securityEngine,
         AntiPatternEngine antiPatternEngine,
@@ -60,7 +60,7 @@ public class SentinelScanTools
         SymbolNavigationEngine symbolNavigationEngine,
         BreakingChangeEngine breakingChangeEngine,
         ISolutionProvider workspaceManager,
-        ILogger<SentinelScanTools> logger)
+        ILogger<ScanTools> logger)
     {
         _analysisEngine = analysisEngine;
         _securityEngine = securityEngine;
@@ -912,17 +912,17 @@ public class SentinelScanTools
 
     internal static ToolOptionsResult ScanOptions()
     {
-        // Single source of truth: derived from SentinelScanTools.scan_descriptors.
+        // Single source of truth: derived from ScanTools.scan_descriptors.
         // Adding, removing, or reclassifying a detector in scan_descriptors automatically
         // propagates here -> no manual sync required.
-        var byDomain = SentinelScanTools.scan_descriptors
+        var byDomain = ScanTools.scan_descriptors
             .GroupBy(d => d.Domain)
             .OrderBy(g => g.Key)
             .ToDictionary(
                 g => g.Key,
                 g => g.Select(d => d.Id).ToArray());
 
-        int total = SentinelScanTools.scan_descriptors.Length;
+        int total = ScanTools.scan_descriptors.Length;
 
         var sb = new StringBuilder();
         sb.AppendLine($"scan - valid detector IDs grouped by domain ({total} total):");

@@ -7,7 +7,7 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
-public class SentinelModernizationTools
+public class ModernizationTools
 {
     private readonly ModernizationEngine _modernizationEngine;
     private readonly ModernizationUpgradeEngine _modernizationUpgradeEngine;
@@ -23,9 +23,9 @@ public class SentinelModernizationTools
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly ISolutionProvider _workspaceManager;
     private readonly SentinelConfiguration _config;
-    private readonly ILogger<SentinelModernizationTools> _logger;
+    private readonly ILogger<ModernizationTools> _logger;
 
-    public SentinelModernizationTools(
+    public ModernizationTools(
         ModernizationEngine modernizationEngine,
         ModernizationUpgradeEngine modernizationUpgradeEngine,
         ModernLoggingEngine modernLoggingEngine,
@@ -40,7 +40,7 @@ public class SentinelModernizationTools
         AsyncOptimizationEngine asyncOptimizationEngine,
         ISolutionProvider workspaceManager,
         SentinelConfiguration config,
-        ILogger<SentinelModernizationTools> logger)
+        ILogger<ModernizationTools> logger)
     {
         _modernizationEngine = modernizationEngine;
         _modernizationUpgradeEngine = modernizationUpgradeEngine;

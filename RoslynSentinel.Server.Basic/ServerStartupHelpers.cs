@@ -43,7 +43,7 @@ public static class ServerStartupHelpers
     /// against the current directory, --base-repo-dir (if set), or the server's install directory.</param>
     /// <param name="baseRepoDirectory">Value of --base-repo-dir=, or null. Used to resolve relative --solution/LoadSolution paths.</param>
     /// <param name="includeTools">Parsed --include-tools value: individual tool-class names to
-    /// activate in addition to whatever --mode resolves, e.g. "SentinelGitTools,SentinelScanTools".</param>
+    /// activate in addition to whatever --mode resolves, e.g. "GitTools,ScanTools".</param>
     /// <param name="excludeTools">Parsed --exclude-tools value: individual tool-class names to
     /// deactivate even if --mode or --include-tools would otherwise activate them. Always wins.</param>
     /// <param name="operatingMode"><see cref="OperatingMode.Testing"/> when --testing is present,
@@ -100,7 +100,7 @@ public static class ServerStartupHelpers
 
     /// <summary>
     /// Every tool class carries a "Sentinel" prefix (e.g. SentinelWorkspaceTools,
-    /// SentinelGitTools), so a shortened --include-tools/--exclude-tools name like "GitTools"
+    /// GitTools), so a shortened --include-tools/--exclude-tools name like "GitTools"
     /// can be resolved by prepending it unconditionally when it's not already present.
     /// </summary>
     private static HashSet<string> NormalizeToolClassNames(HashSet<string> names)
@@ -213,7 +213,7 @@ public static class ServerStartupHelpers
 
         var outputPath = GetArgValue(args, "--output");
         var full = args.Contains("--full");
-        SentinelConsoleMode.ListTools(registerTools, outputPath, full);
+        ConsoleMode.ListTools(registerTools, outputPath, full);
         return true;
     }
 
@@ -275,7 +275,7 @@ public static class ServerStartupHelpers
         return "No tools would be active: nothing supplied to --mode/--include-tools matched a known " +
                $"mode or tool class. --mode='{modeArg}' (known modes: {availableModes}). Tool-class " +
                "names are matched with an implied \"Sentinel\" prefix, so both 'GitTools' and " +
-               "'SentinelGitTools' are accepted. Use --list-tools to see valid combinations.";
+               "'GitTools' are accepted. Use --list-tools to see valid combinations.";
     }
 
     /// <summary>

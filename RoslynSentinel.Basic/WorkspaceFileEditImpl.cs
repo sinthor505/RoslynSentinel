@@ -15,7 +15,7 @@ namespace RoslynSentinel.Basic;
 /// SentinelWorkspaceTools.cs only actually still has 3 of those 7 live as [McpServerTool] methods
 /// (RetryFailedChanges, UndoLastApply, ReadFile) - the other 4 (ApplyDiff/ApplyUnifiedDiff/
 /// WriteFile/DeleteFile) are live, separately-registered [McpServerTool] methods on a wholly
-/// different, pre-existing class (SentinelWholeFileWriteTools.cs) that this plan does not name and
+/// different, pre-existing class (WholeFileWriteTools.cs) that this plan does not name and
 /// is out of scope to touch. DiffEngine is confirmed dead on SentinelWorkspaceTools (FindReferences:
 /// only the constructor assignment, zero live-method uses - its only "use" is inside a large
 /// block-commented dead ApplyDiffWithConfirmationCode method) so it is dropped from this class

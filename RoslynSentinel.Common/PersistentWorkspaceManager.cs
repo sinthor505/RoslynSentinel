@@ -38,7 +38,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     // Session-wide fatal latch: set once by ApplyProposedChangesAsync on a confirmed hash-backed
     // drift hit (see docs/current/ideas/external-drift-hard-blocker.md proposal item 2). While
     // true, every mutating call fails immediately via SessionHaltedException, regardless of which
-    // file it targets. Cleared only out-of-band via ClearSessionHalt (SentinelAdminTools), never
+    // file it targets. Cleared only out-of-band via ClearSessionHalt (AdminTools), never
     // by the exception's own throw path.
     private volatile bool _sessionHalted;
     private volatile bool _disposed = false;
@@ -265,7 +265,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// <summary>
     /// Out-of-band recovery: clears the session-wide halt latch after a human/operator has
     /// reviewed the drift that tripped it. Deliberately not reachable from the model's normal
-    /// tool surface -> only via the Admin-gated SentinelAdminTools.
+    /// tool surface -> only via the Admin-gated AdminTools.
     /// </summary>
     public void ClearSessionHalt()
     {

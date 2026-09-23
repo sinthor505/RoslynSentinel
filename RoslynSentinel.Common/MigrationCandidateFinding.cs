@@ -35,4 +35,4 @@ public record MigrationCandidateFinding(
         (string.IsNullOrWhiteSpace(Reason) ? "" : $": {Reason}") +
         $" - {MethodName}";
 }
-// v2 -> ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)
+// v2 -> ScanOptions() now derived from ScanTools.scan_descriptors (single source of truth)

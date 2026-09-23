@@ -26,7 +26,7 @@ public class UndoLastApplyTests
     private static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
 
     private FakeWorkspaceManager _fakeWorkspaceManager;
-    private SentinelWorkspaceTools _fakeWorkspaceTools;
+    private WorkspaceTools _fakeWorkspaceTools;
     private string _tempDir;
 
     [SetUp]
@@ -50,7 +50,7 @@ public class UndoLastApplyTests
         }
     }
 
-    private static SentinelWorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
+    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
@@ -60,10 +60,10 @@ public class UndoLastApplyTests
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
-        return new SentinelWorkspaceTools(
+        return new WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
+            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             new BuildEngine(workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),

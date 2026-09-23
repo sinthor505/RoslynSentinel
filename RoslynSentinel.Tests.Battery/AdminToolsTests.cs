@@ -1,4 +1,4 @@
-// SentinelAdminTools -> tests for the "Admin"-mode-gated reconciliation tools.
+// AdminTools -> tests for the "Admin"-mode-gated reconciliation tools.
 // See docs/current/ideas/external-drift-hard-blocker.md.
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -6,16 +6,16 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 [TestFixture]
-public class SentinelAdminToolsTests
+public class AdminToolsTests
 {
     private IWorkspaceManager _workspaceManager;
-    private RoslynSentinel.Server.Basic.SentinelAdminTools _tools;
+    private RoslynSentinel.Server.Basic.AdminTools _tools;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _tools = new RoslynSentinel.Server.Basic.SentinelAdminTools(_workspaceManager);
+        _tools = new RoslynSentinel.Server.Basic.AdminTools(_workspaceManager);
     }
 
     [TearDown]

@@ -17,7 +17,7 @@ namespace RoslynSentinel.Tests.Battery;
 public class ReadFileTests
 {
     private FakeWorkspaceManager _workspaceManager;
-    private SentinelWorkspaceTools _tools;
+    private WorkspaceTools _tools;
     private string _documentPath;
 
     [SetUp]
@@ -43,10 +43,10 @@ public class ReadFileTests
         var structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);
         var dependencyEngine = new DependencyEngine(_workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(_workspaceManager);
-        _tools = new SentinelWorkspaceTools(
+        _tools = new WorkspaceTools(
             _workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
+            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             new BuildEngine(_workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),

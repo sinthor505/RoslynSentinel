@@ -14,14 +14,14 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class ReplaceSnippetSizeGuardTests
 {
-    private static SentinelWorkspaceTools BuildTools(
+    private static WorkspaceTools BuildTools(
         IWorkspaceManager workspaceManager,
         WriteToolAdviceHelper? writeAdvice = null)
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
-        return new SentinelWorkspaceTools(
+        return new WorkspaceTools(
             workspaceManager,
             new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine),
             diffEngine, diagnosticEngine,
@@ -29,7 +29,7 @@ public class ReplaceSnippetSizeGuardTests
             new StructuralRefinementEngine(workspaceManager, config),
             new DependencyEngine(workspaceManager),
             new ProjectConsistencyEngine(workspaceManager),
-            config, NullLogger<SentinelWorkspaceTools>.Instance,
+            config, NullLogger<WorkspaceTools>.Instance,
             new BuildEngine(workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
@@ -117,13 +117,13 @@ public class ReplaceSnippetSizeGuardTests
     [Test]
     public async Task ReplaceSnippet_OverCapWithWholeFileWriteGatedOff_DoesNotNameWriteFileAsync()
     {
-        // The run-398 regression, stated directly: with SentinelWholeFileWriteTools gated off (the
+        // The run-398 regression, stated directly: with WholeFileWriteTools gated off (the
         // configuration that scores 26/26 -> see project_wholefilewrite_gating_overnight_result_2026_09_08),
         // the size error must not send the agent to a tool it cannot call.
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager, new WriteToolAdviceHelper(["SentinelRefactoringTools"]));
+        var tools = BuildTools(workspaceManager, new WriteToolAdviceHelper(["RefactoringTools"]));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var anchor = (await File.ReadAllTextAsync(targetFile)).Split('\n')[0];

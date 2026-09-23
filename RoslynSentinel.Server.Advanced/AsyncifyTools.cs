@@ -10,7 +10,7 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
-public class SentinelAsyncifyTools
+public class AsyncifyTools
 {
     private readonly AntiPatternEngine _antiPatternEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
@@ -20,7 +20,7 @@ public class SentinelAsyncifyTools
     private readonly ValidationEngine _validationEngine;
     private readonly FailureRouter _failureRouter;
     private readonly MigrationLedger _ledger;
-    private readonly ILogger<SentinelAsyncifyTools> _logger;
+    private readonly ILogger<AsyncifyTools> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true,
@@ -32,7 +32,7 @@ public class SentinelAsyncifyTools
 
     private static readonly JsonSerializerOptions _debugDumpOptions = new() { WriteIndented = true };
 
-    public SentinelAsyncifyTools(
+    public AsyncifyTools(
         AntiPatternEngine antiPatternEngine,
         AsyncOptimizationEngine asyncOptimizationEngine,
         AsyncBatchEngine asyncBatchEngine,
@@ -41,7 +41,7 @@ public class SentinelAsyncifyTools
         ValidationEngine validationEngine,
         FailureRouter failureRouter,
         MigrationLedger ledger,
-        ILogger<SentinelAsyncifyTools> logger)
+        ILogger<AsyncifyTools> logger)
     {
         _antiPatternEngine = antiPatternEngine;
         _asyncOptimizationEngine = asyncOptimizationEngine;

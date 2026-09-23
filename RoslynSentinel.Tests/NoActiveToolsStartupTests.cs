@@ -75,7 +75,7 @@ public class NoActiveToolsStartupTests
     {
         // --include-tools without --mode is a supported way to run a narrow surface, so it must
         // not trip the guard.
-        var failure = Describe(includeTools: ["SentinelGitTools"]);
+        var failure = Describe(includeTools: ["GitTools"]);
 
         Assert.That(failure, Is.Null);
     }
@@ -106,13 +106,13 @@ public class NoActiveToolsStartupTests
         var failure = Describe(
             modeArg: "Admin",
             activeModes: ["Admin"],
-            excludeTools: ["SentinelAdminTools"]);
+            excludeTools: ["AdminTools"]);
 
         Assert.That(failure, Is.Not.Null);
         Assert.Multiple(() =>
         {
             Assert.That(failure, Does.Contain("--exclude-tools"));
-            Assert.That(failure, Does.Contain("SentinelAdminTools"), "must name what was excluded");
+            Assert.That(failure, Does.Contain("AdminTools"), "must name what was excluded");
             Assert.That(failure, Does.Contain("Exclude always wins"));
         });
     }
@@ -134,7 +134,7 @@ public class NoActiveToolsStartupTests
         // "WholeFileWrite" even though both are real modes in ToolClassRegistry. Since the fix
         // makes each entry point's AllModes field *equal to* ToolClassRegistry's own Keys, the
         // meaningful regression check is that "all" (i.e. every key in the registry) resolves to
-        // a tool-class set containing SentinelAdminTools/SentinelWholeFileWriteTools for both
+        // a tool-class set containing AdminTools/WholeFileWriteTools for both
         // variants -> this fails again if either map ever grows a mode a hardcoded list wouldn't
         // have picked up.
         var basicAllModes = new HashSet<string>(
@@ -149,10 +149,10 @@ public class NoActiveToolsStartupTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(basicResolved, Does.Contain("SentinelAdminTools"));
-            Assert.That(basicResolved, Does.Contain("SentinelWholeFileWriteTools"));
-            Assert.That(advancedResolved, Does.Contain("SentinelAdminTools"));
-            Assert.That(advancedResolved, Does.Contain("SentinelWholeFileWriteTools"));
+            Assert.That(basicResolved, Does.Contain("AdminTools"));
+            Assert.That(basicResolved, Does.Contain("WholeFileWriteTools"));
+            Assert.That(advancedResolved, Does.Contain("AdminTools"));
+            Assert.That(advancedResolved, Does.Contain("WholeFileWriteTools"));
         });
     }
 
@@ -167,8 +167,8 @@ public class NoActiveToolsStartupTests
         Assert.That(
             () => ServerStartupHelpers.SmokeResolveToolTypes(
                 services,
-                [typeof(SentinelWorkspaceTools)],
-                Names("SentinelGitTools")),
+                [typeof(WorkspaceTools)],
+                Names("GitTools")),
             Throws.Nothing,
             "a type outside the active set must not be resolved, let alone reported as broken");
     }
@@ -190,7 +190,7 @@ public class NoActiveToolsStartupTests
         var ex = Assert.Throws<InvalidOperationException>(() =>
             ServerStartupHelpers.SmokeResolveToolTypes(
                 services,
-                [typeof(SentinelWorkspaceTools)],
+                [typeof(WorkspaceTools)],
                 Names("SentinelWorkspaceTools")));
 
         Assert.Multiple(() =>

@@ -23,10 +23,9 @@ public class ServerStdio
     // conditionally-registered class to this list is now safe.
     private static readonly Type[] ActiveToolTypes =
     [
-        typeof(SentinelWorkspaceTools),
-        typeof(SentinelDocumentationTools),
-        typeof(SentinelSymbolTools),
-        typeof(SentinelRefactoringTools),
+        typeof(WorkspaceTools),
+        typeof(DocumentationTools),
+        typeof(SymbolNavigationTools)
     ];
 
     public static async Task Startup(string[] args)
@@ -117,8 +116,8 @@ public class ServerStdio
                     activeModes, ToolClassRegistry.BasicModeToToolClasses, includeTools, excludeTools));
 
             host.Services.WarmupAndAutoLoadBasic(solutionPath, logger, baseRepoDirectory);
-            SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
-            SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
+            ConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
+            ConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
             ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg, includeTools, excludeTools, operatingMode);
 
             try
@@ -127,7 +126,7 @@ public class ServerStdio
                 {
                     using var lifetimeCts = new CancellationTokenSource();
                     var hostTask = host.RunAsync(lifetimeCts.Token);
-                    await SentinelConsoleMode.RunReplAsync(
+                    await ConsoleMode.RunReplAsync(
                         replWriteStream!, replReadStream!, lifetimeCts).ConfigureAwait(false);
                     await hostTask.ConfigureAwait(false);
                 }

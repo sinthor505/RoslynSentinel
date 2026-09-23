@@ -39,30 +39,19 @@ public class ModifyAttributeBatchTests
     }
     """;
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
-    private static SentinelRefactoringTools BuildTools(IWorkspaceManager workspaceManager)
+    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
-        return new SentinelRefactoringTools(
+        return new RefactoringStructuralTools(
             new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, workspaceManager, config),
-            //new StandardRefactoringEngine(workspaceManager),
-            new MappingEngine(workspaceManager),
-            //new SemanticRefactoringLibrary(workspaceManager),
-            //new GranularRefactoringEngine(workspaceManager),
             new StructuralRefinementEngine(workspaceManager, config),
-            //new CodeStyleEngine(workspaceManager, config),
-            //new CodeFlowEngine(workspaceManager),
-            new MsToolAugmentEngine(workspaceManager),
-            //new CodeGenerationEngine(workspaceManager),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             workspaceManager,
             new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine),
-            config,
-            NullLogger<SentinelRefactoringTools>.Instance);
+            NullLogger<RefactoringStructuralTools>.Instance);
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]

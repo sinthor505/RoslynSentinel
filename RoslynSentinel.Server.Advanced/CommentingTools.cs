@@ -7,19 +7,19 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
-public class SentinelCommentingTools
+public class CommentingTools
 {
     private readonly CommentingEngine _commentingEngine;
     private readonly IWorkspaceManager _workspaceManager;
-    private readonly ILogger<SentinelCommentingTools> _logger;
+    private readonly ILogger<CommentingTools> _logger;
 
     private const int DefaultMaxMembers = 200;
     private const int DefaultMaxTokens = 2000;
 
-    public SentinelCommentingTools(
+    public CommentingTools(
         CommentingEngine commentingEngine,
         IWorkspaceManager workspaceManager,
-        ILogger<SentinelCommentingTools> logger)
+        ILogger<CommentingTools> logger)
     {
         _commentingEngine = commentingEngine;
         _workspaceManager = workspaceManager;

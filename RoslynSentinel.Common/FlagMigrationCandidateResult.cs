@@ -31,4 +31,4 @@ public record FlagMigrationCandidateResult(
     bool AttributeClassInjected,
     string Summary
 );
-// v2 -> ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)
+// v2 -> ScanOptions() now derived from ScanTools.scan_descriptors (single source of truth)

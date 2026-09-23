@@ -9,16 +9,16 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Basic;
 
 [McpServerToolType]
-public class SentinelWholeFileWriteTools
+public class WholeFileWriteTools
 {
     private readonly SymbolNavigationEngine _symbolNavigationEngine;    // Added by AddConstructorParameter
     private readonly IWorkspaceManager _workspaceManager;
-    private readonly SentinelWorkspaceTools _workspaceTools;
+    private readonly WorkspaceTools _workspaceTools;
     private readonly ValidationEngine _validationEngine;
     private readonly DiffEngine _diffEngine;
-    private readonly ILogger<SentinelWholeFileWriteTools> _logger;
+    private readonly ILogger<WholeFileWriteTools> _logger;
 
-    public SentinelWholeFileWriteTools(IWorkspaceManager workspaceManager, SentinelWorkspaceTools workspaceTools, ValidationEngine validationEngine, DiffEngine diffEngine, ILogger<SentinelWholeFileWriteTools> logger, SymbolNavigationEngine symbolNavigationEngine)
+    public WholeFileWriteTools(IWorkspaceManager workspaceManager, WorkspaceTools workspaceTools, ValidationEngine validationEngine, DiffEngine diffEngine, ILogger<WholeFileWriteTools> logger, SymbolNavigationEngine symbolNavigationEngine)
     {
         _workspaceManager = workspaceManager;
         _workspaceTools = workspaceTools;
@@ -269,7 +269,7 @@ public class SentinelWholeFileWriteTools
         return new
         {
             result = strippedResult,
-            diff = returnDiff ? SentinelRefactoringTools.BuildDiffFromPreImages(diffChanges, preImages) : null,
+            diff = returnDiff ? ValidateAndApplyHelper.BuildDiffFromPreImages(diffChanges, preImages) : null,
             diffHunkFindings = diffReport.HasFindings ? diffReport.Describe() : null
         };
     }
@@ -387,7 +387,7 @@ public class SentinelWholeFileWriteTools
                         ? new
                         {
                             result = strippedResult,
-                            diff = SentinelRefactoringTools.BuildDiffFromPreImages(resolvedChanges, result.PreImages)
+                            diff = ValidateAndApplyHelper.BuildDiffFromPreImages(resolvedChanges, result.PreImages)
                         }
                         : strippedResult;
                     return new SentinelCallToolResult<object>()

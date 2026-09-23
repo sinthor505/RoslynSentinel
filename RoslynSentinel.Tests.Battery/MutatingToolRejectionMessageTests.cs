@@ -45,7 +45,7 @@ public class MutatingToolRejectionMessageTests
         }
         """;
 
-    private static SentinelWorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
+    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
@@ -55,10 +55,10 @@ public class MutatingToolRejectionMessageTests
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
-        return new SentinelWorkspaceTools(
+        return new WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
+            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             new BuildEngine(workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
@@ -89,7 +89,7 @@ public class MutatingToolRejectionMessageTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
         var result = await wholeFileWriteTools.WriteFile(reason: "test message", WriteFileOperation.ReplaceFile, helperPath, HelperFileContentRenamed);
@@ -108,7 +108,7 @@ public class MutatingToolRejectionMessageTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
         var changes = new Dictionary<string, string>
@@ -131,7 +131,7 @@ public class MutatingToolRejectionMessageTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
         var unifiedDiff =

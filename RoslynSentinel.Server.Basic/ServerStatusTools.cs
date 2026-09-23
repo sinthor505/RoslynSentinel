@@ -4,14 +4,14 @@ using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
 
-public class SentinelServerStatusTools
+public class ServerStatusTools
 {
     // Added by AddMember (expected - used for diagnostics)
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ActiveToolSurface _activeToolSurface;
     private readonly StoppedByScriptMarker _stoppedByScriptMarker;
 
-    public SentinelServerStatusTools(
+    public ServerStatusTools(
         IWorkspaceManager workspaceManager,
         ActiveToolSurface activeToolSurface,
         StoppedByScriptMarker stoppedByScriptMarker)
@@ -99,7 +99,7 @@ public sealed record McpServerStatusToolSurface(
 public sealed record McpServerStatusStoppedByScript(bool WasFound, string? Details);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Named shape mirroring <see cref="SentinelServerStatusTools.McpServerStatus"/>'s anonymous return
+/// Named shape mirroring <see cref="ServerStatusTools.McpServerStatus"/>'s anonymous return
 /// object, used only as <c>OutputSchemaType</c> so the tool can advertise a real MCP
 /// <c>outputSchema</c>/<c>StructuredContent</c> shape (2026-07-28 protocol) without changing the
 /// method's actual return type.

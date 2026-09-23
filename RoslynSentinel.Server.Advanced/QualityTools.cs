@@ -8,7 +8,7 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
-public class SentinelQualityTools
+public class QualityTools
 {
     private readonly TestingEngine _testingEngine;
     private readonly ControlFlowEngine _controlFlowEngine;
@@ -20,13 +20,13 @@ public class SentinelQualityTools
     private readonly StackOverflowEngine _stackOverflowEngine;
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly ISolutionProvider _workspaceManager;
-    private readonly ILogger<SentinelQualityTools> _logger;
+    private readonly ILogger<QualityTools> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true
     };
 
-    public SentinelQualityTools(
+    public QualityTools(
         TestingEngine testingEngine,
         ControlFlowEngine controlFlowEngine,
         AnalysisEngine analysisEngine,
@@ -37,7 +37,7 @@ public class SentinelQualityTools
         StackOverflowEngine stackOverflowEngine,
         MsToolAugmentEngine toolAugmentEngine,
         ISolutionProvider workspaceManager,
-        ILogger<SentinelQualityTools> logger)
+        ILogger<QualityTools> logger)
     {
         _testingEngine = testingEngine;
         _controlFlowEngine = controlFlowEngine;
@@ -68,11 +68,11 @@ public class SentinelQualityTools
         _ = cancellationToken;
         return toolName switch
         {
-            "scan" => SentinelScanTools.ScanOptions(),
-            "apply_file_codemod" => SentinelCodemodTools.ApplyFileCodemodOptions(),
-            "apply_method_codemod" => SentinelCodemodTools.ApplyMethodCodemodOptions(),
-            "apply_class_codemod" => SentinelCodemodTools.ApplyClassCodemodOptions(),
-            "generate" => SentinelGenerationTools.GenerateOptions(),
+            "scan" => ScanTools.ScanOptions(),
+            "apply_file_codemod" => CodemodTools.ApplyFileCodemodOptions(),
+            "apply_method_codemod" => CodemodTools.ApplyMethodCodemodOptions(),
+            "apply_class_codemod" => CodemodTools.ApplyClassCodemodOptions(),
+            "generate" => GenerationTools.GenerateOptions(),
             "convert_switch_to_pattern_safe" => ConvertSwitchOptions(),
             "analyze_switch_for_pattern_conversion" => AnalyzeSwitchOptions(),
             "analyze_foreach_for_linq_conversion" => AnalyzeForeachOptions(),
@@ -330,4 +330,4 @@ public class SentinelQualityTools
         }
     };
 }
-// v2 -> ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)
+// v2 -> ScanOptions() now derived from ScanTools.scan_descriptors (single source of truth)

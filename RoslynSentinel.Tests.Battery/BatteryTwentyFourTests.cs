@@ -1,5 +1,5 @@
-// Battery #24 -> SentinelRefactoringTools
-// Tests all ~65 public methods of SentinelRefactoringTools in-memory via TestSolutionBuilder.
+// Battery #24 -> RefactoringTools
+// Tests all ~65 public methods of RefactoringTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -28,8 +28,12 @@ public class BatteryTwentyFourTests
     private ModernizationEngine _modernizationEngine;
     private DiffEngine _diffEngine;
     private ValidationEngine _validationEngine;
-    private SentinelRefactoringTools _tools;
-    private SentinelAdvancedRefactoringTools _advTools;
+    private SymbolNavigationEngine _symbolNavigationEngine;
+    private RefactoringStructuralTools _refactoringStructuralTools;
+    private RefactoringSignatureTools _refactoringSignatureTools;
+    private RefactoringExtractionDocsTools _refactoringExtractionDocsTools;
+    private MsToolAugmentEngine _msToolAugmentEngine;
+    private AdvancedRefactoringTools _advTools;
 
     private const string RefactorSource = @"
 using System;
@@ -119,46 +123,46 @@ public enum Status { Active = 1, Pending = 2 }
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
         _diffEngine = new DiffEngine();
+        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
-        _tools = new SentinelRefactoringTools(
+        _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
+        _refactoringStructuralTools = new RefactoringStructuralTools(
             _refactoringEngine,
-            //_standardRefactoringEngine,
-            _mappingEngine,
-            //_semanticRefactoringLibrary,
-            //_granularRefactoringEngine,
             _structuralRefinementEngine,
-            //_codeStyleEngine,
-            //_codeFlowEngine,
-            new MsToolAugmentEngine(_workspaceManager),
-            //new CodeGenerationEngine(_workspaceManager),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            _symbolNavigationEngine,
             _workspaceManager,
             _validationEngine,
-            _config,
-            NullLogger<SentinelRefactoringTools>.Instance);
-        _advTools = new SentinelAdvancedRefactoringTools(
+            NullLogger<RefactoringStructuralTools>.Instance);
+        _refactoringSignatureTools = new RefactoringSignatureTools(
             _refactoringEngine,
-            //new StandardRefactoringEngine(_workspaceManager),
+            _workspaceManager,
+            _validationEngine,
+            _symbolNavigationEngine,
+            NullLogger<RefactoringSignatureTools>.Instance);
+        _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(
+            _refactoringEngine,
+            _msToolAugmentEngine,
+            _mappingEngine,
+            _symbolNavigationEngine,
+            _workspaceManager,
+            _validationEngine,
+            NullLogger<RefactoringExtractionDocsTools>.Instance);
+        _advTools = new AdvancedRefactoringTools(
+            _refactoringEngine,
             new AdvancedStructuralEngine(_workspaceManager),
             new MappingEngine(_workspaceManager),
             new SemanticRefactoringLibrary(_workspaceManager),
             new GranularRefactoringEngine(_workspaceManager),
-            //new AdvancedLogicEngine(_workspaceManager),
             new RefinementEngine(_workspaceManager),
             new AdvancedTypeEngine(_workspaceManager),
-            //new CodeStyleEngine(_workspaceManager, _config),
-            //new CodeFlowEngine(_workspaceManager),
-            //new AdvancedRefactoringEngine(_workspaceManager),
-            //new LogicOptimizationEngine(_workspaceManager),
             new ModernizationEngine(_workspaceManager, _config),
-            //new OutParamRefactoringEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),
             new CodeGenerationEngine(_workspaceManager),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,
             new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
             _config,
-            NullLogger<SentinelAdvancedRefactoringTools>.Instance);
+            NullLogger<AdvancedRefactoringTools>.Instance);
     }
 
     [TearDown]
@@ -194,7 +198,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task SafeDeleteSymbol_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -252,7 +256,7 @@ public enum Status { Active = 1, Pending = 2 }
         var located = await symbolNavEngine.LocateSymbolAsync("GetLabel", containingType: "Order");
         var handle = located.Single();
 
-        var result = await _tools.RenameSymbol(
+        var result = await _refactoringSignatureTools.RenameSymbol(
             reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
             newName: "GetDisplayLabel");
         Assert.That(result, Is.Not.Null);
@@ -263,7 +267,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RenameSymbol_NonExistentSymbol_ReturnsErrorObject()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.RenameSymbol(
+        var result = await _refactoringSignatureTools.RenameSymbol(
             reason: "test message", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol",
             newName: "NewName");
 
@@ -297,7 +301,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task UsingDirective_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
+        var result = await _refactoringExtractionDocsTools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -305,7 +309,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task UsingDirective_AutoStageFalse_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq", autoStage: false);
+        var result = await _refactoringExtractionDocsTools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq", autoStage: false);
         Assert.That(result, Is.Not.Null);
     }
     // Added by InsertMemberAfter (expected - used for diagnostics)
@@ -321,7 +325,7 @@ public enum Status { Active = 1, Pending = 2 }
             "namespace TestProj;\n\npublic class Order\n{\n  public int OrderId { get; set; }\n}\n";
         SetSource(misindentedSource, "Order.cs");
 
-        var result = await _tools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
+        var result = await _refactoringExtractionDocsTools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
 
         Assert.That(result.IsSuccess, Is.True);
         var summary = (AppliedChangeSummary)result.SuccessData!;
@@ -338,7 +342,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ModifyEnum_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyEnum(reason: "test message", "Order.cs", "Status", "Active,Pending,Cancelled");
+        var result = await _refactoringStructuralTools.ModifyEnum(reason: "test message", "Order.cs", "Status", "Active,Pending,Cancelled");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -348,7 +352,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_Add_OnEnumContainer_Succeeds()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Status", newMemberSource: "Cancelled");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Status", newMemberSource: "Cancelled");
         Assert.That(result.IsSuccess, Is.True);
     }
 
@@ -356,7 +360,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_Remove_OnEnumMember_Succeeds()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "Pending", skipPrecheck: true);
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "Pending", skipPrecheck: true);
         Assert.That(result.IsSuccess, Is.True);
     }
 
@@ -364,7 +368,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_Replace_OnEnumMember_Succeeds()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "Pending", newMemberSource: "InProgress=2");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "Pending", newMemberSource: "InProgress=2");
         Assert.That(result.IsSuccess, Is.True);
     }
 
@@ -372,7 +376,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_View_OnEnumContainer_ReturnsEnumMembers()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.view, "Status");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.view, "Status");
         Assert.That(result.IsSuccess, Is.True);
     }
 
@@ -382,7 +386,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InsertMemberAfter_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Description => \"\";", position: "after:GetLabel");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Description => \"\";", position: "after:GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -392,7 +396,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InsertMemberBefore_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Tag => \"\";", position: "before:GetLabel");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Tag => \"\";", position: "before:GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -402,7 +406,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddAttribute_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyAttribute(reason: "test message", "Order.cs", "Order", "[Serializable]", AttributeModifyAction.add);
+        var result = await _refactoringStructuralTools.ModifyAttribute(reason: "test message", "Order.cs", "Order", "[Serializable]", AttributeModifyAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -412,7 +416,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddBaseType_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyBaseType(reason: "test message", "Order.cs", "Order", "IService", AddRemoveAction.add);
+        var result = await _refactoringStructuralTools.ModifyBaseType(reason: "test message", "Order.cs", "Order", "IService", AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -422,7 +426,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveAttribute_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyAttribute(reason: "test message", "Order.cs", "Order", "Serializable", AttributeModifyAction.remove);
+        var result = await _refactoringStructuralTools.ModifyAttribute(reason: "test message", "Order.cs", "Order", "Serializable", AttributeModifyAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -432,7 +436,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveBaseType_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyBaseType(reason: "test message", "Order.cs", "Order", "IService", AddRemoveAction.remove);
+        var result = await _refactoringStructuralTools.ModifyBaseType(reason: "test message", "Order.cs", "Order", "IService", AddRemoveAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -452,7 +456,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ChangeAccessibility_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ChangeAccessibility(reason: "test message", "Order.cs", "OrderId", AccessibilityLevel.@internal);
+        var result = await _refactoringSignatureTools.ChangeAccessibility(reason: "test message", "Order.cs", "OrderId", AccessibilityLevel.@internal);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -462,12 +466,12 @@ public enum Status { Active = 1, Pending = 2 }
         SetSource(SimpleSource, "Order.cs");
         var versionBeforeAnyMutation = _workspaceManager.WorkspaceVersion;
 
-        var first = await _tools.ChangeAccessibility(reason: "test message", "Order.cs", "OrderId", AccessibilityLevel.@internal);
+        var first = await _refactoringSignatureTools.ChangeAccessibility(reason: "test message", "Order.cs", "OrderId", AccessibilityLevel.@internal);
         var firstSummary = (AppliedChangeSummary)first.SuccessData!;
         Assert.That(firstSummary.WorkspaceVersion, Is.Not.Null);
         Assert.That(firstSummary.WorkspaceVersion, Is.GreaterThan(versionBeforeAnyMutation));
 
-        var second = await _tools.ChangeAccessibility(reason: "test message", "Order.cs", "CustomerName", AccessibilityLevel.@internal);
+        var second = await _refactoringSignatureTools.ChangeAccessibility(reason: "test message", "Order.cs", "CustomerName", AccessibilityLevel.@internal);
         var secondSummary = (AppliedChangeSummary)second.SuccessData!;
         Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion!),
             "A second mutation must stamp a strictly higher version than the first.");
@@ -479,7 +483,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddModifier_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier(reason: "test message", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.add);
+        var result = await _refactoringStructuralTools.ModifyModifier(reason: "test message", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -489,7 +493,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveModifier_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier(reason: "test message", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.remove);
+        var result = await _refactoringStructuralTools.ModifyModifier(reason: "test message", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -504,7 +508,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task SummaryComment_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.SummaryComment(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "Represents an order.");
+        var result = await _refactoringExtractionDocsTools.SummaryComment(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "Represents an order.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -514,7 +518,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddProperty_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addTypedMember, "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addTypedMember, "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -524,7 +528,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddField_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addTypedMember, "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addTypedMember, "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -554,7 +558,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ConstructorParameter_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
+        var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -564,7 +568,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_View_ListsExistingParameters()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.view, "GetLabel");
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.view, "GetLabel");
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
     }
 
@@ -572,7 +576,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_Add_AppendsRequiredParameter_NoExistingCallers()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool");
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool");
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
     }
 
@@ -582,7 +586,7 @@ public enum Status { Active = 1, Pending = 2 }
         SetMultiFile(
             ("Order.cs", SimpleSource),
             ("Caller.cs", "namespace TestProj;\npublic class Caller { public string Use(Order o) => o.GetStatus(); }"));
-        var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool", defaultValue: "false");
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool", defaultValue: "false");
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
     }
 
@@ -595,7 +599,7 @@ public enum Status { Active = 1, Pending = 2 }
         SetMultiFile(
             ("Order.cs", orderSourceWithRename),
             ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
-        var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
     }
 
@@ -603,7 +607,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_Remove_NonLastParameter_Refused()
     {
         SetSource(RefactorSource, "Animal.cs");
-        var result = await _tools.MethodSignature(reason: "test message", "Animal.cs", AddRemoveViewAction.remove, "Process", "a");
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Animal.cs", AddRemoveViewAction.remove, "Process", "a");
         Assert.That(result.IsSuccess, Is.False, "Removing a non-trailing parameter must be refused, not silently applied.");
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("last parameter"));
@@ -618,7 +622,7 @@ public enum Status { Active = 1, Pending = 2 }
         SetMultiFile(
             ("Order.cs", orderSourceWithRename),
             ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(first: \"a\", last: \"b\"); }"));
-        var result = await _tools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(result.IsSuccess, Is.False, "A named-argument call site cannot be safely rewritten and must refuse the whole operation.");
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("named arguments"));
@@ -642,7 +646,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task SyncTypeAndFilename_ValidFile_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.SyncTypeAndFilename(reason: "test message", "Order.cs");
+        var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", "Order.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -673,7 +677,7 @@ public enum Status { Active = 1, Pending = 2 }
                 [("Mismatched.cs", mismatchedSource, oldPath)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath, dryRun: true);
+            var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath, dryRun: true);
 
             Assert.That(File.Exists(oldPath), Is.True, "dryRun must never delete the original file, even when validation fails.");
             Assert.That(File.Exists(newPath), Is.False, "dryRun must never write the renamed file.");
@@ -710,7 +714,7 @@ public enum Status { Active = 1, Pending = 2 }
                 [("Mismatched.cs", mismatchedSource, oldPath)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath);
+            var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath);
 
             Assert.That(result.IsSuccess, Is.True, $"Expected rename to succeed; error: {result.ErrorData?.Message}");
             Assert.That(File.Exists(oldPath), Is.False, "Old file should be deleted after a successful rename.");
@@ -795,7 +799,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MakeMethodStatic_ValidMethod_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier(reason: "test message", "Order.cs", "GetLabel", NonAccessibilityModifier.@static, AddRemoveAction.add);
+        var result = await _refactoringStructuralTools.ModifyModifier(reason: "test message", "Order.cs", "GetLabel", NonAccessibilityModifier.@static, AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -826,7 +830,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task GenerateMapping_ValidTypes_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.GenerateMapping("Order.cs", "Order", "Status");
+        var result = await _refactoringExtractionDocsTools.GenerateMapping("Order.cs", "Order", "Status");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -936,7 +940,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ReplaceMember_ValidMember_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "GetLabel", newMemberSource: "public string GetLabel() => $\"{OrderId}: {CustomerName}\";");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "GetLabel", newMemberSource: "public string GetLabel() => $\"{OrderId}: {CustomerName}\";");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -946,7 +950,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddMemberToClass_ValidClass_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Tag { get; set; }");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Tag { get; set; }");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -956,7 +960,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveMember_ValidMember_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -964,7 +968,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveMember_ZeroReferences_SucceedsAsBefore()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
         Assert.That(result.IsSuccess, Is.True, "GetLabel has no callers in SimpleSource - default precheck must let it through.");
     }
 
@@ -985,7 +989,7 @@ public enum Status { Active = 1, Pending = 2 }
         }
         """, "Helper.cs");
 
-        var result = await _tools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName");
 
         Assert.That(result.IsSuccess, Is.False, "A member with a real caller must be refused by default.");
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -1014,7 +1018,7 @@ public enum Status { Active = 1, Pending = 2 }
         }
         """, "Helper.cs");
 
-        var result = await _tools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName", skipPrecheck: true);
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName", skipPrecheck: true);
 
         Assert.That(result.IsSuccess, Is.False, "The engine's own caller check still applies even with skipPrecheck: true.");
     }
@@ -1042,11 +1046,11 @@ public enum Status { Active = 1, Pending = 2 }
         }
         """, "Greeter.cs");
 
-        var refused = await _tools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet");
+        var refused = await _refactoringStructuralTools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet");
         Assert.That(refused.IsSuccess, Is.False, "An interface member's implementation must be caught by the default precheck.");
         Assert.That(refused.ErrorData!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
 
-        var result = await _tools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet", skipPrecheck: true);
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet", skipPrecheck: true);
         Assert.That(result.IsSuccess, Is.False, "Removing an interface's sole implementation still breaks compilation - the separate compile-validation safety net catches it.");
         Assert.That(result.ErrorData!.Message, Does.Contain("does not implement interface member"),
             "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped.");
@@ -1076,7 +1080,7 @@ public enum Status { Active = 1, Pending = 2 }
             }
             """));
 
-        var result = await _tools.Member(reason: "test message", "Dog.cs", MemberAction.remove, memberName: "Speak");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Dog.cs", MemberAction.remove, memberName: "Speak");
         Assert.That(result.IsSuccess, Is.True, "An override with no callers and nothing overriding it in turn must succeed under the default precheck.");
     }
 
@@ -1234,7 +1238,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     public async Task ExtractLocalVariable_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ExtractLocalVariable(reason: "test message", "Order.cs", "GetLabel", "label");
+        var result = await _refactoringExtractionDocsTools.ExtractLocalVariable(reason: "test message", "Order.cs", "GetLabel", "label");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1242,7 +1246,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     public async Task ExtractLocalVariable_NonExistentFile_ReturnsStructuredError()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.ExtractLocalVariable(reason: "test message", "NonExistent.cs", "GetLabel", "label");
+        var result = await _refactoringExtractionDocsTools.ExtractLocalVariable(reason: "test message", "NonExistent.cs", "GetLabel", "label");
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -1305,7 +1309,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
                 [("Mismatched.cs", mismatchedSource, oldPath)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "MainService");
+            var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "MainService");
 
             Assert.That(result.IsSuccess, Is.True, $"Expected rename to succeed; error: {result.ErrorData?.Message}");
             var summary = (AppliedChangeSummary)result.SuccessData!;
@@ -1339,7 +1343,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
                 [("Mismatched.cs", mismatchedSource, oldPath)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var result = await _tools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "DoesNotExist");
+            var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "DoesNotExist");
 
             Assert.That(result.IsSuccess, Is.False);
             Assert.That(result.ErrorData!.Message, Does.Contain("DoesNotExist"));

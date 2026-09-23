@@ -163,7 +163,7 @@ public static class ToolErrorMapper
     /// <summary>
     /// Same mapping as <see cref="ToResultError"/>, for the handful of tool methods that return a
     /// bare <see cref="string"/> instead of a <see cref="SentinelCallToolResult{T}"/> (e.g. <c>Produces(DataTag.ResultOnly)</c>
-    /// methods in <c>SentinelGenerationTools</c>) and so have nowhere to put a structured <see cref="ResultError"/>.
+    /// methods in <c>GenerationTools</c>) and so have nowhere to put a structured <see cref="ResultError"/>.
     /// </summary>
     public static string ToErrorMessage(Exception ex, ISolutionProvider workspaceManager, string context)
     {

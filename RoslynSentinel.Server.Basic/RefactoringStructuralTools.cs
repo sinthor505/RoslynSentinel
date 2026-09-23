@@ -6,9 +6,92 @@ using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
 
+// Added by AddTopLevelType(expected - used for diagnostics)
+/// <summary>
+/// Named shape mirroring the <c>updatedHandle</c> anonymous object inside
+/// <see cref="RenameSymbolResultEnvelope"/>'s <c>Data</c>, built from <see cref="SymbolHandle"/>.
+/// Primary path only - see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record RenameSymbolUpdatedHandle(
+    [property: Produces(DataTag.SessionId)] string SessionId,
+    [property: Produces(DataTag.ProjectName)] string ProjectName,
+    [property: Produces(DataTag.DocCommentId)] string DocCommentId);
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Named shape mirroring the anonymous object <see cref="SentinelRefactoringTools.RenameSymbol"/>
+/// assigns to <c>SentinelCallToolResult<object>.Data</c> on its applied success path. Primary path only
+/// (the resolution-failed / no-pending-changes / apply-failed error paths return a different,
+/// error-shaped envelope with no Data) - see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record RenameSymbolData(
+    [property: Produces(DataTag.ChangeId)] string? ChangeId,
+    bool DryRun,
+    string? Diff,
+    [property: Produces(DataTag.SymbolName)] string OldName,
+    [property: Produces(DataTag.SymbolName)] string NewName,
+    int FilesChanged,
+    RenameSymbolUpdatedHandle? UpdatedHandle,
+    IReadOnlyList<ResidualMention>? ResidualMentions,
+    string? ResidualMentionsNote);
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
+/// <see cref="SentinelRefactoringTools.RenameSymbol"/>'s primary success path, which sets only
+/// <c>IsSuccess</c> and <c>Data</c> (not TotalRecords/WorkspaceVersion/etc). Primary path only -
+/// see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record RenameSymbolResultEnvelope(
+    bool Success,
+    RenameSymbolData? Data);
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
+/// <see cref="SentinelRefactoringTools.ModifyModifier"/>'s primary (autoStage=true, singular-edit,
+/// non-batch) success path, which sets only <c>IsSuccess</c> and <c>Data</c>. Deliberately does not
+/// cover the batch (edits != null), autoStage=false, or error branches - see
+/// proposal_structuredcontent_rollout.md. AppliedChangeSummary lives in RoslynSentinel.Common and
+/// is reused by several other tools (e.g. ChangeAccessibility); it is intentionally left
+/// undecorated here rather than adding DataTag attributes to a shared type outside this POC's
+/// file scope - ChangeId tagging on ModifyModifier's own output is expressed at the method level
+/// via the existing [Produces(DataTag.ChangeId)] instead.
+/// </summary>
+public sealed record ModifyModifierResultEnvelope(
+    bool Success,
+    AppliedChangeSummary? Data);
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Named shape mirroring the engine-layer <c>MethodParameterInfo</c> (RoslynSentinel.Basic,
+/// RefactoringEngine.cs) as surfaced by MethodSignature's view branch. Declared here (rather than
+/// tagging MethodParameterInfo itself) because that engine type lives outside this POC's file
+/// scope - see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record MethodSignatureParameterInfo(
+    [property: Produces(DataTag.SymbolName)] string ParamName,
+    [property: Produces(DataTag.DataType)] string ParamType,
+    string? DefaultValue);
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Mirrors the anonymous <c>new { Parameters = parameters }</c> object assigned to Data on
+/// MethodSignature's view branch.
+/// </summary>
+public sealed record MethodSignatureViewData(
+    IReadOnlyList<MethodSignatureParameterInfo> Parameters);
+// Added by AddTopLevelType (expected - used for diagnostics)
+/// <summary>
+/// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
+/// <see cref="SentinelRefactoringTools.MethodSignature"/>'s "view" branch only (operation=view),
+/// which sets only <c>IsSuccess</c> and <c>Data = new { Parameters }</c>. The add/remove branches
+/// (both the non-autoStage ToJsonSummary shape and the autoStage applied-with-offload
+/// MemberChangedContentResult/AppliedChangeSummary shape) are intentionally NOT covered by this
+/// POC - see proposal_structuredcontent_rollout.md.
+/// </summary>
+public sealed record MethodSignatureViewResultEnvelope(
+    bool Success,
+    MethodSignatureViewData? Data);
+
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): MCP-surface half of the
-// RefactoringStructuralTools/Impl pair. All method bodies delegate one-line to _impl; all original
-// [McpServerTool]/[Produces]/[Description] attributes are preserved verbatim from SentinelRefactoringTools.cs.
+// RefactoringSignatureTools/Impl pair. All method bodies delegate one-line to _impl; all original
+// [McpServerTool]/[Produces]/[Description] attributes are preserved verbatim from RefactoringTools.cs.
 [McpServerToolType]
 public class RefactoringStructuralTools
 {

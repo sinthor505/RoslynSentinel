@@ -12,10 +12,10 @@ public static class ToolClassRegistry
     public static readonly IReadOnlyDictionary<string, string[]> BasicModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Workspace"] = ["SentinelWorkspaceTools", "SentinelDocumentationTools", "SentinelSymbolTools", "SentinelGitTools"],
-            ["Admin"] = ["SentinelAdminTools"],
-            ["WholeFileWrite"] = ["SentinelWholeFileWriteTools"],
-            ["Refactor"] = ["SentinelRefactoringTools"],
+            ["Workspace"] = ["SentinelWorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "GitTools"],
+            ["Admin"] = ["AdminTools"],
+            ["WholeFileWrite"] = ["WholeFileWriteTools"],
+            ["Refactor"] = ["RefactoringTools"],
             // Modernize/Quality/Generation/Asyncify register no classes in Basic today (commented
             // out pending Advanced-only tool classes) -> omitted here since an empty array would
             // be indistinguishable from "mode not recognized" for expansion purposes.
@@ -35,7 +35,7 @@ public static class ToolClassRegistry
             // independent of solution/workspace lifecycle ("Workspace" above).
             ["WorkspaceFileContent"] = ["WorkspaceFileEditTools", "WorkspaceReadNavigationTools"],
             ["RefactorSignature"] = ["RefactoringSignatureTools"],
-            ["RefactorStructural"] = ["RefactoringStructuralTools"],
+            ["RefactorStructural"] = ["RefactoringSignatureTools"],
             ["RefactorExtractionDocs"] = ["RefactoringExtractionDocsTools"],
             ["SymbolNavigation"] = ["SymbolNavigationTools"],
             ["SymbolRelationship"] = ["SymbolRelationshipTools"],
@@ -50,23 +50,23 @@ public static class ToolClassRegistry
     public static readonly IReadOnlyDictionary<string, string[]> AdvancedModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Workspace"] = ["SentinelWorkspaceTools", "SentinelDocumentationTools", "SentinelSymbolTools", "SentinelGitTools"],
-            ["Admin"] = ["SentinelAdminTools"],
-            ["WholeFileWrite"] = ["SentinelWholeFileWriteTools"],
-            ["Refactor"] = ["SentinelRefactoringTools", "SentinelAdvancedRefactoringTools"],
-            ["Intelligence"] = ["SentinelIntelligenceTools", "SentinelScanTools"],
-            ["Modernize"] = ["SentinelModernizationTools"],
-            ["Quality"] = ["SentinelQualityTools"],
-            ["Generation"] = ["SentinelGenerationTools", "SentinelCommentingTools"],
-            ["Asyncify"] = ["SentinelAsyncifyTools"],
+            ["Workspace"] = ["SentinelWorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "GitTools"],
+            ["Admin"] = ["AdminTools"],
+            ["WholeFileWrite"] = ["WholeFileWriteTools"],
+            ["Refactor"] = ["RefactoringTools", "AdvancedRefactoringTools"],
+            ["Intelligence"] = ["IntelligenceTools", "ScanTools"],
+            ["Modernize"] = ["ModernizationTools"],
+            ["Quality"] = ["QualityTools"],
+            ["Generation"] = ["GenerationTools", "CommentingTools"],
+            ["Asyncify"] = ["AsyncifyTools"],
         };
 
     /// <summary>
     /// Tool classes registered whenever any of Refactor/Modernize/Quality/Generation is active
-    /// (Advanced only -> <c>SentinelCodemodTools</c> itself is Advanced-only, so this rule is a
+    /// (Advanced only -> <c>CodemodTools</c> itself is Advanced-only, so this rule is a
     /// no-op for Basic). Kept separate from the per-mode maps above because it's an "any of"
     /// rule spanning four modes rather than a single mode's own class list.
     /// </summary>
     public static readonly string[] CodemodTriggerModes = ["Refactor", "Modernize", "Quality", "Generation"];
-    public const string CodemodToolClass = "SentinelCodemodTools";
+    public const string CodemodToolClass = "CodemodTools";
 }

@@ -18,8 +18,8 @@ public class BatteryTwentyTests
     private StructuralRefinementEngine _structuralRefinementEngine;
     private DependencyEngine _dependencyEngine;
     private ProjectConsistencyEngine _projectConsistencyEngine;
-    private SentinelWorkspaceTools _workspaceTools;
-    private SentinelWholeFileWriteTools _wholeFileWriteTools;
+    private WorkspaceTools _workspaceTools;
+    private WholeFileWriteTools _wholeFileWriteTools;
 
     private const string SimpleSource = "namespace TestProj; public class Order { public int Id { get; set; } }";
 
@@ -35,15 +35,15 @@ public class BatteryTwentyTests
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _projectConsistencyEngine = new ProjectConsistencyEngine(_workspaceManager);
-        _workspaceTools = new SentinelWorkspaceTools(
+        _workspaceTools = new WorkspaceTools(
             _workspaceManager, _validationEngine, _diffEngine, _diagnosticEngine,
             _solutionManagementEngine, _structuralRefinementEngine, _dependencyEngine,
-            _projectConsistencyEngine, _config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, _diagnosticEngine),
+            _projectConsistencyEngine, _config, NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, _diagnosticEngine),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(_workspaceManager),
             new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        _wholeFileWriteTools = new SentinelWholeFileWriteTools(_workspaceManager, _workspaceTools, _validationEngine, _diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        _wholeFileWriteTools = new WholeFileWriteTools(_workspaceManager, _workspaceTools, _validationEngine, _diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
     }
 
     [TearDown]
@@ -407,9 +407,9 @@ public class BatteryTwentyTests
 
     // --- Diagnose ---
 
-    // GetExternalChanges/AcknowledgeSync tests moved to SentinelAdminToolsTests.cs ->
-    // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to SentinelAdminTools
-    // (RoslynSentinel.Server.Basic/SentinelAdminTools.cs), gated behind the "Admin" mode. See
+    // GetExternalChanges/AcknowledgeSync tests moved to AdminToolsTests.cs ->
+    // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to AdminTools
+    // (RoslynSentinel.Server.Basic/AdminTools.cs), gated behind the "Admin" mode. See
     // docs/current/ideas/external-drift-hard-blocker.md.
 
     // --- ApplyDiff (consolidated: format × action; formerly named ProposedChange) ---

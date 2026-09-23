@@ -8,7 +8,7 @@ namespace RoslynSentinel.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): implementation half of the
 // RefactoringSignatureTools/Impl pair. Method bodies below are moved verbatim from
-// SentinelRefactoringTools.cs (RenameSymbol, MethodSignature, ChangeAccessibility,
+// RefactoringTools.cs (RenameSymbol, MethodSignature, ChangeAccessibility,
 // ConstructorParameter) except for the ValidateAndApplyAsync private helper, which is duplicated
 // per-Impl-class (each new class owns its own thin instance wrapper around the shared static
 // ValidateAndApplyHelper, per Decision 1-Amendment).

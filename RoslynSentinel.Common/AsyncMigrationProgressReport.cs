@@ -20,4 +20,4 @@ public record AsyncMigrationProgressReport(
     int PendingObsoleteCallers,
     int AsyncVoidEventHandlers
 );
-// v2 -> ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)
+// v2 -> ScanOptions() now derived from ScanTools.scan_descriptors (single source of truth)

@@ -31,7 +31,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class ApplyDiffSizeGuardTests
 {
-    private static SentinelWorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
+    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
@@ -41,10 +41,10 @@ public class ApplyDiffSizeGuardTests
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
-        var workspaceTools = new SentinelWorkspaceTools(
+        var workspaceTools = new WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
+            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             new BuildEngine(workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
@@ -63,7 +63,7 @@ public class ApplyDiffSizeGuardTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
@@ -97,7 +97,7 @@ public class ApplyDiffSizeGuardTests
 
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var result = await wholeFileWriteTools.ApplyDiff(
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
@@ -211,7 +211,7 @@ public class ApplyDiffSizeGuardTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
@@ -234,7 +234,7 @@ public class ApplyDiffSizeGuardTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        var wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        var wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFilePath = Path.Combine(fixture.SolutionDirectory, Path.GetDirectoryName(
             Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First())!, "BrandNewFile.cs");

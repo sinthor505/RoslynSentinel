@@ -15,8 +15,8 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class WriteToolAdviceHelperTests
 {
-    private const string WholeFileWriteClass = "SentinelWholeFileWriteTools";
-    private const string RefactoringClass = "SentinelRefactoringTools";
+    private const string WholeFileWriteClass = "WholeFileWriteTools";
+    private const string RefactoringClass = "RefactoringTools";
 
     [Test]
     public void IsExposed_UnknownToolName_ReturnsFalse()
@@ -43,7 +43,7 @@ public class WriteToolAdviceHelperTests
     [Test]
     public void AdviseForOversizedEdit_NoWholeFileWriteClass_FallsBackToStructuralTools()
     {
-        // The exact run-398 gating: SentinelWholeFileWriteTools is off, so all four of WriteFile,
+        // The exact run-398 gating: WholeFileWriteTools is off, so all four of WriteFile,
         // DeleteFile, ApplyDiff and ApplyUnifiedDiff are unmentionable at once.
         var helper = new WriteToolAdviceHelper([RefactoringClass]);
 

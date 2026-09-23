@@ -19,7 +19,7 @@ namespace RoslynSentinel.Server.Basic;
 /// Decision 7 step 4 (fine-grained mode-string wiring) lands.
 /// </summary>
 [McpServerToolType]
-public class SentinelWorkspaceTools
+public class WorkspaceTools
 {
     private readonly SymbolNavigationEngine _symbolNavigationEngine;    // Added by AddConstructorParameter
     private readonly BuildEngine _buildEngine;
@@ -32,7 +32,7 @@ public class SentinelWorkspaceTools
     private readonly DependencyEngine _dependencyEngine;
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly SentinelConfiguration _config;
-    private readonly ILogger<SentinelWorkspaceTools> _logger;
+    private readonly ILogger<WorkspaceTools> _logger;
     private readonly WorkspaceReadNavigationImpl _readNav;
     private readonly WriteToolAdviceHelper _writeAdvice;
 
@@ -63,7 +63,7 @@ public class SentinelWorkspaceTools
             }
     };
 
-    public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice)
+    public WorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<WorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice)
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
@@ -145,7 +145,7 @@ public class SentinelWorkspaceTools
         CancellationToken cancellationToken = default)
         => _projectManagement.LoadSolution(reason, solutionPath, baseRepoDir, forceReload, cancellationToken);
 
-    // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to SentinelAdminTools.cs,
+    // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to AdminTools.cs,
     // gated behind the "Admin" mode -> see docs/current/ideas/external-drift-hard-blocker.md.
     // Not model-visible by default anymore; reconciliation is an out-of-band operator action now.
 
@@ -162,7 +162,7 @@ public class SentinelWorkspaceTools
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
     }
 
-    // ApplyUnifiedDiff moved to SentinelWholeFileWriteTools.cs (gated off the default MCP surface,
+    // ApplyUnifiedDiff moved to WholeFileWriteTools.cs (gated off the default MCP surface,
     // alongside ApplyDiff) -> see docs/current/design_applyunifieddiff_replace_snippet_v1.md.
     // ReplaceSnippet (below, on this default surface) replaces it for small, exact-text edits.
 
@@ -254,7 +254,7 @@ public class SentinelWorkspaceTools
                     ? new
                     {
                         result = strippedConfirmedResult,
-                        diff = SentinelRefactoringTools.BuildDiffFromPreImages(pending.Value.Changes, confirmedResult.PreImages)
+                        diff = RefactoringTools.BuildDiffFromPreImages(pending.Value.Changes, confirmedResult.PreImages)
                     }
                     : strippedConfirmedResult;
                 return new SentinelCallToolResult<object>()
@@ -324,7 +324,7 @@ public class SentinelWorkspaceTools
                         ? new
                         {
                             result = strippedResult,
-                            diff = SentinelRefactoringTools.BuildDiffFromPreImages(changes, result.PreImages)
+                            diff = RefactoringTools.BuildDiffFromPreImages(changes, result.PreImages)
                         }
                         : strippedResult;
                     return new SentinelCallToolResult<object>()
@@ -428,7 +428,7 @@ public class SentinelWorkspaceTools
                             ? new
                             {
                                 result = strippedDiffResult,
-                                diff = SentinelRefactoringTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
+                                diff = RefactoringTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
                             }
                             : strippedDiffResult;
                         return new SentinelCallToolResult<object>()

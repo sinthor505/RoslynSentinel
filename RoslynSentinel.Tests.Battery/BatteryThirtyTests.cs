@@ -454,7 +454,7 @@ public class Registry {
     }
 
     // =========================================================================
-    // Cross-cutting: the handler in SentinelModernizationTools must not throw
+    // Cross-cutting: the handler in ModernizationTools must not throw
     // =========================================================================
 
     [Test]

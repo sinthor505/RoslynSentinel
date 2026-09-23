@@ -7,7 +7,7 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
-public class SentinelIntelligenceTools
+public class IntelligenceTools
 {
     private readonly ImpactAnalyzer _impactAnalyzer;
     private readonly SemanticSearchEngine _semanticSearchEngine;
@@ -26,9 +26,9 @@ public class SentinelIntelligenceTools
     private readonly DiscoveryEngine _discoveryEngine;
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly ISolutionProvider _workspaceManager;
-    private readonly ILogger<SentinelIntelligenceTools> _logger;
+    private readonly ILogger<IntelligenceTools> _logger;
 
-    public SentinelIntelligenceTools(
+    public IntelligenceTools(
         ImpactAnalyzer impactAnalyzer,
         SemanticSearchEngine semanticSearchEngine,
         MetricsEngine metricsEngine,
@@ -47,7 +47,7 @@ public class SentinelIntelligenceTools
         ProjectConsistencyEngine projectConsistencyEngine,
         ISolutionProvider workspaceManager,
         SentinelConfiguration config,
-        ILogger<SentinelIntelligenceTools> logger)
+        ILogger<IntelligenceTools> logger)
     {
         _impactAnalyzer = impactAnalyzer;
         _semanticSearchEngine = semanticSearchEngine;

@@ -12,7 +12,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class CreateFileDeleteFileTests
 {
-    private static SentinelWorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
+    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
@@ -23,17 +23,17 @@ public class CreateFileDeleteFileTests
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
 
-        var workspaceTools = new SentinelWorkspaceTools(
+        var workspaceTools = new WorkspaceTools(
             workspaceManager, validationEngine, diffEngine, diagnosticEngine,
             solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
-            projectConsistencyEngine, config, NullLogger<SentinelWorkspaceTools>.Instance,
+            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
             new BuildEngine(workspaceManager, diagnosticEngine),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             new TestRunEngine(workspaceManager),
             new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
 
-        var wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        var wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         return workspaceTools;
     }
@@ -47,7 +47,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewFile.cs");
         var content = "public class NewFile { }";
@@ -68,7 +68,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(existingFile);
@@ -89,7 +89,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var replacementContent = "public class Replaced { }";
@@ -112,7 +112,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var missingFile = Path.Combine(fixture.SolutionDirectory, "DoesNotExist.cs");
 
@@ -132,7 +132,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewSubdir", "Nested.cs");
 
@@ -155,7 +155,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "Notes.txt");
         var content = "plain text notes, not a Roslyn document";
@@ -180,7 +180,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "ToDelete.cs");
         await fixture.AddFileToSolution(workspaceManager, "ToDelete.cs", "public class ToDelete { }");
@@ -200,7 +200,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var missingFile = Path.Combine(fixture.SolutionDirectory, "DoesNotExist.cs");
 
@@ -219,7 +219,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "Undoable.cs");
         var content = "public class Undoable { }";
@@ -251,7 +251,7 @@ public class CreateFileDeleteFileTests
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        SentinelWholeFileWriteTools wholeFileWriteTools = new SentinelWholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<SentinelWholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         // Modify the file directly on disk (bypassing ApplyProposedChangesAsync) without
@@ -423,21 +423,13 @@ public class CreateFileDeleteFileTests
         var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
-        var refactoringTools = new SentinelRefactoringTools(
+        var refactoringTools = new RefactoringStructuralTools(
             refactoringEngine,
-            //standardRefactoringEngine,
-            mappingEngine, //semanticRefactoringLibrary,
-                           //granularRefactoringEngine,
             structuralRefinementEngine,
-            //codeStyleEngine,
-            //codeFlowEngine,
-            msToolAugmentEngine,
-            //codeGenerationEngine, 
             symbolNavigationEngine,
             workspaceManager,
             validationEngine,
-            config,
-            NullLogger<SentinelRefactoringTools>.Instance);
+            NullLogger<RefactoringStructuralTools>.Instance);
 
         var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
         var newFile = Path.Combine(existingProjectDir, "Populated.cs");

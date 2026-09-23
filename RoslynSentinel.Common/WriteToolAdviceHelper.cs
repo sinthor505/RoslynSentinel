@@ -54,13 +54,13 @@ public sealed record WriteAdvice(
 /// </para>
 /// <para>
 /// Granularity matters here. <see cref="ToolClassRegistry"/> resolves at <em>class</em>
-/// granularity, but advice names <em>tools</em>, and <c>SentinelWholeFileWriteTools</c> alone holds
+/// granularity, but advice names <em>tools</em>, and <c>WholeFileWriteTools</c> alone holds
 /// four of them -> so "is that class active?" cannot answer "may I mention ApplyUnifiedDiff?"
 /// without the tool->class map below.
 /// </para>
 /// <para>
 /// Basic-only by design. Every tool this can name is a gated whole-file-write tool, and all four
-/// live together in Basic's <c>SentinelWholeFileWriteTools</c>; Advanced has no whole-file-write
+/// live together in Basic's <c>WholeFileWriteTools</c>; Advanced has no whole-file-write
 /// tools at all. (Distinguish those from <em>mutating</em> tools generally, a much larger set
 /// spanning both projects -> Advanced's mutators are semantic refactorings, not escape hatches for
 /// an oversized text edit, so they never appear here.)
@@ -75,14 +75,14 @@ public sealed class WriteToolAdviceHelper
     private static readonly IReadOnlyDictionary<string, string> ToolToDeclaringClass =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["WriteFile"] = "SentinelWholeFileWriteTools",
-            ["DeleteFile"] = "SentinelWholeFileWriteTools",
-            ["ApplyDiff"] = "SentinelWholeFileWriteTools",
-            ["ApplyUnifiedDiff"] = "SentinelWholeFileWriteTools",
-            ["Member"] = "SentinelRefactoringTools",
-            ["RenameSymbol"] = "SentinelRefactoringTools",
-            ["ChangeSignature"] = "SentinelRefactoringTools",
-            ["ExtractMethodSafe"] = "SentinelRefactoringTools",
+            ["WriteFile"] = "WholeFileWriteTools",
+            ["DeleteFile"] = "WholeFileWriteTools",
+            ["ApplyDiff"] = "WholeFileWriteTools",
+            ["ApplyUnifiedDiff"] = "WholeFileWriteTools",
+            ["Member"] = "RefactoringTools",
+            ["RenameSymbol"] = "RefactoringTools",
+            ["ChangeSignature"] = "RefactoringTools",
+            ["ExtractMethodSafe"] = "RefactoringTools",
         };
 
     private readonly HashSet<string> _activeToolClasses;

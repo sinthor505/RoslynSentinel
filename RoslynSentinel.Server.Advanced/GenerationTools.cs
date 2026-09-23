@@ -7,22 +7,22 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
-public class SentinelGenerationTools
+public class GenerationTools
 {
     private readonly CodeGenerationEngine _codeGenerationEngine;
     private readonly ApiAutomationEngine _apiAutomationEngine;
     // private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     // private readonly ApiIntegrationEngine _apiIntegrationEngine;
     private readonly ISolutionProvider _workspaceManager;
-    private readonly ILogger<SentinelGenerationTools> _logger;
+    private readonly ILogger<GenerationTools> _logger;
 
-    public SentinelGenerationTools(
+    public GenerationTools(
         CodeGenerationEngine codeGenerationEngine,
         ApiAutomationEngine apiAutomationEngine,
         // AsyncOptimizationEngine asyncOptimizationEngine,
         // ApiIntegrationEngine apiIntegrationEngine,
         ISolutionProvider workspaceManager,
-        ILogger<SentinelGenerationTools> logger)
+        ILogger<GenerationTools> logger)
     {
         _codeGenerationEngine = codeGenerationEngine;
         _apiAutomationEngine = apiAutomationEngine;

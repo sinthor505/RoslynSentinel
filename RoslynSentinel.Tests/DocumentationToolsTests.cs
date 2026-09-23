@@ -7,15 +7,15 @@ using RoslynSentinel.Tests.Fakes;
 namespace RoslynSentinel.Tests;
 
 [TestFixture]
-public class SentinelDocumentationToolsTests
+public class DocumentationToolsTests
 {
     private string _solutionRoot = "";
-    private SentinelDocumentationTools _tools = null!;
+    private DocumentationTools _tools = null!;
 
     [SetUp]
     public void Setup()
     {
-        _solutionRoot = Path.Combine(Path.GetTempPath(), "SentinelDocumentationToolsTests", Path.GetRandomFileName());
+        _solutionRoot = Path.Combine(Path.GetTempPath(), "DocumentationToolsTests", Path.GetRandomFileName());
         Directory.CreateDirectory(_solutionRoot);
 
         _tools = BuildTools(OperatingMode.Production);
@@ -26,16 +26,16 @@ public class SentinelDocumentationToolsTests
     /// root. Because OperatingMode is injected rather than static, both modes can be exercised from
     /// this one fixture with no [NonParallelizable] -> see SentinelHostOptions' remarks.
     /// </summary>
-    private SentinelDocumentationTools BuildTools(OperatingMode operatingMode)
+    private DocumentationTools BuildTools(OperatingMode operatingMode)
     {
         var workspaceManager = new FakeWorkspaceManager
         {
             SolutionPath = Path.Combine(_solutionRoot, "Fake.slnx")
         };
-        return new SentinelDocumentationTools(
+        return new DocumentationTools(
             workspaceManager,
             new SentinelHostOptions { OperatingMode = operatingMode },
-            NullLogger<SentinelDocumentationTools>.Instance);
+            NullLogger<DocumentationTools>.Instance);
     }
 
     [TearDown]

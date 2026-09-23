@@ -1,9 +1,9 @@
-// Battery #21 -> SentinelModernizationTools
-// Tests all 26 public methods of SentinelModernizationTools in-memory via TestSolutionBuilder.
+// Battery #21 -> ModernizationTools
+// Tests all 26 public methods of ModernizationTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using SentinelModernizationTools = RoslynSentinel.Server.Advanced.SentinelModernizationTools;
+using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
@@ -25,7 +25,7 @@ public class BatteryTwentyOneTests
     private IDEStyleEngine _ideStyleEngine;
     private ImmutabilityEngine _immutabilityEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
-    private SentinelModernizationTools _tools;
+    private ModernizationTools _tools;
 
     private const string RichSource = @"
 using System;
@@ -151,12 +151,12 @@ public class Worker
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
         _immutabilityEngine = new ImmutabilityEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _tools = new SentinelModernizationTools(
+        _tools = new ModernizationTools(
             _modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine,
             _syntaxUpgradeEngine, _analysisEngine, _logicOptimizationEngine,
             _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine,
             _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine,
-            _workspaceManager, _config, NullLogger<SentinelModernizationTools>.Instance);
+            _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
     }
 
     [TearDown]

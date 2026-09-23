@@ -14,7 +14,7 @@ namespace RoslynSentinel.Server.Advanced;
 /// Shared between <see cref="ServerStdio"/> and <see cref="ServerHttp"/> so the set of task-eligible
 /// tools stays in one place. Adding a new long-running tool to task support is a one-line change here.
 /// </remarks>
-public static class RoslynSentinelTaskTools
+public static class TaskTools
 {
     /// <summary>Tool names that may run as a task when the calling client declares the tasks capability.</summary>
     public static readonly FrozenSet<string> Names = new[] { "Asyncify", "AsyncifyLoop", "BulkComment", "Features" }

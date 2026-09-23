@@ -22,7 +22,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryThirtyThreeTests
 {
-    // ── engines for SentinelIntelligenceTools (Bug #1) ─────────────────────────
+    // ── engines for IntelligenceTools (Bug #1) ─────────────────────────
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private ImpactAnalyzer _impactAnalyzer;
@@ -40,9 +40,9 @@ public class BatteryThirtyThreeTests
     private SymbolNavigationEngine _symbolNavigationEngine;
     private DependencyInjectionEngine _dependencyInjectionEngine;
     private DiscoveryEngine _discoveryEngine;
-    private SentinelIntelligenceTools _intelligenceTools;
+    private IntelligenceTools _intelligenceTools;
 
-    // ── additional engines for SentinelQualityTools (Bug #2) ───────────────────
+    // ── additional engines for QualityTools (Bug #2) ───────────────────
     private PerformanceEngine _performanceEngine;
     private SecurityEngine _securityEngine;
     private TestingEngine _testingEngine;
@@ -51,7 +51,7 @@ public class BatteryThirtyThreeTests
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AsyncBatchEngine _asyncBatchEngine;
     private DiagnosticEngine _diagnosticEngine;
-    private SentinelQualityTools _qualityTools;
+    private QualityTools _qualityTools;
     private DiffEngine _diffEngine;
 
     [SetUp]
@@ -77,7 +77,7 @@ public class BatteryThirtyThreeTests
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
 
-        _intelligenceTools = new SentinelIntelligenceTools(_impactAnalyzer,
+        _intelligenceTools = new IntelligenceTools(_impactAnalyzer,
             _semanticSearchEngine,
             _metricsEngine,
             _inventoryEngine,
@@ -95,7 +95,7 @@ public class BatteryThirtyThreeTests
             new ProjectConsistencyEngine(_workspaceManager),
             _workspaceManager,
             _config,
-            NullLogger<SentinelIntelligenceTools>.Instance);
+            NullLogger<IntelligenceTools>.Instance);
 
         _performanceEngine = new PerformanceEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
@@ -107,7 +107,7 @@ public class BatteryThirtyThreeTests
         _diffEngine = new DiffEngine();
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
 
-        _qualityTools = new SentinelQualityTools(_testingEngine,
+        _qualityTools = new QualityTools(_testingEngine,
             _controlFlowEngine,
             _analysisEngine,
             new AntiPatternEngine(_workspaceManager),
@@ -117,7 +117,7 @@ public class BatteryThirtyThreeTests
             new StackOverflowEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
-            NullLogger<SentinelQualityTools>.Instance);
+            NullLogger<QualityTools>.Instance);
     }
 
     [TearDown]

@@ -51,7 +51,7 @@ public static class OperationBlobWriter
     /// </summary>
     /// <remarks>
     /// Sanitizing here rather than trusting callers is the durable fix. Seventeen call sites in
-    /// SentinelAdvancedRefactoringTools passed slashed operation names ("WrapRange/region",
+    /// AdvancedRefactoringTools passed slashed operation names ("WrapRange/region",
     /// "Inline/method", …); <see cref="Path.Combine"/> then resolved the blob into a
     /// non-existent operations/WrapRange/ subdirectory, the write threw
     /// DirectoryNotFoundException, and the catch below swallowed it into a return string nobody

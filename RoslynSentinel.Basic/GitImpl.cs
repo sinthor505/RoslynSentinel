@@ -2,7 +2,7 @@ using System.Text;
 
 using Microsoft.Extensions.Logging;
 
-namespace RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Basic;
 
 // ─── Result types ────────────────────────────────────────────────────────────
 public record GitResult

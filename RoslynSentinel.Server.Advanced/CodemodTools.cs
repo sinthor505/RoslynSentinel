@@ -7,7 +7,7 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
-public class SentinelCodemodTools
+public class CodemodTools
 {
     // ── shared engines ────────────────────────────────────────────────────────
     private readonly RefactoringEngine _refactoringEngine;
@@ -43,9 +43,9 @@ public class SentinelCodemodTools
     private readonly PathDrivenTestEngine _pathDrivenTestEngine;
 
     private readonly ISolutionProvider _workspaceManager;
-    private readonly ILogger<SentinelCodemodTools> _logger;
+    private readonly ILogger<CodemodTools> _logger;
 
-    public SentinelCodemodTools(
+    public CodemodTools(
         RefactoringEngine refactoringEngine,
         LogicOptimizationEngine logicOptimizationEngine,
         AsyncOptimizationEngine asyncOptimizationEngine,
@@ -74,7 +74,7 @@ public class SentinelCodemodTools
         TestingEngine testingEngine,
         PathDrivenTestEngine pathDrivenTestEngine,
         ISolutionProvider workspaceManager,
-        ILogger<SentinelCodemodTools> logger)
+        ILogger<CodemodTools> logger)
     {
         _refactoringEngine = refactoringEngine;
         _logicOptimizationEngine = logicOptimizationEngine;

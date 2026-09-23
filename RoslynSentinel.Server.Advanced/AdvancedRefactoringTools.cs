@@ -23,7 +23,7 @@ public sealed record ChangeSignatureParameterInput(
     string? defaultValue = null);
 
 [McpServerToolType]
-public class SentinelAdvancedRefactoringTools
+public class AdvancedRefactoringTools
 {
     private readonly RefactoringEngine _refactoringEngine;
     //private readonly StandardRefactoringEngine _standardRefactoringEngine;
@@ -45,9 +45,9 @@ public class SentinelAdvancedRefactoringTools
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
     private readonly SentinelConfiguration _config;
-    private readonly ILogger<SentinelAdvancedRefactoringTools> _logger;
+    private readonly ILogger<AdvancedRefactoringTools> _logger;
 
-    public SentinelAdvancedRefactoringTools(
+    public AdvancedRefactoringTools(
         RefactoringEngine refactoringEngine,
         //StandardRefactoringEngine standardRefactoringEngine,
         AdvancedStructuralEngine advancedStructuralEngine,
@@ -69,7 +69,7 @@ public class SentinelAdvancedRefactoringTools
         IWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
         SentinelConfiguration config,
-        ILogger<SentinelAdvancedRefactoringTools> logger)
+        ILogger<AdvancedRefactoringTools> logger)
     {
         _refactoringEngine = refactoringEngine;
         //_standardRefactoringEngine = standardRefactoringEngine;
