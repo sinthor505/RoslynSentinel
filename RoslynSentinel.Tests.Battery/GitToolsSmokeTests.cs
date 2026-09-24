@@ -208,4 +208,68 @@ public class GitToolsSmokeTests
         Assert.That(successProperty!.GetValue(result), Is.EqualTo(false),
             "repoPath must only be accepted for status/log/diff/show - mutating operations should stay scoped to the loaded solution.");
     }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    // Regression coverage for docs/current/blockers/resolved/blocking_error_git_diff_mojibake_display.md:
+    // RunGitAsync previously decoded git's redirected stdout/stderr using Console.OutputEncoding
+    // (the legacy OS codepage) instead of UTF-8, so any non-ASCII multi-byte character in a diffed
+    // file's content came back as mojibake. This asserts the actual UTF-8 character round-trips.
+    [Test]
+    public async Task Git_Diff_RoundTripsNonAsciiCharacterCorrectlyAsync()
+    {
+        // U+2014 EM DASH is UTF-8 encoded as the 3-byte sequence E2 80 94 - exactly the shape that
+        // decoded one byte at a time through a legacy codepage, per the linked blocker doc.
+        const string emDash = "—";
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), $"hello {emDash} again", System.Text.Encoding.UTF8);
+
+        var result = await _gitTools.Git(reason: "test message", GitOperation.diff);
+
+        Assert.That(result.IsSuccess, Is.True);
+        var diff = (GitDiffResult)result.SuccessData!;
+        Assert.That(diff.Success, Is.True, diff.Error);
+        Assert.That(diff.Diff, Does.Contain(emDash),
+            "the diff should contain the real UTF-8 em dash, not a mis-decoded mojibake substitute.");
+        Assert.That(diff.Warning, Is.Null, "a correctly-decoded diff should not raise a corruption warning.");
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    [Test]
+    public async Task Git_Show_RoundTripsNonAsciiCharacterInFileContentCorrectlyAsync()
+    {
+        const string emDash = "—";
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), $"hello {emDash} again", System.Text.Encoding.UTF8);
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add non-ascii content");
+
+        var result = await _gitTools.Git(reason: "test message", GitOperation.show, target: "HEAD");
+
+        Assert.That(result.IsSuccess, Is.True);
+        var show = (GitShowResult)result.SuccessData!;
+        Assert.That(show.Success, Is.True, show.Error);
+        Assert.That(show.Diff, Does.Contain(emDash),
+            "git show's diff should contain the real UTF-8 em dash, not a mis-decoded mojibake substitute.");
+        Assert.That(show.Warning, Is.Null, "a correctly-decoded show result should not raise a corruption warning.");
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    [Test]
+    public async Task Git_Diff_WarnsWhenOutputContainsReplacementCharacterAsync()
+    {
+        // Simulates a genuinely undecodable byte sequence reaching the diff text (rather than
+        // re-triggering the original bug, which is now fixed) - if any future regression or a
+        // different-cause decode failure inserts U+FFFD, the Warning field must surface it instead
+        // of silently returning corrupted text.
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "hello � again");
+
+        var result = await _gitTools.Git(reason: "test message", GitOperation.diff);
+
+        Assert.That(result.IsSuccess, Is.True);
+        var diff = (GitDiffResult)result.SuccessData!;
+        Assert.That(diff.Success, Is.True, diff.Error);
+        Assert.That(diff.Warning, Is.Not.Null.And.Contains("U+FFFD"),
+            "a diff containing the Unicode replacement character must raise a decode-corruption warning.");
+    }
 }
