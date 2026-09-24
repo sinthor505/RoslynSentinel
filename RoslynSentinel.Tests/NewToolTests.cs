@@ -16,7 +16,6 @@ public class NewToolTests
 {
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
-    private CodeGenerationEngine _codeGenerationEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private RefactoringEngine _refactoringEngine;
     private DiagnosticEngine _diagnosticEngine;
@@ -26,9 +25,8 @@ public class NewToolTests
     {
         _workspaceManager = new FakeWorkspaceManager();
         _config = new SentinelConfiguration();
-        _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
     }
 
@@ -45,98 +43,6 @@ public class NewToolTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", files);
         _workspaceManager.SetTestSolution(solution);
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // ConvertPropertySafe
-    // ──────────────────────────────────────────────────────────────────────────
-
-    [Test]
-    public async Task ConvertPropertySafe_ToFullProperty_PreservesInitializer()
-    {
-        SetSource("""
-            public class Foo
-            {
-                public int Count { get; set; } = 42;
-            }
-            """);
-
-        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Count", "ToFullProperty");
-
-        Assert.That(result.UpdatedText!, Contains.Substring("42"), "Initializer value should survive ToFullProperty conversion");
-        Assert.That(result.UpdatedText!, Contains.Substring("get =>"), "Should produce expression-body getter");
-        Assert.That(result.UpdatedText!, Contains.Substring("set =>"), "Should produce expression-body setter");
-    }
-
-    [Test]
-    public async Task ConvertPropertySafe_ToAutoProperty_RemovesBackingField()
-    {
-        SetSource("""
-            public class Foo
-            {
-                private int _count;
-                public int Count
-                {
-                    get { return _count; }
-                    set { _count = value; }
-                }
-            }
-            """);
-
-        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Count", "ToAutoProperty");
-
-        Assert.That(result.UpdatedText!, Contains.Substring("{ get; set; }"), "Should produce auto-property");
-    }
-
-    [Test]
-    public async Task ConvertPropertySafe_InvalidDirection_ThrowsOrReturnsError()
-    {
-        SetSource("""
-            public class Foo { public int X { get; set; } }
-            """);
-
-        var ex = Assert.ThrowsAsync<ArgumentException>(
-            () => _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "X", "BadDirection"));
-        Assert.That(ex?.Message, Does.Contain("direction").IgnoreCase.Or.Contain("BadDirection"));
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // InterpolateStringSafe
-    // ──────────────────────────────────────────────────────────────────────────
-
-    [Test]
-    public async Task InterpolateStringSafe_LiteralFormat_ProducesInterpolatedString()
-    {
-        SetSource("""
-            public class Foo
-            {
-                public string Build(string name, int age)
-                {
-                    return string.Format("Hello {0}, you are {1}", name, age);
-                }
-            }
-            """);
-
-        var result = await _codeGenerationEngine.InterpolateStringAsync(
-            "Test.cs",
-            "string.Format(\"Hello {0}, you are {1}\", name, age)");
-
-        Assert.That(result.UpdatedText!, Contains.Substring("$\""), "Should produce an interpolated string");
-        Assert.That(result.UpdatedText!, Contains.Substring("{name}"), "First arg should be inlined");
-        Assert.That(result.UpdatedText!, Contains.Substring("{age}"), "Second arg should be inlined");
-    }
-
-    [Test]
-    public async Task InterpolateStringSafe_SnippetNotFound_ThrowsOrReturnsError()
-    {
-        SetSource("""
-            public class Foo { }
-            """);
-
-        DocumentEditResult? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format(\"missing\")"));
-        Assert.That(result!.Message, Does.Contain("ErrorDetails:"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

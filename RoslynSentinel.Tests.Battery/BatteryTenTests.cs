@@ -21,7 +21,7 @@ public class ValidationEngineTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _diffEngine = new DiffEngine();
-        _engine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
+        _engine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("Source",
             [("Greeter.cs", "public class Greeter { public string Greet() => \"Hello\"; }")]);

@@ -4,14 +4,14 @@ using Microsoft.Extensions.Logging;
 namespace RoslynSentinel.Basic;
 
 // SolutionItemFile, ProjectInfoEntry, ProjectFilesAndDependencies, SolutionItemsAllResult remain
-// declared in SentinelWorkspaceTools.cs (their original declaration site) to avoid a CS0101
+// declared in WorkspaceTools.cs (their original declaration site) to avoid a CS0101
 // collision - SolutionItemsAllResult in particular already exists in
 // RoslynSentinel.Common/LargeResultHelper.cs, confirming it must not be re-declared here.
 public record SolutionFileInfo(string Path, string Format);
 
 /// <summary>
 /// Plain DI-constructed implementation backing WorkspaceProjectManagementTools. Method bodies are
-/// moved verbatim from SentinelWorkspaceTools (Decision 7 step 2) - not yet MCP-agnostic in return
+/// moved verbatim from WorkspaceTools (Decision 7 step 2) - not yet MCP-agnostic in return
 /// type, per Decision 1-Amendment's explicit scope (mechanical shim only for this pass).
 /// </summary>
 public class WorkspaceProjectManagementImpl

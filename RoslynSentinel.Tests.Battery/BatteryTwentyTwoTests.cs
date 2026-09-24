@@ -109,7 +109,7 @@ public class OrderService : IOrderService
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _impactAnalyzer = new ImpactAnalyzer(NullLogger<ImpactAnalyzer>.Instance, _workspaceManager);
+        _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
         _semanticSearchEngine = new SemanticSearchEngine(_workspaceManager);
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
@@ -157,7 +157,7 @@ public class OrderService : IOrderService
             _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine,
             new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config),
             new CodeStyleAnalysisEngine(_workspaceManager),
-            new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config),
+            new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config),
             _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager),
             _workspaceManager, NullLogger<ScanTools>.Instance);
     }
@@ -178,7 +178,7 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _scanTools.RunScanDetector(
-            reason: "test message", detector: ScanTools.DetectorId.unused_references, scope: ToolScope.file, filepath: "Test.cs");
+            reason: "test message", detector: ScanTools.DetectorId.unused_references, scope: ToolScope.file, filePath: "Test.cs");
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -613,7 +613,7 @@ public class OrderService : IOrderService
     public async Task PreviewRenameImpact_ValidSymbol_ReturnsPreview()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.PreviewRenameImpact(reason: "test message", filepath: "Test.cs", symbolName: "ProcessAsync");
+        var result = await _symbolRelationshipTools.PreviewRenameImpact(reason: "test message", filePath: "Test.cs", symbolName: "ProcessAsync");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -623,7 +623,7 @@ public class OrderService : IOrderService
     public async Task FindCallersSafe_ValidSymbol_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "ProcessAsync", FindReferencesKind.callers, filepath: "Test.cs");
+        var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "ProcessAsync", FindReferencesKind.callers, filePath: "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -633,7 +633,7 @@ public class OrderService : IOrderService
     public async Task FindImplementationsSafe_ValidInterface_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "IOrderService", FindReferencesKind.implementations, filepath: "Test.cs");
+        var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "IOrderService", FindReferencesKind.implementations, filePath: "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -643,7 +643,7 @@ public class OrderService : IOrderService
     public async Task FindReferences_KindAll_ReturnsBothCallersAndImplementations()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "ProcessAsync", FindReferencesKind.all, filepath: "Test.cs");
+        var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "ProcessAsync", FindReferencesKind.all, filePath: "Test.cs");
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);

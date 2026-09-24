@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using SentinelModernizationTools = RoslynSentinel.Server.Advanced.SentinelModernizationTools;
+using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -9,121 +9,124 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class ComprehensiveToolTests
 {
-    private IWorkspaceManager _workspaceManager;
-    private SentinelConfiguration _config;
-    private ValidationEngine _validationEngine;
-    private DiffEngine _diffEngine;
-    private DiagnosticEngine _diagnosticEngine;
-    private SolutionManagementEngine _solutionManagementEngine;
-    private StructuralRefinementEngine _structuralRefinementEngine;
-    private ImpactAnalyzer _impactAnalyzer;
-    private SemanticSearchEngine _semanticSearchEngine;
-    private MetricsEngine _metricsEngine;
-    private InventoryEngine _inventoryEngine;
-    private DeadCodeEngine _deadCodeEngine;
-    private AnalysisEngine _analysisEngine;
-    private DocumentationEngine _documentationEngine;
-    private DependencyEngine _dependencyEngine;
-    private ProjectStructureEngine _projectStructureEngine;
-    private RefactoringEngine _refactoringEngine;
-    private StandardRefactoringEngine _standardRefactoringEngine;
-    private AdvancedStructuralEngine _advancedStructuralEngine;
-    private MappingEngine _mappingEngine;
-    private SemanticRefactoringLibrary _semanticRefactoringLibrary;
-    private GranularRefactoringEngine _granularRefactoringEngine;
     private AdvancedLogicEngine _advancedLogicEngine;
-    private RefinementEngine _refinementEngine;
+    private AdvancedRefactoringEngine _advancedRefactoringEngine;
+    private AdvancedStructuralEngine _advancedStructuralEngine;
     private AdvancedTypeEngine _advancedTypeEngine;
-    private ModernizationEngine _modernizationEngine;
-    private ModernizationUpgradeEngine _modernizationUpgradeEngine;
-    private ModernLoggingEngine _modernLoggingEngine;
-    private SyntaxUpgradeEngine _syntaxUpgradeEngine;
-    private LogicOptimizationEngine _logicOptimizationEngine;
-    private CodeStyleEngine _codeStyleEngine;
-    private CodeHealingEngine _codeHealingEngine;
-    private PerformanceEngine _performanceEngine;
-    private SecurityEngine _securityEngine;
-    private TestingEngine _testingEngine;
-    private ControlFlowEngine _controlFlowEngine;
-    private AsyncSafetyEngine _asyncSafetyEngine;
-    private CodeGenerationEngine _codeGenerationEngine;
+    private AnalysisEngine _analysisEngine;
     private ApiAutomationEngine _apiAutomationEngine;
-    private HealthOrchestrationEngine _healthOrchestrationEngine;
+    private ApiIntegrationEngine _apiIntegrationEngine;
     private ArchitecturalEngine _architecturalEngine;
-    private SymbolNavigationEngine _symbolNavigationEngine;
+    private AsyncBatchEngine _asyncBatchEngine;
+    private AsyncOptimizationEngine _asyncOptimizationEngine;
+    private AsyncSafetyEngine _asyncSafetyEngine;
+    private CodeFlowEngine _codeFlowEngine;
+    private CodeGenerationEngine _codeGenerationEngine;
+    private CodeHealingEngine _codeHealingEngine;
+    private CodeStyleEngine _codeStyleEngine;
+    private ControlFlowEngine _controlFlowEngine;
+    private DeadCodeEngine _deadCodeEngine;
+    private DependencyEngine _dependencyEngine;
     private DependencyInjectionEngine _dependencyInjectionEngine;
+    private DiagnosticEngine _diagnosticEngine;
+    private DiffEngine _diffEngine;
     private DiscoveryEngine _discoveryEngine;
+    private DocumentationEngine _documentationEngine;
+    private GenerationTools _generationTools;
+    private GranularRefactoringEngine _granularRefactoringEngine;
+    private HealthOrchestrationEngine _healthOrchestrationEngine;
     private IDEStyleEngine _ideStyleEngine;
     private ImmutabilityEngine _immutabilityEngine;
-    private AsyncOptimizationEngine _asyncOptimizationEngine;
-    private CodeFlowEngine _codeFlowEngine;
-    private AdvancedRefactoringEngine _advancedRefactoringEngine;
-    private ApiIntegrationEngine _apiIntegrationEngine;
-    private AsyncBatchEngine _asyncBatchEngine;
+    private ImpactAnalyzer _impactAnalyzer;
+    private IntelligenceTools _intelligenceTools;
+    private InventoryEngine _inventoryEngine;
+    private IWorkspaceManager _workspaceManager;
+    private LogicOptimizationEngine _logicOptimizationEngine;
+    private MappingEngine _mappingEngine;
+    private MetricsEngine _metricsEngine;
+    private ModernizationEngine _modernizationEngine;
+    private ModernizationTools _modernizationTools;
+    private ModernizationUpgradeEngine _modernizationUpgradeEngine;
+    private ModernLoggingEngine _modernLoggingEngine;
+    private PerformanceEngine _performanceEngine;
+    private ProjectStructureEngine _projectStructureEngine;
+    private QualityTools _qualityTools;
+    private RefactoringEngine _refactoringEngine;
+    private AdvancedRefactoringTools _advancedRefactoringTools;
+    private RefinementEngine _refinementEngine;
+    private SecurityEngine _securityEngine;
+    private SemanticRefactoringLibrary _semanticRefactoringLibrary;
+    private SemanticSearchEngine _semanticSearchEngine;
+    private SentinelConfiguration _config;
+    private SolutionManagementEngine _solutionManagementEngine;
+    private StandardRefactoringEngine _standardRefactoringEngine;
+    private StructuralRefinementEngine _structuralRefinementEngine;
+    private SymbolNavigationEngine _symbolNavigationEngine;
+    private SyntaxUpgradeEngine _syntaxUpgradeEngine;
+    private TestingEngine _testingEngine;
+    private ValidationEngine _validationEngine;
+    private WorkspaceTools _workspaceTools;
 
-    private SentinelWorkspaceTools _workspaceTools;
-    private SentinelIntelligenceTools _intelligenceTools;
-    private SentinelRefactoringTools _refactoringTools;
-    private SentinelModernizationTools _modernizationTools;
-    private SentinelQualityTools _qualityTools;
-    private SentinelGenerationTools _generationTools;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _diffEngine = new DiffEngine();
-        _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
-        _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
-        _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
-        _impactAnalyzer = new ImpactAnalyzer(NullLogger<ImpactAnalyzer>.Instance, _workspaceManager);
-        _semanticSearchEngine = new SemanticSearchEngine(_workspaceManager);
-        _metricsEngine = new MetricsEngine(_workspaceManager);
-        _inventoryEngine = new InventoryEngine(_workspaceManager);
-        _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
-        _documentationEngine = new DocumentationEngine(_workspaceManager);
-        _dependencyEngine = new DependencyEngine(_workspaceManager);
-        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
-        _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
-        _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
-        _mappingEngine = new MappingEngine(_workspaceManager);
-        _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
-        _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
         _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
-        _refinementEngine = new RefinementEngine(_workspaceManager);
+        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
+        _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
         _advancedTypeEngine = new AdvancedTypeEngine(_workspaceManager);
+        _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
+        _apiAutomationEngine = new ApiAutomationEngine(_workspaceManager);
+        _apiIntegrationEngine = new ApiIntegrationEngine(_workspaceManager);
+        _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
+        _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
+        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
+        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
+        _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
+        _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+        _codeHealingEngine = new CodeHealingEngine(_workspaceManager, _config);
+        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
+        _config = new SentinelConfiguration();
+        _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
+        _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
+        _dependencyEngine = new DependencyEngine(_workspaceManager);
+        _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
+        _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        _diffEngine = new DiffEngine();
+        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
+        _documentationEngine = new DocumentationEngine(_workspaceManager);
+        _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
+        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _analysisEngine, _config);
+        _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
+        _immutabilityEngine = new ImmutabilityEngine(_workspaceManager);
+        _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
+        _inventoryEngine = new InventoryEngine(_workspaceManager);
+        _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
+        _mappingEngine = new MappingEngine(_workspaceManager);
+        _metricsEngine = new MetricsEngine(_workspaceManager);
         _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
         _modernizationUpgradeEngine = new ModernizationUpgradeEngine(_workspaceManager);
         _modernLoggingEngine = new ModernLoggingEngine(_workspaceManager);
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
-        _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
-        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
-        _codeHealingEngine = new CodeHealingEngine(_workspaceManager, _config);
         _performanceEngine = new PerformanceEngine(_workspaceManager);
+        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+        _refinementEngine = new RefinementEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
-        _testingEngine = new TestingEngine(_workspaceManager);
-        _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
-        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
-        _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-        _apiAutomationEngine = new ApiAutomationEngine(_workspaceManager);
-        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _analysisEngine, _config);
-        _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
+        _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
+        _semanticSearchEngine = new SemanticSearchEngine(_workspaceManager);
+        _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
+        _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
+        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
-        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
-        _immutabilityEngine = new ImmutabilityEngine(_workspaceManager);
-        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
-        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
-        _apiIntegrationEngine = new ApiIntegrationEngine(_workspaceManager);
-        _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
+        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
+        _testingEngine = new TestingEngine(_workspaceManager);
+        _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
 
-        _workspaceTools = new SentinelWorkspaceTools(_workspaceManager,
+        _advancedRefactoringTools = new AdvancedRefactoringTools(_workspaceManager);
+
+
+        _workspaceTools = new WorkspaceTools(_workspaceManager,
             _validationEngine,
             _diffEngine,
             _diagnosticEngine,
@@ -132,13 +135,14 @@ public class ComprehensiveToolTests
             _dependencyEngine,
             new ProjectConsistencyEngine(_workspaceManager),
             _config,
-            NullLogger<SentinelWorkspaceTools>.Instance,
+            NullLogger<WorkspaceTools>.Instance,
             new BuildEngine(_workspaceManager, _diagnosticEngine),
             _symbolNavigationEngine,
             new TestRunEngine(_workspaceManager),
             new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
-        _intelligenceTools = new SentinelIntelligenceTools(_impactAnalyzer,
+
+        _intelligenceTools = new IntelligenceTools(_impactAnalyzer,
             _semanticSearchEngine,
             _metricsEngine,
             _inventoryEngine,
@@ -156,19 +160,11 @@ public class ComprehensiveToolTests
             new ProjectConsistencyEngine(_workspaceManager),
             _workspaceManager,
             _config,
-            NullLogger<SentinelIntelligenceTools>.Instance);
-        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine,
-            _mappingEngine,
-            _structuralRefinementEngine,
-            new MsToolAugmentEngine(_workspaceManager),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
-            _config,
-            NullLogger<SentinelRefactoringTools>.Instance);
+            NullLogger<IntelligenceTools>.Instance);
 
-        _modernizationTools = new SentinelModernizationTools(_modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine, _syntaxUpgradeEngine, _analysisEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<SentinelModernizationTools>.Instance);
-        _qualityTools = new SentinelQualityTools(_testingEngine,
+        _modernizationTools = new ModernizationTools(_modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine, _syntaxUpgradeEngine, _analysisEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+
+        _qualityTools = new QualityTools(_testingEngine,
             _controlFlowEngine,
             _analysisEngine,
             new AntiPatternEngine(_workspaceManager),
@@ -178,11 +174,9 @@ public class ComprehensiveToolTests
             new StackOverflowEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
-            NullLogger<SentinelQualityTools>.Instance);
-        _generationTools = new SentinelGenerationTools(_codeGenerationEngine,
-            _apiAutomationEngine,
-            _workspaceManager,
-            NullLogger<SentinelGenerationTools>.Instance);
+            NullLogger<QualityTools>.Instance);
+
+        _generationTools = new GenerationTools(_workspaceManager, NullLogger<GenerationTools>.Instance);
     }
 
     [TearDown]
@@ -196,7 +190,7 @@ public class ComprehensiveToolTests
     {
         var result = await _workspaceTools.LoadSolution(reason: "test message", "fake.sln");
         Assert.That(result.IsSuccess, Is.False, "fake.sln does not exist");
-        Assert.That(result.ErrorDetails?.Message, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.ErrorData?.Message, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -254,7 +248,7 @@ public class ComprehensiveToolTests
         var result = await _workspaceTools.GetFileOutline(reason: "test message", "Status.cs");
 
         Assert.That(result.IsSuccess, Is.True);
-        var items = ((FileOutlineResult)result.SuccessDetails!).Symbols;
+        var items = ((FileOutlineResult)result.SuccessData!).Symbols;
         Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum", "Status")));
         Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Pending")));
         Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Shipped")));
@@ -277,7 +271,7 @@ public class ComprehensiveToolTests
         var result = await _workspaceTools.ListAll(reason: "test message");
 
         Assert.That(result.IsSuccess, Is.True);
-        var entries = (List<SolutionSymbolEntry>)result.SuccessDetails!;
+        var entries = (List<SolutionSymbolEntry>)result.SuccessData!;
         Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("class", "Order")));
         Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("method", "Ship")));
         Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("enum", "Status")));
@@ -298,7 +292,7 @@ public class ComprehensiveToolTests
         var result = await _workspaceTools.ListAll(reason: "test message", kind: ListAllKind.method);
 
         Assert.That(result.IsSuccess, Is.True);
-        var entries = (List<SolutionSymbolEntry>)result.SuccessDetails!;
+        var entries = (List<SolutionSymbolEntry>)result.SuccessData!;
         Assert.That(entries, Has.All.Matches<SolutionSymbolEntry>(e => e?.Kind == "method"));
         Assert.That(entries.Select(e => e.Name), Contains.Item("Ship"));
     }
@@ -311,7 +305,7 @@ public class ComprehensiveToolTests
         var result = await _workspaceTools.ListAll(reason: "test message", kind: ListAllKind.enumMember);
 
         Assert.That(result.IsSuccess, Is.True);
-        var entries = (List<SolutionSymbolEntry>)result.SuccessDetails!;
+        var entries = (List<SolutionSymbolEntry>)result.SuccessData!;
         Assert.That(entries, Has.Count.EqualTo(2));
         Assert.That(entries.Select(e => e.Name), Is.EquivalentTo(new[] { "Pending", "Shipped" }));
     }

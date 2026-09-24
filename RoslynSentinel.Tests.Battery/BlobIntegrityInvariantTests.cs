@@ -23,7 +23,7 @@ public class BlobIntegrityInvariantTests
 {
     private TestSolutionFixture _fixture;
     private PersistentWorkspaceManager _workspaceManager;
-    private AdvancedRefactoringTools _tools;
+    private AdvancedRefactoringTools _advancedRefactoringTools;
     private string _targetFile;
 
     [SetUp]
@@ -37,29 +37,7 @@ public class BlobIntegrityInvariantTests
         await _workspaceManager.LoadSolutionAsync(_fixture.SolutionPath);
 
         var config = new SentinelConfiguration();
-        _tools = new AdvancedRefactoringTools(
-            new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config),
-            //new StandardRefactoringEngine(_workspaceManager),
-            new AdvancedStructuralEngine(_workspaceManager),
-            new MappingEngine(_workspaceManager),
-            new SemanticRefactoringLibrary(_workspaceManager),
-            new GranularRefactoringEngine(_workspaceManager),
-            //new AdvancedLogicEngine(_workspaceManager),
-            new RefinementEngine(_workspaceManager),
-            new AdvancedTypeEngine(_workspaceManager),
-            //new CodeStyleEngine(_workspaceManager, config),
-            //new CodeFlowEngine(_workspaceManager),
-            //new AdvancedRefactoringEngine(_workspaceManager),
-            //new LogicOptimizationEngine(_workspaceManager),
-            new ModernizationEngine(_workspaceManager, config),
-            //new OutParamRefactoringEngine(_workspaceManager),
-            new MsToolAugmentEngine(_workspaceManager),
-            new CodeGenerationEngine(_workspaceManager),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
-            config,
-            NullLogger<AdvancedRefactoringTools>.Instance);
+        _advancedRefactoringTools = new AdvancedRefactoringTools(_workspaceManager);
 
         _targetFile = Directory
             .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
@@ -107,7 +85,7 @@ public class BlobIntegrityInvariantTests
         var lines = source.Split('\n');
         var bodyLine = Array.FindIndex(lines, l => l.TrimStart().StartsWith("public ")) + 2;
 
-        var result = await _tools.WrapRange(
+        var result = await _advancedRefactoringTools.WrapRange(
             reason: "test message", _targetFile, startLine: bodyLine, endLine: bodyLine,
             wrapper: "region", name: "TestRegion", dryRun: false);
 
@@ -119,7 +97,7 @@ public class BlobIntegrityInvariantTests
     {
         var typeName = await FindATypeNameAsync();
 
-        var result = await _tools.MoveType(
+        var result = await _advancedRefactoringTools.MoveType(
             reason: "test message", _targetFile, typeName, destination: "ownFile", dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "MoveType");
@@ -130,7 +108,7 @@ public class BlobIntegrityInvariantTests
     {
         var typeName = await FindATypeNameAsync();
 
-        var result = await _tools.ExtractMembers(
+        var result = await _advancedRefactoringTools.ExtractMembers(
             reason: "test message", _targetFile, typeName, ExtractAsType.@interface,
             newTypeName: "IExtractedForTest", dryRun: false);
 
@@ -142,7 +120,7 @@ public class BlobIntegrityInvariantTests
     {
         var typeName = await FindATypeNameAsync();
 
-        var result = await _tools.SyncInterface(
+        var result = await _advancedRefactoringTools.SyncInterface(
             reason: "test message", _targetFile, interfaceName: "IDisposable", action: SyncInterfaceAction.sync,
             className: typeName, dryRun: false);
 
@@ -152,7 +130,7 @@ public class BlobIntegrityInvariantTests
     [Test]
     public async Task Inline_IssuedChangeIdResolvesToABlobAsync()
     {
-        var result = await _tools.Inline(
+        var result = await _advancedRefactoringTools.Inline(
             reason: "test message", _targetFile, targetName: "value", kind: InlineKind.variable, dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "Inline");

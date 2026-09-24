@@ -26,7 +26,7 @@ public class DeepFunctionalVerificationTests
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager, config);
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
-        _refactoringEngine = new RefactoringEngine(new NullLogger<RefactoringEngine>(), _workspaceManager, config);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, new NullLogger<RefactoringEngine>(), config);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _modernizationEngine = new ModernizationEngine(_workspaceManager, config);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);

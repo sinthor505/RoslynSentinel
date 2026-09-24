@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using SentinelModernizationTools = RoslynSentinel.Server.Advanced.SentinelModernizationTools;
+using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -35,7 +35,7 @@ public class BugFixTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
@@ -819,7 +819,7 @@ public class Service
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             var config = new SentinelConfiguration();
             _analysisEngine = new AnalysisEngine(_workspaceManager, config);
-            _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
             _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
             _testingEngine = new TestingEngine(_workspaceManager);
             _securityEngine = new SecurityEngine(_workspaceManager);
@@ -973,7 +973,7 @@ public class Svc : ISvc { public void Foo() {} }";
         [Test]
         public async Task CheckForSqlInjection_ConstInterpolation_IsNotFlagged()
         {
-            const string src = @"using Microsoft.SuccessDetails.SqlClient;
+            const string src = @"using Microsoft.SuccessData.SqlClient;
 public class Repo
 {
     private const string TempTable = ""#tempItems"";
@@ -1236,7 +1236,7 @@ public class MyTests
         {
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _config = new SentinelConfiguration();
-            _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
             _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
             _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
             _diEngine = new DependencyInjectionEngine(_workspaceManager);
@@ -1955,16 +1955,18 @@ public class TargetDto
         private CodeGenerationEngine _codeGenerationEngine = null!;
         private PerformanceEngine _performanceEngine = null!;
         private SyntaxUpgradeEngine _syntaxUpgradeEngine = null!;
+        private AdvancedRefactoringEngine _advancedRefactoringEngine = null!;
 
         [SetUp]
         public void Setup()
         {
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             var config = new SentinelConfiguration();
-            _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
             _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
             _performanceEngine = new PerformanceEngine(_workspaceManager);
             _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
+            _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, config);
         }
 
         [TearDown]
@@ -2030,7 +2032,7 @@ public class OtherClass
     public string Name { get; set; }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await _refactoringEngine.ConvertExpressionBodyAsync(
+            var result = await _advancedRefactoringEngine.ConvertExpressionBodyAsync(
                 "MyClass.cs", "NonExistentMethod", "ToExpressionBody");
 
             Assert.That(result.Message, Does.Contain("not found"),
@@ -2050,7 +2052,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await _refactoringEngine.ConvertExpressionBodyAsync(
+            var result = await _advancedRefactoringEngine.ConvertExpressionBodyAsync(
                 "MyClass.cs", "GetName", "ToExpressionBody");
 
             Assert.That(result.Message, Does.Contain("Cannot convert"),
@@ -2069,7 +2071,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await _refactoringEngine.ConvertExpressionBodyAsync(
+            var result = await _advancedRefactoringEngine.ConvertExpressionBodyAsync(
                 "MyClass.cs", "GetName", "ToBlockBody");
 
             Assert.That(result.Message, Does.Contain("Cannot convert"),
@@ -2096,7 +2098,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await _refactoringEngine.ConvertExpressionBodyAsync(
+            var result = await _advancedRefactoringEngine.ConvertExpressionBodyAsync(
                 "MyClass.cs", "GetName", "ToExpressionBody",
                 contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
 
@@ -2176,7 +2178,7 @@ public class Processor
             _config = new SentinelConfiguration();
             _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
             _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
-            _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
             _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
             _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
             _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
@@ -2708,7 +2710,7 @@ public class Processor
         {
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _config = new SentinelConfiguration();
-            _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
             _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         }
 
@@ -2907,7 +2909,7 @@ public class Processor
             var config = new SentinelConfiguration();
             _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
             _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
-            _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
             _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
             _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
             _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
@@ -3211,7 +3213,7 @@ public class Processor
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _config = new SentinelConfiguration();
             _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
-            _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
             _refinementEngine = new RefinementEngine(_workspaceManager);
             _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
             _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
@@ -3610,7 +3612,7 @@ public class AddGuardClausesNullReturnRegressionTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    private SentinelQualityTools CreateTools() => new SentinelQualityTools(new TestingEngine(_workspaceManager),
+    private QualityTools CreateTools() => new QualityTools(new TestingEngine(_workspaceManager),
             new ControlFlowEngine(_workspaceManager),
             new AnalysisEngine(_workspaceManager, _config),
             new AntiPatternEngine(_workspaceManager),
@@ -3620,7 +3622,7 @@ public class AddGuardClausesNullReturnRegressionTests
             new StackOverflowEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
-            NullLogger<SentinelQualityTools>.Instance);
+            NullLogger<QualityTools>.Instance);
 
     [Test]
     public async Task AddGuardClausesAsync_FileNotInWorkspace_ReturnsEmpty()
@@ -3689,7 +3691,7 @@ public class AddBenchmarkStubNullReturnRegressionTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    private SentinelQualityTools CreateTools() => new SentinelQualityTools(_engine,
+    private QualityTools CreateTools() => new QualityTools(_engine,
             new ControlFlowEngine(_workspaceManager),
             new AnalysisEngine(_workspaceManager, _config),
             new AntiPatternEngine(_workspaceManager),
@@ -3699,7 +3701,7 @@ public class AddBenchmarkStubNullReturnRegressionTests
             new StackOverflowEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
-            NullLogger<SentinelQualityTools>.Instance);
+            NullLogger<QualityTools>.Instance);
 
     [Test]
     public async Task AddBenchmarkStubAsync_FileNotInWorkspace_ReturnsEmpty()
@@ -3768,7 +3770,7 @@ public class AddBracesNullReturnRegressionTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    private SentinelModernizationTools CreateTools() => new SentinelModernizationTools(
+    private ModernizationTools CreateTools() => new ModernizationTools(
         new ModernizationEngine(_workspaceManager, _config),
         new ModernizationUpgradeEngine(_workspaceManager),
         new ModernLoggingEngine(_workspaceManager),
@@ -3783,7 +3785,7 @@ public class AddBracesNullReturnRegressionTests
         new AsyncOptimizationEngine(_workspaceManager),
         _workspaceManager,
         _config,
-        NullLogger<SentinelModernizationTools>.Instance);
+        NullLogger<ModernizationTools>.Instance);
 
     [Test]
     public async Task AddBracesAsync_FileNotInWorkspace_ReturnsEmpty()
@@ -3848,7 +3850,7 @@ public class MakeClassImmutableNullReturnRegressionTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    private SentinelModernizationTools CreateTools() => new SentinelModernizationTools(
+    private ModernizationTools CreateTools() => new ModernizationTools(
         new ModernizationEngine(_workspaceManager, _config),
         new ModernizationUpgradeEngine(_workspaceManager),
         new ModernLoggingEngine(_workspaceManager),
@@ -3863,7 +3865,7 @@ public class MakeClassImmutableNullReturnRegressionTests
         new AsyncOptimizationEngine(_workspaceManager),
         _workspaceManager,
         _config,
-        NullLogger<SentinelModernizationTools>.Instance);
+        NullLogger<ModernizationTools>.Instance);
 
     [Test]
     public async Task MakeClassImmutableAsync_FileNotInWorkspace_ReturnsEmpty()
@@ -3915,7 +3917,7 @@ public class MakeClassImmutableNullReturnRegressionTests
 public class SyncInterfaceToImplementationNullReturnRegressionTests
 {
     private IWorkspaceManager _workspaceManager;
-    private RefactoringEngine _engine;
+    private AdvancedRefactoringEngine _engine;
     private SentinelConfiguration _config;
 
     [SetUp]
@@ -3923,7 +3925,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _engine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+        _engine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, _config);
         // Load a minimal solution so the engine reaches the "file/class not found" return path
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Stub.cs", "public interface IFoo { } public class Foo : IFoo { }")]);
@@ -3933,40 +3935,10 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    private SentinelRefactoringTools CreateTools() => new SentinelRefactoringTools(_engine,
-            new MappingEngine(_workspaceManager),
-            new StructuralRefinementEngine(_workspaceManager, _config),
-            new MsToolAugmentEngine(_workspaceManager),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
-            _config,
-            NullLogger<SentinelRefactoringTools>.Instance);
+    private RefactoringEngine CreateTools() => new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
 
-    // SyncInterface moved to SentinelAdvancedRefactoringTools in the Basic/Advanced server split.
-    private SentinelAdvancedRefactoringTools CreateAdvancedTools() => new SentinelAdvancedRefactoringTools(
-            _engine,
-            //new StandardRefactoringEngine(_workspaceManager),
-            new AdvancedStructuralEngine(_workspaceManager),
-            new MappingEngine(_workspaceManager),
-            new SemanticRefactoringLibrary(_workspaceManager),
-            new GranularRefactoringEngine(_workspaceManager),
-            //new AdvancedLogicEngine(_workspaceManager),
-            new RefinementEngine(_workspaceManager),
-            new AdvancedTypeEngine(_workspaceManager),
-            //new CodeStyleEngine(_workspaceManager, _config),
-            //new CodeFlowEngine(_workspaceManager),
-            //new AdvancedRefactoringEngine(_workspaceManager),
-            //new LogicOptimizationEngine(_workspaceManager),
-            new ModernizationEngine(_workspaceManager, _config),
-            //new OutParamRefactoringEngine(_workspaceManager),
-            new MsToolAugmentEngine(_workspaceManager),
-            new CodeGenerationEngine(_workspaceManager),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
-            _config,
-            NullLogger<SentinelAdvancedRefactoringTools>.Instance);
+    // SyncInterface moved to AdvancedRefactoringTools in the Basic/Advanced server split.
+    private AdvancedRefactoringTools CreateAdvancedTools() => new AdvancedRefactoringTools(_workspaceManager);
 
     [Test]
     public async Task SyncInterfaceToImplementationAsync_FileNotInWorkspace_ReturnsContent()

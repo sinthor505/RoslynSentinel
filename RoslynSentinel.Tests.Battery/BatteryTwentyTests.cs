@@ -1,5 +1,5 @@
-// Battery #20 -> SentinelWorkspaceTools
-// Tests all 26 public methods of SentinelWorkspaceTools in-memory via TestSolutionBuilder.
+// Battery #20 -> WorkspaceTools
+// Tests all 26 public methods of WorkspaceTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -29,7 +29,7 @@ public class BatteryTwentyTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _diffEngine = new DiffEngine();
-        _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
+        _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
@@ -420,7 +420,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
 
-        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
+        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.validate, filePath: "Test.cs", unifiedDiff: diff);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -440,7 +440,7 @@ public class BatteryTwentyTests
     public async Task ApplyDiff_Diff_Apply_NonExistentFile_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
+        var result = await _wholeFileWriteTools.ApplyDiff(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.apply, filePath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -453,7 +453,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
-        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.validate, filePath: "Test.cs", unifiedDiff: diff);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -461,7 +461,7 @@ public class BatteryTwentyTests
     public async Task ApplyUnifiedDiff_MissingFilepath_ReturnsInvalidArgument()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filepath: "", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filePath: "", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -471,7 +471,7 @@ public class BatteryTwentyTests
     public async Task ApplyUnifiedDiff_MissingUnifiedDiff_ReturnsInvalidArgument()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filepath: "Test.cs", unifiedDiff: "");
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filePath: "Test.cs", unifiedDiff: "");
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -481,7 +481,7 @@ public class BatteryTwentyTests
     public async Task ApplyUnifiedDiff_Apply_NonExistentFile_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
+        var result = await _wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filePath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);

@@ -9,26 +9,11 @@ public class ModifyBaseTypeBatchTests
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private RefactoringEngine _refactoringEngine;
-    private StandardRefactoringEngine _standardRefactoringEngine;
-    private AdvancedStructuralEngine _advancedStructuralEngine;
-    private MappingEngine _mappingEngine;
-    private SemanticRefactoringLibrary _semanticRefactoringLibrary;
-    private GranularRefactoringEngine _granularRefactoringEngine;
-    private AdvancedLogicEngine _advancedLogicEngine;
-    private RefinementEngine _refinementEngine;
-    private AdvancedTypeEngine _advancedTypeEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
-    private CodeStyleEngine _codeStyleEngine;
-    private CodeFlowEngine _codeFlowEngine;
-    private AdvancedRefactoringEngine _advancedRefactoringEngine;
-    private LogicOptimizationEngine _logicOptimizationEngine;
-    private ModernizationEngine _modernizationEngine;
     private DiffEngine _diffEngine;
     private ValidationEngine _validationEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private RefactoringStructuralTools _refactoringStructuralTools;
-    private RefactoringSignatureTools _refactoringSignatureTools;
-    private RefactoringExtractionDocsTools _refactoringExtractionDocsTools;
     private MsToolAugmentEngine _msToolAugmentEngine;
 
     // Added by AddMember (expected - used for diagnostics)
@@ -71,25 +56,13 @@ public class ModifyBaseTypeBatchTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
-        _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
-        _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
-        _mappingEngine = new MappingEngine(_workspaceManager);
-        _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
-        _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
-        _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
-        _refinementEngine = new RefinementEngine(_workspaceManager);
-        _advancedTypeEngine = new AdvancedTypeEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
-        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
-        _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
-        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
-        _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
-        _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _diffEngine = new DiffEngine();
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
+        _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
         _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
+        _structuralRefinementEngine = new StructuralRefinementEngine(
+            _workspaceManager);
         _refactoringStructuralTools = new RefactoringStructuralTools(
             _refactoringEngine,
             _structuralRefinementEngine,
@@ -97,20 +70,6 @@ public class ModifyBaseTypeBatchTests
             _workspaceManager,
             _validationEngine,
             NullLogger<RefactoringStructuralTools>.Instance);
-        _refactoringSignatureTools = new RefactoringSignatureTools(
-            _refactoringEngine,
-            _workspaceManager,
-            _validationEngine,
-            _symbolNavigationEngine,
-            NullLogger<RefactoringSignatureTools>.Instance);
-        _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(
-            _refactoringEngine,
-            _msToolAugmentEngine,
-            _mappingEngine,
-            _symbolNavigationEngine,
-            _workspaceManager,
-            _validationEngine,
-            NullLogger<RefactoringExtractionDocsTools>.Instance);
     }
 
     [TearDown]
@@ -121,8 +80,11 @@ public class ModifyBaseTypeBatchTests
     public async Task ModifyBaseType_BatchTwoEditsSameFile_BothApplyAgainstOriginalSnapshotAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
+        // Load into the class-field _workspaceManager, not a disconnected local instance:
+        // _refactoringStructuralTools (built in Setup()) holds a reference to _workspaceManager,
+        // so loading the fixture anywhere else leaves it seeing an empty workspace ("no solution
+        // is loaded") even though a solution was loaded - just not into the instance that matters.
+        await fixture.AddFileToSolution(_workspaceManager, FixtureRelativePath, FixtureSource);
 
         var result = await _refactoringStructuralTools.ModifyBaseType(
             reason: "batch test same file two edits",
@@ -149,9 +111,10 @@ public class ModifyBaseTypeBatchTests
     public async Task ModifyBaseType_BatchAcrossTwoFiles_AppliesBothInOneCallAsync()
     {
         using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource, reloadSolution: false);
-        await fixture.AddFileToSolution(workspaceManager, SecondFixtureRelativePath, SecondFixtureSource);
+        // See the sibling same-file batch test above for why this loads into the class-field
+        // _workspaceManager rather than a fresh local instance.
+        await fixture.AddFileToSolution(_workspaceManager, FixtureRelativePath, FixtureSource, reloadSolution: false);
+        await fixture.AddFileToSolution(_workspaceManager, SecondFixtureRelativePath, SecondFixtureSource);
 
         var result = await _refactoringStructuralTools.ModifyBaseType(
             reason: "batch test across two files",
@@ -236,7 +199,7 @@ public class ModifyBaseTypeBatchTests
 
         var result = await _refactoringStructuralTools.ModifyBaseType(
             reason: "batch test both supplied",
-            filepath: FixtureRelativePath,
+            filePath: FixtureRelativePath,
             typeName: "BaseTypeBatchTargetA",
             baseTypeName: "IBaseTypeBatchMarker",
             action: AddRemoveAction.add,

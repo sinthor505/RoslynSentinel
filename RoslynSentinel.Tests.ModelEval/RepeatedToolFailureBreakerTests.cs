@@ -32,7 +32,11 @@ public class RepeatedToolFailureBreakerTests
     // "Workspace" is where LocateSymbol/GetFileOutline live (SentinelWorkspaceTools /
     // SentinelSymbolTools) -> see ToolClassRegistry.AdvancedModeToToolClasses. Not the project
     // names "Basic"/"Advanced", which aren't mode names at all and silently resolve to nothing.
-    private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
+    // "Workspace" alone no longer covers LocateSymbol: the DI split moved it onto
+    // SymbolNavigationTools, gated by the fine-grained "SymbolNavigation" sub-mode (see
+    // ToolClassRegistry.BasicModeToToolClasses), not "Workspace" itself.
+    private static readonly HashSet<string> ActiveModes =
+        new(StringComparer.OrdinalIgnoreCase) { "Workspace", "SymbolNavigation" };
 
     private IHost _host = null!;
     private McpClient _mcpClient = null!;
@@ -56,7 +60,7 @@ public class RepeatedToolFailureBreakerTests
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
+            o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
 
         var hostBuilder = Host.CreateApplicationBuilder();

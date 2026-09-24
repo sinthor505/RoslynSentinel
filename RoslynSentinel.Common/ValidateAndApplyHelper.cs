@@ -118,7 +118,7 @@ public static class ValidateAndApplyHelper
     }
 
     public static async Task<string> BuildDiffAsync(
-        IWorkspaceManager workspaceManager,
+        ISolutionProvider workspaceManager,
         Dictionary<FilePathWrapper, string> changes,
         CancellationToken cancellationToken)
     {

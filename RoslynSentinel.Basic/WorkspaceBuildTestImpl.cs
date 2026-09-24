@@ -4,7 +4,7 @@ namespace RoslynSentinel.Basic;
 
 /// <summary>
 /// Plain DI-constructed implementation backing WorkspaceBuildTestTools. Method bodies moved
-/// verbatim from SentinelWorkspaceTools (Decision 7 step 2).
+/// verbatim from WorkspaceTools (Decision 7 step 2).
 /// </summary>
 public class WorkspaceBuildTestImpl
 {

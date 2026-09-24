@@ -230,7 +230,7 @@ public class DiffEngineTests
         workspaceManager.SetTestSolution(solution);
 
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(new NullLogger<ValidationEngine>(), workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, new NullLogger<ValidationEngine>());
 
         var diff = "@@ -1,1 +1,1 @@\n-public class C { public void M() {} }\n+public class C { public void M() { int x = 1; } }";
 
@@ -249,7 +249,7 @@ public class DiffEngineTests
         workspaceManager.SetTestSolution(solution);
 
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(new NullLogger<ValidationEngine>(), workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, new NullLogger<ValidationEngine>());
 
         // Introducing a syntax error (missing semicolon)
         var diff = "@@ -1,1 +1,1 @@\n-public class C { public void M() {} }\n+public class C { public void M() { int x = 1 } }";

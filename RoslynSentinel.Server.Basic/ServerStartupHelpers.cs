@@ -99,7 +99,7 @@ public static class ServerStartupHelpers
             : value.Split(',').Select(n => n.Trim()).Where(n => n.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Every tool class carries a "Sentinel" prefix (e.g. SentinelWorkspaceTools,
+    /// Every tool class carries a "Sentinel" prefix (e.g. WorkspaceTools,
     /// GitTools), so a shortened --include-tools/--exclude-tools name like "GitTools"
     /// can be resolved by prepending it unconditionally when it's not already present.
     /// </summary>
@@ -227,8 +227,8 @@ public static class ServerStartupHelpers
     /// <remarks>
     /// A server with no tools cannot do anything, but the failure used to surface from deep inside
     /// DI: launching with no <c>--mode</c> registered zero tool classes, then the DEBUG smoke
-    /// check demanded <c>SentinelWorkspaceTools</c> unconditionally and threw
-    /// "Tool type not resolvable: SentinelWorkspaceTools". That names a type the operator never
+    /// check demanded <c>WorkspaceTools</c> unconditionally and threw
+    /// "Tool type not resolvable: WorkspaceTools". That names a type the operator never
     /// mentioned and says nothing about the missing flag. Checked here instead, where the actual
     /// cause -> no <c>--mode</c> and no <c>--include-tools</c> -> is still known.
     ///
@@ -593,7 +593,7 @@ public static class ServerStartupHelpers
                 excludeTools is { Count: > 0 } ? string.Join(", ", excludeTools) : "(none)",
                 operatingMode,
                 operatingMode == OperatingMode.Testing ? "docs/testing/" : "docs/",
-                RoslynSentinel.Common.ServerBuildInfo.BinaryPath, RoslynSentinel.Common.ServerBuildInfo.Pid);
+                ServerBuildInfo.BinaryPath, ServerBuildInfo.Pid);
         }
 
         Debug.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");

@@ -338,11 +338,11 @@ function Invoke-VSCodeServerRestart {
         return
     }
 
-    # Mirrors the --include-tools list in C:\Users\Administrator\.mcp.json's stdio launch, so this
-    # fallback serves the same tool surface rather than drifting into a second, unsynced set. Keep
-    # the two in sync by hand if either changes - stdio is primary; this copy only exists in case
-    # stdio flakes. Same list duplicated in roslynsentinel-vscode-control.ps1's Start-HttpCopy.
-    $includeTools = "SentinelWorkspaceTools,SentinelDocumentationTools,SentinelSymbolTools,SentinelGitTools,SentinelAdminTools,SentinelWholeFileWriteTools,SentinelRefactoringTools,SentinelAdvancedRefactoringTools,SentinelIntelligenceTools,SentinelScanTools,SentinelModernizationTools,SentinelCommentingTools"
+    # Mirrors C:\Users\Administrator\.mcp.json's stdio launch mode, so this fallback serves the
+    # same tool surface rather than drifting into a second, unsynced set. --mode=all derives its
+    # class list from ToolClassRegistry.AdvancedModeToToolClasses.Keys at build time (see
+    # ServerStdio.cs), so unlike a hand-maintained --include-tools literal it cannot drift on a
+    # future tool-class rename. stdio is primary; this copy only exists in case stdio flakes.
 
     # -WindowStyle Hidden means an unredirected child's console output is simply gone - the server's
     # own graceful "no tools active" style errors were invisible here for the three days the
@@ -355,7 +355,7 @@ function Invoke-VSCodeServerRestart {
     $launchStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $launchStdout = Join-Path $launchLogDir "launch-stdout-$launchStamp.log"
     $launchStderr = Join-Path $launchLogDir "launch-stderr-$launchStamp.log"
-    Start-Process -FilePath $vscodeExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--include-tools=$includeTools" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
+    Start-Process -FilePath $vscodeExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--mode=all" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
 
     $started = $null
     $sw = [System.Diagnostics.Stopwatch]::StartNew()

@@ -34,7 +34,7 @@ public class ToolGapsTests
         var config = new SentinelConfiguration();
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
     }
 
     [TearDown]

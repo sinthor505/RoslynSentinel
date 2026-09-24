@@ -25,7 +25,7 @@ public class PreviewInstanceMoveCallSitesTests
         await _workspaceManager.LoadSolutionAsync(_fixture.SolutionPath);
 
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         _engine = new AdvancedStructuralEngine(_workspaceManager, validationEngine);
     }
 

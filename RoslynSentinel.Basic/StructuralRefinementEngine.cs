@@ -12,6 +12,12 @@ public class StructuralRefinementEngine
     private readonly ISolutionProvider _workspaceManager;
     private readonly SentinelConfiguration _config;
 
+    public StructuralRefinementEngine(ISolutionProvider workspaceManager)
+    {
+        _workspaceManager = workspaceManager;
+        _config = new SentinelConfiguration();
+    }
+
     public StructuralRefinementEngine(ISolutionProvider workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;

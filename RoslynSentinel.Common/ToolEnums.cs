@@ -77,7 +77,7 @@ public enum ProposedChangeAction
     // section 5b) and was never used correctly in practice. Commented out (not deleted) so the
     // value can't appear in ApplyDiff's JSON schema at all, while keeping the old mechanism
     // available to reintroduce later -> see the commented-out ApplyDiffWithConfirmationCode in
-    // SentinelWorkspaceTools.cs, which depends on this value and is commented out alongside it.
+    // WorkspaceTools.cs, which depends on this value and is commented out alongside it.
     // confirmationCode
 
 }

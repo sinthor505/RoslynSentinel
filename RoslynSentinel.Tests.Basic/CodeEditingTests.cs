@@ -16,14 +16,16 @@ public class CodeEditingTests
 {
     private IWorkspaceManager _workspaceManager;
     private RefactoringEngine _engine;
+    private SymbolNavigationEngine _symbolNavigationEngine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _engine = new RefactoringEngine(
-            NullLogger<RefactoringEngine>.Instance,
             _workspaceManager,
+            NullLogger<RefactoringEngine>.Instance,
             new SentinelConfiguration());
     }
 
@@ -155,21 +157,21 @@ public enum ToolScope
     public async Task IsEnumContainer_OnEnum_ReturnsTrue()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
-        Assert.That(await _engine.IsEnumContainerAsync("ToolScope.cs", "ToolScope"), Is.True);
+        Assert.That(await _symbolNavigationEngine.IsEnumContainerAsync("ToolScope.cs", "ToolScope"), Is.True);
     }
 
     [Test]
     public async Task IsEnumContainer_OnClass_ReturnsFalse()
     {
         SetSource("public class Widget { }", "Widget.cs");
-        Assert.That(await _engine.IsEnumContainerAsync("Widget.cs", "Widget"), Is.False);
+        Assert.That(await _symbolNavigationEngine.IsEnumContainerAsync("Widget.cs", "Widget"), Is.False);
     }
 
     [Test]
     public async Task IsEnumContainer_NotFound_ReturnsFalse()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
-        Assert.That(await _engine.IsEnumContainerAsync("ToolScope.cs", "NoSuchType"), Is.False);
+        Assert.That(await _symbolNavigationEngine.IsEnumContainerAsync("ToolScope.cs", "NoSuchType"), Is.False);
     }
 
     [Test]
@@ -177,11 +179,11 @@ public enum ToolScope
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
 
-        var (outcome, message, members) = await _engine.GetContainerMembersAsync("ToolScope.cs", "ToolScope");
+        var (outcome, message, members) = await _symbolNavigationEngine.GetContainerMembersAsync("ToolScope.cs", "ToolScope");
 
         Assert.That(outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(members.Select(m => m.Name), Is.EquivalentTo(new[] { "file", "project", "solution" }));
-        Assert.That(members, Has.All.Matches<RefactoringEngine.ContainerMemberInfo>(m => m?.Kind == "enumMember"));
+        Assert.That(members, Has.All.Matches<SymbolNavigationEngine.ContainerMemberInfo>(m => m?.Kind == "enumMember"));
     }
 
     [Test]
@@ -285,7 +287,7 @@ public enum Singleton
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
 
-        var containerName = await _engine.TryGetEnumMemberContainerNameAsync("ToolScope.cs", "project");
+        var containerName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync("ToolScope.cs", "project");
 
         Assert.That(containerName, Is.EqualTo("ToolScope"));
     }
@@ -300,7 +302,7 @@ public class Animal
 }
 ", "Animal.cs");
 
-        var containerName = await _engine.TryGetEnumMemberContainerNameAsync("Animal.cs", "Name");
+        var containerName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync("Animal.cs", "Name");
 
         Assert.That(containerName, Is.Null);
     }
@@ -310,7 +312,7 @@ public class Animal
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
 
-        var containerName = await _engine.TryGetEnumMemberContainerNameAsync("ToolScope.cs", "nonexistent");
+        var containerName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync("ToolScope.cs", "nonexistent");
 
         Assert.That(containerName, Is.Null);
     }

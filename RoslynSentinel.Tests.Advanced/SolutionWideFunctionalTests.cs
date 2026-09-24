@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 
 using RoslynSentinel.Tests.Fakes;
 
-namespace RoslynSentinel.Tests;
+namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
 public class SolutionWideFunctionalTests

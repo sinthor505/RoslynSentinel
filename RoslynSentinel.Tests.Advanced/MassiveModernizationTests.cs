@@ -1,10 +1,6 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
-using SentinelModernizationTools = RoslynSentinel.Server.Advanced.SentinelModernizationTools;
+using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -14,16 +10,18 @@ public class MassiveModernizationTests
 {
     private IWorkspaceManager _workspaceManager;
     private RefactoringEngine _refactoringEngine;
+    private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private ModernizationEngine _modernizationEngine;
-    private SentinelModernizationTools _modernizationTools;
+    private ModernizationTools _modernizationTools;
 
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
+        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
 
         var modern = new ModernizationEngine(_workspaceManager, config);
@@ -39,7 +37,7 @@ public class MassiveModernizationTests
         var immutability = new ImmutabilityEngine(_workspaceManager);
         var asyncOpt = new AsyncOptimizationEngine(_workspaceManager);
 
-        _modernizationTools = new SentinelModernizationTools(modern, upgrade, logging, _syntaxUpgradeEngine, analysis, logic, style, healing, advLogic, ideStyle, immutability, asyncOpt, _workspaceManager, config, NullLogger<SentinelModernizationTools>.Instance);
+        _modernizationTools = new ModernizationTools(modern, upgrade, logging, _syntaxUpgradeEngine, analysis, logic, style, healing, advLogic, ideStyle, immutability, asyncOpt, _workspaceManager, config, NullLogger<ModernizationTools>.Instance);
     }
 
     [TearDown]
@@ -82,7 +80,7 @@ public class MassiveModernizationTests
             public C{id}(int x) {{ _x = x; }}
             public int X => _x;
         }}", $"C{id}.cs");
-        var result = await _refactoringEngine.ConvertToPrimaryConstructorAsync($"C{id}.cs", $"C{id}");
+        var result = await _advancedRefactoringEngine.ConvertToPrimaryConstructorAsync($"C{id}.cs", $"C{id}");
         Assert.That(result.UpdatedText!, Contains.Substring($"class C{id}(int x)"));
     }
 

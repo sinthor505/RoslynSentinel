@@ -4,7 +4,7 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Shared static helper for writing the forensic operation blob that undo_last_apply relies on.
-/// Extracted verbatim from SentinelWorkspaceTools.WriteBlobForApplyAsync (see
+/// Extracted verbatim from WorkspaceTools.WriteBlobForApplyAsync (see
 /// docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md, Decision 7 step 1) so both
 /// the file-edit and project-management tool clusters can call it without a cross-class dependency.
 /// </summary>

@@ -1,16 +1,26 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
-namespace RoslynSentinel.Basic;
+namespace RoslynSentinel.Advanced;
 
 public class CodeFlowEngine
 {
     private readonly ISolutionProvider _workspaceManager;
+    private readonly ILogger<CodeFlowEngine> _logger;
 
     public CodeFlowEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
+        _logger = new NullLogger<CodeFlowEngine>();
+    }
+
+    public CodeFlowEngine(ISolutionProvider workspaceManager, ILogger<CodeFlowEngine> logger)
+    {
+        _workspaceManager = workspaceManager;
+        _logger = logger;
     }
 
     /// <summary>

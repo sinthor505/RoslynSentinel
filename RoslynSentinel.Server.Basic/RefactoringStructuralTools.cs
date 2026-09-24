@@ -1,6 +1,7 @@
 using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol.Server;
 
@@ -18,7 +19,7 @@ public sealed record RenameSymbolUpdatedHandle(
     [property: Produces(DataTag.DocCommentId)] string DocCommentId);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Named shape mirroring the anonymous object <see cref="SentinelRefactoringTools.RenameSymbol"/>
+/// Named shape mirroring the anonymous object <see cref="RefactoringTools.RenameSymbol"/>
 /// assigns to <c>SentinelCallToolResult<object>.Data</c> on its applied success path. Primary path only
 /// (the resolution-failed / no-pending-changes / apply-failed error paths return a different,
 /// error-shaped envelope with no Data) - see proposal_structuredcontent_rollout.md.
@@ -36,7 +37,7 @@ public sealed record RenameSymbolData(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
-/// <see cref="SentinelRefactoringTools.RenameSymbol"/>'s primary success path, which sets only
+/// <see cref="RefactoringTools.RenameSymbol"/>'s primary success path, which sets only
 /// <c>IsSuccess</c> and <c>Data</c> (not TotalRecords/WorkspaceVersion/etc). Primary path only -
 /// see proposal_structuredcontent_rollout.md.
 /// </summary>
@@ -46,7 +47,7 @@ public sealed record RenameSymbolResultEnvelope(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
-/// <see cref="SentinelRefactoringTools.ModifyModifier"/>'s primary (autoStage=true, singular-edit,
+/// <see cref="RefactoringTools.ModifyModifier"/>'s primary (autoStage=true, singular-edit,
 /// non-batch) success path, which sets only <c>IsSuccess</c> and <c>Data</c>. Deliberately does not
 /// cover the batch (edits != null), autoStage=false, or error branches - see
 /// proposal_structuredcontent_rollout.md. AppliedChangeSummary lives in RoslynSentinel.Common and
@@ -79,7 +80,7 @@ public sealed record MethodSignatureViewData(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
-/// <see cref="SentinelRefactoringTools.MethodSignature"/>'s "view" branch only (operation=view),
+/// <see cref="RefactoringTools.MethodSignature"/>'s "view" branch only (operation=view),
 /// which sets only <c>IsSuccess</c> and <c>Data = new { Parameters }</c>. The add/remove branches
 /// (both the non-autoStage ToJsonSummary shape and the autoStage applied-with-offload
 /// MemberChangedContentResult/AppliedChangeSummary shape) are intentionally NOT covered by this
@@ -97,6 +98,28 @@ public class RefactoringStructuralTools
 {
     private readonly RefactoringStructuralImpl _impl;
 
+    public RefactoringStructuralTools(IWorkspaceManager workspaceManager)
+    {
+        new RefactoringStructuralTools(
+            new RefactoringEngine(workspaceManager),
+            new StructuralRefinementEngine(workspaceManager),
+            new SymbolNavigationEngine(workspaceManager),
+            workspaceManager,
+            new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            NullLogger<RefactoringStructuralTools>.Instance);
+    }
+
+    public RefactoringStructuralTools(IWorkspaceManager workspaceManager, ILogger logger)
+    {
+        new RefactoringStructuralTools(
+            new RefactoringEngine(workspaceManager),
+            new StructuralRefinementEngine(workspaceManager),
+            new SymbolNavigationEngine(workspaceManager),
+            workspaceManager,
+            new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            logger);
+    }
+
     public RefactoringStructuralTools(
         RefactoringEngine refactoringEngine,
         StructuralRefinementEngine structuralRefinementEngine,
@@ -112,14 +135,14 @@ public class RefactoringStructuralTools
     // needs containerName (or, for a brand-new top-level type, newMemberSource alone with no
     // typedKind); view needs containerName; remove needs memberName; replace needs memberName +
     // newMemberSource. Within add, exactly one of newMemberSource or typedKind+typedName+typedType
-    // is required. No param besides filepath/operation is universally required, so a model can
+    // is required. No param besides filePath/operation is universally required, so a model can
     // supply the wrong subset for its chosen operation and only find out at runtime.
     [McpServerTool(Name = "Member")]
     [Produces(DataTag.ChangeId)]
     [Description("Add (as a raw source member, a generated typed property/field, or a brand-new top-level type), remove, replace, or view a type member (method, property, field, constructor). This is the right choice even for a one-line change inside a member - read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
     public Task<SentinelCallToolResult<object>> Member(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
         [Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
         [Description("Required for addMember and addTypedMember, and for view. Not used for addTopLevelType, remove, or replace.")]
@@ -153,7 +176,7 @@ public class RefactoringStructuralTools
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default) =>
-        _impl.Member(reason, filepath, operation, containerName, namespaceName, memberName, newMemberSource, position, typedKind, typedName, typedType,
+        _impl.Member(reason, filePath, operation, containerName, namespaceName, memberName, newMemberSource, position, typedKind, typedName, typedType,
             accessibility, hasSetter, isInit, isReadonly, isStatic, initializer, skipPrecheck, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff,
             requestParams, cancellationToken);
 
@@ -162,7 +185,7 @@ public class RefactoringStructuralTools
     [Description("Replaces an enum's complete member list in one operation. Use GetTypeInfo(typeName, include:\"members\") to see current values first.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyEnum(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
         [Description("List of member names in the desired order, either a comma-separated string (e.g. \"Pending,Shipped,Cancelled\") or a JSON array of strings (e.g. [\"Pending\",\"Shipped\",\"Cancelled\"]) - both are accepted; append \"=N\" for an explicit value (e.g. \"Archived=99\"). Omitted names are removed, new names are added, explicit values are preserved, and implicit members take the next ordinal from their predecessor - as if hand-typed. Pass the complete list every time, not a delta.")]
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string values,
@@ -173,7 +196,7 @@ public class RefactoringStructuralTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.ModifyEnum(reason, filepath, enumName, values, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+        _impl.ModifyEnum(reason, filePath, enumName, values, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
@@ -181,7 +204,7 @@ public class RefactoringStructuralTools
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyAttribute(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
-        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filePath = null,
         [Description("For overloaded/duplicate-named targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? targetName = null,
         [Description("The attribute to add/replace/remove. May include or omit the surrounding [ ] brackets.")]
@@ -198,7 +221,7 @@ public class RefactoringStructuralTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.ModifyAttribute(reason, filepath, targetName, existingAttribute, action, newAttribute, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
+        _impl.ModifyAttribute(reason, filePath, targetName, existingAttribute, action, newAttribute, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = false, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
     [Produces(DataTag.ChangeId)]
@@ -206,7 +229,7 @@ public class RefactoringStructuralTools
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifier(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
-        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filePath = null,
         [Consumes(DataTag.SymbolName, required: false)] string? targetName = null,
         [ExternalInputRequired(DataTag.Modifier, required: false)] NonAccessibilityModifier? modifier = null,
         [Consumes(DataTag.Action, required: false)] AddRemoveAction? action = null,
@@ -218,7 +241,7 @@ public class RefactoringStructuralTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.ModifyModifier(reason, filepath, targetName, modifier, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
+        _impl.ModifyModifier(reason, filePath, targetName, modifier, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyBaseType")]
     [Produces(DataTag.ChangeId)]
@@ -226,7 +249,7 @@ public class RefactoringStructuralTools
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyBaseType(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
-        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filepath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filePath = null,
         [Description("For types with the same name in the same file, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? typeName = null,
         [Description("The base type or interface name to add or remove.")] string? baseTypeName = null,
@@ -239,18 +262,18 @@ public class RefactoringStructuralTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.ModifyBaseType(reason, filepath, typeName, baseTypeName, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
+        _impl.ModifyBaseType(reason, filePath, typeName, baseTypeName, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "SyncTypeAndFilename")]
     [Produces(DataTag.ResultOnly)]
     [Description("Synchronizes the filename to match a type declared in the file.")]
     public Task<SentinelCallToolResult<object>> SyncTypeAndFilename(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
         [Description("The top-level type in the file to sync the filename to. Omit to default to the first non-nested type declared in the file (fine for the common single-type-per-file case). Name it explicitly to get a specific result when the file declares more than one top-level type - without it, whichever type happens to be declared first wins, which is not necessarily the file's conceptual main type.")]
         string? targetTypeName = null,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.SyncTypeAndFilename(reason, filepath, targetTypeName, dryRun, returnDiff, cancellationToken);
+        _impl.SyncTypeAndFilename(reason, filePath, targetTypeName, dryRun, returnDiff, cancellationToken);
 }

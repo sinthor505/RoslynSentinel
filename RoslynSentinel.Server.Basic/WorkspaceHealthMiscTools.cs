@@ -10,7 +10,15 @@ namespace RoslynSentinel.Server.Basic;
 public class WorkspaceHealthMiscTools
 {
     private readonly WorkspaceHealthMiscImpl _impl;
+    private readonly SentinelConfiguration _config;
+    private readonly BuildEngine _buildEngine;
 
+    public WorkspaceHealthMiscTools(IWorkspaceManager workspaceManager, ILogger logger)
+    {
+        _config = new SentinelConfiguration();
+        _buildEngine = new BuildEngine(workspaceManager);
+        _impl = new WorkspaceHealthMiscImpl(workspaceManager, _config, _buildEngine, logger);
+    }
     public WorkspaceHealthMiscTools(IWorkspaceManager workspaceManager, SentinelConfiguration config,
         BuildEngine buildEngine, ILogger logger)
     {

@@ -809,8 +809,8 @@ public class RefactoringEngineGapTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new RefactoringEngine(
-            NullLogger<RefactoringEngine>.Instance,
             _workspaceManager,
+            NullLogger<RefactoringEngine>.Instance,
             new SentinelConfiguration());
     }
 

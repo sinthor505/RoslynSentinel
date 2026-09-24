@@ -1,4 +1,4 @@
-// GetMethodSource -> SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap
+// GetMethodSource -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap
 // flagged branches: document == null, method == null, methodBytes > threshold, plus happy path).
 // root == null is not exercised here -> GetSyntaxRootAsync only returns null for non-source
 // documents, which TestSolutionBuilder never produces, so that branch is effectively unreachable
@@ -35,7 +35,7 @@ public class GetMethodSourceTests
 
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);

@@ -34,6 +34,7 @@ public class BatteryTwentyFourTests
     private RefactoringExtractionDocsTools _refactoringExtractionDocsTools;
     private MsToolAugmentEngine _msToolAugmentEngine;
     private AdvancedRefactoringTools _advTools;
+    private GenerationTools _generationTools;
 
     private const string RefactorSource = @"
 using System;
@@ -107,7 +108,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
         _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
@@ -124,8 +125,9 @@ public enum Status { Active = 1, Pending = 2 }
         _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
         _diffEngine = new DiffEngine();
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
+        _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
         _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
+        _generationTools = new GenerationTools(_workspaceManager, NullLogger<GenerationTools>.Instance);
         _refactoringStructuralTools = new RefactoringStructuralTools(
             _refactoringEngine,
             _structuralRefinementEngine,
@@ -142,27 +144,11 @@ public enum Status { Active = 1, Pending = 2 }
         _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(
             _refactoringEngine,
             _msToolAugmentEngine,
-            _mappingEngine,
             _symbolNavigationEngine,
             _workspaceManager,
             _validationEngine,
             NullLogger<RefactoringExtractionDocsTools>.Instance);
-        _advTools = new AdvancedRefactoringTools(
-            _refactoringEngine,
-            new AdvancedStructuralEngine(_workspaceManager),
-            new MappingEngine(_workspaceManager),
-            new SemanticRefactoringLibrary(_workspaceManager),
-            new GranularRefactoringEngine(_workspaceManager),
-            new RefinementEngine(_workspaceManager),
-            new AdvancedTypeEngine(_workspaceManager),
-            new ModernizationEngine(_workspaceManager, _config),
-            new MsToolAugmentEngine(_workspaceManager),
-            new CodeGenerationEngine(_workspaceManager),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
-            _config,
-            NullLogger<AdvancedRefactoringTools>.Instance);
+        _advTools = new AdvancedRefactoringTools(_workspaceManager);
     }
 
     [TearDown]
@@ -830,7 +816,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task GenerateMapping_ValidTypes_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringExtractionDocsTools.GenerateMapping("Order.cs", "Order", "Status");
+        var result = await _generationTools.GenerateMapping("Order.cs", "Order", "Status");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1170,7 +1156,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     public async Task ConvertExpressionBody_ToBlockBody_ReturnsString()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
-        var result = await _refactoringEngine.ConvertExpressionBodyAsync("Refactor.cs", "Sound", "ToBlockBody");
+        var result = await _advancedRefactoringEngine.ConvertExpressionBodyAsync("Refactor.cs", "Sound", "ToBlockBody");
     }
 
     // --- ExtractConstant ---

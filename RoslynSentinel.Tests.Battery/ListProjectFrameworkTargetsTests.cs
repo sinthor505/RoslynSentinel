@@ -1,4 +1,4 @@
-// ListProjectFrameworkTargets -> SentinelWorkspaceTools. Zero coverage before this file. The tool itself
+// ListProjectFrameworkTargets -> WorkspaceTools. Zero coverage before this file. The tool itself
 // is a thin try/catch wrapper with no branches of its own; the real branching lives in
 // ProjectConsistencyEngine.GetProjectFrameworkSummaryAsync, which reads each project's .csproj file
 // directly off disk (not from the in-memory Roslyn solution) looking for TargetFramework/TargetFrameworks
@@ -28,7 +28,7 @@ public class ListProjectFrameworkTargetsTests
 
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);

@@ -1,6 +1,8 @@
 using System.Diagnostics;
-using System.Text;
 using System.Text.RegularExpressions;
+
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Basic;
 
@@ -8,11 +10,31 @@ public class BuildEngine
 {
     private readonly ISolutionProvider _workspaceManager;
     private readonly DiagnosticEngine _diagnosticEngine;
+    private readonly ILogger<BuildEngine> _logger;
 
+    public BuildEngine(ISolutionProvider workspaceManager)
+    {
+        _workspaceManager = workspaceManager;
+        _diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        _logger = new NullLogger<BuildEngine>();
+    }
+    public BuildEngine(ISolutionProvider workspaceManager, ILogger<BuildEngine> logger)
+    {
+        _workspaceManager = workspaceManager;
+        _diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        _logger = logger;
+    }
     public BuildEngine(ISolutionProvider workspaceManager, DiagnosticEngine diagnosticEngine)
     {
         _workspaceManager = workspaceManager;
         _diagnosticEngine = diagnosticEngine;
+        _logger = new NullLogger<BuildEngine>();
+    }
+    public BuildEngine(ISolutionProvider workspaceManager, DiagnosticEngine diagnosticEngine, ILogger<BuildEngine> logger)
+    {
+        _workspaceManager = workspaceManager;
+        _diagnosticEngine = diagnosticEngine;
+        _logger = logger;
     }
 
     public async Task<EngineResultWrapper<BuildResult>> RunQuickBuildAsync(

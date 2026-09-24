@@ -5,8 +5,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using NUnit.Framework;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Tests.Battery;
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -198,8 +196,8 @@ public class RefactoringEngineTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new RefactoringEngine(
-            NullLogger<RefactoringEngine>.Instance,
             _workspaceManager,
+            NullLogger<RefactoringEngine>.Instance,
             new SentinelConfiguration());
     }
 

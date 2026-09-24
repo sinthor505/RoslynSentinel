@@ -388,7 +388,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     {
         var config = new SentinelConfiguration();
         var engine = new RefactoringEngine(
-            NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+            _workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
         Dictionary<FilePathWrapper, string>? result = null;
         var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
@@ -402,7 +402,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     {
         var config = new SentinelConfiguration();
         var engine = new RefactoringEngine(
-            NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+            _workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
         string? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = (await engine.WrapInTryCatchAsync(_realFilePath, 1, 5)).UpdatedText!,
@@ -410,19 +410,8 @@ public class RealSolution_EngineSmoke_Battery34Tests
         Assert.That(result, Is.Not.Null);
     }
 
-    [Test]
-    public async Task RefactoringEngine_SyncInterfaceToImplementation_DoesNotThrow()
-    {
-        var config = new SentinelConfiguration();
-        var engine = new RefactoringEngine(
-            NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
-        string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.SyncInterfaceToImplementationAsync(
-                _realFilePath, _realClassName, "I" + _realClassName)).UpdatedText!,
-            "RefactoringEngine.SyncInterfaceToImplementationAsync must not throw (interface may not exist - graceful return expected).");
-        Assert.That(result, Is.Not.Null);
-    }
+    // SyncInterfaceToImplementationAsync moved to AdvancedRefactoringEngine during the engine
+    // restructure; covered by RoslynSentinel.Tests.Advanced/AdvancedToolsTests.cs instead.
 
     // =========================================================================
     // 13 -> GranularRefactoringEngine

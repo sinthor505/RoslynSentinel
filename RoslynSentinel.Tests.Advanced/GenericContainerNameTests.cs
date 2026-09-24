@@ -6,7 +6,7 @@
 // it could never equal a caller's raw generic string. Third recorded instance of this class of miss
 // (cf. docs/current/project_qwen36_35b_smoketest_and_member_containername_gap.md).
 //
-// Driven through RefactoringEngine rather than the SentinelRefactoringTools surface: the fix is one
+// Driven through RefactoringEngine rather than the RefactoringTools surface: the fix is one
 // engine-level chokepoint shared by 13 call sites across Member, ModifyEnum and ModifyBaseType, and
 // the engine needs three constructor arguments where the tool class needs sixteen.
 
@@ -44,7 +44,7 @@ public class GenericContainerNameTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _refactoringEngine = new RefactoringEngine(
-            NullLogger<RefactoringEngine>.Instance, _workspaceManager, new SentinelConfiguration());
+            _workspaceManager, NullLogger<RefactoringEngine>.Instance, new SentinelConfiguration());
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Wrappers.cs", GenericSource)]);
         _workspaceManager.SetTestSolution(solution);
@@ -134,12 +134,12 @@ public class GenericContainerNameTests
         // silently resolve to a type they didn't name, which is worse than reporting the miss.
         Assert.Multiple(() =>
         {
-            Assert.That(RefactoringEngine.NormalizeTypeName("Foo<T>"), Is.EqualTo("Foo"));
-            Assert.That(RefactoringEngine.NormalizeTypeName("Foo<TKey, TValue>"), Is.EqualTo("Foo"));
-            Assert.That(RefactoringEngine.NormalizeTypeName("Foo`1"), Is.EqualTo("Foo"));
-            Assert.That(RefactoringEngine.NormalizeTypeName("  Foo<T>  "), Is.EqualTo("Foo"));
-            Assert.That(RefactoringEngine.NormalizeTypeName("Foo"), Is.EqualTo("Foo"));
-            Assert.That(RefactoringEngine.NormalizeTypeName("public class Foo<T> : IBar"),
+            Assert.That(SymbolNavigationEngine.NormalizeTypeName("Foo<T>"), Is.EqualTo("Foo"));
+            Assert.That(SymbolNavigationEngine.NormalizeTypeName("Foo<TKey, TValue>"), Is.EqualTo("Foo"));
+            Assert.That(SymbolNavigationEngine.NormalizeTypeName("Foo`1"), Is.EqualTo("Foo"));
+            Assert.That(SymbolNavigationEngine.NormalizeTypeName("  Foo<T>  "), Is.EqualTo("Foo"));
+            Assert.That(SymbolNavigationEngine.NormalizeTypeName("Foo"), Is.EqualTo("Foo"));
+            Assert.That(SymbolNavigationEngine.NormalizeTypeName("public class Foo<T> : IBar"),
                 Is.EqualTo("public class Foo<T> : IBar"),
                 "no trailing '>', so nothing is stripped");
         });

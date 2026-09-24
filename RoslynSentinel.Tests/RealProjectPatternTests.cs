@@ -1,7 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Common;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
@@ -30,6 +29,7 @@ public class RealProjectPatternTests
 {
     private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
+    private WorkspaceHealthMiscImpl _workspaceHealthMisc;
 
     [SetUp]
     public void Setup()
@@ -40,6 +40,7 @@ public class RealProjectPatternTests
         _workspaceManager = new PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
+        _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
@@ -625,7 +626,7 @@ namespace ExpressRecipe.InventoryService;
 public class InventoryRepository { }";
         SetSource(source, "InventoryRepository.cs");
 
-        var report = await _engine.GetWorkspaceHealthAsync();
+        var report = await _workspaceHealthMisc.GetWorkspaceHealthAsync();
 
         Assert.That(report.IsOperational, Is.True,
             "Workspace with test solution must be reported as operational");
@@ -643,7 +644,7 @@ public class InventoryRepository { }";
         // but no solution is loaded yet. The health check correctly distinguishes these.
         using var fresh = new PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
-        var freshEngine = new MsToolAugmentEngine(fresh);
+        var freshEngine = new WorkspaceHealthMiscImpl(fresh, new SentinelConfiguration());
 
         var report = await freshEngine.GetWorkspaceHealthAsync();
 

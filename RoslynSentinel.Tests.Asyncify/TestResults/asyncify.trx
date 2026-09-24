@@ -118,15 +118,15 @@ Assert.That(inner, Is.Not.Null)&#xD;
     </UnitTest>
     <UnitTest name="T2_ScanAsyncMigrationCandidates_LoadListWithAttribute_FindsCandidate" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="a460e5d0-1e16-c710-824f-cbb8fef5e76a">
       <Execution id="c9ffaf2e-7c5a-40e1-96db-8db91f895424" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T2_ScanAsyncMigrationCandidates_LoadListWithAttribute_FindsCandidate" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T2_ScanAsyncMigrationCandidates_LoadListWithAttribute_FindsCandidate" />
     </UnitTest>
     <UnitTest name="T12_PropagateCancellationToken_EmptyTargets_ZeroAttempted" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="ed4bbe84-af4d-aafe-6fb1-80dd79e0cfbe">
       <Execution id="84bbac8d-322f-48ab-b99f-063ac88cc4f4" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T12_PropagateCancellationToken_EmptyTargets_ZeroAttempted" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T12_PropagateCancellationToken_EmptyTargets_ZeroAttempted" />
     </UnitTest>
     <UnitTest name="T9_FlagAsyncMigrationCandidates_DryRunTargets_Succeeds" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="a2ce9062-2e06-c984-b9d2-4a42170748d0">
       <Execution id="f3fb827b-016b-4eb4-b190-2d0dad3af5c5" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T9_FlagAsyncMigrationCandidates_DryRunTargets_Succeeds" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T9_FlagAsyncMigrationCandidates_DryRunTargets_Succeeds" />
     </UnitTest>
     <UnitTest name="T4_GetLargeResult_ValidScanId_ApiSurfaceEntryList_ReturnsEntries" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="fec4a67a-aa0c-5862-0b6a-87c8a8181bfe">
       <Execution id="4366fb70-cfd7-4f8b-bbb5-5df93bea1fa1" />
@@ -134,11 +134,11 @@ Assert.That(inner, Is.Not.Null)&#xD;
     </UnitTest>
     <UnitTest name="T16_Asyncify_WithLimitParams_NoSolution_ReturnsSolutionNotLoaded" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="5b2c910a-2f69-0933-37e1-bc6af6e46c48">
       <Execution id="50b750cc-bc2d-4824-9ef0-b9bad30a8828" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T16_Asyncify_WithLimitParams_NoSolution_ReturnsSolutionNotLoaded" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T16_Asyncify_WithLimitParams_NoSolution_ReturnsSolutionNotLoaded" />
     </UnitTest>
     <UnitTest name="T10_BridgeAsyncMethods_DryRun_AllItemsAttempted" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="a94c279f-c1dd-be4e-f88e-352572d68550">
       <Execution id="44c64bc3-fa01-4e93-9a5e-03228d8e6ab9" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T10_BridgeAsyncMethods_DryRun_AllItemsAttempted" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T10_BridgeAsyncMethods_DryRun_AllItemsAttempted" />
     </UnitTest>
     <UnitTest name="T6_GetLargeResult_FilePathOutsideScansDir_ReturnsError" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="82daf901-598b-6f08-f9bd-5ea433eb814d">
       <Execution id="c9e838ec-fed9-4ab7-b512-9464a01c9be2" />
@@ -150,15 +150,15 @@ Assert.That(inner, Is.Not.Null)&#xD;
     </UnitTest>
     <UnitTest name="T8_BridgeAsyncMethods_EmptyTargets_ZeroAttempted" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="2d540322-9744-0089-fc4c-66a575084250">
       <Execution id="2904d6ec-6011-4ef9-b549-92504506239e" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T8_BridgeAsyncMethods_EmptyTargets_ZeroAttempted" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T8_BridgeAsyncMethods_EmptyTargets_ZeroAttempted" />
     </UnitTest>
     <UnitTest name="T11_AddCancellationToken_DryRun_ReturnsWithoutError" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="429d245e-1f54-0b98-6ec9-c8c2505008b4">
       <Execution id="daa6b75c-d984-4285-9caf-bb4c28db821e" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T11_AddCancellationToken_DryRun_ReturnsWithoutError" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T11_AddCancellationToken_DryRun_ReturnsWithoutError" />
     </UnitTest>
     <UnitTest name="T13_ExtractEventHandlers_MissingContextSnippet_ReturnsFailed" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="e89e300d-cd33-3b3c-ceda-71e04a0fff6c">
       <Execution id="0b165004-5b46-4fe1-b45b-61eea67a140b" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T13_ExtractEventHandlers_MissingContextSnippet_ReturnsFailed" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T13_ExtractEventHandlers_MissingContextSnippet_ReturnsFailed" />
     </UnitTest>
     <UnitTest name="T1_GetLargeResult_NoScanIdNoFilePath_ReturnsError" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="5462cade-f872-d8ba-c7a3-07f852602477">
       <Execution id="e0055c38-d6ca-4649-a142-96d9ebd571a2" />
@@ -170,19 +170,19 @@ Assert.That(inner, Is.Not.Null)&#xD;
     </UnitTest>
     <UnitTest name="T20_Asyncify_DefaultParams_Score70WithCaller_BridgesAndUpliftsCallers" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="030aedd2-987d-04f4-4268-f00e737c986c">
       <Execution id="5d99ed2b-0829-488b-a336-a6e3e73df5f5" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T20_Asyncify_DefaultParams_Score70WithCaller_BridgesAndUpliftsCallers" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T20_Asyncify_DefaultParams_Score70WithCaller_BridgesAndUpliftsCallers" />
     </UnitTest>
     <UnitTest name="T3_ScanAsyncMigrationCandidates_Summarize_ReturnsMigrationScanSummary" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="88fd0c82-d946-8668-dbb6-06d0ffbdedb3">
       <Execution id="a9d1dc75-500d-47c4-9fa7-7e4a572bbfc3" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T3_ScanAsyncMigrationCandidates_Summarize_ReturnsMigrationScanSummary" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T3_ScanAsyncMigrationCandidates_Summarize_ReturnsMigrationScanSummary" />
     </UnitTest>
     <UnitTest name="T15_EventHandlersToAsync_NoSolution_ReturnsSolutionNotLoaded" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="40dca888-4e82-a53a-947a-482153a2f256">
       <Execution id="4d94bb7c-9cd4-4891-9d06-cb80a10ceba3" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T15_EventHandlersToAsync_NoSolution_ReturnsSolutionNotLoaded" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T15_EventHandlersToAsync_NoSolution_ReturnsSolutionNotLoaded" />
     </UnitTest>
     <UnitTest name="T14_UpliftCallers_EmptyTargets_ZeroAttempted" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="0b40f05a-2a60-f5dc-96ab-07901ea72bd2">
       <Execution id="66c92e58-5e53-42d4-88f8-a8ff7f13922f" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T14_UpliftCallers_EmptyTargets_ZeroAttempted" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T14_UpliftCallers_EmptyTargets_ZeroAttempted" />
     </UnitTest>
     <UnitTest name="Router_OverloadAlreadyExists_ReturnsHintWithPrefilledFileAndMethod" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="fee86906-b615-94c2-2e84-b878ebf8bf01">
       <Execution id="3d698b33-f269-444f-aac2-d38c42809ca3" />
@@ -194,11 +194,11 @@ Assert.That(inner, Is.Not.Null)&#xD;
     </UnitTest>
     <UnitTest name="T7_FlagAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="fe49f4ab-cc83-9411-3bee-61d0ad65d852">
       <Execution id="58ce47a7-906b-46aa-a9c7-6271fb266628" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T7_FlagAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T7_FlagAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" />
     </UnitTest>
     <UnitTest name="T17_UpliftCallers_QualifiedStaticCall_PreservesTypeQualifier" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="190dfb5a-0838-d6dd-67f5-a3f9ee3607e8">
       <Execution id="d1ac7f9d-8905-4578-bbb1-0f522769607e" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T17_UpliftCallers_QualifiedStaticCall_PreservesTypeQualifier" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T17_UpliftCallers_QualifiedStaticCall_PreservesTypeQualifier" />
     </UnitTest>
     <UnitTest name="Directive_DoesNotClaimCompletion_WhenOutcomeIsPartialOrNoProgress(PartialProgress)" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="94fab00b-2938-4a4b-ce52-03535c4c6230">
       <Execution id="f530d0ea-d4bf-4f72-9f9b-9bfd993bdf00" />
@@ -206,7 +206,7 @@ Assert.That(inner, Is.Not.Null)&#xD;
     </UnitTest>
     <UnitTest name="T6_GetAsyncMigrationProgress_WithAsyncMethods_ReturnsReport" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="2bf60369-d24b-fd6f-478a-d2290095c920">
       <Execution id="e13327ba-19ee-44fc-a1a6-51afd0b71a49" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T6_GetAsyncMigrationProgress_WithAsyncMethods_ReturnsReport" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T6_GetAsyncMigrationProgress_WithAsyncMethods_ReturnsReport" />
     </UnitTest>
     <UnitTest name="FromCounts_PartialProgress_WhenSucceededAndFailed" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="e0be2919-9a30-4964-cfaa-ca4fd5185e7a">
       <Execution id="08b36446-f667-427d-8948-2c7350d6c5e2" />
@@ -214,7 +214,7 @@ Assert.That(inner, Is.Not.Null)&#xD;
     </UnitTest>
     <UnitTest name="T4_ScanAsyncMigrationCandidates_MinScoreAboveAll_ReturnsEmptyList" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="934e786e-4ed1-4cc1-fc94-69bfaa0ddf96">
       <Execution id="330e654d-6275-4de1-b76b-3d92fe04c76f" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T4_ScanAsyncMigrationCandidates_MinScoreAboveAll_ReturnsEmptyList" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T4_ScanAsyncMigrationCandidates_MinScoreAboveAll_ReturnsEmptyList" />
     </UnitTest>
     <UnitTest name="AlreadySatisfied_AbsentFromActionable_AndOutcomeIsCompletedWithNoOps" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="da11f4e4-78f7-0fce-826a-6d74687688cb">
       <Execution id="16a992b7-d1a4-4c5f-97ef-cd7c4a6a98e6" />
@@ -222,15 +222,15 @@ Assert.That(inner, Is.Not.Null)&#xD;
     </UnitTest>
     <UnitTest name="T18_UpliftCallers_ChainedMemberAccess_AwaitIsParenthesised" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="efa672db-c949-a200-bd9c-28a78170195f">
       <Execution id="b4a79bab-cbec-4f60-94db-c2dcef42f5de" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T18_UpliftCallers_ChainedMemberAccess_AwaitIsParenthesised" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T18_UpliftCallers_ChainedMemberAccess_AwaitIsParenthesised" />
     </UnitTest>
     <UnitTest name="T5_GetAsyncMigrationProgress_NoSolution_ReturnsSolutionNotLoaded" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="d1a82b96-1028-160c-5c03-5029f4c700f5">
       <Execution id="8ca5e94a-2b3a-48df-ac1d-024cfccfe5f1" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T5_GetAsyncMigrationProgress_NoSolution_ReturnsSolutionNotLoaded" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T5_GetAsyncMigrationProgress_NoSolution_ReturnsSolutionNotLoaded" />
     </UnitTest>
     <UnitTest name="T1_ScanAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="102c5c1a-93b8-e9ec-365f-bb9e7b252377">
       <Execution id="fae9ed83-4f16-485a-b91e-5914cfd22186" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T1_ScanAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T1_ScanAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" />
     </UnitTest>
     <UnitTest name="Router_TwoEqualWeightProducers_SameToolSelectedAcrossRepeatedCalls" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="b6f1502c-7fff-5065-8637-8322d1d1fb20">
       <Execution id="c0d08712-a0d1-49bc-818d-4289724278ae" />
@@ -246,7 +246,7 @@ Assert.That(inner, Is.Not.Null)&#xD;
     </UnitTest>
     <UnitTest name="T19_Asyncify_DefaultParams_Score49BelowThreshold_NoUplift" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="156d4733-d6a7-b846-fd61-c5761da15799">
       <Execution id="07b5b4d0-4813-40e1-a3a3-b5c5d62732bc" />
-      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T19_Asyncify_DefaultParams_Score49BelowThreshold_NoUplift" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.AsyncifyToolsTests" name="T19_Asyncify_DefaultParams_Score49BelowThreshold_NoUplift" />
     </UnitTest>
     <UnitTest name="FromCounts_CompletedFully_WhenSucceededAndNoFailuresNoAlreadySatisfied" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="f437086d-1aaa-ba53-2514-f3b150079acc">
       <Execution id="d3b689a6-ffa9-4421-8636-f2f8b67e16c1" />

@@ -59,7 +59,7 @@ namespace Avaal.Service
 {
     public class TripService
     {
-        public System.SuccessDetails.DataTable GetTrips(int id) => null;
+        public System.SuccessData.DataTable GetTrips(int id) => null;
     }
 }", "TripService.cs");
 

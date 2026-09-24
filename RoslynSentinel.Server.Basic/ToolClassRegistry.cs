@@ -12,10 +12,12 @@ public static class ToolClassRegistry
     public static readonly IReadOnlyDictionary<string, string[]> BasicModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Workspace"] = ["SentinelWorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "GitTools"],
+            ["Workspace"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools"],
             ["Admin"] = ["AdminTools"],
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
             ["Refactor"] = ["RefactoringTools"],
+            ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools", "RefactoringTools"],
+
             // Modernize/Quality/Generation/Asyncify register no classes in Basic today (commented
             // out pending Advanced-only tool classes) -> omitted here since an empty array would
             // be indistinguishable from "mode not recognized" for expansion purposes.
@@ -50,7 +52,7 @@ public static class ToolClassRegistry
     public static readonly IReadOnlyDictionary<string, string[]> AdvancedModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Workspace"] = ["SentinelWorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "GitTools"],
+            ["Workspace"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "GitTools"],
             ["Admin"] = ["AdminTools"],
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
             ["Refactor"] = ["RefactoringTools", "AdvancedRefactoringTools"],
@@ -59,6 +61,7 @@ public static class ToolClassRegistry
             ["Quality"] = ["QualityTools"],
             ["Generation"] = ["GenerationTools", "CommentingTools"],
             ["Asyncify"] = ["AsyncifyTools"],
+            ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools", "RefactoringTools"],
         };
 
     /// <summary>

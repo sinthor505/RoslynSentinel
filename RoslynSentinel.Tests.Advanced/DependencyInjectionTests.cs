@@ -1,14 +1,10 @@
+using System.Reflection;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol.Server;
-
-using RoslynSentinel.Common;
-
-using System.Reflection;
-
-using SentinelModernizationTools = RoslynSentinel.Server.Advanced.SentinelModernizationTools;
 
 namespace RoslynSentinel.Tests.Advanced;
 
@@ -61,17 +57,17 @@ public class DependencyInjectionTests
     public void AllMcpTools_ShouldBeResolvable()
     {
         // Act & Assert
-        var workspaceTools = _serviceProvider.GetService<SentinelWorkspaceTools>();
+        var workspaceTools = _serviceProvider.GetService<WorkspaceTools>();
         Assert.That(workspaceTools, Is.Not.Null);
 
-        var refactoringTools = _serviceProvider.GetService<SentinelRefactoringTools>();
-        Assert.That(refactoringTools, Is.Not.Null, "Failed to resolve SentinelRefactoringTools. Check constructor dependencies.");
+        var refactoringTools = _serviceProvider.GetService<RefactoringStructuralTools>();
+        Assert.That(refactoringTools, Is.Not.Null, "Failed to resolve RefactoringStructuralTools. Check constructor dependencies.");
     }
 
     [Test]
     public void DynamicDiscovery_AllClassesWithToolAttribute_ShouldBeResolvable()
     {
-        var assembly = typeof(SentinelWorkspaceTools).Assembly;
+        var assembly = typeof(WorkspaceTools).Assembly;
         var toolTypes = assembly.GetTypes()
             .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() != null);
 

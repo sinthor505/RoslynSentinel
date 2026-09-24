@@ -682,7 +682,7 @@ public class Clean
         SetSource(@"
 public class Repo
 {
-    public void Query(string name, System.SuccessDetails.IDbConnection conn)
+    public void Query(string name, System.SuccessData.IDbConnection conn)
     {
         // Direct call -> interpolated string as the SQL argument
         Execute($""SELECT * FROM Users WHERE Name = '{name}'"");

@@ -11,17 +11,17 @@ namespace RoslynSentinel.Server.Basic;
 /// (Decision 1-Amendment).
 ///
 /// This class is a trial slice of that plan's DI split, landed ahead of the rest: today it is
-/// registered in DI only as a plain singleton consumed internally by <c>SentinelWorkspaceTools</c>
+/// registered in DI only as a plain singleton consumed internally by <c>WorkspaceTools</c>
 /// (field <c>_readNav</c>) -> the plan's Decision 4 mode strings ("WorkspaceReadNav"/"WorkspaceFileIO")
 /// that would call <c>mcpBuilder.WithTools<WorkspaceReadNavigationTools>()</c> and make the
 /// [McpServerTool] attributes below live have not been added to
 /// ServiceRegistrationExtensionsBasic.cs yet. So GetMethodSource/GetFileOutline/GetLargeResult here
 /// are currently NOT reachable over MCP -> the real, registered versions of those three tool names
-/// are the ones in SentinelWorkspaceTools.cs, which is what MCP clients actually call. This is not
+/// are the ones in WorkspaceTools.cs, which is what MCP clients actually call. This is not
 /// dead code or an accidental duplicate; it is the intended shape once Decision 4/Decision 7 step 4
 /// finish wiring the fine-grained mode strings.
 ///
-/// The six methods this pairs with in SentinelWorkspaceTools.cs (the ones actually reachable over
+/// The six methods this pairs with in WorkspaceTools.cs (the ones actually reachable over
 /// MCP today) are: GetMethodSource, GetFileOutline, ListAll, SearchSolutionText,
 /// GetOperationDetail, GetLargeResult - each carries its own short comment there pointing back here.
 /// </summary>
@@ -39,20 +39,20 @@ public class WorkspaceReadNavigationTools
     [Description("Returns the full source text of a named method or constructor, plus a structured list of its attributes.")]
     public Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSource(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
         [Description("Method or constructor name. For a constructor, pass the containing class's name (e.g. \"OrderService\" for `public OrderService(...)`). Case-sensitive with case-insensitive fallback; returns the first match for overloaded names.")]
         [Consumes(DataTag.MethodName, required: true)] string methodName,
         CancellationToken cancellationToken = default)
-        => _impl.GetMethodSource(reason, filepath, methodName, cancellationToken);
+        => _impl.GetMethodSource(reason, filePath, methodName, cancellationToken);
 
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file - namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
     public Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
         CancellationToken cancellationToken = default)
-        => _impl.GetFileOutline(reason, filepath, cancellationToken);
+        => _impl.GetFileOutline(reason, filePath, cancellationToken);
 
     [McpServerTool(Name = "ListAll")]
     [Produces(DataTag.Report)]
@@ -98,12 +98,12 @@ public class WorkspaceReadNavigationTools
     [Description("Pages through a large result that was written to disk because it exceeded the inline size threshold.")]
     public Task<SentinelCallToolResult<object>> GetLargeResult(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filepath must be supplied;
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filePath must be supplied;
         // neither is individually required but the tool fails if both are omitted.
-        [Description("The result's resultId, as returned alongside the original truncated result. Required if filepath is omitted.")]
+        [Description("The result's resultId, as returned alongside the original truncated result. Required if filePath is omitted.")]
         [Consumes(DataTag.ResultId)] string? resultId = null,
         [Description("Path to a largeresult_*.json file under .roslynsentinel/largeresults. Required if resultId is omitted.")]
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
         [Description("Maximum number of records to return. Ignored when paging a Raw/offloaded text result - use charLimit instead.")]
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [Description("Number of records (or, for a Raw/offloaded text result, characters) to skip before taking the next page.")]
@@ -111,5 +111,5 @@ public class WorkspaceReadNavigationTools
         [Description("Maximum number of characters to return when paging a Raw/offloaded text result (e.g. from ReadFile or the generic size-limit backstop). Ignored for every other result type, which use limit instead. Defaults to a size-appropriate window when omitted.")]
         [ToolOption(ToolOptionTag.CharLimit)] int? charLimit = null,
         CancellationToken cancellationToken = default)
-        => _impl.GetLargeResult(reason, resultId, filepath, limit, offset, charLimit: charLimit, cancellationToken: cancellationToken);
+        => _impl.GetLargeResult(reason, resultId, filePath, limit, offset, charLimit: charLimit, cancellationToken: cancellationToken);
 }

@@ -1,11 +1,12 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Basic;
 
 /// <summary>
 /// Plain DI-constructed implementation backing WorkspaceHealthMiscTools. Method bodies moved
-/// verbatim from SentinelWorkspaceTools (Decision 7 step 2).
+/// verbatim from WorkspaceTools (Decision 7 step 2).
 /// </summary>
 public class WorkspaceHealthMiscImpl
 {
@@ -13,6 +14,31 @@ public class WorkspaceHealthMiscImpl
     private readonly SentinelConfiguration _config;
     private readonly BuildEngine _buildEngine;
     private readonly ILogger _logger;
+
+    public WorkspaceHealthMiscImpl(IWorkspaceManager workspaceManager)
+    {
+        _workspaceManager = workspaceManager;
+        _config = new SentinelConfiguration();
+        _buildEngine = new BuildEngine(workspaceManager, new DiagnosticEngine(workspaceManager));
+        _logger = NullLogger<WorkspaceHealthMiscImpl>.Instance;
+    }
+
+    public WorkspaceHealthMiscImpl(IWorkspaceManager workspaceManager, SentinelConfiguration config)
+    {
+        _workspaceManager = workspaceManager;
+        _config = config;
+        _buildEngine = new BuildEngine(workspaceManager, new DiagnosticEngine(workspaceManager));
+        _logger = NullLogger<WorkspaceHealthMiscImpl>.Instance;
+    }
+
+    public WorkspaceHealthMiscImpl(IWorkspaceManager workspaceManager, SentinelConfiguration config,
+    BuildEngine buildEngine)
+    {
+        _workspaceManager = workspaceManager;
+        _config = config;
+        _buildEngine = buildEngine;
+        _logger = NullLogger<WorkspaceHealthMiscImpl>.Instance;
+    }
 
     public WorkspaceHealthMiscImpl(IWorkspaceManager workspaceManager, SentinelConfiguration config,
         BuildEngine buildEngine, ILogger logger)

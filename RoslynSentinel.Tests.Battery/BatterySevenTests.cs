@@ -1,8 +1,6 @@
 #pragma warning disable CS8618
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Tests.Battery;
 
 /// <summary>

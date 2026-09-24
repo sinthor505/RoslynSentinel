@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Basic;
 
@@ -9,7 +10,13 @@ public class ImpactAnalyzer
     private readonly ILogger<ImpactAnalyzer> _logger;
     private readonly ISolutionProvider _workspaceManager;
 
-    public ImpactAnalyzer(ILogger<ImpactAnalyzer> logger, ISolutionProvider workspaceManager)
+    public ImpactAnalyzer(ISolutionProvider workspaceManager)
+    {
+        _workspaceManager = workspaceManager;
+        _logger = new NullLogger<ImpactAnalyzer>();
+    }
+
+    public ImpactAnalyzer(ISolutionProvider workspaceManager, ILogger<ImpactAnalyzer> logger)
     {
         _logger = logger;
         _workspaceManager = workspaceManager;

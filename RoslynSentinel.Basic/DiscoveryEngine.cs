@@ -1,6 +1,8 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Basic;
 
@@ -48,11 +50,27 @@ public class DiscoveryEngine
 {
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly IWorkspaceManager _workspaceManager;
+    private readonly ILogger<DiscoveryEngine> _logger;
+
+    public DiscoveryEngine(IWorkspaceManager workspaceManager)
+    {
+        _workspaceManager = workspaceManager;
+        _logger = new NullLogger<DiscoveryEngine>();
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+    }
 
     public DiscoveryEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine)
     {
         _workspaceManager = workspaceManager;
         _symbolNavigationEngine = symbolNavigationEngine;
+        _logger = new NullLogger<DiscoveryEngine>();
+    }
+
+    public DiscoveryEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine, ILogger<DiscoveryEngine> logger)
+    {
+        _workspaceManager = workspaceManager;
+        _symbolNavigationEngine = symbolNavigationEngine;
+        _logger = logger;
     }
 
     /// <summary>

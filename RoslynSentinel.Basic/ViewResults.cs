@@ -6,7 +6,7 @@ namespace RoslynSentinel.Basic;
 /// RefactoringEngine.cs:5524), unchanged rather than reprojected, so the tool's wire shape
 /// matches the engine's own record 1:1.
 /// </summary>
-public record MemberViewResult(IReadOnlyList<RefactoringEngine.ContainerMemberInfo> Members);
+public record MemberViewResult(IReadOnlyList<SymbolNavigationEngine.ContainerMemberInfo> Members);
 
 /// <summary>
 /// Result shape for UsingDirective(operation: view) - lists a file's using directives. Element

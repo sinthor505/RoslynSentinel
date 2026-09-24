@@ -10,7 +10,7 @@ public class AdvancedToolsTests
     private AsyncSafetyEngine _asyncSafetyEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
-    private RefactoringEngine _refactoringEngine;
+    private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private GranularRefactoringEngine _granularRefactoringEngine;
     private SentinelConfiguration _config;
 
@@ -22,7 +22,7 @@ public class AdvancedToolsTests
         _config = new SentinelConfiguration();
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, _config);
         _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
     }
 
@@ -223,7 +223,7 @@ public class Service : IService {
     public void DoB() {}
 }", "Service.cs");
 
-        var result = await _refactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
+        var result = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
 
         Assert.That(result.UpdatedText, Does.Contain("void DoB()"));
         Assert.That(result.UpdatedText, Does.Contain("void DoA()"));
@@ -239,7 +239,7 @@ public class Service : IService {
     public void DoB() {}
 }", "Service.cs");
 
-        var result = await _refactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
+        var result = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
 
         // No new members should have been added -> both already present
         // Count occurrences of DoB in interface section
@@ -257,7 +257,7 @@ public class Service : IService {
     public string Name { get; set; }
 }", "Service.cs");
 
-        var result = await _refactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
+        var result = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
 
         Assert.That(result.UpdatedText, Does.Contain("Name"));
         Assert.That(result.UpdatedText, Does.Contain("get;"));

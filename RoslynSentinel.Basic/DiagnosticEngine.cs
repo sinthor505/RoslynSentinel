@@ -1,4 +1,6 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Basic;
 
@@ -12,10 +14,18 @@ public record DiagnosticSummary(
 public class DiagnosticEngine
 {
     private readonly ISolutionProvider _workspaceManager;
+    private readonly ILogger<DiagnosticEngine> _logger;
 
     public DiagnosticEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
+        _logger = new NullLogger<DiagnosticEngine>();
+    }
+
+    public DiagnosticEngine(ISolutionProvider workspaceManager, ILogger<DiagnosticEngine> logger)
+    {
+        _workspaceManager = workspaceManager;
+        _logger = logger;
     }
 
     public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)

@@ -30,23 +30,23 @@ public class SymbolRelationshipTools
         [Description("Which relationship to query.")]
         [ExternalInputRequired(DataTag.SymbolKind)] FindUsagesSearchKind searchKind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
         [Description("Ranks results by frequency. Only affects objectCreations.")]
         [ToolOption(ToolOptionTag.Sort)] bool sortByFrequency = false,
         CancellationToken cancellationToken = default) =>
-        _impl.QuerySymbolRelationships(reason, name, searchKind, projectName, filepath, sortByFrequency, cancellationToken);
+        _impl.QuerySymbolRelationships(reason, name, searchKind, projectName, filePath, sortByFrequency, cancellationToken);
 
     [McpServerTool(Name = "GetBestInsertionPoint")]
     [Produces(DataTag.StartLine)]
     [Description("Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields -> constructors -> destructors -> properties -> events -> methods -> nested types).")]
     public Task<SentinelCallToolResult<BestInsertionResult, ResultError>> GetBestInsertionPoint(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
         [Consumes(DataTag.ContainerName)] string containerName,
         [Description("The kind of member being inserted.")]
         [ExternalInputRequired(DataTag.MemberKind)] InsertionMemberKind memberKind,
         CancellationToken cancellationToken = default) =>
-        _impl.GetBestInsertionPoint(reason, filepath, containerName, memberKind, cancellationToken);
+        _impl.GetBestInsertionPoint(reason, filePath, containerName, memberKind, cancellationToken);
 
     [McpServerTool(Name = "PreviewRenameImpact")]
     [Produces(DataTag.Report)]
@@ -54,16 +54,16 @@ public class SymbolRelationshipTools
     public Task<SentinelCallToolResult<object>> PreviewRenameImpact(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Together with symbolName, resolves the target when docCommentId isn't known. Use contextSnippet/lineBefore/lineAfter to disambiguate if the name appears more than once.")]
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
         [Consumes(DataTag.SymbolName)] string? symbolName = null,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        [Description("Preferred way to identify the target, together with projectName - as returned by LocateSymbol. Unambiguous; no filepath needed.")]
+        [Description("Preferred way to identify the target, together with projectName - as returned by LocateSymbol. Unambiguous; no filePath needed.")]
         string? docCommentId = null,
         [Description(ToolParams.ProjectName)] string? projectName = null,
         CancellationToken cancellationToken = default) =>
-        _impl.PreviewRenameImpact(reason, filepath, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken);
+        _impl.PreviewRenameImpact(reason, filePath, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken);
 
     [McpServerTool(Name = "FindReferences")]
     [Produces(DataTag.Report)]
@@ -74,10 +74,10 @@ public class SymbolRelationshipTools
         [Description("callers: call sites only. implementations: overrides/interface implementations only. all: both, clearly labeled.")]
         [Consumes(DataTag.SymbolKind)] FindReferencesKind kind,
         [Description("Optional - omit to search by name across the solution; supply to pin resolution when the name is ambiguous across files.")]
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         CancellationToken cancellationToken = default) =>
-        _impl.FindReferences(reason, symbolName, kind, filepath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        _impl.FindReferences(reason, symbolName, kind, filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
 }

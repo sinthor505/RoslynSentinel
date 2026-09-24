@@ -8,15 +8,16 @@ public class MassiveRefactoringTests
 {
     private IWorkspaceManager _workspaceManager;
     private RefactoringEngine _refactoringEngine;
-    private SentinelRefactoringTools _refactoringTools;
-    private SentinelAdvancedRefactoringTools _advancedRefactoringTools;
+    private RefactoringStructuralTools _refactoringStructuralTools;
+    private RefactoringSignatureTools _refactoringSignatureTools;
+    private AdvancedRefactoringTools _advancedRefactoringTools;
 
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
 
         var sr = new StructuralRefinementEngine(_workspaceManager, config);
         var standard = new StandardRefactoringEngine(_workspaceManager);
@@ -33,40 +34,11 @@ public class MassiveRefactoringTests
         var logicOpt = new LogicOptimizationEngine(_workspaceManager);
         var modernization = new ModernizationEngine(_workspaceManager, config);
 
-        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine,
-            mapping,
-            sr,
-            new MsToolAugmentEngine(_workspaceManager),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
-            config,
-            NullLogger<SentinelRefactoringTools>.Instance);
+        _refactoringStructuralTools = new RefactoringStructuralTools(_workspaceManager);
+        _refactoringSignatureTools = new RefactoringSignatureTools(_workspaceManager);
 
-        // ExtractMembers / MoveType moved to SentinelAdvancedRefactoringTools in the server split.
-        _advancedRefactoringTools = new SentinelAdvancedRefactoringTools(
-            _refactoringEngine,
-            //new StandardRefactoringEngine(_workspaceManager),
-            new AdvancedStructuralEngine(_workspaceManager),
-            new MappingEngine(_workspaceManager),
-            new SemanticRefactoringLibrary(_workspaceManager),
-            new GranularRefactoringEngine(_workspaceManager),
-            //new AdvancedLogicEngine(_workspaceManager),
-            new RefinementEngine(_workspaceManager),
-            new AdvancedTypeEngine(_workspaceManager),
-            //new CodeStyleEngine(_workspaceManager, _config),
-            //new CodeFlowEngine(_workspaceManager),
-            //new AdvancedRefactoringEngine(_workspaceManager),
-            //new LogicOptimizationEngine(_workspaceManager),
-            new ModernizationEngine(_workspaceManager, config),
-            //new OutParamRefactoringEngine(_workspaceManager),
-            new MsToolAugmentEngine(_workspaceManager),
-            new CodeGenerationEngine(_workspaceManager),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
-            config,
-            NullLogger<SentinelAdvancedRefactoringTools>.Instance);
+        // ExtractMembers / MoveType moved to AdvancedRefactoringTools in the server split.
+        _advancedRefactoringTools = new AdvancedRefactoringTools(_workspaceManager);
     }
 
     [TearDown]
@@ -90,8 +62,8 @@ public class MassiveRefactoringTests
         var result = await _advancedRefactoringTools.ExtractMembers(reason: "test message", $"C{id}.cs", $"C{id}", ExtractAsType.@interface, $"IC{id}", autoStage: false);
 
         // With autoStage:false the tool returns SuccessDetails = AppliedChangeSummary { ChangedContent = Dictionary<FilePathWrapper, string> }.
-        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
-        var changes = ((AppliedChangeSummary)result.SuccessDetails!).ChangedContent;
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var changes = ((AppliedChangeSummary)result.SuccessData!).ChangedContent;
         Assert.That(changes, Is.Not.Null.And.Not.Empty);
     }
 
@@ -111,7 +83,7 @@ public class MassiveRefactoringTests
         var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var handle = (await symbolNavEngine.LocateSymbolAsync($"OldM{id}")).Single();
 
-        var result = await _refactoringTools.RenameSymbol(
+        var result = await _refactoringSignatureTools.RenameSymbol(
             reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
             newName: $"NewM{id}");
         Assert.That(result.IsSuccess, Is.True);
@@ -131,8 +103,8 @@ public class MassiveRefactoringTests
         var result = await _advancedRefactoringTools.MoveType(reason: "test message", $"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
 
         // Dictionary keys are FilePathWrapper, not string, since the server split.
-        Assert.That(result.IsSuccess, Is.True, result.ErrorDetails?.Message);
-        var data = result.SuccessDetails?.ChangedContent;
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var data = result.SuccessData?.ChangedContent;
         Assert.That(data?.Count, Is.GreaterThan(1));
     }
 }

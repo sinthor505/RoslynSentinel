@@ -28,19 +28,19 @@ public class RegressionTests
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private RefactoringEngine _refactoringEngine;
-    private CodeGenerationEngine _codeGenerationEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private DiagnosticEngine _diagnosticEngine;
+    private WorkspaceHealthMiscImpl _workspaceHealthMisc;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
-        _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager, _config);
     }
 
     [TearDown]
@@ -176,129 +176,6 @@ public class RegressionTests
         var ifacePath = result.Keys.First(k => k != "ProductService.cs");
         Assert.That(result[ifacePath], Does.Contain("namespace MyApp.Core"));
         Assert.That(result[ifacePath], Does.Contain("IProductService"));
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // 3. ConvertPropertySafe -> modifier preservation + contextSnippet
-    // ══════════════════════════════════════════════════════════════════════════
-
-    [Test]
-    public async Task ConvertPropertySafe_PreservesVirtualModifier_OnToFullProperty()
-    {
-        // ConvertPropertySafe promises to handle virtual/override/new -> this test enforces that.
-        SetSource("""
-            public class Base
-            {
-                public virtual int Count { get; set; } = 10;
-            }
-            """);
-
-        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Count", "ToFullProperty");
-
-        Assert.That(result.UpdatedText, Does.Contain("virtual"), "virtual modifier must survive ToFullProperty conversion");
-        Assert.That(result.UpdatedText, Does.Contain("10"), "Initializer value must survive conversion");
-    }
-
-    [Test]
-    public async Task ConvertPropertySafe_PreservesOverrideModifier_OnToFullProperty()
-    {
-        SetSource("""
-            public class Base { public virtual int Size { get; set; } }
-            public class Derived : Base
-            {
-                public override int Size { get; set; } = 99;
-            }
-            """);
-
-        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Size", "ToFullProperty");
-
-        Assert.That(result.UpdatedText, Does.Contain("override"), "override modifier must survive ToFullProperty conversion");
-        Assert.That(result.UpdatedText, Does.Contain("99"), "Initializer 99 must survive conversion");
-    }
-
-    [Test]
-    public async Task ConvertPropertySafe_ContextSnippet_PicksCorrectPropertyWhenNamesClash()
-    {
-        // Two classes each have a 'Name' property. contextSnippet must pick the right one.
-        SetSource("""
-            public class Person
-            {
-                public string Name { get; set; } = "Alice";
-            }
-            public class Company
-            {
-                public string Name { get; set; } = "Acme";
-            }
-            """);
-
-        // Target only the Company.Name property via contextSnippet
-        var result = await _codeGenerationEngine.ConvertPropertySafeAsync(
-            "Test.cs", "Name", "ToFullProperty",
-            contextSnippet: "\"Acme\"");
-
-        // The result must expand Company.Name (initializer "Acme" should move to backing field)
-        // Person.Name should remain an auto-property
-        Assert.That(result.UpdatedText, Does.Contain("\"Acme\""),
-            "Company's initializer Acme must appear in the backing field");
-        // Person.Name should still be an auto-property (no _name backing for Alice)
-        var personSection = result.UpdatedText!.Substring(0, result.UpdatedText!.IndexOf("Company", StringComparison.Ordinal));
-        Assert.That(personSection, Does.Contain("{ get; set; }"),
-            "Person.Name must remain an auto-property - context snippet should have limited the change");
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // 4. InterpolateStringSafe -> const format string (the exact MS built-in bug)
-    // ══════════════════════════════════════════════════════════════════════════
-
-    [Test]
-    public async Task InterpolateStringSafe_ConstFormatString_ResolvedViaSemanticModel()
-    {
-        // The MS built-in convert_to_interpolated_string fails when the format string is a
-        // named const. Our implementation resolves it via the semantic model. This test
-        // covers exactly that scenario.
-        SetSource("""
-            public class Logger
-            {
-                private const string MessageFmt = "User {0} logged in from {1}";
-
-                public string BuildLog(string user, string ip)
-                {
-                    return string.Format(MessageFmt, user, ip);
-                }
-            }
-            """);
-
-        var result = await _codeGenerationEngine.InterpolateStringAsync(
-            "Test.cs",
-            "string.Format(MessageFmt, user, ip)");
-
-        Assert.That(result.UpdatedText!, Contains.Substring("$\""), "Should produce an interpolated string");
-        Assert.That(result.UpdatedText!, Contains.Substring("{user}"), "user arg should be inlined");
-        Assert.That(result.UpdatedText!, Contains.Substring("{ip}"), "ip arg should be inlined");
-        // The const itself should no longer appear as a format reference
-        Assert.That(result.UpdatedText!, Does.Not.Contain("string.Format(MessageFmt"), "Original string.Format call must be replaced");
-    }
-
-    [Test]
-    public async Task InterpolateStringSafe_FormatSpecifier_PreservedInInterpolation()
-    {
-        // {0:N2} format specifiers must survive conversion.
-        SetSource("""
-            public class Formatter
-            {
-                public string FormatPrice(decimal amount)
-                {
-                    return string.Format("Price: {0:N2}", amount);
-                }
-            }
-            """);
-
-        var result = await _codeGenerationEngine.InterpolateStringAsync(
-            "Test.cs",
-            "string.Format(\"Price: {0:N2}\", amount)");
-
-        Assert.That(result.UpdatedText!, Contains.Substring("$\""), "Must produce interpolated string");
-        Assert.That(result.UpdatedText!, Contains.Substring("{amount:N2}"), "Format specifier N2 must be preserved");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -504,125 +381,6 @@ public class RegressionTests
 
         Assert.That(callers.Any(c => c.CallerMethod == "Read"),
             Is.True, "Should resolve the field declaration and find its usage in Read");
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // 7. ImplementInterfaceSafe -> partial implementation, property-only, no override
-    // ══════════════════════════════════════════════════════════════════════════
-
-    [Test]
-    public async Task ImplementInterfaceSafe_PartialImplementation_OnlyGeneratesMissingMembers()
-    {
-        // Class already implements one method -> only the missing one should be generated.
-        const string source = """
-            namespace App;
-
-            public interface IWorker
-            {
-                void Start();
-                void Stop();
-            }
-
-            public class Worker : IWorker
-            {
-                public void Start() { /* already done */ }
-            }
-            """;
-        SetSource(source, "Worker.cs");
-
-        var result = await _codeGenerationEngine.ImplementInterfaceAsync("Worker.cs", "Worker", "IWorker");
-
-        // Stop() must be generated
-        Assert.That(result.UpdatedText, Does.Contain("public void Stop"),
-            "Missing Stop() method must be generated");
-        // Start() must NOT be duplicated -> check 'public void Start' (not 'void Start' which also matches interface)
-        var publicStartCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"public void Start").Count;
-        Assert.That(publicStartCount, Is.EqualTo(1),
-            "Start() must NOT be duplicated - it was already implemented");
-    }
-
-    [Test]
-    public async Task ImplementInterfaceSafe_PropertyOnlyInterface_GeneratesPropertyStubs()
-    {
-        // Interface with only properties (no methods) must produce property stubs.
-        const string source = """
-            namespace App;
-
-            public interface IConfig
-            {
-                string Host { get; set; }
-                int Port { get; }
-            }
-
-            public class AppConfig : IConfig
-            {
-            }
-            """;
-        SetSource(source, "Config.cs");
-
-        var result = await _codeGenerationEngine.ImplementInterfaceAsync("Config.cs", "AppConfig", "IConfig");
-
-        Assert.That(result.UpdatedText, Does.Contain("public string Host"),
-            "Host property stub must be generated");
-        Assert.That(result.UpdatedText, Does.Contain("public int Port"),
-            "Port property stub must be generated");
-        Assert.That(result.UpdatedText, Does.Contain("NotImplementedException"),
-            "Property stubs must throw NotImplementedException");
-        Assert.That(result.UpdatedText, Does.Not.Contain("override"),
-            "REGRESSION: interface property stubs must NOT have 'override' keyword");
-    }
-
-    [Test]
-    public async Task ImplementInterfaceSafe_NeverAdds_OverrideKeyword_OnMethods()
-    {
-        // CRITICAL REGRESSION TEST: The MS built-in implement_interface incorrectly adds
-        // 'override' to interface implementations. Ours must never do this.
-        const string source = """
-            namespace App;
-
-            public interface ISerializer
-            {
-                string Serialize(object obj);
-                T Deserialize<T>(string json);
-            }
-
-            public class JsonSerializer : ISerializer
-            {
-            }
-            """;
-        SetSource(source, "JsonSerializer.cs");
-
-        var result = await _codeGenerationEngine.ImplementInterfaceAsync(
-            "JsonSerializer.cs", "JsonSerializer", "ISerializer");
-
-        Assert.That(result.UpdatedText, Does.Not.Contain("override"),
-            "REGRESSION: interface method stubs must NEVER have 'override' keyword");
-        Assert.That(result.UpdatedText, Does.Contain("public string Serialize"),
-            "Serialize stub must be generated");
-    }
-
-    [Test]
-    public async Task ImplementInterfaceSafe_ReadOnlyProperty_GeneratesGetterOnly()
-    {
-        // Read-only properties in an interface (get; only) must produce getter-only stubs.
-        const string source = """
-            namespace App;
-            public interface IReadOnly { string Id { get; } }
-            public class Impl : IReadOnly { }
-            """;
-        SetSource(source, "Impl.cs");
-
-        var result = await _codeGenerationEngine.ImplementInterfaceAsync("Impl.cs", "Impl", "IReadOnly");
-
-        Assert.That(result.UpdatedText, Does.Contain("public string Id"),
-            "Id property must be generated");
-        // A read-only stub should NOT have a setter accessor
-        var idPropStart = result.UpdatedText!.IndexOf("public string Id", StringComparison.Ordinal);
-        var afterId = result.UpdatedText!.Substring(idPropStart);
-        var nextMemberOrEnd = afterId.IndexOf("\n    public ", StringComparison.Ordinal);
-        var idBlock = nextMemberOrEnd > 0 ? afterId.Substring(0, nextMemberOrEnd) : afterId;
-        Assert.That(idBlock, Does.Not.Contain("set"),
-            "Read-only interface property must NOT generate a setter");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1350,7 +1108,7 @@ public class RegressionTests
         // Create a fresh workspace manager with NO solution loaded
         using var freshManager = new PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
-        var engine = new MsToolAugmentEngine(freshManager);
+        var engine = new WorkspaceHealthMiscImpl(freshManager);
 
         var report = await engine.GetWorkspaceHealthAsync();
 
@@ -1371,7 +1129,7 @@ public class RegressionTests
             """);
 
         var engine = CreateAugmentEngine();
-        var report = await engine.GetWorkspaceHealthAsync();
+        var report = await _workspaceHealthMisc.GetWorkspaceHealthAsync();
 
         Assert.That(report.IsOperational, Is.True);
         Assert.That(report.HasLoadedSolution, Is.True);

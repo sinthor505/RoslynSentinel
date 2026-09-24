@@ -3,14 +3,15 @@ using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Editing;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Simplification;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol;
-using Microsoft.CodeAnalysis.Editing;
 
 namespace RoslynSentinel.Basic;
 
@@ -33,6 +34,7 @@ public record FormatHunk(int StartLine, int EndLine, List<string> ContextBefore,
 public record FormatPreviewResult(bool Changed, int TotalHunks, List<FormatHunk> Hunks);
 public class RefactoringEngine
 {
+    private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly ILogger<RefactoringEngine> _logger;
     private readonly ISolutionProvider _workspaceManager;
     private readonly SentinelConfiguration _config;
@@ -42,11 +44,29 @@ public class RefactoringEngine
         "\r",
         "\n"
     };
-    public RefactoringEngine(ILogger<RefactoringEngine> logger, ISolutionProvider workspaceManager, SentinelConfiguration config)
+
+    public RefactoringEngine(ISolutionProvider workspaceManager)
+    {
+        _workspaceManager = workspaceManager;
+        _logger = new NullLogger<RefactoringEngine>();
+        _config = new SentinelConfiguration();
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+    }
+
+    public RefactoringEngine(ISolutionProvider workspaceManager, ILogger<RefactoringEngine> logger, SentinelConfiguration config)
     {
         _logger = logger;
         _workspaceManager = workspaceManager;
         _config = config;
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+    }
+
+    public RefactoringEngine(ISolutionProvider workspaceManager, SymbolNavigationEngine symbolNavigationEngine, ILogger<RefactoringEngine> logger, SentinelConfiguration config)
+    {
+        _logger = logger;
+        _workspaceManager = workspaceManager;
+        _config = config;
+        _symbolNavigationEngine = symbolNavigationEngine;
     }
 
     /// <summary>
@@ -311,7 +331,7 @@ public class RefactoringEngine
                     var boundMethod = refSemanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
                     if (boundMethod == null)
                     {
-                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Could not resolve the bound overload for this call site via the semantic model."));
+                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Could not _symbolNavigationEngine. Resolve the bound overload for this call site via the semantic model."));
                         continue;
                     }
 
@@ -1266,7 +1286,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? member;
         try
         {
-            member = ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
+            member = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -1348,7 +1368,7 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? container = null;
         try
         {
-            container = ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+            container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -1366,7 +1386,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = BuildContainerNotFoundMessage(root, containerName)
+                Message = SymbolNavigationEngine.BuildContainerNotFoundMessage(root, containerName)
             };
         }
 
@@ -1386,7 +1406,7 @@ public class RefactoringEngine
         {
             throw new NotSupportedException(
                 $"AddMemberAsync: unhandled container type {container.GetType().Name} for \"{containerName}\". " +
-                "This is a bug - every BaseTypeDeclarationSyntax subtype must resolve to a TypeDeclarationSyntax here; " +
+                "This is a bug - every BaseTypeDeclarationSyntax subtype must _symbolNavigationEngine. Resolve to a TypeDeclarationSyntax here; " +
                 "silently returning the container unchanged would falsely report success.");
         }
 
@@ -1426,7 +1446,7 @@ public class RefactoringEngine
     /// <summary>
     /// Adds a brand-new top-level type declaration (enum/class/record/struct/interface) to a file,
     /// for the case AddMemberAsync can't handle: there is no existing BaseTypeDeclarationSyntax to
-    /// target because the type being added doesn't exist yet. Resolves to the file's namespace
+    /// target because the type being added doesn't exist yet. _symbolNavigationEngine. Resolves to the file's namespace
     /// (NamespaceDeclarationSyntax or FileScopedNamespaceDeclarationSyntax) when namespaceName is
     /// null and exactly one namespace is present, or to the CompilationUnitSyntax itself for a file
     /// with no namespace (global namespace). If the file has multiple namespaces and namespaceName
@@ -1565,7 +1585,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? member;
         try
         {
-            member = ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
+            member = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -1614,200 +1634,6 @@ public class RefactoringEngine
             FilePath = filePath,
             Message = "// Member removed.",
             UpdatedText = await RoslynFormattingHelper.RemoveNodeFormattedAsync(document, root, member, cancellationToken)
-        };
-    }
-
-    public async Task<DocumentEditResult> ConvertToPrimaryConstructorAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
-    {
-        if (!_config.IsFeatureEnabled("PrimaryConstructors"))
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature 'PrimaryConstructors' is disabled."
-            };
-        }
-
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Class not found."
-            };
-        }
-
-        var ctor = classNode.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
-        if (ctor == null || ctor.ParameterList.Parameters.Count == 0)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Constructor not found or has no parameters."
-            };
-        }
-
-        // Minimal implementation for tests: convert to class C(int x) and remove fields/ctor
-        var newClass = SyntaxFactory.ClassDeclaration(classNode.Identifier).WithModifiers(classNode.Modifiers).WithParameterList(ctor.ParameterList);
-        var members = classNode.Members.Where(m => m is not ConstructorDeclarationSyntax && m is not FieldDeclarationSyntax).ToList();
-        newClass = newClass.WithMembers(SyntaxFactory.List(members));
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.Modified,
-            FilePath = filePath,
-            Message = "// Class converted to primary constructor.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
-        };
-    }
-
-    public async Task<DocumentEditResult> ConvertExpressionBodyAsync(FilePathWrapper filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
-    {
-        if (!_config.IsFeatureEnabled("ConvertExpressionBody"))
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature 'ConvertExpressionBody' is disabled."
-            };
-        }
-
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
-
-        var root = (await document.GetSyntaxRootAsync(cancellationToken))!;
-        var text = await document.GetTextAsync(cancellationToken);
-        MemberDeclarationSyntax? target;
-        try
-        {
-            target = ResolveMemberByNameOrSnippet(root, text, memberName, contextSnippet, lineBefore, lineAfter,
-                m => m is MethodDeclarationSyntax || m is PropertyDeclarationSyntax || m is ConstructorDeclarationSyntax);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message
-            };
-        }
-
-        if (target == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Member '{memberName}' not found in '{Path.GetFileName(filePath)}'."
-            };
-        }
-
-        SyntaxNode newTarget;
-        if (direction == "ToExpressionBody")
-        {
-            if (target is MethodDeclarationSyntax meth && meth.Body != null)
-            {
-                var stmts = meth.Body.Statements;
-                if (stmts.Count == 1 && stmts[0] is ReturnStatementSyntax ret && ret.Expression != null)
-                {
-                    newTarget = meth.WithBody(null).WithExpressionBody(SyntaxFactory.ArrowExpressionClause(ret.Expression)).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-                }
-                else
-                {
-                    return new DocumentEditResult
-                    {
-                        Outcome = EditOutcome.CannotConvert,
-                        FilePath = filePath,
-                        Message = $"// Cannot convert '{memberName}' to expression body: method body has {stmts.Count} statement(s); only single-return methods can be converted."
-                    };
-                }
-            }
-            else if (target is PropertyDeclarationSyntax prop && prop.AccessorList != null)
-            {
-                var getter = prop.AccessorList.Accessors.FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-                if (getter?.Body?.Statements.Count == 1 && getter.Body.Statements[0] is ReturnStatementSyntax pret && pret.Expression != null)
-                {
-                    newTarget = prop.WithAccessorList(null).WithExpressionBody(SyntaxFactory.ArrowExpressionClause(pret.Expression)).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-                }
-                else
-                {
-                    return new DocumentEditResult
-                    {
-                        Outcome = EditOutcome.CannotConvert,
-                        FilePath = filePath,
-                        Message = $"// Cannot convert '{memberName}' to expression body: property getter does not contain a simple return statement."
-                    };
-                }
-            }
-            else
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotConvert,
-                    FilePath = filePath,
-                    Message = $"// Cannot convert '{memberName}' to expression body: member has no block body or is already an expression body."
-                };
-            }
-        }
-        else // ToBlockBody
-        {
-            if (target is MethodDeclarationSyntax methExpr && methExpr.ExpressionBody != null)
-            {
-                var returnType = methExpr.ReturnType.ToString().Trim();
-                StatementSyntax stmt = returnType == "void" ? SyntaxFactory.ExpressionStatement(methExpr.ExpressionBody.Expression) : (StatementSyntax)SyntaxFactory.ReturnStatement(methExpr.ExpressionBody.Expression);
-                newTarget = methExpr.WithExpressionBody(null).WithSemicolonToken(default).WithBody(SyntaxFactory.Block(stmt));
-            }
-            else if (target is PropertyDeclarationSyntax propExpr && propExpr.ExpressionBody != null)
-            {
-                var getter = SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithBody(SyntaxFactory.Block(SyntaxFactory.ReturnStatement(propExpr.ExpressionBody.Expression)));
-                newTarget = propExpr.WithExpressionBody(null).WithSemicolonToken(default).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.SingletonList(getter)));
-            }
-            else
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotConvert,
-                    FilePath = filePath,
-                    Message = $"// Cannot convert '{memberName}' to block body: member has no expression body (already a block body or not a method/property)."
-                };
-            }
-        }
-
-        var newRoot = root.ReplaceNode(target, RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newTarget));
-        var doc = document.WithSyntaxRoot(newRoot);
-        var formatted = await Formatter.FormatAsync(doc, null, cancellationToken);
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.Modified,
-            FilePath = filePath,
-            UpdatedText = (await formatted.GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -1941,10 +1767,10 @@ public class RefactoringEngine
         {
             // ContextHelper's message ("contextSnippet not found"/"ambiguous (N matches)") is
             // necessarily generic -> ContextHelper only sees raw text offsets, it has no symbolName
-            // or declaration list to enumerate the way ResolveMemberByNameOrSnippet's NearMissList
+            // or declaration list to enumerate the way _symbolNavigationEngine. ResolveMemberByNameOrSnippet's NearMissList
             // hint does, and this tool has no name argument at all (it targets an expression by its
             // literal text, not a named declaration) -> so there is no candidate set to report here
-            // the way there is for the member/type resolvers. Point the caller at the tools that
+            // the way there is for the member/type _symbolNavigationEngine. Resolvers. Point the caller at the tools that
             // would show it real file content instead of leaving a bare message with nothing to act on.
             return new DocumentEditResult
             {
@@ -1964,12 +1790,12 @@ public class RefactoringEngine
         var exactMatch = root.DescendantNodes().OfType<ExpressionSyntax>().Where(e => e.SpanStart == pos && System.Text.RegularExpressions.Regex.Replace(e.ToString().Trim(), @"\s+", " ") == normalizedSnippet).FirstOrDefault();
         // Fallback: contextSnippet didn't match a whole expression's text at this position -> walk from
         // the token at the position up to the nearest enclosing expression instead. This is inherently
-        // ambiguous (a partial/short contextSnippet can resolve to a larger expression than the caller
+        // ambiguous (a partial/short contextSnippet can _symbolNavigationEngine. Resolve to a larger expression than the caller
         // intended), so it only ever kicks in when the exact match above fails, and never overrides it.
         var expression = exactMatch ?? root.FindToken(pos).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            // The snippet DID resolve to a text position (pos, above) -> the failure is that no
+            // The snippet DID _symbolNavigationEngine. Resolve to a text position (pos, above) -> the failure is that no
             // ExpressionSyntax boundary aligns with it (e.g. the snippet spans a statement, a
             // keyword, or crosses an expression boundary). Report where it landed instead of a
             // bare "not found", since that position is real, already-available information -> a
@@ -2440,7 +2266,7 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? enumNode = null;
         try
         {
-            enumNode = ResolveTypeByNameOrSnippet(root, sourceText, enumName, contextSnippet, lineBefore, lineAfter);
+            enumNode = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, enumName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -2616,7 +2442,7 @@ public class RefactoringEngine
     /// </summary>
     public async Task<DocumentEditResult> AddEnumMemberAsync(FilePathWrapper filePath, string enumName, string newMemberToken, string? afterMemberName = null, string? beforeMemberName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var (outcome, message, existing) = await GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        var (outcome, message, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (outcome != EditOutcome.Modified)
         {
             return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
@@ -2670,7 +2496,7 @@ public class RefactoringEngine
     /// </summary>
     public async Task<DocumentEditResult> RemoveEnumMemberAsync(FilePathWrapper filePath, string enumName, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var (outcome, message, existing) = await GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        var (outcome, message, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (outcome != EditOutcome.Modified)
         {
             return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
@@ -2697,7 +2523,7 @@ public class RefactoringEngine
     /// </summary>
     public async Task<DocumentEditResult> ReplaceEnumMemberAsync(FilePathWrapper filePath, string enumName, string memberName, string newMemberToken, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var (outcome, message, existing) = await GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        var (outcome, message, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (outcome != EditOutcome.Modified)
         {
             return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
@@ -2743,7 +2569,7 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? container = null;
         try
         {
-            container = ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+            container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -2761,7 +2587,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = BuildContainerNotFoundMessage(root, containerName)
+                Message = SymbolNavigationEngine.BuildContainerNotFoundMessage(root, containerName)
             };
         }
 
@@ -2797,7 +2623,7 @@ public class RefactoringEngine
         var insertedDescription = DescribeParsedMember(newMember);
         newMember = newMember.WithAddedByComment("InsertMemberAfter");
         var membersList = typeDecl.Members.ToList();
-        var idx = membersList.FindIndex(m => GetMemberName(m) == afterMemberName);
+        var idx = membersList.FindIndex(m => _symbolNavigationEngine.GetMemberName(m) == afterMemberName);
         var insertIndex = idx < 0 ? membersList.Count : idx + 1;
 
         return new DocumentEditResult
@@ -2838,7 +2664,7 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? container = null;
         try
         {
-            container = ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+            container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -2856,7 +2682,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = BuildContainerNotFoundMessage(root, containerName)
+                Message = SymbolNavigationEngine.BuildContainerNotFoundMessage(root, containerName)
             };
         }
 
@@ -2892,7 +2718,7 @@ public class RefactoringEngine
         var insertedDescription = DescribeParsedMember(newMember);
         newMember = newMember.WithAddedByComment("InsertMemberBefore");
         var membersList = typeDecl.Members.ToList();
-        var idx = membersList.FindIndex(m => GetMemberName(m) == beforeMemberName);
+        var idx = membersList.FindIndex(m => _symbolNavigationEngine.GetMemberName(m) == beforeMemberName);
         var insertIndex = idx < 0 ? membersList.Count : idx;
 
         return new DocumentEditResult
@@ -2953,7 +2779,7 @@ public class RefactoringEngine
         SyntaxNode? targetNode = null;
         try
         {
-            var memberNode = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
+            var memberNode = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
             if (memberNode != null)
             {
                 targetNode = memberNode;
@@ -2973,7 +2799,7 @@ public class RefactoringEngine
         {
             try
             {
-                var typeNode = ResolveTypeByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+                var typeNode = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
                 if (typeNode != null)
                 {
                     targetNode = typeNode;
@@ -3038,7 +2864,7 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? container = null;
         try
         {
-            container = ResolveTypeByNameOrSnippet(root, sourceText, typeName, contextSnippet, lineBefore, lineAfter);
+            container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, typeName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -3132,8 +2958,8 @@ public class RefactoringEngine
         SyntaxNode? targetNode = null;
         try
         {
-            var memberTarget = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
-            targetNode = memberTarget ?? ResolveTypeByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            var memberTarget = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
+            targetNode = memberTarget ?? _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -3222,7 +3048,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? memberTarget = null;
         try
         {
-            memberTarget = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
+            memberTarget = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
         }
         catch (InvalidOperationException ex)
         {
@@ -3283,7 +3109,7 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? container = null;
         try
         {
-            container = ResolveTypeByNameOrSnippet(root, sourceText, typeName, contextSnippet, lineBefore, lineAfter);
+            container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, typeName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -3332,12 +3158,12 @@ public class RefactoringEngine
     /// edit in <paramref name="edits"/> to <paramref name="filePath"/> against ONE original syntax root,
     /// then folds all replacements into a single <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/>
     /// call. Calling the single-edit methods N times independently would be wrong for a multi-edit batch
-    /// targeting the same file: each call resolves against its own fresh GetCurrentSolutionAsync root, so
+    /// targeting the same file: each call _symbolNavigationEngine. Resolves against its own fresh GetCurrentSolutionAsync root, so
     /// the second call's UpdatedText would silently discard the first edit instead of compounding it.
     /// Returns one <see cref="DocumentEditResult"/> for the whole file: <see cref="EditOutcome.Modified"/>
     /// with UpdatedText on full success, or <see cref="EditOutcome.CannotEdit"/> with every per-index
     /// failure joined into Message (never a partial write) when any edit in this file's group fails to
-    /// resolve or two edits collide on the same target node.
+    /// _symbolNavigationEngine. Resolve or two edits collide on the same target node.
     /// </summary>
     public async Task<DocumentEditResult> ApplyModifierBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TargetName, string Modifier, AddRemoveAction Action, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
     {
@@ -3361,7 +3187,7 @@ public class RefactoringEngine
         {
             try
             {
-                var target = ResolveMemberByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
+                var target = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
                 if (target == null)
                 {
                     errors.Add($"edits[{edit.Index}] ({edit.TargetName}): target not found.");
@@ -3387,7 +3213,7 @@ public class RefactoringEngine
         {
             if (seen.TryGetValue(kvp.Value, out var firstIndex))
             {
-                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls.");
+                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both _symbolNavigationEngine. Resolve to the same target in '{filePath}'. Split these into separate calls.");
             }
             else
             {
@@ -3449,7 +3275,7 @@ public class RefactoringEngine
     /// <summary>
     /// Batch form of <see cref="AddAttributeAsync"/>/<see cref="ReplaceAttributeAsync"/>/
     /// <see cref="RemoveAttributeAsync"/>: same execution model as <see cref="ApplyModifierBatchAsync"/> ->
-    /// resolve every edit's target against ONE original root, reject same-node collisions, fold all
+    /// _symbolNavigationEngine. Resolve every edit's target against ONE original root, reject same-node collisions, fold all
     /// replacements into one <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/> call.
     /// </summary>
     public async Task<DocumentEditResult> ApplyAttributeBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TargetName, string ExistingAttribute, AttributeModifyAction Action, string? NewAttribute, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
@@ -3474,8 +3300,8 @@ public class RefactoringEngine
         {
             try
             {
-                var memberTarget = ResolveMemberByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter, m => m is not BaseTypeDeclarationSyntax);
-                SyntaxNode? targetNode = memberTarget ?? ResolveTypeByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
+                var memberTarget = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter, m => m is not BaseTypeDeclarationSyntax);
+                SyntaxNode? targetNode = memberTarget ?? _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
                 if (targetNode == null)
                 {
                     errors.Add($"edits[{edit.Index}] ({edit.TargetName}): target not found.");
@@ -3499,7 +3325,7 @@ public class RefactoringEngine
         {
             if (seen.TryGetValue(kvp.Value, out var firstIndex))
             {
-                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls.");
+                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both _symbolNavigationEngine. Resolve to the same target in '{filePath}'. Split these into separate calls.");
             }
             else
             {
@@ -3597,7 +3423,7 @@ public class RefactoringEngine
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Batch form of <see cref="AddBaseTypeAsync"/>/<see cref="RemoveBaseTypeAsync"/>: same execution
-    /// model as <see cref="ApplyModifierBatchAsync"/> -> resolve every edit's type target against ONE
+    /// model as <see cref="ApplyModifierBatchAsync"/> -> _symbolNavigationEngine. Resolve every edit's type target against ONE
     /// original root, reject same-node collisions, fold all replacements into one
     /// <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/> call.
     /// </summary>
@@ -3623,7 +3449,7 @@ public class RefactoringEngine
         {
             try
             {
-                var container = ResolveTypeByNameOrSnippet(root, sourceText, edit.TypeName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
+                var container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, edit.TypeName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
                 if (container == null)
                 {
                     errors.Add($"edits[{edit.Index}] ({edit.TypeName}): type not found.");
@@ -3647,7 +3473,7 @@ public class RefactoringEngine
         {
             if (seen.TryGetValue(kvp.Value, out var firstIndex))
             {
-                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls.");
+                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both _symbolNavigationEngine. Resolve to the same target in '{filePath}'. Split these into separate calls.");
             }
             else
             {
@@ -3729,7 +3555,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? target = null;
         try
         {
-            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            target = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -3809,7 +3635,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? target = null;
         try
         {
-            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            target = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -3887,7 +3713,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? target = null;
         try
         {
-            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            target = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -3976,7 +3802,7 @@ public class RefactoringEngine
         SyntaxNode? target = null;
         try
         {
-            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
+            target = _symbolNavigationEngine.ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
         }
         catch (InvalidOperationException ex)
         {
@@ -4147,7 +3973,7 @@ public class RefactoringEngine
         SyntaxNode? target;
         try
         {
-            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
+            target = _symbolNavigationEngine.ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
         }
         catch (InvalidOperationException ex)
         {
@@ -4208,7 +4034,7 @@ public class RefactoringEngine
         SyntaxNode? target;
         try
         {
-            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
+            target = _symbolNavigationEngine.ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
         }
         catch (InvalidOperationException ex)
         {
@@ -4301,7 +4127,7 @@ public class RefactoringEngine
             _ => 9
         };
         static bool IsStatic(MemberDeclarationSyntax m) => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword));
-        var sorted = container.Members.OrderBy(CategoryOf).ThenBy(m => IsStatic(m) ? 0 : 1).ThenBy(m => GetMemberName(m) ?? "").ToList();
+        var sorted = container.Members.OrderBy(CategoryOf).ThenBy(m => IsStatic(m) ? 0 : 1).ThenBy(m => _symbolNavigationEngine.GetMemberName(m) ?? "").ToList();
         var newContainer = container.WithMembers(SyntaxFactory.List(sorted));
         return new DocumentEditResult
         {
@@ -4551,7 +4377,7 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? classNode = null;
         try
         {
-            classNode = ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
+            classNode = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -4678,7 +4504,7 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? classNode;
         try
         {
-            classNode = ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
+            classNode = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -4808,7 +4634,7 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? classNode;
         try
         {
-            classNode = ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
+            classNode = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -4847,7 +4673,7 @@ public class RefactoringEngine
     public record MethodParameterInfo(string ParamName, string ParamType, string? DefaultValue);
 
     /// <summary>
-    /// Lists a method's parameters. methodName is resolved via ResolveMemberByNameOrSnippet, so
+    /// Lists a method's parameters. methodName is _symbolNavigationEngine. Resolved via _symbolNavigationEngine. ResolveMemberByNameOrSnippet, so
     /// contextSnippet/lineBefore/lineAfter disambiguate overloads the same way every other
     /// member-targeting tool does.
     /// </summary>
@@ -4870,7 +4696,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? memberNode;
         try
         {
-            memberNode = ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
+            memberNode = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
         }
         catch (InvalidOperationException ex)
         {
@@ -4940,7 +4766,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? memberNode;
         try
         {
-            memberNode = ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
+            memberNode = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
         }
         catch (InvalidOperationException ex)
         {
@@ -5034,7 +4860,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? memberNode;
         try
         {
-            memberNode = ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
+            memberNode = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
         }
         catch (InvalidOperationException ex)
         {
@@ -5295,624 +5121,6 @@ public class RefactoringEngine
                 Message = $"// ContextSnippet error: {ex.Message}"
             };
         }
-    }
-
-    private string? GetMemberName(MemberDeclarationSyntax member)
-    {
-        return member switch
-        {
-            MethodDeclarationSyntax m => m.Identifier.Text,
-            PropertyDeclarationSyntax p => p.Identifier.Text,
-            ClassDeclarationSyntax c => c.Identifier.Text,
-            InterfaceDeclarationSyntax i => i.Identifier.Text,
-            FieldDeclarationSyntax f => f.Declaration.Variables.FirstOrDefault()?.Identifier.Text,
-            ConstructorDeclarationSyntax ctor => ctor.Identifier.Text,
-            // EnumDeclarationSyntax/RecordDeclarationSyntax/StructDeclarationSyntax are all
-            // MemberDeclarationSyntax (via BaseTypeDeclarationSyntax) and so are already collected
-            // as candidates by ResolveMemberByNameOrSnippet's DescendantNodes().OfType<...>() scan ->
-            // omitting them here didn't exclude them, it silently made GetMemberName return null for
-            // them, so the `GetMemberName(m) == memberName` filter dropped them regardless of what
-            // name was searched for. Confirmed: AddSummaryCommentAsync("OrderStatus", ...) against a
-            // real, unambiguous top-level enum failed "target not found" purely because of this gap.
-            EnumDeclarationSyntax e => e.Identifier.Text,
-            RecordDeclarationSyntax r => r.Identifier.Text,
-            StructDeclarationSyntax s => s.Identifier.Text,
-            _ => null
-        };
-    }
-
-    // Task I evaluation (docs/plan-tool-disambiguation-remediation-v1.md, addendum under Task I):
-    // NearMissList won over NearestSnippet/CorrectedCoordinates because it's the only strategy that
-    // shows an agent every real candidate instead of just the first one -> on a genuinely ambiguous
-    // snippet (2+ real matches), the other two strategies only ever surfaced candidate #1, which is
-    // actively misleading (an agent can't tell there were other matches worth choosing between, let
-    // alone which one it meant). NearMissList's per-candidate line + declaration preview is also the
-    // only shape that gives an agent enough to construct a corrected contextSnippet in one try. The
-    // other 2 strategies' dead code was deleted here per the plan's own Task I instruction.
-    /// <summary>
-    /// Resolves a member by name, optionally disambiguating with a contextSnippet when the name
-    /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
-    /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
-    /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildMemberHint).
-    /// </summary>
-    private MemberDeclarationSyntax? ResolveMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, Func<MemberDeclarationSyntax, bool>? extraFilter = null)
-    {
-        var candidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax)).Where(m => extraFilter == null || extraFilter(m)).ToList();
-        // A type's own name and its constructor's name are identical (both read from
-        // ClassDeclarationSyntax/StructDeclarationSyntax.Identifier and
-        // ConstructorDeclarationSyntax.Identifier), so "OrderService" matches both the class
-        // declaration and its constructor here. None of these tools operate on whole type
-        // declarations (ReplaceMember/ChangeAccessibility/etc. target "a method, property, or
-        // field"), so when a constructor shares the name, prefer it over the enclosing type ->
-        // otherwise the type declaration (found first, being the ancestor node) silently wins
-        // and callers asking for "the OrderService member" get the whole class back.
-        if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
-        {
-            candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
-        }
-
-        if (contextSnippet == null || candidates.Count <= 1)
-        {
-            // memberName alone already resolves unambiguously (zero or one candidate) -> a
-            // contextSnippet exists only to disambiguate between multiple same-named candidates,
-            // so there's nothing for it to do here. A caller that includes one defensively (or
-            // whose snippet has a whitespace/formatting mismatch against the file, unrelated to
-            // *which* member is meant) should not have the whole call fail over a match that was
-            // never actually needed -> confirmed regression: ContosoOrders ApplyDiscount (a single,
-            // non-overloaded method) failed ReplaceMember twice on contextSnippet mismatches that
-            // had no bearing on which member was targeted, before the caller gave up and switched
-            // tools entirely.
-            return candidates.FirstOrDefault();
-        }
-
-        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
-        if (matches.Count == 0)
-        {
-            throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "not found"));
-        }
-
-        if (matches.Count == 1)
-        {
-            var match = matches[0];
-            var matchedMember = candidates.FirstOrDefault(c => c.Span.Contains(match));
-            if (matchedMember != null)
-            {
-                return matchedMember;
-            }
-
-            // Snippet matched but didn't align to a candidate member -> treat as ambiguous
-            throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "ambiguous"));
-        }
-
-        // 2+ matches
-        throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "ambiguous"));
-    }
-
-    // EnumMemberDeclarationSyntax does not derive from MemberDeclarationSyntax (it hangs directly
-    // off EnumDeclarationSyntax, not off a Members list of MemberDeclarationSyntax), so it is
-    // invisible to ResolveMemberByNameOrSnippet's DescendantNodes().OfType<MemberDeclarationSyntax>()
-    // scan regardless of what GetMemberName returns for it. Confirmed: AddSummaryCommentAsync
-    // against an enum member (e.g. OrderStatus.Pending) fails "target not found" even though the
-    // enum type itself resolves fine. SummaryComment's three operations only ever call SyntaxNode-
-    // level trivia APIs (GetLeadingTrivia/WithLeadingTrivia) on the resolved target, never anything
-    // MemberDeclarationSyntax-specific, so this dedicated resolver returns the broader SyntaxNode
-    // and is used only by those three methods -> other tools (ReplaceMember, ModifyModifier, etc.)
-    // keep using ResolveMemberByNameOrSnippet as-is, since they need MemberDeclarationSyntax-only
-    // APIs (e.g. .Modifiers) that an enum member does not have.
-    private SyntaxNode? ResolveMemberOrEnumMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName = null)
-    {
-        var candidates = new List<SyntaxNode>();
-        candidates.AddRange(root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax)));
-        candidates.AddRange(root.DescendantNodes().OfType<EnumMemberDeclarationSyntax>().Where(m => m.Identifier.Text == memberName));
-
-        if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
-        {
-            candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
-        }
-
-        // Sibling types can declare members with byte-identical text (e.g. two records each with
-        // "public string Name { get; set; } = "";"), which no line-based contextSnippet can tell
-        // apart -> narrowing by the member's own containing type first resolves that case without
-        // ever reaching snippet matching. Applied whenever the hint is given and actually narrows
-        // the set (never to an empty result, in case the caller's hint doesn't match reality).
-        if (containingTypeName != null && candidates.Count > 1)
-        {
-            var narrowed = candidates.Where(c => c.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text == containingTypeName).ToList();
-            if (narrowed.Count > 0)
-            {
-                candidates = narrowed;
-            }
-        }
-
-        if (contextSnippet == null || candidates.Count <= 1)
-        {
-            return candidates.FirstOrDefault();
-        }
-
-        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
-        if (matches.Count == 0)
-        {
-            throw new InvalidOperationException(BuildMemberHint(candidates, matches, "not found"));
-        }
-
-        if (matches.Count == 1)
-        {
-            var match = matches[0];
-            var matchedMember = candidates.FirstOrDefault(c => c.Span.Contains(match));
-            if (matchedMember != null)
-            {
-                return matchedMember;
-            }
-
-            throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
-        }
-
-        // 2+ matches
-        throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
-    }
-
-    /// <summary>
-    /// Cheap pre-check so callers (e.g. Member's dispatch for remove/replace, which only take a bare
-    /// memberName) can detect that the named member is actually an enum member and route to
-    /// RemoveEnumMemberAsync/ReplaceEnumMemberAsync instead of RemoveMemberAsync/ReplaceMemberAsync
-    /// (whose resolver, ResolveMemberByNameOrSnippet, can never match an EnumMemberDeclarationSyntax ->
-    /// it isn't a MemberDeclarationSyntax). Returns null if memberName doesn't resolve to an enum
-    /// member at all (including "not found" and "ambiguous") -> callers should let the normal
-    /// resolution path in whichever method they call next surface the real error in that case.
-    /// </summary>
-    public async Task<string?> TryGetEnumMemberContainerNameAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
-    {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return null;
-        }
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var sourceText = await document.GetTextAsync(cancellationToken);
-        if (root == null || sourceText == null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
-            return target is EnumMemberDeclarationSyntax enumMember && enumMember.Parent is EnumDeclarationSyntax enumDecl ? enumDecl.Identifier.Text : null;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Cheap pre-check so callers (e.g. Member's dispatch) can route to the enum-specific
-    /// Add/Remove/ReplaceEnumMemberAsync methods instead of the class/struct/interface/record-only
-    /// AddMemberAsync/RemoveMemberAsync/ReplaceMemberAsync/InsertMemberAfterAsync/InsertMemberBeforeAsync
-    /// family. Returns false (not an error) if the container isn't found at all -> callers should let
-    /// the normal resolution path in whichever method they call next surface the real "not found"
-    /// error, rather than this pre-check swallowing it.
-    /// </summary>
-    public async Task<bool> IsEnumContainerAsync(FilePathWrapper filePath, string containerName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
-    {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return false;
-        }
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var sourceText = await document.GetTextAsync(cancellationToken);
-        if (root == null || sourceText == null)
-        {
-            return false;
-        }
-
-        try
-        {
-            return ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter) is EnumDeclarationSyntax;
-        }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
-    }
-
-    public record ContainerMemberInfo(string? Name, string Kind, string Signature, int StartLine, int EndLine);
-    /// <summary>
-    /// Lists the direct members of one container (class/struct/interface/record) in one file,
-    /// syntax-scoped rather than symbol-scoped -> unlike GetTypeInfo/GetTypeMembersDetailAsync
-    /// (which resolve by type name across the whole solution's compilation and include inherited
-    /// members), this only looks at the exact container the caller is about to edit, so its
-    /// output lines up with what RemoveMember/ReplaceMember need: an exact memberName plus enough
-    /// signature text to build a contextSnippet if the name turns out to be overloaded.
-    /// </summary>
-    public async Task<(EditOutcome Outcome, string? Message, List<ContainerMemberInfo> Members)> GetContainerMembersAsync(FilePathWrapper filePath, string containerName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
-    {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return (EditOutcome.DocumentNotFound, "// Document not found.", []);
-        }
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var sourceText = await document.GetTextAsync(cancellationToken);
-        if (root == null || sourceText == null)
-        {
-            return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", []);
-        }
-
-        BaseTypeDeclarationSyntax? containerNode;
-        try
-        {
-            containerNode = ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return (EditOutcome.CannotEdit, ex.Message, []);
-        }
-
-        if (containerNode is EnumDeclarationSyntax enumDecl)
-        {
-            var enumLines = sourceText.Lines;
-            var enumResult = enumDecl.Members.Select(m =>
-            {
-                var signature = m.EqualsValue != null ? $"{m.Identifier.Text} = {m.EqualsValue.Value}" : m.Identifier.Text;
-                return new ContainerMemberInfo(m.Identifier.Text, "enumMember", signature, enumLines.GetLineFromPosition(m.SpanStart).LineNumber + 1, enumLines.GetLineFromPosition(m.Span.End).LineNumber + 1);
-            }).ToList();
-            return (EditOutcome.Modified, null, enumResult);
-        }
-
-        if (containerNode == null || containerNode is not TypeDeclarationSyntax typeDecl)
-        {
-            return (EditOutcome.CannotEdit, "// Cannot edit: container not found.", []);
-        }
-
-        var lines = sourceText.Lines;
-        var result = typeDecl.Members.Select(m =>
-        {
-            var kind = m switch
-            {
-                MethodDeclarationSyntax => "method",
-                PropertyDeclarationSyntax => "property",
-                FieldDeclarationSyntax => "field",
-                ConstructorDeclarationSyntax => "constructor",
-                EventDeclarationSyntax or EventFieldDeclarationSyntax => "event",
-                IndexerDeclarationSyntax => "indexer",
-                _ => m.Kind().ToString()
-            };
-            var signature = m.WithLeadingTrivia().WithTrailingTrivia().ToFullString().Trim();
-            var firstLineEnd = signature.IndexOfAny(['\n', '{', ';']);
-            if (firstLineEnd > 0)
-            {
-                signature = signature[..firstLineEnd].Trim();
-            }
-
-            return new ContainerMemberInfo(GetMemberName(m), kind, signature, lines.GetLineFromPosition(m.SpanStart).LineNumber + 1, lines.GetLineFromPosition(m.Span.End).LineNumber + 1);
-        }).ToList();
-        return (EditOutcome.Modified, null, result);
-    }
-
-    /// <summary>
-    /// Reduces a type name to the bare identifier Roslyn's <c>Identifier.Text</c> exposes, by
-    /// stripping a trailing type-argument list (<c>Foo<T></c>, <c>Foo<TKey, TValue></c>)
-    /// or backtick arity (<c>Foo`1</c>).
-    /// </summary>
-    /// <remarks>
-    /// Needed because <c>Identifier.Text</c> is already arity-stripped, so comparing it against a
-    /// caller's raw string rejected the type's own declared spelling: run 20260910-013550-398 had
-    /// <c>containerName: "EngineResultWrapper<T>"</c> fail and the bare
-    /// <c>"EngineResultWrapper"</c> succeed on the next turn. Third recorded instance
-    /// (cf. project_qwen36_35b_smoketest_and_member_containername_gap). Applied to both sides of
-    /// the comparison so all three spellings resolve identically.
-    /// </remarks>
-    public static string NormalizeTypeName(string typeName)
-    {
-        var name = typeName.Trim();
-
-        var backtick = name.IndexOf('`');
-        if (backtick > 0)
-        {
-            return name[..backtick];
-        }
-
-        // Only a trailing argument list is stripped -> an angle bracket anywhere else isn't arity
-        // (a caller passing a whole declaration line, say), and truncating there would silently
-        // resolve to the wrong type rather than reporting a miss.
-        var open = name.IndexOf('<');
-        return open > 0 && name.EndsWith('>') ? name[..open].TrimEnd() : name;
-    }
-
-    /// <summary>
-    /// Resolves a type by name, optionally disambiguating with a contextSnippet when the name
-    /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
-    /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
-    /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildTypeHint).
-    /// </summary>
-    /// <remarks>
-    /// The single chokepoint for 13 call sites across Member, ModifyEnum, ModifyBaseType and
-    /// others, so the generic-name normalization here covers all of them.
-    /// </remarks>
-    private BaseTypeDeclarationSyntax? ResolveTypeByNameOrSnippet(SyntaxNode root, SourceText sourceText, string typeName, string? contextSnippet, string? lineBefore, string? lineAfter, Func<BaseTypeDeclarationSyntax, bool>? extraFilter = null)
-    {
-        var normalizedRequest = NormalizeTypeName(typeName);
-        var candidates = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => NormalizeTypeName(t.Identifier.Text) == normalizedRequest).Where(t => extraFilter == null || extraFilter(t)).ToList();
-        if (contextSnippet == null || candidates.Count <= 1)
-        {
-            // typeName alone already resolves unambiguously -> see the identical guard and
-            // rationale in ResolveMemberByNameOrSnippet above.
-            return candidates.FirstOrDefault();
-        }
-
-        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
-        if (matches.Count == 0)
-        {
-            throw new InvalidOperationException(BuildTypeHint(candidates, matches, "not found"));
-        }
-
-        if (matches.Count == 1)
-        {
-            var match = matches[0];
-            var matchedType = candidates.FirstOrDefault(c => c.Span.Contains(match));
-            if (matchedType != null)
-            {
-                return matchedType;
-            }
-
-            throw new InvalidOperationException(BuildTypeHint(candidates, matches, "ambiguous"));
-        }
-
-        throw new InvalidOperationException(BuildTypeHint(candidates, matches, "ambiguous"));
-    }
-
-    private string BuildMemberHint(List<SyntaxNode> candidates, List<int> matches, string failureMode)
-    {
-        if (candidates.Count == 0)
-        {
-            return $"contextSnippet {failureMode}: no candidates found.";
-        }
-
-        var previews = candidates.Take(3).Select(c =>
-        {
-            var line = (c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1) ?? -1;
-            var text = c.ToString().Split('\n').First().Trim();
-            if (text.Length > 50)
-            {
-                text = text.Substring(0, 47) + "...";
-            }
-
-            return $"line {line} `{text}`";
-        });
-        var count = candidates.Count;
-        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
-        return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
-    }
-
-    /// <summary>
-    /// Builds the message for a container that could not be found, listing the type names the file
-    /// actually declares.
-    /// </summary>
-    /// <remarks>
-    /// Replaces three identical <c>"// Container not found."</c> literals, which said nothing
-    /// actionable and -> being prefixed with <c>//</c> -> read as commented-out code rather than an
-    /// error. Listing the available names is the single most useful thing to return here: the
-    /// caller's next move is always to pick one, and it also reveals a wrong-file mistake
-    /// immediately. Generic spellings resolve, so a listed name can be given back verbatim; see
-    /// <see cref="NormalizeTypeName"/>.
-    /// </remarks>
-    private static string BuildContainerNotFoundMessage(SyntaxNode root, string requestedName)
-    {
-        var declared = root.DescendantNodes()
-            .OfType<BaseTypeDeclarationSyntax>()
-            .Select(t => t.Identifier.Text)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-
-        if (declared.Count == 0)
-        {
-            return $"No type named '{requestedName}' was found - this file declares no types at all. " +
-                   "Check the filePath.";
-        }
-
-        var shown = declared.Take(10).ToList();
-        var suffix = declared.Count > shown.Count ? $" (+{declared.Count - shown.Count} more)" : "";
-        return $"No type named '{requestedName}' was found in this file. Types declared here: " +
-               $"{string.Join(", ", shown)}{suffix}. Pass one of those as containerName - a type " +
-               "argument list is optional, so both 'Foo' and 'Foo<T>' resolve.";
-    }
-
-    private string BuildTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
-    {
-        if (candidates.Count == 0)
-        {
-            return $"contextSnippet {failureMode}: no candidates found.";
-        }
-
-        var previews = candidates.Take(3).Select(c =>
-        {
-            var line = (c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1) ?? -1;
-            var text = c.ToString().Split('\n').First().Trim();
-            if (text.Length > 50)
-            {
-                text = text.Substring(0, 47) + "...";
-            }
-
-            return $"line {line} `{text}`";
-        });
-        var count = candidates.Count;
-        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
-        return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
-    }
-
-    public async Task<DocumentEditResult> SyncInterfaceToImplementationAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
-    {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-        // Find the class document
-        var classDocument = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (classDocument == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Class file not found."
-            };
-        }
-
-        var classRoot = await classDocument.GetSyntaxRootAsync(cancellationToken);
-        if (classRoot == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not parse class file."
-            };
-        }
-
-        var classNode = classRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Class not found."
-            };
-        }
-
-        // Collect public non-static non-override methods and properties from the class
-        var publicMethods = classNode.Members.OfType<MethodDeclarationSyntax>().Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)) && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword))).ToList();
-        var publicProperties = classNode.Members.OfType<PropertyDeclarationSyntax>().Where(p => p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) && !p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)) && !p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword))).ToList();
-        // Find the interface -> first in same file, then in other documents
-        Document? interfaceDocument = null;
-        InterfaceDeclarationSyntax? interfaceNode = null;
-        SyntaxNode? interfaceRoot = null;
-        // Search same file first
-        interfaceNode = classRoot.DescendantNodes().OfType<InterfaceDeclarationSyntax>().FirstOrDefault(i => i.Identifier.Text == interfaceName);
-        if (interfaceNode != null)
-        {
-            interfaceDocument = classDocument;
-            interfaceRoot = classRoot;
-        }
-        else
-        {
-            // Search all documents
-            foreach (var doc in solution.Projects.SelectMany(p => p.Documents))
-            {
-                if (doc == classDocument)
-                {
-                    continue;
-                }
-
-                var r = await doc.GetSyntaxRootAsync(cancellationToken);
-                if (r == null)
-                {
-                    continue;
-                }
-
-                var iface = r.DescendantNodes().OfType<InterfaceDeclarationSyntax>().FirstOrDefault(i => i.Identifier.Text == interfaceName);
-                if (iface != null)
-                {
-                    interfaceDocument = doc;
-                    interfaceRoot = r;
-                    interfaceNode = iface;
-                    break;
-                }
-            }
-        }
-
-        if (interfaceNode == null || interfaceDocument == null || interfaceRoot == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Interface not found."
-            };
-        }
-
-        // Collect existing interface member signatures (for deduplication)
-        var existingMethodSigs = interfaceNode.Members.OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text + "|" + string.Join(",", m.ParameterList.Parameters.Select(p => p.Type?.ToString().Trim()))).ToHashSet(StringComparer.Ordinal);
-        var existingPropertyNames = interfaceNode.Members.OfType<PropertyDeclarationSyntax>().Select(p => p.Identifier.Text).ToHashSet(StringComparer.Ordinal);
-        var newMembers = new List<MemberDeclarationSyntax>();
-        foreach (var method in publicMethods)
-        {
-            var sig = method.Identifier.Text + "|" + string.Join(",", method.ParameterList.Parameters.Select(p => p.Type?.ToString().Trim()));
-            if (existingMethodSigs.Contains(sig))
-            {
-                continue;
-            }
-
-            // Build interface method: return type + name + params, no body
-            var ifaceMethod = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(method.ReturnType, method.Identifier).WithParameterList(method.ParameterList).WithTypeParameterList(method.TypeParameterList).WithConstraintClauses(method.ConstraintClauses).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()));
-            newMembers.Add(ifaceMethod);
-        }
-
-        foreach (var prop in publicProperties)
-        {
-            if (existingPropertyNames.Contains(prop.Identifier.Text))
-            {
-                continue;
-            }
-
-            // Build interface property
-            var hasGetter = prop.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) == true || prop.ExpressionBody != null;
-            var hasSetter = prop.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.SetAccessorDeclaration)) == true;
-            var hasInit = prop.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.InitAccessorDeclaration)) == true;
-            var accessors = new List<AccessorDeclarationSyntax>();
-            if (hasGetter)
-            {
-                accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
-            }
-
-            if (hasSetter)
-            {
-                accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
-            }
-
-            if (hasInit)
-            {
-                accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
-            }
-
-            var ifaceProp = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()));
-            newMembers.Add(ifaceProp);
-        }
-
-        if (newMembers.Count == 0)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.NoChange,
-                FilePath = interfaceDocument.FilePath ?? interfaceDocument.Name,
-                UpdatedText = interfaceRoot.ToFullString() // Already up to date
-            };
-        }
-
-        var newInterfaceNode = interfaceNode.AddMembers(newMembers.ToArray());
-        // If interface is in a different file, indicate which file was updated
-        if (interfaceDocument != classDocument)
-        {
-            var updatedPath = interfaceDocument.FilePath ?? interfaceDocument.Name;
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Modified,
-                FilePath = updatedPath,
-                UpdatedText = "// Updated file: " + updatedPath + "\n" + await RoslynFormattingHelper.ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
-            };
-        }
-
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.Modified,
-            FilePath = interfaceDocument.FilePath ?? interfaceDocument.Name,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
-        };
     }
 
     public async Task<DocumentEditResult> UpdateXmlDocsFromSignatureAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)

@@ -34,12 +34,12 @@ public class WholeFileWriteTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("CreateFile: file must not already exist. ReplaceFile: file must already exist.")]
         [ExternalInputRequired(DataTag.Action)] WriteFileOperation operation,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
         [Description("Full file content. Parent directories are created automatically.")] string content,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filePath, _workspaceManager.GetSolutionRoot());
         try
         {
             bool exists = File.Exists(filePathResolved);
@@ -113,9 +113,9 @@ public class WholeFileWriteTools
     [Description("Deletes a file from disk; fails if it doesn't exist. Undoable via UndoLastApply.")]
     public async Task<SentinelCallToolResult<object>> DeleteFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, CancellationToken cancellationToken = default)
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filePath, _workspaceManager.GetSolutionRoot());
         try
         {
             if (!File.Exists(filePathResolved))
@@ -285,8 +285,8 @@ public class WholeFileWriteTools
     /// dimension is exempt from both.
     /// </summary>
     private const double LargeShrinkRejectionThreshold = 0.5;
-    // CONDITIONAL-PARAM-REVIEW-REQUIRED: changesetFormat=files requires 'changes' (filepath/unifiedDiff
-    // unused); changesetFormat=diff requires 'filepath' and 'unifiedDiff' (changes unused). No single
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: changesetFormat=files requires 'changes' (filePath/unifiedDiff
+    // unused); changesetFormat=diff requires 'filePath' and 'unifiedDiff' (changes unused). No single
     // param is universally required beyond changesetFormat/action, so a model can supply the wrong
     // subset for its chosen format and only find out at runtime.
     [McpServerTool(Name = "ApplyDiff")]
@@ -294,7 +294,7 @@ public class WholeFileWriteTools
     [Description("Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff (changesetFormat=diff), validating by delta-compile before writing.")]
     public async Task<SentinelCallToolResult<object>> ApplyDiff(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("files: use changes (filePath->content map). diff: use filepath+unifiedDiff.")]
+        [Description("files: use changes (filePath->content map). diff: use filePath+unifiedDiff.")]
         [ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat,
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required when changesetFormat=files, unused otherwise.
@@ -302,7 +302,7 @@ public class WholeFileWriteTools
         [ExternalInputRequired(DataTag.OperationId)] Dictionary<string, string>? changes = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required when changesetFormat=diff, unused otherwise.
         [Description("Required for changesetFormat=diff.")]
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required when changesetFormat=diff, unused otherwise.
         [Description("Required for changesetFormat=diff.")]
         [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null,
@@ -314,7 +314,7 @@ public class WholeFileWriteTools
     {
         try
         {
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filePath);
             if (changesetFormat == ChangesetFormat.files)
             {
                 if (changes == null)
@@ -432,7 +432,7 @@ public class WholeFileWriteTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyDiff: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
+                        ErrorData = new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyDiff: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.")
                     };
                 }
 
@@ -441,7 +441,7 @@ public class WholeFileWriteTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filepath' and 'unifiedDiff' are required when changesetFormat=diff.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filePath' and 'unifiedDiff' are required when changesetFormat=diff.")
                     };
                 }
 
@@ -450,7 +450,7 @@ public class WholeFileWriteTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filepath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filePath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
                     };
                 }
 
@@ -548,13 +548,13 @@ public class WholeFileWriteTools
         }
     }
     // Simplified, diff-only sibling of ApplyDiff -> collapses ApplyDiff's two required-param-sets
-    // (files: 'changes' dict / diff: 'filepath'+'unifiedDiff', with 'filepath' silently ignored in
-    // files mode) into a single always-required (filepath, unifiedDiff) pair, closing the common
-    // agent footgun of supplying unifiedDiff without filepath. Whole-file rewrites now go through
+    // (files: 'changes' dict / diff: 'filePath'+'unifiedDiff', with 'filePath' silently ignored in
+    // files mode) into a single always-required (filePath, unifiedDiff) pair, closing the common
+    // agent footgun of supplying unifiedDiff without filePath. Whole-file rewrites now go through
     // WriteFile(operation=ReplaceFile) instead of a 'files' mode here. ApplyDiff itself is kept
     // unchanged (not deleted) so its multi-file 'files' mode can be reactivated later if needed.
     // Moved here (off the default MCP surface, this class carries no [McpServerToolType]) from
-    // SentinelWorkspaceTools.cs -> ReplaceSnippet there now covers small exact-text edits on the
+    // WorkspaceTools.cs -> ReplaceSnippet there now covers small exact-text edits on the
     // default surface without diff-hunk syntax; this tool is kept for reactivation if a genuine
     // need for multi-line diff-hunk edits resurfaces. See
     // docs/current/design_applyunifieddiff_replace_snippet_v1.md.
@@ -566,8 +566,8 @@ public class WholeFileWriteTools
         [Description("apply: writes the change. validate: checks without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         [Description("The single file unifiedDiff applies to.")]
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("The unified diff to apply to filepath.")]
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Description("The unified diff to apply to filePath.")]
         [ToolOption(ToolOptionTag.UnifiedDiff, required: true)] string unifiedDiff,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -575,15 +575,15 @@ public class WholeFileWriteTools
     {
         try
         {
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filePath);
             if (!filePathResolved.Validated)
             {
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = false,
                     ErrorData = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
-                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyUnifiedDiff: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
-                        : new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'filepath' is required (it names the single file the unifiedDiff applies to).")
+                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyUnifiedDiff: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.")
+                        : new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to).")
                 };
             }
 

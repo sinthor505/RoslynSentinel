@@ -1,6 +1,7 @@
 using System.Text;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Basic;
 
@@ -182,6 +183,12 @@ public class GitImpl : IGitOperations
     // the process-spawn itself, not anything git does once running). Falls back to "git" if PATH
     // resolution fails here, preserving prior behavior.
     private static readonly string GitExecutablePath = ResolveGitExecutablePath();
+
+    public GitImpl(ISolutionProvider workspaceManager)
+    {
+        _workspaceManager = workspaceManager;
+        _logger = new NullLogger<GitImpl>();
+    }
 
     public GitImpl(ISolutionProvider workspaceManager, ILogger<GitImpl> logger)
     {

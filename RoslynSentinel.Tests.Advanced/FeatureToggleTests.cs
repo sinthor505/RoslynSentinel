@@ -1,9 +1,7 @@
 #pragma warning disable CS8618
-using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Common;
 using RoslynSentinel.Tests.Fakes;
 
-namespace RoslynSentinel.Tests;
+namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
 public class FeatureToggleTests
@@ -36,7 +34,7 @@ public class FeatureToggleTests
     {
         // Arrange - File with MultiType smell
         SetSource("public class A {} public class B {}");
-        
+
         // Act 1: Enabled (Default)
         var result1 = await _structureEngine.FindStructuralSmellsAsync();
         Assert.That(result1.Any(s => s.Contains("[MULTI_TYPE]")), Is.True);

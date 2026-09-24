@@ -49,7 +49,7 @@ public class McpTasksHarnessBulkCommentTests
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
+            o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
 
         var hostBuilder = Host.CreateApplicationBuilder();
@@ -231,7 +231,7 @@ public class McpTasksHarnessBulkCommentTests
         var block = contentArray.EnumerateArray().First();
         var text = block.GetProperty("text").GetString()!;
         using var parsed = JsonDocument.Parse(text);
-        return parsed.RootElement.GetProperty("successDetails").Clone();
+        return parsed.RootElement.GetProperty("successData").Clone();
     }
 
     private static IDictionary<string, JsonElement> ToArguments(IDictionary<string, object?> arguments) =>

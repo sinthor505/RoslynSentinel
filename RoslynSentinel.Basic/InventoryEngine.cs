@@ -1,17 +1,25 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-
-using RoslynSentinel.Common;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Basic;
 
 public class InventoryEngine
 {
     private readonly ISolutionProvider _workspaceManager;
+    private readonly ILogger<InventoryEngine> _logger;
 
     public InventoryEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
+        _logger = NullLogger<InventoryEngine>.Instance;
+    }
+
+    public InventoryEngine(ISolutionProvider workspaceManager, ILogger<InventoryEngine> logger)
+    {
+        _workspaceManager = workspaceManager;
+        _logger = logger;
     }
 
     public async Task<CodeInventoryReport> GetCodeInventoryAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)

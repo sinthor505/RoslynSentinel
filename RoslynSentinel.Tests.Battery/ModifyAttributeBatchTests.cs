@@ -45,11 +45,11 @@ public class ModifyAttributeBatchTests
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
         return new RefactoringStructuralTools(
-            new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, workspaceManager, config),
+            new RefactoringEngine(workspaceManager, NullLogger<RefactoringEngine>.Instance, config),
             new StructuralRefinementEngine(workspaceManager, config),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine),
+            new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
             NullLogger<RefactoringStructuralTools>.Instance);
     }
 
@@ -178,7 +178,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "batch test both supplied",
-            filepath: FixtureRelativePath,
+            filePath: FixtureRelativePath,
             targetName: "AttributeBatchTargetA",
             existingAttribute: "Obsolete",
             action: AttributeModifyAction.remove,

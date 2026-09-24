@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace RoslynSentinel.Tests.Basic;
+namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
 public class NamespacePathMismatchTests

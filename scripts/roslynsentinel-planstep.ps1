@@ -102,9 +102,9 @@
 
 .PARAMETER IncludeTools
     CSV of tool class names to enable on each step's server instance (passed through as
-    --include-tools). Default: SentinelWorkspaceTools,SentinelSymbolTools,
-    SentinelRefactoringTools,SentinelDocumentationTools,SentinelCommentingTools,
-    SentinelAdvancedRefactoringTools.
+    --include-tools). Default: WorkspaceTools,SentinelSymbolTools,
+    RefactoringTools,DocumentationTools,CommentingTools,
+    AdvancedRefactoringTools.
 
 .PARAMETER Temperature
     Sampling temperature sent on every request (omitted entirely if not passed, letting LM Studio

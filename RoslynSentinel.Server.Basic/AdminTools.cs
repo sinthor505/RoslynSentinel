@@ -8,7 +8,7 @@ namespace RoslynSentinel.Server.Basic;
 // AllModes in ServerStdio.cs/ServerHttp.cs, so it's off by default and only reachable via an
 // explicit --mode=Admin or --mode=<...>,Admin). See
 // docs/current/ideas/external-drift-hard-blocker.md -> these two tools used to live in
-// SentinelWorkspaceTools (model-visible by default under the "Workspace" mode), but letting the
+// WorkspaceTools (model-visible by default under the "Workspace" mode), but letting the
 // in-task model reconcile external drift itself only works for a genuinely concurrent-editing
 // scenario this server doesn't target; under the single-session/no-concurrent-actors assumption a
 // real drift hit should stop the session, not be something the model talks its way past. This

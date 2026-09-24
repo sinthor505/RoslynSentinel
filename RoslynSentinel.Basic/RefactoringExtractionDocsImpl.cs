@@ -1,8 +1,6 @@
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
-using ModelContextProtocol.Protocol;
-using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Basic;
 
@@ -14,7 +12,6 @@ public class RefactoringExtractionDocsImpl
 {
     private readonly RefactoringEngine _refactoringEngine;
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
-    private readonly MappingEngine _mappingEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
@@ -23,7 +20,6 @@ public class RefactoringExtractionDocsImpl
     public RefactoringExtractionDocsImpl(
         RefactoringEngine refactoringEngine,
         MsToolAugmentEngine msToolAugmentEngine,
-        MappingEngine mappingEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         IWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
@@ -31,7 +27,6 @@ public class RefactoringExtractionDocsImpl
     {
         _refactoringEngine = refactoringEngine;
         _msToolAugmentEngine = msToolAugmentEngine;
-        _mappingEngine = mappingEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
@@ -52,43 +47,12 @@ public class RefactoringExtractionDocsImpl
         bool returnDiff = false,
         IProgress<ProgressNotificationValue>? progress = default,
         IReadOnlyCollection<FilePathWrapper>? removePaths = null,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null) =>
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
-            dryRun, returnDiff, progress, removePaths, cancellationToken,
+            dryRun, returnDiff, progress, removePaths, cancellationToken, deletePaths,
             describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
-
-    public async Task<SentinelCallToolResult<object>> GenerateMapping(
-        FilePathWrapper filepath,
-        string fromType,
-        string toType,
-        bool dryRun = false,
-        bool returnDiff = false,
-        RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-            IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
-
-            var result = await _mappingEngine.GenerateMappingAsync(filePathResolved, fromType, toType, cancellationToken);
-            if (string.IsNullOrEmpty(result.UpdatedText))
-                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' -> '{toType}' in '{filePathResolved}'. Ensure both types exist in the solution.") };
-
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
-            var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress, cancellationToken: cancellationToken);
-            if (apply.Error is not null)
-                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = apply.Error };
-            return new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Generated mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff) };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GenerateMapping failed for '{FromType}' to '{ToType}' in '{FilePathWrapper}'", fromType, toType, filePathResolved);
-            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateMapping") };
-        }
-    }
 
     public async Task<SentinelCallToolResult<object>> UsingDirective(
         ToolCallReason reason,

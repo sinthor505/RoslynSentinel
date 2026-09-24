@@ -2,6 +2,7 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Advanced;
@@ -11,26 +12,64 @@ public class GenerationTools
 {
     private readonly CodeGenerationEngine _codeGenerationEngine;
     private readonly ApiAutomationEngine _apiAutomationEngine;
-    // private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
-    // private readonly ApiIntegrationEngine _apiIntegrationEngine;
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly MappingEngine _mappingEngine;
+    private readonly SymbolNavigationEngine _symbolNavigationEngine;
+    private readonly ValidationEngine _validationEngine;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<GenerationTools> _logger;
+
+    public GenerationTools(
+    IWorkspaceManager workspaceManager,
+    ILogger<GenerationTools> logger)
+    {
+        _codeGenerationEngine = new CodeGenerationEngine(workspaceManager);
+        _apiAutomationEngine = new ApiAutomationEngine(workspaceManager);
+        _mappingEngine = new MappingEngine(workspaceManager);
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+        _validationEngine = new ValidationEngine(workspaceManager);
+        _workspaceManager = workspaceManager;
+        _logger = logger;
+    }
 
     public GenerationTools(
         CodeGenerationEngine codeGenerationEngine,
         ApiAutomationEngine apiAutomationEngine,
-        // AsyncOptimizationEngine asyncOptimizationEngine,
-        // ApiIntegrationEngine apiIntegrationEngine,
-        ISolutionProvider workspaceManager,
+        MappingEngine mappingEngine,
+        SymbolNavigationEngine symbolNavigationEngine,
+        ValidationEngine validationEngine,
+        IWorkspaceManager workspaceManager,
         ILogger<GenerationTools> logger)
     {
         _codeGenerationEngine = codeGenerationEngine;
         _apiAutomationEngine = apiAutomationEngine;
-        // _asyncOptimizationEngine = asyncOptimizationEngine;
-        // _apiIntegrationEngine = apiIntegrationEngine;
+        _mappingEngine = mappingEngine;
+        _symbolNavigationEngine = symbolNavigationEngine;
+        _validationEngine = validationEngine;
         _workspaceManager = workspaceManager;
         _logger = logger;
     }
+
+    /// <summary>
+    /// Validates proposed changes against the current in-memory solution and, unless
+    /// <paramref name="dryRun"/> is set, writes them straight to disk (write-through -> no
+    /// intermediate staging step). Rolls back any already-written files if a multi-file change
+    /// partially fails, so a change never lands half-applied.
+    /// </summary>
+    private Task<ApplyOutcome> ValidateAndApplyAsync(
+        Dictionary<FilePathWrapper, string> changes,
+        string description,
+        string operationName,
+        bool dryRun = false,
+        bool returnDiff = false,
+        IProgress<ProgressNotificationValue>? progress = default,
+        IReadOnlyCollection<FilePathWrapper>? removePaths = null,
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null) =>
+        ValidateAndApplyHelper.ValidateAndApplyAsync(
+            _validationEngine, _workspaceManager, _logger, changes, operationName,
+            dryRun, returnDiff, progress, removePaths, cancellationToken, deletePaths,
+            describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
+
 
     [McpServerTool(Name = "GenerateClassesFromJson")]
     [Produces(DataTag.ResultOnly)]
@@ -165,6 +204,38 @@ public class GenerationTools
         {
             _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePathWrapper}'", filePath);
             return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "InterpolateStringSafe");
+        }
+    }
+
+    public async Task<SentinelCallToolResult<object>> GenerateMapping(
+        FilePathWrapper filepath,
+        string fromType,
+        string toType,
+        bool dryRun = false,
+        bool returnDiff = false,
+        RequestContext<CallToolRequestParams>? requestParams = null,
+        CancellationToken cancellationToken = default)
+    {
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        try
+        {
+            ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+            IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+
+            var result = await _mappingEngine.GenerateMappingAsync(filePathResolved, fromType, toType, cancellationToken);
+            if (string.IsNullOrEmpty(result.UpdatedText))
+                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' -> '{toType}' in '{filePathResolved}'. Ensure both types exist in the solution.") };
+
+            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
+            var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = apply.Error };
+            return new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Generated mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff) };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GenerateMapping failed for '{FromType}' to '{ToType}' in '{FilePathWrapper}'", fromType, toType, filePathResolved);
+            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateMapping") };
         }
     }
 

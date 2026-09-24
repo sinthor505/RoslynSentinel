@@ -12,6 +12,7 @@ public class BatteryEighteenTests
 {
     private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _msEngine;
+    private WorkspaceHealthMiscImpl _workspaceHealthMisc;
 
     private const string RichSource = @"
 using System;
@@ -91,6 +92,7 @@ public class OrderService : IOrderService
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _msEngine = new MsToolAugmentEngine(_workspaceManager);
+        _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager);
     }
 
     [TearDown]
@@ -232,14 +234,14 @@ public class OrderService : IOrderService
     public async Task GetWorkspaceHealth_WithLoadedSolution_ReturnsReport()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _msEngine.GetWorkspaceHealthAsync();
+        var result = await _workspaceHealthMisc.GetWorkspaceHealthAsync();
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task GetWorkspaceHealth_NoSolution_ReturnsReport()
     {
-        var result = await _msEngine.GetWorkspaceHealthAsync();
+        var result = await _workspaceHealthMisc.GetWorkspaceHealthAsync();
         Assert.That(result, Is.Not.Null);
     }
 

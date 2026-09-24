@@ -96,7 +96,7 @@ public sealed class RunnerOptions
         var turnCap = int.TryParse(GetArg(args, "--turn-cap"), out var tc) ? tc : 40;
         var wallClockCapMinutes = int.TryParse(GetArg(args, "--wall-clock-cap-minutes"), out var wc) ? wc : 30;
         var includeTools = GetArg(args, "--include-tools")
-            ?? "SentinelWorkspaceTools,SentinelSymbolTools,SentinelRefactoringTools,SentinelDocumentationTools,SentinelCommentingTools,SentinelAdvancedRefactoringTools";
+            ?? "WorkspaceTools,SentinelSymbolTools,RefactoringTools,DocumentationTools,CommentingTools,AdvancedRefactoringTools";
         var clean = HasFlag(args, "--clean");
 
         if (startStep > endStep)

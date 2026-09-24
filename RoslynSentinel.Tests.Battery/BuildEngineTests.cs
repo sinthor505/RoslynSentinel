@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
 using RoslynSentinel.Basic;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Battery;
 

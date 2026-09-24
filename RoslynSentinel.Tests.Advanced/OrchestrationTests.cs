@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618
-namespace RoslynSentinel.Tests;
+namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
 public class OrchestrationTests

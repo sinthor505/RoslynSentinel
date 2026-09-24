@@ -1,4 +1,4 @@
-// CreateFile/DeleteFile -> SentinelWorkspaceTools. New tools that route through the same
+// CreateFile/DeleteFile -> WorkspaceTools. New tools that route through the same
 // ApplyProposedChangesAsync chokepoint as every other mutating tool (drift-checked, undo-tracked),
 // extended with a deletePaths parameter for DeleteFile. Requires a real disk-backed solution
 // (PersistentWorkspaceManager + TestSolutionFixture) since these tools do real File.Exists/
@@ -16,7 +16,7 @@ public class CreateFileDeleteFileTests
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
@@ -46,7 +46,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewFile.cs");
@@ -67,7 +67,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
@@ -88,7 +88,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var existingFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
@@ -111,7 +111,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var missingFile = Path.Combine(fixture.SolutionDirectory, "DoesNotExist.cs");
@@ -131,7 +131,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "NewSubdir", "Nested.cs");
@@ -154,7 +154,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "Notes.txt");
@@ -179,7 +179,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "ToDelete.cs");
@@ -199,7 +199,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var missingFile = Path.Combine(fixture.SolutionDirectory, "DoesNotExist.cs");
@@ -218,7 +218,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFile = Path.Combine(fixture.SolutionDirectory, "Undoable.cs");
@@ -250,7 +250,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
@@ -277,7 +277,7 @@ public class CreateFileDeleteFileTests
         Assert.That(File.Exists(targetFile), Is.True);
     }
 
-    // CreateFile (the MCP tool, SentinelWorkspaceTools.CreateFile) -> distinct from
+    // CreateFile (the MCP tool, WorkspaceTools.CreateFile) -> distinct from
     // WriteFile(operation=CreateFile) exercised above; the two share a name coincidentally (tool
     // name vs WriteFileOperation enum member). This tool never accepts free-form content: for .cs
     // files, namespaceName + typeKind + typeName are all mandatory, seeding a namespace plus one
@@ -410,7 +410,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var config = new SentinelConfiguration();
-        var refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, workspaceManager, config);
+        var refactoringEngine = new RefactoringEngine(workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
         var standardRefactoringEngine = new StandardRefactoringEngine(workspaceManager);
         var mappingEngine = new MappingEngine(workspaceManager);
         var semanticRefactoringLibrary = new SemanticRefactoringLibrary(workspaceManager);
@@ -422,7 +422,7 @@ public class CreateFileDeleteFileTests
         var codeGenerationEngine = new CodeGenerationEngine(workspaceManager);
         var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var refactoringTools = new RefactoringStructuralTools(
             refactoringEngine,
             structuralRefinementEngine,
@@ -444,7 +444,7 @@ public class CreateFileDeleteFileTests
         var populateResult = await refactoringTools.Member(
             reason: "test message",
             operation: MemberAction.addMember,
-            filepath: newFile,
+            filePath: newFile,
             containerName: "Foo",
             newMemberSource: "public int Value { get; set; }");
         Assert.That(populateResult.IsSuccess, Is.True, populateResult.ErrorData?.Message);
@@ -453,7 +453,7 @@ public class CreateFileDeleteFileTests
         var secondTypeResult = await refactoringTools.Member(
             reason: "test message",
             operation: MemberAction.addTopLevelType,
-            filepath: newFile,
+            filePath: newFile,
             newMemberSource: "public class Bar { }");
         Assert.That(secondTypeResult.IsSuccess, Is.True, secondTypeResult.ErrorData?.Message);
 

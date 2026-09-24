@@ -2,8 +2,8 @@
 //
 // Launching with no --mode (and no --include-tools) registers zero tool classes. Before this
 // guard the failure surfaced from deep inside DI: the DEBUG smoke check demanded
-// SentinelWorkspaceTools unconditionally and threw "Tool type not resolvable:
-// SentinelWorkspaceTools" -> a type the operator never mentioned, with no hint that a flag was
+// WorkspaceTools unconditionally and threw "Tool type not resolvable:
+// WorkspaceTools" -> a type the operator never mentioned, with no hint that a flag was
 // missing. Found while probing the refreshed bin-vscode stdio server with a bare
 // --transport=stdio.
 //
@@ -45,7 +45,7 @@ public class NoActiveToolsStartupTests
             Assert.That(failure, Does.Contain("--include-tools"));
             Assert.That(failure, Does.Contain("--mode=all"), "must state the one-flag fix");
             Assert.That(failure, Does.Contain("--list-tools"), "must state how to check a combination");
-            Assert.That(failure, Does.Not.Contain("SentinelWorkspaceTools"),
+            Assert.That(failure, Does.Not.Contain("WorkspaceTools"),
                 "must not name an internal type the operator never asked for - that was the old message");
         });
     }
@@ -191,11 +191,11 @@ public class NoActiveToolsStartupTests
             ServerStartupHelpers.SmokeResolveToolTypes(
                 services,
                 [typeof(WorkspaceTools)],
-                Names("SentinelWorkspaceTools")));
+                Names("WorkspaceTools")));
 
         Assert.Multiple(() =>
         {
-            Assert.That(ex!.Message, Does.Contain("SentinelWorkspaceTools"));
+            Assert.That(ex!.Message, Does.Contain("WorkspaceTools"));
             Assert.That(ex.Message, Does.Contain("dependencies"), "must point at the real cause");
             Assert.That(ex.InnerException, Is.Not.Null, "the underlying resolution failure must be preserved");
         });

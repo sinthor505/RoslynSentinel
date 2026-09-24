@@ -36,7 +36,7 @@ public class BatteryThirtyOneTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
         _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
@@ -52,31 +52,9 @@ public class BatteryThirtyOneTests
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
         _validationEngine = new ValidationEngine(
-            NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine());
+            _workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
 
-        _tools = new AdvancedRefactoringTools(
-            _refactoringEngine,
-            //new StandardRefactoringEngine(_workspaceManager),
-            new AdvancedStructuralEngine(_workspaceManager),
-            new MappingEngine(_workspaceManager),
-            new SemanticRefactoringLibrary(_workspaceManager),
-            new GranularRefactoringEngine(_workspaceManager),
-            //new AdvancedLogicEngine(_workspaceManager),
-            new RefinementEngine(_workspaceManager),
-            new AdvancedTypeEngine(_workspaceManager),
-            //new CodeStyleEngine(_workspaceManager, _config),
-            //new CodeFlowEngine(_workspaceManager),
-            //new AdvancedRefactoringEngine(_workspaceManager),
-            //new LogicOptimizationEngine(_workspaceManager),
-            new ModernizationEngine(_workspaceManager, _config),
-            //new OutParamRefactoringEngine(_workspaceManager),
-            new MsToolAugmentEngine(_workspaceManager),
-            new CodeGenerationEngine(_workspaceManager),
-            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
-            _config,
-            NullLogger<AdvancedRefactoringTools>.Instance);
+        _tools = new AdvancedRefactoringTools(_workspaceManager);
     }
 
     [TearDown]

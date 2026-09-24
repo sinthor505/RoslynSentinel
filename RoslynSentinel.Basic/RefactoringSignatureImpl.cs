@@ -48,10 +48,11 @@ public class RefactoringSignatureImpl
         bool returnDiff = false,
         IProgress<ProgressNotificationValue>? progress = default,
         IReadOnlyCollection<FilePathWrapper>? removePaths = null,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null) =>
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
-            dryRun, returnDiff, progress, removePaths, cancellationToken,
+            dryRun, returnDiff, progress, removePaths, cancellationToken, deletePaths,
             describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
 
     public async Task<SentinelCallToolResult<object>> RenameSymbol(

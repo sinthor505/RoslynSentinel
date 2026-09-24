@@ -11,7 +11,7 @@ using RoslynSentinel.Server.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// Tests for SentinelWorkspaceTools.GetLargeResult:
+/// Tests for WorkspaceTools.GetLargeResult:
 ///   T1  – No resultId and no filePath -> error "Result file not found"
 ///   T2  – Unknown resultId (file doesn't exist) -> error
 ///   T3  – Valid resultId, MigrationCandidateFindingList file -> findings returned, TotalRecords set
@@ -47,7 +47,7 @@ public class GetLargeResultTests
         var config = new SentinelConfiguration();
         var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
 
-        _workspaceTools = new WorkspaceTools(_workspaceManager, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+        _workspaceTools = new WorkspaceTools(_workspaceManager, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
             WriteToolAdviceHelper.WithAllToolsExposed());
     }
 
@@ -234,7 +234,7 @@ public class GetLargeResultTests
         var findings = MakeMigrationFindings(2);
         var filePath = WriteLargeResultFile(findings, ResultWrapperType.MigrationCandidateFindingList, resultId);
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", filepath: filePath);
+        var result = await _workspaceTools.GetLargeResult(reason: "test message", filePath: filePath);
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(2));
@@ -252,7 +252,7 @@ public class GetLargeResultTests
         var outsidePath = Path.Combine(_tempDir, "result_20260101T000000Z_fakeid.json");
         await File.WriteAllTextAsync(outsidePath, "{}");
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", filepath: outsidePath);
+        var result = await _workspaceTools.GetLargeResult(reason: "test message", filePath: outsidePath);
 
         Assert.That(result.IsSuccess, Is.False,
             "A result file outside .roslynsentinel/largeresults/ must be rejected.");

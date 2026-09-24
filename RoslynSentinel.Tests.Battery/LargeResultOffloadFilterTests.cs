@@ -120,7 +120,7 @@ public class LargeResultOffloadFilterTests
         var resultId = pointer.RootElement.GetProperty("resultId").GetString();
         Assert.That(resultId, Is.Not.Null.And.Not.Empty);
         var sizeBytes = pointer.RootElement.GetProperty("sizeBytes").GetInt32();
-        Assert.That(sizeBytes, Is.GreaterThan(RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes),
+        Assert.That(sizeBytes, Is.GreaterThan(LargeResultHelper.OffloadThresholdBytes),
             "sizeBytes should report the size that actually triggered the offload.");
 
         // Round-trip: GetLargeResult must be able to read the offloaded payload back, and the
@@ -139,7 +139,7 @@ public class LargeResultOffloadFilterTests
         {
             var page = await _client.CallToolAsync(
                 "GetLargeResult",
-                new Dictionary<string, object?> { ["reason"] = "test message", ["resultId"] = resultId, ["offset"] = offset.Value, ["charLimit"] = RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes }!,
+                new Dictionary<string, object?> { ["reason"] = "test message", ["resultId"] = resultId, ["offset"] = offset.Value, ["charLimit"] = LargeResultHelper.OffloadThresholdBytes }!,
                 cancellationToken: TestContext.CurrentContext.CancellationToken);
             Assert.That(page.IsError, Is.Not.True);
 

@@ -3,8 +3,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public class IDEStyleEngine

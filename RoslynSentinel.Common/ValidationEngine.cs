@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Common;
 
@@ -12,7 +13,21 @@ public class ValidationEngine
     private readonly ISolutionProvider _workspaceManager;
     private readonly DiffEngine _diffEngine;
 
-    public ValidationEngine(ILogger<ValidationEngine> logger, ISolutionProvider workspaceManager, DiffEngine diffEngine)
+    public ValidationEngine(ISolutionProvider workspaceManager)
+    {
+        _logger = NullLogger<ValidationEngine>.Instance;
+        _workspaceManager = workspaceManager;
+        _diffEngine = new DiffEngine();
+    }
+
+    public ValidationEngine(ISolutionProvider workspaceManager, DiffEngine diffEngine)
+    {
+        _logger = NullLogger<ValidationEngine>.Instance;
+        _workspaceManager = workspaceManager;
+        _diffEngine = diffEngine;
+    }
+
+    public ValidationEngine(ISolutionProvider workspaceManager, DiffEngine diffEngine, ILogger<ValidationEngine> logger)
     {
         _logger = logger;
         _workspaceManager = workspaceManager;

@@ -1,4 +1,4 @@
-// UndoLastApply -> SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap
+// UndoLastApply -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap
 // flagged it as the highest-priority gap: it's the recently-fixed atomicity/rollback path per
 // project_workspace_manager_deferred_gaps.md, so regressions here are the costliest to miss).
 //
@@ -54,7 +54,7 @@ public class UndoLastApplyTests
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
@@ -264,8 +264,8 @@ public class UndoLastApplyTests
 
         var config = new SentinelConfiguration();
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, new DiffEngine());
-        var refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, workspaceManager, config);
+        var validationEngine = new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var refactoringEngine = new RefactoringEngine(workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
         var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var structuralTools = new RefactoringStructuralTools(refactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, NullLogger<RefactoringStructuralTools>.Instance);
 

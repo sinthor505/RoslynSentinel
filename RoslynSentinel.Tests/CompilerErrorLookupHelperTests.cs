@@ -4,7 +4,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Basic;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests;
 

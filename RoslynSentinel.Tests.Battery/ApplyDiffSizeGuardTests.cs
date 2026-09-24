@@ -35,7 +35,7 @@ public class ApplyDiffSizeGuardTests
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
@@ -62,7 +62,7 @@ public class ApplyDiffSizeGuardTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
@@ -96,7 +96,7 @@ public class ApplyDiffSizeGuardTests
         var commentedOut = string.Join('\n', originalContent.Split('\n').Select(line => "// " + line));
 
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var result = await wholeFileWriteTools.ApplyDiff(
@@ -112,7 +112,7 @@ public class ApplyDiffSizeGuardTests
     // The following confirmationCode-replay tests targeted ApplyDiffWithConfirmationCode directly ->
     // that mechanism was removed from the registered ApplyDiff tool (see comment at top of file).
     // ApplyDiffWithConfirmationCode and ProposedChangeAction.confirmationCode are now both
-    // block-commented out (SentinelWorkspaceTools.cs / ToolEnums.cs) rather than deleted, so these
+    // block-commented out (WorkspaceTools.cs / ToolEnums.cs) rather than deleted, so these
     // tests are commented out alongside them -> un-comment all three together if the mechanism is
     // ever reintroduced.
     /*
@@ -138,13 +138,13 @@ public class ApplyDiffSizeGuardTests
             validateOnApply: false);
         Assert.That(rejected.IsSuccess, Is.False);
 
-        var code = ExtractConfirmationCode(rejected.ErrorDetails!.Message);
+        var code = ExtractConfirmationCode(rejected.ErrorData!.Message);
 
         var confirmed = await tools.ApplyDiffWithConfirmationCode(
             ChangesetFormat.files, ProposedChangeAction.confirmationCode,
             confirmationCode: code);
 
-        Assert.That(confirmed.IsSuccess, Is.True, confirmed.ErrorDetails?.Message);
+        Assert.That(confirmed.IsSuccess, Is.True, confirmed.ErrorData?.Message);
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(fragment));
     }
 
@@ -191,14 +191,14 @@ public class ApplyDiffSizeGuardTests
             ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<FilePathWrapper, string> { [targetFile] = "using System;\n" },
             validateOnApply: false);
-        var code = ExtractConfirmationCode(rejected.ErrorDetails!.Message);
+        var code = ExtractConfirmationCode(rejected.ErrorData!.Message);
 
         var firstReplay = await tools.ApplyDiffWithConfirmationCode(ChangesetFormat.files, ProposedChangeAction.confirmationCode, confirmationCode: code);
-        Assert.That(firstReplay.IsSuccess, Is.True, firstReplay.ErrorDetails?.Message);
+        Assert.That(firstReplay.IsSuccess, Is.True, firstReplay.ErrorData?.Message);
 
         var secondReplay = await tools.ApplyDiffWithConfirmationCode(ChangesetFormat.files, ProposedChangeAction.confirmationCode, confirmationCode: code);
         Assert.That(secondReplay.IsSuccess, Is.False);
-        Assert.That(secondReplay.ErrorDetails!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(secondReplay.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
     */
 
@@ -210,7 +210,7 @@ public class ApplyDiffSizeGuardTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
@@ -233,7 +233,7 @@ public class ApplyDiffSizeGuardTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var newFilePath = Path.Combine(fixture.SolutionDirectory, Path.GetDirectoryName(

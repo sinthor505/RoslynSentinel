@@ -306,7 +306,7 @@ public class PlanImplementVerifyAgentTests
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
+            o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
 
         if (blockMutatingTools || LlmOptions.MinimalToolSchema)

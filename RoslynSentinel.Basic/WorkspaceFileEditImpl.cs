@@ -7,16 +7,16 @@ namespace RoslynSentinel.Basic;
 
 /// <summary>
 /// Plain DI-constructed implementation backing WorkspaceFileEditTools. Method bodies moved
-/// verbatim from SentinelWorkspaceTools (Decision 7 step 2).
+/// verbatim from WorkspaceTools (Decision 7 step 2).
 ///
 /// CORRECTION vs. the plan doc's Decision 1 (flagged per Decision 7 step 1.5's audit mandate):
 /// Decision 1 listed this class as 7 tools (ApplyDiff, ApplyUnifiedDiff, WriteFile, DeleteFile,
 /// RetryFailedChanges, UndoLastApply, ReadFile) with DiffEngine as a dependency. As of 2026-09-17,
-/// SentinelWorkspaceTools.cs only actually still has 3 of those 7 live as [McpServerTool] methods
+/// WorkspaceTools.cs only actually still has 3 of those 7 live as [McpServerTool] methods
 /// (RetryFailedChanges, UndoLastApply, ReadFile) - the other 4 (ApplyDiff/ApplyUnifiedDiff/
 /// WriteFile/DeleteFile) are live, separately-registered [McpServerTool] methods on a wholly
 /// different, pre-existing class (WholeFileWriteTools.cs) that this plan does not name and
-/// is out of scope to touch. DiffEngine is confirmed dead on SentinelWorkspaceTools (FindReferences:
+/// is out of scope to touch. DiffEngine is confirmed dead on WorkspaceTools (FindReferences:
 /// only the constructor assignment, zero live-method uses - its only "use" is inside a large
 /// block-commented dead ApplyDiffWithConfirmationCode method) so it is dropped from this class
 /// entirely rather than carried forward unused.

@@ -1,7 +1,5 @@
 using System.Text.RegularExpressions;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 /// <summary>

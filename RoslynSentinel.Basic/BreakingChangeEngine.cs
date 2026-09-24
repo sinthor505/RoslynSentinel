@@ -26,6 +26,7 @@ public record BreakingChange(
 /// to capture a baseline JSON string,
 /// (2) make code changes, (3) call DetectBreakingChanges with the baseline to see what broke.
 /// </summary>
+/// 
 public class BreakingChangeEngine
 {
     private readonly ISolutionProvider _workspaceManager;

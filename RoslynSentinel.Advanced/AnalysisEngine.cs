@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 
-namespace RoslynSentinel.Basic;
+namespace RoslynSentinel.Advanced;
 
 public record DuplicateMethodGroup(string Hash, List<MethodLocation> Locations);
 public record MethodLocation(FilePathWrapper filePath, string TypeName, string MethodName);

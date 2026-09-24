@@ -2,7 +2,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Basic;
 
@@ -133,6 +135,12 @@ public class SymbolNavigationEngine
 {
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<SymbolNavigationEngine> _logger;
+
+    public SymbolNavigationEngine(ISolutionProvider workspaceManager)
+    {
+        _workspaceManager = workspaceManager;
+        _logger = NullLogger<SymbolNavigationEngine>.Instance;
+    }
 
     public SymbolNavigationEngine(ISolutionProvider workspaceManager, ILogger<SymbolNavigationEngine> logger)
     {
@@ -2048,7 +2056,7 @@ public class SymbolNavigationEngine
     /// RefactoringEngine mutation tools. Returns an empty string (not a sentence fragment) when
     /// symbolName itself doesn't resolve to anything nearby, since there's nothing to list.
     /// </summary>
-    private static string DescribeNameOnlyCandidates(List<MemberDeclarationSyntax> candidates, string symbolName)
+    public static string DescribeNameOnlyCandidates(List<MemberDeclarationSyntax> candidates, string symbolName)
     {
         if (candidates.Count == 0)
         {
@@ -2085,7 +2093,7 @@ public class SymbolNavigationEngine
     /// and are more likely to include irrelevant noise). Returns an empty string when nothing similar
     /// is found either, so the caller message degrades to a plain "not found" with no dangling hint.
     /// </summary>
-    private static async Task<string> DescribeNearMissCandidatesAsync(
+    public static async Task<string> DescribeNearMissCandidatesAsync(
         Solution solution, string symbolName, CancellationToken cancellationToken)
     {
         var suggestions = new List<string>();
@@ -2155,7 +2163,7 @@ public class SymbolNavigationEngine
     /// otherwise risks resolving to a concrete, non-virtual method that structurally can never have
     /// implementations, producing an empty result indistinguishable from a genuine zero-implementations answer.
     /// </summary>
-    private async Task<ISymbol?> ResolveSymbolByNameAsync(
+    public async Task<ISymbol?> ResolveSymbolByNameAsync(
         Solution solution,
         string symbolName,
         string? contextSnippet,
@@ -2240,6 +2248,457 @@ public class SymbolNavigationEngine
         }
 
         return null;
+    }
+
+    public string? GetMemberName(MemberDeclarationSyntax member)
+    {
+        return member switch
+        {
+            MethodDeclarationSyntax m => m.Identifier.Text,
+            PropertyDeclarationSyntax p => p.Identifier.Text,
+            ClassDeclarationSyntax c => c.Identifier.Text,
+            InterfaceDeclarationSyntax i => i.Identifier.Text,
+            FieldDeclarationSyntax f => f.Declaration.Variables.FirstOrDefault()?.Identifier.Text,
+            ConstructorDeclarationSyntax ctor => ctor.Identifier.Text,
+            // EnumDeclarationSyntax/RecordDeclarationSyntax/StructDeclarationSyntax are all
+            // MemberDeclarationSyntax (via BaseTypeDeclarationSyntax) and so are already collected
+            // as candidates by ResolveMemberByNameOrSnippet's DescendantNodes().OfType<...>() scan ->
+            // omitting them here didn't exclude them, it silently made GetMemberName return null for
+            // them, so the `GetMemberName(m) == memberName` filter dropped them regardless of what
+            // name was searched for. Confirmed: AddSummaryCommentAsync("OrderStatus", ...) against a
+            // real, unambiguous top-level enum failed "target not found" purely because of this gap.
+            EnumDeclarationSyntax e => e.Identifier.Text,
+            RecordDeclarationSyntax r => r.Identifier.Text,
+            StructDeclarationSyntax s => s.Identifier.Text,
+            _ => null
+        };
+    }
+
+    // Task I evaluation (docs/plan-tool-disambiguation-remediation-v1.md, addendum under Task I):
+    // NearMissList won over NearestSnippet/CorrectedCoordinates because it's the only strategy that
+    // shows an agent every real candidate instead of just the first one -> on a genuinely ambiguous
+    // snippet (2+ real matches), the other two strategies only ever surfaced candidate #1, which is
+    // actively misleading (an agent can't tell there were other matches worth choosing between, let
+    // alone which one it meant). NearMissList's per-candidate line + declaration preview is also the
+    // only shape that gives an agent enough to construct a corrected contextSnippet in one try. The
+    // other 2 strategies' dead code was deleted here per the plan's own Task I instruction.
+    /// <summary>
+    /// Resolves a member by name, optionally disambiguating with a contextSnippet when the name
+    /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
+    /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
+    /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildMemberHint).
+    /// </summary>
+    public MemberDeclarationSyntax? ResolveMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, Func<MemberDeclarationSyntax, bool>? extraFilter = null)
+    {
+        var candidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax)).Where(m => extraFilter == null || extraFilter(m)).ToList();
+        // A type's own name and its constructor's name are identical (both read from
+        // ClassDeclarationSyntax/StructDeclarationSyntax.Identifier and
+        // ConstructorDeclarationSyntax.Identifier), so "OrderService" matches both the class
+        // declaration and its constructor here. None of these tools operate on whole type
+        // declarations (ReplaceMember/ChangeAccessibility/etc. target "a method, property, or
+        // field"), so when a constructor shares the name, prefer it over the enclosing type ->
+        // otherwise the type declaration (found first, being the ancestor node) silently wins
+        // and callers asking for "the OrderService member" get the whole class back.
+        if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
+        {
+            candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
+        }
+
+        if (contextSnippet == null || candidates.Count <= 1)
+        {
+            // memberName alone already resolves unambiguously (zero or one candidate) -> a
+            // contextSnippet exists only to disambiguate between multiple same-named candidates,
+            // so there's nothing for it to do here. A caller that includes one defensively (or
+            // whose snippet has a whitespace/formatting mismatch against the file, unrelated to
+            // *which* member is meant) should not have the whole call fail over a match that was
+            // never actually needed -> confirmed regression: ContosoOrders ApplyDiscount (a single,
+            // non-overloaded method) failed ReplaceMember twice on contextSnippet mismatches that
+            // had no bearing on which member was targeted, before the caller gave up and switched
+            // tools entirely.
+            return candidates.FirstOrDefault();
+        }
+
+        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+        if (matches.Count == 0)
+        {
+            throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "not found"));
+        }
+
+        if (matches.Count == 1)
+        {
+            var match = matches[0];
+            var matchedMember = candidates.FirstOrDefault(c => c.Span.Contains(match));
+            if (matchedMember != null)
+            {
+                return matchedMember;
+            }
+
+            // Snippet matched but didn't align to a candidate member -> treat as ambiguous
+            throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "ambiguous"));
+        }
+
+        // 2+ matches
+        throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "ambiguous"));
+    }
+
+    // EnumMemberDeclarationSyntax does not derive from MemberDeclarationSyntax (it hangs directly
+    // off EnumDeclarationSyntax, not off a Members list of MemberDeclarationSyntax), so it is
+    // invisible to ResolveMemberByNameOrSnippet's DescendantNodes().OfType<MemberDeclarationSyntax>()
+    // scan regardless of what GetMemberName returns for it. Confirmed: AddSummaryCommentAsync
+    // against an enum member (e.g. OrderStatus.Pending) fails "target not found" even though the
+    // enum type itself resolves fine. SummaryComment's three operations only ever call SyntaxNode-
+    // level trivia APIs (GetLeadingTrivia/WithLeadingTrivia) on the resolved target, never anything
+    // MemberDeclarationSyntax-specific, so this dedicated resolver returns the broader SyntaxNode
+    // and is used only by those three methods -> other tools (ReplaceMember, ModifyModifier, etc.)
+    // keep using ResolveMemberByNameOrSnippet as-is, since they need MemberDeclarationSyntax-only
+    // APIs (e.g. .Modifiers) that an enum member does not have.
+    public SyntaxNode? ResolveMemberOrEnumMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName = null)
+    {
+        var candidates = new List<SyntaxNode>();
+        candidates.AddRange(root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax)));
+        candidates.AddRange(root.DescendantNodes().OfType<EnumMemberDeclarationSyntax>().Where(m => m.Identifier.Text == memberName));
+
+        if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
+        {
+            candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
+        }
+
+        // Sibling types can declare members with byte-identical text (e.g. two records each with
+        // "public string Name { get; set; } = "";"), which no line-based contextSnippet can tell
+        // apart -> narrowing by the member's own containing type first resolves that case without
+        // ever reaching snippet matching. Applied whenever the hint is given and actually narrows
+        // the set (never to an empty result, in case the caller's hint doesn't match reality).
+        if (containingTypeName != null && candidates.Count > 1)
+        {
+            var narrowed = candidates.Where(c => c.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text == containingTypeName).ToList();
+            if (narrowed.Count > 0)
+            {
+                candidates = narrowed;
+            }
+        }
+
+        if (contextSnippet == null || candidates.Count <= 1)
+        {
+            return candidates.FirstOrDefault();
+        }
+
+        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+        if (matches.Count == 0)
+        {
+            throw new InvalidOperationException(BuildMemberHint(candidates, matches, "not found"));
+        }
+
+        if (matches.Count == 1)
+        {
+            var match = matches[0];
+            var matchedMember = candidates.FirstOrDefault(c => c.Span.Contains(match));
+            if (matchedMember != null)
+            {
+                return matchedMember;
+            }
+
+            throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
+        }
+
+        // 2+ matches
+        throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
+    }
+
+    /// <summary>
+    /// Cheap pre-check so callers (e.g. Member's dispatch for remove/replace, which only take a bare
+    /// memberName) can detect that the named member is actually an enum member and route to
+    /// RemoveEnumMemberAsync/ReplaceEnumMemberAsync instead of RemoveMemberAsync/ReplaceMemberAsync
+    /// (whose resolver, ResolveMemberByNameOrSnippet, can never match an EnumMemberDeclarationSyntax ->
+    /// it isn't a MemberDeclarationSyntax). Returns null if memberName doesn't resolve to an enum
+    /// member at all (including "not found" and "ambiguous") -> callers should let the normal
+    /// resolution path in whichever method they call next surface the real error in that case.
+    /// </summary>
+    public async Task<string?> TryGetEnumMemberContainerNameAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return null;
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
+            return target is EnumMemberDeclarationSyntax enumMember && enumMember.Parent is EnumDeclarationSyntax enumDecl ? enumDecl.Identifier.Text : null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Cheap pre-check so callers (e.g. Member's dispatch) can route to the enum-specific
+    /// Add/Remove/ReplaceEnumMemberAsync methods instead of the class/struct/interface/record-only
+    /// AddMemberAsync/RemoveMemberAsync/ReplaceMemberAsync/InsertMemberAfterAsync/InsertMemberBeforeAsync
+    /// family. Returns false (not an error) if the container isn't found at all -> callers should let
+    /// the normal resolution path in whichever method they call next surface the real "not found"
+    /// error, rather than this pre-check swallowing it.
+    /// </summary>
+    public async Task<bool> IsEnumContainerAsync(FilePathWrapper filePath, string containerName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return false;
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter) is EnumDeclarationSyntax;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    public record ContainerMemberInfo(string? Name, string Kind, string Signature, int StartLine, int EndLine);
+    /// <summary>
+    /// Lists the direct members of one container (class/struct/interface/record) in one file,
+    /// syntax-scoped rather than symbol-scoped -> unlike GetTypeInfo/GetTypeMembersDetailAsync
+    /// (which resolve by type name across the whole solution's compilation and include inherited
+    /// members), this only looks at the exact container the caller is about to edit, so its
+    /// output lines up with what RemoveMember/ReplaceMember need: an exact memberName plus enough
+    /// signature text to build a contextSnippet if the name turns out to be overloaded.
+    /// </summary>
+    public async Task<(EditOutcome Outcome, string? Message, List<ContainerMemberInfo> Members)> GetContainerMembersAsync(FilePathWrapper filePath, string containerName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return (EditOutcome.DocumentNotFound, "// Document not found.", []);
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", []);
+        }
+
+        BaseTypeDeclarationSyntax? containerNode;
+        try
+        {
+            containerNode = ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (EditOutcome.CannotEdit, ex.Message, []);
+        }
+
+        if (containerNode is EnumDeclarationSyntax enumDecl)
+        {
+            var enumLines = sourceText.Lines;
+            var enumResult = enumDecl.Members.Select(m =>
+            {
+                var signature = m.EqualsValue != null ? $"{m.Identifier.Text} = {m.EqualsValue.Value}" : m.Identifier.Text;
+                return new ContainerMemberInfo(m.Identifier.Text, "enumMember", signature, enumLines.GetLineFromPosition(m.SpanStart).LineNumber + 1, enumLines.GetLineFromPosition(m.Span.End).LineNumber + 1);
+            }).ToList();
+            return (EditOutcome.Modified, null, enumResult);
+        }
+
+        if (containerNode == null || containerNode is not TypeDeclarationSyntax typeDecl)
+        {
+            return (EditOutcome.CannotEdit, "// Cannot edit: container not found.", []);
+        }
+
+        var lines = sourceText.Lines;
+        var result = typeDecl.Members.Select(m =>
+        {
+            var kind = m switch
+            {
+                MethodDeclarationSyntax => "method",
+                PropertyDeclarationSyntax => "property",
+                FieldDeclarationSyntax => "field",
+                ConstructorDeclarationSyntax => "constructor",
+                EventDeclarationSyntax or EventFieldDeclarationSyntax => "event",
+                IndexerDeclarationSyntax => "indexer",
+                _ => m.Kind().ToString()
+            };
+            var signature = m.WithLeadingTrivia().WithTrailingTrivia().ToFullString().Trim();
+            var firstLineEnd = signature.IndexOfAny(['\n', '{', ';']);
+            if (firstLineEnd > 0)
+            {
+                signature = signature[..firstLineEnd].Trim();
+            }
+
+            return new ContainerMemberInfo(GetMemberName(m), kind, signature, lines.GetLineFromPosition(m.SpanStart).LineNumber + 1, lines.GetLineFromPosition(m.Span.End).LineNumber + 1);
+        }).ToList();
+        return (EditOutcome.Modified, null, result);
+    }
+
+    /// <summary>
+    /// Reduces a type name to the bare identifier Roslyn's <c>Identifier.Text</c> exposes, by
+    /// stripping a trailing type-argument list (<c>Foo<T></c>, <c>Foo<TKey, TValue></c>)
+    /// or backtick arity (<c>Foo`1</c>).
+    /// </summary>
+    /// <remarks>
+    /// Needed because <c>Identifier.Text</c> is already arity-stripped, so comparing it against a
+    /// caller's raw string rejected the type's own declared spelling: run 20260910-013550-398 had
+    /// <c>containerName: "EngineResultWrapper<T>"</c> fail and the bare
+    /// <c>"EngineResultWrapper"</c> succeed on the next turn. Third recorded instance
+    /// (cf. project_qwen36_35b_smoketest_and_member_containername_gap). Applied to both sides of
+    /// the comparison so all three spellings resolve identically.
+    /// </remarks>
+    public static string NormalizeTypeName(string typeName)
+    {
+        var name = typeName.Trim();
+
+        var backtick = name.IndexOf('`');
+        if (backtick > 0)
+        {
+            return name[..backtick];
+        }
+
+        // Only a trailing argument list is stripped -> an angle bracket anywhere else isn't arity
+        // (a caller passing a whole declaration line, say), and truncating there would silently
+        // resolve to the wrong type rather than reporting a miss.
+        var open = name.IndexOf('<');
+        return open > 0 && name.EndsWith('>') ? name[..open].TrimEnd() : name;
+    }
+
+    /// <summary>
+    /// Resolves a type by name, optionally disambiguating with a contextSnippet when the name
+    /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
+    /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
+    /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildTypeHint).
+    /// </summary>
+    /// <remarks>
+    /// The single chokepoint for 13 call sites across Member, ModifyEnum, ModifyBaseType and
+    /// others, so the generic-name normalization here covers all of them.
+    /// </remarks>
+    public BaseTypeDeclarationSyntax? ResolveTypeByNameOrSnippet(SyntaxNode root, SourceText sourceText, string typeName, string? contextSnippet, string? lineBefore, string? lineAfter, Func<BaseTypeDeclarationSyntax, bool>? extraFilter = null)
+    {
+        var normalizedRequest = NormalizeTypeName(typeName);
+        var candidates = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => NormalizeTypeName(t.Identifier.Text) == normalizedRequest).Where(t => extraFilter == null || extraFilter(t)).ToList();
+        if (contextSnippet == null || candidates.Count <= 1)
+        {
+            // typeName alone already resolves unambiguously -> see the identical guard and
+            // rationale in ResolveMemberByNameOrSnippet above.
+            return candidates.FirstOrDefault();
+        }
+
+        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+        if (matches.Count == 0)
+        {
+            throw new InvalidOperationException(BuildTypeHint(candidates, matches, "not found"));
+        }
+
+        if (matches.Count == 1)
+        {
+            var match = matches[0];
+            var matchedType = candidates.FirstOrDefault(c => c.Span.Contains(match));
+            if (matchedType != null)
+            {
+                return matchedType;
+            }
+
+            throw new InvalidOperationException(BuildTypeHint(candidates, matches, "ambiguous"));
+        }
+
+        throw new InvalidOperationException(BuildTypeHint(candidates, matches, "ambiguous"));
+    }
+
+    public string BuildMemberHint(List<SyntaxNode> candidates, List<int> matches, string failureMode)
+    {
+        if (candidates.Count == 0)
+        {
+            return $"contextSnippet {failureMode}: no candidates found.";
+        }
+
+        var previews = candidates.Take(3).Select(c =>
+        {
+            var line = (c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1) ?? -1;
+            var text = c.ToString().Split('\n').First().Trim();
+            if (text.Length > 50)
+            {
+                text = text.Substring(0, 47) + "...";
+            }
+
+            return $"line {line} `{text}`";
+        });
+        var count = candidates.Count;
+        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
+        return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
+    }
+
+    /// <summary>
+    /// Builds the message for a container that could not be found, listing the type names the file
+    /// actually declares.
+    /// </summary>
+    /// <remarks>
+    /// Replaces three identical <c>"// Container not found."</c> literals, which said nothing
+    /// actionable and -> being prefixed with <c>//</c> -> read as commented-out code rather than an
+    /// error. Listing the available names is the single most useful thing to return here: the
+    /// caller's next move is always to pick one, and it also reveals a wrong-file mistake
+    /// immediately. Generic spellings resolve, so a listed name can be given back verbatim; see
+    /// <see cref="NormalizeTypeName"/>.
+    /// </remarks>
+    public static string BuildContainerNotFoundMessage(SyntaxNode root, string requestedName)
+    {
+        var declared = root.DescendantNodes()
+            .OfType<BaseTypeDeclarationSyntax>()
+            .Select(t => t.Identifier.Text)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (declared.Count == 0)
+        {
+            return $"No type named '{requestedName}' was found - this file declares no types at all. " +
+                   "Check the filePath.";
+        }
+
+        var shown = declared.Take(10).ToList();
+        var suffix = declared.Count > shown.Count ? $" (+{declared.Count - shown.Count} more)" : "";
+        return $"No type named '{requestedName}' was found in this file. Types declared here: " +
+               $"{string.Join(", ", shown)}{suffix}. Pass one of those as containerName - a type " +
+               "argument list is optional, so both 'Foo' and 'Foo<T>' resolve.";
+    }
+
+    private string BuildTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    {
+        if (candidates.Count == 0)
+        {
+            return $"contextSnippet {failureMode}: no candidates found.";
+        }
+
+        var previews = candidates.Take(3).Select(c =>
+        {
+            var line = (c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1) ?? -1;
+            var text = c.ToString().Split('\n').First().Trim();
+            if (text.Length > 50)
+            {
+                text = text.Substring(0, 47) + "...";
+            }
+
+            return $"line {line} `{text}`";
+        });
+        var count = candidates.Count;
+        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
+        return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
     }
 
     /// <summary>

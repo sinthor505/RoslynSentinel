@@ -1,4 +1,4 @@
-// GetOperationDetail -> SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap
+// GetOperationDetail -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap
 // flagged branches: blobPath == null, filter present, file: filter true/false, unknown filter).
 // Blob schema follows OperationBlobWriter.WriteAsync's on-disk layout, same as UndoLastApplyTests.cs.
 // ItemRecordOutcome now serializes as its string name (JsonStringEnumConverter), matching its
@@ -33,7 +33,7 @@ public class GetOperationDetailTests
 
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);

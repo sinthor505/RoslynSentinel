@@ -44,73 +44,34 @@ public static class RoslynSentinelServiceExtensionsBasic
         // TryAdd only so a caller that already registered StoppedByScriptMarker (e.g., ServerStdio.cs
         // or ServerHttp.cs from a real host) is not overwritten. Test fixtures without that context
         // get this default stub.
-        services.TryAddSingleton(new StoppedByScriptMarker(WasFound: false, Details: null));
-        services.AddSingleton<PersistentWorkspaceManager>();
-        services.AddSingleton<IWorkspaceManager>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
-        services.AddSingleton<ISolutionProvider>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
-        services.AddSingleton<DiffEngine>();
-        services.AddSingleton<ValidationEngine>();
-        services.AddSingleton<ImpactAnalyzer>();
-        services.AddSingleton<RefactoringEngine>();
-        // services.AddSingleton<MetricsEngine>();
-        // services.AddSingleton<CodeHealingEngine>();
-        services.AddSingleton<AnalysisEngine>();
-        // services.AddSingleton<PerformanceEngine>();
-        // services.AddSingleton<SecurityEngine>();
-        // services.AddSingleton<TestingEngine>();
-        services.AddSingleton<CodeGenerationEngine>();
-        // services.AddSingleton<ModernizationEngine>();
-        // services.AddSingleton<DependencyInjectionEngine>();
-        services.AddSingleton<ThreadSafetyEngine>();
-        // services.AddSingleton<ArchitecturalEngine>();
-        // services.AddSingleton<AdvancedRefactoringEngine>();
-        // services.AddSingleton<DocumentationEngine>();
-        // services.AddSingleton<SecurityAndSafetyEngine>();
-        // services.AddSingleton<ApiIntegrationEngine>();
-        services.AddSingleton<InventoryEngine>();
-        // services.AddSingleton<AsyncOptimizationEngine>();
-        services.AddSingleton<InstrumentationEngine>();
-        // services.AddSingleton<AdvancedTypeEngine>();
-        // services.AddSingleton<ModernLoggingEngine>();
-        services.AddSingleton<CodeFlowEngine>();
-        services.AddSingleton<StructuralRefinementEngine>();
-        // services.AddSingleton<LogicOptimizationEngine>();
-        services.AddSingleton<SemanticSearchEngine>();
-        // services.AddSingleton<ModernizationUpgradeEngine>();
-        // services.AddSingleton<AsyncSafetyEngine>();
-        services.AddSingleton<ProjectStructureEngine>();
-        // services.AddSingleton<DeadCodeEngine>();
-        services.AddSingleton<SyntaxUpgradeEngine>();
-        // services.AddSingleton<RefinementEngine>();
-        services.AddSingleton<DiagnosticEngine>();
-        services.AddSingleton<BuildEngine>();
-        services.AddSingleton<TestRunEngine>();
-        services.AddSingleton<SolutionManagementEngine>();
-        services.AddSingleton<MappingEngine>();
-        services.AddSingleton<IDEStyleEngine>();
-        services.AddSingleton<StandardRefactoringEngine>();
-        services.AddSingleton<ImmutabilityEngine>();
-        services.AddSingleton<CodeStyleEngine>();
-        services.AddSingleton<DependencyEngine>();
-        // services.AddSingleton<AdvancedLogicEngine>();
-        // services.AddSingleton<AdvancedStructuralEngine>();
-        services.AddSingleton<SemanticRefactoringLibrary>();
-        services.AddSingleton<GranularRefactoringEngine>();
-        // services.AddSingleton<ApiAutomationEngine>();
-        services.AddSingleton<ControlFlowEngine>();
-        // services.AddSingleton<HealthOrchestrationEngine>();
-        services.AddSingleton<SymbolNavigationEngine>();
-        // services.AddSingleton<AntiPatternEngine>();
-        // services.AddSingleton<CloneDetectionEngine>();
-        // services.AddSingleton<OutParamRefactoringEngine>();
-        services.AddSingleton<DiscoveryEngine>();
-        services.AddSingleton<MsToolAugmentEngine>();
-        services.AddSingleton<CodeStyleAnalysisEngine>();
-        services.AddSingleton<ProjectConsistencyEngine>();
         services.AddSingleton<BreakingChangeEngine>();
-        // services.AddSingleton<PathDrivenTestEngine>();
-        services.AddSingleton<StackOverflowEngine>();
-        // services.AddSingleton<AsyncBatchEngine>();
+        services.AddSingleton<BuildEngine>();
+        services.AddSingleton<DependencyEngine>();
+        services.AddSingleton<DiagnosticEngine>();
+        services.AddSingleton<DiffEngine>();
+        services.AddSingleton<DiscoveryEngine>();
+        services.AddSingleton<ImpactAnalyzer>();
+        services.AddSingleton<InventoryEngine>();
+        services.AddSingleton<ISolutionProvider>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
+        services.AddSingleton<IWorkspaceManager>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
+        services.AddSingleton<MsToolAugmentEngine>();
+        services.AddSingleton<PersistentWorkspaceManager>();
+        services.AddSingleton<ProjectConsistencyEngine>();
+        services.AddSingleton<ProjectStructureEngine>();
+        services.AddSingleton<RefactoringEngine>();
+        services.AddSingleton<SemanticRefactoringLibrary>();
+        services.AddSingleton<SemanticSearchEngine>();
+        services.AddSingleton<SolutionManagementEngine>();
+        services.AddSingleton<StandardRefactoringEngine>();
+        services.AddSingleton<StructuralRefinementEngine>();
+        services.AddSingleton<SymbolNavigationEngine>();
+        services.AddSingleton<SyntaxUpgradeEngine>();
+        services.AddSingleton<TestRunEngine>();
+        services.AddSingleton<ThreadSafetyEngine>();
+        services.AddSingleton<ValidationEngine>();
+        services.TryAddSingleton(new StoppedByScriptMarker(WasFound: false, Details: null));
+
+
         return services;
     }
     /// <summary>
@@ -145,12 +106,13 @@ public static class RoslynSentinelServiceExtensionsBasic
         // use to build the startup guidance message) so McpServerStatus can report today's actual
         // mode/include-tools/exclude-tools resolution instead of a caller having to guess or
         // restart the server to find out.
-        services.AddSingleton(new ActiveToolSurface(
+        var activeToolSurface = new ActiveToolSurface(
             modeArg: string.Join(",", activeModes.OrderBy(m => m, StringComparer.OrdinalIgnoreCase)),
             activeModes: activeModes,
             includeTools: resolvedIncludeTools,
             excludeTools: resolvedExcludeTools,
-            activeToolClasses: activeToolClasses));
+            activeToolClasses: activeToolClasses);
+        services.AddSingleton(activeToolSurface);
 
         // Always registered, independent of activeToolClasses/--mode/--include-tools/
         // --exclude-tools: the one tool meant to be reachable no matter what selection is in
@@ -161,7 +123,7 @@ public static class RoslynSentinelServiceExtensionsBasic
 
         // Decision 7 step 4: the *Tools/*Impl split classes take a plain (non-generic) ILogger,
         // not ILogger<T> - previously this only worked because each was constructed with `new`
-        // inside a facade's constructor (e.g. SentinelWorkspaceTools), which passes down its own
+        // inside a facade's constructor (e.g. WorkspaceTools), which passes down its own
         // ILogger<TFacade> by implicit reference conversion, never asking DI to resolve a plain
         // ILogger directly. Registering these classes as DI singletons in their own right (the
         // fine-grained mode-string blocks below) is the first thing that ever asks the container
@@ -171,7 +133,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         // same category name pattern the rest of the server already uses implicitly.
         services.TryAddSingleton(sp => sp.GetRequiredService<ILoggerFactory>().CreateLogger("RoslynSentinel"));
 
-        if (activeToolClasses.Contains("SentinelWorkspaceTools"))
+        if (activeToolClasses.Contains("WorkspaceTools"))
         {
             services.AddSingleton<WorkspaceReadNavigationImpl>();
             services.AddSingleton<WorkspaceReadNavigationTools>();
@@ -180,7 +142,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
         // Fine-grained Workspace sub-modes (Decision 7 step 4, Decision 4 + Addendum B) -
         // independently opt-in-able direct registrations of the split classes, none requiring
-        // "SentinelWorkspaceTools"/"Workspace" itself. WorkspaceReadNavigationImpl/Tools use
+        // "WorkspaceTools"/"Workspace" itself. WorkspaceReadNavigationImpl/Tools use
         // TryAddSingleton since the block above may already have registered them.
         if (activeToolClasses.Contains("WorkspaceFileEditTools"))
         {
@@ -259,17 +221,30 @@ public static class RoslynSentinelServiceExtensionsBasic
             // services.AddSingleton<ScanTools>();
             // mcpBuilder.WithTools<ScanTools>();
         }
+        if (activeToolClasses.Contains("RefactoringTools"))
+        {
+            services.AddSingleton<RefactoringSignatureTools>();
+            mcpBuilder.WithSentinelTools<RefactoringSignatureTools>();
+            services.AddSingleton<RefactoringStructuralTools>();
+            mcpBuilder.WithSentinelTools<RefactoringStructuralTools>();
+            services.AddSingleton<RefactoringExtractionDocsTools>();
+            mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
+        }
         // Fine-grained Refactor sub-modes (Decision 7 step 4, Decision 4) - independently
-        // opt-in-able, none require "RefactoringTools"/"Refactor" itself.
+        // opt-in-able via --include-tools=<ClassName> even without "RefactoringTools"/"Refactor"
+        // itself; TryAddSingleton/TryAdd-equivalent here would be cleaner, but AddSingleton is
+        // consistent with every other block in this method, so a class named in both the mode's
+        // umbrella gate above and its own explicit --include-tools entry gets a harmless duplicate
+        // registration (last one wins for GetRequiredService<T>, per DI container semantics).
         if (activeToolClasses.Contains("RefactoringSignatureTools"))
         {
             services.AddSingleton<RefactoringSignatureTools>();
             mcpBuilder.WithSentinelTools<RefactoringSignatureTools>();
         }
-        if (activeToolClasses.Contains("RefactoringSignatureTools"))
+        if (activeToolClasses.Contains("RefactoringStructuralTools"))
         {
-            services.AddSingleton<RefactoringSignatureTools>();
-            mcpBuilder.WithSentinelTools<RefactoringSignatureTools>();
+            services.AddSingleton<RefactoringStructuralTools>();
+            mcpBuilder.WithSentinelTools<RefactoringStructuralTools>();
         }
         if (activeToolClasses.Contains("RefactoringExtractionDocsTools"))
         {
@@ -486,7 +461,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                         {
                             var text = block.Text;
                             if (string.IsNullOrEmpty(text) ||
-                                text.Length <= RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes)
+                                text.Length <= LargeResultHelper.OffloadThresholdBytes)
                             {
                                 continue;
                             }
@@ -494,11 +469,11 @@ public static class RoslynSentinelServiceExtensionsBasic
                             var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
                             logger?.LogWarning(
                                 "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {OffloadThresholdBytes})",
-                                context.Params?.Name, text.Length, RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes);
+                                context.Params?.Name, text.Length, LargeResultHelper.OffloadThresholdBytes);
 
                             var workspaceManager = context.Server.Services?.GetService<PersistentWorkspaceManager>();
                             var solutionRoot = workspaceManager?.GetSolutionRoot();
-                            var stored = await RoslynSentinel.Common.LargeResultHelper.StoreRawJsonAsync(text, solutionRoot, cancellationToken);
+                            var stored = await LargeResultHelper.StoreRawJsonAsync(text, solutionRoot, cancellationToken);
                             if (!stored.offloaded)
                             {
                                 // No solution loaded, or the write failed to qualify -> fail closed to
@@ -513,7 +488,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     offloaded = true,
                                     resultId = stored.resultId,
                                     sizeBytes = text.Length,
-                                    message = $"Result is {text.Length} bytes (threshold: {RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes}). Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."
+                                    message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}). Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."
                                 })
                             }];
                             break;

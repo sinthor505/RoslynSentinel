@@ -4,7 +4,7 @@ using RoslynSentinel.Common;
 
 #pragma warning disable CS8618
 
-namespace RoslynSentinel.Tests.Basic;
+namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
 public class MappingEngineTests

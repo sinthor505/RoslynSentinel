@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 
 using ModelContextProtocol;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Tests.Fakes;
 
 // Minimal IWorkspaceManager fake for tests that only need CurrentSolution / GetCurrentSolutionAsync,

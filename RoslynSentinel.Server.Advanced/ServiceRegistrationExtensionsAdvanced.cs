@@ -25,39 +25,52 @@ public static class RoslynSentinelServiceExtensionsAdvanced
 
         // Advanced-only engines: not registered by Basic (either because Basic's tool classes
         // don't use them, or because they're deliberately gated to the fuller Advanced tool set).
-        services.AddSingleton<MetricsEngine>();
-        services.AddSingleton<CodeHealingEngine>();
-        services.AddSingleton<PerformanceEngine>();
-        services.AddSingleton<SecurityEngine>();
-        services.AddSingleton<TestingEngine>();
-        services.AddSingleton<ModernizationEngine>();
-        services.AddSingleton<DependencyInjectionEngine>();
-        services.AddSingleton<ArchitecturalEngine>();
-        services.AddSingleton<AdvancedRefactoringEngine>();
-        services.AddSingleton<DocumentationEngine>();
-        services.AddSingleton<SecurityAndSafetyEngine>();
-        services.AddSingleton<ApiIntegrationEngine>();
-        services.AddSingleton<AsyncOptimizationEngine>();
-        services.AddSingleton<AdvancedTypeEngine>();
-        services.AddSingleton<ModernLoggingEngine>();
-        services.AddSingleton<LogicOptimizationEngine>();
-        services.AddSingleton<ModernizationUpgradeEngine>();
-        services.AddSingleton<AsyncSafetyEngine>();
-        services.AddSingleton<DeadCodeEngine>();
-        services.AddSingleton<RefinementEngine>();
         services.AddSingleton<AdvancedLogicEngine>();
+        services.AddSingleton<AdvancedRefactoringEngine>();
         services.AddSingleton<AdvancedStructuralEngine>();
-        services.AddSingleton<ApiAutomationEngine>();
-        services.AddSingleton<HealthOrchestrationEngine>();
+        services.AddSingleton<AdvancedTypeEngine>();
+        services.AddSingleton<AnalysisEngine>();
         services.AddSingleton<AntiPatternEngine>();
+        services.AddSingleton<ApiAutomationEngine>();
+        services.AddSingleton<ApiIntegrationEngine>();
+        services.AddSingleton<ArchitecturalEngine>();
+        services.AddSingleton<AsyncBatchEngine>();
+        services.AddSingleton<AsyncOptimizationEngine>();
+        services.AddSingleton<AsyncSafetyEngine>();
         services.AddSingleton<CloneDetectionEngine>();
+        services.AddSingleton<CodeFlowEngine>();
+        services.AddSingleton<CodeGenerationEngine>();
+        services.AddSingleton<CodeGenerationEngine>();
+        services.AddSingleton<CodeHealingEngine>();
+        services.AddSingleton<CodeStyleAnalysisEngine>();
+        services.AddSingleton<CodeStyleEngine>();
+        services.AddSingleton<CommentingEngine>();
+        services.AddSingleton<ControlFlowEngine>();
+        services.AddSingleton<DeadCodeEngine>();
+        services.AddSingleton<DependencyInjectionEngine>();
+        services.AddSingleton<DocumentationEngine>();
+        services.AddSingleton<GranularRefactoringEngine>();
+        services.AddSingleton<HealthOrchestrationEngine>();
+        services.AddSingleton<IDEStyleEngine>();
+        services.AddSingleton<ImmutabilityEngine>();
+        services.AddSingleton<InstrumentationEngine>();
+        services.AddSingleton<LogicOptimizationEngine>();
+        services.AddSingleton<MappingEngine>();
+        services.AddSingleton<MetricsEngine>();
+        services.AddSingleton<MigrationLedger>();
+        services.AddSingleton<ModernizationEngine>();
+        services.AddSingleton<ModernizationUpgradeEngine>();
+        services.AddSingleton<ModernLoggingEngine>();
         services.AddSingleton<OutParamRefactoringEngine>();
         services.AddSingleton<PathDrivenTestEngine>();
-        services.AddSingleton<AsyncBatchEngine>();
-        services.AddSingleton<MigrationLedger>();
-        services.AddSingleton<CommentingEngine>();
+        services.AddSingleton<PerformanceEngine>();
+        services.AddSingleton<RefinementEngine>();
         services.AddSingleton<ScopedOperationLedgerEngine>();
-        services.AddSingleton<IScopedOperationLedger>(sp => sp.GetRequiredService<ScopedOperationLedgerEngine>());
+        services.AddSingleton<SecurityAndSafetyEngine>();
+        services.AddSingleton<SecurityEngine>();
+        services.AddSingleton<StackOverflowEngine>();
+        services.AddSingleton<TestingEngine>();
+
 
         // LmStudioClient talks to a locally-hosted LM Studio server (OpenAI-compatible
         // /v1/chat/completions). AddHttpClient<LmStudioClient> registers the concrete type keyed

@@ -47,7 +47,7 @@ public class ConvertToAsyncBridgeTests
     public async Task ConvertToAsyncBridge_TaskReturn_ProducesAsyncOverload()
     {
         SetSource(@"
-using System.SuccessDetails;
+using System.SuccessData;
 public class TripService
 {
     public DataTable GetTrips(int companyId)
@@ -73,7 +73,7 @@ public class TripService
     public async Task ConvertToAsyncBridge_TaskReturn_OriginalBodyReplacedWithBridgeCall()
     {
         SetSource(@"
-using System.SuccessDetails;
+using System.SuccessData;
 public class TripService
 {
     public DataTable GetTrips(int companyId)
@@ -100,7 +100,7 @@ public class TripService
     public async Task ConvertToAsyncBridge_TaskReturn_ObsoleteAttributeAddedToOriginal()
     {
         SetSource(@"
-using System.SuccessDetails;
+using System.SuccessData;
 public class TripService
 {
     public DataTable GetTrips(int companyId)
@@ -123,7 +123,7 @@ public class TripService
     public async Task ConvertToAsyncBridge_TaskReturn_InlineCommentAddedToBridgeBody()
     {
         SetSource(@"
-using System.SuccessDetails;
+using System.SuccessData;
 public class TripService
 {
     public DataTable GetTrips(int companyId)
@@ -167,7 +167,7 @@ public class NotificationService
     public async Task ConvertToAsyncBridge_MultipleParameters_AllForwardedInBridgeCall()
     {
         SetSource(@"
-using System.SuccessDetails;
+using System.SuccessData;
 public class DriverService
 {
     public DataTable GetDrivers(int companyId, string status, int limit)
@@ -187,7 +187,7 @@ public class DriverService
     public async Task ConvertToAsyncBridge_ExpressionBodiedMethod_AsyncOverloadGetsBlockBody()
     {
         SetSource(@"
-using System.SuccessDetails;
+using System.SuccessData;
 public class TripService
 {
     public DataTable GetTrips(int companyId) => DataHelper.Search(companyId);
@@ -207,7 +207,7 @@ public class TripService
     public async Task ConvertToAsyncBridge_StaticMethod_Works()
     {
         SetSource(@"
-using System.SuccessDetails;
+using System.SuccessData;
 public class TripService
 {
     public static DataTable GetAllTrips()
@@ -228,7 +228,7 @@ public class TripService
     public async Task ConvertToAsyncBridge_AsyncMethodInsertedAfterOriginal()
     {
         SetSource(@"
-using System.SuccessDetails;
+using System.SuccessData;
 public class TripService
 {
     public DataTable GetTrips(int companyId)
@@ -274,7 +274,7 @@ public class Service
     {
         SetSource(@"
 using System.Threading.Tasks;
-using System.SuccessDetails;
+using System.SuccessData;
 public class Service
 {
     public DataTable GetTripsAsync(int id)
@@ -292,7 +292,7 @@ public class Service
     public async System.Threading.Tasks.Task ConvertToAsyncBridge_AbstractMethod_Throws()
     {
         SetSource(@"
-using System.SuccessDetails;
+using System.SuccessData;
 public abstract class BaseService
 {
     public abstract DataTable GetTrips(int companyId);
@@ -363,7 +363,7 @@ public class Service
         SetSource(@"
 using System.Threading;
 using System.Threading.Tasks;
-using System.SuccessDetails;
+using System.SuccessData;
 public class TripService
 {
     public DataTable GetTrips(int companyId)

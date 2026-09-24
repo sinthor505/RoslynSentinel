@@ -1,4 +1,4 @@
-// ReadFile -> SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap flagged
+// ReadFile -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap flagged
 // branches: document == null, startLine/endLine slicing, out-of-range slice, offload threshold).
 // Data is returned as an anonymous object (not a named record) for the non-offload paths. Anonymous
 // type properties are internal to the declaring assembly, so `dynamic` binding fails cross-assembly
@@ -37,7 +37,7 @@ public class ReadFileTests
 
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, diffEngine);
+        var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);

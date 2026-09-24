@@ -23,7 +23,7 @@ public class ReplaceSnippetSizeGuardTests
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         return new WorkspaceTools(
             workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine),
+            new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
             diffEngine, diagnosticEngine,
             new SolutionManagementEngine(workspaceManager),
             new StructuralRefinementEngine(workspaceManager, config),

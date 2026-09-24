@@ -34,18 +34,18 @@ public class SymbolNavigationTools
         [Description("Restricts results to symbols declared inside this namespace.")]
         [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
-        [ExternalInputRequired(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [ExternalInputRequired(DataTag.SourceFilepath, required: false)] string? filePath = null,
         [Description("false enables a prefix/contains search instead of an exact name match.")]
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
         CancellationToken cancellationToken = default) =>
-        _impl.LocateSymbol(reason, symbolName, symbolKind, containingType, containingNamespace, projectName, filepath, exactMatch, cancellationToken);
+        _impl.LocateSymbol(reason, symbolName, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, cancellationToken);
 
     [McpServerTool(Name = "InspectSymbol")]
     [Produces(DataTag.DocCommentId)]
     [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol - if you only have a name, use LocateSymbol first to find the declaring file.")]
     public Task<SentinelCallToolResult<object>> InspectSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Description("info returns type, kind, accessibility, attributes, and documentation. blastRadius returns all call sites and affected projects - for a full caller/override breakdown instead of a summary, use FindReferences.")]
         [ToolOption(ToolOptionTag.Aspect)] InspectSymbolAspect aspect,
@@ -53,7 +53,7 @@ public class SymbolNavigationTools
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         CancellationToken cancellationToken = default
         ) =>
-        _impl.InspectSymbol(reason, filepath, contextSnippet, aspect, lineBefore, lineAfter, cancellationToken);
+        _impl.InspectSymbol(reason, filePath, contextSnippet, aspect, lineBefore, lineAfter, cancellationToken);
 
     [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]
