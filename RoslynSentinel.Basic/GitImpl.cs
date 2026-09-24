@@ -92,6 +92,13 @@ public record GitDiffResult : GitResult
     {
         get; set;
     }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    public string? Warning
+    {
+        get; set;
+    }
 }
 
 public record GitShowResult : GitResult
@@ -102,6 +109,13 @@ public record GitShowResult : GitResult
     public string Message { get; set; } = "";
     public string Diff { get; set; } = "";
     public int FilesChanged
+    {
+        get; set;
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)
+    public string? Warning
     {
         get; set;
     }
@@ -319,7 +333,23 @@ public class GitImpl : IGitOperations
             RedirectStandardInput = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+            // Without these, Process decodes the redirected pipes using Console.OutputEncoding,
+            // which on Windows defaults to the legacy OS codepage, not UTF-8. Git writes UTF-8 to
+            // stdout/stderr regardless of that codepage, so every non-ASCII multi-byte character
+            // (e.g. an em dash in a diffed file) gets decoded one byte at a time as separate
+            // legacy-codepage characters and re-encoded into mojibake like "ΓÇö" - see
+            // docs/current/blockers/blocking_error_git_diff_mojibake_display.md. Forcing UTF-8 here
+            // makes decoding match what git actually wrote.
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
+        // Belt-and-braces: also tell git explicitly to treat commit/log text as UTF-8, in case a
+        // repo-level i18n.* config otherwise changes how git itself encodes that text before it
+        // ever reaches the pipe.
+        process.StartInfo.ArgumentList.Add("-c");
+        process.StartInfo.ArgumentList.Add("i18n.logOutputEncoding=utf-8");
+        process.StartInfo.ArgumentList.Add("-c");
+        process.StartInfo.ArgumentList.Add("i18n.commitEncoding=utf-8");
         foreach (var arg in args)
             process.StartInfo.ArgumentList.Add(arg);
 
@@ -408,6 +438,57 @@ public class GitImpl : IGitOperations
             // handle may already be invalid. Nothing more useful to do here.
         }
     }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// Best-effort check that <paramref name="text"/> decoded cleanly as UTF-8, for surfacing a
+    /// warning rather than silently returning corrupted diff text - see
+    /// docs/current/blockers/blocking_error_git_diff_mojibake_display.md. Two independent signals:
+    /// U+FFFD (the .NET/UTF-8 decoder's own "this byte sequence was invalid" replacement character),
+    /// and the specific C1-control-block run (U+0080-U+009F) that appears when UTF-8 multi-byte
+    /// sequences get mis-decoded one byte at a time through a Windows-125x-family legacy codepage
+    /// instead (the "ΓÇö"-style mojibake the linked blocker documented). Neither check requires
+    /// knowing what the correct text should have been - both are shapes that well-formed text
+    /// essentially never contains on their own.
+    /// </summary>
+    private static string? DetectDecodeCorruption(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return null;
+
+        if (text.Contains('�'))
+        {
+            return "Output contains U+FFFD (Unicode replacement character), meaning some bytes " +
+                   "from git could not be decoded as UTF-8 and were lost. Non-ASCII content in this " +
+                   "result may be corrupted or missing - re-check the source file directly (ReadFile/" +
+                   "GetFileOutline) rather than trusting this text for anything non-ASCII.";
+        }
+
+        var suspiciousRunLength = 0;
+        foreach (var ch in text)
+        {
+            if (ch is >= '\u0080' and <= '\u009F')
+            {
+                suspiciousRunLength++;
+                if (suspiciousRunLength >= 2)
+                {
+                    return "Output contains a run of C1 control characters (U+0080-U+009F), the " +
+                           "signature of a UTF-8 multi-byte sequence mis-decoded one byte at a time " +
+                           "through a legacy codepage (e.g. an em dash showing up as ΓÇö-style " +
+                           "mojibake). Non-ASCII content in this result is likely corrupted - re-check " +
+                           "the source file directly (ReadFile/GetFileOutline) rather than trusting this text.";
+                }
+            }
+            else
+            {
+                suspiciousRunLength = 0;
+            }
+        }
+
+        return null;
+    }
+
 
     private static string StatusLabel(char code) => code switch
     {
@@ -609,7 +690,7 @@ public class GitImpl : IGitOperations
                 ? diffRaw.Stdout[..maxBytes] + $"\n... (truncated at {maxBytes} bytes)"
                 : diffRaw.Stdout;
 
-            return new GitDiffResult { Success = true, Diff = diff, FilesChanged = filesChanged };
+            return new GitDiffResult { Success = true, Diff = diff, FilesChanged = filesChanged, Warning = DetectDecodeCorruption(diff) };
         }
         catch (Exception ex)
         {
@@ -673,6 +754,7 @@ public class GitImpl : IGitOperations
                 Message = metaParts[4].Trim('\n', '\r'),
                 Diff = diff,
                 FilesChanged = filesChanged,
+                Warning = DetectDecodeCorruption(diff) ?? DetectDecodeCorruption(metaParts[4]),
             };
         }
         catch (Exception ex)
