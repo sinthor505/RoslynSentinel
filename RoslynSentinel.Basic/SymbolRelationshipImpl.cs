@@ -233,29 +233,36 @@ public class SymbolRelationshipImpl
             if (kind == FindReferencesKind.callers)
             {
                 var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                var summary = SummarizeListResult.Build(result, c => c.FilePath);
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessData = result
+                    SuccessData = new { callers = result, summary },
+                    StatusMessage = summary.ToStatusMessage("caller")
                 };
             }
             if (kind == FindReferencesKind.implementations)
             {
                 var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                var summary = SummarizeListResult.Build(result, i => i.FilePath ?? "(unknown)");
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessData = result
+                    SuccessData = new { implementations = result, summary },
+                    StatusMessage = summary.ToStatusMessage("implementation")
                 };
             }
             if (kind == FindReferencesKind.all)
             {
                 var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                var combinedPaths = callers.Select(c => c.FilePath).Concat(implementations.Select(i => i.FilePath ?? "(unknown)")).ToList();
+                var summary = SummarizeListResult.Build(combinedPaths, p => p);
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
-                    SuccessData = new { callers, implementations }
+                    SuccessData = new { callers, implementations, summary },
+                    StatusMessage = summary.ToStatusMessage("hit")
                 };
             }
             return new SentinelCallToolResult<object>

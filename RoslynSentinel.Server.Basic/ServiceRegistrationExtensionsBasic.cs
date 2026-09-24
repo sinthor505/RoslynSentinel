@@ -480,6 +480,64 @@ public static class RoslynSentinelServiceExtensionsBasic
                                 continue;
                             }
 
+                            // Best-effort size hint so the pointer alone tells the model whether this
+                            // is 1 big hit or 300 small ones, instead of forcing a GetLargeResult round
+                            // trip just to find out. Shape-agnostic by design (this filter runs for
+                            // every tool, typed and untyped alike) -> parsed straight from the raw JSON
+                            // rather than any tool-specific DTO. itemCount looks for the envelope's own
+                            // totalRecords first (set by ForPossiblyLargeDataAsync callers), then falls
+                            // back to counting elements of the first array found under successData
+                            // (covers untyped tools like FindReferences that set SuccessData directly).
+                            // statusMessage is relayed whenever the tool already populated one (e.g.
+                            // FindReferences/SearchSolutionText's SummarizeListResult-based summary) so
+                            // that hint survives the offload instead of being silently dropped.
+                            int? itemCount = null;
+                            string? statusMessage = null;
+                            try
+                            {
+                                var root = System.Text.Json.Nodes.JsonNode.Parse(text)?.AsObject();
+                                if (root != null)
+                                {
+                                    if (root.TryGetPropertyValue("totalRecords", out var totalRecordsNode) &&
+                                        totalRecordsNode != null &&
+                                        totalRecordsNode.GetValueKind() == System.Text.Json.JsonValueKind.Number)
+                                    {
+                                        itemCount = totalRecordsNode.GetValue<int>();
+                                    }
+                                    else if (root.TryGetPropertyValue("successData", out var successDataNode) && successDataNode != null)
+                                    {
+                                        if (successDataNode is System.Text.Json.Nodes.JsonArray topArray)
+                                        {
+                                            itemCount = topArray.Count;
+                                        }
+                                        else if (successDataNode is System.Text.Json.Nodes.JsonObject successObject)
+                                        {
+                                            var arrays = successObject.Where(kv => kv.Value is System.Text.Json.Nodes.JsonArray).ToList();
+                                            if (arrays.Count > 0)
+                                            {
+                                                itemCount = arrays.Sum(kv => ((System.Text.Json.Nodes.JsonArray)kv.Value!).Count);
+                                            }
+                                        }
+                                    }
+
+                                    if (root.TryGetPropertyValue("statusMessage", out var statusMessageNode) &&
+                                        statusMessageNode != null &&
+                                        statusMessageNode.GetValueKind() == System.Text.Json.JsonValueKind.String)
+                                    {
+                                        statusMessage = statusMessageNode.GetValue<string>();
+                                    }
+                                }
+                            }
+                            catch (Exception parseEx)
+                            {
+                                // Best-effort only - never let a parse quirk in some other tool's shape
+                                // block the offload itself, just fall back to no hint.
+                                Debug.WriteLine($"Large result offload size-hint parse failed: {parseEx}");
+                            }
+
+                            var hint = itemCount is int n ? $" Result contains {n} item(s)." : "";
+                            var summaryLine = statusMessage != null ? $" Summary: {statusMessage}" : "";
+
                             result.Content = [new ModelContextProtocol.Protocol.TextContentBlock
                             {
                                 Text = System.Text.Json.JsonSerializer.Serialize(new
@@ -487,7 +545,9 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     offloaded = true,
                                     resultId = stored.resultId,
                                     sizeBytes = text.Length,
-                                    message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}). Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."
+                                    itemCount,
+                                    statusMessage,
+                                    message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}).{hint}{summaryLine} Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."
                                 })
                             }];
                             break;

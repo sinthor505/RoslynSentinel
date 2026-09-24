@@ -518,6 +518,8 @@ public class WorkspaceReadNavigationImpl
 
             string? warning = warnings.Count > 0 ? string.Join(" ", warnings) : null;
             var payload = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid);
+            var allMatches = literalResults.Concat(regexResults).ToList();
+            var matchSummary = SummarizeListResult.Build(allMatches, m => m.filePath.Absolute);
             var searchResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                 payload,
                 _workspaceManager.GetSolutionRoot(),
@@ -525,6 +527,7 @@ public class WorkspaceReadNavigationImpl
                 ResultWrapperType.TextSearchMatchList,
                 totalRecords: literalResults.Count + regexResults.Count,
                 workspaceVersion: _workspaceManager.WorkspaceVersion,
+                statusMessage: matchSummary.ToStatusMessage("match"),
                 cancellationToken: cancellationToken);
             return searchResult with { WarningDetails = warning };
         }
