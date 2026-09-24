@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Advanced;
 
 public class CodeHealingEngine
@@ -96,7 +94,7 @@ public class CodeHealingEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync();
+        var root = await document.GetSyntaxRootAsync(cancellationToken: cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult

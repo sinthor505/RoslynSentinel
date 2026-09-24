@@ -873,7 +873,7 @@ public class C
         var result = await _outParamEngine.ConvertOutParamsToValueTupleAsync("C.cs", "M");
 
         Assert.That(result.Success, Is.True, $"Expected success but got: {result.Message}");
-        Assert.That(result.CallSitesRewritten, Is.EqualTo(0), "No callers in this solution");
+        Assert.That(result.CallSitesRewritten, Is.Zero, "No callers in this solution");
     }
 
     [Test]

@@ -96,7 +96,7 @@ public class AdminTools
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(250));
                 Environment.Exit(0);
-            });
+            }, cancellationToken: cancellationToken);
 
             return "Stopping. VS Code will respawn a fresh instance on its next tool call.";
         }

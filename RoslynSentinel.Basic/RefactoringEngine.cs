@@ -310,7 +310,7 @@ public class RefactoringEngine
                     }
 
                     var span = location.Location.SourceSpan;
-                    var refLineNumber = refRoot.SyntaxTree.GetLineSpan(span).StartLinePosition.Line + 1;
+                    var refLineNumber = refRoot.SyntaxTree.GetLineSpan(span, cancellationToken: cancellationToken).StartLinePosition.Line + 1;
                     var token = refRoot.FindToken(span.Start);
                     // A constructor reference has no InvocationExpressionSyntax - its call sites are
                     // `new Foo(...)` (ObjectCreationExpressionSyntax) or `Foo x = new(...)`
@@ -4926,7 +4926,7 @@ public class RefactoringEngine
                     }
 
                     var span = location.Location.SourceSpan;
-                    var refLineNumber = refRoot.SyntaxTree.GetLineSpan(span).StartLinePosition.Line + 1;
+                    var refLineNumber = refRoot.SyntaxTree.GetLineSpan(span, cancellationToken: cancellationToken).StartLinePosition.Line + 1;
                     var token = refRoot.FindToken(span.Start);
                     var invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
                     if (invocation == null)

@@ -62,7 +62,7 @@ public class FeatureToggleTests
         var result2 = await _analysisEngine.FindBoxingAllocationsAsync();
 
         // Assert
-        Assert.That(result2.Count, Is.EqualTo(0), "Boxing should be skipped when disabled.");
+        Assert.That(result2.Count, Is.Zero, "Boxing should be skipped when disabled.");
     }
 
     [Test]

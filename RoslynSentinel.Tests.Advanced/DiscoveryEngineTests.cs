@@ -137,7 +137,7 @@ public class MyService
         var results = await _discoveryEngine.FindAllThrowSitesAsync();
 
         // Bare rethrows should not be included
-        Assert.That(results.Count, Is.EqualTo(0));
+        Assert.That(results.Count, Is.Zero);
     }
 
     [Test]
@@ -439,9 +439,9 @@ public class MyService
             "Service.cs", "Unused", contextSnippet: "private void Unused()");
 
         // TotalReferences = count of call-site references (not the declaration itself)
-        Assert.That(preview.TotalReferences, Is.EqualTo(0),
+        Assert.That(preview.TotalReferences, Is.Zero,
             "A never-called private method should have 0 references.");
-        Assert.That(preview.FilesAffected, Is.EqualTo(0),
+        Assert.That(preview.FilesAffected, Is.Zero,
             "No files are affected when method has no callers.");
     }
 

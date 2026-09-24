@@ -61,7 +61,7 @@ public class BatteryThirtyEightTests
 
         var report = await _engine.GeneratePathDrivenTestsAsync(docPath, "DoesNotExist");
 
-        Assert.That(report.PathCount, Is.EqualTo(0), "No paths for a missing method");
+        Assert.That(report.PathCount, Is.Zero, "No paths for a missing method");
         Assert.That(report.GeneratedTestCode, Does.Contain("ErrorDetails"),
             "ErrorDetails message must appear in GeneratedTestCode when method is not found");
     }

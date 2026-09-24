@@ -1,5 +1,3 @@
-using System.ComponentModel;
-
 using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Basic;
@@ -44,7 +42,7 @@ public class SymbolNavigationImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = false,
-                    ErrorData =  new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
+                    ErrorData = new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
                         ". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call ListAll for a cheap solution-wide orientation listing if you're not sure of the exact name.")
                 };
@@ -92,7 +90,7 @@ public class SymbolNavigationImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData =  new ResultError(ToolErrorCode.Exception,
+                        ErrorData = new ResultError(ToolErrorCode.Exception,
                             $"Could not resolve a symbol in '{filePathResolved}' for contextSnippet \"{snippetPreview}\". " +
                             "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
                             "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
@@ -108,7 +106,7 @@ public class SymbolNavigationImpl
             }
             if (aspect == InspectSymbolAspect.blastRadius)
             {
-                var result = await _impactAnalyzer.AnalyzeImpactAsync(filePathResolved, contextSnippet, lineBefore, lineAfter);
+                var result = await _impactAnalyzer.AnalyzeImpactAsync(filePathResolved, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
@@ -118,7 +116,7 @@ public class SymbolNavigationImpl
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled aspect '{aspect}'.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled aspect '{aspect}'.")
             };
         }
         catch (Exception ex)
@@ -155,13 +153,13 @@ public class SymbolNavigationImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
                     };
                 }
             }
             if (include == TypeInfoInclude.members || include == TypeInfoInclude.both)
             {
-                members = await _symbolNavigationEngine.GetTypeMembersDetailAsync(typeName, projectName, includeInherited);
+                members = await _symbolNavigationEngine.GetTypeMembersDetailAsync(typeName, projectName, includeInherited, cancellationToken: cancellationToken);
             }
             if (include == TypeInfoInclude.hierarchy)
             {
@@ -194,7 +192,7 @@ public class SymbolNavigationImpl
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled include '{include}'.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled include '{include}'.")
             };
         }
         catch (Exception ex)

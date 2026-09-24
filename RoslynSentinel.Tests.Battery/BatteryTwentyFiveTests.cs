@@ -992,7 +992,7 @@ public class Calculator {
         var result = await _engine.GetSymbolInfoAsync("Calculator.cs", "Add");
 
         // Either a valid result or null is acceptable -> method should not throw
-        Assert.That(() => result == null || result.Name != null, Is.True, "Should return SymbolHoverInfo or null without throwing");
+        Assert.That((result == null || result.Name != null), Is.True, "Should return SymbolHoverInfo or null without throwing");
     }
 
     [Test]

@@ -541,7 +541,7 @@ namespace MyApp
 
         var result = await _refactoringEngine.MoveTypeToFileAsync("OnlyClass.cs", "OnlyClass");
 
-        Assert.That(result.Count, Is.EqualTo(0),
+        Assert.That(result.Count, Is.Zero,
             "Single-type file should return empty dict (nothing to move)");
     }
 
@@ -1385,7 +1385,6 @@ public class Consumer
             Assert.That(results, Is.Not.Null, "FindCallersAsync must not throw when interface and class share same method name");
         }
 
-
         // Added by InsertMemberAfter (expected - used for diagnostics)
         // ── 9e: FindImplementations -> no filePath, interface/class name collision now resolves to real implementations (regression test for the GetSolutionRoot bug) ───
 
@@ -1403,7 +1402,6 @@ public class Foo : IFoo
             Assert.That(results, Is.Not.Empty,
                 "FindImplementationsForMemberAsync must resolve to the interface member (not the concrete class method) when no filePath/contextSnippet is supplied, so it can find Foo.GetNameAsync as a real implementation");
         }
-
 
         // Added by InsertMemberAfter (expected - used for diagnostics)
         // ── 9f: FindCallers -> same collision shape, no regression from the preferImplementable split ───
@@ -1429,7 +1427,6 @@ public class Consumer
                 "FindCallersAsync's preferImplementable:false path must keep resolving via the class candidate exactly as before this change");
         }
 
-
         // Added by InsertMemberAfter (expected - used for diagnostics)
         // ── 9g: FindImplementations -> resolved symbol is structurally incapable of having implementations ───
 
@@ -1446,7 +1443,6 @@ public class Consumer
             Assert.That(ex!.Message, Does.Contain("structurally incapable of having implementations"));
             Assert.That(ex.Message, Does.Contain("DoWork"));
         }
-
 
         // Added by InsertMemberAfter (expected - used for diagnostics)
         // ── 9h: FindImplementations -> zero candidates anywhere now suggests near-miss names ───

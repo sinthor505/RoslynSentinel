@@ -2,7 +2,7 @@ namespace RoslynSentinel.Common;
 
 public class ScopedOperationLedgerEngine : IScopedOperationLedger
 {
-    private readonly object _lock = new();
+    private readonly Lock _lock = new Lock();
     private string? _openOperationName;
     private List<LedgerEntryBase>? _entries;
 
@@ -137,7 +137,6 @@ public class ScopedOperationLedgerEngine : IScopedOperationLedger
             return _entries is null ? [] : [.. _entries];
         }
     }
-
 
     // Added by AddMember (expected - used for diagnostics)
     private string? _openingChangeId;

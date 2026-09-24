@@ -43,7 +43,7 @@ public class WorkspaceBuildTestImpl
                     };
                 }
 
-                result = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
+                result = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName, cancellationToken: cancellationToken);
                 summary = result.Data;
             }
             else if (scope == ToolScope.project)
@@ -57,12 +57,12 @@ public class WorkspaceBuildTestImpl
                     };
                 }
 
-                result = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
+                result = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName, cancellationToken: cancellationToken);
                 summary = result.Data;
             }
             else if (scope == ToolScope.solution)
             {
-                result = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
+                result = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails, cancellationToken: cancellationToken);
                 summary = result.Data;
             }
             else

@@ -237,7 +237,7 @@ public class DiffEngineTests
         var report = await validationEngine.ValidateDiffAsync("C.cs", diff);
 
         Assert.That(report.Success, Is.True);
-        Assert.That(report.Diagnostics.Count, Is.EqualTo(0));
+        Assert.That(report.Diagnostics.Count, Is.Zero);
     }
 
     [Test]

@@ -63,8 +63,8 @@ public class BatteryThirtyNineTests
 
         var report = await _engine.AnalyzeStackOverflowRisksAsync(await GetDocPath());
 
-        Assert.That(report.DefiniteCount, Is.EqualTo(0), "No definite risks in clean code");
-        Assert.That(report.SuspiciousCount, Is.EqualTo(0), "No suspicious risks in clean code");
+        Assert.That(report.DefiniteCount, Is.Zero, "No definite risks in clean code");
+        Assert.That(report.SuspiciousCount, Is.Zero, "No suspicious risks in clean code");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -302,7 +302,7 @@ public class BatteryThirtyNineTests
 
         var report = await _engine.AnalyzeStackOverflowRisksAsync(await GetDocPath());
 
-        Assert.That(report.DefiniteCount, Is.EqualTo(0),
+        Assert.That(report.DefiniteCount, Is.Zero,
             "No definite stack overflow risks in properly written factorial");
         Assert.That(report.Findings.Any(f => f.Kind == "ArgumentNotDecreasing"), Is.False,
             "ArgumentNotDecreasing should not fire when n-1 is passed");

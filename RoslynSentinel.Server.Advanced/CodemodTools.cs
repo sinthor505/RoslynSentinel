@@ -241,7 +241,7 @@ public class CodemodTools
                     return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result4 };
                 case "add_configure_await_false":
                     {
-                        var result5 = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(filePath, libraryMode);
+                        var result5 = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(filePath, libraryMode, cancellationToken: cancellationToken);
                         if (string.IsNullOrEmpty(result5.UpdatedText))
                         {
                             return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No awaits missing .ConfigureAwait(false) found in '{filePath}'." };
@@ -251,7 +251,7 @@ public class CodemodTools
                     }
                 case "remove_configure_await_false":
                     {
-                        var result6 = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(filePath);
+                        var result6 = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(filePath, cancellationToken: cancellationToken);
                         if (string.IsNullOrEmpty(result6.UpdatedText))
                         {
                             return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No .ConfigureAwait(false) calls found to remove in '{filePath}'." };
@@ -539,7 +539,7 @@ public class CodemodTools
                     }
                 case "convert_to_async_enumerable":
                     {
-                        var r = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(filePath, methodName);
+                        var r = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(filePath, methodName, cancellationToken: cancellationToken);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
                             return new SentinelCallToolResult<object>
@@ -1075,7 +1075,7 @@ public class CodemodTools
                     }
                 case "sort_members":
                     {
-                        var r = await _refactoringEngine.SortMembersAsync(filePath, className);
+                        var r = await _refactoringEngine.SortMembersAsync(filePath, className, cancellationToken: cancellationToken);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
                             return new SentinelCallToolResult<object>
@@ -1321,7 +1321,7 @@ public class CodemodTools
                             return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_test_skeleton.") };
                         }
 
-                        var result = await _testingEngine.GenerateTestSkeletonAsync(filePath, className);
+                        var result = await _testingEngine.GenerateTestSkeletonAsync(filePath, className, cancellationToken: cancellationToken);
                         return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result };
                     }
                 case CodemodKind.generate_to_string_safe:

@@ -1,7 +1,7 @@
-// ReplaceSnippet's batch path (the 'edits' parameter). Per the design doc
+// ReplaceSnippet's batch path (the 'batchEdits' parameter). Per the design doc
 // (docs/current/proposal_batch_replacesnippet.md) every edit in a batch is anchored against its
 // file's ORIGINAL content, never a prior edit's output, so these tests specifically cover: multiple
-// edits to one file, edits spanning multiple files, overlap rejection, and the either/or validation
+// batchEdits to one file, batchEdits spanning multiple files, overlap rejection, and the either/or validation
 // against the singular filepath/oldContent/newContent parameters.
 //
 // A real on-disk solution (TestSolutionFixture + PersistentWorkspaceManager) is used, matching
@@ -54,7 +54,7 @@ public class ReplaceSnippetBatchTests
         var result = await tools.ReplaceSnippet(
             reason: "test batch same file",
             ProposedChangeAction.validate,
-            edits:
+            batchEdits:
             [
                 new SnippetEdit { FilePath = targetFile, OldContent = firstAnchor, NewContent = firstAnchor + " // edit-a" },
                 new SnippetEdit { FilePath = targetFile, OldContent = lastNonEmptyLine, NewContent = lastNonEmptyLine + " // edit-b" },
@@ -79,7 +79,7 @@ public class ReplaceSnippetBatchTests
         var result = await tools.ReplaceSnippet(
             reason: "test batch across files",
             ProposedChangeAction.apply,
-            edits:
+            batchEdits:
             [
                 new SnippetEdit { FilePath = fileA, OldContent = anchorA, NewContent = anchorA + " // touched-a" },
                 new SnippetEdit { FilePath = fileB, OldContent = anchorB, NewContent = anchorB + " // touched-b" },
@@ -114,7 +114,7 @@ public class ReplaceSnippetBatchTests
         var result = await tools.ReplaceSnippet(
             reason: "test batch overlap rejection",
             ProposedChangeAction.apply,
-            edits:
+            batchEdits:
             [
                 new SnippetEdit { FilePath = targetFile, OldContent = firstLine, NewContent = "// replaced-whole-line" },
                 new SnippetEdit { FilePath = targetFile, OldContent = overlappingFragment, NewContent = "// replaced-fragment" },
@@ -142,7 +142,7 @@ public class ReplaceSnippetBatchTests
         var result = await tools.ReplaceSnippet(
             reason: "test batch partial failure",
             ProposedChangeAction.apply,
-            edits:
+            batchEdits:
             [
                 new SnippetEdit { FilePath = fileA, OldContent = anchorA, NewContent = anchorA + " // should-not-land" },
                 new SnippetEdit { FilePath = fileA, OldContent = "this text does not exist anywhere in the file", NewContent = "irrelevant" },
@@ -172,7 +172,7 @@ public class ReplaceSnippetBatchTests
             filePath: targetFile,
             oldContent: anchor,
             newContent: anchor + " // x",
-            edits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = anchor + " // y" }]);
+            batchEdits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = anchor + " // y" }]);
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
@@ -187,9 +187,9 @@ public class ReplaceSnippetBatchTests
         var tools = BuildTools(workspaceManager);
 
         var result = await tools.ReplaceSnippet(
-            reason: "test empty edits",
+            reason: "test empty batchEdits",
             ProposedChangeAction.validate,
-            edits: []);
+            batchEdits: []);
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
@@ -211,7 +211,7 @@ public class ReplaceSnippetBatchTests
         var result = await tools.ReplaceSnippet(
             reason: "test over cap",
             ProposedChangeAction.validate,
-            edits: edits);
+            batchEdits: edits);
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));

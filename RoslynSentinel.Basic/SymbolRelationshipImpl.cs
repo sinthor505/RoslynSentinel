@@ -164,7 +164,7 @@ public class SymbolRelationshipImpl
 
         try
         {
-            var result = await _discoveryEngine.FindBestInsertionPointAsync(filePathResolved, containerName, memberKind.ToString());
+            var result = await _discoveryEngine.FindBestInsertionPointAsync(filePathResolved, containerName, memberKind.ToString(), cancellationToken: cancellationToken);
             return new SentinelCallToolResult<BestInsertionResult, ResultError>
             {
                 IsSuccess = true,
@@ -241,7 +241,7 @@ public class SymbolRelationshipImpl
             }
             if (kind == FindReferencesKind.implementations)
             {
-                var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
+                var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
@@ -250,8 +250,8 @@ public class SymbolRelationshipImpl
             }
             if (kind == FindReferencesKind.all)
             {
-                var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
-                var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter);
+                var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,

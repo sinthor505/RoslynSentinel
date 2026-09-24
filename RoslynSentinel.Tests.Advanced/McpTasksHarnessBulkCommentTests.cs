@@ -121,8 +121,8 @@ public class McpTasksHarnessBulkCommentTests
         var data = FindDataElement(doc.RootElement);
         Assert.That(data.GetProperty("dryRun").GetBoolean(), Is.True);
         Assert.That(data.GetProperty("totalMembers").GetInt32(), Is.GreaterThan(0), "ContosoOrders sample should contain commentable members.");
-        Assert.That(data.GetProperty("commentedThisCall").GetInt32(), Is.EqualTo(0), "dryRun must never call the LLM or apply comments.");
-        Assert.That(_fakeLlmClient.CallCount, Is.EqualTo(0), "dryRun must short-circuit before any LLM call.");
+        Assert.That(data.GetProperty("commentedThisCall").GetInt32(), Is.Zero, "dryRun must never call the LLM or apply comments.");
+        Assert.That(_fakeLlmClient.CallCount, Is.Zero, "dryRun must short-circuit before any LLM call.");
     }
 
     [Test]

@@ -61,22 +61,22 @@ public class WorkspaceFileEditTools
     // over-cap error can (see WriteToolAdviceHelper) -> and a hardcoded name here would be shown to
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
-    [Description("Replaces one exact block of text with another in a single file, for localized edits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) instead. For multiple small edits - in the same file or across files - pass 'edits' instead of the singular filePath/oldContent/newContent params. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
+    [Description("Replaces one exact block of text with another in a single file, for localized batchEdits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) instead. For multiple small batchEdits - in the same file or across files - pass 'batchEdits' instead of the singular filePath/oldContent/newContent params. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
     public Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filePath = null,
         [ToolOption(ToolOptionTag.OldContent, required: false)][Description(ToolParams.OldContent)] string? oldContent = null,
         [ToolOption(ToolOptionTag.NewContent, required: false)][Description(ToolParams.NewContent)] string? newContent = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.SnippetEdits)] List<SnippetEdit>? edits = null,
+        [Description(ToolParams.SnippetEdits)] List<SnippetEdit>? batchEdits = null,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default)
-        => _impl.ReplaceSnippet(reason, action, filePath, oldContent, newContent, lineBefore, lineAfter, edits, validateOnApply, returnDiff, cancellationToken);
+        => _impl.ReplaceSnippet(reason, action, filePath, oldContent, newContent, lineBefore, lineAfter, batchEdits, validateOnApply, returnDiff, cancellationToken);
 
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: namespaceName/typeKind/typeName are required for a .cs
     // file (to seed a valid compilation unit) and ignored for every other file extension -> a model

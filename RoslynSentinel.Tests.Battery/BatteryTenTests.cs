@@ -199,7 +199,7 @@ public class DiagnosticEngineTests
     {
         var summary = await _engine.GetFileDiagnosticsAsync("Clean.cs");
 
-        Assert.That(summary.Data.Errors, Is.EqualTo(0), "Clean file should report no errors");
+        Assert.That(summary.Data.Errors, Is.Zero, "Clean file should report no errors");
     }
 
     [Test]

@@ -74,7 +74,7 @@ public class WorkspaceHealthMiscImpl
                 _ => new SentinelCallToolResult<object>
                 {
                     IsSuccess = false,
-                    ErrorData =  new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: list, get, update.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: list, get, update.")
                 }
             };
         }
@@ -129,7 +129,7 @@ public class WorkspaceHealthMiscImpl
 
         try
         {
-            var result = await GetWorkspaceHealthAsync();
+            var result = await GetWorkspaceHealthAsync(cancellationToken: cancellationToken);
 
             if (verify != BuildVerifyLevel.noBuild)
             {

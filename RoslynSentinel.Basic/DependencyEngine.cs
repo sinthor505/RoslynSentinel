@@ -25,7 +25,7 @@ public partial class DependencyEngine
         var packageRefs = new List<string>();
         if (project.FilePath != null && File.Exists(project.FilePath))
         {
-            var content = await File.ReadAllTextAsync(project.FilePath);
+            var content = await File.ReadAllTextAsync(project.FilePath, cancellationToken: cancellationToken);
             var matches = System.Text.RegularExpressions.Regex.Matches(content, "<PackageReference\\s+Include=\"([^\"]+)\"");
             foreach (System.Text.RegularExpressions.Match match in matches)
             {

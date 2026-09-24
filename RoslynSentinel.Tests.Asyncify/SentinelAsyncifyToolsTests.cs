@@ -116,7 +116,9 @@ public class AsyncifyToolsTests
     {
         _workspaceManager.Dispose();
         if (Directory.Exists(_tempDir))
+        {
             Directory.Delete(_tempDir, recursive: true);
+        }
     }
 
     private void SetSource(string source, string fileName = "RegionForm.cs")
@@ -179,7 +181,9 @@ public class AsyncifyToolsTests
 
         var expectedBuckets = new[] { "<0", "0-25", "26-50", "51-75", "76plus" };
         foreach (var bucket in expectedBuckets)
+        {
             Assert.That(summary.ByScoreBucket.ContainsKey(bucket), Is.True, $"Bucket key '{bucket}' must be present.");
+        }
 
         Assert.That(summary.ByClass, Is.Not.Null);
         Assert.That(summary.ByClass.Count, Is.GreaterThanOrEqualTo(1));
@@ -199,9 +203,9 @@ public class AsyncifyToolsTests
         Assert.That(result.IsSuccess, Is.True);
         var findings = result.SuccessData as List<MigrationCandidateFinding>;
         Assert.That(findings, Is.Not.Null);
-        Assert.That(findings!.Count, Is.EqualTo(0),
+        Assert.That(findings!.Count, Is.Zero,
             "minScore=100 should filter out loadList which has Score=50.");
-        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        Assert.That(result.TotalRecords, Is.Zero);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -270,7 +274,7 @@ public class Svc
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
-        Assert.That(result.SuccessData!.Summary.Attempted, Is.EqualTo(0));
+        Assert.That(result.SuccessData!.Summary.Attempted, Is.Zero);
         Assert.That(result.SuccessData.SuggestedUpliftTargets, Is.Empty);
     }
 
@@ -303,7 +307,7 @@ public class Svc
         Assert.That(result.SuccessData!.BreakerOpen, Is.False);
         Assert.That(result.SuccessData.Succeeded, Is.EqualTo(1),
             "loadList should be flagged (DryRun=true - changes computed but not written).");
-        Assert.That(result.SuccessData.Failed, Is.EqualTo(0));
+        Assert.That(result.SuccessData.Failed, Is.Zero);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -323,7 +327,7 @@ public class Svc
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
         Assert.That(result.SuccessData!.Summary.Attempted, Is.EqualTo(1));
-        Assert.That(result.SuccessData.Summary.Failed, Is.EqualTo(0));
+        Assert.That(result.SuccessData.Summary.Failed, Is.Zero);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -367,7 +371,7 @@ public class Svc
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
-        Assert.That(result.SuccessData!.Attempted, Is.EqualTo(0));
+        Assert.That(result.SuccessData!.Attempted, Is.Zero);
         Assert.That(result.SuccessData.BreakerOpen, Is.False);
     }
 
@@ -414,7 +418,7 @@ public class Svc
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
-        Assert.That(result.SuccessData!.Summary.Attempted, Is.EqualTo(0));
+        Assert.That(result.SuccessData!.Summary.Attempted, Is.Zero);
         Assert.That(result.SuccessData.SuggestedPropagateTargets, Is.Empty);
     }
 
@@ -563,7 +567,7 @@ public static class DataHelper
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ToString());
         Assert.That(result.SuccessData, Is.Not.Null);
 
-        Assert.That(result.SuccessData!.Succeeded, Is.EqualTo(0),
+        Assert.That(result.SuccessData!.Succeeded, Is.Zero,
             "loadList (Score=49) is below scoreThreshold=50 and must not be bridged.");
 
         Assert.That(result.SuccessData.MinCandidateScore, Is.EqualTo(49),

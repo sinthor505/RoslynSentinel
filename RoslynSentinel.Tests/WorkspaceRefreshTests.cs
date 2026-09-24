@@ -55,7 +55,10 @@ public class WorkspaceRefreshTests
         }
         finally
         {
-            if (File.Exists(tempFile)) File.Delete(tempFile);
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
         }
     }
 
@@ -92,8 +95,15 @@ public class WorkspaceRefreshTests
         }
         finally
         {
-            if (File.Exists(newFilePath)) File.Delete(newFilePath);
-            if (Directory.Exists(projectDir)) Directory.Delete(projectDir, true);
+            if (File.Exists(newFilePath))
+            {
+                File.Delete(newFilePath);
+            }
+
+            if (Directory.Exists(projectDir))
+            {
+                Directory.Delete(projectDir, true);
+            }
         }
     }
 
@@ -136,8 +146,15 @@ public class WorkspaceRefreshTests
         }
         finally
         {
-            if (File.Exists(csprojFile)) File.Delete(csprojFile);
-            if (Directory.Exists(projectDir)) Directory.Delete(projectDir, true);
+            if (File.Exists(csprojFile))
+            {
+                File.Delete(csprojFile);
+            }
+
+            if (Directory.Exists(projectDir))
+            {
+                Directory.Delete(projectDir, true);
+            }
         }
     }
 }

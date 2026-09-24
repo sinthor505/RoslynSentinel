@@ -136,7 +136,7 @@ public class C { }";
         SetSource(source, "Clean.cs");
         var result = await _engine.SortAndDeduplicateUsingsAsync("Clean.cs");
 
-        Assert.That(result.RemovedDuplicates, Is.EqualTo(0),
+        Assert.That(result.RemovedDuplicates, Is.Zero,
             "No duplicates - nothing to remove");
     }
 
@@ -654,7 +654,7 @@ public class InventoryRepository { }";
             "Workspace infrastructure is operational even before load_solution is called");
         Assert.That(report.HasLoadedSolution, Is.False,
             "No solution has been loaded yet");
-        Assert.That(report.ProjectCount, Is.EqualTo(0),
+        Assert.That(report.ProjectCount, Is.Zero,
             "No projects without a loaded solution");
         Assert.That(report.Summary, Does.Contain("No solution").Or.Contain("no solution").Or.Contain("load_solution"),
             "Summary should guide user to call load_solution");
@@ -674,8 +674,8 @@ public class C { }";
 
         var result = await _engine.SortAndDeduplicateUsingsAsync("C.cs");
 
-        Assert.That(result.OriginalCount, Is.EqualTo(0), "No usings means count=0");
-        Assert.That(result.RemovedDuplicates, Is.EqualTo(0), "Nothing to remove");
+        Assert.That(result.OriginalCount, Is.Zero, "No usings means count=0");
+        Assert.That(result.RemovedDuplicates, Is.Zero, "Nothing to remove");
         Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty);
     }
 
@@ -704,7 +704,7 @@ namespace Test; public class C { }";
         // First line must be a System.* using
         Assert.That(lines[0], Does.StartWith("using System"),
             "First using must be System.* (sorted System-first policy)");
-        Assert.That(result.RemovedDuplicates, Is.EqualTo(0),
+        Assert.That(result.RemovedDuplicates, Is.Zero,
             "No duplicates in this source");
     }
 

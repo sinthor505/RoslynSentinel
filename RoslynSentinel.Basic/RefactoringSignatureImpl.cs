@@ -263,7 +263,7 @@ public class RefactoringSignatureImpl
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePathResolved, targetName, accessibility, contextSnippet, lineBefore, lineAfter);
+            var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePathResolved, targetName, accessibility, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             if (!autoStage)
             {
                 var noStageAccessibilityKeyword = accessibility switch
@@ -355,7 +355,7 @@ public class RefactoringSignatureImpl
             string resolvedFieldName;
             if (operation == AddRemoveViewAction.add)
             {
-                updated = await _refactoringEngine.AddConstructorParameterAsync(filePathResolved, className, paramName, paramType!, fieldName, contextSnippet, lineBefore, lineAfter);
+                updated = await _refactoringEngine.AddConstructorParameterAsync(filePathResolved, className, paramName, paramType!, fieldName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 // updated.Message carries "// paramName='x', fieldName='_x'" on success -> surface the
                 // resolved field name explicitly since it may differ from what the caller passed
                 // (see fieldName/paramName collision disambiguation in AddConstructorParameterAsync).
@@ -412,7 +412,7 @@ public class RefactoringSignatureImpl
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                 new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true),
                 _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
-                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description);
+                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {

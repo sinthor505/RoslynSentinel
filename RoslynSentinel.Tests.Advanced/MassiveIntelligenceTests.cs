@@ -97,7 +97,7 @@ public class MassiveIntelligenceTests
     {
         SetSource("public class C { private int _used; public int Get() => _used; }", "C.cs");
         var dead = await _deadCodeEngine.DetectUnusedPrivateFieldsAsync("C.cs");
-        Assert.That(dead.Count, Is.EqualTo(0));
+        Assert.That(dead.Count, Is.Zero);
     }
 
     [Test]

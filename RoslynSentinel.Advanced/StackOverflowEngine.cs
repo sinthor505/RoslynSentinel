@@ -27,14 +27,14 @@ public sealed class StackOverflowEngine
 
         if (document != null)
         {
-            var tree = await document.GetSyntaxTreeAsync();
-            root = await tree!.GetRootAsync();
-            model = await document.GetSemanticModelAsync();
+            var tree = await document.GetSyntaxTreeAsync(cancellationToken: cancellationToken);
+            root = await tree!.GetRootAsync(cancellationToken: cancellationToken);
+            model = await document.GetSemanticModelAsync(cancellationToken: cancellationToken);
         }
         else
         {
-            var source = File.Exists(filePath) ? await File.ReadAllTextAsync(filePath) : "";
-            root = CSharpSyntaxTree.ParseText(source).GetRoot();
+            var source = File.Exists(filePath) ? await File.ReadAllTextAsync(filePath, cancellationToken: cancellationToken) : "";
+            root = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken).GetRoot(cancellationToken: cancellationToken);
         }
 
         var findings = new List<StackOverflowFinding>();

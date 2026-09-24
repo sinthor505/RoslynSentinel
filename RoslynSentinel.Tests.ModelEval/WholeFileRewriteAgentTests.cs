@@ -588,7 +588,7 @@ public class WholeFileRewriteAgentTests
         // a failing test by deleting or [Fact(Skip=...)]-ing it instead of fixing the code.
         var testProjectPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
         var postRunTestResult = await DotnetTestRunner.RunAsync(testProjectPath, cancellationToken);
-        Assert.That(postRunTestResult.Failed, Is.EqualTo(0),
+        Assert.That(postRunTestResult.Failed, Is.Zero,
             $"ContosoOrders.Tests should have zero failures after the model's fix (baseline: " +
             $"{testBaseline.Passed}/{testBaseline.Total} passed; after: {postRunTestResult.Passed}/{postRunTestResult.Total} passed). " +
             $"Transcript: {result.TranscriptPath}\n{postRunTestResult.RawOutput}");

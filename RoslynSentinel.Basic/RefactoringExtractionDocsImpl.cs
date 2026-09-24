@@ -146,7 +146,7 @@ public class RefactoringExtractionDocsImpl
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                 new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true),
                 _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
-                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description);
+                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
@@ -187,8 +187,8 @@ public class RefactoringExtractionDocsImpl
             }
 
             var updated = operation == AddRemoveViewAction.add
-                ? await _refactoringEngine.AddSummaryCommentAsync(filePathResolved, targetName, summaryText!, contextSnippet, lineBefore, lineAfter, containingTypeName)
-                : await _refactoringEngine.RemoveSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
+                ? await _refactoringEngine.AddSummaryCommentAsync(filePathResolved, targetName, summaryText!, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken: cancellationToken)
+                : await _refactoringEngine.RemoveSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken: cancellationToken);
 
             if (!autoStage)
             {
@@ -235,7 +235,7 @@ public class RefactoringExtractionDocsImpl
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                 summary,
                 _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
-                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description);
+                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
@@ -258,7 +258,7 @@ public class RefactoringExtractionDocsImpl
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var result = await _refactoringEngine.ExtractLocalVariableAsync(filePathResolved, exactExpressionText, variableName, lineBefore, lineAfter);
+            var result = await _refactoringEngine.ExtractLocalVariableAsync(filePathResolved, exactExpressionText, variableName, lineBefore, lineAfter, cancellationToken: cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
                 string errorReason = result.Outcome switch

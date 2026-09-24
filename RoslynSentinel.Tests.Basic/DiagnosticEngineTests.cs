@@ -24,7 +24,7 @@ public class DiagnosticEngineTests
         var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
 
         Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success));
-        Assert.That(result.Data.Errors, Is.EqualTo(0));
+        Assert.That(result.Data.Errors, Is.Zero);
     }
 
     [Test]

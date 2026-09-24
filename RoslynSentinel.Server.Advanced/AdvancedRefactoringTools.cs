@@ -192,7 +192,7 @@ public class AdvancedRefactoringTools
                 }
             }
 
-            var result = await _refactoringEngine.ChangeSignatureAsync(filePath, methodName, specs);
+            var result = await _refactoringEngine.ChangeSignatureAsync(filePath, methodName, specs, cancellationToken: cancellationToken);
             if (result.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, result.Error) };
 
@@ -254,7 +254,7 @@ public class AdvancedRefactoringTools
         FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var changes = await _advancedTypeEngine.ConvertAnonymousToNamedAsync(filePath, newClassName);
+            var changes = await _advancedTypeEngine.ConvertAnonymousToNamedAsync(filePath, newClassName, cancellationToken: cancellationToken);
             if (changes.Count == 0)
                 return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"ConvertAnonymousToNamed: no anonymous object found in '{filePath}'.") };
 
@@ -292,7 +292,7 @@ public class AdvancedRefactoringTools
         FilePathWrapper targetFilePath = FilePathWrapper.FromWire(rawTargetFilePath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var changes = await _advancedStructuralEngine.InlineClassAsync(sourceFilePath, targetFilePath, className);
+            var changes = await _advancedStructuralEngine.InlineClassAsync(sourceFilePath, targetFilePath, className, cancellationToken: cancellationToken);
             if (changes.Count == 0)
                 return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"InlineClass: class '{className}' not found in '{sourceFilePath}'.") };
 
@@ -334,7 +334,7 @@ public class AdvancedRefactoringTools
                 }
 
                 return await MoveAllTypesToFilesCore(
-                    await _refactoringEngine.MoveAllTypesToFilesAsync(target),
+                    await _refactoringEngine.MoveAllTypesToFilesAsync(target, cancellationToken: cancellationToken),
                     autoStage, dryRun, returnDiff, $"Move all types to files in '{Path.GetFileName(target)}'",
                     previewFiles: true,
                     cancellationToken: cancellationToken);
@@ -347,7 +347,7 @@ public class AdvancedRefactoringTools
                 }
 
                 return await MoveAllTypesToFilesCore(
-                    await _refactoringEngine.MoveAllTypesToFilesInProjectAsync(target),
+                    await _refactoringEngine.MoveAllTypesToFilesInProjectAsync(target, cancellationToken: cancellationToken),
                     autoStage, dryRun, returnDiff, $"Move all types to files in project '{target}'",
                     previewFiles: false,
                     cancellationToken: cancellationToken);
@@ -355,7 +355,7 @@ public class AdvancedRefactoringTools
             if (scope == ToolScope.solution)
             {
                 return await MoveAllTypesToFilesCore(
-                    await _refactoringEngine.MoveAllTypesToFilesInSolutionAsync(),
+                    await _refactoringEngine.MoveAllTypesToFilesInSolutionAsync(cancellationToken: cancellationToken),
                     autoStage, dryRun, returnDiff, "Move all types to files in solution",
                     previewFiles: false,
                     cancellationToken: cancellationToken);
@@ -454,7 +454,7 @@ public class AdvancedRefactoringTools
             // Validate that we have either contextSnippet or both startLine/endLine
             if (!string.IsNullOrWhiteSpace(contextSnippet))
             {
-                var result = await _mappingEngine.InvertAssignmentsAsync(filePath, contextSnippet, lineBefore, lineAfter);
+                var result = await _mappingEngine.InvertAssignmentsAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 if (string.IsNullOrEmpty(result.UpdatedText))
                     return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"InvertAssignments: no assignments found in the snippet of '{filePath}'.") };
 
@@ -466,7 +466,7 @@ public class AdvancedRefactoringTools
             }
             else if (startLine > 0 && endLine > 0)
             {
-                var result = await _mappingEngine.InvertAssignmentsAsync(filePath, startLine, endLine);
+                var result = await _mappingEngine.InvertAssignmentsAsync(filePath, startLine, endLine, cancellationToken: cancellationToken);
                 if (string.IsNullOrEmpty(result.UpdatedText))
                     return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"InvertAssignments: no assignments found in lines {startLine}-{endLine} of '{filePath}'.") };
 
@@ -599,7 +599,7 @@ public class AdvancedRefactoringTools
             var fileErr = GetFileNotInSolutionError(filePath);
             if (fileErr != null) return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, fileErr) };
 
-            var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync(filePath, methodName, newTypeName, parameterNames);
+            var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync(filePath, methodName, newTypeName, parameterNames, cancellationToken: cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
                 return new SentinelCallToolResult<object>()
                 {
@@ -650,22 +650,22 @@ public class AdvancedRefactoringTools
             string stageDesc;
             if (newType == IntroduceAsType.localVariable)
             {
-                result = await _granularRefactoringEngine.IntroduceVariableAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
+                result = await _granularRefactoringEngine.IntroduceVariableAsync(filePath, contextSnippet, newName, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 stageDesc = $"Introduce local variable '{newName}'.";
             }
             else if (newType == IntroduceAsType.field)
             {
-                result = await _granularRefactoringEngine.IntroduceFieldAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
+                result = await _granularRefactoringEngine.IntroduceFieldAsync(filePath, contextSnippet, newName, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 stageDesc = $"Introduce field '{newName}'.";
             }
             else if (newType == IntroduceAsType.parameter)
             {
-                result = await _granularRefactoringEngine.IntroduceParameterAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
+                result = await _granularRefactoringEngine.IntroduceParameterAsync(filePath, contextSnippet, newName, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 stageDesc = $"Introduce parameter '{newName}'.";
             }
             else if (newType == IntroduceAsType.constant)
             {
-                var constResult = await _augmentEngine.ExtractConstantSafeAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
+                var constResult = await _augmentEngine.ExtractConstantSafeAsync(filePath, contextSnippet, newName, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 if (!constResult.Success || string.IsNullOrEmpty(constResult.UpdatedContent))
                     return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, constResult.Error ?? "ExtractConstantSafe failed.") };
 
@@ -738,7 +738,7 @@ public class AdvancedRefactoringTools
                 }
                 try
                 {
-                    var changes = await _refactoringEngine.ExtractInterfaceAsync(filePath, className, newTypeName);
+                    var changes = await _refactoringEngine.ExtractInterfaceAsync(filePath, className, newTypeName, cancellationToken: cancellationToken);
                     if (!autoStage)
                     {
                         return new SentinelCallToolResult<AppliedChangeSummary>()
@@ -772,7 +772,7 @@ public class AdvancedRefactoringTools
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "memberNames is required when newType=partial.") };
                 }
-                var partialChanges = await _granularRefactoringEngine.ExtractMembersToPartialAsync(filePath, className, memberNames);
+                var partialChanges = await _granularRefactoringEngine.ExtractMembersToPartialAsync(filePath, className, memberNames, cancellationToken: cancellationToken);
                 if (!autoStage)
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>()
@@ -804,7 +804,7 @@ public class AdvancedRefactoringTools
                 var actualClassNames = classNames ?? new[] { className };
                 try
                 {
-                    var changes = await _advancedStructuralEngine.ExtractSuperclassAsync(actualFilePaths, actualClassNames, newTypeName);
+                    var changes = await _advancedStructuralEngine.ExtractSuperclassAsync(actualFilePaths, actualClassNames, newTypeName, cancellationToken: cancellationToken);
                     if (!autoStage)
                     {
                         return new SentinelCallToolResult<AppliedChangeSummary>()
@@ -872,7 +872,7 @@ public class AdvancedRefactoringTools
                 var implFileErr = GetFileNotInSolutionError(filePath);
                 if (implFileErr != null) return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, implFileErr) };
 
-                var implResult = await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName);
+                var implResult = await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName, cancellationToken: cancellationToken);
                 if (string.IsNullOrEmpty(implResult.UpdatedText))
                     return new SentinelCallToolResult<object>()
                     {
@@ -896,7 +896,7 @@ public class AdvancedRefactoringTools
                 var syncFileErr = GetFileNotInSolutionError(filePath);
                 if (syncFileErr != null) return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, syncFileErr) };
 
-                var syncResult = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName);
+                var syncResult = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName, cancellationToken: cancellationToken);
                 if (string.IsNullOrEmpty(syncResult.UpdatedText))
                     return new SentinelCallToolResult<object>()
                     {
@@ -951,7 +951,7 @@ public class AdvancedRefactoringTools
             {
                 try
                 {
-                    var methodChanges = await _refinementEngine.InlineMethodAsync(filePath, targetName);
+                    var methodChanges = await _refinementEngine.InlineMethodAsync(filePath, targetName, cancellationToken: cancellationToken);
                     var methodApply = await ValidateAndApplyAsync(methodChanges, $"Inline method '{targetName}'.", "Inline_method", dryRun, returnDiff, cancellationToken: cancellationToken);
                     if (methodApply.Error is not null)
                         return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = methodApply.Error };
@@ -965,7 +965,7 @@ public class AdvancedRefactoringTools
             }
             if (kind == InlineKind.variable)
             {
-                var updated = await _semanticRefactoringLibrary.InlineVariableAsync(filePath, targetName);
+                var updated = await _semanticRefactoringLibrary.InlineVariableAsync(filePath, targetName, cancellationToken: cancellationToken);
                 if (string.IsNullOrEmpty(updated))
                     return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"Inline/variable: variable '{targetName}' not found in '{filePath}'.") };
 
@@ -977,7 +977,7 @@ public class AdvancedRefactoringTools
             }
             if (kind == InlineKind.field)
             {
-                var fieldResult = await _granularRefactoringEngine.InlineFieldAsync(filePath, targetName);
+                var fieldResult = await _granularRefactoringEngine.InlineFieldAsync(filePath, targetName, cancellationToken: cancellationToken);
                 if (string.IsNullOrEmpty(fieldResult.UpdatedText))
                     return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"Inline/field: field '{targetName}' not found in '{filePath}'.") };
 
@@ -992,7 +992,7 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(methodName))
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "methodName is required when kind=parameter.") };
 
-                var paramResult = await _granularRefactoringEngine.InlineParameterAsync(filePath, methodName, targetName);
+                var paramResult = await _granularRefactoringEngine.InlineParameterAsync(filePath, methodName, targetName, cancellationToken: cancellationToken);
                 if (string.IsNullOrEmpty(paramResult.UpdatedText))
                     return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"Inline/parameter: parameter '{targetName}' not found in method '{methodName}' in '{filePath}'.") };
 
@@ -1274,7 +1274,7 @@ public class AdvancedRefactoringTools
         {
             if (destination == "ownFile")
             {
-                var changes = await _refactoringEngine.MoveTypeToFileAsync(filePath, typeName);
+                var changes = await _refactoringEngine.MoveTypeToFileAsync(filePath, typeName, cancellationToken: cancellationToken);
                 if (!autoStage)
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>
@@ -1307,7 +1307,7 @@ public class AdvancedRefactoringTools
             }
             if (destination == "outerScope")
             {
-                var outerResult = await _granularRefactoringEngine.MoveTypeToOuterScopeAsync(filePath, typeName);
+                var outerResult = await _granularRefactoringEngine.MoveTypeToOuterScopeAsync(filePath, typeName, cancellationToken: cancellationToken);
                 if (!autoStage)
                 {
                     var noStageOuterChanges = string.IsNullOrEmpty(outerResult.UpdatedText)

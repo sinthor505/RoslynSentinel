@@ -843,7 +843,7 @@ public class DiscoveryEngine
                         _ => ("Unknown", parent?.GetType().Name ?? "", "")
                     };
 
-                    var symbolLocation = await _symbolNavigationEngine.LocateSymbolAsync(targetName, kind, containingType, null, null, docPath, true).ConfigureAwait(false);
+                    var symbolLocation = await _symbolNavigationEngine.LocateSymbolAsync(targetName, kind, containingType, null, null, docPath, true, cancellationToken: cancellationToken).ConfigureAwait(false);
                     var located = symbolLocation.FirstOrDefault();
 
                     var line = attr.GetLocation().GetLineSpan().StartLinePosition.Line + 1;

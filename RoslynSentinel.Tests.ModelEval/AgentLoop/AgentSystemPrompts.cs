@@ -49,6 +49,8 @@ public static class AgentSystemPrompts
           kind:"files") first to see what actually exists, then narrow from there. Repeatedly
           retrying SearchSolutionText with slightly different guessed patterns after it returns no
           matches is a sign you should switch to listing instead of searching.
+        - The MCP server validates most changes and rejects edits that result in new compiliation errors.
+          Plan your edits in and perform them in a sequence that ensures each edit will chain to the next edit.
         - If a task says a fix pattern already exists elsewhere in the codebase, actually find and
           read it before writing your own fix - do not assume what it looks like or reinvent it
           under a different name. Reusing the exact existing approach is the point of that
@@ -101,8 +103,9 @@ public static class AgentSystemPrompts
            anything by a guessed name.
         2. Read the relevant file(s) before editing - do not edit from memory or assumption.
         3. Make the smallest change that fixes the described problem.
-        4. Verify your change (build the affected project).
-        5. Report what you changed and the verification result.
+        4. Verify your change and ensure it is correct.
+        5. Perform a full build the affected project/solution and confirm it succeeds.
+        6. Report what you changed and the verification result.
         """;
 
     /// <summary>

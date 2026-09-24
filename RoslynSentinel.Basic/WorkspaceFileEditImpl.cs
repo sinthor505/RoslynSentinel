@@ -83,7 +83,7 @@ public class WorkspaceFileEditImpl
                 };
             }
 
-            var json = await File.ReadAllTextAsync(blobPath);
+            var json = await File.ReadAllTextAsync(blobPath, cancellationToken);
             var doc = JsonSerializer.Deserialize<JsonElement>(json);
             var revertable = doc.GetProperty("items").EnumerateArray().Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!).Where(r => r.Outcome == ItemRecordOutcome.Succeeded && r.BeforeSource != null).ToList();
             if (revertable.Count == 0)
@@ -469,7 +469,7 @@ public class WorkspaceFileEditImpl
                         };
                     }
 
-                    var oldText = await document.GetTextAsync();
+                    var oldText = await document.GetTextAsync(cancellationToken: cancellationToken);
                     // FindExactSnippetPosition (not FindSnippetPosition) is required here: it never
                     // uses ContextHelper's whitespace-collapsing fallback, so match.Length is always
                     // the real removable span. Using oldContent.Length instead of match.Length used
@@ -485,7 +485,7 @@ public class WorkspaceFileEditImpl
 
                     if (action == ProposedChangeAction.validate)
                     {
-                        var validationResult = await _validationEngine.ValidateChangesAsync(snippetChanges);
+                        var validationResult = await _validationEngine.ValidateChangesAsync(snippetChanges, cancellationToken: cancellationToken);
                         return validationResult.Success ? new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsSuccess = true,
@@ -508,7 +508,7 @@ public class WorkspaceFileEditImpl
                                 "[COMPILER ERROR]\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
-                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result);
+                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet", result, cancellationToken: cancellationToken);
                     var strippedResult = result with { PreImages = null };
                     string? diffContent = returnDiff
                         ? ValidateAndApplyHelper.BuildDiffFromPreImages(snippetChanges, result.PreImages)
@@ -694,7 +694,7 @@ public class WorkspaceFileEditImpl
 
         if (action == ProposedChangeAction.validate)
         {
-            var validationResult = await _validationEngine.ValidateChangesAsync(finalContents);
+            var validationResult = await _validationEngine.ValidateChangesAsync(finalContents, cancellationToken: cancellationToken);
             return validationResult.Success
                 ? new SentinelCallToolResult<ReplaceSnippetResult>() { IsSuccess = true, SuccessData = new ReplaceSnippetResult(null, validationResult, null) }
                 : new SentinelCallToolResult<ReplaceSnippetResult>()
@@ -716,7 +716,7 @@ public class WorkspaceFileEditImpl
                         "[COMPILER ERROR]\n" +
                         await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                 };
-            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result);
+            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "replace_snippet_batch", result, cancellationToken: cancellationToken);
             var strippedResult = result with { PreImages = null };
             string? diffContent = returnDiff
                 ? ValidateAndApplyHelper.BuildDiffFromPreImages(finalContents, result.PreImages)
@@ -832,7 +832,7 @@ public class WorkspaceFileEditImpl
                 };
             }
 
-            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "create_file", result);
+            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "create_file", result, cancellationToken: cancellationToken);
             var strippedResult = result with { PreImages = null };
             return new SentinelCallToolResult<object>()
             {

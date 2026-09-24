@@ -1135,13 +1135,19 @@ public class Calc
         var blankLinesBetween1and2 = 0;
         foreach (var line in between1and2.Split('\n'))
         {
-            if (line.Trim().Length == 0) blankLinesBetween1and2++;
+            if (line.Trim().Length == 0)
+            {
+                blankLinesBetween1and2++;
+            }
         }
 
         var blankLinesBetween2and3 = 0;
         foreach (var line in between2and3.Split('\n'))
         {
-            if (line.Trim().Length == 0) blankLinesBetween2and3++;
+            if (line.Trim().Length == 0)
+            {
+                blankLinesBetween2and3++;
+            }
         }
 
         Assert.That(blankLinesBetween1and2, Is.GreaterThanOrEqualTo(1), "Blank line between First and Second must survive.");
@@ -1216,10 +1222,13 @@ public class Calc
         var bareLfCount = 0;
         for (var i = 0; i < text.Length; i++)
         {
-            if (text[i] == '\n' && (i == 0 || text[i - 1] != '\r')) bareLfCount++;
+            if (text[i] == '\n' && (i == 0 || text[i - 1] != '\r'))
+            {
+                bareLfCount++;
+            }
         }
 
-        Assert.That(bareLfCount, Is.EqualTo(0), "A CRLF-dominant file must not gain any stray bare LF line endings.");
+        Assert.That(bareLfCount, Is.Zero, "A CRLF-dominant file must not gain any stray bare LF line endings.");
     }
 
     [Test]

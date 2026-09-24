@@ -630,7 +630,7 @@ public class Order
         Assert.That(result.IsSuccess, Is.True);
         var data = (BuildResult)result.SuccessData!;
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Succeeded));
-        Assert.That(data.ErrorCount, Is.EqualTo(0));
+        Assert.That(data.ErrorCount, Is.Zero);
         Assert.That(data.ExitCode, Is.Null, "quickBuild does not run a subprocess.");
     }
 

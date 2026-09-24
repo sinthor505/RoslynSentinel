@@ -34,7 +34,7 @@ public class EolUtilitiesTests
         var result = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, method, newMethod);
         var crlfCount = System.Text.RegularExpressions.Regex.Matches(result, "\r\n").Count;
         var bareLfCount = System.Text.RegularExpressions.Regex.Matches(result, "(?<!\r)\n").Count;
-        Assert.That(crlfCount, Is.EqualTo(0), $"Expected 0 CRLF but found {crlfCount}. Bare LF count: {bareLfCount}. Result: {result}");
+        Assert.That(crlfCount, Is.Zero, $"Expected 0 CRLF but found {crlfCount}. Bare LF count: {bareLfCount}. Result: {result}");
     }
     // Added by AddMember (expected - used for diagnostics)
     [Test]
@@ -57,7 +57,7 @@ public class EolUtilitiesTests
         var result = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, method, newMethod);
         var crlfCount = System.Text.RegularExpressions.Regex.Matches(result, "\r\n").Count;
         var bareLfCount = System.Text.RegularExpressions.Regex.Matches(result, "(?<!\r)\n").Count;
-        Assert.That(crlfCount, Is.EqualTo(0), $"Expected 0 CRLF but found {crlfCount}. Bare LF count: {bareLfCount}. Result: {result}");
+        Assert.That(crlfCount, Is.Zero, $"Expected 0 CRLF but found {crlfCount}. Bare LF count: {bareLfCount}. Result: {result}");
     }
     // Added by AddMember (expected - used for diagnostics)
     [Test]
@@ -79,6 +79,6 @@ public class EolUtilitiesTests
         var result = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, method, newMethod);
         var crlfCount = System.Text.RegularExpressions.Regex.Matches(result, "\r\n").Count;
         var bareLfCount = System.Text.RegularExpressions.Regex.Matches(result, "(?<!\r)\n").Count;
-        Assert.That(bareLfCount, Is.EqualTo(0), $"Expected 0 bare LF but found {bareLfCount}. CRLF count: {crlfCount}. Result: {result}");
+        Assert.That(bareLfCount, Is.Zero, $"Expected 0 bare LF but found {bareLfCount}. CRLF count: {crlfCount}. Result: {result}");
     }
 }

@@ -327,7 +327,7 @@ public class CommentingEngine
             // Re-parse the updated text to compute the post-comment hash and stamp it in the same
             // pass, then re-sync the local document to this member's result so the next member's
             // AddSummaryCommentCoreAsync call (above) sees this one's comment already in place.
-            var newTree = CSharpSyntaxTree.ParseText(editResult.UpdatedText);
+            var newTree = CSharpSyntaxTree.ParseText(editResult.UpdatedText, cancellationToken: cancellationToken);
             var newRoot = await newTree.GetRootAsync(cancellationToken);
             var newMember = FindEquivalentMemberByName(newRoot, site.Node, site.MemberName, site.ContainingTypeName, site.NameOrdinal);
             if (newMember == null)

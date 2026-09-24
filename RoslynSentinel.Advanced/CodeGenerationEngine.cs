@@ -128,7 +128,7 @@ public partial class CodeGenerationEngine
         CancellationToken ct)
     {
         // Primary: semantic type info
-        var resolved = semanticModel.GetTypeInfo(receiverSyntax).Type;
+        var resolved = semanticModel.GetTypeInfo(receiverSyntax, ct).Type;
         if (resolved != null)
         {
             return configTypeNames.Contains(resolved.Name);

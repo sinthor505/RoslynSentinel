@@ -89,7 +89,7 @@ public class WholeFileWriteTools
                 };
             }
 
-            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, operation == WriteFileOperation.CreateFile ? "create_file" : "replace_file", result);
+            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, operation == WriteFileOperation.CreateFile ? "create_file" : "replace_file", result, cancellationToken: cancellationToken);
             var strippedResult = result with { PreImages = null };
             return new SentinelCallToolResult<object>()
             {
@@ -140,7 +140,7 @@ public class WholeFileWriteTools
                 };
             }
 
-            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "delete_file", result);
+            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "delete_file", result, cancellationToken: cancellationToken);
             var strippedResult = result with { PreImages = null };
             return new SentinelCallToolResult<object>()
             {
@@ -377,7 +377,7 @@ public class WholeFileWriteTools
                                 "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
-                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result);
+                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken);
                     // PreImages (full pre-edit file content) is dropped from the default response -
                     // it's already captured in the undo blob written above (GetOperationDetail/
                     // UndoLastApply can retrieve it) and was the single largest contributor to
@@ -401,7 +401,7 @@ public class WholeFileWriteTools
                 {
                     try
                     {
-                        var validationResult = await _validationEngine.ValidateChangesAsync(resolvedChanges);
+                        var validationResult = await _validationEngine.ValidateChangesAsync(resolvedChanges, cancellationToken: cancellationToken);
                         return validationResult.Success ? new SentinelCallToolResult<object>()
                         {
                             IsSuccess = true,
@@ -478,7 +478,7 @@ public class WholeFileWriteTools
                             };
                         }
 
-                        var oldText = await document.GetTextAsync();
+                        var oldText = await document.GetTextAsync(cancellationToken: cancellationToken);
                         var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff, out var diffReport).ToString();
                         var targetPath = document.FilePath ?? filePathResolved;
                         var diffChanges = new Dictionary<FilePathWrapper, string>
@@ -494,7 +494,7 @@ public class WholeFileWriteTools
                                     "ApplyDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                     await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                             };
-                        await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result);
+                        await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken);
                         var strippedDiffResult = result with { PreImages = null };
                         object diffResponseData = BuildDiffApplyResponseData(strippedDiffResult, diffReport, returnDiff, diffChanges, result.PreImages);
                         return new SentinelCallToolResult<object>()
@@ -516,7 +516,7 @@ public class WholeFileWriteTools
 
                 if (action == ProposedChangeAction.validate)
                 {
-                    var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff);
+                    var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff, cancellationToken: cancellationToken);
                     return validationResult.Success ? new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
@@ -611,7 +611,7 @@ public class WholeFileWriteTools
                         };
                     }
 
-                    var oldText = await document.GetTextAsync();
+                    var oldText = await document.GetTextAsync(cancellationToken: cancellationToken);
                     var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff, out var diffReport).ToString();
                     var targetPath = document.FilePath ?? filePathResolved;
                     var diffChanges = new Dictionary<FilePathWrapper, string>
@@ -627,7 +627,7 @@ public class WholeFileWriteTools
                                 "ApplyUnifiedDiff: the diff was valid and matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                 await CompilerErrorLookupHelper.DescribeAsync(result.ValidationResult, _symbolNavigationEngine, cancellationToken))
                         };
-                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_unified_diff", result);
+                    await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_unified_diff", result, cancellationToken: cancellationToken);
                     var strippedDiffResult = result with { PreImages = null };
                     object diffResponseData = BuildDiffApplyResponseData(strippedDiffResult, diffReport, returnDiff, diffChanges, result.PreImages);
                     return new SentinelCallToolResult<object>()
@@ -652,7 +652,7 @@ public class WholeFileWriteTools
 
             if (action == ProposedChangeAction.validate)
             {
-                var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff);
+                var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff, cancellationToken: cancellationToken);
                 return validationResult.Success ? new SentinelCallToolResult<object>()
                 {
                     IsSuccess = true,

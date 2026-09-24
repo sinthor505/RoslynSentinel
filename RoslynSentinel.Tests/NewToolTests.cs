@@ -180,7 +180,7 @@ public class NewToolTests
 
         var summary = await _diagnosticEngine.GetFileDiagnosticsAsync("Test.cs");
 
-        Assert.That(summary.Data.Errors, Is.EqualTo(0), "Well-formed file should have no errors");
+        Assert.That(summary.Data.Errors, Is.Zero, "Well-formed file should have no errors");
     }
 
     [Test]

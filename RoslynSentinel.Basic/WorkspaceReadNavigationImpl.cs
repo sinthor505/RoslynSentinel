@@ -113,7 +113,7 @@ public class WorkspaceReadNavigationImpl
                 };
             }
 
-            var root = await document.GetSyntaxRootAsync();
+            var root = await document.GetSyntaxRootAsync(cancellationToken: cancellationToken);
             if (root == null)
             {
                 return new SentinelCallToolResult<MethodSourceResult, ResultError>()
@@ -210,7 +210,7 @@ public class WorkspaceReadNavigationImpl
                 };
             }
 
-            var root = await document.GetSyntaxRootAsync();
+            var root = await document.GetSyntaxRootAsync(cancellationToken: cancellationToken);
             if (root == null)
             {
                 return new SentinelCallToolResult<FileOutlineResult, ResultError>()

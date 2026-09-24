@@ -35,22 +35,17 @@ public class WorkspaceTools
     private readonly WorkspaceReadNavigationImpl _readNav;
     private readonly WriteToolAdviceHelper _writeAdvice;
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private readonly WorkspaceProjectManagementTools _projectManagement;
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private readonly WorkspaceBuildTestTools _buildTest;
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private readonly WorkspaceFileEditTools _fileEdit;
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private readonly WorkspaceHealthMiscTools _healthMisc;
-
 
     private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
@@ -163,7 +158,7 @@ public class WorkspaceTools
 
     // ApplyUnifiedDiff moved to WholeFileWriteTools.cs (gated off the default MCP surface,
     // alongside ApplyDiff) -> see docs/current/design_applyunifieddiff_replace_snippet_v1.md.
-    // ReplaceSnippet (below, on this default surface) replaces it for small, exact-text edits.
+    // ReplaceSnippet (below, on this default surface) replaces it for small, exact-text batchEdits.
 
     // ReplaceSnippet/ReplaceSnippetBatch/CreateFile moved to WorkspaceFileEditTools/
     // WorkspaceFileEditImpl (Decision 7 step 2 facade split). This class keeps its original
@@ -175,22 +170,22 @@ public class WorkspaceTools
     // over-cap error can (see WriteToolAdviceHelper) -> and a hardcoded name here would be shown to
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
-    [Description("Replaces one exact text block with another in a file, for small localized edits. Prefer a structural Roslyn tool for structural changes. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error. Supply either filepath/oldContent/newContent or edits, not both.")]
+    [Description("Replaces one exact text block with another in a file, for small localized batchEdits. Prefer a structural Roslyn tool for structural changes. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error. Supply either filepath/oldContent/newContent or batchEdits, not both.")]
     public Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filePath = null,
         [ToolOption(ToolOptionTag.OldContent, required: false)][Description(ToolParams.OldContent)] string? oldContent = null,
         [ToolOption(ToolOptionTag.NewContent, required: false)][Description(ToolParams.NewContent)] string? newContent = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.SnippetEdits)] List<SnippetEdit>? edits = null,
+        [Description(ToolParams.SnippetEdits)] List<SnippetEdit>? batchEdits = null,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default)
-        => _fileEdit.ReplaceSnippet(reason, action, filePath, oldContent, newContent, lineBefore, lineAfter, edits, validateOnApply, returnDiff, cancellationToken);
+        => _fileEdit.ReplaceSnippet(reason, action, filePath, oldContent, newContent, lineBefore, lineAfter, batchEdits, validateOnApply, returnDiff, cancellationToken);
 
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: namespaceName/typeKind/typeName are required for a .cs
     // file (to seed a valid compilation unit) and ignored for every other file extension -> a model

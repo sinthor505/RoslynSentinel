@@ -101,7 +101,7 @@ public class OperationOutcomeRoutingTests
 
         Assert.That(result.Actionable, Is.Empty);
         Assert.That(result.AlreadySatisfied, Is.EqualTo(3));
-        Assert.That(result.Failed, Is.EqualTo(0));
+        Assert.That(result.Failed, Is.Zero);
         Assert.That(result.Outcome, Is.EqualTo(OperationOutcome.CompletedWithNoOps));
     }
 

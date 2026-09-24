@@ -2188,7 +2188,7 @@ public class SymbolNavigationEngine
             }
 
             var candidates = compilation
-                .GetSymbolsWithName(symbolName, SymbolFilter.Member)
+                .GetSymbolsWithName(symbolName, SymbolFilter.Member, cancellationToken: cancellationToken)
                 .ToList();
 
             if (candidates.Count == 0)

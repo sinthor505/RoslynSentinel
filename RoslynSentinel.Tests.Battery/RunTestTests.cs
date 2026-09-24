@@ -137,7 +137,7 @@ public class RunTestTests
 
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
-        Assert.That(data.TotalCount, Is.EqualTo(0));
+        Assert.That(data.TotalCount, Is.Zero);
         Assert.That(data.Detail, Does.Contain("matched filter"));
     }
 

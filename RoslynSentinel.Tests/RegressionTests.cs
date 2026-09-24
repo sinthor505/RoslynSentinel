@@ -487,7 +487,7 @@ public class RegressionTests
 
         var summary = await _diagnosticEngine.GetFileDiagnosticsAsync("Test.cs");
 
-        Assert.That(summary.Data.Errors, Is.EqualTo(0),
+        Assert.That(summary.Data.Errors, Is.Zero,
             "REGRESSION: Valid code must report zero errors");
     }
 
@@ -928,7 +928,7 @@ public class RegressionTests
         var engine = CreateAugmentEngine();
         var result = await engine.SortAndDeduplicateUsingsAsync("Test.cs");
 
-        Assert.That(result.RemovedDuplicates, Is.EqualTo(0),
+        Assert.That(result.RemovedDuplicates, Is.Zero,
             "No duplicates -> RemovedDuplicates must be 0");
         Assert.That(result.OriginalCount, Is.EqualTo(3));
     }
@@ -1043,7 +1043,7 @@ public class RegressionTests
             Assert.That(analysis.IsSafeToConvert, Is.True,
                 "No pre-foreach modifications -> should be safe to convert");
             Assert.That(analysis.CollectionVariableName, Is.EqualTo("results"));
-            Assert.That(analysis.StatementsBeforeForeach, Is.EqualTo(0));
+            Assert.That(analysis.StatementsBeforeForeach, Is.Zero);
             Assert.That(analysis.BlockingReason, Is.Null);
         }
         finally
@@ -1116,8 +1116,8 @@ public class RegressionTests
             "Workspace without a loaded solution is still operational");
         Assert.That(report.HasLoadedSolution, Is.False,
             "No solution has been loaded in this workspace");
-        Assert.That(report.ProjectCount, Is.EqualTo(0));
-        Assert.That(report.DocumentCount, Is.EqualTo(0));
+        Assert.That(report.ProjectCount, Is.Zero);
+        Assert.That(report.DocumentCount, Is.Zero);
         Assert.That(report.Summary, Is.Not.Null.And.Not.Empty);
     }
 

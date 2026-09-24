@@ -116,7 +116,7 @@ public class GitTools
         }
         else
         {
-            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "GitError", Message: ((GitResult)result)?.Error) };
+            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "GitError", Message: ((GitResult)result)?.Error ?? "Unknown Git error") };
         }
     }
 }

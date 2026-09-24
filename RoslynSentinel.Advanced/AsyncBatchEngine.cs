@@ -1144,8 +1144,8 @@ public class AsyncBatchEngine
             CancellationToken cancellationToken = default)
     {
         // Pre-check: analyse the current in-memory source to determine the caller's async state.
-        var preCheckTree = CSharpSyntaxTree.ParseText(preCheckSource);
-        var preCheckRoot = preCheckTree.GetRoot();
+        var preCheckTree = CSharpSyntaxTree.ParseText(preCheckSource, cancellationToken: cancellationToken);
+        var preCheckRoot = preCheckTree.GetRoot(cancellationToken: cancellationToken);
         var preCheckMethods = preCheckRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
         var callerMethodNode = preCheckMethods.FirstOrDefault(m => m.Identifier.Text == callerMethodName);
 

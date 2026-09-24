@@ -87,8 +87,8 @@ public class ReadEnvelopeBuilderTests
         var envelope = ReadEnvelopeBuilder.BuildForWholeFile(totalLineCount: 0, totalByteCount: 0);
 
         Assert.That(envelope.IsComplete, Is.True);
-        Assert.That(envelope.LineCount, Is.EqualTo(0));
-        Assert.That(envelope.ByteCount, Is.EqualTo(0));
+        Assert.That(envelope.LineCount, Is.Zero);
+        Assert.That(envelope.ByteCount, Is.Zero);
         Assert.That(envelope.ContinuationOffset, Is.Null);
     }
 

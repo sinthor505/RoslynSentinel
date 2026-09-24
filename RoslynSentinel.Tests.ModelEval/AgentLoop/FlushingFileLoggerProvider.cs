@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-
 using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Tests.ModelEval.AgentLoop;
@@ -15,7 +13,7 @@ namespace RoslynSentinel.Tests.ModelEval.AgentLoop;
 public sealed class FlushingFileLoggerProvider : ILoggerProvider
 {
     private readonly StreamWriter _writer;
-    private readonly object _writeLock = new();
+    private readonly Lock _writeLock = new Lock();
 
     public FlushingFileLoggerProvider(string filePath)
     {

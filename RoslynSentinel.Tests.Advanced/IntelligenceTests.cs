@@ -52,7 +52,7 @@ public class IntelligenceTests
         _workspaceManager.SetTestSolution(solution);
 
         var cycles = await _analysisEngine.FindCircularDependenciesAsync();
-        Assert.That(cycles.Count, Is.EqualTo(0), "Linear should not be a cycle.");
+        Assert.That(cycles.Count, Is.Zero, "Linear should not be a cycle.");
     }
 
     [Test]
@@ -74,6 +74,6 @@ public class IntelligenceTests
 
         var cycles = await _analysisEngine.FindCircularDependenciesAsync();
 
-        Assert.That(cycles.Count, Is.EqualTo(0), "Linear dependency should not be flagged as circular.");
+        Assert.That(cycles.Count, Is.Zero, "Linear dependency should not be flagged as circular.");
     }
 }

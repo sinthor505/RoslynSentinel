@@ -381,7 +381,7 @@ public class OrderPricingRefactorAgentTests
         // by deleting or [Fact(Skip=...)]-ing it instead of fixing the code.
         var testProjectPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Tests", "ContosoOrders.Tests.csproj");
         var postRunTestResult = await DotnetTestRunner.RunAsync(testProjectPath, TestContext.CurrentContext.CancellationToken);
-        Assert.That(postRunTestResult.Failed, Is.EqualTo(0),
+        Assert.That(postRunTestResult.Failed, Is.Zero,
             $"ContosoOrders.Tests should have zero failures after the model's refactor (baseline: " +
             $"{_testBaseline.Passed}/{_testBaseline.Total} passed; after: {postRunTestResult.Passed}/{postRunTestResult.Total} passed). " +
             $"Transcript: {result.TranscriptPath}\n{postRunTestResult.RawOutput}");

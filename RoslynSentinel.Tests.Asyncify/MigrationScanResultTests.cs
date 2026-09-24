@@ -672,7 +672,10 @@ public class Svc
         var tokenPattern = new System.Text.RegularExpressions.Regex(@"^[\w\-]+:[0-9\-]+$");
         foreach (var finding in result.SuccessData!)
         {
-            if (string.IsNullOrWhiteSpace(finding.Reason)) continue;
+            if (string.IsNullOrWhiteSpace(finding.Reason))
+            {
+                continue;
+            }
 
             var tokens = finding.Reason.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
             foreach (var token in tokens)
