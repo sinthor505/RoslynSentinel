@@ -46,15 +46,11 @@ public class WorkspaceReadNavigationImpl
 {
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<WorkspaceReadNavigationImpl> _logger;
-    private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
-        Converters =
-            {
-                new JsonStringEnumConverter()
-            }
-    };
+    // Points at the solution-wide shared instance (RoslynSentinel.Common.SharedJsonOptions.Default)
+    // rather than constructing its own, per docs/current/plans/plan_shared_json_serializer_options.md.
+    // Kept as a same-named field rather than replacing all 28 call sites with the fully-qualified
+    // name, since this is an internal serialize/deserialize round-trip within this class either way.
+    private static readonly JsonSerializerOptions _jsonOptions = RoslynSentinel.Common.SharedJsonOptions.Default;
     public WorkspaceReadNavigationImpl(IWorkspaceManager workspaceManager, ILogger<WorkspaceReadNavigationImpl> logger)
     {
         _workspaceManager = workspaceManager;

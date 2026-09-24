@@ -21,14 +21,6 @@ public class AsyncifyTools
     private readonly FailureRouter _failureRouter;
     private readonly MigrationLedger _ledger;
     private readonly ILogger<AsyncifyTools> _logger;
-    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
-    {
-        PropertyNameCaseInsensitive = true,
-        Converters =
-            {
-                new JsonStringEnumConverter()
-            }
-    };
 
     private static readonly JsonSerializerOptions _debugDumpOptions = new() { WriteIndented = true };
 
@@ -201,7 +193,7 @@ public class AsyncifyTools
                 FlagPhase: flagPhaseResult);
 
             // B1 Fix 4: overflow safety net -> should be unreachable with slim types + caps.
-            var summaryJson = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(summary, _jsonOptions);
+            var summaryJson = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(summary, RoslynSentinel.Common.SharedJsonOptions.Default);
 
             if (_logger.IsEnabled(LogLevel.Information))
             {

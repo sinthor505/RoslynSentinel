@@ -47,16 +47,6 @@ public class WorkspaceTools
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private readonly WorkspaceHealthMiscTools _healthMisc;
 
-    private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
-        Converters =
-            {
-                new JsonStringEnumConverter()
-            }
-    };
-
     public WorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<WorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice)
     {
         _workspaceManager = workspaceManager;

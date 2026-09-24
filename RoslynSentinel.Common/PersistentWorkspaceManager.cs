@@ -133,10 +133,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     {
         get; set;
     }
-    private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
-    {
-        PropertyNameCaseInsensitive = true
-    };
+    // Points at the solution-wide shared instance rather than constructing its own, per
+    // docs/current/plans/plan_shared_json_serializer_options.md.
+    private static readonly JsonSerializerOptions _jsonOptions = SharedJsonOptions.Default;
 
     // Guards MSBuildLocator.RegisterInstance, which is process-global and not safe to call
     // from more than one thread at a time (e.g. multiple test fixtures constructing this type

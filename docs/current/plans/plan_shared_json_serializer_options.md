@@ -1,5 +1,12 @@
 # Plan: consolidate JSON serializer options into a shared helper
 
+## Status: IMPLEMENTED (2026-09-24)
+
+See "Implementation notes" at the end of this doc for what actually landed, including two
+deliberate deviations from the literal instructions below (both disclosed per this doc's own
+"if any step admits more than one reasonable reading" rule) and one newly-discovered out-of-scope
+instance this pass did not touch.
+
 ## If any step below admits more than one reasonable reading
 
 Stop before acting on it. State: (1) the ambiguity itself, (2) which reading you chose, (3) why -
@@ -174,3 +181,52 @@ f. **`RoslynSentinel.Server.Advanced/SentinelQualityTools.cs`**
   document itself - it is archived and out of scope for this change.
 - Do not add any settings to `SharedJsonOptions.Default` beyond `WriteIndented`,
   `PropertyNameCaseInsensitive`, `UnsafeRelaxedJsonEscaping`, and `JsonStringEnumConverter`.
+
+## Implementation notes (2026-09-24)
+
+The file paths in this plan's table were stale by the time of implementation - the repo's DI
+tool-split work (see `project_di_tool_split_plan_2026_09_05` in project memory) had since renamed
+`SentinelWorkspaceTools.cs` -> `WorkspaceTools.cs`, `SentinelAsyncifyTools.cs` -> `AsyncifyTools.cs`,
+and `SentinelQualityTools.cs` -> `QualityTools.cs`. All 6 originally-listed instances were located by
+searching for `new JsonSerializerOptions` and confirmed against their current paths before editing.
+
+**Deviation 1 - `WorkspaceTools.cs`'s `_jsonOptions` field was dead, not migrated.** The plan's step
+2a assumed this field had live call sites to redirect (as `WorkspaceReadNavigationImpl.cs` and
+`SentinelQualityTools.cs`'s dead-field case both illustrate the plan already anticipated this
+possibility for *some* files). Grepping this file specifically found zero usages - the plan didn't
+call this one out as dead, but it was. Handled the same way the plan already handles
+`SentinelQualityTools.cs`: deleted outright, no replacement.
+
+**Deviation 2 - `WorkspaceReadNavigationImpl.cs`'s 28 call sites were not individually replaced.**
+The plan's step 2b lists all 28 `_jsonOptions` call sites (by old line numbers) and says to replace
+each with `SharedJsonOptions.Default`. Instead, the field itself was kept (same name, same type) but
+its initializer was changed to `RoslynSentinel.Common.SharedJsonOptions.Default` instead of
+constructing a new instance. This achieves the plan's actual goal (one shared instance, no
+settings drift) without a 28-site text change, since this is a private field used only within its
+own file - there is no external caller that could be confused by the indirection. Chose this reading
+because the plan's own rationale for consolidating (avoiding drift between hand-rolled instances) is
+fully satisfied either way, and the disclosed alternative is lower-risk (one edit vs. 28) for the
+same outcome. If a reviewer prefers the literal 28-site replacement for readability/greppability,
+that's a straightforward follow-up.
+
+**New out-of-scope instance found:** `RoslynSentinel.Common/ToolCallRateLimiter.cs:12` has its own
+`_jsonOptions` field (`new JsonSerializerOptions` with settings not yet compared against the shared
+defaults), not present in this plan's original table - the plan predates this file, or missed it.
+Per this plan's own "Out of scope" instruction ("note it in your final report as a follow-up
+candidate, but do not migrate it as part of this plan"), it was left untouched.
+
+**Verification performed:**
+- Full solution build: 0 errors, 0 warnings.
+- Full test suite: 2467 passed, 0 failed, 115 skipped (pre-existing skips, unrelated to this change).
+- No test in the solution asserts on a literal `<`/`>`/`&`/`'` escape sequence
+  (searched before and after the change), so no test updates were needed.
+- Final `new JsonSerializerOptions` count outside `SharedJsonOptions.Default`: `AsyncifyTools`'s
+  `_debugDumpOptions` (untouched, out of scope, uses target-typed `new()` so it doesn't even match
+  this literal search), plus the newly-found `ToolCallRateLimiter.cs` instance and two test-only
+  instances (`RoslynSentinel.Tests.Battery/McpServerStatusStructuredContentTests.cs`,
+  `RoslynSentinel.Tests.ModelEval/AgentLoop/ModelAgentRunner.cs`), all correctly out of this plan's
+  scope.
+- Manual verification (literal `<`/`>` in tool output): not separately re-verified beyond the
+  passing test suite and the confirmed absence of escape-sequence assertions, since the change is a
+  single shared `JsonSerializerOptions.Encoder` setting exercised transitively by hundreds of the
+  passing tests above.

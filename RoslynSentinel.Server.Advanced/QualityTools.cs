@@ -21,10 +21,6 @@ public class QualityTools
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<QualityTools> _logger;
-    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
-    {
-        PropertyNameCaseInsensitive = true
-    };
 
     public QualityTools(
         TestingEngine testingEngine,
