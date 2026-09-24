@@ -43,7 +43,7 @@ public record ListSummary(int TotalCount, int FileCount, IReadOnlyList<FileHitCo
     /// Baz.cs (2) (+2 more files)". Meant for a tool's top-level StatusMessage so a caller sees the
     /// shape of the result (1 big hit vs. many small ones) without opening the payload.
     /// </summary>
-    public string ToStatusMessage(string itemNoun = "hit")
+    public string ToSummaryMessage(string itemNoun = "hit")
     {
         if (TotalCount == 0)
         {

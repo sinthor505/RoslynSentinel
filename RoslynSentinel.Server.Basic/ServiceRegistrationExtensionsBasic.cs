@@ -547,7 +547,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     sizeBytes = text.Length,
                                     itemCount,
                                     statusMessage,
-                                    message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}).{hint}{summaryLine} Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."
+                                    message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}).{hint} Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."
                                 })
                             }];
                             break;

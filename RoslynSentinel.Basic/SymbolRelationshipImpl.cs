@@ -238,7 +238,7 @@ public class SymbolRelationshipImpl
                 {
                     IsSuccess = true,
                     SuccessData = new { callers = result, summary },
-                    StatusMessage = summary.ToStatusMessage("caller")
+                    StatusMessage = summary.ToSummaryMessage("caller")
                 };
             }
             if (kind == FindReferencesKind.implementations)
@@ -249,7 +249,7 @@ public class SymbolRelationshipImpl
                 {
                     IsSuccess = true,
                     SuccessData = new { implementations = result, summary },
-                    StatusMessage = summary.ToStatusMessage("implementation")
+                    StatusMessage = summary.ToSummaryMessage("implementation")
                 };
             }
             if (kind == FindReferencesKind.all)
@@ -262,7 +262,7 @@ public class SymbolRelationshipImpl
                 {
                     IsSuccess = true,
                     SuccessData = new { callers, implementations, summary },
-                    StatusMessage = summary.ToStatusMessage("hit")
+                    StatusMessage = summary.ToSummaryMessage("hit")
                 };
             }
             return new SentinelCallToolResult<object>
