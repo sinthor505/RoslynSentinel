@@ -85,7 +85,6 @@ public class RefactoringEngine
         return normalized.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
     }
 
-
     /// <summary>
     /// SyntaxFactory.ParseMemberDeclaration parses only the FIRST declaration in a multi-declaration
     /// string and silently discards the rest - it does not throw and the returned node's FullSpan
@@ -123,7 +122,6 @@ public class RefactoringEngine
             : $"The source does not parse as a single valid declaration ({parsed.Kind()}, with parse errors): {string.Join("; ", parsed.GetDiagnostics().Select(d => d.GetMessage()))}";
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private static string DescribeParsedMember(MemberDeclarationSyntax member)
     {
@@ -144,7 +142,6 @@ public class RefactoringEngine
             ? kind
             : $"{kind} '{string.Join("', '", names)}'";
     }
-
 
     public async Task<DocumentEditResult> FormatDocumentAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
@@ -3151,7 +3148,6 @@ public class RefactoringEngine
         };
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Batch form of <see cref="AddModifierAsync"/>/<see cref="RemoveModifierAsync"/>: applies every
@@ -3269,7 +3265,6 @@ public class RefactoringEngine
             UpdatedText = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
         };
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
@@ -3419,7 +3414,6 @@ public class RefactoringEngine
         };
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Batch form of <see cref="AddBaseTypeAsync"/>/<see cref="RemoveBaseTypeAsync"/>: same execution
@@ -3524,7 +3518,6 @@ public class RefactoringEngine
             UpdatedText = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
         };
     }
-
 
     public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePathWrapper filePath, string targetName, AccessibilityLevel accessibility, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {

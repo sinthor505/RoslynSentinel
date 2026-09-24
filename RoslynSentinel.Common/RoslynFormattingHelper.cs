@@ -102,7 +102,6 @@ public static class RoslynFormattingHelper
         return problems;
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Batch form of <see cref="ReplaceNodeFormattedAsync"/>: replaces every old->new pair in
@@ -142,7 +141,6 @@ public static class RoslynFormattingHelper
         var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
         return EolUtilities.NormalizeEol(formattedText, dominantEol);
     }
-
 
     /// <summary>
     /// Removes <paramref name = "nodeToRemove"/> without reformatting any sibling's interior.

@@ -9,7 +9,6 @@ public class ModifyAttributeBatchTests
     // Added by AddMember (expected - used for diagnostics)
     private const string FixtureRelativePath = "ContosoOrders.Core/AttributeBatchFixture.cs";
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private const string FixtureSource = """
     namespace ContosoOrders.Core;
@@ -25,10 +24,8 @@ public class ModifyAttributeBatchTests
     }
     """;
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private const string SecondFixtureRelativePath = "ContosoOrders.Core/AttributeBatchFixtureSecond.cs";
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private const string SecondFixtureSource = """
@@ -81,7 +78,6 @@ public class ModifyAttributeBatchTests
         });
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task ModifyAttribute_BatchAcrossTwoFiles_AppliesBothInOneCallAsync()
@@ -112,7 +108,6 @@ public class ModifyAttributeBatchTests
         });
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task ModifyAttribute_BatchSameNodeTwice_RejectsWithoutWritingAsync()
@@ -138,7 +133,6 @@ public class ModifyAttributeBatchTests
         var afterContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
         Assert.That(afterContent, Is.EqualTo(beforeContent));
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
@@ -166,7 +160,6 @@ public class ModifyAttributeBatchTests
         Assert.That(afterContent, Is.EqualTo(beforeContent));
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task ModifyAttribute_BothEditsAndSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
@@ -189,7 +182,6 @@ public class ModifyAttributeBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task ModifyAttribute_NeitherEditsNorSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
@@ -206,7 +198,6 @@ public class ModifyAttributeBatchTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("edits"));
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
@@ -225,7 +216,6 @@ public class ModifyAttributeBatchTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]

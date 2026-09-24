@@ -549,7 +549,6 @@ public class ContextHelperTests
             () => ContextHelper.FindSnippetPosition(ApplyDiscountLikeSource, fabricatedSnippet));
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     [Description("FindAllSnippetMatchesWithLength: a multi-line lineBefore can never satisfy the "
@@ -573,7 +572,6 @@ public class ContextHelperTests
         Assert.That(ex!.Message, Does.Contain("single line"));
         Assert.That(ex.Message, Does.Contain("lineBefore"));
     }
-
 
     // Added by AddMember (expected - used for diagnostics)
     [Test]

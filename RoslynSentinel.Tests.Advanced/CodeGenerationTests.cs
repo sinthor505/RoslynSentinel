@@ -14,7 +14,6 @@ public class CodeGenerationTests
     private IWorkspaceManager _workspaceManager;
     private CodeGenerationEngine _codeGenerationEngine;
 
-
     [SetUp]
     public void Setup()
     {
@@ -727,5 +726,4 @@ public class SomeClass { }", "SomeClass.cs");
         Assert.That(idBlock, Does.Not.Contain("set"),
             "Read-only interface property must NOT generate a setter");
     }
-
 }

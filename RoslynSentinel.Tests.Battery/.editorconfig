@@ -5,9 +5,20 @@ root = true
 [*.cs]
 
 # Surpress warnings
+dotnet_analyzer_diagnostic.category-Style.severity = none
+dotnet_analyzer_diagnostic.category-Design.severity = none
+dotnet_analyzer_diagnostic.category-Performance.severity = none
+dotnet_diagnostic.SYSLIB1045.severity = none
 dotnet_diagnostic.AsyncFixer01.severity = none
 dotnet_diagnostic.AsyncFixer02.severity = none
+dotnet_diagnostic.NUnit2045.severity = none
+dotnet_diagnostic.NUnit2046.severity = none
 dotnet_diagnostic.CA1859.severity = none
+dotnet_diagnostic.IDE0058.severity = none
+dotnet_diagnostic.IDE0059.severity = none
+dotnet_diagnostic.IDE0300.severity = none
+dotnet_diagnostic.IDE0301.severity = none
+dotnet_diagnostic.IDE0305.severity = none
 
 #### Core EditorConfig Options ####
 

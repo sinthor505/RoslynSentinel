@@ -56,7 +56,9 @@ public class GetLargeResultTests
     {
         _workspaceManager.Dispose();
         if (Directory.Exists(_tempDir))
+        {
             Directory.Delete(_tempDir, recursive: true);
+        }
     }
 
     private string WriteLargeResultFile<T>(T data, ResultWrapperType type, string resultId)

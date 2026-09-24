@@ -242,7 +242,6 @@ public class UndoLastApplyTests
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(currentContent));
     }
 
-
     // Added by AddMember (expected - used for diagnostics)
     // Regression test for blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md
     // Symptom 2: SyncTypeAndFilename used to delete the old file via a bare FileIoHelper.DeleteAsync

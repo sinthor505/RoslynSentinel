@@ -920,7 +920,6 @@ public class GitImpl : IGitOperations
         }
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Moves HEAD/the current branch to <paramref name="refName"/> without ever touching the working
@@ -949,7 +948,6 @@ public class GitImpl : IGitOperations
             return new GitStatusResult { Success = false, Error = $"Git reset failed: {ex.Message}" };
         }
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)/// <summary>
     /// Lists branches (default), or creates/deletes one when <paramref name="branchName"/> is

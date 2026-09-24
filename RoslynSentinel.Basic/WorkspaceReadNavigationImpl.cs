@@ -1252,7 +1252,6 @@ public class WorkspaceReadNavigationImpl
         }
     }
 
-
     // Added by AddMember (expected - used for diagnostics)
     // Mirrors the Raw branch's worst-case-then-shrink loop (see the ResultWrapperType.Raw case in
     // GetLargeResult) so every list-shaped switch branch there gets the same guarantee: the page

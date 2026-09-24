@@ -67,7 +67,6 @@ public class ComprehensiveToolTests
     private ValidationEngine _validationEngine;
     private WorkspaceTools _workspaceTools;
 
-
     [SetUp]
     public void Setup()
     {
@@ -124,7 +123,6 @@ public class ComprehensiveToolTests
         _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
 
         _advancedRefactoringTools = new AdvancedRefactoringTools(_workspaceManager);
-
 
         _workspaceTools = new WorkspaceTools(_workspaceManager,
             _validationEngine,

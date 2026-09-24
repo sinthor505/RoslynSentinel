@@ -71,7 +71,6 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<StackOverflowEngine>();
         services.AddSingleton<TestingEngine>();
 
-
         // LmStudioClient talks to a locally-hosted LM Studio server (OpenAI-compatible
         // /v1/chat/completions). AddHttpClient<LmStudioClient> registers the concrete type keyed
         // to its own HttpClient; the extra AddSingleton<ILlmClient> below forwards to that same

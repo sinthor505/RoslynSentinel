@@ -71,7 +71,6 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<ValidationEngine>();
         services.TryAddSingleton(new StoppedByScriptMarker(WasFound: false, Details: null));
 
-
         return services;
     }
     /// <summary>

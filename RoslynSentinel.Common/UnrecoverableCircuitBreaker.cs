@@ -32,10 +32,8 @@ public class UnrecoverableCircuitBreaker
     // Added by AddMember (expected - used for diagnostics)
     private readonly Lock _unrecoverableBreakerLock = new();
 
-
     // Added by AddMember (expected - used for diagnostics)
     private string? _unrecoverableHaltMessage;
-
 
     // Added by AddMember (expected - used for diagnostics)
     /// <summary>
@@ -67,7 +65,6 @@ public class UnrecoverableCircuitBreaker
             toolName, changeId, diagnostic);
     }
 
-
     // Added by AddMember (expected - used for diagnostics)
     public bool IsTripped()
     {
@@ -76,7 +73,6 @@ public class UnrecoverableCircuitBreaker
             return _unrecoverableHaltMessage is not null;
         }
     }
-
 
     // Added by AddMember (expected - used for diagnostics)
     public string? StateMessage()

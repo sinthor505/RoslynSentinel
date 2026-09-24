@@ -185,7 +185,6 @@ public class LargeResultOffloadFilterTests
             "A response under threshold must pass through unmodified - the filter must stay a pure pass-through for small tool results.");
     }
 
-
     // Added by AddMember (expected - used for diagnostics)
     [Test]
     public async Task TypedBranchOffload_GetLargeResultFirstCall_ReturnsDataNotAnotherOffloadEnvelope()

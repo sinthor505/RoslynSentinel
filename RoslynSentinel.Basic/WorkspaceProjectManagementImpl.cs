@@ -285,10 +285,8 @@ public class WorkspaceProjectManagementImpl
         return string.Equals(Path.GetFullPath(currentPath), Path.GetFullPath(solutionPath), StringComparison.OrdinalIgnoreCase);
     }
 
-
     // Added by InsertMemberBefore (expected - used for diagnostics)
     private static readonly (string Dir, string DocType)[] ProjectDocSubdirs = [("plans", "plan"), ("handoffs", "handoff"), ("completed", "completed_work"), ("documentation", "documentation"),];
-
 
     private string BuildPostLoadHint(string solutionRoot)
     {

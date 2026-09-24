@@ -172,7 +172,6 @@ public static class McpToolSchemaPatcher
     private static object CreateTarget(IServiceProvider? services, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type type) =>
         services is null ? Activator.CreateInstance(type)! : ActivatorUtilities.CreateInstance(services, type);
 
-
     // Added by AddMember (expected - used for diagnostics)
     /// <summary>
     /// Post-processes <paramref name="tool"/>'s already-built <see cref="Tool.InputSchema"/> to add

@@ -95,7 +95,6 @@ public record SentinelCallToolResult<TSuccess, TError>
     /// </summary>
     public ServerInfo ServerInfo { get; init; } = new();
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Unique identifier for this specific response, generated fresh per instance. Not settable ->
@@ -104,7 +103,6 @@ public record SentinelCallToolResult<TSuccess, TError>
     /// tool name + similar arguments across many turns cannot do on its own.
     /// </summary>
     public string ResponseId { get; init; } = Guid.NewGuid().ToString();
-
 
     /// <summary>True when the operation completed without error.</summary>
     public bool IsSuccess
@@ -177,7 +175,6 @@ public record SentinelCallToolResult<TSuccess, TError>
     {
         get; init;
     }
-
 
     // Added by AddMember (expected - used for diagnostics)
     public string? StatusMessage

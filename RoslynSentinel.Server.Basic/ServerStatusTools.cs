@@ -32,7 +32,6 @@ public class ServerStatusTools
         var automatic = (IAutomaticCircuitBreaker)_workspaceManager;
         var unrecoverable = (IUnrecoverableBreaker)_workspaceManager;
 
-
         return new SentinelCallToolResult<McpServerStatusResult>
         {
             IsSuccess = true,

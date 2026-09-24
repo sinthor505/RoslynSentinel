@@ -78,7 +78,6 @@ public class RefactoringStructuralImpl
         return trimmed.Length > 0 ? trimmed : fallbackLabel;
     }
 
-
     private async Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifierBatch(List<ModifierEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
     {
         if (edits.Count > MaxModifierFamilyEditsPerBatch)

@@ -163,7 +163,6 @@ public class PreviewInstanceMoveCallSitesTests
         });
     }
 
-
     // Added by AddMember (expected - used for diagnostics)
     [Test]
     public async Task MoveMemberAsync_UnambiguousInstanceMember_AppliesAutomaticallyAsync()
@@ -213,7 +212,6 @@ public class PreviewInstanceMoveCallSitesTests
             Assert.That(targetChange.Value, Does.Contain("public void Foo()"));
         });
     }
-
 
     [Test]
     public async Task MoveMemberAsync_AmbiguousInstanceMemberNoFixup_ReturnsPendingLedgerEntryAsync()
@@ -269,7 +267,6 @@ public class PreviewInstanceMoveCallSitesTests
             Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1));
         });
     }
-
 
     // Added by AddMember (expected - used for diagnostics)
     [Test]

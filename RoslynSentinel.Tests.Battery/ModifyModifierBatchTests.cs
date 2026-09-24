@@ -9,7 +9,6 @@ public class ModifyModifierBatchTests
     // Added by AddMember (expected - used for diagnostics)
     private const string FixtureRelativePath = "ContosoOrders.Core/ModifierBatchFixture.cs";
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private const string FixtureSource = """
     namespace ContosoOrders.Core;
@@ -25,7 +24,6 @@ public class ModifyModifierBatchTests
     }
     """;
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
     {
@@ -39,7 +37,6 @@ public class ModifyModifierBatchTests
             new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
             NullLogger<RefactoringStructuralTools>.Instance);
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
@@ -68,7 +65,6 @@ public class ModifyModifierBatchTests
             Assert.That(newContent, Does.Contain("static void MethodTwo"));
         });
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
@@ -110,7 +106,6 @@ public class ModifyModifierBatchTests
         });
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task ModifyModifier_BatchSameNodeTwice_RejectsWithoutWritingAsync()
@@ -135,7 +130,6 @@ public class ModifyModifierBatchTests
         var newContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
         Assert.That(newContent, Is.EqualTo(originalContent), "a same-node collision must not write anything");
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
@@ -163,7 +157,6 @@ public class ModifyModifierBatchTests
             "one unresolvable edit in a batch must roll back the whole batch, not partially apply it");
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task ModifyModifier_BothEditsAndSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
@@ -186,7 +179,6 @@ public class ModifyModifierBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task ModifyModifier_NeitherEditsNorSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
@@ -202,7 +194,6 @@ public class ModifyModifierBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("required"));
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task ModifyModifier_EmptyEditsArray_RejectsAsInvalidArgumentAsync()
@@ -217,7 +208,6 @@ public class ModifyModifierBatchTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]

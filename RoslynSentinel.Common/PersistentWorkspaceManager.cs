@@ -1894,7 +1894,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         return count;
     }
 
-
     private readonly IScopedOperationLedger _ledger;
 
     // -- IScopedOperationLedger -- pass-through to the injected engine; see ScopedOperationLedgerEngine.
@@ -1906,22 +1905,17 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     public bool TryRelease() => _ledger.TryRelease();
     public IReadOnlyList<LedgerEntryBase> GetOpenEntries() => _ledger.GetOpenEntries();
 
-
     // Added by AddMember (expected - used for diagnostics)
     private readonly UnrecoverableCircuitBreaker _unrecoverableBreaker;
-
 
     // Added by AddMember (expected - used for diagnostics)
     private readonly MutationCircuitBreaker _mutationBreaker;
 
-
     // Added by AddMember (expected - used for diagnostics)
     private readonly OrientationCircuitBreaker _orientationBreaker;
 
-
     // Added by AddMember (expected - used for diagnostics)
     private readonly ToolCallRateLimiter _rateLimiter = new();
-
 
     // Added by AddMember (expected - used for diagnostics)
     private readonly SymbolResolver _symbolResolver;

@@ -136,7 +136,6 @@ public class ScopedOperationLedgerBlockingTests
             "the refused write must not have reached disk");
     }
 
-
     // Added by AddMember (expected - used for diagnostics)
     [Test]
     public void RecordUndo_OfFixChangeId_ReTripsBreakerAfterRelease()
@@ -189,7 +188,6 @@ public class ScopedOperationLedgerBlockingTests
             "undoing the fix's own changeId must flip the entry back to unresolved");
         Assert.That(Ledger.TryRelease(), Is.False, "an unresolved entry must keep the breaker tripped");
     }
-
 
     // Added by AddMember (expected - used for diagnostics)
     [Test]

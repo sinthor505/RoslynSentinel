@@ -98,7 +98,6 @@ public static class ToolParams
     "rejected before anything is written. Each edit is still bound by the same oldContent/newContent " +
     "size limits as a single-edit call.";
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     public const string ModifierEdits =
     "Batch form: apply several add/remove-modifier edits in one call instead of one call per edit. " +
@@ -107,7 +106,6 @@ public static class ToolParams
     "tree (not against the result of an earlier edit in this same array), then all edits for a file " +
     "are applied together and written as one atomic change. Two edits in the same file that resolve " +
     "to the same target are rejected before anything is written.";
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     // Added by ModifyAttribute batch support
@@ -118,7 +116,6 @@ public static class ToolParams
     "each file's ORIGINAL syntax tree (not against the result of an earlier edit in this same array), " +
     "then all edits for a file are applied together and written as one atomic change. Two edits in the " +
     "same file that resolve to the same target are rejected before anything is written.";
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     // Added by ModifyBaseType batch support

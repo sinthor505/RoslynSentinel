@@ -698,7 +698,6 @@ public class OrderService : IOrderService
         Assert.That(result.WarningDetails, Does.Contain("nothing found under any kind"));
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task QuerySymbolRelationships_AttributeUsages_TopLevelClassTarget_ReturnsMatchNotCrash()

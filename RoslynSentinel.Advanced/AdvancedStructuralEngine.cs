@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
-
-using RoslynSentinel.Common;
 using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Advanced;
@@ -812,7 +810,6 @@ public class AdvancedStructuralEngine
         }
     }
 
-
     // Added by AddMember (expected - used for diagnostics)
     private static ITypeSymbol? GetSymbolType(ISymbol symbol) => symbol switch
     {
@@ -822,7 +819,6 @@ public class AdvancedStructuralEngine
         ILocalSymbol l => l.Type,
         _ => null
     };
-
 
     // Added by AddMember (expected - used for diagnostics)
     /// <summary>
@@ -1010,7 +1006,6 @@ public class AdvancedStructuralEngine
 
         return results;
     }
-
 
     // Added by AddMember (expected - used for diagnostics)
     private async Task<MoveMemberResult> MoveInstanceMembersAsync(

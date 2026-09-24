@@ -62,7 +62,6 @@ public class AdminTools
             : $"Cleared {count} tracked external file change(s).";
     }
 
-
     // Added by AddMember (expected - used for diagnostics)
     [McpServerTool(Name = "McpServerControl")]
     [Produces(DataTag.ResultOnly)]

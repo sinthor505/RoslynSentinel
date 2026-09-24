@@ -715,7 +715,9 @@ public enum Status { Active = 1, Pending = 2 }
         finally
         {
             if (Directory.Exists(tempDir))
+            {
                 Directory.Delete(tempDir, recursive: true);
+            }
         }
     }
 
@@ -1274,7 +1276,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         Assert.That(result, Is.Not.Null);
     }
 
-
     // Added by AddMember (expected - used for diagnostics)
     // Regression test for blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md
     // Symptom 1: without targetTypeName, SyncTypeAndFilename picked whichever type happened to be
@@ -1305,10 +1306,11 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         finally
         {
             if (Directory.Exists(tempDir))
+            {
                 Directory.Delete(tempDir, recursive: true);
+            }
         }
     }
-
 
     // Added by AddMember (expected - used for diagnostics)
     // Companion negative case: an unknown targetTypeName must fail with an actionable error naming
@@ -1339,7 +1341,9 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         finally
         {
             if (Directory.Exists(tempDir))
+            {
                 Directory.Delete(tempDir, recursive: true);
+            }
         }
     }
 }
