@@ -1,5 +1,4 @@
 // SentinelConsoleMode.cs v2
-using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -9,7 +8,6 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 
 using ModelContextProtocol.Server;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Server.Basic;
 
@@ -113,12 +111,20 @@ public static partial class ConsoleMode
         object data = full
             ? new
             {
-                _metadata = new { toolCount = tools.Count, generatedUtc = DateTime.UtcNow.ToString("O") },
+                _metadata = new
+                {
+                    toolCount = tools.Count,
+                    generatedUtc = DateTime.UtcNow.ToString("O")
+                },
                 tools = tools.Select(t => new { name = t.Name, description = t.Description, inputSchema = t.InputSchema }),
             }
             : new
             {
-                _metadata = new { toolCount = tools.Count, generatedUtc = DateTime.UtcNow.ToString("O") },
+                _metadata = new
+                {
+                    toolCount = tools.Count,
+                    generatedUtc = DateTime.UtcNow.ToString("O")
+                },
                 tools = tools.Select(t => t.Name).ToList(),
             };
 
@@ -576,7 +582,9 @@ public static partial class ConsoleMode
             var tools = ExtractToolManifest(services);
 
             string generatedUtc = DateTime.UtcNow.ToString("O");
-            int totalChars = tools.Sum(t => t.Name.Length + (t.Description?.Length ?? 0));
+            //int totalChars = tools.Sum(t => t.Name.Length + (t.Description?.Length ?? 0));
+            //int totalChars = tools.Sum(t => t.ToString()?.Length ?? 0);
+            int totalChars = tools.Sum(t => t.Name.Length + (t.Description?.Length ?? 0) + (t.InputSchema.ToString()?.Length ?? 0));
 
             // ── tool_list.json -> full payload: name + description + inputSchema ──
             var fullPayload = new

@@ -22,6 +22,8 @@ public class WorkspaceHealthMiscTools
     public WorkspaceHealthMiscTools(IWorkspaceManager workspaceManager, SentinelConfiguration config,
         BuildEngine buildEngine, ILogger logger)
     {
+        _buildEngine = buildEngine;
+        _config = config;
         _impl = new WorkspaceHealthMiscImpl(workspaceManager, config, buildEngine, logger);
     }
 

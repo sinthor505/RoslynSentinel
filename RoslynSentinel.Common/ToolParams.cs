@@ -2,11 +2,6 @@ namespace RoslynSentinel.Common;
 
 public static class ToolParams
 {
-    public const string SessionId =
-        "Optional. Only needed if you are explicitly tracking workspace sessions yourself. " +
-        "Leave empty/omitted - the server will resolve the symbol fresh from docCommentId " +
-        "and projectName without requiring a session round-trip.";
-
     public const string ProjectName =
         "Project name returned by LocateSymbol in the projectName field. " +
         "Must match exactly - case-sensitive.";
@@ -30,8 +25,11 @@ public static class ToolParams
         "true = include a diff preview in the response.";
 
     // Context disambiguation
+    /*
     public const string ContextSnippet =
         "Short unique fragment identifying the target when its name alone is ambiguous, copied verbatim from a prior result.";
+    */
+    public const string ContextSnippet = "Short unique verbatim disambiguating fragment for identifying the target";
 
     public const string LineBefore =
         "Line before contextSnippet, to disambiguate repeats.";
@@ -39,6 +37,7 @@ public static class ToolParams
     public const string LineAfter =
         "Line after contextSnippet, to disambiguate repeats.";
 
+    /*
     public const string OldContent =
         "REQUIRED. Verbatim text to find and replace - copied exactly from a prior tool result " +
         "(ReadFile/GetMethodSource/etc.), not retyped from memory. Matched as a literal substring " +
@@ -47,10 +46,16 @@ public static class ToolParams
         "edits only. If oldContent matches more than once in the file, use lineBefore/lineAfter to " +
         "disambiguate.";
 
+    */
+    public const string OldContent = "Verbatim text to find and replace using literal substring match.";
+
+    /*
     public const string NewContent =
         "REQUIRED. Verbatim replacement text for oldContent. May be empty (pure deletion) or longer " +
         "than oldContent (net insertion), as long as it stays within the size limit (a startup-" +
         "configured line/char limit, reported in the error if exceeded).";
+    */
+    public const string NewContent = "Verbatim replacement text for oldContent.";
 
     public const string ContainingTypeName =
         "Optional. Only needed when the target's name AND contextSnippet are still ambiguous - e.g. " +
@@ -75,9 +80,12 @@ public static class ToolParams
         "\"file\" (scopeName = filePath) | \"project\" (scopeName = projectName) | \"solution\" (scopeName ignored)";
 
     // Transcript review
+    /*    
     public const string Reason =
         "Why you're calling this now (min 10 chars, must contain a space).";
-
+    */
+    // Testing with empty reason to reduce tool schema token usage. Observing model compliance.
+    public const string Reason = "";
 
     // Added by AddMember (expected - used for diagnostics)
     public const string SnippetEdits =

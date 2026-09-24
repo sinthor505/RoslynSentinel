@@ -100,24 +100,23 @@ public class RefactoringStructuralTools
 
     public RefactoringStructuralTools(IWorkspaceManager workspaceManager)
     {
-        new RefactoringStructuralTools(
-            new RefactoringEngine(workspaceManager),
-            new StructuralRefinementEngine(workspaceManager),
-            new SymbolNavigationEngine(workspaceManager),
-            workspaceManager,
-            new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
-            NullLogger<RefactoringStructuralTools>.Instance);
+        var refactoringEngine = new RefactoringEngine(workspaceManager);
+        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager);
+        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+        var validationEngine = new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var logger = NullLogger<RefactoringStructuralTools>.Instance;
+
+        _impl = new RefactoringStructuralImpl(refactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, logger);
     }
 
     public RefactoringStructuralTools(IWorkspaceManager workspaceManager, ILogger logger)
     {
-        new RefactoringStructuralTools(
-            new RefactoringEngine(workspaceManager),
-            new StructuralRefinementEngine(workspaceManager),
-            new SymbolNavigationEngine(workspaceManager),
-            workspaceManager,
-            new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
-            logger);
+        var refactoringEngine = new RefactoringEngine(workspaceManager);
+        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager);
+        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+        var validationEngine = new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+
+        _impl = new RefactoringStructuralImpl(refactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, logger);
     }
 
     public RefactoringStructuralTools(
@@ -139,11 +138,13 @@ public class RefactoringStructuralTools
     // supply the wrong subset for its chosen operation and only find out at runtime.
     [McpServerTool(Name = "Member")]
     [Produces(DataTag.ChangeId)]
-    [Description("Add (as a raw source member, a generated typed property/field, or a brand-new top-level type), remove, replace, or view a type member (method, property, field, constructor). This is the right choice even for a one-line change inside a member - read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
+    //[Description("Add (as a raw source member, a generated typed property/field, or a brand-new top-level type), remove, replace, or view a type member (method, property, field, constructor). This is the right choice even for a one-line change inside a member - read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
+    [Description("Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. Also views constructors.")]
     public Task<SentinelCallToolResult<object>> Member(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
-        [Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
+        //[Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
+        //[Description("Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. Also views constructors.")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
         [Description("Required for addMember and addTypedMember, and for view. Not used for addTopLevelType, remove, or replace.")]
         [Consumes(DataTag.SymbolName, required: false)] string? containerName = null,
@@ -151,7 +152,7 @@ public class RefactoringStructuralTools
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
         [Description("Required for remove and replace - the member to target. For overloaded targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
-        [Description("replace: the full replacement member source (signature + body). addMember: the full raw member source to insert into containerName - use position (\"after:MemberName\"/\"before:MemberName\"/\"end\") to place it. addTopLevelType: the full new type declaration (enum/class/record/struct/interface) - containerName is not used. Not used for addTypedMember, remove, or view.")]
+        [Description("add or replace: require full trivia, signature and body. addTopLevelType: the full new type declaration (enum/class/record/struct/interface) - containerName is not used. Not used for addTypedMember, remove, or view.")]
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
         [Description("addMember only: where to insert - null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\". Not used for addTopLevelType, addTypedMember, remove, replace, or view.")]
         [ExternalInputRequired(DataTag.Position)] string? position = null,
@@ -167,7 +168,7 @@ public class RefactoringStructuralTools
         [Description("addTypedMember, typedKind=field only.")][ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
         [Description("addTypedMember, typedKind=field only.")][ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
         [Description("addTypedMember, typedKind=field only: optional initializer expression.")][ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
-        [Description("remove only. When false (default), refuses removal if the member has any callers or implementations (checked the same way as FindReferences(kind: all)). Set true to skip this check and remove unconditionally.")] bool skipPrecheck = false,
+        [Description("Forcefully removes the member, skipping any precheck for callers or implementations.")] bool skipPrecheck = false,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,

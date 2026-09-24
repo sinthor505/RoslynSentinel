@@ -360,14 +360,23 @@ public sealed class LmStudioAgentClient
 
     private sealed class LmStudioModelsResponse
     {
-        public List<LmStudioModelInfo>? Data { get; set; }
+        public List<LmStudioModelInfo>? Data
+        {
+            get; set;
+        }
     }
 
     private sealed class LmStudioModelInfo
     {
-        public string? Id { get; set; }
+        public string? Id
+        {
+            get; set;
+        }
         [JsonPropertyName("loaded_context_length")]
-        public int? LoadedContextLength { get; set; }
+        public int? LoadedContextLength
+        {
+            get; set;
+        }
     }
 
     /// <summary>
@@ -382,14 +391,14 @@ public sealed class LmStudioAgentClient
         StreamReader reader,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var idleTimeout = TimeSpan.FromSeconds(LlmOptions.StreamIdleTimeoutSeconds);
+        var streamIdleTimeout = TimeSpan.FromSeconds(LlmOptions.StreamIdleTimeoutSeconds);
         string? eventType = null;
         while (true)
         {
             string? line;
             using (var idleCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
             {
-                idleCts.CancelAfter(idleTimeout);
+                idleCts.CancelAfter(streamIdleTimeout);
                 try
                 {
                     line = await reader.ReadLineAsync(idleCts.Token);
@@ -397,7 +406,7 @@ public sealed class LmStudioAgentClient
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
                     throw new StreamIdleTimeoutException(
-                        $"LM Studio SSE stream produced no data for {idleTimeout.TotalSeconds}s; treating the connection as dead.");
+                        $"LM Studio SSE stream produced no data for {streamIdleTimeout.TotalSeconds}s; treating the connection as dead.");
                 }
             }
 

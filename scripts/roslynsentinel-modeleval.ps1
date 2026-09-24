@@ -165,6 +165,9 @@
     documented fields on /v1/chat/completions (a different endpoint this harness doesn't use).
     Set these by hand in LM Studio's sampling panel for the loaded model instead.
 
+.PARAMETER StreamTimeout
+	How many seconds to wait before assuming the model has failed to generating streaming tokens.
+
 .EXAMPLE
     .\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
     Sweep size=60 against the .112 GTX 1080 host.
@@ -207,7 +210,9 @@ param(
 
     [double]$RepeatPenalty,
 
-    [double]$MinP
+    [double]$MinP,
+	
+	[double]$StreamTimeout
 )
 
 $ErrorActionPreference = 'Stop'
@@ -216,6 +221,7 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 $knownHosts = @{
     '112' = @{ BaseUrl = 'http://192.168.1.112:1234/v1'; Suffix = '112' }
     '113' = @{ BaseUrl = 'http://192.168.1.113:1234/v1'; Suffix = '113' }
+	'85' = @{ BaseUrl = 'http://192.168.1.85:1234/v1'; Suffix = '85' }
 }
 
 if ($knownHosts.ContainsKey($HostAddress)) {
@@ -226,9 +232,9 @@ else {
     $baseUrl = $HostAddress
     $suffix = ($HostAddress -replace '[^a-zA-Z0-9]', '_').Trim('_')
     if (-not $suffix) {
-        throw "Could not derive an --artifacts-path suffix from -HostAddress '$HostAddress'. Pass a known alias (112, 113) or a URL like http://host:1234/v1."
+        throw "Could not derive an --artifacts-path suffix from -HostAddress '$HostAddress'. Pass a known alias (112, 113, 85) or a URL like http://host:1234/v1."
     }
-    Write-Warning "'$HostAddress' is not a known host alias (112, 113) - using it verbatim as the base URL and deriving artifacts suffix '$suffix'."
+    Write-Warning "'$HostAddress' is not a known host alias (112, 113, 85) - using it verbatim as the base URL and deriving artifacts suffix '$suffix'."
 }
 
 $testNames = @{
@@ -289,6 +295,9 @@ if ($PSBoundParameters.ContainsKey('TopP')) {
 if ($PSBoundParameters.ContainsKey('TopK') -or $PSBoundParameters.ContainsKey('RepeatPenalty') -or $PSBoundParameters.ContainsKey('MinP')) {
     Write-Warning "TopK/RepeatPenalty/MinP CANNOT be sent or verified via this harness's /v1/responses endpoint - confirmed 2026-09-05 that LM Studio silently drops these three there (a repeat_penalty A/B test at 1.0 vs 1.8 produced byte-identical output), even though they ARE real, documented params on /v1/chat/completions. Set them by hand in LM Studio's sampling panel for the loaded model; this script cannot do it for you or confirm the UI value matches."
 }
+if ($PSBoundParameters.ContainsKey('StreamTimeout')) {
+	Write-Host "    ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS" -ForegroundColor Cyan
+}
 Write-Host "    --artifacts-path $artifactsPath" -ForegroundColor Cyan
 Write-Host ""
 
@@ -307,10 +316,16 @@ else {
     $env:ROSLYNSENTINEL_LLM_TOP_P = $null
 }
 if ($MinimalTools) {
-    $env:ROSLYNSENTINEL_LLM_MINIMAL_TOOLS = 'true'
+    $env:ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS = $StreamTimeout
 }
 else {
-    $env:ROSLYNSENTINEL_LLM_MINIMAL_TOOLS = $null
+    $env:ROSLYNSENTINEL_LLM_STREAM_IDLE_TIMEOUT_SECONDS = $null
+}
+if ($PSBoundParameters.ContainsKey('StreamTimeout')) {
+    $env:ROSLYNSENTINEL_LLM_TOP_P = $TopP
+}
+else {
+    $env:ROSLYNSENTINEL_LLM_TOP_P = $null
 }
 if ($currentTest -eq 'SizeThreshold') {
     $env:ROSLYNSENTINEL_MODELEVAL_SIZES = "$Size"
