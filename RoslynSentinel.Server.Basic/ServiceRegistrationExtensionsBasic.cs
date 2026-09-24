@@ -536,7 +536,6 @@ public static class RoslynSentinelServiceExtensionsBasic
                             }
 
                             var hint = itemCount is int n ? $" Result contains {n} item(s)." : "";
-                            var summaryLine = statusMessage != null ? $" Summary: {statusMessage}" : "";
 
                             result.Content = [new ModelContextProtocol.Protocol.TextContentBlock
                             {
