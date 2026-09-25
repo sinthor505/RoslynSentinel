@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 
 using Microsoft.CodeAnalysis;
+using RoslynSentinel.Common;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
@@ -14,10 +15,10 @@ public record MethodLocation(FilePathWrapper filePath, string TypeName, string M
 
 public class AnalysisEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public AnalysisEngine(ISolutionProvider workspaceManager, SentinelConfiguration config)
+    public AnalysisEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;
@@ -63,7 +64,7 @@ public class AnalysisEngine
             return new List<LargeTypeReport>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var reports = new List<LargeTypeReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -89,7 +90,7 @@ public class AnalysisEngine
             return new List<LargeMethodReport>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var reports = new List<LargeMethodReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -116,7 +117,7 @@ public class AnalysisEngine
             return new List<DuplicateMethodGroup>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var methodHashes = new Dictionary<string, List<MethodLocation>>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -151,7 +152,7 @@ public class AnalysisEngine
             return new List<InterfaceCandidateReport>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var candidates = new List<InterfaceCandidateReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -182,7 +183,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -206,7 +207,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var instantiatedTypes = new HashSet<string>();
         var declaredTypes = new List<(string Name, string Document)>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
@@ -245,7 +246,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> DetectUnreachableCodeAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -276,7 +277,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindCircularDependenciesAsync(CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var projects = solution.Projects.ToDictionary(p => p.Id);
 
@@ -324,7 +325,7 @@ public class AnalysisEngine
 
     public async Task<DocumentEditResult> GenerateCallTreeAsync(FilePathWrapper filePath, string methodName, int depth = 3, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -423,7 +424,7 @@ public class AnalysisEngine
         var indent = new string(' ', currentDepth * 2);
         sb.AppendLine($"{indent}- {symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}");
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         foreach (var syntaxRef in symbol.DeclaringSyntaxReferences)
         {
             var node = await syntaxRef.GetSyntaxAsync(cancellationToken);
@@ -453,7 +454,7 @@ public class AnalysisEngine
 
     public async Task<DocumentEditResult> GenerateEqualityOverridesAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -666,7 +667,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
         var results = new List<string>();
 
@@ -868,7 +869,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, true, cancellationToken);
 
@@ -951,7 +952,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindPossibleInfiniteLoopsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
         var results = new List<string>();
 
@@ -997,7 +998,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindInternalClassesThatCouldBePrivateAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
 
@@ -1035,7 +1036,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
 
@@ -1289,7 +1290,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
 
@@ -1316,7 +1317,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -1338,7 +1339,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
 
@@ -1372,7 +1373,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
         var disposalExclusions = new HashSet<string> { "HttpClient", "Task", "MemoryStream" };
@@ -1417,7 +1418,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
 
@@ -1443,7 +1444,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
 
@@ -1470,7 +1471,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
 
@@ -1546,7 +1547,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
 
@@ -1571,7 +1572,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
         var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName))
@@ -1611,7 +1612,7 @@ public class AnalysisEngine
     /// </summary>
     public async Task<List<string>> FindCircularTypeReferencesAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
 
         // Build map: simpleName -> set of constructor-parameter simple names
@@ -1681,7 +1682,7 @@ public class AnalysisEngine
     public async Task<List<string>> FindFinalizerOnDisposableAsync(
         string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
         var results = new List<string>();
 
@@ -1739,7 +1740,7 @@ public class AnalysisEngine
     public async Task<List<string>> FindUnboundedStaticCollectionsAsync(
         string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
         var results = new List<string>();
 
@@ -1809,7 +1810,7 @@ public class AnalysisEngine
     public async Task<List<string>> FindUnboundedRecursionAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
         var results = new List<string>();
 
@@ -1913,7 +1914,7 @@ public class AnalysisEngine
     public async Task<List<string>> FindMisboundOverloadChainsAsync(
         string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
         var results = new List<string>();
 
@@ -1987,7 +1988,7 @@ public class AnalysisEngine
     public async Task<List<string>> FindMissingGenericConstraintsAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
         var results = new List<string>();
 
