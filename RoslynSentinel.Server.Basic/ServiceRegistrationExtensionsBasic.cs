@@ -54,6 +54,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<InventoryEngine>();
         services.AddSingleton<ISolutionProvider>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
         services.AddSingleton<IWorkspaceManager>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
+        services.AddSingleton<IWorkspaceReader>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
         services.AddSingleton<MsToolAugmentEngine>();
         services.AddSingleton<PersistentWorkspaceManager>();
         services.AddSingleton<ProjectConsistencyEngine>();
