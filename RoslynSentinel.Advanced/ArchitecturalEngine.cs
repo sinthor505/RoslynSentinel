@@ -14,9 +14,9 @@ public record CircularDependencyChain(
 
 public class ArchitecturalEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public ArchitecturalEngine(ISolutionProvider workspaceManager)
+    public ArchitecturalEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -26,7 +26,7 @@ public class ArchitecturalEngine
     /// </summary>
     public async Task<DocumentEditResult> ConvertToBackgroundServiceAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax ?? throw new InvalidOperationException("Could not parse syntax root.");
@@ -74,7 +74,7 @@ public class ArchitecturalEngine
     public async Task<List<CircularDependencyChain>> FindCircularDependenciesAsync(
         string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName))
         {
@@ -449,7 +449,7 @@ public class ArchitecturalEngine
         string? filePath = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var violations = new List<LayerViolation>();
 
         IEnumerable<Document?> documents;
