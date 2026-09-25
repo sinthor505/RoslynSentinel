@@ -8,15 +8,15 @@ namespace RoslynSentinel.Basic;
 public class ImpactAnalyzer
 {
     private readonly ILogger<ImpactAnalyzer> _logger;
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public ImpactAnalyzer(ISolutionProvider workspaceManager)
+    public ImpactAnalyzer(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
         _logger = new NullLogger<ImpactAnalyzer>();
     }
 
-    public ImpactAnalyzer(ISolutionProvider workspaceManager, ILogger<ImpactAnalyzer> logger)
+    public ImpactAnalyzer(IWorkspaceManager workspaceManager, ILogger<ImpactAnalyzer> logger)
     {
         _logger = logger;
         _workspaceManager = workspaceManager;
@@ -26,7 +26,7 @@ public class ImpactAnalyzer
     {
         try
         {
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var document = solution.GetDocumentIdsWithFilePath(filePath)
                 .Select(solution.GetDocument)
                 .FirstOrDefault();
@@ -137,7 +137,7 @@ public class ImpactAnalyzer
 
     public async Task<List<string>> GetDataFlowAsync(FilePathWrapper filePath, int startLine, int startColumn, int endLine, int endColumn, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"Document not found: {filePath}");
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -184,7 +184,7 @@ public class ImpactAnalyzer
 
     private async Task<ImpactReport> FindSymbolRelationsAsync(FilePathWrapper filePath, int line, int column, Func<ISymbol, Solution, CancellationToken, Task<IEnumerable<ISymbol>>> relationFinder, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
             .Select(solution.GetDocument)
             .FirstOrDefault() ?? throw new FileNotFoundException($"Document not found: {filePath}");
