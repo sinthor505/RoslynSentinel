@@ -9,9 +9,9 @@ namespace RoslynSentinel.Advanced;
 
 public class LogicOptimizationEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public LogicOptimizationEngine(ISolutionProvider workspaceManager)
+    public LogicOptimizationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -21,7 +21,7 @@ public class LogicOptimizationEngine
     /// </summary>
     public async Task<DocumentEditResult> SimplifyBooleanExpressionsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -60,7 +60,7 @@ public class LogicOptimizationEngine
     /// </summary>
     public async Task<DocumentEditResult> AddGuardClausesAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -135,7 +135,7 @@ public class LogicOptimizationEngine
     /// </summary>
     public async Task<DocumentEditResult> ConvertToNullCoalescingAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -184,7 +184,7 @@ public class LogicOptimizationEngine
     /// </summary>
     public async Task<DocumentEditResult> ConvertToSwitchAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
