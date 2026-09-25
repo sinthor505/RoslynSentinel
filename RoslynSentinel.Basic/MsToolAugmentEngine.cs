@@ -1,7 +1,6 @@
 using System.Text;
 
 using Microsoft.CodeAnalysis;
-using RoslynSentinel.Common;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
@@ -1137,8 +1136,8 @@ public class MsToolAugmentEngine
                 SyntaxFactory.Token(SyntaxKind.PrivateKeyword).WithTrailingTrivia(SyntaxFactory.Space),
                 SyntaxFactory.Token(SyntaxKind.ConstKeyword).WithTrailingTrivia(SyntaxFactory.Space)))
             .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
-            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
-            .WithAddedByComment("ExtractConstantSafe");
+            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
+        //.WithAddedByComment("ExtractConstantSafe");
 
         var updatedType = newContainingType.WithMembers(
             newContainingType.Members.Insert(0, constDecl));
@@ -1311,8 +1310,8 @@ public class MsToolAugmentEngine
                     .WithTrailingTrivia(SyntaxFactory.Space)))
             .WithParameterList(SyntaxFactory.ParameterList())
             .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(interpolated))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-            .WithAddedByComment("Generate(kind: generate_to_string_safe)");
+            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+        //.WithAddedByComment("Generate(kind: generate_to_string_safe)");
 
         var newTypeDecl = typeDecl.AddMembers(method);
         var newRoot = root.ReplaceNode(typeDecl, newTypeDecl);
@@ -1809,7 +1808,7 @@ public class MsToolAugmentEngine
         var methodWithTrivia = newMethodDecl
             .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed, SyntaxFactory.LineFeed))
             .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
-            .WithAddedByComment("ExtractMethodSafe")
+            //.WithAddedByComment("ExtractMethodSafe")
             .WithAdditionalAnnotations(editAnnotation);
 
         var updatedType = newContainingType.AddMembers(methodWithTrivia);

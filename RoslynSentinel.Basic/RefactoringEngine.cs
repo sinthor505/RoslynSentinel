@@ -1453,7 +1453,7 @@ public class RefactoringEngine
         }
 
         var addedDescription = DescribeParsedMember(newMember);
-        newMember = newMember.WithAddedByComment("AddMember");
+        //newMember = newMember.WithAddedByComment("AddMember");
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -1520,7 +1520,7 @@ public class RefactoringEngine
             };
         }
 
-        newType = newType.WithAddedByComment("AddTopLevelType");
+        //newType = newType.WithAddedByComment("AddTopLevelType");
 
         var namespaces = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().ToList();
         BaseNamespaceDeclarationSyntax? targetNamespace;
@@ -2654,7 +2654,7 @@ public class RefactoringEngine
         }
 
         var insertedDescription = DescribeParsedMember(newMember);
-        newMember = newMember.WithAddedByComment("InsertMemberAfter");
+        //newMember = newMember.WithAddedByComment("InsertMemberAfter");
         var membersList = typeDecl.Members.ToList();
         var idx = membersList.FindIndex(m => _symbolNavigationEngine.GetMemberName(m) == afterMemberName);
         var insertIndex = idx < 0 ? membersList.Count : idx + 1;
@@ -2750,7 +2750,7 @@ public class RefactoringEngine
         }
 
         var insertedDescription = DescribeParsedMember(newMember);
-        newMember = newMember.WithAddedByComment("InsertMemberBefore");
+        //newMember = newMember.WithAddedByComment("InsertMemberBefore");
         var membersList = typeDecl.Members.ToList();
         var idx = membersList.FindIndex(m => _symbolNavigationEngine.GetMemberName(m) == beforeMemberName);
         var insertIndex = idx < 0 ? membersList.Count : idx;
@@ -4457,7 +4457,8 @@ public class RefactoringEngine
         // "_camelCase(paramName)" derivation, which always differs from paramName.
         var defaultFieldName = $"_{char.ToLower(paramName[0])}{paramName[1..]}";
         string derivedFieldName = fieldName == null || fieldName == paramName || fieldName == $"_{paramName}" ? defaultFieldName : fieldName;
-        var fieldDecl = ((FieldDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration($"private readonly {paramType} {derivedFieldName};")!).WithAddedByComment("AddConstructorParameter");
+        var fieldDecl = ((FieldDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration($"private readonly {paramType} {derivedFieldName};")!);
+        //.WithAddedByComment("AddConstructorParameter");
         var assignmentStatement = SyntaxFactory.ParseStatement($"{derivedFieldName} = {paramName};");
         var newParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName)).WithType(SyntaxFactory.ParseTypeName(paramType).WithTrailingTrivia(SyntaxFactory.Space));
         var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
@@ -4483,7 +4484,8 @@ public class RefactoringEngine
         {
             var paramList = SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList([newParam]));
             var body = SyntaxFactory.Block(assignmentStatement);
-            newCtor = SyntaxFactory.ConstructorDeclaration(className).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword).WithTrailingTrivia(SyntaxFactory.Space))).WithParameterList(paramList).WithBody(body).WithAddedByComment("AddConstructorParameter");
+            newCtor = SyntaxFactory.ConstructorDeclaration(className).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword).WithTrailingTrivia(SyntaxFactory.Space))).WithParameterList(paramList).WithBody(body);
+            //.WithAddedByComment("AddConstructorParameter");
         }
 
         var newMembers = new List<MemberDeclarationSyntax>

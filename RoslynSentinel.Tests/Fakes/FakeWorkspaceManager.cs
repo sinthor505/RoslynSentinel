@@ -160,4 +160,16 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     }
     bool IScopedOperationLedger.TryRelease() => false;
     IReadOnlyList<LedgerEntryBase> IScopedOperationLedger.GetOpenEntries() => [];
+
+
+    // Added by AddMember (expected - used for diagnostics)
+
+    public async Task<Compilation> GetCompilationAsync(ProjectId projectId, ReadSource source, CancellationToken cancellationToken)
+    {
+        var solution = await GetCurrentSolutionAsync(cancellationToken);
+        var project = solution.GetProject(projectId)
+            ?? throw new ArgumentException($"No project with id '{projectId}' in the current solution.", nameof(projectId));
+        return await project.GetCompilationAsync(cancellationToken)
+            ?? throw new InvalidOperationException($"Project '{project.Name}' does not support compilation.");
+    }
 }

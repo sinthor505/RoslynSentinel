@@ -43,6 +43,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private volatile bool _sessionHalted;
     private volatile bool _disposed = false;
     private readonly ConcurrentDictionary<FilePathWrapper, string> _failedChangesCache = new();
+    // Per-project Compilation cache (docs/current/proposal_compilation_cache.md). Invalidated
+    // lazily for exactly the project(s) touched by a successful ApplyProposedChangesAsync write;
+    // never invalidated eagerly and never scoped solution-wide. Both ReadSource values are unified
+    // today (see GetSolutionAsync), same as everywhere else in this class -- the split becomes real
+    // once staged writes exist. Keyed by Task, not Compilation, so concurrent callers for the same
+    // uncached project await the same in-flight build instead of racing separate ones.
+    private readonly ConcurrentDictionary<ProjectId, Task<Compilation>> _compilationCache = new();
     // _internalChanges/_externalChanges are the older path-key + ~5s-freshness-window
     // self-write-suppression mechanism (see OnFileSystemChanged). _knownFileHashes (below) is a
     // newer, content-based check layered IN FRONT of this one, not a replacement -> deliberately,
@@ -387,6 +394,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 { "NuGetAudit", "false" },
                 { "NuGetAuditLevel", "critical" }
             });
+            // Fresh MSBuildWorkspace -> any cached Compilation from a prior load is unusable,
+            // whether this is the first load or a reload of an already-running server.
+            _compilationCache.Clear();
             _workspaceLoadErrors.Clear();
             _workspace.RegisterWorkspaceFailedHandler((d) =>
             {
@@ -799,6 +809,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                         var old = _workspace;
                         _workspace = newWorkspace;
                         CurrentSolution = newSolution;
+                        // Full workspace recreation -> ProjectIds from the old solution are not
+                        // guaranteed to match the new one, so every cached Compilation is unusable.
+                        _compilationCache.Clear();
                         old?.Dispose();
                     }
                     catch
@@ -823,6 +836,12 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     }
                 }
                 CurrentSolution = _workspace.CurrentSolution;
+                // Only these specific projects were reloaded -> invalidate just their cache
+                // entries, not the whole cache.
+                foreach (var reloadedProjectId in projectsToReload)
+                {
+                    _compilationCache.TryRemove(reloadedProjectId, out _);
+                }
             }
             else
             {
@@ -838,6 +857,8 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     if (!string.IsNullOrEmpty(slnPath))
                     {
                         CurrentSolution = await _workspace.OpenSolutionAsync(slnPath);
+                        // Full workspace recreation -> ProjectIds are not guaranteed stable.
+                        _compilationCache.Clear();
                     }
                 }
                 else
@@ -1004,6 +1025,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             if (docId != null)
             {
                 CurrentSolution = CurrentSolution!.RemoveDocument(docId);
+                _compilationCache.TryRemove(docId.ProjectId, out _);
             }
         }
         finally
@@ -1069,6 +1091,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     public void SetTestSolution(Solution solution)
     {
         CurrentSolution = solution;
+        // A forced solution swap can reuse ProjectIds from a prior test's solution -> clear
+        // rather than risk a stale or mismatched cached Compilation leaking between tests.
+        _compilationCache.Clear();
     }
 
     public HealthComponents GetHealthComponents()
@@ -1492,6 +1517,27 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     {
                         Interlocked.Increment(ref _workspaceVersion);
                     }
+
+                    // Compilation cache invalidation (docs/current/proposal_compilation_cache.md):
+                    // a full reload replaces CurrentSolution wholesale, so every cached entry is
+                    // stale regardless of which files changed -> clear the whole cache rather than
+                    // trying to map succeeded paths against a solution that's about to be swapped
+                    // out from under this method. Otherwise, invalidate exactly the project(s) the
+                    // just-applied write touched -- nothing broader.
+                    if (needsFullReload)
+                    {
+                        _compilationCache.Clear();
+                    }
+                    else if (CurrentSolution is { } postWriteSolution)
+                    {
+                        foreach (var filePath in succeeded)
+                        {
+                            foreach (var documentId in postWriteSolution.GetDocumentIdsWithFilePath(filePath))
+                            {
+                                _compilationCache.TryRemove(documentId.ProjectId, out _);
+                            }
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1698,6 +1744,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             CurrentSolution = newSolution;
             _lastLoadedAt = DateTime.UtcNow;
             Interlocked.Increment(ref _workspaceVersion);
+            // Full workspace recreation -> ProjectIds from the old solution are not guaranteed to
+            // match the new one, so every cached Compilation is unusable regardless of key.
+            _compilationCache.Clear();
 
             var cutoff = DateTime.UtcNow.AddSeconds(-5);
             foreach (var key in _internalChanges.Keys.ToList())
@@ -1955,4 +2004,40 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     // Added by AddMember (expected - used for diagnostics)
     private readonly SymbolResolver _symbolResolver;
+
+
+    /// <summary>
+    /// <see cref="IWorkspaceReader"/> implementation. Serves a cached <see cref="Compilation"/> for
+    /// <paramref name="projectId"/> when one exists; otherwise builds it once and caches the build
+    /// task so concurrent callers for the same project await the same build rather than racing
+    /// separate ones. Invalidated only by <see cref="ApplyProposedChangesAsync"/> for exactly the
+    /// project(s) a successful write touched -- see docs/current/proposal_compilation_cache.md.
+    /// </summary>
+    public async Task<Compilation> GetCompilationAsync(ProjectId projectId, ReadSource source, CancellationToken cancellationToken)
+    {
+        var solution = await GetSolutionAsync(source, cancellationToken);
+        if (solution.GetProject(projectId) is null)
+        {
+            throw new ArgumentException($"No project with id '{projectId}' in the current solution.", nameof(projectId));
+        }
+
+        var buildTask = _compilationCache.GetOrAdd(projectId, static (id, sol) => BuildCompilationAsync(sol, id, CancellationToken.None), solution);
+        try
+        {
+            return await buildTask.WaitAsync(cancellationToken);
+        }
+        catch
+        {
+            // A failed build must not poison the cache for the next caller.
+            _compilationCache.TryRemove(new KeyValuePair<ProjectId, Task<Compilation>>(projectId, buildTask));
+            throw;
+        }
+
+        static async Task<Compilation> BuildCompilationAsync(Solution solution, ProjectId projectId, CancellationToken cancellationToken)
+        {
+            var project = solution.GetProject(projectId)!;
+            return await project.GetCompilationAsync(cancellationToken)
+                ?? throw new InvalidOperationException($"Project '{project.Name}' does not support compilation.");
+        }
+    }
 }

@@ -43,4 +43,16 @@ public interface IWorkspaceReader
     /// <see cref="SolutionNotLoadedException"/> if no solution is loaded.
     /// </summary>
     Task<Microsoft.CodeAnalysis.Solution> GetSolutionAsync(ReadSource source, CancellationToken cancellationToken);
+
+
+    // Added by AddMember (expected - used for diagnostics)
+
+    /// <summary>
+    /// Returns the requested project's <see cref="Microsoft.CodeAnalysis.Compilation"/>, from a
+    /// per-project cache when a valid entry exists for <paramref name="source"/>. Throws
+    /// <see cref="SolutionNotLoadedException"/> if no solution is loaded, or
+    /// <see cref="ArgumentException"/> if <paramref name="projectId"/> does not identify a project
+    /// in the current solution.
+    /// </summary>
+    Task<Microsoft.CodeAnalysis.Compilation> GetCompilationAsync(Microsoft.CodeAnalysis.ProjectId projectId, ReadSource source, CancellationToken cancellationToken);
 }
