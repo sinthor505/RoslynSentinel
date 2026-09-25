@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public record GenerationResult(FilePathWrapper filePath, string Content);
@@ -32,9 +34,9 @@ public record DecoratorResult(
 
 public partial class CodeGenerationEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public CodeGenerationEngine(ISolutionProvider workspaceManager)
+    public CodeGenerationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -176,7 +178,7 @@ public partial class CodeGenerationEngine
 
     public async Task<DocumentEditResult> GenerateConstructorAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -295,7 +297,7 @@ public partial class CodeGenerationEngine
         string[]? excludeProperties = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -370,7 +372,7 @@ public partial class CodeGenerationEngine
     /// </summary>
     public async Task<DocumentEditResult> GenerateDefaultConfigJsonAsync(string projectName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName) ?? throw new InvalidOperationException("Project not found.");
         var collectedKeys = new SortedSet<string>(StringComparer.Ordinal);
 
@@ -499,7 +501,7 @@ public partial class CodeGenerationEngine
     public async Task<RepositoryInterfaceResult> GenerateRepositoryInterfaceAsync(
         FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath) ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
@@ -599,7 +601,7 @@ public partial class CodeGenerationEngine
     public async Task<FluentBuilderResult> GenerateFluentBuilderAsync(
         FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath == filePath || d.Name == filePath);
         if (document == null)
@@ -736,7 +738,7 @@ public partial class CodeGenerationEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -856,7 +858,7 @@ public partial class CodeGenerationEngine
 
     public async Task<DocumentEditResult> ImplementInterfaceAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -1013,7 +1015,7 @@ public partial class CodeGenerationEngine
         string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -1240,7 +1242,7 @@ public partial class CodeGenerationEngine
         string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
