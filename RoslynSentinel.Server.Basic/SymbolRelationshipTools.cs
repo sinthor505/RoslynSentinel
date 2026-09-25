@@ -11,14 +11,9 @@ public class SymbolRelationshipTools
 {
     private readonly SymbolRelationshipImpl _impl;
 
-    public SymbolRelationshipTools(
-        DiscoveryEngine discoveryEngine,
-        SemanticSearchEngine semanticSearchEngine,
-        SymbolNavigationEngine symbolNavigationEngine,
-        ISolutionProvider workspaceManager,
-        ILogger logger)
+    public SymbolRelationshipTools(SymbolRelationshipImpl impl)
     {
-        _impl = new SymbolRelationshipImpl(discoveryEngine, semanticSearchEngine, symbolNavigationEngine, workspaceManager, logger);
+        _impl = impl;
     }
 
     [McpServerTool(Name = "QuerySymbolRelationships")]

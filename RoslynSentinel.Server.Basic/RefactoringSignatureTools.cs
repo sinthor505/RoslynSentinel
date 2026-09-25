@@ -12,19 +12,9 @@ public class RefactoringSignatureTools
 {
     private readonly RefactoringSignatureImpl _impl;
 
-    public RefactoringSignatureTools(IWorkspaceManager workspaceManager)
+    public RefactoringSignatureTools(RefactoringSignatureImpl impl)
     {
-        _impl = new RefactoringSignatureImpl(new RefactoringEngine(workspaceManager), workspaceManager, new ValidationEngine(workspaceManager), new SymbolNavigationEngine(workspaceManager), NullLogger<RefactoringSignatureImpl>.Instance);
-    }
-
-    public RefactoringSignatureTools(
-        RefactoringEngine refactoringEngine,
-        IWorkspaceManager workspaceManager,
-        ValidationEngine validationEngine,
-        SymbolNavigationEngine symbolNavigationEngine,
-        ILogger logger)
-    {
-        _impl = new RefactoringSignatureImpl(refactoringEngine, workspaceManager, validationEngine, symbolNavigationEngine, logger);
+        _impl = impl;
     }
 
     [McpServerTool(Name = "RenameSymbol", UseStructuredContent = false, OutputSchemaType = typeof(RenameSymbolResultEnvelope))]

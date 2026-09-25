@@ -67,10 +67,10 @@ public class WorkspaceTools
         // Decision 7 step 2 (plan_split_workspace_refactoring_tools_for_di.md): WorkspaceTools
         // is now a legacy facade preserving its original constructor/tool signatures, delegating
         // internally to the newly-split *Tools classes.
-        _projectManagement = new WorkspaceProjectManagementTools(workspaceManager, solutionManagementEngine, dependencyEngine, projectConsistencyEngine, structuralRefinementEngine, logger);
-        _buildTest = new WorkspaceBuildTestTools(workspaceManager, diagnosticEngine, buildEngine, testRunEngine, logger);
-        _fileEdit = new WorkspaceFileEditTools(workspaceManager, readNav, logger, validationEngine, symbolNavigationEngine, writeAdvice);
-        _healthMisc = new WorkspaceHealthMiscTools(workspaceManager, config, buildEngine, logger);
+        _projectManagement = new WorkspaceProjectManagementTools(new WorkspaceProjectManagementImpl(workspaceManager, solutionManagementEngine, dependencyEngine, projectConsistencyEngine, structuralRefinementEngine, logger));
+        _buildTest = new WorkspaceBuildTestTools(new WorkspaceBuildTestImpl(workspaceManager, diagnosticEngine, buildEngine, testRunEngine, logger));
+        _fileEdit = new WorkspaceFileEditTools(new WorkspaceFileEditImpl(workspaceManager, readNav, logger, validationEngine, symbolNavigationEngine, writeAdvice));
+        _healthMisc = new WorkspaceHealthMiscTools(new WorkspaceHealthMiscImpl(workspaceManager, config, buildEngine, logger));
     }
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]

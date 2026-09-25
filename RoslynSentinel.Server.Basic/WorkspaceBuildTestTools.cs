@@ -11,10 +11,9 @@ public class WorkspaceBuildTestTools
 {
     private readonly WorkspaceBuildTestImpl _impl;
 
-    public WorkspaceBuildTestTools(IWorkspaceManager workspaceManager, DiagnosticEngine diagnosticEngine,
-        BuildEngine buildEngine, TestRunEngine testRunEngine, ILogger logger)
+    public WorkspaceBuildTestTools(WorkspaceBuildTestImpl impl)
     {
-        _impl = new WorkspaceBuildTestImpl(workspaceManager, diagnosticEngine, buildEngine, testRunEngine, logger);
+        _impl = impl;
     }
 
     [McpServerTool(Name = "GetDiagnostics")]

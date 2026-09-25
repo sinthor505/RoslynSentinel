@@ -18,10 +18,9 @@ public class WorkspaceFileEditTools
 {
     private readonly WorkspaceFileEditImpl _impl;
 
-    public WorkspaceFileEditTools(IWorkspaceManager workspaceManager, WorkspaceReadNavigationImpl readNav, ILogger logger,
-        ValidationEngine validationEngine, SymbolNavigationEngine symbolNavigationEngine, WriteToolAdviceHelper writeAdvice)
+    public WorkspaceFileEditTools(WorkspaceFileEditImpl impl)
     {
-        _impl = new WorkspaceFileEditImpl(workspaceManager, readNav, logger, validationEngine, symbolNavigationEngine, writeAdvice);
+        _impl = impl;
     }
 
     [McpServerTool(Name = "RetryFailedChanges")]

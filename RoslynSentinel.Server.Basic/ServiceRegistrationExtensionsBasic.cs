@@ -148,16 +148,19 @@ public static class RoslynSentinelServiceExtensionsBasic
         {
             services.TryAddSingleton<WorkspaceReadNavigationImpl>();
             services.TryAddSingleton<WorkspaceReadNavigationTools>();
+            services.AddSingleton<WorkspaceFileEditImpl>();
             services.AddSingleton<WorkspaceFileEditTools>();
             mcpBuilder.WithSentinelTools<WorkspaceFileEditTools>();
         }
         if (activeToolClasses.Contains("WorkspaceBuildTestTools"))
         {
+            services.AddSingleton<WorkspaceBuildTestImpl>();
             services.AddSingleton<WorkspaceBuildTestTools>();
             mcpBuilder.WithSentinelTools<WorkspaceBuildTestTools>();
         }
         if (activeToolClasses.Contains("WorkspaceProjectManagementTools"))
         {
+            services.AddSingleton<WorkspaceProjectManagementImpl>();
             services.AddSingleton<WorkspaceProjectManagementTools>();
             mcpBuilder.WithSentinelTools<WorkspaceProjectManagementTools>();
         }
@@ -169,6 +172,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
         if (activeToolClasses.Contains("WorkspaceHealthMiscTools"))
         {
+            services.AddSingleton<WorkspaceHealthMiscImpl>();
             services.AddSingleton<WorkspaceHealthMiscTools>();
             mcpBuilder.WithSentinelTools<WorkspaceHealthMiscTools>();
         }
@@ -181,11 +185,13 @@ public static class RoslynSentinelServiceExtensionsBasic
         // opt-in-able, neither requires "SymbolNavigationTools"/"Workspace" itself.
         if (activeToolClasses.Contains("SymbolNavigationTools"))
         {
+            services.AddSingleton<SymbolNavigationImpl>();
             services.AddSingleton<SymbolNavigationTools>();
             mcpBuilder.WithSentinelTools<SymbolNavigationTools>();
         }
         if (activeToolClasses.Contains("SymbolRelationshipTools"))
         {
+            services.AddSingleton<SymbolRelationshipImpl>();
             services.AddSingleton<SymbolRelationshipTools>();
             mcpBuilder.WithSentinelTools<SymbolRelationshipTools>();
         }
@@ -223,10 +229,13 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
         if (activeToolClasses.Contains("RefactoringTools"))
         {
+            services.AddSingleton<RefactoringSignatureImpl>();
             services.AddSingleton<RefactoringSignatureTools>();
             mcpBuilder.WithSentinelTools<RefactoringSignatureTools>();
+            services.AddSingleton<RefactoringStructuralImpl>();
             services.AddSingleton<RefactoringStructuralTools>();
             mcpBuilder.WithSentinelTools<RefactoringStructuralTools>();
+            services.AddSingleton<RefactoringExtractionDocsImpl>();
             services.AddSingleton<RefactoringExtractionDocsTools>();
             mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
         }
@@ -238,16 +247,19 @@ public static class RoslynSentinelServiceExtensionsBasic
         // registration (last one wins for GetRequiredService<T>, per DI container semantics).
         if (activeToolClasses.Contains("RefactoringSignatureTools"))
         {
+            services.TryAddSingleton<RefactoringSignatureImpl>();
             services.AddSingleton<RefactoringSignatureTools>();
             mcpBuilder.WithSentinelTools<RefactoringSignatureTools>();
         }
         if (activeToolClasses.Contains("RefactoringStructuralTools"))
         {
+            services.TryAddSingleton<RefactoringStructuralImpl>();
             services.AddSingleton<RefactoringStructuralTools>();
             mcpBuilder.WithSentinelTools<RefactoringStructuralTools>();
         }
         if (activeToolClasses.Contains("RefactoringExtractionDocsTools"))
         {
+            services.TryAddSingleton<RefactoringExtractionDocsImpl>();
             services.AddSingleton<RefactoringExtractionDocsTools>();
             mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
         }

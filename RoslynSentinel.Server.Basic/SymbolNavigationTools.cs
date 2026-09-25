@@ -11,13 +11,9 @@ public class SymbolNavigationTools
 {
     private readonly SymbolNavigationImpl _impl;
 
-    public SymbolNavigationTools(
-        SymbolNavigationEngine symbolNavigationEngine,
-        ImpactAnalyzer impactAnalyzer,
-        ISolutionProvider workspaceManager,
-        ILogger logger)
+    public SymbolNavigationTools(SymbolNavigationImpl impl)
     {
-        _impl = new SymbolNavigationImpl(symbolNavigationEngine, impactAnalyzer, workspaceManager, logger);
+        _impl = impl;
     }
 
     [McpServerTool(Name = "LocateSymbol", UseStructuredContent = false, OutputSchemaType = typeof(LocateSymbolResult))]

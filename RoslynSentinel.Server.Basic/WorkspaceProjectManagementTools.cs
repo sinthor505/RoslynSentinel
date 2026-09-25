@@ -11,12 +11,9 @@ public class WorkspaceProjectManagementTools
 {
     private readonly WorkspaceProjectManagementImpl _impl;
 
-    public WorkspaceProjectManagementTools(IWorkspaceManager workspaceManager, SolutionManagementEngine solutionManagementEngine,
-        DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine,
-        StructuralRefinementEngine structuralRefinementEngine, ILogger logger)
+    public WorkspaceProjectManagementTools(WorkspaceProjectManagementImpl impl)
     {
-        _impl = new WorkspaceProjectManagementImpl(workspaceManager, solutionManagementEngine, dependencyEngine,
-            projectConsistencyEngine, structuralRefinementEngine, logger);
+        _impl = impl;
     }
 
     [McpServerTool(Name = "ListSolutionItems")]

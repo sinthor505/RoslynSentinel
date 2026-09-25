@@ -14,15 +14,9 @@ public class RefactoringExtractionDocsTools
 {
     private readonly RefactoringExtractionDocsImpl _impl;
 
-    public RefactoringExtractionDocsTools(
-        RefactoringEngine refactoringEngine,
-        MsToolAugmentEngine msToolAugmentEngine,
-        SymbolNavigationEngine symbolNavigationEngine,
-        IWorkspaceManager workspaceManager,
-        ValidationEngine validationEngine,
-        ILogger logger)
+    public RefactoringExtractionDocsTools(RefactoringExtractionDocsImpl impl)
     {
-        _impl = new RefactoringExtractionDocsImpl(refactoringEngine, msToolAugmentEngine, symbolNavigationEngine, workspaceManager, validationEngine, logger);
+        _impl = impl;
     }
 
     [McpServerTool(Name = "UsingDirective")]

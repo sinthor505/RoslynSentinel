@@ -98,36 +98,9 @@ public class RefactoringStructuralTools
 {
     private readonly RefactoringStructuralImpl _impl;
 
-    public RefactoringStructuralTools(IWorkspaceManager workspaceManager)
+    public RefactoringStructuralTools(RefactoringStructuralImpl impl)
     {
-        var refactoringEngine = new RefactoringEngine(workspaceManager);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager);
-        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
-        var validationEngine = new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        var logger = NullLogger<RefactoringStructuralTools>.Instance;
-
-        _impl = new RefactoringStructuralImpl(refactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, logger);
-    }
-
-    public RefactoringStructuralTools(IWorkspaceManager workspaceManager, ILogger logger)
-    {
-        var refactoringEngine = new RefactoringEngine(workspaceManager);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager);
-        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
-        var validationEngine = new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-
-        _impl = new RefactoringStructuralImpl(refactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, logger);
-    }
-
-    public RefactoringStructuralTools(
-        RefactoringEngine refactoringEngine,
-        StructuralRefinementEngine structuralRefinementEngine,
-        SymbolNavigationEngine symbolNavigationEngine,
-        IWorkspaceManager workspaceManager,
-        ValidationEngine validationEngine,
-        ILogger logger)
-    {
-        _impl = new RefactoringStructuralImpl(refactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, logger);
+        _impl = impl;
     }
 
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: required-param set depends entirely on 'operation' -> add
