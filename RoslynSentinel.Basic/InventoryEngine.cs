@@ -7,16 +7,16 @@ namespace RoslynSentinel.Basic;
 
 public class InventoryEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<InventoryEngine> _logger;
 
-    public InventoryEngine(ISolutionProvider workspaceManager)
+    public InventoryEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
         _logger = NullLogger<InventoryEngine>.Instance;
     }
 
-    public InventoryEngine(ISolutionProvider workspaceManager, ILogger<InventoryEngine> logger)
+    public InventoryEngine(IWorkspaceManager workspaceManager, ILogger<InventoryEngine> logger)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
@@ -24,7 +24,7 @@ public class InventoryEngine
 
     public async Task<CodeInventoryReport> GetCodeInventoryAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
         // Fallback: tolerate path/link differences by matching on file name + full-path equality (case-insensitive).
@@ -59,7 +59,7 @@ public class InventoryEngine
 
     public async Task<CodeInventoryReport> GetCodeInventoryAsync2(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
         // Fallback: tolerate path/link differences by matching on file name + full-path equality (case-insensitive).

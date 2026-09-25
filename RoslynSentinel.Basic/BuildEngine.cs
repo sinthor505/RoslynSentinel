@@ -131,14 +131,15 @@ public class BuildEngine
     public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50)
     {
         var start = DateTime.UtcNow;
-        var solutionPath = _workspaceManager.CurrentSolution?.FilePath ?? _workspaceManager.SolutionPath;
+        var currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var solutionPath = currentSolution?.FilePath ?? _workspaceManager.SolutionPath;
         if (string.IsNullOrEmpty(solutionPath))
         {
             return new EngineResultWrapper<BuildResult>(EngineOutcome.InvalidInput,
                 error: new EngineError("No solution is loaded. Call LoadSolution before running a full build."));
         }
 
-        var projectNames = _workspaceManager.CurrentSolution?.Projects.Select(p => p.Name).ToList() ?? [];
+        var projectNames = currentSolution?.Projects.Select(p => p.Name).ToList() ?? [];
         if (projectNames.Count == 0)
         {
             return EngineResultWrapper<BuildResult>.Failure(
