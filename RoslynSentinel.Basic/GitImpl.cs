@@ -93,7 +93,6 @@ public record GitDiffResult : GitResult
         get; set;
     }
 
-
     // Added by AddMember (expected - used for diagnostics)
     public string? Warning
     {
@@ -112,7 +111,6 @@ public record GitShowResult : GitResult
     {
         get; set;
     }
-
 
     // Added by AddMember (expected - used for diagnostics)
     public string? Warning
@@ -439,7 +437,6 @@ public class GitImpl : IGitOperations
         }
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Best-effort check that <paramref name="text"/> decoded cleanly as UTF-8, for surfacing a
@@ -488,7 +485,6 @@ public class GitImpl : IGitOperations
 
         return null;
     }
-
 
     private static string StatusLabel(char code) => code switch
     {
@@ -660,11 +656,11 @@ public class GitImpl : IGitOperations
             }
             else if (target != "working")
             {
-                // Show what a specific commit changed (diff against its parent), falling back to
-                // the empty tree when the commit has no parent (e.g. a repo's very first commit) -
-                // `<target>^` does not resolve there and git would otherwise fail the whole call.
-                var diffParentRaw = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"{target}^"], cancellationToken);
-                args.Add(diffParentRaw.ExitCode == 0 ? $"{target}^" : EmptyTreeHash);
+                // Diff the working tree against an arbitrary single ref (HEAD, a branch, a SHA) -
+                // equivalent to `git diff <target>`. This is NOT "what did this commit change"
+                // (that is ShowAsync's job, diffing the commit against its parent) - conflating the
+                // two here previously made `target: "HEAD"` return the last commit's diff instead of
+                // the working tree's uncommitted changes against HEAD.
                 args.Add(target);
             }
 

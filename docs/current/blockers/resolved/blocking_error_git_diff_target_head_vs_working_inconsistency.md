@@ -1,9 +1,10 @@
 # `Git` tool's `diff` operation returns a false-empty result for `target: "HEAD"` when real changes exist
 
-**Status:** CONFIRMED against real shell `git`, not yet fixed. (Narrowed after direct verification --
-see "Verification against real git" below; an earlier draft of this doc also flagged a second,
-apparent `target: "working"` staleness that direct verification DISPROVED -- see that section for why
-it was a false lead, not a real defect.)
+**Status:** RESOLVED 2026-09-25. Root cause traced and fixed in `RoslynSentinel.Basic/GitImpl.cs`'s
+`DiffAsync` method -- see "Fix applied" below. (Narrowed after direct verification -- see
+"Verification against real git" below; an earlier draft of this doc also flagged a second, apparent
+`target: "working"` staleness that direct verification DISPROVED -- see that section for why it was a
+false lead, not a real defect.)
 
 ## What was being attempted
 
@@ -72,27 +73,25 @@ Results:
   `target: "working"` was right to show nothing. There were only ever two diff results to explain
   (steps 2 and 3), not three, and only step 2 (`target: "HEAD"`) is a real defect.
 
-## Root cause -- NOT YET TRACED TO SOURCE
+## Root cause -- CONFIRMED against source
 
-I did not read the `Git` tool's implementation to find the code path responsible for `target: "HEAD"`
-returning an empty/wrong diff. Nothing below should be read as a confirmed cause -- both are
-hypotheses pending verification against source:
+Traced to `RoslynSentinel.Basic/GitImpl.cs`'s `DiffAsync` method. It shared a code path with the
+unrelated `ShowAsync` method: for any non-"working" target, both resolved `<target>^` (the target's
+parent commit) via `rev-parse --verify --quiet`, falling back to `EmptyTreeHash` when the target has
+no parent, then diffed `<target>^..<target>`. That logic is correct for `ShowAsync` (implements
+`git show <target>`, i.e. "what did this commit change"), but `DiffAsync` should implement
+`git diff <target>` (i.e. "how does the working tree differ from this ref") -- a single-ref diff, not
+a diff between the ref and its parent. With `target: "HEAD"`, this made `DiffAsync` return
+`HEAD^..HEAD` (the last commit's own diff) instead of the working tree's uncommitted changes against
+HEAD -- which is empty whenever the working tree happens to match what the last commit already
+introduced, matching the false-empty symptom in step 2.
 
-- **(a) `target: "HEAD"` diffed against the index, not the working tree.** The empty result in step 2
-  is consistent with a `--cached`-style comparison (working-tree-vs-index, where the index still
-  matches HEAD because nothing was staged) being mislabeled or miswired as a HEAD-vs-working-tree
-  comparison. Real `git diff HEAD` (no `--cached`) returns the same content as `target: "working"`,
-  so if the MCP tool's `target: "HEAD"` path is intended to reproduce `git diff HEAD`, it is
-  currently doing something else -- most plausibly comparing against the index/last-stage rather than
-  the working tree.
-- **(b) `status`'s 10-entry cap has no pagination parameter.** Separately from the `diff` defect,
-  `status` truncates to 10 of 115 entries with `isTruncated: true` and no `offset`/`limit`/`page`
-  parameter on the tool's schema to retrieve the rest. The file WAS correctly counted in
-  `totalUnstagedCount`, so this is a real gap (no way to enumerate a large dirty tree in bounded
-  calls) rather than incorrect data, but it still meant `status` alone could not be used to build a
-  complete, accurate file list for scoping a targeted commit.
+Hypothesis (a) above (index vs. working tree) was refuted -- the actual cause was a wrong commit
+range, not a wrong tree-side comparison.
 
-Both are unconfirmed as to exact code path; the implementation has not been read.
+Hypothesis (b) (`status`'s 10-entry pagination cap) remains a real, separate, still-open gap -- not
+addressed by this fix. Tracked as a follow-up rather than re-opening this doc; see "What would resolve
+this" below.
 
 ## Why this blocks (per CLAUDE.md failure doctrine)
 
@@ -112,21 +111,23 @@ alone could not build a complete file list for a 115-file dirty tree. Together t
 scoping `git commit` to exactly the files this session touched, so no staging or committing was
 attempted before this doc was written, per the doctrine above.
 
-## What would resolve this
+## Fix applied
 
-- Trace the `Git` tool's `diff` implementation to find what `target: "HEAD"` actually compares against
-  (working tree vs. index vs. a cached blob) and why it differs from `target: "working"` and from real
-  `git diff HEAD` -- confirm or refute hypothesis (a) above against source.
-- Fix `target: "HEAD"` so it agrees with `target: "working"` and with real `git diff HEAD` for the same
-  file at the same point in time (once confirmed, `target: "working"` needs no change -- it was
-  correct in every case checked here).
-- Add pagination (`offset`/`limit`, or equivalent) to `Git(operation: "status")` so a dirty tree larger
-  than 10 files can be fully enumerated in a bounded number of calls, and document how to page through
-  `isTruncated: true` results -- currently no such parameter exists on the tool's schema.
+`DiffAsync`'s non-"working" branch (previously resolving `<target>^` and diffing the parent-to-target
+range, copied from `ShowAsync`) now passes `target` straight through as a single ref, matching
+`git diff <target>` semantics. Verified live post-rebuild: `Git(operation: "diff", target: "HEAD",
+paths: "RoslynSentinel.Basic/GitImpl.cs")` returns the real, non-empty working-tree-vs-HEAD diff
+(byte-consistent with the change history in this doc), no longer an empty result. Full solution build
+was 0 errors / 0 warnings both before and after live verification.
+
+Still open, not addressed by this fix (tracked separately, not blocking):
+- `status`'s 10-entry cap with no pagination parameter (hypothesis (b) above) -- a dirty tree larger
+  than 10 files still cannot be fully enumerated in one or a few bounded calls.
 - Add a regression test that: writes a change to a tracked file via a mutating MCP tool
   (`ReplaceSnippet` or similar), then calls `Git(operation: "diff", target: "HEAD", ...)` and asserts
   it returns a non-empty diff matching the file's actual changes (a real `git diff HEAD` run in the
-  test's temp repo is a good oracle) -- this would have caught the defect found here directly.
+  test's temp repo is a good oracle) -- this would have caught the defect found here directly, and
+  would catch a regression of it.
 
 ## Related
 
