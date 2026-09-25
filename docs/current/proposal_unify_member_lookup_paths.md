@@ -1,5 +1,17 @@
 # Unify Member's divergent declaration-kind dispatch tables (design notes)
 
+**Superseded 2026-09-24 by `docs/current/proposal_universal_symbol_resolver.md`.** That document
+folds this file's dispatch-table analysis into its own migration section (6) as the narrower half of
+a wider fragmentation problem: the five `SymbolNavigationEngine.cs` symbol-lookup resolvers this file
+did not originally cover turned out to share the same root cause (independently-maintained "which
+declaration kinds/candidates does this code recognize" logic, drifting apart because nothing keeps
+the copies in sync) and produced a fourth same-symptom incident
+(`docs/current/blockers/blocking_error_member_replace_interface_notfound.md`) after this file was
+written. This file is kept in place, unedited below, because
+`docs/current/blockers/blocking_error_member_replace_interface_notfound.md` and
+`docs/current/blockers/resolved/blocking_error_member_remove_false_not_found.md` both cite it by
+filename; read `proposal_universal_symbol_resolver.md` for the current, superseding design.
+
 ## Motivation
 
 Three separate `Member`-family incidents have now produced the identical symptom - `remove` (or a
@@ -120,6 +132,7 @@ Likely worth doing, moderate cost:
 
 ## Status
 
-Design proposal only - not yet implemented. Raised directly by
-`blocking_error_member_remove_false_not_found.md`'s investigation surfacing this table comparison;
-not itself required to close that blocker (which had a distinct, already-applied one-line fix).
+Superseded - see the notice at the top of this file. Left otherwise unedited as a historical record;
+do not implement this file's proposed fix in isolation - implement it as part of
+`proposal_universal_symbol_resolver.md`'s migration section (6) instead, so the dispatch-table
+unification and the resolver unification land as one coherent pass rather than two overlapping ones.

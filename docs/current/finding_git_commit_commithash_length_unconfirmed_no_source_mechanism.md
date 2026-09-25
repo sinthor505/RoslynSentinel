@@ -150,6 +150,66 @@ This investigation cannot distinguish between these without a live, byte-verifie
 "What unblocks it"). The practical takeaway either way: **the tool should not rely on a human or
 model eyeballing a hash to catch this class of defect** -- see "Recommended mitigation" below.
 
+## Third occurrence (2026-09-25), and a new variable: a different agent, not a transcription by the reader
+
+A background subagent (dispatched for "Sweep batch 16: migrate AsyncifyTools to IWorkspaceReader")
+independently reported the identical symptom in its final report text: it quoted a commit hash as
+41 characters, cross-checked it against a fresh `Git(operation: "log")` call on the same commit
+(getting the same 41-character string both times, "not a transient tool glitch" by its own
+reasoning), and declined to treat it as a blocker per this doc's own precedent.
+
+This occurrence differs from all 4 originals in one respect worth recording: the earlier instances
+were this session's own hand-transcription of prior conversation text. This one is a *different*
+agent instance transcribing a tool result into its own final-report prose, then handing that prose
+to the parent session -- so "the same single agent mis-transcribing repeatedly" is no longer a
+candidate explanation; it would have to be "hand-transcription of a 40-char hex string into prose is
+unreliable in general, independent of which agent does it," which is actually a *stronger*, more
+mundane explanation than a serialization defect, not a weaker one.
+
+The parent session re-verified independently, twice, using methods that do not involve prose
+transcription:
+1. A fresh `Git(operation: "log", paths: ["RoslynSentinel.Server.Advanced/AsyncifyTools.cs"])` call
+   returned `"hash":"75ed7e94a26dcf8ffe6d09562822c38c4e6c51bf"` verbatim in the JSON tool result
+   (not retyped by the parent agent -- read directly from the structured response).
+2. That exact string, copied byte-for-byte (not retyped) into `printf '%s' "<hash>" | wc -c` via the
+   Bash tool, counted **40** characters.
+
+This is consistent with the doc's existing lean: **when a hash is checked by counting bytes
+programmatically instead of visually reading/repeating hex digits, it is always 40.** Every
+"41-character" report to date, across 3 separate agent contexts now (this session twice, one
+subagent), has been a claim made by an agent reading/transcribing the digits itself, never a
+byte-counted measurement. No occurrence has yet survived a `wc -c`-style check. This raises the
+prior for "human/agent hex-transcription is the actual failure mode, not the Git tool" without fully
+closing the file -- the recommended mitigation below (an assertion at construction time) would
+settle this permanently regardless, and remains worth doing since it is cheap either way.
+
+## Fourth, fifth, and sixth occurrences (2026-09-24/25), all resolved to 40 on independent check
+
+Three more background subagents, dispatched for the `design_read_chokepoint.md` sweep (batches 35
+"LogicOptimizationEngine", 37 "SecurityAndSafetyEngine", 38 "TestingEngine"), each independently
+reported their own commit hash as 41 characters in their final-report prose. In every one of the 3
+cases, the parent session re-verified via the same non-prose method as the third occurrence above --
+a fresh `Git(operation: "log", paths: "<file>")` call read directly from the structured JSON
+response (not retyped), followed by `printf '%s' "<hash>" | wc -c` on that exact byte-for-byte
+string -- and every one measured **40** characters, matching the JSON verbatim:
+
+- Batch 35: reported as 41; `4163960a26ccad048e144e632d4577e756c896c6` measured 40.
+- Batch 37: reported as 41; `9e576430b9297c0dbad71bbdc343d790ee89de5a` measured 40.
+- Batch 38: reported as 41; `d82f44f6b34d45f9683159e966ef8840f87c87ea` measured 40.
+
+This makes it 6 for 6: every "41-character" report to date, across at least 4 separate agent
+contexts (this session's own hand-transcription twice, plus 4 different background subagents), has
+failed to survive a byte-counted check -- and every byte-counted check has landed on exactly 40. No
+occurrence has ever produced a hash that measured non-40 when counted programmatically rather than
+read/repeated by an agent. Given this density of consistent negative results, the practical
+conclusion (short of the assertion-at-construction-time mitigation below actually shipping and
+firing) is that this is an agent-transcription artifact of reading/quoting a 40-character hex string
+in prose, not a tool-side defect -- the status line above is now stale in this respect and could
+reasonably be tightened, but is left as-is pending that mitigation actually landing, per this doc's
+own point 3 under "What unblocks it": the assertion is what would settle this permanently, and
+until it ships and is observed never firing, "confirmed transcription artifact" is a hair stronger
+a claim than the evidence technically requires.
+
 ## What unblocks it
 
 Any of the following would resolve the open question:
