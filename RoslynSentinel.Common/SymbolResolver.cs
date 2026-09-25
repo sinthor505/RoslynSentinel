@@ -4,16 +4,16 @@ namespace RoslynSentinel.Common;
 
 public class SymbolResolver
 {
-    private readonly ISolutionProvider _solutionProvider;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public SymbolResolver(ISolutionProvider solutionProvider)
+    public SymbolResolver(IWorkspaceManager workspaceManager)
     {
-        _solutionProvider = solutionProvider;
+        _workspaceManager = workspaceManager;
     }
 
     public async Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken)
     {
-        var solution = await _solutionProvider.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == handle.ProjectName);
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(cancellationToken);
@@ -24,7 +24,7 @@ public class SymbolResolver
 
     public async Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default)
     {
-        var solution = await _solutionProvider.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(cancellationToken);
