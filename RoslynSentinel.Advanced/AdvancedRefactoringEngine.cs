@@ -4,16 +4,17 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using RoslynSentinel.Common;
 namespace RoslynSentinel.Advanced;
 
 public class AdvancedRefactoringEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<AdvancedRefactoringEngine> _logger;
     private readonly SentinelConfiguration _config;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
 
-    public AdvancedRefactoringEngine(ISolutionProvider workspaceManager)
+    public AdvancedRefactoringEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
         _logger = new NullLogger<AdvancedRefactoringEngine>();
@@ -21,7 +22,7 @@ public class AdvancedRefactoringEngine
         _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
     }
 
-    public AdvancedRefactoringEngine(ISolutionProvider workspaceManager, ILogger<AdvancedRefactoringEngine> logger)
+    public AdvancedRefactoringEngine(IWorkspaceManager workspaceManager, ILogger<AdvancedRefactoringEngine> logger)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
@@ -29,7 +30,7 @@ public class AdvancedRefactoringEngine
         _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
     }
 
-    public AdvancedRefactoringEngine(ISolutionProvider workspaceManager, ILogger<AdvancedRefactoringEngine> logger, SentinelConfiguration config)
+    public AdvancedRefactoringEngine(IWorkspaceManager workspaceManager, ILogger<AdvancedRefactoringEngine> logger, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
@@ -37,7 +38,7 @@ public class AdvancedRefactoringEngine
         _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
     }
 
-    public AdvancedRefactoringEngine(ISolutionProvider workspaceManager, SymbolNavigationEngine symbolNavigationEngine, ILogger<AdvancedRefactoringEngine> logger, SentinelConfiguration config)
+    public AdvancedRefactoringEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine, ILogger<AdvancedRefactoringEngine> logger, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
@@ -47,7 +48,7 @@ public class AdvancedRefactoringEngine
 
     public async Task<DocumentEditResult> ReplaceStringConcatWithInterpolationAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -127,7 +128,7 @@ public class AdvancedRefactoringEngine
 
     public async Task<DocumentEditResult> OptimizeTaskWaitAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -346,7 +347,7 @@ public class AdvancedRefactoringEngine
 
     public async Task<Dictionary<FilePathWrapper, string>> ExtractServiceFromControllerAsync(FilePathWrapper filePath, string controllerName, string serviceName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var controller = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == controllerName)) ?? throw new InvalidOperationException("Controller not found.");
@@ -389,7 +390,7 @@ public class AdvancedRefactoringEngine
 
     public async Task<DocumentEditResult> SyncInterfaceToImplementationAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         // Find the class document
         var classDocument = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (classDocument == null)
@@ -566,7 +567,7 @@ public class AdvancedRefactoringEngine
             };
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -700,7 +701,7 @@ public class AdvancedRefactoringEngine
             };
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
