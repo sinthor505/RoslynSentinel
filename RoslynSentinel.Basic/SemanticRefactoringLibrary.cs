@@ -3,13 +3,15 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Basic;
 
 public class SemanticRefactoringLibrary
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public SemanticRefactoringLibrary(ISolutionProvider workspaceManager)
+    public SemanticRefactoringLibrary(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -47,7 +49,7 @@ public class SemanticRefactoringLibrary
     /// </summary>
     public async Task<string> InlineVariableAsync(FilePathWrapper filePath, string variableName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -182,7 +184,7 @@ public class SemanticRefactoringLibrary
     /// </summary>
     public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePathWrapper filePath, string className, string propertyName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -232,7 +234,7 @@ public class SemanticRefactoringLibrary
     /// </summary>
     public async Task<DocumentEditResult> WrapInUsingAsync(FilePathWrapper filePath, int startLine, int endLine, string disposalName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -280,7 +282,7 @@ public class SemanticRefactoringLibrary
     /// </summary>
     public async Task<DocumentEditResult> WrapInUsingAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, string disposalName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
