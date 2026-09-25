@@ -4,13 +4,15 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public class SecurityEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public SecurityEngine(ISolutionProvider workspaceManager)
+    public SecurityEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -24,7 +26,7 @@ public class SecurityEngine
 
     public async Task<List<SecurityIssueReport>> AnalyzeSecurityAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
             ?? solution.Projects.SelectMany(p => p.Documents)
@@ -181,7 +183,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> FindHardcodedPathsAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
@@ -243,7 +245,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> CheckForSqlInjectionAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
@@ -413,7 +415,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> FindReDoSPatternsAsync(
         FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
             ?? solution.Projects.SelectMany(p => p.Documents)
@@ -524,7 +526,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> FindUnvalidatedRegexSourceAsync(
         FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var issues = new List<SecurityIssueReport>();
 
         var normalizedPath = Path.GetFullPath(filePath);
@@ -672,7 +674,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> FindRegexNewInLoopAsync(
         FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var issues = new List<SecurityIssueReport>();
 
         var normalizedPath = Path.GetFullPath(filePath);
@@ -741,7 +743,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> DetectJsonAntiPatternsAsync(
         FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
             ?? solution.Projects.SelectMany(p => p.Documents)
