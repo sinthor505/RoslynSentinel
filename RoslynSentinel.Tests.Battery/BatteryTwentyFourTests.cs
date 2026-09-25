@@ -1072,6 +1072,47 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result.IsSuccess, Is.True, "An override with no callers and nothing overriding it in turn must succeed under the default precheck.");
     }
 
+    // Regression coverage for docs/current/blockers/blocking_error_member_replace_interface_notfound.md:
+    // ResolveMemberByNameOrSnippet used to unconditionally exclude every interface-body member from
+    // its candidate set, so replace/remove could never target an interface's own property or method
+    // declaration (only Member(view), via a different unfiltered lookup path, could see them). Fixed
+    // via excludeInterfaceMembers: false at these two call sites, plus an interface-vs-implementer
+    // disambiguation rule for when a same-named implementer is also in scope (see
+    // RemoveMember_HasImplementationOnly_SkipPrecheckTrue_BypassesToolLevelCheck above, which exercises
+    // that disambiguation from the other direction: same name, implementer must win over the interface).
+
+    [Test]
+    public async Task RemoveMember_InterfaceProperty_NoImplementerInFile_Succeeds()
+    {
+        SetSource("""
+            namespace TestProj;
+
+            public interface IGreeter
+            {
+                string Greeting { get; }
+            }
+            """, "IGreeter.cs");
+
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "IGreeter.cs", MemberAction.remove, memberName: "Greeting");
+        Assert.That(result.IsSuccess, Is.True, "Member(remove) must be able to target a property declared directly on an interface.");
+    }
+
+    [Test]
+    public async Task ReplaceMember_InterfaceMethod_NoImplementerInFile_Succeeds()
+    {
+        SetSource("""
+            namespace TestProj;
+
+            public interface IGreeter
+            {
+                string Greet();
+            }
+            """, "IGreeter.cs");
+
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "IGreeter.cs", MemberAction.replace, memberName: "Greet", newMemberSource: "string Greet(string name);");
+        Assert.That(result.IsSuccess, Is.True, "Member(replace) must be able to target a method declared directly on an interface.");
+    }
+
     // --- ReplaceConstructorWithFactory ---
 
     [Test]

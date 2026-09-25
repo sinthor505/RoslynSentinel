@@ -43,11 +43,18 @@ shape already spec'd in the plan doc. Full plan also covers `RefactoringSignatur
 during this pass — check those too before assuming this TODO's scope is limited to
 `SyncTypeAndFilename`'s cluster.
 
-## `Member`'s three divergent declaration-kind dispatch tables — proposal only, not implemented
+## Symbol/member lookup fragmentation across five resolvers plus three dispatch tables — proposal only, not implemented
 
 **Found:** 2026-09-20, surfaced while root-causing the third `Member(remove)` "false not found"
-incident (`blockers/resolved/blocking_error_member_remove_false_not_found.md`). Full proposal:
-[proposal_unify_member_lookup_paths.md](proposal_unify_member_lookup_paths.md).
+incident (`blockers/resolved/blocking_error_member_remove_false_not_found.md`). Broadened
+2026-09-24 after a fourth same-symptom incident
+(`blockers/resolved/blocking_error_member_replace_interface_notfound.md`, fixed 2026-09-25) traced to
+the same fragmentation
+disease one level down, in `SymbolNavigationEngine.cs`'s five symbol-lookup resolvers rather than
+just the three declaration-kind dispatch tables originally found here. Full, current proposal:
+[proposal_universal_symbol_resolver.md](proposal_universal_symbol_resolver.md) — supersedes
+[proposal_unify_member_lookup_paths.md](proposal_unify_member_lookup_paths.md), which is kept in
+place with a superseded notice since two resolved blockers cite it by filename.
 
 **What:** `GetMemberName` (`RefactoringEngine.cs:5292-5314`), `GetContainerMembersAsync`'s inline
 switch (`RefactoringEngine.cs:5570-5578`), and `FindImplementationsForMemberAsync`'s dispatch
@@ -55,12 +62,18 @@ switch (`RefactoringEngine.cs:5570-5578`), and `FindImplementationsForMemberAsyn
 `MemberDeclarationSyntax` kinds they recognize, and all three currently disagree with each other
 (different kind sets, different fallback behavior for an unrecognized kind). `e120b68` fixed one
 gap in one of the three (fields, in the third table); nothing stops the same shape of bug
-recurring in a kind/table combination not yet hit by a live repro.
+recurring in a kind/table combination not yet hit by a live repro. Separately,
+`SymbolNavigationEngine.cs`'s five symbol-lookup resolvers (`LocateSymbolAsync`,
+`ResolveSymbolByNameAsync`, `ResolveMemberByNameOrSnippet`, `ResolveMemberOrEnumMemberByNameOrSnippet`,
+`ResolveTypeByNameOrSnippet`) each maintain their own candidate-collection and disambiguation logic;
+the interface-member incident above traced directly to two of these five disagreeing about whether
+interface-body members belong in the candidate set at all.
 
-**Suggested approach:** extract one shared `DescribeMemberDeclaration`/`GetDeclaredSymbolForMember`
-helper into `RefactoringToolHelpers.cs` and migrate all three call sites onto it — see the proposal
-doc for the exact signature, open questions (should the shared default throw or return null?), and
-regression-test plan. Not started; a refactor, not a quick patch.
+**Suggested approach:** see `proposal_universal_symbol_resolver.md` for the full design — a single
+`ResolveCandidates` query replacing the three syntax-only resolvers, a `CandidateKind` enum, a
+separate opt-in semantic layer, and a staged obsolete-then-sweep migration folding in the
+dispatch-table unification (this section's original scope) as part of the same pass. Not started; a
+multi-session refactor, not a quick patch.
 
 ## `Member(replace)` sub-findings left open by the blank-line/newline fix (2026-09-18)
 

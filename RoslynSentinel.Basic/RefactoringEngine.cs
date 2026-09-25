@@ -1256,6 +1256,9 @@ public class RefactoringEngine
 
     public async Task<DocumentEditResult> ReplaceMemberAsync(FilePathWrapper filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
+        // excludeInterfaceMembers: false -- replace must be able to target an interface's own
+        // member declaration (e.g. ISolutionProvider.CurrentSolution), not just implementers.
+        // See docs/current/blockers/blocking_error_member_replace_interface_notfound.md.
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -1283,7 +1286,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? member;
         try
         {
-            member = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
+            member = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter, excludeInterfaceMembers: false);
         }
         catch (InvalidOperationException ex)
         {
@@ -1555,6 +1558,8 @@ public class RefactoringEngine
 
     public async Task<DocumentEditResult> RemoveMemberAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
+        // excludeInterfaceMembers: false -- remove must be able to target an interface's own
+        // member declaration, not just implementers. Same rationale as ReplaceMemberAsync above.
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -1582,7 +1587,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? member;
         try
         {
-            member = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
+            member = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter, excludeInterfaceMembers: false);
         }
         catch (InvalidOperationException ex)
         {

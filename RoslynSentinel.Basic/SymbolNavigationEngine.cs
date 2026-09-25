@@ -2288,9 +2288,9 @@ public class SymbolNavigationEngine
     /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
     /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildMemberHint).
     /// </summary>
-    public MemberDeclarationSyntax? ResolveMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, Func<MemberDeclarationSyntax, bool>? extraFilter = null)
+    public MemberDeclarationSyntax? ResolveMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, Func<MemberDeclarationSyntax, bool>? extraFilter = null, bool excludeInterfaceMembers = true)
     {
-        var candidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax)).Where(m => extraFilter == null || extraFilter(m)).ToList();
+        var candidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName).Where(m => !excludeInterfaceMembers || m.Parent is not InterfaceDeclarationSyntax).Where(m => extraFilter == null || extraFilter(m)).ToList();
         // A type's own name and its constructor's name are identical (both read from
         // ClassDeclarationSyntax/StructDeclarationSyntax.Identifier and
         // ConstructorDeclarationSyntax.Identifier), so "OrderService" matches both the class
@@ -2302,6 +2302,17 @@ public class SymbolNavigationEngine
         if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
         {
             candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
+        }
+
+        // When excludeInterfaceMembers is false, an interface and its implementer can both
+        // contribute a same-named candidate (e.g. IGreeter.Greet() and Greeter.Greet() in the
+        // same file) with nothing to tell them apart by name alone. Prefer the implementer, the
+        // same way the constructor-vs-type check above prefers the more specific member over the
+        // type declaration -> a caller resolving "Greet" almost always means the concrete member,
+        // not the interface's abstract declaration of it.
+        if (candidates.Count > 1 && candidates.Any(c => c.Parent is InterfaceDeclarationSyntax) && candidates.Any(c => c.Parent is not InterfaceDeclarationSyntax))
+        {
+            candidates = candidates.Where(c => c.Parent is not InterfaceDeclarationSyntax).ToList();
         }
 
         if (contextSnippet == null || candidates.Count <= 1)
@@ -2352,15 +2363,23 @@ public class SymbolNavigationEngine
     // and is used only by those three methods -> other tools (ReplaceMember, ModifyModifier, etc.)
     // keep using ResolveMemberByNameOrSnippet as-is, since they need MemberDeclarationSyntax-only
     // APIs (e.g. .Modifiers) that an enum member does not have.
-    public SyntaxNode? ResolveMemberOrEnumMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName = null)
+    public SyntaxNode? ResolveMemberOrEnumMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName = null, bool excludeInterfaceMembers = true)
     {
         var candidates = new List<SyntaxNode>();
-        candidates.AddRange(root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax)));
+        candidates.AddRange(root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName && (!excludeInterfaceMembers || m.Parent is not InterfaceDeclarationSyntax)));
         candidates.AddRange(root.DescendantNodes().OfType<EnumMemberDeclarationSyntax>().Where(m => m.Identifier.Text == memberName));
 
         if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
         {
             candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
+        }
+
+        // Same rationale as ResolveMemberByNameOrSnippet's equivalent check: with
+        // excludeInterfaceMembers false, an interface and its implementer can both match the same
+        // name with nothing to disambiguate by name alone -> prefer the implementer.
+        if (candidates.Count > 1 && candidates.Any(c => c.Parent is InterfaceDeclarationSyntax) && candidates.Any(c => c.Parent is not InterfaceDeclarationSyntax))
+        {
+            candidates = candidates.Where(c => c.Parent is not InterfaceDeclarationSyntax).ToList();
         }
 
         // Sibling types can declare members with byte-identical text (e.g. two records each with
