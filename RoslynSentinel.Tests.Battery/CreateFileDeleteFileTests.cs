@@ -423,13 +423,13 @@ public class CreateFileDeleteFileTests
         var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var refactoringTools = new RefactoringStructuralTools(
+        var refactoringTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
             refactoringEngine,
             structuralRefinementEngine,
             symbolNavigationEngine,
             workspaceManager,
             validationEngine,
-            NullLogger<RefactoringStructuralTools>.Instance);
+            NullLogger<RefactoringStructuralImpl>.Instance));
 
         var existingProjectDir = Path.GetDirectoryName(Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).First())!;
         var newFile = Path.Combine(existingProjectDir, "Populated.cs");

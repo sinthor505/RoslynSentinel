@@ -60,13 +60,13 @@ public class ModifyBaseTypeBatchTests
         _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(
             _workspaceManager);
-        _refactoringStructuralTools = new RefactoringStructuralTools(
+        _refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
             _refactoringEngine,
             _structuralRefinementEngine,
             _symbolNavigationEngine,
             _workspaceManager,
             _validationEngine,
-            NullLogger<RefactoringStructuralTools>.Instance);
+            NullLogger<RefactoringStructuralImpl>.Instance));
     }
 
     [TearDown]

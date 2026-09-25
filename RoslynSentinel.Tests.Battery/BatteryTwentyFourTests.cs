@@ -128,26 +128,26 @@ public enum Status { Active = 1, Pending = 2 }
         _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
         _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
         _generationTools = new GenerationTools(_workspaceManager, NullLogger<GenerationTools>.Instance);
-        _refactoringStructuralTools = new RefactoringStructuralTools(
+        _refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
             _refactoringEngine,
             _structuralRefinementEngine,
             _symbolNavigationEngine,
             _workspaceManager,
             _validationEngine,
-            NullLogger<RefactoringStructuralTools>.Instance);
-        _refactoringSignatureTools = new RefactoringSignatureTools(
+            NullLogger<RefactoringStructuralImpl>.Instance));
+        _refactoringSignatureTools = new RefactoringSignatureTools(new RefactoringSignatureImpl(
             _refactoringEngine,
             _workspaceManager,
             _validationEngine,
             _symbolNavigationEngine,
-            NullLogger<RefactoringSignatureTools>.Instance);
-        _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(
+            NullLogger<RefactoringSignatureImpl>.Instance));
+        _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(new RefactoringExtractionDocsImpl(
             _refactoringEngine,
             _msToolAugmentEngine,
             _symbolNavigationEngine,
             _workspaceManager,
             _validationEngine,
-            NullLogger<RefactoringExtractionDocsTools>.Instance);
+            NullLogger<RefactoringExtractionDocsImpl>.Instance));
         _advTools = new AdvancedRefactoringTools(_workspaceManager);
     }
 

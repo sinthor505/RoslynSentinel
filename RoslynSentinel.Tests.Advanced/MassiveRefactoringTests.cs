@@ -34,8 +34,19 @@ public class MassiveRefactoringTests
         var logicOpt = new LogicOptimizationEngine(_workspaceManager);
         var modernization = new ModernizationEngine(_workspaceManager, config);
 
-        _refactoringStructuralTools = new RefactoringStructuralTools(_workspaceManager);
-        _refactoringSignatureTools = new RefactoringSignatureTools(_workspaceManager);
+        _refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
+            _refactoringEngine,
+            sr,
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            _workspaceManager,
+            new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            NullLogger<RefactoringStructuralImpl>.Instance));
+        _refactoringSignatureTools = new RefactoringSignatureTools(new RefactoringSignatureImpl(
+            _refactoringEngine,
+            _workspaceManager,
+            new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            NullLogger<RefactoringSignatureImpl>.Instance));
 
         // ExtractMembers / MoveType moved to AdvancedRefactoringTools in the server split.
         _advancedRefactoringTools = new AdvancedRefactoringTools(_workspaceManager);

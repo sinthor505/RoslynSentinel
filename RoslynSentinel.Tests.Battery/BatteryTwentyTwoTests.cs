@@ -135,18 +135,18 @@ public class OrderService : IOrderService
             _config, NullLogger<IntelligenceTools>.Instance);
 
         // Symbol-level tools moved to SentinelSymbolTools (Basic) in the server split.
-        _symbolRelationshipTools = new SymbolRelationshipTools(
+        _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(
             _discoveryEngine,
             _semanticSearchEngine,
             _symbolNavigationEngine,
             _workspaceManager,
-            NullLogger<SymbolRelationshipTools>.Instance);
+            NullLogger<SymbolRelationshipImpl>.Instance));
 
-        _symbolNavigationTools = new SymbolNavigationTools(
+        _symbolNavigationTools = new SymbolNavigationTools(new SymbolNavigationImpl(
             _symbolNavigationEngine,
             _impactAnalyzer,
             _workspaceManager,
-            NullLogger<SymbolNavigationTools>.Instance);
+            NullLogger<SymbolNavigationImpl>.Instance));
 
         // GetPublicApiSurface moved to ScanTools (Advanced).
         _scanTools = new ScanTools(

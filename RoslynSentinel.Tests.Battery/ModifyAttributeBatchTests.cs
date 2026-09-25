@@ -41,13 +41,13 @@ public class ModifyAttributeBatchTests
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
-        return new RefactoringStructuralTools(
+        return new RefactoringStructuralTools(new RefactoringStructuralImpl(
             new RefactoringEngine(workspaceManager, NullLogger<RefactoringEngine>.Instance, config),
             new StructuralRefinementEngine(workspaceManager, config),
             new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             workspaceManager,
             new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
-            NullLogger<RefactoringStructuralTools>.Instance);
+            NullLogger<RefactoringStructuralImpl>.Instance));
     }
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
