@@ -148,10 +148,8 @@ public static class ToolErrorMapper
 {
     /// <param name="ex">The caught exception.</param>
     /// <param name="workspaceManager">
-    /// Used as a fallback signal only: if a not-yet-migrated call site throws a plain
-    /// <see cref="InvalidOperationException"/> for a "no solution loaded" reason without using
-    /// <see cref="SolutionNotLoadedException"/>, checking <see cref="ISolutionProvider.CurrentSolution"/>
-    /// directly still catches it correctly instead of guessing from the exception type.
+    /// Unused by the classification itself (callers now throw <see cref="SolutionNotLoadedException"/>
+    /// directly instead of returning null from a chokepoint property); kept for call-site compatibility.
     /// </param>
     /// <param name="context">Short label prefixed to the message (e.g. "ApplyDiff diff apply for 'Foo.cs'").</param>
     public static ResultError ToResultError(Exception ex, ISolutionProvider workspaceManager, string context)
@@ -178,7 +176,7 @@ public static class ToolErrorMapper
             return (toolEx.ErrorCode, $"{context} failed: {toolEx.Message}");
         }
 
-        if (workspaceManager.CurrentSolution == null)
+        if (ex is SolutionNotLoadedException)
         {
             return (ToolErrorCode.SolutionNotLoaded, $"{context} failed: no solution is loaded. Call LoadSolution first. Data: {ex.Message}");
         }
