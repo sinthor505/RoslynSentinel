@@ -47,7 +47,11 @@ public class CommentingTools
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        if (_workspaceManager.CurrentSolution == null)
+        try
+        {
+            await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        }
+        catch (SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<CommentingResult>
             {
@@ -243,7 +247,7 @@ public class CommentingTools
         int commented = 0;
         int succeeded = 0;
         int failed = 0;
-        var baseSolution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var baseSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         var membersByFile = staleMembers
             .GroupBy(m => m.FilePath)

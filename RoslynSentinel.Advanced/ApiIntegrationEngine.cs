@@ -8,16 +8,16 @@ namespace RoslynSentinel.Advanced;
 
 public class ApiIntegrationEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public ApiIntegrationEngine(ISolutionProvider workspaceManager)
+    public ApiIntegrationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
 
     public async Task<DocumentEditResult> AddValidationToPocoAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

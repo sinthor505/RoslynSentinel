@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class ImmutabilityEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public ImmutabilityEngine(ISolutionProvider workspaceManager)
+    public ImmutabilityEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -18,7 +18,7 @@ public class ImmutabilityEngine
     /// </summary>
     public async Task<DocumentEditResult> MakeClassImmutableAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
