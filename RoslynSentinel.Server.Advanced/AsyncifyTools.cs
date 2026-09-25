@@ -84,8 +84,12 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<object>
             {
@@ -299,8 +303,12 @@ public class AsyncifyTools
         // RequestContext<CallToolRequestParams> requestParams = null,        
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<AsyncMigrationProgressReport>
             {
@@ -349,8 +357,12 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -421,8 +433,12 @@ public class AsyncifyTools
         // RequestContext<CallToolRequestParams> requestParams = null,        
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -535,8 +551,12 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
@@ -605,8 +625,12 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<UpliftCallersResult>
             {
@@ -679,8 +703,12 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -735,8 +763,12 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -788,8 +820,12 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -842,8 +878,12 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -909,8 +949,12 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -986,8 +1030,12 @@ public class AsyncifyTools
         int maxLoops = 5,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
-        if (solution == null)
+        Microsoft.CodeAnalysis.Solution solution;
+        try
+        {
+            solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RoslynSentinel.Common.SolutionNotLoadedException)
         {
             return new SentinelCallToolResult<AsyncifyLoopResult>
             {
