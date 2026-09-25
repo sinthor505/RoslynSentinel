@@ -35,6 +35,11 @@ public class OrientationBreakerFilterTests
     [SetUp]
     public async Task SetUp()
     {
+        // This fixture asserts exact trip-at-3 behavior against a real server; pin the threshold
+        // explicitly rather than relying on OrientationBreakerOptions' own default (10), which is
+        // tuned for interactive use.
+        OrientationBreakerOptions.Configure(["--orientation-breaker-threshold", "3"]);
+
         _fixture = new TestSolutionFixture();
 
         var clientToServer = new Pipe();

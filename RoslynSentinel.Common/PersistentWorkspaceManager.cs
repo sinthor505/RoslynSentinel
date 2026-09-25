@@ -148,7 +148,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         _ledger = ledger ?? new ScopedOperationLedgerEngine();
         _unrecoverableBreaker = new UnrecoverableCircuitBreaker(logger);
         _mutationBreaker = new MutationCircuitBreaker(logger);
-        _orientationBreaker = new OrientationCircuitBreaker(logger);
+        _orientationBreaker = new OrientationCircuitBreaker(logger, OrientationBreakerOptions.TripThreshold);
         _symbolResolver = new SymbolResolver(this);
         _debounceTimer = new Timer(OnDebounceTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 

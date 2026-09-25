@@ -6,18 +6,19 @@ public class OrientationCircuitBreaker : IAutomaticCircuitBreaker
 {
     private readonly ILogger _logger;
 
-    public OrientationCircuitBreaker(ILogger logger)
+    public OrientationCircuitBreaker(ILogger logger, int tripThreshold = 10)
     {
         _logger = logger;
+        _orientationBreakerTripThreshold = tripThreshold;
     }
 
-    private const int OrientationBreakerTripThreshold = 3;
+    private readonly int _orientationBreakerTripThreshold;
     private readonly Lock _orientationBreakerLock = new();
     private bool _orientationBreakerOpen;
     private int _consecutiveZeroMatchSearches;
 
     /// <summary>
-    /// Records a SearchSolutionText outcome; trips after OrientationBreakerTripThreshold
+    /// Records a SearchSolutionText outcome; trips after the configured trip threshold
     /// consecutive zero-match calls. Returns true only on the call that flips the breaker open.
     /// </summary>
     public bool RecordSearchOutcome(int matchCount)
@@ -31,7 +32,7 @@ public class OrientationCircuitBreaker : IAutomaticCircuitBreaker
             }
 
             _consecutiveZeroMatchSearches++;
-            if (_consecutiveZeroMatchSearches >= OrientationBreakerTripThreshold && !_orientationBreakerOpen)
+            if (_consecutiveZeroMatchSearches >= _orientationBreakerTripThreshold && !_orientationBreakerOpen)
             {
                 _orientationBreakerOpen = true;
                 _logger.LogWarning(

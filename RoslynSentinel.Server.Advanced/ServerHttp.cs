@@ -25,6 +25,7 @@ public class ServerHttp
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
         LlmOptions.Configure(args);
         ReplaceSnippetOptions.Configure(args);
+        OrientationBreakerOptions.Configure(args);
 
         if (ServerStartupHelpers.HandleListTools(
                 args,

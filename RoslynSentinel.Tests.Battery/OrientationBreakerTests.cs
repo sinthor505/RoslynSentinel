@@ -18,6 +18,14 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class OrientationBreakerTests
 {
+    // These tests assert exact trip-at-3 behavior; pin the threshold explicitly rather than
+    // relying on OrientationBreakerOptions' own default (10), which is tuned for interactive use.
+    [SetUp]
+    public void SetUp()
+    {
+        OrientationBreakerOptions.Configure(["--orientation-breaker-threshold", "3"]);
+    }
+
     [Test]
     public void RecordSearchOutcome_BelowThreshold_DoesNotTrip()
     {
