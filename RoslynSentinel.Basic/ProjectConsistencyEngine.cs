@@ -18,16 +18,16 @@ public record ProjectConsistencyIssue(
 /// </summary>
 public class ProjectConsistencyEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public ProjectConsistencyEngine(ISolutionProvider workspaceManager)
+    public ProjectConsistencyEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
 
     public async Task<List<ProjectConsistencyIssue>> CheckConsistencyAsync(CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var issues = new List<ProjectConsistencyIssue>();
 
         var projects = solution.Projects.ToList();
@@ -170,7 +170,7 @@ public class ProjectConsistencyEngine
     /// </summary>
     public async Task<List<ProjectFrameworkSummary>> GetProjectFrameworkSummaryAsync(CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<ProjectFrameworkSummary>();
 
         foreach (var project in solution.Projects)
