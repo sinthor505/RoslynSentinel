@@ -197,8 +197,8 @@ public static class RoslynSentinelServiceExtensionsBasic
         if (activeToolClasses.Contains("AdminTools"))
         {
             // Restricted/operator-only tool -> deliberately NOT included in AllModes (see
-            // ServerStdio.cs/ServerHttp.cs), so --mode alone can't reach it; only an explicit
-            // --mode=Admin or --include-tools=AdminTools activates it.
+            // ServerStdio.cs/ServerHttp.cs); reachable via --mode=Admin, --mode=Claude, or
+            // --include-tools=AdminTools.
             services.AddSingleton<AdminTools>();
             mcpBuilder.WithSentinelTools<AdminTools>();
         }

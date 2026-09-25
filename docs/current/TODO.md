@@ -529,3 +529,20 @@ Three concrete gaps, all still open:
   concurrent sessions against the same solution are a supported pattern (`project_concurrent_sessions`
   memory) is still unresolved — same open question as the prior occurrence,
   `blocking_error_session_halt_from_out_of_band_rm_mid_spike.md`.
+
+## `Git(operation: "status")` has no pagination for dirty trees larger than 10 files
+
+**Found:** 2026-09-25, while scoping a `git commit` to a specific file inside a 115-file dirty tree
+(see `docs/current/blockers/resolved/blocking_error_git_diff_target_head_vs_working_inconsistency.md`,
+which this was split out of — that doc's `target: "HEAD"` diff bug is fixed; this pagination gap is
+not, and was never a duplicate of it).
+
+**What:** `status` returns only 10 unstaged-file entries per call, with `isTruncated: true` when more
+exist, but the tool's schema has no `offset`/`limit`/`page` parameter to retrieve the remainder. The
+truncation itself is not a correctness bug — `totalUnstagedCount` was verified accurate against real
+shell `git status --short` — but there is currently no way to enumerate a large dirty tree's full file
+list in a bounded number of MCP `Git` calls.
+
+**Suggested approach:** add an `offset`/`limit` (or cursor) pair to `status`'s schema, mirroring the
+pagination pattern already used elsewhere in this repo's tools (e.g. `hasMorePages` on list-shaped
+results), and document how to page through `isTruncated: true`.
