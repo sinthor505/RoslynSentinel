@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
@@ -82,7 +84,8 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<object>
             {
@@ -296,7 +299,8 @@ public class AsyncifyTools
         // RequestContext<CallToolRequestParams> requestParams = null,        
         CancellationToken cancellationToken = default)
     {
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<AsyncMigrationProgressReport>
             {
@@ -345,7 +349,8 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -416,7 +421,8 @@ public class AsyncifyTools
         // RequestContext<CallToolRequestParams> requestParams = null,        
         CancellationToken cancellationToken = default)
     {
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -529,7 +535,8 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
@@ -598,7 +605,8 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<UpliftCallersResult>
             {
@@ -671,7 +679,8 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -726,7 +735,8 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -778,7 +788,8 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -831,7 +842,8 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -897,7 +909,8 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
@@ -973,7 +986,8 @@ public class AsyncifyTools
         int maxLoops = 5,
         CancellationToken cancellationToken = default)
     {
-        if (_workspaceManager.CurrentSolution == null)
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken).ConfigureAwait(false);
+        if (solution == null)
         {
             return new SentinelCallToolResult<AsyncifyLoopResult>
             {
