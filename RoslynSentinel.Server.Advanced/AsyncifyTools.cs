@@ -98,6 +98,14 @@ public class AsyncifyTools
                               "No solution is loaded. Call LoadSolution first.")
             };
         }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<object>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ScanAsyncMigrationCandidates")
+            };
+        }
 
         // ── auto-flag phase (skipped for file scope or when forceRescan=false) ──
         var scopedProjectName = scope == ToolScope.project ? projectName : null;
@@ -317,6 +325,14 @@ public class AsyncifyTools
                               "No solution is loaded. Call LoadSolution first.")
             };
         }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<AsyncMigrationProgressReport>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetAsyncMigrationProgress")
+            };
+        }
 
         try
         {
@@ -369,6 +385,14 @@ public class AsyncifyTools
                 IsSuccess = false,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
+            };
+        }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<BatchResultSummary>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FlagAsyncMigrationCandidates")
             };
         }
 
@@ -445,6 +469,14 @@ public class AsyncifyTools
                 IsSuccess = false,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
+            };
+        }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<BatchResultSummary>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ClearAsyncMigrationCandidateFlags")
             };
         }
 
@@ -565,6 +597,14 @@ public class AsyncifyTools
                               "No solution is loaded. Call LoadSolution first.")
             };
         }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<BridgeAsyncMethodsResult>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "BridgeAsyncMethods")
+            };
+        }
 
         if (targets == null || targets.Count == 0)
             return new SentinelCallToolResult<BridgeAsyncMethodsResult>
@@ -637,6 +677,14 @@ public class AsyncifyTools
                 IsSuccess = false,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
+            };
+        }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<UpliftCallersResult>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UpliftCallers")
             };
         }
 
@@ -717,6 +765,14 @@ public class AsyncifyTools
                               "No solution is loaded. Call LoadSolution first.")
             };
         }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<BatchResultSummary>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PropagateCancellationToken")
+            };
+        }
 
         if (targets == null || targets.Count == 0)
             return new SentinelCallToolResult<BatchResultSummary>
@@ -777,6 +833,14 @@ public class AsyncifyTools
                               "No solution is loaded. Call LoadSolution first.")
             };
         }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<BatchResultSummary>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AddCancellationToken")
+            };
+        }
 
         if (targets == null || targets.Count == 0)
             return new SentinelCallToolResult<BatchResultSummary>
@@ -832,6 +896,14 @@ public class AsyncifyTools
                 IsSuccess = false,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
+            };
+        }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<BatchResultSummary>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractEventHandlers")
             };
         }
 
@@ -890,6 +962,14 @@ public class AsyncifyTools
                 IsSuccess = false,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
+            };
+        }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<BatchResultSummary>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "EventHandlersToAsync")
             };
         }
 
@@ -961,6 +1041,14 @@ public class AsyncifyTools
                 IsSuccess = false,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
+            };
+        }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<BatchResultSummary>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Asyncify")
             };
         }
 
@@ -1042,6 +1130,14 @@ public class AsyncifyTools
                 IsSuccess = false,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
+            };
+        }
+        catch (OperationCanceledException ex)
+        {
+            return new SentinelCallToolResult<AsyncifyLoopResult>
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AsyncifyLoop")
             };
         }
 
