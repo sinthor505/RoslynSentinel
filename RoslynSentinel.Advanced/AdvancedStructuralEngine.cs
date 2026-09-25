@@ -4,17 +4,19 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Text;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null);
 
 public class AdvancedStructuralEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
     private readonly ValidationEngine? _validationEngine;
 
-    public AdvancedStructuralEngine(ISolutionProvider workspaceManager, ValidationEngine? validationEngine = null)
+    public AdvancedStructuralEngine(IWorkspaceManager workspaceManager, ValidationEngine? validationEngine = null)
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
@@ -22,7 +24,7 @@ public class AdvancedStructuralEngine
 
     public async Task<DocumentEditResult> ConvertAbstractClassToInterfaceAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -63,7 +65,7 @@ public class AdvancedStructuralEngine
 
     public async Task<DocumentEditResult> ReplaceConstructorWithFactoryAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -108,7 +110,7 @@ public class AdvancedStructuralEngine
 
     public async Task<Dictionary<FilePathWrapper, string>> ExtractSuperclassAsync(FilePathWrapper[] filePaths, string[] classNames, string newBaseClassName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var changes = new Dictionary<FilePathWrapper, string>();
         var firstFile = filePaths[0];
         var document = solution.GetDocumentIdsWithFilePath(firstFile).Select(solution.GetDocument).FirstOrDefault();
@@ -170,7 +172,7 @@ public class AdvancedStructuralEngine
     /// </summary>
     public async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -630,7 +632,7 @@ public class AdvancedStructuralEngine
     /// </summary>
     public async Task<Dictionary<FilePathWrapper, string>> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         bool sameFile = string.Equals(
             Path.GetFullPath(sourceFilePath),
             Path.GetFullPath(targetFilePath),
@@ -840,7 +842,7 @@ public class AdvancedStructuralEngine
             throw new InvalidOperationException("PreviewInstanceMoveCallSitesAsync requires a ValidationEngine - this AdvancedStructuralEngine instance was constructed without one.");
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
