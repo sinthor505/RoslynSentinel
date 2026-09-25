@@ -66,7 +66,7 @@ public record ObsoleteCallerFinding(
 
 public class AntiPatternEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
     private static readonly HashSet<string> AllPatterns = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -77,7 +77,7 @@ public class AntiPatternEngine
         "ThrowInFinally", "StaticEventSubscription"
     };
 
-    public AntiPatternEngine(ISolutionProvider workspaceManager)
+    public AntiPatternEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -88,7 +88,7 @@ public class AntiPatternEngine
         string[]? patternFilter = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -1076,7 +1076,7 @@ public class AntiPatternEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -1174,7 +1174,7 @@ public class AntiPatternEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -1358,7 +1358,7 @@ public class AntiPatternEngine
         int minOccurrences = 3,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -1477,7 +1477,7 @@ public class AntiPatternEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -1611,7 +1611,7 @@ public class AntiPatternEngine
         FilePathWrapper filePath,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
         var findings = new List<ExceptionHandlingFinding>();
 
@@ -1979,7 +1979,7 @@ public class AntiPatternEngine
     public async Task<List<AntiPatternFinding>> FindLongParameterListAsync(
         string? filePath = null, string? projectName = null, int minParameters = 4, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -2055,7 +2055,7 @@ public class AntiPatternEngine
     public async Task<List<AntiPatternFinding>> FindPrimitiveObsessionAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -2134,7 +2134,7 @@ public class AntiPatternEngine
     public async Task<List<AntiPatternFinding>> FindInconsistentAsyncSuffixAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -2315,7 +2315,7 @@ public class AntiPatternEngine
     public async Task<List<OutParamMethodFinding>> FindMultipleOutParameterMethodsAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -2401,7 +2401,7 @@ public class AntiPatternEngine
     public async Task<List<AntiPatternFinding>> FindValueTypeMutationIntentAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -2579,7 +2579,7 @@ public class AntiPatternEngine
         string? symbolId = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<ObsoleteCallerFinding>();
 
         // Collect all [Obsolete]-decorated method symbols across the solution.
