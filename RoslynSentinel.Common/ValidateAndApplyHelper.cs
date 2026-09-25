@@ -118,11 +118,11 @@ public static class ValidateAndApplyHelper
     }
 
     public static async Task<string> BuildDiffAsync(
-        ISolutionProvider workspaceManager,
+        IWorkspaceManager workspaceManager,
         Dictionary<FilePathWrapper, string> changes,
         CancellationToken cancellationToken)
     {
-        var solution = await workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var parts = new List<string>();
         foreach (var (path, newText) in changes)
         {
