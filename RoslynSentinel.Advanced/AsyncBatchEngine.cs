@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Advanced;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -786,7 +788,7 @@ public class AsyncBatchEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
 
         foreach (var project in solution.Projects)
@@ -949,7 +951,15 @@ public class AsyncBatchEngine
             var callersInFile = fileGroup.ToList();
 
             // Confirm the file exists (workspace or disk) before attempting any transform.
-            var initialSol = _workspaceManager.CurrentSolution;
+            Solution? initialSol;
+            try
+            {
+                initialSol = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            }
+            catch (SolutionNotLoadedException)
+            {
+                initialSol = null;
+            }
             bool hasInitialDoc = initialSol?.GetDocumentIdsWithFilePath(callerFilePath).Any() == true;
             if (!hasInitialDoc && !File.Exists(callerFilePath))
             {
@@ -982,7 +992,15 @@ public class AsyncBatchEngine
                 // Read current state -> picks up each preceding caller's applied write.
                 string currentSource;
                 {
-                    var sol = _workspaceManager.CurrentSolution;
+                    Solution? sol;
+                    try
+                    {
+                        sol = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+                    }
+                    catch (SolutionNotLoadedException)
+                    {
+                        sol = null;
+                    }
                     var wsDoc = sol?.GetDocumentIdsWithFilePath(callerFilePath)
                         .Select(id => sol.GetDocument(id)).FirstOrDefault();
                     currentSource = wsDoc != null
@@ -1350,7 +1368,7 @@ public class AsyncBatchEngine
         string? cancellationTokenExpression,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault();
