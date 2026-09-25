@@ -6,10 +6,10 @@ namespace RoslynSentinel.Advanced;
 
 public class CodeHealingEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public CodeHealingEngine(ISolutionProvider workspaceManager, SentinelConfiguration config)
+    public CodeHealingEngine(IWorkspaceReader workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;
@@ -27,7 +27,7 @@ public class CodeHealingEngine
             };
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -82,7 +82,7 @@ public class CodeHealingEngine
 
     public async Task<DocumentEditResult> AddRetryPolicyAsync(string f, int sl, int el, int rc, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == f || d.FilePath == f);
         if (document == null)
         {
@@ -169,7 +169,7 @@ public class CodeHealingEngine
 
     public async Task<Dictionary<FilePathWrapper, string>> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var changes = new Dictionary<FilePathWrapper, string>();
 
         foreach (var target in targets)

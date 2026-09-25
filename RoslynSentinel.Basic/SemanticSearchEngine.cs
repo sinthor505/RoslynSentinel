@@ -18,9 +18,9 @@ public record SearchResult(
 
 public class SemanticSearchEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
 
-    public SemanticSearchEngine(ISolutionProvider workspaceManager)
+    public SemanticSearchEngine(IWorkspaceReader workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -36,7 +36,7 @@ public class SemanticSearchEngine
         string returnType,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<SearchResult>();
         var seen = new HashSet<string>();
         var normalised = returnType.Trim();
@@ -114,7 +114,7 @@ public class SemanticSearchEngine
         string attributeName,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<SearchResult>();
         var seen = new HashSet<string>();
 

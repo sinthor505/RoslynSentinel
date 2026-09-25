@@ -24,9 +24,9 @@ public record DuplicateBlockGroup(
 
 public class CloneDetectionEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
 
-    public CloneDetectionEngine(ISolutionProvider workspaceManager)
+    public CloneDetectionEngine(IWorkspaceReader workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -36,7 +36,7 @@ public class CloneDetectionEngine
     public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInClassAsync(
         FilePathWrapper filePath, string className, int minStatements = 4, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         Document? document = null;
         foreach (var project in solution.Projects)
@@ -84,7 +84,7 @@ public class CloneDetectionEngine
     public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInHierarchyAsync(
         string typeName, string? projectName = null, int minStatements = 4, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         var projects = string.IsNullOrEmpty(projectName)
             ? solution.Projects

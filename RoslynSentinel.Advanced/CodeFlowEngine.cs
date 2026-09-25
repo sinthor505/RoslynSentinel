@@ -8,16 +8,16 @@ namespace RoslynSentinel.Advanced;
 
 public class CodeFlowEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
     private readonly ILogger<CodeFlowEngine> _logger;
 
-    public CodeFlowEngine(ISolutionProvider workspaceManager)
+    public CodeFlowEngine(IWorkspaceReader workspaceManager)
     {
         _workspaceManager = workspaceManager;
         _logger = new NullLogger<CodeFlowEngine>();
     }
 
-    public CodeFlowEngine(ISolutionProvider workspaceManager, ILogger<CodeFlowEngine> logger)
+    public CodeFlowEngine(IWorkspaceReader workspaceManager, ILogger<CodeFlowEngine> logger)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
@@ -30,7 +30,7 @@ public class CodeFlowEngine
     {
         try
         {
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
             if (document == null)
             {
