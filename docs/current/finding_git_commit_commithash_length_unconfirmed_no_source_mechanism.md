@@ -2,14 +2,19 @@
 # not be corroborated against any server-side artifact, and the commit implementation has no
 # mechanism capable of producing a 41-character string
 
-**Status:** unconfirmed as a tool defect. The on-disk commit hashes are independently verified
-correct (40 hex characters, standard SHA-1 length). The commit-hash construction path was traced to
-source and contains no operation that could append, duplicate, or otherwise lengthen the hash. No
-server log or other artifact captures the actual bytes the tool returned for these 4 calls, so the
-41-character claim rests solely on a transcription of prior conversation text that could not be
-independently verified byte-for-byte. This is filed as a finding about an evidence gap, not a
-confirmed response-integrity bug -- see "What was ruled out" and "What would confirm or refute this"
-below.
+**Status:** unconfirmed as a tool defect, but re-opened rather than closed as a one-off
+transcription error -- the user separately reports having seen 41-character commit hashes mentioned
+in other, unrelated sessions, which weakens the "this was just this session's manual miscount"
+explanation below. The on-disk commit hashes for the 4 calls this doc originally investigated are
+independently verified correct (40 hex characters, standard SHA-1 length), and the commit-hash
+construction path in `GitImpl.cs` was traced to source and contains no operation that could append,
+duplicate, or otherwise lengthen the hash. No server log or other artifact captures the actual bytes
+the tool returned for these 4 calls, so the original 41-character claim in this session rests solely
+on a transcription of prior conversation text that could not be independently verified byte-for-byte
+at the time. Given the cross-session recurrence, the leading hypothesis shifts from "manual
+transcription slip" toward a serialization/escaping issue in a layer this investigation did not
+examine (see "Recommended mitigation" below) -- see "What was ruled out" and "What could not be
+verified" for what is and isn't settled.
 
 ## What was being attempted
 
@@ -120,11 +125,34 @@ No artifact independent of the task's own prior-turn text was found containing t
 Per CLAUDE.md's root-cause discipline ("a cause you have not traced to source is a hypothesis --
 label it as one"): a genuine tool-side defect producing 41-character hashes remains a hypothesis,
 not a confirmed finding. The confirmed findings are narrower: the on-disk hashes are correct, and
-the implementation path has no mechanism to explain the claimed symptom even if it did occur.
+`GitImpl.cs`'s own construction path has no mechanism to explain the claimed symptom even if it did
+occur.
+
+## Cross-session recurrence (2026-09-24, reported by the user)
+
+After this doc's initial version was written and closed as "very likely a transcription error," the
+user reported independently: **"I have seen 41 char commit hashes mentioned in other sessions."**
+This is significant because it is not this session's evidence -- it means the symptom (or at least
+the report of it) is not a one-off artifact of a single conversation's manual re-transcription. Two
+non-exclusive readings:
+
+- The symptom is real and reproducible across sessions, meaning the cause is upstream of anything a
+  single session's transcript could show -- e.g. in the MCP framework's own JSON
+  serialization/transport layer, or in whatever tool-result rendering path the client applies before
+  the text reaches a transcript (neither was examined by this investigation, which only traced
+  `GitImpl.cs`/`GitTools.cs`).
+- Multiple independent sessions have each separately mis-transcribed a 40-character hash the same
+  way, which is a weaker explanation once it is not just one session doing it, but not impossible if
+  something about the value's visual presentation (e.g. line-wrapping in a terminal, a copy source
+  that inserts characters) makes a specific kind of miscount likely across sessions.
+
+This investigation cannot distinguish between these without a live, byte-verified reproduction (see
+"What unblocks it"). The practical takeaway either way: **the tool should not rely on a human or
+model eyeballing a hash to catch this class of defect** -- see "Recommended mitigation" below.
 
 ## What unblocks it
 
-Either of the following would resolve the open question:
+Any of the following would resolve the open question:
 
 1. **Reproduce live.** Run a fresh `Git(operation: "commit")` call in an active session and inspect
    the raw MCP tool-call response JSON directly (not a re-typed/re-quoted copy of it) -- e.g. via
@@ -141,6 +169,18 @@ Either of the following would resolve the open question:
    tools) logged their outgoing result object at `LogLevel.Debug` or similar, a future occurrence of
    this same claim could be checked against a real artifact within the same session instead of
    relying on conversation-text transcription.
+3. **Add a length assertion at the DTO/serialization boundary (recommended, cheap, ships regardless
+   of root cause).** The user's suggestion: add a sanity check on `GitCommitResult.CommitHash` (and
+   plausibly `GitRevertResult`'s hash-typed fields, if any) that asserts/validates the value is
+   exactly 40 hex characters before it leaves `GitImpl.cs`, logging or flagging a structured warning
+   if not. This does not require knowing the root cause to be worth doing: a SHA-1 commit hash has a
+   fixed, checkable shape, so validating it at the point it is constructed (`GitImpl.cs:948-956`) is
+   a cheap, permanent guardrail against this exact symptom recurring silently -- consistent with this
+   repo's failure doctrine ("a guardrail that halts before corruption instead of after"). It would
+   also immediately answer the open question: if the assertion never fires across many future
+   commits, that is strong evidence the original reports were transcription artifacts; if it does
+   fire, it pinpoints that the corruption (if any) happens before this point rather than in a later
+   serialization/transport layer.
 
 ## Related
 
