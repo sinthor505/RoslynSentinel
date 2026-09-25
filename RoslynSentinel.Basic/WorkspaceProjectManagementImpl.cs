@@ -44,7 +44,7 @@ public class WorkspaceProjectManagementImpl
         {
             if (kind == SolutionItemsKind.projects)
             {
-                var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+                var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
                 var projectInfos = solution.Projects.Select(p => new ProjectInfoEntry(p.Name, p.FilePath)).ToList();
                 return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                     projectInfos,
@@ -90,7 +90,7 @@ public class WorkspaceProjectManagementImpl
 
                 try
                 {
-                    var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+                    var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
                     var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
                     if (project == null)
                     {
@@ -143,7 +143,7 @@ public class WorkspaceProjectManagementImpl
 
             if (kind == SolutionItemsKind.all)
             {
-                var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+                var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
                 var solutionRoot = _workspaceManager.GetSolutionRoot();
 
                 var projectInfos = solution.Projects.Select(p => new ProjectInfoEntry(p.Name, p.FilePath)).ToList();

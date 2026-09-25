@@ -41,9 +41,9 @@ public record TestRunResult(
 
 public class TestRunEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public TestRunEngine(ISolutionProvider workspaceManager)
+    public TestRunEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -75,7 +75,7 @@ public class TestRunEngine
                     error: new EngineError("scopeName (projectName) is required when scope=project."));
             }
 
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var project = solution.Projects.FirstOrDefault(p => p.Name == scopeName);
             if (project?.FilePath is null)
             {
@@ -87,13 +87,17 @@ public class TestRunEngine
         }
         else
         {
-            if (_workspaceManager.CurrentSolution is null && _workspaceManager.SolutionPath is null)
+            Microsoft.CodeAnalysis.Solution solution;
+            try
+            {
+                solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            }
+            catch (SolutionNotLoadedException)
             {
                 return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
                     error: new EngineError("No solution is loaded. Call LoadSolution before running RunTest."));
             }
 
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             targets = solution.Projects
                 .Where(p => p.FilePath is not null && IsTestProject(p))
                 .Select(p => (p.Name, p.FilePath!))

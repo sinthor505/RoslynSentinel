@@ -379,7 +379,7 @@ public class WorkspaceTools
                 {
                     try
                     {
-                        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+                        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
                         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePathWrapper == filePathResolved.Absolute);
                         if (document == null)
                         {

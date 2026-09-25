@@ -10,9 +10,9 @@ namespace RoslynSentinel.Advanced;
 
 public class PathDrivenTestEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
 
-    public PathDrivenTestEngine(ISolutionProvider workspaceManager)
+    public PathDrivenTestEngine(IWorkspaceReader workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -31,7 +31,7 @@ public class PathDrivenTestEngine
         int? disambiguateLine = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
             .Select(solution.GetDocument)

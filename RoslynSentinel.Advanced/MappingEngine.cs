@@ -7,9 +7,9 @@ namespace RoslynSentinel.Advanced;
 
 public class MappingEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
 
-    public MappingEngine(ISolutionProvider workspaceManager)
+    public MappingEngine(IWorkspaceReader workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -23,7 +23,7 @@ public class MappingEngine
         string toType,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -95,7 +95,7 @@ public class MappingEngine
     /// </summary>
     public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePathWrapper filePath, int startLine, int endLine, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -143,7 +143,7 @@ public class MappingEngine
     /// </summary>
     public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

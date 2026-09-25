@@ -4,9 +4,9 @@ namespace RoslynSentinel.Basic;
 
 public class SolutionManagementEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public SolutionManagementEngine(ISolutionProvider workspaceManager)
+    public SolutionManagementEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -16,7 +16,7 @@ public class SolutionManagementEngine
     /// </summary>
     public async Task<DocumentEditResult> CreateProjectAsync(string projectName, string projectType = "console", CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath;
         var slnDir = Path.GetDirectoryName(slnPath) ?? throw new InvalidOperationException("Solution path not found.");
         var projectDir = Path.Combine(slnDir, projectName);
@@ -51,7 +51,7 @@ public class SolutionManagementEngine
         await CreateProjectAsync(targetProjectName, "classlib", cancellationToken);
 
         // 2. Identify files to move
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var sourceProject = solution.Projects.FirstOrDefault(p => p.Name == sourceProjectName) ?? throw new InvalidOperationException("Source project not found.");
         var filesToMove = sourceProject.Documents.Where(d => d.Folders.Contains(folderName)).ToList();
 

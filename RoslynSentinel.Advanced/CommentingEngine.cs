@@ -13,7 +13,7 @@ namespace RoslynSentinel.Advanced;
 /// </summary>
 public class CommentingEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
     private readonly RefactoringEngine _refactoringEngine;
     private readonly ILlmClient _llmClient;
 
@@ -34,7 +34,7 @@ public class CommentingEngine
     // AddSummaryCommentCoreAsync call must see the previous member's edit already applied to the document.
     private static int LlmParallelism => LlmOptions.Parallelism;
 
-    public CommentingEngine(ISolutionProvider workspaceManager, RefactoringEngine refactoringEngine, ILlmClient llmClient)
+    public CommentingEngine(IWorkspaceReader workspaceManager, RefactoringEngine refactoringEngine, ILlmClient llmClient)
     {
         _workspaceManager = workspaceManager;
         _refactoringEngine = refactoringEngine;
@@ -66,7 +66,7 @@ public class CommentingEngine
     public async Task<(Dictionary<FilePathWrapper, string> Changes, int SeededCount, int AlreadyTaggedCount, List<string> UnresolvedProjects)> SeedContentHashesAsync(
         ToolScope scope, string? projectName, string? filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var documents = EnumerateScopedDocuments(solution, scope, projectName, filePath);
 
         var changes = new Dictionary<FilePathWrapper, string>();
@@ -176,7 +176,7 @@ public class CommentingEngine
     public async Task<List<MemberSite>> FindStaleMembersAsync(
         ToolScope scope, string? projectName, string? filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var documents = EnumerateScopedDocuments(solution, scope, projectName, filePath);
 
         var stale = new List<MemberSite>();

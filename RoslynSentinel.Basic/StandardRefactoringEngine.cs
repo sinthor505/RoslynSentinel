@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class StandardRefactoringEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
 
-    public StandardRefactoringEngine(ISolutionProvider workspaceManager)
+    public StandardRefactoringEngine(IWorkspaceReader workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -18,7 +18,7 @@ public class StandardRefactoringEngine
     /// </summary>
     public async Task<DocumentEditResult> ConvertMethodToPropertyAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -85,7 +85,7 @@ public class StandardRefactoringEngine
     /// </summary>
     public async Task<DocumentEditResult> MakeMethodStaticAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

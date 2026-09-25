@@ -6,9 +6,9 @@ namespace RoslynSentinel.Advanced;
 
 public sealed class StackOverflowEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
 
-    public StackOverflowEngine(ISolutionProvider workspaceManager)
+    public StackOverflowEngine(IWorkspaceReader workspaceManager)
         => _workspaceManager = workspaceManager;
 
     public async Task<StackOverflowReport> AnalyzeStackOverflowRisksAsync(
@@ -16,7 +16,7 @@ public sealed class StackOverflowEngine
         bool includeInformational = false,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects
             .SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath != null &&

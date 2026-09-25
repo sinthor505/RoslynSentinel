@@ -8,16 +8,16 @@ namespace RoslynSentinel.Advanced;
 
 public class DocumentationEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
 
-    public DocumentationEngine(ISolutionProvider workspaceManager)
+    public DocumentationEngine(IWorkspaceReader workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
 
     public async Task<DocumentEditResult> GenerateXmlDocumentationStubsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
         var document = (solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
             ?? solution.Projects.SelectMany(p => p.Documents)
@@ -72,7 +72,7 @@ public class DocumentationEngine
 
     public async Task<DocumentEditResult> DocumentPocoFieldsAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

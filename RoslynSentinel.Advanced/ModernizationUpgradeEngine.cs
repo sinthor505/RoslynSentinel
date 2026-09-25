@@ -8,9 +8,9 @@ namespace RoslynSentinel.Advanced;
 
 public class ModernizationUpgradeEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
 
-    public ModernizationUpgradeEngine(ISolutionProvider workspaceManager)
+    public ModernizationUpgradeEngine(IWorkspaceReader workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -23,7 +23,7 @@ public class ModernizationUpgradeEngine
     /// </summary>
     public async Task<DocumentEditResult> UseSpanForParsingAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -117,7 +117,7 @@ public class ModernizationUpgradeEngine
     /// </summary>
     public async Task<DocumentEditResult> UpgradePatternMatchingAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -161,7 +161,7 @@ public class ModernizationUpgradeEngine
     /// </summary>
     public async Task<DocumentEditResult> UseThrowExpressionsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

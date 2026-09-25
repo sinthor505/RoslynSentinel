@@ -194,7 +194,7 @@ public class WorkspaceFileEditImpl
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var normalizedPath = Path.GetFullPath(filePathResolved);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
 
@@ -458,7 +458,7 @@ public class WorkspaceFileEditImpl
             {
                 try
                 {
-                    var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+                    var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
                     var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePath == filePathResolved.Absolute);
                     if (document == null)
                     {
@@ -599,7 +599,7 @@ public class WorkspaceFileEditImpl
             };
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var editsByFile = edits
             .Select((edit, index) => (edit, index))
             .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));

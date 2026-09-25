@@ -8,9 +8,9 @@ namespace RoslynSentinel.Advanced;
 
 public class ModernLoggingEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
 
-    public ModernLoggingEngine(ISolutionProvider workspaceManager)
+    public ModernLoggingEngine(IWorkspaceReader workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -20,7 +20,7 @@ public class ModernLoggingEngine
     /// </summary>
     public async Task<DocumentEditResult> ConvertToSourceGeneratedLoggingAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new InvalidOperationException("Class not found.");

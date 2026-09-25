@@ -20,9 +20,9 @@ public record OutParamConversionResult(
 
 public class OutParamRefactoringEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public OutParamRefactoringEngine(ISolutionProvider workspaceManager)
+    public OutParamRefactoringEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -30,7 +30,7 @@ public class OutParamRefactoringEngine
     public async Task<OutParamConversionResult> ConvertOutParamsToValueTupleAsync(
         FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         Document? document = null;
         foreach (var project in solution.Projects)

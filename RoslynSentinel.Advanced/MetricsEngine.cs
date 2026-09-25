@@ -40,16 +40,16 @@ public record CohesionAnalysis(
 
 public class MetricsEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
 
-    public MetricsEngine(ISolutionProvider workspaceManager)
+    public MetricsEngine(IWorkspaceReader workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
 
     public async Task<SolutionMetrics> GetSolutionMetricsAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var projectMetrics = new List<ProjectMetric>();
 
         int totalTypes = 0;
@@ -104,7 +104,7 @@ public class MetricsEngine
     public async Task<List<CohesionAnalysis>> AnalyzeTypeCohesionAsync(
         FilePathWrapper filePath, string? className = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
 
         Document? document = null;
         foreach (var project in solution.Projects)

@@ -33,7 +33,7 @@ public class ScanTools
     private readonly RefactoringEngine _refactoringEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly BreakingChangeEngine _breakingChangeEngine;
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<ScanTools> _logger;
 
     public ScanTools(
@@ -59,7 +59,7 @@ public class ScanTools
         RefactoringEngine refactoringEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         BreakingChangeEngine breakingChangeEngine,
-        ISolutionProvider workspaceManager,
+        IWorkspaceManager workspaceManager,
         ILogger<ScanTools> logger)
     {
         _analysisEngine = analysisEngine;
@@ -419,7 +419,7 @@ public class ScanTools
                     return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result90 };
                 case DetectorId.namespace_path_mismatches:
                     {
-                        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+                        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
                         var result91 = await _analysisEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken: cancellationToken);
                         return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result91 };
                     }
