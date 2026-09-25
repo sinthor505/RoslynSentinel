@@ -105,7 +105,16 @@ public class GenerationTools
     {
         FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
-        var fileIds = _workspaceManager.CurrentSolution?.GetDocumentIdsWithFilePath(filePath);
+        System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DocumentId>? fileIds;
+        try
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            fileIds = solution.GetDocumentIdsWithFilePath(filePath);
+        }
+        catch (SolutionNotLoadedException)
+        {
+            fileIds = null;
+        }
         if (fileIds == null || fileIds.Value.Length == 0)
             return $"GenerateHttpClient: file '{Path.GetFileName(filePath)}' not found in the loaded solution. " +
                    $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.";
@@ -137,12 +146,23 @@ public class GenerationTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        var projectExists = _workspaceManager.CurrentSolution?.Projects
-            .Any(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? false;
+        bool projectExists;
+        List<string> loadedProjects;
+        try
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            projectExists = solution.Projects
+                .Any(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            loadedProjects = solution.Projects
+                .Select(p => p.Name).Take(10).ToList();
+        }
+        catch (SolutionNotLoadedException)
+        {
+            projectExists = false;
+            loadedProjects = [];
+        }
         if (!projectExists)
         {
-            var loadedProjects = _workspaceManager.CurrentSolution?.Projects
-                .Select(p => p.Name).Take(10).ToList() ?? [];
             var projectList = loadedProjects.Count > 0 ? string.Join(", ", loadedProjects) : "none";
             return $"GenerateDefaultConfigJson: project '{projectName}' not found in the loaded solution. " +
                    $"Loaded projects: {projectList}.";
@@ -183,7 +203,16 @@ public class GenerationTools
     {
         FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
-        var interpFileIds = _workspaceManager.CurrentSolution?.GetDocumentIdsWithFilePath(filePath);
+        System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DocumentId>? interpFileIds;
+        try
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            interpFileIds = solution.GetDocumentIdsWithFilePath(filePath);
+        }
+        catch (SolutionNotLoadedException)
+        {
+            interpFileIds = null;
+        }
         if (interpFileIds == null || interpFileIds.Value.Length == 0)
             return $"InterpolateStringSafe: file '{Path.GetFileName(filePath)}' not found in the loaded solution. " +
                    $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.";
