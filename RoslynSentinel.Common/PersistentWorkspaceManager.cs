@@ -1026,7 +1026,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
     }
 
-
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// <see cref="IWorkspaceReader"/> implementation. Both <see cref="ReadSource"/> values currently
@@ -1038,7 +1037,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     {
         return await GetCurrentSolutionAsync(cancellationToken);
     }
-
 
     // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
@@ -1064,7 +1062,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         var text = await document.GetTextAsync(cancellationToken);
         return text.ToString();
     }
-
 
     /// <summary>
     /// Forces an in-memory solution for testing purposes, bypassing disk loading.
