@@ -97,7 +97,7 @@ public class WorkspaceReadNavigationImpl
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var normalizedPath = Path.GetFullPath(filePathResolved);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
             if (document == null)
@@ -194,7 +194,7 @@ public class WorkspaceReadNavigationImpl
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var normalizedPath = Path.GetFullPath(filePathResolved);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
             if (document == null)
@@ -335,7 +335,7 @@ public class WorkspaceReadNavigationImpl
     {
         try
         {
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var projects = solution.Projects.AsEnumerable();
             if (!string.IsNullOrEmpty(projectName))
             {
@@ -404,7 +404,7 @@ public class WorkspaceReadNavigationImpl
     {
         try
         {
-            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var results = new List<TextSearchMatch>();
             var warnings = new List<string>();
             Regex? regex = null;
