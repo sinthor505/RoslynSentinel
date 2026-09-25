@@ -2806,7 +2806,7 @@ public class AntiPatternEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = _workspaceManager.CurrentSolution
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken)
             ?? throw new InvalidOperationException("No solution is loaded.");
 
         int totalAsync = 0;

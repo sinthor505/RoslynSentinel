@@ -206,12 +206,36 @@ rather than folded into feature work:
 
 ## Status
 
-Design proposal only — not yet implemented; re-verified 2026-09-24 (no `IWorkspaceReader`,
-`ReadSource`, or staged-write code exists anywhere in the repo; not scheduled in `TODO.md`). Line
-citations and the file-count figure were refreshed the same day, using `FindReferences`'s new
-grouped `statusMessage` summary to get a symbol-precise (not grep-approximated) count, and to match
-`PersistentWorkspaceManager.cs`'s post-extraction shape (see "Current shape" above); the design
-itself is unaffected — the sweep
-described in "Migration path" still has not started. Motivated by the same PlanStepRunner run review
+Steps 1-2 implemented 2026-09-24/25: `IWorkspaceReader`/`ReadSource` exist
+(`RoslynSentinel.Common/IWorkspaceManager.cs`), `PersistentWorkspaceManager` implements it, and
+`ISolutionProvider.CurrentSolution`/`GetCurrentSolutionAsync` are marked `[Obsolete(error: false)]`.
+**Step 3 (the dedicated sweep) is in progress**, batch-committed file by file (see git log "Sweep
+batch N" commits, 2026-09-24 onward) using two patterns: full-widen the field+constructor to
+`IWorkspaceManager` for files with few/no production callers, or a cast at each call site
+(`((IWorkspaceReader)_workspaceManager).GetSolutionAsync(...)`, tagged `READCHOKEPOINT-CAST`) for
+files with wide production caller graphs where widening the constructor would cascade.
+
+**Sweep-tracking correction (2026-09-25):** early batches searched only for the
+`GetCurrentSolutionAsync(...)` method-call text pattern and missed the sync `CurrentSolution`
+property-getter form (e.g. `_workspaceManager.CurrentSolution`), which is an equally-obsolete,
+equally-in-scope call shape per "Current shape" above. A file already marked complete
+(`AntiPatternEngine.cs`, batch 12) turned out to have one missed `CurrentSolution` site
+(`GetAsyncMigrationProgressAsync`), found only via a live `Build`'s warning list, not the original
+text sweep — fixed same-day. A follow-up solution-wide search for the property-getter pattern
+specifically (`SearchSolutionText` regex `_workspaceManager\.CurrentSolution`, 2026-09-25) found 41
+further matches across 12 files not yet in the batch catalogue (`AsyncifyTools.cs` 12,
+`BugFixTests.cs` 9 [test-only], `GenerationTools.cs` 4, `MsToolAugmentEngine.cs` 3,
+`SentinelAsyncifyToolsTests.cs` 3 [test-only], `AsyncBatchEngine.cs` 2,
+`DeepFunctionalVerificationTests.cs` 2 [test-only], `LoadSolutionPathSanitizationTests.cs` 2
+[test-only], `TestRunEngine.cs` 1, `WorkspaceHealthMiscImpl.cs` 1, `AdvancedRefactoringTools.cs` 1,
+`CommentingTools.cs` 1). These are added to the sweep's remaining-work list; going forward every
+batch's `SearchSolutionText` pass covers both the method-call and property-getter forms together
+rather than as two separate sweeps.
+
+Line citations and the file-count figure in "Motivation" above were last refreshed 2026-09-24, using
+`FindReferences`'s grouped `statusMessage` summary for a symbol-precise (not grep-approximated)
+count of the `GetCurrentSolutionAsync` method-call form specifically; that count does not include
+the `CurrentSolution` property-getter form's sites, which the correction above tracks separately
+pending a combined re-count. Motivated by the same PlanStepRunner run review
 (`20260911-205633-213`) that produced `docs/current/proposal_changesymboltype_tool.md`, via a
 follow-on discussion about reintroducing staged in-memory writes.
