@@ -3822,7 +3822,7 @@ public class RefactoringEngine
 
     /// <summary>
     /// Core of <see cref="AddSummaryCommentAsync"/>, factored out to accept a <see cref="Document"/>
-    /// directly instead of always resolving one from <c>_workspaceManager.GetCurrentSolutionAsync()</c>.
+    /// directly instead of always resolving one from <c>_workspaceManager.GetSolutionAsync(ReadSource.Committed, ...)</c>.
     /// Lets a caller that's evolving its own local <see cref="Solution"/> fork across multiple edits
     /// (e.g. <c>CommentingEngine</c> commenting several members in the same file before a single
     /// disk write) reuse this logic without each call reading back the workspace's committed state.

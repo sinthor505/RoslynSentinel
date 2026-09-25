@@ -16,13 +16,13 @@ public enum HealthEngineType
 
 public class HealthOrchestrationEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceReader _workspaceManager;
     private readonly ProjectStructureEngine _projectStructureEngine;
     private readonly AnalysisEngine _analysisEngine;
     private readonly SentinelConfiguration _config;
 
     public HealthOrchestrationEngine(
-        ISolutionProvider workspaceManager,
+        IWorkspaceReader workspaceManager,
         ProjectStructureEngine projectStructureEngine,
         AnalysisEngine analysisEngine,
         SentinelConfiguration config)
@@ -42,7 +42,7 @@ public class HealthOrchestrationEngine
         int timeoutSeconds = 25,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var sw = Stopwatch.StartNew();
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
