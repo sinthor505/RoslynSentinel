@@ -20,6 +20,11 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
         => Task.FromResult(CurrentSolution
             ?? throw new SolutionNotLoadedException("No solution is loaded. Call load_solution with a .sln or .csproj path."));
 
+    public Task<Solution> GetSolutionAsync(ReadSource source, CancellationToken cancellationToken)
+        => GetCurrentSolutionAsync(cancellationToken);
+
+    public Task<string?> GetDocumentTextAsync(FilePathWrapper path, ReadSource source, CancellationToken cancellationToken) => throw new NotImplementedException();
+
     // --- Everything below: not needed by DiagnosticEngine, so left unimplemented on purpose ---
 
     public string? BaseRepoDirectory { get; set; }
