@@ -79,13 +79,13 @@ public static class ToolParams
     public const string DiagnosticScope =
         "\"file\" (scopeName = filePath) | \"project\" (scopeName = projectName) | \"solution\" (scopeName ignored)";
 
-    // Transcript review
-    /*    
+    // Transcript review        
     public const string Reason =
         "Why you're calling this now (min 10 chars, must contain a space).";
-    */
+    /*
     // Testing with empty reason to reduce tool schema token usage. Observing model compliance.
-    public const string Reason = "";
+    //public const string Reason = ""; // empty reason description caused models to omit the field or be surprised by the constraints, reverted to original.
+    */
 
     // Added by AddMember (expected - used for diagnostics)
     public const string SnippetEdits =
