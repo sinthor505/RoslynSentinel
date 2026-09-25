@@ -948,6 +948,20 @@ public class GitImpl : IGitOperations
             var hashRaw = await RunGitAsync(gitRoot, ["rev-parse", "HEAD"], cancellationToken);
             var hash = hashRaw.ExitCode == 0 ? hashRaw.Stdout.Trim() : "";
 
+            // Sanity check, not a correctness fix: a SHA-1 hash is always exactly 40 hex
+            // characters. This guards against a suspected (unconfirmed, see
+            // docs/current/finding_git_commit_commithash_length_unconfirmed_no_source_mechanism.md)
+            // response-length anomaly reported across multiple sessions - if this ever fires, it
+            // proves the corruption happens at or before this point rather than in a later
+            // serialization/transport layer, which the original investigation could not determine.
+            if (hash.Length > 0 && (hash.Length != 40 || !hash.All(Uri.IsHexDigit)))
+            {
+                _logger.LogWarning(
+                    "git rev-parse HEAD returned a value that is not a well-formed 40-character SHA-1 hash: " +
+                    "length={Length}, value={Hash}. Returning it to the caller as-is for visibility.",
+                    hash.Length, hash);
+            }
+
             // message can be null here (amend --no-edit kept HEAD's existing message), so read
             // back the commit's actual message rather than echoing the (possibly absent) input.
             var msgRaw = await RunGitAsync(gitRoot, ["log", "-1", "--format=%B"], cancellationToken);
