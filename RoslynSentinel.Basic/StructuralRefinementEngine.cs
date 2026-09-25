@@ -4,21 +4,22 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Basic;
 
 public class StructuralRefinementEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public StructuralRefinementEngine(ISolutionProvider workspaceManager)
+    public StructuralRefinementEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
         _config = new SentinelConfiguration();
     }
 
-    public StructuralRefinementEngine(ISolutionProvider workspaceManager, SentinelConfiguration config)
+    public StructuralRefinementEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;
@@ -56,7 +57,7 @@ public class StructuralRefinementEngine
     /// </summary>
     public async Task<DocumentEditResult> SyncTypeAndFilenameAsync(FilePathWrapper filePath, string? targetTypeName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
 
@@ -124,7 +125,7 @@ public class StructuralRefinementEngine
             return DocumentEditResult.FeatureDisabled(filePath);
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -186,7 +187,7 @@ public class StructuralRefinementEngine
     /// </summary>
     public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePathWrapper filePath, string symbolName, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -315,7 +316,7 @@ public class StructuralRefinementEngine
             return DocumentEditResult.FeatureDisabled(filePath);
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
