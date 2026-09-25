@@ -36,7 +36,13 @@ public class ValidationEngine
 
     public async Task<DiagnosticReport> ValidateDiffAsync(FilePathWrapper filePath, string unifiedDiff, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        // READCHOKEPOINT-CAST: _workspaceManager is ISolutionProvider-typed (55 construction sites
+        // across the solution as of 2026-09-24 -- widening the constructor to IWorkspaceManager
+        // would force touching all of them). Every real ISolutionProvider implementation
+        // (PersistentWorkspaceManager, FakeWorkspaceManager) also implements IWorkspaceManager, so
+        // this cast is safe today. Cleanup target: widen the constructor and drop this cast once
+        // ValidationEngine's caller list has been consolidated. See docs/current/design_read_chokepoint.md.
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var documentId = solution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
 
         if (documentId == null)
@@ -83,7 +89,8 @@ public class ValidationEngine
     public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePathWrapper, string> fileChanges,
         IReadOnlyCollection<FilePathWrapper>? removePaths, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        // READCHOKEPOINT-CAST: see ValidateDiffAsync above for rationale (55-site constructor cascade avoided).
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var report = await ValidateChangesAsync(solution, fileChanges, removePaths, cancellationToken);
 
         if (!report.Success && report.Diagnostics.Count > 0)
