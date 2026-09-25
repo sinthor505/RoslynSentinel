@@ -13,16 +13,16 @@ public record DiagnosticSummary(
 
 public class DiagnosticEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<DiagnosticEngine> _logger;
 
-    public DiagnosticEngine(ISolutionProvider workspaceManager)
+    public DiagnosticEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
         _logger = new NullLogger<DiagnosticEngine>();
     }
 
-    public DiagnosticEngine(ISolutionProvider workspaceManager, ILogger<DiagnosticEngine> logger)
+    public DiagnosticEngine(IWorkspaceManager workspaceManager, ILogger<DiagnosticEngine> logger)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
@@ -30,7 +30,7 @@ public class DiagnosticEngine
 
     public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var diagnostics = semanticModel?.GetDiagnostics(null, cancellationToken) ?? Enumerable.Empty<Diagnostic>();
@@ -45,7 +45,7 @@ public class DiagnosticEngine
 
     public async Task<EngineResultWrapper<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName) ?? throw new InvalidOperationException("Project not found.");
         var compilation = await project.GetCompilationAsync(cancellationToken);
         var diagnostics = compilation?.GetDiagnostics(cancellationToken) ?? Enumerable.Empty<Diagnostic>();
@@ -86,7 +86,7 @@ public class DiagnosticEngine
         int maxDetails = 50,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var solutionDir = Path.GetDirectoryName(solution.FilePath ?? "") ?? "";
         var allDiagnostics = new List<DiagnosticInfo>();
 

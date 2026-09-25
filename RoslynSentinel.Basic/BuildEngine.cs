@@ -8,29 +8,29 @@ namespace RoslynSentinel.Basic;
 
 public class BuildEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly DiagnosticEngine _diagnosticEngine;
     private readonly ILogger<BuildEngine> _logger;
 
-    public BuildEngine(ISolutionProvider workspaceManager)
+    public BuildEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
         _diagnosticEngine = new DiagnosticEngine(workspaceManager);
         _logger = new NullLogger<BuildEngine>();
     }
-    public BuildEngine(ISolutionProvider workspaceManager, ILogger<BuildEngine> logger)
+    public BuildEngine(IWorkspaceManager workspaceManager, ILogger<BuildEngine> logger)
     {
         _workspaceManager = workspaceManager;
         _diagnosticEngine = new DiagnosticEngine(workspaceManager);
         _logger = logger;
     }
-    public BuildEngine(ISolutionProvider workspaceManager, DiagnosticEngine diagnosticEngine)
+    public BuildEngine(IWorkspaceManager workspaceManager, DiagnosticEngine diagnosticEngine)
     {
         _workspaceManager = workspaceManager;
         _diagnosticEngine = diagnosticEngine;
         _logger = new NullLogger<BuildEngine>();
     }
-    public BuildEngine(ISolutionProvider workspaceManager, DiagnosticEngine diagnosticEngine, ILogger<BuildEngine> logger)
+    public BuildEngine(IWorkspaceManager workspaceManager, DiagnosticEngine diagnosticEngine, ILogger<BuildEngine> logger)
     {
         _workspaceManager = workspaceManager;
         _diagnosticEngine = diagnosticEngine;
@@ -56,7 +56,7 @@ public class BuildEngine
             {
                 return new EngineResultWrapper<BuildResult>(fileResult.Outcome, error: fileResult.Error);
             }
-            var solutionForFile = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solutionForFile = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var documentId = solutionForFile.GetDocumentIdsWithFilePath(scopeName).FirstOrDefault();
             var owningProject = documentId is null ? null : solutionForFile.GetProject(documentId.ProjectId);
             projectsCompiled = owningProject is null ? [] : [owningProject.Name];
@@ -73,7 +73,7 @@ public class BuildEngine
             {
                 return new EngineResultWrapper<BuildResult>(projectResult.Outcome, error: projectResult.Error);
             }
-            var solutionForProject = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solutionForProject = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             projectsCompiled = solutionForProject.Projects.Any(p => p.Name == scopeName) ? [scopeName] : [];
         }
         else
@@ -83,7 +83,7 @@ public class BuildEngine
             {
                 return new EngineResultWrapper<BuildResult>(solutionResult.Outcome, error: solutionResult.Error);
             }
-            var solutionForAll = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+            var solutionForAll = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var compiledProjects = new List<string>();
             foreach (var project in solutionForAll.Projects)
             {
