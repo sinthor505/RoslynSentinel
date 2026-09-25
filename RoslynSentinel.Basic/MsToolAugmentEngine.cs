@@ -1,6 +1,7 @@
 using System.Text;
 
 using Microsoft.CodeAnalysis;
+using RoslynSentinel.Common;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
@@ -86,7 +87,7 @@ public class MsToolAugmentEngine
         FilePathWrapper filePath, string fieldName, string? overridePropertyName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (doc == null)
         {
@@ -228,7 +229,7 @@ public class MsToolAugmentEngine
     public async Task<SwitchConversionAnalysis> AnalyzeSwitchForPatternConversionAsync(
         FilePathWrapper filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (doc == null)
         {
@@ -303,7 +304,7 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail(analysis.BlockingReason ?? "Switch cannot be safely converted.");
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault()!;
         var root = (await doc.GetSyntaxRootAsync(cancellationToken))!;
         var text = await doc.GetTextAsync(cancellationToken);
@@ -430,7 +431,7 @@ public class MsToolAugmentEngine
     public async Task<MsAugmentResult> ConvertStringFormatToInterpolatedSmartAsync(
         FilePathWrapper filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (doc == null)
         {
@@ -577,7 +578,7 @@ public class MsToolAugmentEngine
     public async Task<UsingsCleanupResult> SortAndDeduplicateUsingsAsync(
         FilePathWrapper filePath, bool writeToFile = true, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException($"File not found: {filePath}");
         var root = (await doc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax)!;
         var original = root.Usings;
@@ -692,7 +693,16 @@ public class MsToolAugmentEngine
 
         if (!preview)
         {
-            var currentSolution = _workspaceManager.CurrentSolution;
+            Solution? currentSolution;
+            try
+            {
+                currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            }
+            catch (SolutionNotLoadedException)
+            {
+                currentSolution = null;
+            }
+
             if (currentSolution != null && currentSolution.GetDocumentIdsWithFilePath(filePath).Any())
             {
                 // Solution is loaded -> route through the shared chokepoint so this write gets
@@ -870,7 +880,16 @@ public class MsToolAugmentEngine
         FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         // Solution must be loaded -> this tool requires semantic analysis
-        var currentSolution = _workspaceManager.CurrentSolution;
+        Solution? currentSolution;
+        try
+        {
+            currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        }
+        catch (SolutionNotLoadedException)
+        {
+            currentSolution = null;
+        }
+
         if (currentSolution == null)
         {
             return new AddUsingsPreview(
@@ -1180,7 +1199,16 @@ public class MsToolAugmentEngine
         // Read source: prefer workspace (always in sync, supports testability)
         // then fall back to disk for files not loaded in the solution.
         string source;
-        var currentSolution = _workspaceManager.CurrentSolution;
+        Solution? currentSolution;
+        try
+        {
+            currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        }
+        catch (SolutionNotLoadedException)
+        {
+            currentSolution = null;
+        }
+
         var wsDoc = currentSolution?.GetDocumentIdsWithFilePath(filePath)
             .Select(currentSolution.GetDocument)
             .FirstOrDefault();
@@ -1392,7 +1420,7 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail($"'{newMethodName}' is not a valid C# identifier.");
         }
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath)
             .Select(solution.GetDocument)
             .FirstOrDefault();
