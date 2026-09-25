@@ -11,10 +11,16 @@ sites wrote `.cs` files via raw `File.WriteAllTextAsync`, bypassing
 
 The read side never got the equivalent treatment. `ISolutionProvider.CurrentSolution` and
 `GetCurrentSolutionAsync` hand out the raw Roslyn `Solution` object, and every engine that needs to
-read source text, member lists, or symbols independently decides how to navigate it. A grep for
-direct `CurrentSolution.`/`GetCurrentSolutionAsync` usage currently turns up **84 files** repo-wide
-(re-checked 2026-09-20; count has drifted down from an earlier "100+" as recent extraction commits,
-e.g. `SymbolResolver.cs` on 2026-09-19, pulled logic out of the largest engines), including nearly
+read source text, member lists, or symbols independently decides how to navigate it.
+`FindReferences(symbolName: "GetCurrentSolutionAsync", kind: callers)` (re-checked 2026-09-24, using
+the tool's new grouped `statusMessage` summary) finds **389 caller sites across 78 files** -
+symbol-precise, not a text grep, so it excludes comments and unrelated `Solution`-typed locals (e.g.
+`AdhocWorkspace().CurrentSolution` in test fixtures). A parallel `SearchSolutionText` sweep for the
+literal `CurrentSolution` text turns up 501 matches across 101 files, a superset that includes those
+non-call-site occurrences. The 78-file figure is the one this document tracks, since it counts actual
+readers of the chokepoint's target, not incidental text matches. (Earlier revisions of this document
+cited "84 files" and, before that, "100+"; both were grep-based approximations superseded by the
+tool-verified 78/101 split above.) This includes nearly
 every `*Engine.cs` in both `RoslynSentinel.Basic` and `RoslynSentinel.Advanced`. This is the same
 shape the write side had before unification: a shared resource with no shared gate governing how
 it's consumed. `ISolutionProvider` is a *provider* — it hands out access — not a *chokepoint* that
@@ -60,11 +66,13 @@ truth) stays unchanged.
   an engine has a `Solution` handle it navigates it directly: `CurrentSolution.GetDocument(...)`,
   `.Projects.SelectMany(...)`, `.GetDocumentIdsWithFilePath(...)`, etc. There is no intermediate
   layer between "have a `Solution`" and "read specific content from it."
-  `PersistentWorkspaceManager.cs` itself does this internally at ~26 sites as of 2026-09-20 (line
-  references from the current file: 300, 403-448, 503, 730-841, 1007, 1016-1035, 1067, 1224,
-  1509-1577, 1662, and more) — the doc's earlier line list (325, 330, 358, 1096-1139, 1600-1668)
-  drifted off real usages after subsequent refactors and has been re-swept here; still the same
-  order of magnitude, "~15+" undercounted slightly.
+  `PersistentWorkspaceManager.cs` itself does this internally at 16 clusters as of 2026-09-24 (line
+  references from the current file: 287-300, 328, 403-447, 496-503, 569, 730-841, 878-919, 992-1007,
+  1016-1035, 1065-1091, 1178-1224, 1509-1577, 1605-1662, 1831-1836) — the doc's previous line list
+  (300, 403-448, 503, 730-841, 1007, 1016-1035, 1067, 1224, 1509-1577, 1662, "and more") missed
+  several clusters (878-919, 992-1007, 1065-1091, 1605-1662, 1831-1836) that a fresh sweep turned up;
+  still the same order of magnitude and conclusion, just re-verified against the live file rather than
+  carried forward.
 - `Solution` is immutable (Roslyn's own design — confirmed in `ISolutionProvider`'s XML doc:
   "callers can apply speculative edits ... without affecting this instance or other callers"), so
   the *object* handed out can't be corrupted by a caller holding it. The ambiguity this document
@@ -122,14 +130,22 @@ Design points:
 
 ## Migration path
 
-Given the scope (100+ files touching `CurrentSolution` directly), a big-bang rewrite is not
+Given the scope (78 call-site files per the `FindReferences` count above), a big-bang rewrite is not
 proposed. Sequence, mirroring how the write-side unification was executed as its own dedicated pass
 rather than folded into feature work:
 
 1. **Add `IWorkspaceReader` alongside `ISolutionProvider`**, implemented by
    `PersistentWorkspaceManager` (which already implements `ISolutionProvider` and half a dozen other
    role interfaces — see the interface list on `PersistentWorkspaceManager`'s class declaration).
-   `ISolutionProvider` is not removed or deprecated yet.
+   `ISolutionProvider` is not removed at this step, but `CurrentSolution` and `GetCurrentSolutionAsync`
+   are marked `[Obsolete("...", error: false)]` (a warning, not an error) pointing callers at the
+   `IWorkspaceReader` equivalent. This is a lighter-weight alternative to adding a `ReadSource` toggle
+   directly onto `ISolutionProvider`: a toggle would let two ways of asking the same read question
+   coexist indefinitely and would force a breaking signature change on `CurrentSolution` (a sync
+   property can't take a parameter without becoming a method) across all 78 files in one motion. The
+   obsolete warning instead gives every remaining direct-access call site a compiler- and IDE-visible
+   nudge with zero behavior change, and turns "how much of the sweep is left" into a build-warning
+   count (`CS0618`) rather than a hand-maintained doc line list.
 2. **New call sites and any code touched for unrelated reasons adopt `IWorkspaceReader`
    opportunistically** — no dedicated sweep yet, just "don't add new direct `CurrentSolution` reads
    once this exists."
@@ -190,10 +206,12 @@ rather than folded into feature work:
 
 ## Status
 
-Design proposal only — not yet implemented; re-verified 2026-09-20 (no `IWorkspaceReader`,
+Design proposal only — not yet implemented; re-verified 2026-09-24 (no `IWorkspaceReader`,
 `ReadSource`, or staged-write code exists anywhere in the repo; not scheduled in `TODO.md`). Line
-citations and the file-count figure were refreshed the same day to match `PersistentWorkspaceManager.cs`'s
-post-extraction shape (see "Current shape" above); the design itself is unaffected — the sweep
+citations and the file-count figure were refreshed the same day, using `FindReferences`'s new
+grouped `statusMessage` summary to get a symbol-precise (not grep-approximated) count, and to match
+`PersistentWorkspaceManager.cs`'s post-extraction shape (see "Current shape" above); the design
+itself is unaffected — the sweep
 described in "Migration path" still has not started. Motivated by the same PlanStepRunner run review
 (`20260911-205633-213`) that produced `docs/current/proposal_changesymboltype_tool.md`, via a
 follow-on discussion about reintroducing staged in-memory writes.

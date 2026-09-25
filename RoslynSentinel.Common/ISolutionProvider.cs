@@ -12,6 +12,7 @@ public interface ISolutionProvider
         set;
     }
     /// <summary>The most recently loaded Roslyn solution, or null if none is loaded.</summary>
+    [Obsolete("Ambiguous once staged writes exist -- use IWorkspaceReader.GetSolutionAsync(ReadSource.Committed/.IncludeStaged) instead. See docs/current/design_read_chokepoint.md.", error: false)]
     Solution? CurrentSolution
     {
         get;
@@ -34,6 +35,7 @@ public interface ISolutionProvider
     }
 
     /// <summary>Returns the current in-memory solution. Roslyn's <see cref="Solution"/> is immutable, so callers can apply speculative edits (e.g. <c>WithDocumentText</c>) without affecting this instance or other callers.</summary>
+    [Obsolete("Ambiguous once staged writes exist -- use IWorkspaceReader.GetSolutionAsync(ReadSource.Committed/.IncludeStaged) instead. See docs/current/design_read_chokepoint.md.", error: false)]
     Task<Solution> GetCurrentSolutionAsync(CancellationToken cancellationToken);
     /// <summary>Lists solution-folder items (non-project files shown in Solution Explorer).</summary>
     List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems();

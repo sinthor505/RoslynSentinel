@@ -24,7 +24,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger
+public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
@@ -1025,6 +1025,46 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             _solutionLock.Release();
         }
     }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// <see cref="IWorkspaceReader"/> implementation. Both <see cref="ReadSource"/> values currently
+    /// behave identically -- delegates straight to <see cref="GetCurrentSolutionAsync"/> -- because
+    /// staged/uncommitted writes do not exist yet. Once they do, ReadSource.IncludeStaged is the one
+    /// that starts diverging; see docs/current/design_read_chokepoint.md.
+    /// </summary>
+    public async Task<Solution> GetSolutionAsync(ReadSource source, CancellationToken cancellationToken)
+    {
+        return await GetCurrentSolutionAsync(cancellationToken);
+    }
+
+
+    // Added by InsertMemberAfter (expected - used for diagnostics)
+    /// <summary>
+    /// <see cref="IWorkspaceReader"/> implementation. Returns null if no document is tracked at
+    /// <paramref name="path"/>, rather than throwing -- callers that need "does this file exist in
+    /// the solution" as a yes/no question get it without a try/catch.
+    /// </summary>
+    public async Task<string?> GetDocumentTextAsync(FilePathWrapper path, ReadSource source, CancellationToken cancellationToken)
+    {
+        var solution = await GetSolutionAsync(source, cancellationToken);
+        var docId = solution.GetDocumentIdsWithFilePath(path).FirstOrDefault();
+        if (docId == null)
+        {
+            return null;
+        }
+
+        var document = solution.GetDocument(docId);
+        if (document == null)
+        {
+            return null;
+        }
+
+        var text = await document.GetTextAsync(cancellationToken);
+        return text.ToString();
+    }
+
 
     /// <summary>
     /// Forces an in-memory solution for testing purposes, bypassing disk loading.
