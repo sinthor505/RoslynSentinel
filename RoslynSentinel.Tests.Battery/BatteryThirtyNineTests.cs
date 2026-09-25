@@ -42,7 +42,7 @@ public class BatteryThirtyNineTests
 
     private async Task<string> GetDocPath()
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(CancellationToken.None);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         return solution.Projects.First().Documents.First().FilePath ?? "Test.cs";
     }
 

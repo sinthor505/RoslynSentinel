@@ -37,7 +37,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(SlnPath);
 
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(CancellationToken.None);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
 
         // Capture project name from the first available project
         _realProjectName = solution.Projects.FirstOrDefault()?.Name
@@ -690,7 +690,7 @@ public class RealSolution_SmokeTests_Battery28
         await _workspaceManager.LoadSolutionAsync(SlnPath);
 
         // Find one document that has at least one class declaration
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(CancellationToken.None);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         foreach (var project in solution.Projects)
         {
             foreach (var doc in project.Documents)

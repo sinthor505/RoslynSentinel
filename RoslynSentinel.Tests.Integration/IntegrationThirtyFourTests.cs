@@ -56,7 +56,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         await _workspaceManager.LoadSolutionAsync(SlnPath);
 
         // Discover one document with a class AND a method for parameterised tests.
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(CancellationToken.None);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         foreach (var project in solution.Projects)
         {
             foreach (var doc in project.Documents)

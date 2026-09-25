@@ -2211,7 +2211,7 @@ public class ProductsController
             SetSource(source, "ProductsController.cs");
 
             // Debug: Check solution state
-            var sol = _workspaceManager.CurrentSolution;
+            var sol = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
             var doc = sol?.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == "ProductsController.cs");
             if (doc != null)
             {
@@ -2256,7 +2256,7 @@ public class MyClass
             SetSource(source, "MyClass.cs");
 
             // Get the actual document from the solution
-            var solution = _workspaceManager.CurrentSolution;
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
             var document = solution?.Projects.SelectMany(p => p.Documents)
                 .FirstOrDefault(d => d.Name == "MyClass.cs");
 
@@ -2404,7 +2404,7 @@ public class Processor
 }";
                 SetSource(code, "Processor.cs");
 
-                var document = _workspaceManager.CurrentSolution?.Projects.First()?.Documents.First();
+                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                 if (document == null)
                 {
                     Assert.Inconclusive("Document not found");
@@ -2459,7 +2459,7 @@ public class Counter
 }";
                 SetSource(code, "Counter.cs");
 
-                var document = _workspaceManager.CurrentSolution?.Projects.First()?.Documents.First();
+                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                 if (document == null)
                 {
                     Assert.Inconclusive("Document not found");
@@ -2520,7 +2520,7 @@ public class ItemProvider
 }";
                 SetSource(code, "ItemProvider.cs");
 
-                var document = _workspaceManager.CurrentSolution?.Projects.First()?.Documents.First();
+                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                 if (document == null)
                 {
                     Assert.Inconclusive("Document not found");
@@ -2570,7 +2570,7 @@ public class MathUtil
 }";
                 SetSource(code, "MathUtil.cs");
 
-                var document = _workspaceManager.CurrentSolution?.Projects.First()?.Documents.First();
+                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                 if (document == null)
                 {
                     Assert.Inconclusive("Document not found");
@@ -2597,7 +2597,7 @@ public class Math
 }";
                 SetSource(code, "Math.cs");
 
-                var document = _workspaceManager.CurrentSolution?.Projects.First()?.Documents.First();
+                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                 if (document == null)
                 {
                     Assert.Inconclusive("Document not found");
@@ -2648,7 +2648,7 @@ public class Calculator
 }";
                 SetSource(code, "Calculator.cs");
 
-                var document = _workspaceManager.CurrentSolution?.Projects.First()?.Documents.First();
+                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                 if (document == null)
                 {
                     Assert.Inconclusive("Document not found");
@@ -2674,7 +2674,7 @@ public class Processor
 }";
                 SetSource(code, "Processor.cs");
 
-                var document = _workspaceManager.CurrentSolution?.Projects.First()?.Documents.First();
+                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                 if (document == null)
                 {
                     Assert.Inconclusive("Document not found");

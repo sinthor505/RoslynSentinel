@@ -10,9 +10,13 @@ namespace RoslynSentinel.Tests.Fakes;
 // NotImplementedException - extend as a test actually needs a member. If a test needs a real
 // on-disk solution instead (actual file I/O, MSBuild load, watcher behavior), use
 // RoslynSentinel.Tests.TestSolutionFixture (backed by PersistentWorkspaceManager) instead of this class.
-public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger
+public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader
+
 {
-    public Solution? CurrentSolution { get; private set; }
+    public Solution? CurrentSolution
+    {
+        get; private set;
+    }
 
     public void SetTestSolution(Solution solution) => CurrentSolution = solution;
 
@@ -27,9 +31,15 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
 
     // --- Everything below: not needed by DiagnosticEngine, so left unimplemented on purpose ---
 
-    public string? BaseRepoDirectory { get; set; }
+    public string? BaseRepoDirectory
+    {
+        get; set;
+    }
     public int ProjectCount => CurrentSolution?.ProjectIds.Count ?? 0;
-    public string? SolutionPath { get; set; }
+    public string? SolutionPath
+    {
+        get; set;
+    }
     public int WorkspaceVersion => 0;
 
     public Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
@@ -39,7 +49,9 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public string? CheckRateLimit(string toolName, int defaultLimit) => null;
     public void ClearExternalFileChanges() => throw new NotImplementedException();
     public void ClearSessionHalt() => throw new NotImplementedException();
-    public void Dispose() { }
+    public void Dispose()
+    {
+    }
     public string GetBreakerDirective() => throw new NotImplementedException();
     public string GetBreakerSeverity() => throw new NotImplementedException();
     public BreakerStatusReport GetBreakerStatus() => throw new NotImplementedException();
@@ -140,8 +152,12 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
         blockReason = null;
         return false;
     }
-    void IScopedOperationLedger.RecordFix(IReadOnlyList<string> entryIds, string changeId) { }
-    void IScopedOperationLedger.RecordUndo(string changeId) { }
+    void IScopedOperationLedger.RecordFix(IReadOnlyList<string> entryIds, string changeId)
+    {
+    }
+    void IScopedOperationLedger.RecordUndo(string changeId)
+    {
+    }
     bool IScopedOperationLedger.TryRelease() => false;
     IReadOnlyList<LedgerEntryBase> IScopedOperationLedger.GetOpenEntries() => [];
 }

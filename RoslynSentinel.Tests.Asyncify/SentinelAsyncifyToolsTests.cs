@@ -515,7 +515,7 @@ public static class DataHelper
 
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ToString());
 
-        var solution = _workspaceManager.CurrentSolution;
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         var doc = solution?.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => string.Equals(d.FilePath, "Chained.cs", StringComparison.OrdinalIgnoreCase));
         Assert.That(doc, Is.Not.Null);
@@ -626,7 +626,7 @@ public static class DataHelper
             $"Directive: {result.SuccessData.Directive}");
 
         // Verify the workspace reflects both the bridge and the uplift.
-        var solution = _workspaceManager.CurrentSolution;
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         var doc = solution?.Projects
             .SelectMany(p => p.Documents)
             .FirstOrDefault(d => string.Equals(d.FilePath, "RegionForm.cs", StringComparison.OrdinalIgnoreCase));
@@ -658,7 +658,7 @@ public static class DataHelper
             "DoWork should be uplifted as the caller of SyncMethod.");
 
         // Read back the updated document from the in-memory workspace.
-        var solution = _workspaceManager.CurrentSolution;
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         var doc = solution?.Projects
             .SelectMany(p => p.Documents)
             .FirstOrDefault(d => string.Equals(d.FilePath, "QualifiedCall.cs", StringComparison.OrdinalIgnoreCase));

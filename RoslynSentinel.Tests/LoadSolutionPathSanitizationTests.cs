@@ -133,8 +133,9 @@ public class LoadSolutionPathSanitizationTests
 
         await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
-        Assert.That(_workspaceManager.CurrentSolution, Is.Not.Null);
-        Assert.That(_workspaceManager.CurrentSolution!.Projects.Any(p => p.Name == "ContosoOrders.Core"), Is.True,
+        var currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        Assert.That(currentSolution, Is.Not.Null);
+        Assert.That(currentSolution!.Projects.Any(p => p.Name == "ContosoOrders.Core"), Is.True,
             "ContosoOrders.Core should be loaded as a project in the solution.");
         Assert.That(_workspaceManager.GetWorkspaceLoadErrors(), Is.Empty,
             "A real, well-formed solution should load without accumulating workspace errors.");
