@@ -209,11 +209,25 @@ rather than folded into feature work:
 Steps 1-2 implemented 2026-09-24/25: `IWorkspaceReader`/`ReadSource` exist
 (`RoslynSentinel.Common/IWorkspaceManager.cs`), `PersistentWorkspaceManager` implements it, and
 `ISolutionProvider.CurrentSolution`/`GetCurrentSolutionAsync` are marked `[Obsolete(error: false)]`.
-**Step 3 (the dedicated sweep) is in progress**, batch-committed file by file (see git log "Sweep
-batch N" commits, 2026-09-24 onward) using two patterns: full-widen the field+constructor to
+**Step 3 (the dedicated sweep) is complete as of commit `44b1841` (2026-09-25, "Sweep batch 48"),**
+which migrated the last 33 sites across 11 test files plus `FakeWorkspaceManager`. Production code
+was already fully migrated in batches 1-47. A solution-wide `SearchSolutionText` re-check at that
+commit confirmed zero remaining `_workspaceManager.(GetCurrentSolutionAsync|CurrentSolution)`
+references. The sweep was batch-committed file by file (see git log "Sweep batch N" commits,
+2026-09-24 through 2026-09-25) using two patterns: full-widen the field+constructor to
 `IWorkspaceManager` for files with few/no production callers, or a cast at each call site
 (`((IWorkspaceReader)_workspaceManager).GetSolutionAsync(...)`, tagged `READCHOKEPOINT-CAST`) for
 files with wide production caller graphs where widening the constructor would cascade.
+
+Several defects were found and fixed in the days immediately following the sweep's close, all
+adjacent to migrated code rather than in the migration itself: `cf7dfe4`/`30861b8` (dead
+null-checks and an uncaught `OperationCanceledException` left over from the old
+nullable-return contract in `AsyncifyTools.cs`), `bf22560` (`ToolErrorMapper` still classified
+"no solution loaded" via the now-obsolete `CurrentSolution == null` check instead of catching
+`SolutionNotLoadedException`), and `ca5738e` (`IWorkspaceReader` was never forwarded in
+`ServiceRegistrationExtensionsBasic`'s DI setup, breaking server startup). **Step 4 (staged writes)
+can now be designed in detail** per the ordering this document specifies — the sweep is no longer a
+blocking precondition.
 
 **Sweep-tracking correction (2026-09-25):** early batches searched only for the
 `GetCurrentSolutionAsync(...)` method-call text pattern and missed the sync `CurrentSolution`
