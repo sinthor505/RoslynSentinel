@@ -29,9 +29,9 @@ public record BreakingChange(
 /// 
 public class BreakingChangeEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public BreakingChangeEngine(ISolutionProvider workspaceManager)
+    public BreakingChangeEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -45,7 +45,7 @@ public class BreakingChangeEngine
         string? filePath = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<PublicApiMember>();
 
         IEnumerable<Document?> documents;

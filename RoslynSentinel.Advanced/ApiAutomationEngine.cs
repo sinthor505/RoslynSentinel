@@ -6,9 +6,9 @@ namespace RoslynSentinel.Advanced;
 
 public class ApiAutomationEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public ApiAutomationEngine(ISolutionProvider workspaceManager)
+    public ApiAutomationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
@@ -18,7 +18,7 @@ public class ApiAutomationEngine
     /// </summary>
     public async Task<DocumentEditResult> GenerateHttpClientForControllerAsync(FilePathWrapper filePath, string controllerName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
