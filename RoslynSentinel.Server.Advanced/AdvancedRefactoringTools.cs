@@ -117,9 +117,18 @@ public class AdvancedRefactoringTools
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
     }
 
-    private string? GetFileNotInSolutionError(FilePathWrapper filePath)
+    private async Task<string?> GetFileNotInSolutionError(FilePathWrapper filePath, CancellationToken cancellationToken)
     {
-        var ids = _workspaceManager.CurrentSolution?.GetDocumentIdsWithFilePath(filePath);
+        System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DocumentId>? ids;
+        try
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            ids = solution.GetDocumentIdsWithFilePath(filePath);
+        }
+        catch (SolutionNotLoadedException)
+        {
+            ids = null;
+        }
         if (ids == null || ids.Value.Length == 0)
             return $"File '{Path.GetFileName(filePath)}' not found in the loaded solution. " +
                    $"Verify the path is correct and the solution is loaded. " +
@@ -596,7 +605,7 @@ public class AdvancedRefactoringTools
         FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var fileErr = GetFileNotInSolutionError(filePath);
+            var fileErr = await GetFileNotInSolutionError(filePath, cancellationToken);
             if (fileErr != null) return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, fileErr) };
 
             var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync(filePath, methodName, newTypeName, parameterNames, cancellationToken: cancellationToken);
@@ -869,7 +878,7 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(className))
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required when action=implement.") };
 
-                var implFileErr = GetFileNotInSolutionError(filePath);
+                var implFileErr = await GetFileNotInSolutionError(filePath, cancellationToken);
                 if (implFileErr != null) return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, implFileErr) };
 
                 var implResult = await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName, cancellationToken: cancellationToken);
@@ -893,7 +902,7 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(className))
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required when action=sync.") };
 
-                var syncFileErr = GetFileNotInSolutionError(filePath);
+                var syncFileErr = await GetFileNotInSolutionError(filePath, cancellationToken);
                 if (syncFileErr != null) return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, syncFileErr) };
 
                 var syncResult = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName, cancellationToken: cancellationToken);
