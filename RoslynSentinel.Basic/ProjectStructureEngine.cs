@@ -6,10 +6,10 @@ namespace RoslynSentinel.Basic;
 
 public class ProjectStructureEngine
 {
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public ProjectStructureEngine(ISolutionProvider workspaceManager, SentinelConfiguration config)
+    public ProjectStructureEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;
@@ -17,7 +17,7 @@ public class ProjectStructureEngine
 
     public async Task<DocumentEditResult> FixMismatchedNamespacesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var project = document.Project;
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
@@ -66,7 +66,7 @@ public class ProjectStructureEngine
 
     public async Task<DocumentEditResult> PreviewMoveFileToNamespaceFolderAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -157,7 +157,7 @@ public class ProjectStructureEngine
         string? filePath = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<string>();
 
         var projects = solution.Projects.AsEnumerable();
