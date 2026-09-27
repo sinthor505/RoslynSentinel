@@ -35,7 +35,7 @@ public class TranscriptReplayTests
 {
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Generation", "Refactoring", "Workspace",
+        "Generation", "Refactoring", "Workspace", "WorkspaceFileContent",
     };
 
     private static readonly Regex SizeFromPathRegex = new(@"[/\\]n(\d+)[/\\]", RegexOptions.Compiled);

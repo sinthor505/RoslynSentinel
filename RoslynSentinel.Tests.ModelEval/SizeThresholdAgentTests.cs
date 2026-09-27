@@ -168,7 +168,7 @@ public class SizeThresholdAgentTests
     // for why Basic is used instead of Advanced here.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Refactor", "Workspace",
+        "Refactor", "Workspace", "WorkspaceFileContent",
     };
 
     private IHost _host = null!;

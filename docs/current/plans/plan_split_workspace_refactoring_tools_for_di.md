@@ -1,54 +1,104 @@
 # Split SentinelWorkspaceTools / SentinelRefactoringTools for DI-level tool-set granularity
 
-## Status update (2026-09-20) -- read this before trusting "not implemented" language below
+## Status update (2026-09-27, part 2) -- Decision 7 step 4 / Addendum B closed out
 
-Found while investigating whether `SyncTypeAndFilename` is a duplicated MCP tool
-(see `docs/current/TODO.md`'s entry on the same date). This plan is **much further along than any
-prior doc/memory tracked** -- confirmed against actual source, not assumption:
+Follow-up to the same-day status note below, after re-reading Addendum B's exact text (lines
+"Revised grouping" / "Why this way and not a `SentinelWorkspaceTools` rename or breaking split")
+against the just-confirmed fact that 9 `WorkspaceTools` methods (`GetFileOutline`, `ListAll`,
+`SearchSolutionText`, `GetOperationDetail`, `GetLargeResult`, `ReplaceSnippet`, `CreateFile`,
+`UndoLastApply`, `RetryFailedChanges`; `GetMethodSource` is a 10th) delegate to `_fileEdit`/
+`_readNav`, and that 8 of the 15 direct-construction test files (`ReadFileTests.cs`,
+`GetMethodSourceTests.cs`, `GetOperationDetailTests.cs`, `ReplaceSnippetBatchTests.cs`,
+`ReplaceSnippetSizeGuardTests.cs`, `UndoLastApplyTests.cs`, `CreateFileDeleteFileTests.cs`,
+`ListSolutionItemsAllTests.cs`) construct `WorkspaceTools` directly and plausibly call exactly
+those methods.
 
-- **All 8 planned `*Tools`/`*Impl` file pairs already exist and are registered**, both from the
-  main body (Decision 1: `WorkspaceFileEditTools`/`Impl`, `WorkspaceBuildTestTools`/`Impl`,
-  `WorkspaceProjectManagementTools`/`Impl`, `WorkspaceReadNavigationTools`/`Impl`,
-  `WorkspaceHealthMiscTools`/`Impl`, `RefactoringSignatureTools`/`Impl`,
-  `RefactoringStructuralTools`/`Impl`, `RefactoringExtractionDocsTools`/`Impl`) and from
-  **Addendum A** (`SymbolNavigationTools`/`Impl`, `SymbolRelationshipTools`/`Impl` -- Addendum A is
-  also done, not just proposed).
-- Step 1 (shared static helpers) is done: `RoslynSentinel.Common/OperationBlobHelper.cs` and
-  `RoslynSentinel.Basic/RefactoringToolHelpers.cs` both exist and are called from their intended
-  sites (`SentinelWorkspaceTools.cs`, `SentinelWholeFileWriteTools.cs`,
-  `WorkspaceProjectManagementImpl.cs`).
-- Registration (Decision 4) landed via a **different mechanism than this doc specifies**: not raw
-  `activeModes.Contains("WorkspaceFileIO")` string checks in `ServiceRegistrationExtensionsBasic.cs`,
-  but `activeToolClasses.Contains("WorkspaceFileEditTools")` gated by a `ToolClassRegistry.cs`
-  mode-to-class-name dictionary (`BasicModeToToolClasses`/`AdvancedModeToToolClasses`). Every split
-  class from Decision 1 + Addendum A has its own `if (activeToolClasses.Contains("<ClassName>"))`
-  block in `ServiceRegistrationExtensionsBasic.cs` (verified lines 185-309) -- functionally
-  equivalent opt-in granularity, different plumbing than the code sample under Decision 4.
-- **What is NOT done -- this is the actual gap**: the "rewrite as thin facade" half of steps 2/3
-  (Decision 3) is incomplete and inconsistent between the two classes:
-  - `SentinelWorkspaceTools.cs` is a **partial** facade: some methods delegate to the new split
-    classes (`GetDiagnostics`, `Build`, `RunTest`, `SafeDeleteUnusedSymbol`, `CreateProject`,
-    `SplitProjectByFolder`, etc.), but others (`ReplaceSnippet`, `ReplaceSnippetBatch`, `CreateFile`)
-    still contain their full original method bodies inline -- confirmed via `GetFileOutline`
-    (still 1244 lines; `ReplaceSnippet` alone spans lines 182-383).
-  - `SentinelRefactoringTools.cs` has **not been converted to a facade at all** for the 6 structural
-    methods: `Member`, `ModifyEnum`, `ModifyAttribute`, `ModifyModifier`, `ModifyBaseType`,
-    `SyncTypeAndFilename` all still have full independent bodies in `SentinelRefactoringTools.cs`
-    (confirmed at line 284 for `SyncTypeAndFilename`) that duplicate -- not delegate to --
-    `RefactoringStructuralTools.cs`'s copies of the same 6 methods (line 165 for
-    `SyncTypeAndFilename`). Both are live `[McpServerTool]`-attributed methods with identical
-    signatures; only `RefactoringStructuralTools`'s registration mode (`"RefactorStructural"`) is
-    unreachable today, which is the only reason this isn't a live tool-name collision right now.
-  - No equivalent check has been done yet for `RefactoringSignatureTools`/`RefactoringExtractionDocsTools`
-    vs. `SentinelRefactoringTools`, or for `SentinelSymbolTools` vs. its Addendum A split -- treat
-    those as unverified, not confirmed-clean, until someone actually diffs them.
+**Conclusion: no `WorkspaceTools.cs` code edit is warranted, and the "remaining gap" language below
+was itself a misreading of Addendum B.** Addendum B narrows *mode-string registration* only --
+literally "Decision 4's if-blocks" / what registers under the `"Workspace"` mode string in DI. It
+does not ask to delete `_fileEdit`/`_readNav` fields or their 9-10 delegating methods from the
+`WorkspaceTools` C# class. Decision 3 (facade preservation) is explicit and takes precedence: the
+facade's whole purpose is that its original method signatures stay callable for direct-construction
+test call sites, and Decision 3's own "Rejected alternative" section already rejected breaking
+those call sites as too costly. Removing the 9-10 methods would break exactly the 8 test files
+above at compile time -- reintroducing the cost Decision 3 rejected, not completing Addendum B.
 
-**Practical effect on "Next step"**: Decision 7 steps 1 and 1.5 (helpers, engine-usage audit) and
-the file-creation half of steps 2/3/3.5 are done. The remaining work is finishing the *facade
-delegation* half of steps 2 and 3 (and auditing whether Addendum A's `SentinelSymbolTools` facade
-is similarly incomplete) -- i.e. actually replacing the duplicated method bodies in
-`SentinelWorkspaceTools.cs`/`SentinelRefactoringTools.cs` with one-line delegating calls, per
-Decision 3's design, rather than creating any new files.
+At the mode-string level (the only level Addendum B actually targets), there is also nothing left
+to narrow: `ToolClassRegistry.cs`'s `"Workspace"` entry maps to one class name, `"WorkspaceTools"`
+(plus `DocumentationTools`/`SentinelSymbolTools`/`SymbolRelationshipTools`/`GitTools`) -- never to
+"the 5 split classes" the way Addendum B's prose assumed. A class-name umbrella can't be narrowed
+below one class without either renaming/splitting the facade type itself (explicitly rejected by
+Decision 3 and Addendum B's own "Why this way" section) or duplicating its method bodies into a
+second class (rejected as pure duplication). `"WorkspaceFileContent"` remains a real, working
+*alternate* path (`WorkspaceFileEditTools`/`WorkspaceReadNavigationTools` directly, no facade, no
+project-management/build-test/health-misc tools riding along) for callers who want the narrower
+surface -- which is what the 8 ModelEval fixtures now use it for -- while `"Workspace"` continues to
+also work for existing/legacy callers. That coexistence is the intended end state, not a leftover
+defect.
+
+**Decision 7 step 4 is therefore complete as of this note**: mode-string map done (prior note),
+8 ModelEval fixtures updated to add `"WorkspaceFileContent"` (this session, verified via
+`ReplaceSnippet` batchEdits, `validationResult.success: true`, 0 failures), and no facade-narrowing
+edit exists to make. Remaining Decision 7 work is only the optional items already listed under
+"Pending"/Decision 5/Decision 6.
+
+**Verification run (2026-09-27, via `RunTest`, solution scope, ~5 min)**: all 4 target projects
+named in step 4 pass clean with zero failures -- `.Battery` 990/990 (10 skipped), `.Advanced`
+897/897 (1 skipped), `.Basic` 232/232, `.Asyncify` 92/92 -- confirming the facade delegation and
+the 8 fixture edits introduced no regression. `.Tests`/`.PlanStepRunner` also clean (251/251,
+8/8); `.Integration` fully skipped (84/84, pre-existing/unrelated). The only failures in the run
+were 15 in `.Tests.ModelEval` (`InvalidOperationException: LM Studio request failed with
+BadRequest`), all in unrelated fixtures (example: `Model_PlansWholeFileRewriteFix_PrefersCallingHelper`)
+-- an LM Studio backend/connectivity issue, not a compile or logic fault, and `.ModelEval` is not
+one of step 4's named verification targets. **Decision 7 step 4 is now fully complete, including
+verification.**
+
+## Status update (2026-09-27) -- read this before trusting "not implemented" language below
+
+Re-verified against actual source (MCP `GetFileOutline`/`GetMethodSource`/`SearchSolutionText`,
+solution loaded) after the 2026-09-20 status note above was found to be stale on several points.
+Superseding that note:
+
+- **All 8 planned `*Tools`/`*Impl` file pairs + Addendum A's 2 exist and are registered** --
+  unchanged from 2026-09-20, still true.
+- Step 1 (shared static helpers) -- unchanged, still done.
+- **Step 3 is actually done, contradicting the 2026-09-20 note**: `SentinelRefactoringTools.cs`'s 6
+  structural methods (`Member`, `ModifyEnum`, `ModifyAttribute`, `ModifyModifier`, `ModifyBaseType`,
+  `SyncTypeAndFilename`) are now confirmed one-line delegates to `_structural.XXX(...)`
+  (`RefactoringStructuralTools`'s `_impl`-backed implementation) -- verified via `GetMethodSource` on
+  all 6. No duplicate bodies remain.
+- **Step 3.5 (Addendum A) also appears done**: `SentinelSymbolTools.cs`'s 7 methods are all
+  13-18-line outline spans consistent with signature + single delegate line to `_navigation`/
+  `_relationship` fields, matching `SymbolNavigationTools`/`SymbolRelationshipTools`.
+- **Step 2 (`SentinelWorkspaceTools`) landed under a new filename**: the class was renamed to
+  `WorkspaceTools` (file `RoslynSentinel.Server.Basic/WorkspaceTools.cs`, 698 lines). It still holds
+  `_fileEdit` (`WorkspaceFileEditTools`) and `_readNav` (`WorkspaceReadNavigationImpl`) fields
+  directly, alongside `_projectManagement`/`_buildTest`/`_healthMisc`, and its `ReadFile` (verified
+  via `GetMethodSource`) is a one-line delegate to `_fileEdit.ReadFile(...)` -- so the facade
+  delegation itself is done, matching Decision 3's design.
+- **Step 4 / Addendum B: mode-string map is done; the "umbrella-narrowing" language below was a
+  misreading of Addendum B -- see the 2026-09-27 part 2 note above, which supersedes this bullet.**
+  - `ToolClassRegistry.cs` (the actual mechanism, superseding this doc's
+    `ServiceRegistrationExtensionsBasic.cs` if-block sketch) does have a `"WorkspaceFileContent"`
+    entry mapping to `["WorkspaceFileEditTools", "WorkspaceReadNavigationTools"]`, and all the
+    fine-grained per-class modes from Decision 4 exist.
+  - ~~But Addendum B's actual point was to narrow `WorkspaceTools`'s (the facade's) own **internal
+    composition** so "Workspace" stops implying file-content tools.~~ Not correct -- Addendum B
+    narrows mode-string registration only; see part 2 above. `WorkspaceTools` still directly
+    composes `_fileEdit`/`_readNav` and still exposes `ReadFile`, `GetFileOutline`,
+    `ListAll`, `SearchSolutionText`, `GetOperationDetail`, `GetLargeResult`, `ReplaceSnippet`,
+    `CreateFile`, `UndoLastApply`, `RetryFailedChanges` as its own delegating methods **by design**
+    (Decision 3 facade preservation), not as an incomplete migration. `"WorkspaceFileContent"` is a
+    genuine alternate path, not a redundant one -- it's narrower (2 classes, no project-management/
+    build-test/health-misc) and facade-free.
+  - **Practical consequence, resolving Addendum B's own gating condition**: the 8 ModelEval fixtures
+    now have `"WorkspaceFileContent"` added (done this session) in addition to keeping `"Workspace"`
+    -- belt-and-suspenders, since `"Workspace"` alone was already confirmed sufficient and remains so.
+  - No equivalent check has been done for `RefactoringSignatureTools`/`RefactoringExtractionDocsTools`
+    vs. `SentinelRefactoringTools` -- treat as unverified.
+
+**Practical effect on "Next step"**: superseded by the 2026-09-27 part 2 note above -- Decision 7
+step 4 is complete, no `WorkspaceTools.cs` edit is needed or planned.
 
 ## Context
 

@@ -73,7 +73,7 @@ public class PlanOnlyAgentTests
     // the BlockedToolFilter below is what actually enforces "no edits", not the mode selection.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Refactor", "Workspace",
+        "Refactor", "Workspace", "WorkspaceFileContent",
     };
 
     // Tool names blocked for this fixture. Matches WholeFileRewriteAgentTests's fixture (BlockConverter/

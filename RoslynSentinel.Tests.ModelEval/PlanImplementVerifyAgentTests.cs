@@ -173,7 +173,7 @@ public class PlanImplementVerifyAgentTests
     // filter below is what actually enforces read-only, not the mode selection.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Refactor", "Workspace",
+        "Refactor", "Workspace", "WorkspaceFileContent",
     };
 
     // Blocks every mutating tool exposed by ActiveModes so the plan and verify phases genuinely

@@ -114,7 +114,7 @@ public class OrderPricingRefactorAgentTests
     // ModifyModifier), without pulling in Advanced's larger tool catalog.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Refactor", "Workspace",
+        "Refactor", "Workspace", "WorkspaceFileContent",
     };
 
     // See OrderPricingRefactorChainAgentTests' identical toggle for the rationale -> an isolation
