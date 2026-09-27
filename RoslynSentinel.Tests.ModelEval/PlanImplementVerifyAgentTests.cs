@@ -193,6 +193,9 @@ public class PlanImplementVerifyAgentTests
     // for why schema size itself (not context growth or task difficulty) is the latency driver
     // this is meant to test. Not a permanent restriction: this list reflects what qwen3.5-9b-coder
     // happened to use on this one fixture, not a general-purpose minimal toolset.
+    // "Search" was "SearchSolutionText" until commit d99fc78a (2026-09-27, unified Search
+    // tool migration). If this set stops matching the live tool list, check for a similar
+    // tool rename before assuming the fixture itself is stale.
     private static readonly HashSet<string> MinimalToolNames = new(StringComparer.Ordinal)
     {
         "ReadFile", "ApplyDiff", "Search", "Build", "LoadSolution",
