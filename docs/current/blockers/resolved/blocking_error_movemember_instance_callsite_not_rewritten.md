@@ -26,6 +26,15 @@ complete so that whatever the mechanism was, the preview now validates against t
 edit and cannot misclassify on that basis. If this class of bug recurs with a complete changeset
 already in place, the "why" caveat above is the next place to look.
 
+**Update 2026-09-27:** the "why" caveat above is now answered, and this fix is already
+confirmed to still hold via runtime debug logging against the exact real-world repro
+(`brokenHere=True` for all 15 call sites, matching the real `CS1061`s every time) -- see
+`docs/current/blockers/blocking_error_movemember_ledger_discarded_on_apply.md`, which re-ran this
+same repro post-fix and found a second, different defect one layer above this one (the MCP tool
+wrapper discards the engine's already-correct call-site ledger instead of surfacing it). That doc
+is the current one for this repro; this doc's FIXED status and regression test remain accurate
+and unaffected.
+
 ---
 
 **Original status: OPEN.** First real-world exercise of `MoveMember`'s instance-member path (newly enabled

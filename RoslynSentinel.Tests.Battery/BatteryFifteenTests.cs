@@ -1,19 +1,16 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Battery;
-
 // ────────────────────────────────────────────────────────────────────────────
 // Battery #15 -> ApiIntegrationEngine, AsyncOptimizationEngine,
 //               CodeFlowEngine, CodeHealingEngine
 // ────────────────────────────────────────────────────────────────────────────
-
 [TestFixture]
 public class ApiIntegrationEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
     private ApiIntegrationEngine _engine = null!;
     private static readonly (string, string)[] Stub = [("Other.cs", "public class Other {}")];
-
     [SetUp]
     public void SetUp()
     {
@@ -24,14 +21,11 @@ public class ApiIntegrationEngineTests
 
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
-
     [Test]
     public async Task AddValidationToPoco_UnknownFile_ReportsWithoutThrowing()
     {
-        var result = await _engine.AddValidationToPocoAsync("NoSuchFile.cs", "PersonDto");
-
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
-            "Engines report not-found through Outcome instead of throwing.");
+        var result = await new ApiAutomationEngine(_mgr).AddValidationToPocoAsync("NoSuchFile.cs", "PersonDto");
+        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified), "Engines report not-found through Outcome instead of throwing.");
     }
 
     [Test]
@@ -42,11 +36,8 @@ public class PersonDto
 {
     public string Name { get; set; }
 }";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("PersonDto.cs", source)]));
-
-        var result = await _engine.AddValidationToPocoAsync("PersonDto.cs", "PersonDto");
-
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("PersonDto.cs", source)]));
+        var result = await new ApiAutomationEngine(_mgr).AddValidationToPocoAsync("PersonDto.cs", "PersonDto");
         Assert.That(result.UpdatedText, Does.Contain("Required"), "string property should get [Required] attribute");
         Assert.That(result.UpdatedText, Does.Contain("StringLength"), "string property should get [StringLength] attribute");
     }
@@ -59,11 +50,8 @@ public class ProductDto
 {
     public int Quantity { get; set; }
 }";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("ProductDto.cs", source)]));
-
-        var result = await _engine.AddValidationToPocoAsync("ProductDto.cs", "ProductDto");
-
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("ProductDto.cs", source)]));
+        var result = await new ApiAutomationEngine(_mgr).AddValidationToPocoAsync("ProductDto.cs", "ProductDto");
         Assert.That(result.UpdatedText, Does.Contain("Range"), "int property should get [Range] attribute");
     }
 }
@@ -74,7 +62,6 @@ public class AsyncOptimizationEngineTests
     private PersistentWorkspaceManager _mgr = null!;
     private AsyncOptimizationEngine _engine = null!;
     private static readonly (string, string)[] Stub = [("Other.cs", "public class Other {}")];
-
     [SetUp]
     public void SetUp()
     {
@@ -85,13 +72,10 @@ public class AsyncOptimizationEngineTests
 
     [TearDown]
     public async Task TearDown() => _mgr?.Dispose();
-
     [Test]
     public async Task OptimizeToValueTask_UnknownFile_ThrowsException()
     {
-        Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _engine.OptimizeToValueTaskAsync("NoSuchFile.cs", "DoWork"),
-            "missing file should throw InvalidOperationException");
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _engine.OptimizeToValueTaskAsync("NoSuchFile.cs", "DoWork"), "missing file should throw InvalidOperationException");
     }
 
     [Test]
@@ -106,13 +90,9 @@ public class MyService
         await Task.CompletedTask;
     }
 }";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("MyService.cs", source)]));
-
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyService.cs", source)]));
         var result = await _engine.OptimizeToValueTaskAsync("MyService.cs", "DoWorkAsync");
-
-        Assert.That(result.UpdatedText, Does.Contain("ValueTask"),
-            "Task-returning method with single await should be convertable to ValueTask");
+        Assert.That(result.UpdatedText, Does.Contain("ValueTask"), "Task-returning method with single await should be convertable to ValueTask");
     }
 
     [Test]
@@ -128,11 +108,8 @@ public class MyService
         await Task.CompletedTask;
     }
 }";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("MyService.cs", source)]));
-
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyService.cs", source)]));
         var result = await _engine.OptimizeToValueTaskAsync("MyService.cs", "ProcessAsync");
-
         Assert.That(result.UpdatedText, Does.Contain("WARNING"), "method with multiple awaits should produce a warning comment");
     }
 }
@@ -143,7 +120,6 @@ public class CodeFlowEngineTests
     private PersistentWorkspaceManager _mgr = null!;
     private CodeFlowEngine _engine = null!;
     private static readonly (string, string)[] Stub = [("Other.cs", "public class Other {}")];
-
     [SetUp]
     public void SetUp()
     {
@@ -154,7 +130,6 @@ public class CodeFlowEngineTests
 
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
-
     [Test]
     public async Task ReduceBlockDepth_UnknownFile_ReturnsErrorComment()
     {
@@ -176,11 +151,8 @@ public class Processor
         }
     }
 }";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Processor.cs", source)]));
-
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Processor.cs", source)]));
         var result = await _engine.ReduceBlockDepthAsync("Processor.cs", "Process");
-
         Assert.That(result.UpdatedText, Does.Contain("return"), "early return should be added");
         Assert.That(result.UpdatedText, Does.Contain("!"), "inverted condition should use logical NOT");
     }
@@ -197,11 +169,8 @@ public class Logger
         System.Console.WriteLine(""done"");
     }
 }";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Logger.cs", source)]));
-
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Logger.cs", source)]));
         var result = await _engine.ReduceBlockDepthAsync("Logger.cs", "Log");
-
         Assert.That(result.UpdatedText!, Does.Not.StartWith("// ErrorDetails:"), "should return source, not error comment");
         Assert.That(result.UpdatedText, Does.Contain("Log"), "method name should still appear");
     }
@@ -213,7 +182,6 @@ public class CodeHealingEngineTests
     private PersistentWorkspaceManager _mgr = null!;
     private CodeHealingEngine _engine = null!;
     private static readonly (string, string)[] Stub = [("Other.cs", "public class Other {}")];
-
     [SetUp]
     public void SetUp()
     {
@@ -224,7 +192,6 @@ public class CodeHealingEngineTests
 
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
-
     [Test]
     public async Task FixThreadSleep_UnknownFile_ReturnsEmptyString()
     {
@@ -245,11 +212,8 @@ public class Worker
         Thread.Sleep(1000);
     }
 }";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Worker.cs", source)]));
-
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Worker.cs", source)]));
         var result = await _engine.FixThreadSleepAsync("Worker.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("Task.Delay"), "Thread.Sleep in async method should be replaced with Task.Delay");
         Assert.That(result.UpdatedText, Does.Contain("await"), "replacement should be awaited");
     }
@@ -266,11 +230,8 @@ public class SyncWorker
         Thread.Sleep(500);
     }
 }";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("SyncWorker.cs", source)]));
-
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("SyncWorker.cs", source)]));
         var result = await _engine.FixThreadSleepAsync("SyncWorker.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("Thread.Sleep"), "Thread.Sleep in sync method should not be touched");
         Assert.That(result.UpdatedText, Does.Not.Contain("Task.Delay"), "no Task.Delay should appear for sync context");
     }

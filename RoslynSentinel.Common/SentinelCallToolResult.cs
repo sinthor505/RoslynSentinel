@@ -70,6 +70,15 @@ public static class ToolErrorCode
     /// <c>action: confirmationCode</c> to proceed with the same (cached) changeset.
     /// </summary>
     public const string ConfirmationRequired = "ConfirmationRequired";
+
+    /// <summary>
+    /// MoveMember's changeset was rejected by the compile-gate because one or more call sites
+    /// of a moved instance member could not be rewritten unambiguously, and the engine already
+    /// explained exactly why (see MoveMemberResult.PendingLedgerEntries/SkippedCallSites). The
+    /// caller should retry with callSiteFixups keyed by "FilePath:Line" using one of the named
+    /// candidates (or "new"), rather than treating this as an opaque compiler-error failure.
+    /// </summary>
+    public const string UnresolvedCallSites = "UnresolvedCallSites";
 }
 
 // ── Envelope ──────────────────────────────────────────────────────────────────

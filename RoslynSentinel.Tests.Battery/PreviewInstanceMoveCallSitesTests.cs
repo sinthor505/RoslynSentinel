@@ -89,7 +89,11 @@ public class PreviewInstanceMoveCallSitesTests
         Assert.Multiple(() =>
         {
             Assert.That(fooSite.Status, Is.EqualTo(CallSiteStatus.Valid));
-            Assert.That(fooSite.SuggestedFix, Is.EqualTo("_classB.Foo"));
+            // SuggestedFix is receiver-only: MoveInstanceMembersAsync's rewrite calls
+            // original.WithExpression(...) on the existing member-access node, which keeps its
+            // own .Name segment - a value that already included ".Foo" here produced a doubled
+            // method name on apply (e.g. "_classB.Foo.Foo").
+            Assert.That(fooSite.SuggestedFix, Is.EqualTo("_classB"));
             Assert.That(fooSite.Candidates, Does.Contain("_classB"));
         });
     }
@@ -195,7 +199,11 @@ public class PreviewInstanceMoveCallSitesTests
         Assert.Multiple(() =>
         {
             Assert.That(fooSite.Status, Is.EqualTo(CallSiteStatus.Valid));
-            Assert.That(fooSite.SuggestedFix, Is.EqualTo("_classB.Foo"));
+            // SuggestedFix is receiver-only: MoveInstanceMembersAsync's rewrite calls
+            // original.WithExpression(...) on the existing member-access node, which keeps its
+            // own .Name segment - a value that already included ".Foo" here produced a doubled
+            // method name on apply (e.g. "_classB.Foo.Foo").
+            Assert.That(fooSite.SuggestedFix, Is.EqualTo("_classB"));
             Assert.That(fooSite.Candidates, Does.Contain("_classB"));
         });
     }

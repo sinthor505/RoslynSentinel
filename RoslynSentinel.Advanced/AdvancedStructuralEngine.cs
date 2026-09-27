@@ -975,7 +975,15 @@ public class AdvancedStructuralEngine
 
                 var lineSpan = refLocation.Location.GetLineSpan();
                 var callExpression = memberAccess?.ToString() ?? refNode?.ToString() ?? symbol.Name;
-                var isMoveOrderDependent = refNode != null && movingMemberDeclarationSpans.Any(span => span.Contains(refNode.Span));
+
+                // TextSpan carries no document identity, so this must not compare spans across
+                // documents: a call site in an unrelated (often short) file can coincidentally
+                // fall inside the same byte-offset range as the moved method's declaration span
+                // in the SOURCE file, producing a false MoveOrderDependent classification (seen
+                // for BatteryFifteenTests.cs/BatteryThirtyTests.cs call sites during MoveMember
+                // testing). Only the source document's own span comparisons are meaningful.
+                bool isSameDocAsSource = string.Equals(refDoc.FilePath, document.FilePath, StringComparison.OrdinalIgnoreCase);
+                var isMoveOrderDependent = isSameDocAsSource && refNode != null && movingMemberDeclarationSpans.Any(span => span.Contains(refNode.Span));
 
                 var brokenHere = validation.Diagnostics.Any(d => string.Equals(d.FilePath, refDoc.FilePath, StringComparison.OrdinalIgnoreCase) && d.StartLine == lineSpan.StartLinePosition.Line + 1);
 
@@ -1028,8 +1036,13 @@ public class AdvancedStructuralEngine
 
                 if (candidates.Count == 1)
                 {
+                    // SuggestedFix (like callSiteFixups) is a receiver-only expression: the rewrite in
+                    // MoveInstanceMembersAsync calls original.WithExpression(...) on the existing
+                    // member-access node, which keeps its own .Name segment. A value that already
+                    // includes ".{symbol.Name}" here produced a doubled method name on apply (e.g.
+                    // "_apiAutomationEngine.AddValidationToPocoAsync.AddValidationToPocoAsync").
                     results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Valid, null,
-                        $"{candidates[0]}.{symbol.Name}", candidates));
+                        candidates[0], candidates));
                     continue;
                 }
 

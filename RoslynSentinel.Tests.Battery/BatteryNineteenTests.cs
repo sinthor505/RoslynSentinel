@@ -1,11 +1,9 @@
 // Battery #19 -> GenerationTools
 // Tests all 13 public methods of GenerationTools in-memory via TestSolutionBuilder.
-
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
-
 [TestFixture]
 public class BatteryNineteenTests
 {
@@ -43,7 +41,6 @@ public class OrdersController : ControllerBase
 
 public record OrderDto(int Id, string Name);
 ";
-
     private const string PocoSource = @"
 namespace TestProj;
 
@@ -60,7 +57,6 @@ public interface IOrderRepository
     Task SaveAsync(Order order);
 }
 ";
-
     [SetUp]
     public void Setup()
     {
@@ -77,7 +73,6 @@ public interface IOrderRepository
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -85,7 +80,6 @@ public interface IOrderRepository
     }
 
     // --- GenerateClassesFromJson (sync) ---
-
     [Test]
     public void GenerateClassesFromJson_ValidJson_ReturnsResult()
     {
@@ -103,7 +97,6 @@ public interface IOrderRepository
     }
 
     // --- GenerateHttpClient ---
-
     [Test]
     public async Task GenerateHttpClient_ValidController_ReturnsCode()
     {
@@ -117,13 +110,10 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _generationTools.GenerateHttpClient(reason: "test message", "NonExistent.cs", "OrdersController");
-
-        Assert.That(result, Is.Not.Null,
-            "Tools return a message rather than throwing for an unknown file.");
+        Assert.That(result, Is.Not.Null, "Tools return a message rather than throwing for an unknown file.");
     }
 
     // --- GenerateConstructor ---
-
     [Test]
     public async Task GenerateConstructor_ValidClass_ReturnsCode()
     {
@@ -141,7 +131,6 @@ public interface IOrderRepository
     }
 
     // --- GenerateToString ---
-
     [Test]
     public async Task GenerateToString_ValidClass_ReturnsResult()
     {
@@ -151,7 +140,6 @@ public interface IOrderRepository
     }
 
     // --- GenerateRepositoryInterface ---
-
     [Test]
     public async Task GenerateRepositoryInterface_ValidClass_ReturnsResult()
     {
@@ -161,7 +149,6 @@ public interface IOrderRepository
     }
 
     // --- GenerateFluentBuilder ---
-
     [Test]
     public async Task GenerateFluentBuilder_ValidClass_ReturnsResult()
     {
@@ -171,7 +158,6 @@ public interface IOrderRepository
     }
 
     // --- GenerateDecoratorClass ---
-
     [Test]
     public async Task GenerateDecoratorClass_ValidInterface_ReturnsResult()
     {
@@ -189,7 +175,6 @@ public interface IOrderRepository
     }
 
     // --- GenerateDefaultConfigJson ---
-
     [Test]
     public async Task GenerateDefaultConfigJson_ValidProject_ReturnsJson()
     {
@@ -203,13 +188,10 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _generationTools.GenerateDefaultConfigJson(reason: "test message", "NoSuchProject");
-
-        Assert.That(result, Is.Not.Null,
-            "Tools return a message rather than throwing for an unknown project.");
+        Assert.That(result, Is.Not.Null, "Tools return a message rather than throwing for an unknown project.");
     }
 
     // --- GenerateAsyncOverload ---
-
     [Test]
     public async Task GenerateAsyncOverload_SyncMethod_ReturnsCode()
     {
@@ -223,17 +205,15 @@ public interface IOrderRepository
     public async Task GenerateAsyncOverload_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _asyncOptimizationEngine.GenerateAsyncOverloadAsync("NonExistent.cs", "GetData"));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _asyncOptimizationEngine.GenerateAsyncOverloadAsync("NonExistent.cs", "GetData"));
     }
 
     // --- AddValidationToPoco ---
-
     [Test]
     public async Task AddValidationToPoco_ValidClass_ReturnsCode()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _apiIntegrationEngine.AddValidationToPocoAsync("Order.cs", "Order");
+        var result = await _apiAutomationEngine.AddValidationToPocoAsync("Order.cs", "Order");
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
@@ -241,12 +221,11 @@ public interface IOrderRepository
     public async Task AddValidationToPoco_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _apiIntegrationEngine.AddValidationToPocoAsync("NonExistent.cs", "Order");
+        var result = await _apiAutomationEngine.AddValidationToPocoAsync("NonExistent.cs", "Order");
         Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
     // --- ImplementInterfaceSafe ---
-
     [Test]
     public async Task ImplementInterfaceSafe_ValidClassAndInterface_ReturnsCode()
     {
@@ -299,7 +278,6 @@ public interface IOrderRepository
     }
 
     // --- InterpolateStringSafe ---
-
     [Test]
     public async Task InterpolateStringSafe_WithFormatCall_ReturnsCode()
     {
@@ -314,8 +292,6 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _generationTools.InterpolateStringSafe(reason: "test message", "NonExistent.cs", "string.Format");
-
-        Assert.That(result, Is.Not.Null,
-            "Tools return a message rather than throwing for an unknown file.");
+        Assert.That(result, Is.Not.Null, "Tools return a message rather than throwing for an unknown file.");
     }
 }

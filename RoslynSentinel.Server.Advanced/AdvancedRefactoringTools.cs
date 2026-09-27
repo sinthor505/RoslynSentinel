@@ -552,7 +552,44 @@ public class AdvancedRefactoringTools
 
             var apply = await ValidateAndApplyAsync(result.Changes, $"Move [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.", "MoveMember", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
+            {
+                // The compile-gate rejection is often just a symptom: the engine already knows
+                // exactly which call sites it couldn't rewrite and why (BlockReason,
+                // CandidatesInScope) - surface that instead of the raw compiler-error dump so the
+                // caller can retry with a correct callSiteFixups entry rather than guessing.
+                if (result.PendingLedgerEntries is { Count: > 0 } unresolvedEntries)
+                {
+                    // Detail must echo e.FilePath verbatim (not Path.GetFileName): that full path is the
+                    // literal callSiteFixups key MoveInstanceMembersAsync matches against
+                    // ("{row.FilePath}:{row.Line}") - a bare filename here would silently never match.
+                    var detail = string.Join("; ", unresolvedEntries.Select(e =>
+                        $"{e.FilePath}:{e.Line} [{e.BrokenExpression}] {e.Status} ({e.BlockReason})" +
+                        (e.CandidatesInScope.Count > 0 ? $" - candidates in scope: {string.Join(", ", e.CandidatesInScope)}" : "")));
+                    return new SentinelCallToolResult<AppliedChangeSummary>
+                    {
+                        IsSuccess = false,
+                        ErrorData = new ResultError(
+                            ToolErrorCode.UnresolvedCallSites,
+                            $"{unresolvedEntries.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site.",
+                            detail)
+                    };
+                }
+
+                if (result.SkippedCallSites.Count > 0)
+                {
+                    var detail = string.Join("; ", result.SkippedCallSites.Select(s => $"{s.FilePath}:{s.LineNumber} ({s.Reason})"));
+                    return new SentinelCallToolResult<AppliedChangeSummary>
+                    {
+                        IsSuccess = false,
+                        ErrorData = new ResultError(
+                            ToolErrorCode.UnresolvedCallSites,
+                            $"{result.SkippedCallSites.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site.",
+                            detail)
+                    };
+                }
+
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsSuccess = false, ErrorData = apply.Error };
+            }
 
             var summaryNote = $"Moved [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.";
 

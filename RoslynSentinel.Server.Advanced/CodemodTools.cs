@@ -1,15 +1,12 @@
 using System.ComponentModel;
-
 using Microsoft.Extensions.Logging;
-
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Advanced;
-
 [McpServerToolType]
 public class CodemodTools
 {
-    // ── shared engines ────────────────────────────────────────────────────────
+    private readonly ApiAutomationEngine _apiAutomationEngine; // ── shared engines ────────────────────────────────────────────────────────
     private readonly RefactoringEngine _refactoringEngine;
     private readonly LogicOptimizationEngine _logicOptimizationEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
@@ -42,41 +39,9 @@ public class CodemodTools
     private readonly TestingEngine _testingEngine;
     private readonly PathDrivenTestEngine _pathDrivenTestEngine;
     private readonly AdvancedRefactoringTools _advancedRefactoringTools;
-
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<CodemodTools> _logger;
-
-    public CodemodTools(
-        RefactoringEngine refactoringEngine,
-        LogicOptimizationEngine logicOptimizationEngine,
-        AsyncOptimizationEngine asyncOptimizationEngine,
-        SyntaxUpgradeEngine syntaxUpgradeEngine,
-        CodeStyleEngine codeStyleEngine,
-        AdvancedLogicEngine advancedLogicEngine,
-        ModernizationEngine modernizationEngine,
-        CodeGenerationEngine codeGenerationEngine,
-        IDEStyleEngine ideStyleEngine,
-        CodeHealingEngine codeHealingEngine,
-        AdvancedRefactoringEngine advancedRefactoringEngine,
-        MsToolAugmentEngine augmentEngine,
-        DocumentationEngine documentationEngine,
-        ProjectStructureEngine projectStructureEngine,
-        ThreadSafetyEngine threadSafetyEngine,
-        GranularRefactoringEngine granularRefactoringEngine,
-        OutParamRefactoringEngine outParamRefactoringEngine,
-        StandardRefactoringEngine standardRefactoringEngine,
-        CodeFlowEngine codeFlowEngine,
-        AdvancedStructuralEngine advancedStructuralEngine,
-        ModernLoggingEngine modernLoggingEngine,
-        ImmutabilityEngine immutabilityEngine,
-        ApiIntegrationEngine apiIntegrationEngine,
-        ArchitecturalEngine architecturalEngine,
-        AnalysisEngine analysisEngine,
-        TestingEngine testingEngine,
-        PathDrivenTestEngine pathDrivenTestEngine,
-        AdvancedRefactoringTools advancedRefactoringTools,
-        ISolutionProvider workspaceManager,
-        ILogger<CodemodTools> logger)
+    public CodemodTools(RefactoringEngine refactoringEngine, LogicOptimizationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, AdvancedLogicEngine advancedLogicEngine, ModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, ProjectStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, GranularRefactoringEngine granularRefactoringEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, CodeFlowEngine codeFlowEngine, AdvancedStructuralEngine advancedStructuralEngine, ModernLoggingEngine modernLoggingEngine, ImmutabilityEngine immutabilityEngine, ApiIntegrationEngine apiIntegrationEngine, ArchitecturalEngine architecturalEngine, AnalysisEngine analysisEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiAutomationEngine apiAutomationEngine)
     {
         _refactoringEngine = refactoringEngine;
         _logicOptimizationEngine = logicOptimizationEngine;
@@ -108,24 +73,15 @@ public class CodemodTools
         _pathDrivenTestEngine = pathDrivenTestEngine;
         _workspaceManager = workspaceManager;
         _logger = logger;
+        _apiAutomationEngine = apiAutomationEngine;
     }
 
     // ── 1. apply_file_codemod ─────────────────────────────────────────────────
-
     [McpServerTool(Name = "ApplyFileCodemod")]
     [Produces(DataTag.ResultOnly)]
     [Description("Applies a file-wide code transformation. Call DescribeAdvancedToolOptions(\"apply_file_codemod\") for the list of transform values.")]
-    public async Task<SentinelCallToolResult<object>> ApplyFileCodemod(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_file_codemod\") for valid values.")]
-        [ExternalInputRequired(DataTag.DataType)] string transform,
-        [Description("Only used by add_configure_await_false: true (default) appends .ConfigureAwait(false) to all awaits.")]
-        [ExternalInputRequired(DataTag.LibraryMode)] bool libraryMode = true,
-        [Description("Only used by format_document_safe / sort_and_deduplicate_usings: true returns updated content without writing to disk.")]
-        [ToolOption(ToolOptionTag.Preview)] bool preview = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> ApplyFileCodemod([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_file_codemod\") for valid values.")][ExternalInputRequired(DataTag.DataType)] string transform, [Description("Only used by add_configure_await_false: true (default) appends .ConfigureAwait(false) to all awaits.")][ExternalInputRequired(DataTag.LibraryMode)] bool libraryMode = true, [Description("Only used by format_document_safe / sort_and_deduplicate_usings: true returns updated content without writing to disk.")][ToolOption(ToolOptionTag.Preview)] bool preview = false, // RequestContext<CallToolRequestParams> requestParams = null,
+    CancellationToken cancellationToken = default)
     {
         try
         {
@@ -133,284 +89,460 @@ public class CodemodTools
             switch (transform)
             {
                 case "add_braces":
+                {
+                    var r = await _syntaxUpgradeEngine.AddBracesAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _syntaxUpgradeEngine.AddBracesAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No brace-less control flow statements found in '{filePath}'. File already uses braces consistently." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = r.ToJsonSummary() };
+                            IsSuccess = true,
+                            SuccessData = $"No brace-less control flow statements found in '{filePath}'. File already uses braces consistently."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = r.ToJsonSummary()
+                    };
+                }
+
                 case "cleanup_implicit_spans":
+                {
+                    var r = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No implicit Span/Memory conversion patterns found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = r.ToJsonSummary() };
+                            IsSuccess = true,
+                            SuccessData = $"No implicit Span/Memory conversion patterns found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = r.ToJsonSummary()
+                    };
+                }
+
                 case "convert_to_null_coalescing":
+                {
+                    var r = await _logicOptimizationEngine.ConvertToNullCoalescingAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _logicOptimizationEngine.ConvertToNullCoalescingAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No null-check patterns eligible for ??/??= conversion found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = r.ToJsonSummary() };
+                            IsSuccess = true,
+                            SuccessData = $"No null-check patterns eligible for ??/??= conversion found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = r.ToJsonSummary()
+                    };
+                }
+
                 case "convert_to_pattern":
+                {
+                    var r = await _modernizationEngine.ConvertToPatternAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _modernizationEngine.ConvertToPatternAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No if/switch chains eligible for pattern-matching conversion found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = r.ToJsonSummary() };
+                            IsSuccess = true,
+                            SuccessData = $"No if/switch chains eligible for pattern-matching conversion found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = r.ToJsonSummary()
+                    };
+                }
+
                 case "convert_to_switch":
+                {
+                    var r = await _logicOptimizationEngine.ConvertToSwitchAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _logicOptimizationEngine.ConvertToSwitchAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No if-else chains eligible for switch expression conversion found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = r.ToJsonSummary() };
+                            IsSuccess = true,
+                            SuccessData = $"No if-else chains eligible for switch expression conversion found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = r.ToJsonSummary()
+                    };
+                }
+
                 case "fix_mismatched_namespaces":
+                {
+                    var r = await _projectStructureEngine.FixMismatchedNamespacesAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _projectStructureEngine.FixMismatchedNamespacesAsync(filePath, cancellationToken);
+                        return new SentinelCallToolResult<object>()
+                        {
+                            IsSuccess = true,
+                            SuccessData = $"No namespace/folder mismatches found in '{filePath}'."};
+                    }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = r.ToJsonSummary()
+                    };
+                }
+
+                case "fix_thread_sleep":
+                {
+                    try
+                    {
+                        var r = await _codeHealingEngine.FixThreadSleepAsync(filePath, cancellationToken);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No namespace/folder mismatches found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = r.ToJsonSummary() };
-                    }
-                case "fix_thread_sleep":
-                    {
-                        try
-                        {
-                            var r = await _codeHealingEngine.FixThreadSleepAsync(filePath, cancellationToken);
-                            if (string.IsNullOrEmpty(r.UpdatedText))
+                            return new SentinelCallToolResult<object>()
                             {
-                                return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No Thread.Sleep calls eligible for async conversion found in '{filePath}'." };
-                            }
+                                IsSuccess = true,
+                                SuccessData = $"No Thread.Sleep calls eligible for async conversion found in '{filePath}'."};
+                        }
 
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = r.ToJsonSummary() };
-                        }
-                        catch (Exception ex)
+                        return new SentinelCallToolResult<object>()
                         {
-                            _logger.LogError(ex, "fix_thread_sleep unexpected exception for '{FilePathWrapper}'", filePath);
-                            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"fix_thread_sleep for '{filePath}'") };
-                        }
+                            IsSuccess = true,
+                            SuccessData = r.ToJsonSummary()
+                        };
                     }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "fix_thread_sleep unexpected exception for '{FilePathWrapper}'", filePath);
+                        return new SentinelCallToolResult<object>()
+                        {
+                            IsSuccess = false,
+                            ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"fix_thread_sleep for '{filePath}'")
+                        };
+                    }
+                }
+
                 case "format_document_preview":
                     var result = await _refactoringEngine.FormatDocumentPreviewAsync(filePath, cancellationToken);
-                    return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result };
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result
+                    };
                 case "format_document_safe":
                     var result2 = await _msToolAugmentEngine.FormatDocumentSafeAsync(filePath, preview, cancellationToken);
-                    return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result2 };
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result2
+                    };
                 case "generate_xml_documentation_stubs":
+                {
+                    var r = await _documentationEngine.GenerateXmlDocumentationStubsAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _documentationEngine.GenerateXmlDocumentationStubsAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No undocumented public members found in '{filePath}'. File already has XML doc stubs." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = r.ToJsonSummary() };
+                            IsSuccess = true,
+                            SuccessData = $"No undocumented public members found in '{filePath}'. File already has XML doc stubs."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = r.ToJsonSummary()
+                    };
+                }
+
                 case "optimize_task_wait":
+                {
+                    var result3 = await _advancedRefactoringEngine.OptimizeTaskWaitAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result3.UpdatedText))
                     {
-                        var result3 = await _advancedRefactoringEngine.OptimizeTaskWaitAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result3.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No synchronous Task.Wait/.Result/.GetAwaiter().GetResult() patterns found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result3.Outcome };
+                            IsSuccess = true,
+                            SuccessData = $"No synchronous Task.Wait/.Result/.GetAwaiter().GetResult() patterns found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result3.Outcome
+                    };
+                }
+
                 case "preview_add_missing_usings":
                     var result4 = await _msToolAugmentEngine.PreviewAddMissingUsingsAsync(filePath, cancellationToken);
-                    return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result4 };
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result4
+                    };
                 case "add_configure_await_false":
+                {
+                    var result5 = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(filePath, libraryMode, cancellationToken: cancellationToken);
+                    if (string.IsNullOrEmpty(result5.UpdatedText))
                     {
-                        var result5 = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(filePath, libraryMode, cancellationToken: cancellationToken);
-                        if (string.IsNullOrEmpty(result5.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No awaits missing .ConfigureAwait(false) found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new SourceTransformResult(result5.UpdatedText, false, false, filePath) };
+                            IsSuccess = true,
+                            SuccessData = $"No awaits missing .ConfigureAwait(false) found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(result5.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "remove_configure_await_false":
+                {
+                    var result6 = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(filePath, cancellationToken: cancellationToken);
+                    if (string.IsNullOrEmpty(result6.UpdatedText))
                     {
-                        var result6 = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(filePath, cancellationToken: cancellationToken);
-                        if (string.IsNullOrEmpty(result6.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No .ConfigureAwait(false) calls found to remove in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new SourceTransformResult(result6.UpdatedText, false, false, filePath) };
+                            IsSuccess = true,
+                            SuccessData = $"No .ConfigureAwait(false) calls found to remove in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(result6.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "simplify_boolean_expressions":
+                {
+                    var result7 = await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result7.UpdatedText))
                     {
-                        var result7 = await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result7.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No boolean expressions eligible for simplification found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result7 };
+                            IsSuccess = true,
+                            SuccessData = $"No boolean expressions eligible for simplification found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result7
+                    };
+                }
+
                 case "simplify_member_access":
+                {
+                    var result8 = await _ideStyleEngine.SimplifyMemberAccessAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result8.UpdatedText))
                     {
-                        var result8 = await _ideStyleEngine.SimplifyMemberAccessAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result8.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No qualified member access patterns found to simplify in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result8 };
+                            IsSuccess = true,
+                            SuccessData = $"No qualified member access patterns found to simplify in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result8
+                    };
+                }
+
                 case "simplify_verbosity":
+                {
+                    var result9 = await _codeStyleEngine.SimplifyVerbosityAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result9.UpdatedText))
                     {
-                        var result9 = await _codeStyleEngine.SimplifyVerbosityAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result9.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No verbose patterns found to simplify in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result9 };
+                            IsSuccess = true,
+                            SuccessData = $"No verbose patterns found to simplify in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result9
+                    };
+                }
+
                 case "sort_and_deduplicate_usings":
+                {
+                    var result17 = await _msToolAugmentEngine.SortAndDeduplicateUsingsAsync(filePath, !preview, cancellationToken);
+                    if (result17 == null)
                     {
-                        var result17 = await _msToolAugmentEngine.SortAndDeduplicateUsingsAsync(filePath, !preview, cancellationToken);
-                        if (result17 == null)
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No unsorted or duplicate using directives found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result17 };
+                            IsSuccess = true,
+                            SuccessData = $"No unsorted or duplicate using directives found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result17
+                    };
+                }
+
                 case "upgrade_pattern_matching":
+                {
+                    var result10 = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result10.UpdatedText))
                     {
-                        var result10 = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result10.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No type-check/cast patterns eligible for modern pattern matching found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result10 };
+                            IsSuccess = true,
+                            SuccessData = $"No type-check/cast patterns eligible for modern pattern matching found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result10
+                    };
+                }
+
                 case "upgrade_thread_safety":
+                {
+                    var result11 = await _codeStyleEngine.FixDangerousLockAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result11.UpdatedText))
                     {
-                        var result11 = await _codeStyleEngine.FixDangerousLockAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result11.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No dangerous lock patterns found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result11 };
+                            IsSuccess = true,
+                            SuccessData = $"No dangerous lock patterns found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result11
+                    };
+                }
+
                 case "upgrade_to_file_scoped_namespace":
+                {
+                    var result12 = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result12.UpdatedText))
                     {
-                        var result12 = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result12.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No block-scoped namespace declarations found in '{filePath}'. File already uses file-scoped namespaces." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result12 };
+                            IsSuccess = true,
+                            SuccessData = $"No block-scoped namespace declarations found in '{filePath}'. File already uses file-scoped namespaces."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result12
+                    };
+                }
+
                 case "upgrade_to_modern_guards":
+                {
+                    var result13 = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result13.UpdatedText))
                     {
-                        var result13 = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result13.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No legacy null/argument guard patterns found in '{filePath}'. File already uses modern guards." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result13 };
+                            IsSuccess = true,
+                            SuccessData = $"No legacy null/argument guard patterns found in '{filePath}'. File already uses modern guards."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result13
+                    };
+                }
+
                 case "use_field_backed_properties":
+                {
+                    var result14 = await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result14.UpdatedText))
                     {
-                        var result14 = await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result14.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No auto-properties eligible for field-backed conversion found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result14 };
+                            IsSuccess = true,
+                            SuccessData = $"No auto-properties eligible for field-backed conversion found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result14
+                    };
+                }
+
                 case "use_index_from_end":
+                {
+                    var result15 = await _codeStyleEngine.UseIndexFromEndAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result15.UpdatedText))
                     {
-                        var result15 = await _codeStyleEngine.UseIndexFromEndAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result15.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No array/list indexing patterns eligible for index-from-end (^n) syntax found in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result15 };
+                            IsSuccess = true,
+                            SuccessData = $"No array/list indexing patterns eligible for index-from-end (^n) syntax found in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result15
+                    };
+                }
+
                 case "use_time_provider":
+                {
+                    var result16 = await _codeStyleEngine.UseTimeProviderAsync(filePath, cancellationToken);
+                    if (string.IsNullOrEmpty(result16.UpdatedText))
                     {
-                        var result16 = await _codeStyleEngine.UseTimeProviderAsync(filePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result16.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No DateTime.Now/UtcNow calls found to replace with ITimeProvider in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result16 };
+                            IsSuccess = true,
+                            SuccessData = $"No DateTime.Now/UtcNow calls found to replace with ITimeProvider in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result16
+                    };
+                }
+
                 default:
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown transform '{transform}'. Valid values: add_braces, cleanup_implicit_spans, " +
-                        "convert_to_null_coalescing, convert_to_pattern, convert_to_switch, fix_mismatched_namespaces, " +
-                        "fix_thread_sleep, format_document_preview, format_document_safe, generate_xml_documentation_stubs, " +
-                        "optimize_task_wait, preview_add_missing_usings, add_configure_await_false, remove_configure_await_false, " +
-                        "simplify_boolean_expressions, simplify_member_access, simplify_verbosity, sort_and_deduplicate_usings, " +
-                        "upgrade_pattern_matching, upgrade_thread_safety, upgrade_to_file_scoped_namespace, " +
-                        "upgrade_to_modern_guards, use_field_backed_properties, use_index_from_end, use_time_provider.")
+                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown transform '{transform}'. Valid values: add_braces, cleanup_implicit_spans, " + "convert_to_null_coalescing, convert_to_pattern, convert_to_switch, fix_mismatched_namespaces, " + "fix_thread_sleep, format_document_preview, format_document_safe, generate_xml_documentation_stubs, " + "optimize_task_wait, preview_add_missing_usings, add_configure_await_false, remove_configure_await_false, " + "simplify_boolean_expressions, simplify_member_access, simplify_verbosity, sort_and_deduplicate_usings, " + "upgrade_pattern_matching, upgrade_thread_safety, upgrade_to_file_scoped_namespace, " + "upgrade_to_modern_guards, use_field_backed_properties, use_index_from_end, use_time_provider.")
                     };
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ApplyFileCodemod ({Transform}) failed", transform);
-            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyFileCodemod ({transform})") };
+            return new SentinelCallToolResult<object>()
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyFileCodemod ({transform})")
+            };
         }
     }
 
     // ── 2. apply_method_codemod ───────────────────────────────────────────────
-
     [McpServerTool(Name = "ApplyMethodCodemod")]
     [Produces(DataTag.ResultOnly)]
     [Description("Applies a method-scoped code transformation. Call DescribeAdvancedToolOptions(\"apply_method_codemod\") for the list of transform values.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: direction is required for transform=convert_expression_body ("ToExpression" or "ToBlock"); unused by other transforms. Enforced at runtime, not by the schema.
-    public async Task<SentinelCallToolResult<object>> ApplyMethodCodemod(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [ExternalInputRequired(DataTag.MethodName, required: true)] string methodName,
-        [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_method_codemod\") for valid values.")]
-        [ExternalInputRequired(DataTag.Transform)] string transform,
-        [Description("Required for transform=convert_expression_body: \"ToExpression\" or \"ToBlock\". Unused by other transforms.")]
-        [ToolOption(ToolOptionTag.Direction)] string? direction = null,
-        [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null,
-        [Description("Only used by transform=make_method_thread_safe: the lock field's name.")]
-        [ExternalInputRequired(DataTag.SymbolName)] string lockFieldName = "_lock",
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> ApplyMethodCodemod([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [ExternalInputRequired(DataTag.MethodName, required: true)] string methodName, [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_method_codemod\") for valid values.")][ExternalInputRequired(DataTag.Transform)] string transform, [Description("Required for transform=convert_expression_body: \"ToExpression\" or \"ToBlock\". Unused by other transforms.")][ToolOption(ToolOptionTag.Direction)] string? direction = null, [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null, [Consumes(DataTag.LineBefore)] string? lineBefore = null, [Consumes(DataTag.LineAfter)] string? lineAfter = null, [Description("Only used by transform=make_method_thread_safe: the lock field's name.")][ExternalInputRequired(DataTag.SymbolName)] string lockFieldName = "_lock", // RequestContext<CallToolRequestParams> requestParams = null,
+    CancellationToken cancellationToken = default)
     {
         try
         {
@@ -418,63 +550,88 @@ public class CodemodTools
             switch (transform)
             {
                 case "add_guard_clauses":
+                {
+                    var r = await _logicOptimizationEngine.AddGuardClausesAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _logicOptimizationEngine.AddGuardClausesAsync(filePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No parameters eligible for guard clause insertion found in '{methodName}' in '{filePath}'." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
+                            IsSuccess = true,
+                            SuccessData = $"No parameters eligible for guard clause insertion found in '{methodName}' in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "convert_expression_body":
+                {
+                    if (string.IsNullOrEmpty(direction))
                     {
-                        if (string.IsNullOrEmpty(direction))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "direction is required for convert_expression_body. Valid values: ToExpression, ToBlock.") };
-                        }
-
-                        var r = await _advancedRefactoringEngine.ConvertExpressionBodyAsync(filePath, methodName, direction, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                $"convert_expression_body ({direction}) found nothing to convert for '{methodName}' in '{filePath}'. " +
-                                "Possible causes: member not found (verify name and file are correct), member already has the target body style, " +
-                                "or contextSnippet did not uniquely match. Use GetFileOutline to confirm the member exists.")
-                            };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "direction is required for convert_expression_body. Valid values: ToExpression, ToBlock.")
+                        };
                     }
+
+                    var r = await _advancedRefactoringEngine.ConvertExpressionBodyAsync(filePath, methodName, direction, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_expression_body ({direction}) found nothing to convert for '{methodName}' in '{filePath}'. " + "Possible causes: member not found (verify name and file are correct), member already has the target body style, " + "or contextSnippet did not uniquely match. Use GetFileOutline to confirm the member exists.")
+                        };
+                    }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "convert_lock_to_semaphore_slim":
+                {
+                    var r = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync(filePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = $"No lock statements found in '{methodName}' in '{filePath}' to convert to SemaphoreSlim." };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
+                            IsSuccess = true,
+                            SuccessData = $"No lock statements found in '{methodName}' in '{filePath}' to convert to SemaphoreSlim."};
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "convert_method_to_indexer":
+                {
+                    var r = await _granularRefactoringEngine.ConvertMethodToIndexerAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _granularRefactoringEngine.ConvertMethodToIndexerAsync(filePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                $"convert_method_to_indexer: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                "The method must have exactly one parameter and return a value. Use GetFileOutline to verify the method exists.")
-                            };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_method_to_indexer: method '{methodName}' not found or not eligible in '{filePath}'. " + "The method must have exactly one parameter and return a value. Use GetFileOutline to verify the method exists.")
+                        };
                     }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "convert_out_params_to_value_tuple":
                     var result = await _outParamRefactoringEngine.ConvertOutParamsToValueTupleAsync(filePath, methodName, cancellationToken);
                     if (result is not { Success: true, Changes.Count: > 0 })
@@ -492,192 +649,103 @@ public class CodemodTools
                         SuccessData = result
                     };
                 case "convert_static_to_extension":
+                {
+                    try
                     {
-                        try
-                        {
-                            var r = await _advancedLogicEngine.ConvertStaticToExtensionAsync(filePath, methodName, cancellationToken);
-                            if (string.IsNullOrEmpty(r.UpdatedText))
-                            {
-                                return new SentinelCallToolResult<object>()
-                                {
-                                    IsSuccess = false,
-                                    ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"convert_static_to_extension: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                    "The method must be static and have at least one parameter to become the 'this' parameter. Use GetFileOutline to verify.")
-                                };
-                            }
-
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "convert_static_to_extension unexpected exception for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"convert_static_to_extension for '{methodName}' in '{filePath}'")
-                            };
-                        }
-                    }
-                case "convert_switch_to_expression":
-                    {
-                        var r = await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync(filePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = true,
-                                SuccessData = $"No switch statements eligible for switch expression conversion found in '{methodName}' in '{filePath}'."
-                            };
-                        }
-
-                        return new SentinelCallToolResult<object>
-                        {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                        };
-                    }
-                case "convert_to_async_enumerable":
-                    {
-                        var r = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(filePath, methodName, cancellationToken: cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"convert_to_async_enumerable: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                    "The method must return Task<List<T>> or Task<IEnumerable<T>>. Use GetFileOutline to verify the method signature.")
-                            };
-                        }
-
-                        return new SentinelCallToolResult<object>
-                        {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                        };
-                    }
-                case "extension_to_static":
-                    {
-                        var r = await _advancedLogicEngine.ExtensionToStaticAsync(filePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"extension_to_static: method '{methodName}' not found or not an extension method in '{filePath}'. " +
-                                    "The method must be in a static class and have a 'this' parameter. Use GetFileOutline to verify.")
-                            };
-                        }
-
-                        return new SentinelCallToolResult<object>
-                        {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                        };
-                    }
-                case "generate_async_overload":
-                    {
-                        try
-                        {
-                            var r = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync(filePath, methodName, cancellationToken);
-                            if (string.IsNullOrEmpty(r.UpdatedText))
-                            {
-                                return new SentinelCallToolResult<object>
-                                {
-                                    IsSuccess = false,
-                                    ErrorData = new ResultError(ToolErrorCode.Exception,
-                                        $"generate_async_overload: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                        "The method must be synchronous and non-void. Use GetFileOutline to verify the method exists and its signature.")
-                                };
-                            }
-
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = true,
-                                SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                            };
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "generate_async_overload unexpected exception for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"generate_async_overload for '{methodName}' in '{filePath}'")
-                            };
-                        }
-                    }
-                case "make_method_static":
-                    {
-                        var r = await _standardRefactoringEngine.MakeMethodStaticAsync(filePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"make_method_static: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                    "The method must not access instance members. Use GetFileOutline to verify the method exists.")
-                            };
-                        }
-
-                        return new SentinelCallToolResult<object>
-                        {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                        };
-                    }
-                case "make_method_thread_safe":
-                    {
-                        var r = await _threadSafetyEngine.MakeMethodThreadSafeAsync(filePath, methodName, lockFieldName, cancellationToken);
+                        var r = await _advancedLogicEngine.ConvertStaticToExtensionAsync(filePath, methodName, cancellationToken);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
                             return new SentinelCallToolResult<object>()
                             {
                                 IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"make_method_thread_safe: method '{methodName}' not found in '{filePath}'. " +
-                                    "Use GetFileOutline to verify the method name (case-sensitive).")
+                                ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_static_to_extension: method '{methodName}' not found or not eligible in '{filePath}'. " + "The method must be static and have at least one parameter to become the 'this' parameter. Use GetFileOutline to verify.")
                             };
                         }
 
-                        return new SentinelCallToolResult<object>
+                        return new SentinelCallToolResult<object>()
                         {
                             IsSuccess = true,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
                         };
                     }
-                case "optimize_independent_awaits":
+                    catch (Exception ex)
                     {
-                        var r = await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync(filePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        _logger.LogError(ex, "convert_static_to_extension unexpected exception for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
+                        return new SentinelCallToolResult<object>
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = true,
-                                SuccessData = $"No sequential independent awaits found to parallelize in '{methodName}' in '{filePath}'."
-                            };
-                        }
+                            IsSuccess = false,
+                            ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"convert_static_to_extension for '{methodName}' in '{filePath}'")
+                        };
+                    }
+                }
 
+                case "convert_switch_to_expression":
+                {
+                    var r = await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
+                    {
                         return new SentinelCallToolResult<object>
                         {
                             IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                            SuccessData = $"No switch statements eligible for switch expression conversion found in '{methodName}' in '{filePath}'."};
+                    }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
+                case "convert_to_async_enumerable":
+                {
+                    var r = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(filePath, methodName, cancellationToken: cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_to_async_enumerable: method '{methodName}' not found or not eligible in '{filePath}'. " + "The method must return Task<List<T>> or Task<IEnumerable<T>>. Use GetFileOutline to verify the method signature.")
                         };
                     }
-                case "optimize_to_value_task":
+
+                    return new SentinelCallToolResult<object>
                     {
-                        var r = await _asyncOptimizationEngine.OptimizeToValueTaskAsync(filePath, methodName, cancellationToken);
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
+                case "extension_to_static":
+                {
+                    var r = await _advancedLogicEngine.ExtensionToStaticAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"extension_to_static: method '{methodName}' not found or not an extension method in '{filePath}'. " + "The method must be in a static class and have a 'this' parameter. Use GetFileOutline to verify.")
+                        };
+                    }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
+                case "generate_async_overload":
+                {
+                    try
+                    {
+                        var r = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync(filePath, methodName, cancellationToken);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
                             return new SentinelCallToolResult<object>
                             {
                                 IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"optimize_to_value_task: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                    "The method must return Task or Task<T> and be async. Use GetFileOutline to verify.")
+                                ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_async_overload: method '{methodName}' not found or not eligible in '{filePath}'. " + "The method must be synchronous and non-void. Use GetFileOutline to verify the method exists and its signature.")
                             };
                         }
 
@@ -687,70 +755,151 @@ public class CodemodTools
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
                         };
                     }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "generate_async_overload unexpected exception for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"generate_async_overload for '{methodName}' in '{filePath}'")
+                        };
+                    }
+                }
+
+                case "make_method_static":
+                {
+                    var r = await _standardRefactoringEngine.MakeMethodStaticAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"make_method_static: method '{methodName}' not found or not eligible in '{filePath}'. " + "The method must not access instance members. Use GetFileOutline to verify the method exists.")
+                        };
+                    }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
+                case "make_method_thread_safe":
+                {
+                    var r = await _threadSafetyEngine.MakeMethodThreadSafeAsync(filePath, methodName, lockFieldName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"make_method_thread_safe: method '{methodName}' not found in '{filePath}'. " + "Use GetFileOutline to verify the method name (case-sensitive).")
+                        };
+                    }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
+                case "optimize_independent_awaits":
+                {
+                    var r = await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = $"No sequential independent awaits found to parallelize in '{methodName}' in '{filePath}'."};
+                    }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
+                case "optimize_to_value_task":
+                {
+                    var r = await _asyncOptimizationEngine.OptimizeToValueTaskAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"optimize_to_value_task: method '{methodName}' not found or not eligible in '{filePath}'. " + "The method must return Task or Task<T> and be async. Use GetFileOutline to verify.")
+                        };
+                    }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "reduce_block_depth":
+                {
+                    var r = await _codeFlowEngine.ReduceBlockDepthAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _codeFlowEngine.ReduceBlockDepthAsync(filePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = true,
-                                SuccessData = $"No deeply nested blocks found to flatten in '{methodName}' in '{filePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                        };
+                            SuccessData = $"No deeply nested blocks found to flatten in '{methodName}' in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "update_xml_docs_from_signature":
+                {
+                    var r = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync(filePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = true,
-                                SuccessData = $"No XML doc parameters out of sync with the signature of '{methodName}' in '{filePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                        };
+                            SuccessData = $"No XML doc parameters out of sync with the signature of '{methodName}' in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "use_exception_expressions":
+                {
+                    var r = await _syntaxUpgradeEngine.UseExceptionExpressionsAsync(filePath, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _syntaxUpgradeEngine.UseExceptionExpressionsAsync(filePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = true,
-                                SuccessData = $"No if-throw guard patterns eligible for exception expression conversion found in '{methodName}' in '{filePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                        };
+                            SuccessData = $"No if-throw guard patterns eligible for exception expression conversion found in '{methodName}' in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 default:
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown transform '{transform}'. Valid values: add_guard_clauses, convert_expression_body, " +
-                         "convert_lock_to_semaphore_slim, convert_method_to_indexer, convert_out_params_to_value_tuple, " +
-                         "convert_static_to_extension, convert_switch_to_expression, convert_to_async_enumerable, " +
-                         "extension_to_static, generate_async_overload, make_method_static, make_method_thread_safe, " +
-                         "optimize_independent_awaits, optimize_to_value_task, reduce_block_depth, " +
-                         "update_xml_docs_from_signature, use_exception_expressions.")
+                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown transform '{transform}'. Valid values: add_guard_clauses, convert_expression_body, " + "convert_lock_to_semaphore_slim, convert_method_to_indexer, convert_out_params_to_value_tuple, " + "convert_static_to_extension, convert_switch_to_expression, convert_to_async_enumerable, " + "extension_to_static, generate_async_overload, make_method_static, make_method_thread_safe, " + "optimize_independent_awaits, optimize_to_value_task, reduce_block_depth, " + "update_xml_docs_from_signature, use_exception_expressions.")
                     };
             }
         }
@@ -764,6 +913,7 @@ public class CodemodTools
             };
         }
     }
+
     // Added by InsertMemberBefore (expected - used for diagnostics)
     /// <summary>
     /// Builds the "filePath is required for {kind}" error for a codemod switch case, distinguishing
@@ -772,345 +922,316 @@ public class CodemodTools
     /// </summary>
     private static ResultError BuildFilePathRequiredError(FilePathWrapper filePath, string kind)
     {
-        return filePath.FailureReason == FilePathFailureReason.NoSolutionLoaded
-            ? new ResultError(ToolErrorCode.SolutionNotLoaded, $"{kind}: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.")
-            : new ResultError(ToolErrorCode.InvalidArgument, $"filePath is required for {kind}.");
+        return filePath.FailureReason == FilePathFailureReason.NoSolutionLoaded ? new ResultError(ToolErrorCode.SolutionNotLoaded, $"{kind}: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.") : new ResultError(ToolErrorCode.InvalidArgument, $"filePath is required for {kind}.");
     }
-    // ── 3. apply_class_codemod ────────────────────────────────────────────────
 
+    // ── 3. apply_class_codemod ────────────────────────────────────────────────
     [McpServerTool(Name = "ApplyClassCodemod")]
     [Produces(DataTag.ResultOnly)]
     [Description("Applies a class-scoped code transformation. Call DescribeAdvancedToolOptions(\"apply_class_codemod\") for the list of transform values.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: propertyName is required by transforms that target a specific property (e.g. convert_property_safe); unused by class-wide transforms. direction is required for transform=convert_property_safe ("ToFullProperty" or "ToAutoProperty"). Enforced at runtime, not by the schema.
-    public async Task<SentinelCallToolResult<object>> ApplyClassCodemod(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [ExternalInputRequired(DataTag.ClassName)] string className,
-        [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_class_codemod\") for valid values.")]
-        [ExternalInputRequired(DataTag.Transform)] string transform,
-        [Description("Required by transforms that target a single property (e.g. convert_property_safe). Unused by class-wide transforms.")]
-        [ExternalInputRequired(DataTag.PropertyName)] string? propertyName = null,
-        [Description("Required for transform=convert_property_safe: \"ToFullProperty\" or \"ToAutoProperty\". Unused by other transforms.")]
-        [ToolOption(ToolOptionTag.Direction)] string? direction = null,
-        [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> ApplyClassCodemod([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [ExternalInputRequired(DataTag.ClassName)] string className, [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_class_codemod\") for valid values.")][ExternalInputRequired(DataTag.Transform)] string transform, [Description("Required by transforms that target a single property (e.g. convert_property_safe). Unused by class-wide transforms.")][ExternalInputRequired(DataTag.PropertyName)] string? propertyName = null, [Description("Required for transform=convert_property_safe: \"ToFullProperty\" or \"ToAutoProperty\". Unused by other transforms.")][ToolOption(ToolOptionTag.Direction)] string? direction = null, [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null, [Consumes(DataTag.LineBefore)] string? lineBefore = null, [Consumes(DataTag.LineAfter)] string? lineAfter = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    CancellationToken cancellationToken = default)
     {
         try
         {
             FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-
             switch (transform)
             {
                 case "add_validation_to_poco":
+                {
+                    try
                     {
-                        try
+                        var r = await _apiAutomationEngine.AddValidationToPocoAsync(filePath, className, cancellationToken);
+                        if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            var r = await _apiIntegrationEngine.AddValidationToPocoAsync(filePath, className, cancellationToken);
-                            if (string.IsNullOrEmpty(r.UpdatedText))
-                            {
-                                return new SentinelCallToolResult<object>
-                                {
-                                    IsSuccess = true,
-                                    SuccessData = $"No unvalidated properties found on '{className}' in '{filePath}'. Class may already have validation attributes or have no settable properties."
-                                };
-                            }
-
                             return new SentinelCallToolResult<object>
                             {
                                 IsSuccess = true,
-                                SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                            };
+                                SuccessData = $"No unvalidated properties found on '{className}' in '{filePath}'. Class may already have validation attributes or have no settable properties."};
                         }
-                        catch (InvalidOperationException ioe)
+
+                        return new SentinelCallToolResult<object>
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"add_validation_to_poco: class '{className}' not found in '{filePath}'. {ioe.Message} " +
-                                    "Use GetFileOutline to verify the class name (case-sensitive).")
-                            };
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "add_validation_to_poco unexpected exception for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"add_validation_to_poco for '{className}' in '{filePath}'")
-                            };
-                        }
+                            IsSuccess = true,
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                        };
                     }
+                    catch (InvalidOperationException ioe)
+                    {
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"add_validation_to_poco: class '{className}' not found in '{filePath}'. {ioe.Message} " + "Use GetFileOutline to verify the class name (case-sensitive).")
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "add_validation_to_poco unexpected exception for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"add_validation_to_poco for '{className}' in '{filePath}'")
+                        };
+                    }
+                }
+
                 case "class_to_record":
+                {
+                    var r = await _modernizationEngine.ClassToRecordAsync(filePath, className, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _modernizationEngine.ClassToRecordAsync(filePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"class_to_record: class '{className}' not found or not eligible in '{filePath}'. " +
-                                    "The class must have no custom methods beyond property accessors. Use GetFileOutline to verify.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"class_to_record: class '{className}' not found or not eligible in '{filePath}'. " + "The class must have no custom methods beyond property accessors. Use GetFileOutline to verify.")
                         };
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "convert_abstract_to_interface":
+                {
+                    try
                     {
-                        try
+                        var r = await _advancedStructuralEngine.ConvertAbstractClassToInterfaceAsync(filePath, className, cancellationToken);
+                        if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            var r = await _advancedStructuralEngine.ConvertAbstractClassToInterfaceAsync(filePath, className, cancellationToken);
-                            if (string.IsNullOrEmpty(r.UpdatedText))
+                            return new SentinelCallToolResult<object>
                             {
-                                return new SentinelCallToolResult<object>
-                                {
-                                    IsSuccess = false,
-                                    ErrorData = new ResultError(ToolErrorCode.Exception,
-                                        $"convert_abstract_to_interface: class '{className}' not found or is not abstract in '{filePath}'. " +
-                                        "The class must be declared with the 'abstract' keyword. Use GetFileOutline to verify.")
-                                };
-                            }
+                                IsSuccess = false,
+                                ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface: class '{className}' not found or is not abstract in '{filePath}'. " + "The class must be declared with the 'abstract' keyword. Use GetFileOutline to verify.")
+                            };
+                        }
 
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = true,
-                                SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                            };
-                        }
-                        catch (InvalidOperationException ioe)
+                        return new SentinelCallToolResult<object>
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"convert_abstract_to_interface: class '{className}' not eligible in '{filePath}'. {ioe.Message}")
-                            };
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "convert_abstract_to_interface unexpected exception for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"convert_abstract_to_interface for '{className}' in '{filePath}'")
-                            };
-                        }
+                            IsSuccess = true,
+                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                        };
                     }
+                    catch (InvalidOperationException ioe)
+                    {
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface: class '{className}' not eligible in '{filePath}'. {ioe.Message}")
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "convert_abstract_to_interface unexpected exception for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"convert_abstract_to_interface for '{className}' in '{filePath}'")
+                        };
+                    }
+                }
+
                 case "convert_property_safe":
+                {
+                    var propName = propertyName ?? className;
+                    if (string.IsNullOrEmpty(direction))
                     {
-                        var propName = propertyName ?? className;
-                        if (string.IsNullOrEmpty(direction))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "direction is required for convert_property_safe. Valid values: ToFullProperty, ToAutoProperty.")
-                            };
-                        }
-
-                        var r = await _codeGenerationEngine.ConvertPropertySafeAsync(filePath, propName, direction, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"convert_property_safe ({direction}): property '{propName}' not found or not eligible in '{filePath}'. " +
-                                    "Possible causes: property name is wrong (case-sensitive), property already has the target style, " +
-                                    "or contextSnippet did not uniquely identify it. Use GetFileOutline to list available properties.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "direction is required for convert_property_safe. Valid values: ToFullProperty, ToAutoProperty.")
                         };
                     }
+
+                    var r = await _codeGenerationEngine.ConvertPropertySafeAsync(filePath, propName, direction, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_property_safe ({direction}): property '{propName}' not found or not eligible in '{filePath}'. " + "Possible causes: property name is wrong (case-sensitive), property already has the target style, " + "or contextSnippet did not uniquely identify it. Use GetFileOutline to list available properties.")
+                        };
+                    }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "convert_property_to_methods":
+                {
+                    var propName = propertyName ?? className;
+                    var r = await _codeStyleEngine.ConvertPropertyToMethodsAsync(filePath, propName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var propName = propertyName ?? className;
-                        var r = await _codeStyleEngine.ConvertPropertyToMethodsAsync(filePath, propName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"convert_property_to_methods: property '{propName}' not found in '{filePath}'. " +
-                                    "Use GetFileOutline to list available properties (name is case-sensitive).")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_property_to_methods: property '{propName}' not found in '{filePath}'. " + "Use GetFileOutline to list available properties (name is case-sensitive).")
                         };
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "convert_to_background_service":
+                {
+                    var r = await _architecturalEngine.ConvertToBackgroundServiceAsync(filePath, className, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _architecturalEngine.ConvertToBackgroundServiceAsync(filePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"convert_to_background_service: class '{className}' not found or not eligible in '{filePath}'. " +
-                                    "The class must not already implement BackgroundService. Use GetFileOutline to verify.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_to_background_service: class '{className}' not found or not eligible in '{filePath}'. " + "The class must not already implement BackgroundService. Use GetFileOutline to verify.")
                         };
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "convert_to_source_generated_logging":
+                {
+                    var r = await _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync(filePath, className, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync(filePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = true,
-                                SuccessData = $"No ILogger.Log calls found to convert to source-generated logging in '{className}' in '{filePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                        };
+                            SuccessData = $"No ILogger.Log calls found to convert to source-generated logging in '{className}' in '{filePath}'."};
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "document_poco_fields":
+                {
+                    var r = await _documentationEngine.DocumentPocoFieldsAsync(filePath, className, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _documentationEngine.DocumentPocoFieldsAsync(filePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = true,
-                                SuccessData = $"No undocumented fields/properties found on '{className}' in '{filePath}'. Class may already be documented or have no public fields."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                        };
+                            SuccessData = $"No undocumented fields/properties found on '{className}' in '{filePath}'. Class may already be documented or have no public fields."};
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "make_class_immutable":
+                {
+                    var r = await _immutabilityEngine.MakeClassImmutableAsync(filePath, className, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _immutabilityEngine.MakeClassImmutableAsync(filePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"make_class_immutable: class '{className}' not found or already immutable in '{filePath}'. " +
-                                    "Use GetFileOutline to verify the class exists and has mutable properties.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"make_class_immutable: class '{className}' not found or already immutable in '{filePath}'. " + "Use GetFileOutline to verify the class exists and has mutable properties.")
                         };
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "record_to_class":
+                {
+                    var r = await _modernizationEngine.RecordToClassAsync(filePath, className, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _modernizationEngine.RecordToClassAsync(filePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"record_to_class: record '{className}' not found in '{filePath}'. " +
-                                    "The type must be declared as a 'record'. Use GetFileOutline to verify.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"record_to_class: record '{className}' not found in '{filePath}'. " + "The type must be declared as a 'record'. Use GetFileOutline to verify.")
                         };
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "replace_constructor_with_factory":
+                {
+                    var r = await _advancedStructuralEngine.ReplaceConstructorWithFactoryAsync(filePath, className, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _advancedStructuralEngine.ReplaceConstructorWithFactoryAsync(filePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"replace_constructor_with_factory: class '{className}' not found or not eligible in '{filePath}'. " +
-                                    "Use GetFileOutline to verify the class name (case-sensitive).")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"replace_constructor_with_factory: class '{className}' not found or not eligible in '{filePath}'. " + "Use GetFileOutline to verify the class name (case-sensitive).")
                         };
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "sort_members":
+                {
+                    var r = await _refactoringEngine.SortMembersAsync(filePath, className, cancellationToken: cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _refactoringEngine.SortMembersAsync(filePath, className, cancellationToken: cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = true,
-                                SuccessData = $"No members to reorder found in '{className}' in '{filePath}'. Type may be empty or already sorted."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
-                        };
+                            SuccessData = $"No members to reorder found in '{className}' in '{filePath}'. Type may be empty or already sorted."};
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case "upgrade_to_primary_constructor":
+                {
+                    var r = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync(filePath, className, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
                     {
-                        var r = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync(filePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception,
-                                    $"upgrade_to_primary_constructor: class '{className}' not found or not eligible in '{filePath}'. " +
-                                    "The constructor must only assign parameters to readonly fields (no other logic). Use GetFileOutline to verify the class exists.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"upgrade_to_primary_constructor: class '{className}' not found or not eligible in '{filePath}'. " + "The constructor must only assign parameters to readonly fields (no other logic). Use GetFileOutline to verify the class exists.")
                         };
                     }
+
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 default:
                     return new SentinelCallToolResult<object>
                     {
@@ -1131,233 +1252,337 @@ public class CodemodTools
     }
 
     // ── 4. generate ───────────────────────────────────────────────────────────
-
     [McpServerTool(Name = "Generate")]
     [Produces(DataTag.ResultOnly)]
     [Description("Generates new code for a type or method. Call DescribeAdvancedToolOptions(\"generate\") for the list of kind values, their required parameters, and return types.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: filepath is required for every kind except generate_decorator_class. className/methodName/members/disambiguateLine requirements vary per kind -> see DescribeAdvancedToolOptions("generate"). Enforced at runtime, not by the schema.
-    public async Task<SentinelCallToolResult<object>> Generate(
-        [Description("The kind of code to generate. See DescribeAdvancedToolOptions(\"generate\") for valid values.")]
-        CodemodKind kind,
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
-        [Consumes(DataTag.ClassName)] string? className = null,
-        [Consumes(DataTag.MethodName)] string? methodName = null,
-        [Consumes(DataTag.MemberName)] string? members = null,
-        [Description("Only used by kind=generate_decorator_class: the prefix for the generated decorator class name.")]
-        [ExternalInputRequired(DataTag.DecoratorPrefix)] string decoratorPrefix = "Logging",
-        [Description("Only used by kind=generate_decorator_class: scopes the interface lookup to one project.")]
-        [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
-        [Description("Only used by kind=generate_path_driven_tests: \"NUnit\" (default), \"xunit\", or \"mstest\".")]
-        [ExternalInputRequired(DataTag.Framework)] string framework = "NUnit",
-        [Description("Only used by kind=generate_path_driven_tests: resolves an overloaded method target.")]
-        [ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> Generate([Description("The kind of code to generate. See DescribeAdvancedToolOptions(\"generate\") for valid values.")] CodemodKind kind, [Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [Consumes(DataTag.ClassName)] string? className = null, [Consumes(DataTag.MethodName)] string? methodName = null, [Consumes(DataTag.MemberName)] string? members = null, [Description("Only used by kind=generate_decorator_class: the prefix for the generated decorator class name.")][ExternalInputRequired(DataTag.DecoratorPrefix)] string decoratorPrefix = "Logging", [Description("Only used by kind=generate_decorator_class: scopes the interface lookup to one project.")][ExternalInputRequired(DataTag.ProjectName)] string? projectName = null, [Description("Only used by kind=generate_path_driven_tests: \"NUnit\" (default), \"xunit\", or \"mstest\".")][ExternalInputRequired(DataTag.Framework)] string framework = "NUnit", [Description("Only used by kind=generate_path_driven_tests: resolves an overloaded method target.")][ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    CancellationToken cancellationToken = default)
     {
         try
         {
             FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
-
             switch (kind)
             {
                 case CodemodKind.add_benchmark_stub:
+                {
+                    if (!filePath.Validated)
                     {
-                        if (!filePath.Validated)
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { ErrorData = BuildFilePathRequiredError(filePath, "add_benchmark_stub") };
-                        }
-
-                        if (string.IsNullOrEmpty(className))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for add_benchmark_stub.") };
-                        }
-
-                        if (string.IsNullOrEmpty(methodName))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "methodName is required for add_benchmark_stub.") };
-                        }
-
-                        var r = await _testingEngine.AddBenchmarkStubAsync(filePath, className, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.Exception, $"add_benchmark_stub failed for '{className}.{methodName}' in '{filePath}': file not found, class not found, or method not found. Ensure the solution is loaded.") };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
+                            ErrorData = BuildFilePathRequiredError(filePath, "add_benchmark_stub")
+                        };
                     }
+
+                    if (string.IsNullOrEmpty(className))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for add_benchmark_stub.")
+                        };
+                    }
+
+                    if (string.IsNullOrEmpty(methodName))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "methodName is required for add_benchmark_stub.")
+                        };
+                    }
+
+                    var r = await _testingEngine.AddBenchmarkStubAsync(filePath, className, methodName, cancellationToken);
+                    if (string.IsNullOrEmpty(r.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"add_benchmark_stub failed for '{className}.{methodName}' in '{filePath}': file not found, class not found, or method not found. Ensure the solution is loaded.")
+                        };
+                    }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = new SourceTransformResult(r.UpdatedText, false, false, filePath)
+                    };
+                }
+
                 case CodemodKind.generate_constructor:
+                {
+                    if (!filePath.Validated)
                     {
-                        if (!filePath.Validated)
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { ErrorData = BuildFilePathRequiredError(filePath, "generate_constructor") };
-                        }
-
-                        if (string.IsNullOrEmpty(className))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_constructor.") };
-                        }
-
-                        var result = await _codeGenerationEngine.GenerateConstructorAsync(filePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(result.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_constructor failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.") };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result.ToJsonSummary() };
+                            ErrorData = BuildFilePathRequiredError(filePath, "generate_constructor")
+                        };
                     }
+
+                    if (string.IsNullOrEmpty(className))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_constructor.")
+                        };
+                    }
+
+                    var result = await _codeGenerationEngine.GenerateConstructorAsync(filePath, className, cancellationToken);
+                    if (string.IsNullOrEmpty(result.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_constructor failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                        };
+                    }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result.ToJsonSummary()
+                    };
+                }
+
                 case CodemodKind.generate_decorator_class:
+                {
+                    if (string.IsNullOrEmpty(className))
                     {
-                        if (string.IsNullOrEmpty(className))
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className (the interface name) is required for generate_decorator_class.") };
-                        }
-
-                        var result = await _codeGenerationEngine.GenerateDecoratorClassAsync(className, decoratorPrefix, projectName, cancellationToken);
-                        if (result == null)
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_decorator_class: interface '{className}' not found in the solution{(projectName != null ? $" project '{projectName}'" : string.Empty)}. Ensure the interface name matches exactly (including leading 'I') and is part of the loaded solution.") };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result };
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className (the interface name) is required for generate_decorator_class.")
+                        };
                     }
+
+                    var result = await _codeGenerationEngine.GenerateDecoratorClassAsync(className, decoratorPrefix, projectName, cancellationToken);
+                    if (result == null)
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_decorator_class: interface '{className}' not found in the solution{(projectName != null ? $" project '{projectName}'" : string.Empty)}. Ensure the interface name matches exactly (including leading 'I') and is part of the loaded solution.")
+                        };
+                    }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result
+                    };
+                }
+
                 case CodemodKind.generate_equality_overrides:
+                {
+                    if (!filePath.Validated)
                     {
-                        if (!filePath.Validated)
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { ErrorData = BuildFilePathRequiredError(filePath, "generate_equality_overrides") };
-                        }
-
-                        if (string.IsNullOrEmpty(className))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_equality_overrides.") };
-                        }
-
-                        var result = await _analysisEngine.GenerateEqualityOverridesAsync(filePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(result.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_equality_overrides failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.") };
-                        }
-
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result.ToJsonSummary() };
+                            ErrorData = BuildFilePathRequiredError(filePath, "generate_equality_overrides")
+                        };
                     }
+
+                    if (string.IsNullOrEmpty(className))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_equality_overrides.")
+                        };
+                    }
+
+                    var result = await _analysisEngine.GenerateEqualityOverridesAsync(filePath, className, cancellationToken);
+                    if (string.IsNullOrEmpty(result.UpdatedText))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_equality_overrides failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                        };
+                    }
+
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result.ToJsonSummary()
+                    };
+                }
+
                 case CodemodKind.generate_fluent_builder:
+                {
+                    if (!filePath.Validated)
                     {
-                        if (!filePath.Validated)
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { ErrorData = BuildFilePathRequiredError(filePath, "generate_fluent_builder") };
-                        }
-
-                        if (string.IsNullOrEmpty(className))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_fluent_builder.") };
-                        }
-
-                        try
-                        {
-                            var result = await _codeGenerationEngine.GenerateFluentBuilderAsync(filePath, className, cancellationToken);
-                            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result };
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "generate_fluent_builder failed for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
-                            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"generate_fluent_builder for '{className}' in '{filePath}'") };
-                        }
+                            ErrorData = BuildFilePathRequiredError(filePath, "generate_fluent_builder")
+                        };
                     }
+
+                    if (string.IsNullOrEmpty(className))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_fluent_builder.")
+                        };
+                    }
+
+                    try
+                    {
+                        var result = await _codeGenerationEngine.GenerateFluentBuilderAsync(filePath, className, cancellationToken);
+                        return new SentinelCallToolResult<object>()
+                        {
+                            IsSuccess = true,
+                            SuccessData = result
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "generate_fluent_builder failed for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
+                        return new SentinelCallToolResult<object>()
+                        {
+                            IsSuccess = false,
+                            ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"generate_fluent_builder for '{className}' in '{filePath}'")
+                        };
+                    }
+                }
+
                 case CodemodKind.generate_path_driven_tests:
+                {
+                    if (!filePath.Validated)
                     {
-                        if (!filePath.Validated)
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { ErrorData = BuildFilePathRequiredError(filePath, "generate_path_driven_tests") };
-                        }
-
-                        if (string.IsNullOrEmpty(methodName))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "methodName is required for generate_path_driven_tests.") };
-                        }
-
-                        var result = await _pathDrivenTestEngine.GeneratePathDrivenTestsAsync(filePath, methodName, framework, disambiguateLine, cancellationToken);
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result };
+                            ErrorData = BuildFilePathRequiredError(filePath, "generate_path_driven_tests")
+                        };
                     }
+
+                    if (string.IsNullOrEmpty(methodName))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "methodName is required for generate_path_driven_tests.")
+                        };
+                    }
+
+                    var result = await _pathDrivenTestEngine.GeneratePathDrivenTestsAsync(filePath, methodName, framework, disambiguateLine, cancellationToken);
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result
+                    };
+                }
+
                 case CodemodKind.generate_repository_interface:
+                {
+                    if (!filePath.Validated)
                     {
-                        if (!filePath.Validated)
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { ErrorData = BuildFilePathRequiredError(filePath, "generate_repository_interface") };
-                        }
-
-                        if (string.IsNullOrEmpty(className))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_repository_interface.") };
-                        }
-
-                        var result = await _codeGenerationEngine.GenerateRepositoryInterfaceAsync(filePath, className, cancellationToken);
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result };
+                            ErrorData = BuildFilePathRequiredError(filePath, "generate_repository_interface")
+                        };
                     }
+
+                    if (string.IsNullOrEmpty(className))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_repository_interface.")
+                        };
+                    }
+
+                    var result = await _codeGenerationEngine.GenerateRepositoryInterfaceAsync(filePath, className, cancellationToken);
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result
+                    };
+                }
+
                 case CodemodKind.generate_test_scaffold:
+                {
+                    if (!filePath.Validated)
                     {
-                        if (!filePath.Validated)
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { ErrorData = BuildFilePathRequiredError(filePath, "generate_test_scaffold") };
-                        }
-
-                        if (string.IsNullOrEmpty(className))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_test_scaffold.") };
-                        }
-
-                        var result = await _testingEngine.GenerateTestScaffoldAsync(filePath, className, cancellationToken);
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result };
+                            ErrorData = BuildFilePathRequiredError(filePath, "generate_test_scaffold")
+                        };
                     }
+
+                    if (string.IsNullOrEmpty(className))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_test_scaffold.")
+                        };
+                    }
+
+                    var result = await _testingEngine.GenerateTestScaffoldAsync(filePath, className, cancellationToken);
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result
+                    };
+                }
+
                 case CodemodKind.generate_test_skeleton:
+                {
+                    if (!filePath.Validated)
                     {
-                        if (!filePath.Validated)
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { ErrorData = BuildFilePathRequiredError(filePath, "generate_test_skeleton") };
-                        }
-
-                        if (string.IsNullOrEmpty(className))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_test_skeleton.") };
-                        }
-
-                        var result = await _testingEngine.GenerateTestSkeletonAsync(filePath, className, cancellationToken: cancellationToken);
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result };
+                            ErrorData = BuildFilePathRequiredError(filePath, "generate_test_skeleton")
+                        };
                     }
+
+                    if (string.IsNullOrEmpty(className))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required for generate_test_skeleton.")
+                        };
+                    }
+
+                    var result = await _testingEngine.GenerateTestSkeletonAsync(filePath, className, cancellationToken: cancellationToken);
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result
+                    };
+                }
+
                 case CodemodKind.generate_to_string_safe:
+                {
+                    if (!filePath.Validated)
                     {
-                        if (!filePath.Validated)
+                        return new SentinelCallToolResult<object>()
                         {
-                            return new SentinelCallToolResult<object>() { ErrorData = BuildFilePathRequiredError(filePath, "generate_to_string_safe") };
-                        }
-
-                        if (string.IsNullOrEmpty(className))
-                        {
-                            return new SentinelCallToolResult<object>() { ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className (typeName) is required for generate_to_string_safe.") };
-                        }
-
-                        IList<string>? memberList = members?.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                                     .Select(m => m.Trim())
-                                     .Where(m => m.Length > 0)
-                                     .ToList();
-                        var result = await _msToolAugmentEngine.GenerateToStringSafeAsync(filePath, className, memberList, cancellationToken);
-                        return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = result };
+                            ErrorData = BuildFilePathRequiredError(filePath, "generate_to_string_safe")
+                        };
                     }
+
+                    if (string.IsNullOrEmpty(className))
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className (typeName) is required for generate_to_string_safe.")
+                        };
+                    }
+
+                    IList<string>? memberList = members?.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(m => m.Trim()).Where(m => m.Length > 0).ToList();
+                    var result = await _msToolAugmentEngine.GenerateToStringSafeAsync(filePath, className, memberList, cancellationToken);
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsSuccess = true,
+                        SuccessData = result
+                    };
+                }
+
                 default:
                     return new SentinelCallToolResult<object>()
                     {
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                        $"Unknown kind '{kind}'. Valid values: add_benchmark_stub, generate_constructor, " +
-                        "generate_decorator_class, generate_equality_overrides, generate_fluent_builder, " +
-                        "generate_path_driven_tests, generate_repository_interface, generate_test_scaffold, " +
-                        "generate_test_skeleton, generate_to_string_safe.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown kind '{kind}'. Valid values: add_benchmark_stub, generate_constructor, " + "generate_decorator_class, generate_equality_overrides, generate_fluent_builder, " + "generate_path_driven_tests, generate_repository_interface, generate_test_scaffold, " + "generate_test_skeleton, generate_to_string_safe.")
                     };
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Generate ({Kind}) failed", kind);
-            return new SentinelCallToolResult<object>() { ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"Generate ({kind})") };
+            return new SentinelCallToolResult<object>()
+            {
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"Generate ({kind})")
+            };
         }
     }
 
@@ -1399,19 +1624,36 @@ public class CodemodTools
             """,
         StructuredOptions = new Dictionary<string, object>
         {
-            ["transforms"] = new[] {
-                "add_braces", "cleanup_implicit_spans", "convert_to_null_coalescing", "convert_to_pattern",
-                "convert_to_switch", "fix_mismatched_namespaces", "fix_thread_sleep", "format_document_preview",
-                "format_document_safe", "generate_xml_documentation_stubs", "optimize_task_wait",
-                "preview_add_missing_usings", "add_configure_await_false", "remove_configure_await_false",
-                "simplify_boolean_expressions", "simplify_member_access", "simplify_verbosity",
-                "sort_and_deduplicate_usings", "upgrade_pattern_matching", "upgrade_thread_safety",
-                "upgrade_to_file_scoped_namespace", "upgrade_to_modern_guards", "use_field_backed_properties",
-                "use_index_from_end", "use_time_provider"
+            ["transforms"] = new[]
+            {
+                "add_braces",
+                "cleanup_implicit_spans",
+                "convert_to_null_coalescing",
+                "convert_to_pattern",
+                "convert_to_switch",
+                "fix_mismatched_namespaces",
+                "fix_thread_sleep",
+                "format_document_preview",
+                "format_document_safe",
+                "generate_xml_documentation_stubs",
+                "optimize_task_wait",
+                "preview_add_missing_usings",
+                "add_configure_await_false",
+                "remove_configure_await_false",
+                "simplify_boolean_expressions",
+                "simplify_member_access",
+                "simplify_verbosity",
+                "sort_and_deduplicate_usings",
+                "upgrade_pattern_matching",
+                "upgrade_thread_safety",
+                "upgrade_to_file_scoped_namespace",
+                "upgrade_to_modern_guards",
+                "use_field_backed_properties",
+                "use_index_from_end",
+                "use_time_provider"
             }
         }
     };
-
     internal static ToolOptionsResult ApplyMethodCodemodOptions() => new()
     {
         Description = """
@@ -1451,17 +1693,28 @@ public class CodemodTools
             """,
         StructuredOptions = new Dictionary<string, object>
         {
-            ["transforms"] = new[] {
-                "add_guard_clauses", "convert_expression_body", "convert_lock_to_semaphore_slim",
-                "convert_method_to_indexer", "convert_out_params_to_value_tuple", "convert_static_to_extension",
-                "convert_switch_to_expression", "convert_to_async_enumerable", "extension_to_static",
-                "generate_async_overload", "make_method_static", "make_method_thread_safe",
-                "optimize_independent_awaits", "optimize_to_value_task", "reduce_block_depth",
-                "update_xml_docs_from_signature", "use_exception_expressions"
+            ["transforms"] = new[]
+            {
+                "add_guard_clauses",
+                "convert_expression_body",
+                "convert_lock_to_semaphore_slim",
+                "convert_method_to_indexer",
+                "convert_out_params_to_value_tuple",
+                "convert_static_to_extension",
+                "convert_switch_to_expression",
+                "convert_to_async_enumerable",
+                "extension_to_static",
+                "generate_async_overload",
+                "make_method_static",
+                "make_method_thread_safe",
+                "optimize_independent_awaits",
+                "optimize_to_value_task",
+                "reduce_block_depth",
+                "update_xml_docs_from_signature",
+                "use_exception_expressions"
             }
         }
     };
-
     internal static ToolOptionsResult ApplyClassCodemodOptions() => new()
     {
         Description = """
@@ -1491,11 +1744,20 @@ public class CodemodTools
             """,
         StructuredOptions = new Dictionary<string, object>
         {
-            ["transforms"] = new[] {
-                "add_validation_to_poco", "class_to_record", "convert_abstract_to_interface",
-                "convert_property_safe", "convert_property_to_methods", "convert_to_background_service",
-                "convert_to_source_generated_logging", "document_poco_fields", "make_class_immutable",
-                "record_to_class", "replace_constructor_with_factory", "sort_members",
+            ["transforms"] = new[]
+            {
+                "add_validation_to_poco",
+                "class_to_record",
+                "convert_abstract_to_interface",
+                "convert_property_safe",
+                "convert_property_to_methods",
+                "convert_to_background_service",
+                "convert_to_source_generated_logging",
+                "document_poco_fields",
+                "make_class_immutable",
+                "record_to_class",
+                "replace_constructor_with_factory",
+                "sort_members",
                 "upgrade_to_primary_constructor"
             }
         }

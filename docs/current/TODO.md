@@ -4,6 +4,44 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `MoveMember`'s `callSiteFixups` `"new"` sentinel only supports a parameterless constructor
+
+**Found:** 2026-09-27, during real end-to-end `MoveMember` testing
+(`ApiIntegrationEngine.AddValidationToPocoAsync` -> `ApiAutomationEngine`).
+
+**What:** `AdvancedStructuralEngine.cs`'s `MoveInstanceMembersAsync` rewrite handles the `"new"`
+sentinel value in `callSiteFixups` by emitting
+`SyntaxFactory.ObjectCreationExpression(SyntaxFactory.IdentifierName(targetClassName)).WithArgumentList(SyntaxFactory.ArgumentList())`
+— always a parameterless constructor call, regardless of what the target type's actual constructor
+requires. Against `ApiAutomationEngine(IWorkspaceManager workspaceManager)` (a required-parameter
+constructor), every call site fixed up with `"new"` failed with `CS7036`
+("no argument given that corresponds to the required parameter 'workspaceManager'"). Worked around
+in that session by passing the full expression (`"new ApiAutomationEngine(_workspaceManager)"`) as
+the fixup value instead of the bare `"new"` sentinel — this already works, since non-`"new"` values
+are parsed via `SyntaxFactory.ParseExpression` verbatim.
+
+**Not fixed:** the `"new"` sentinel could inspect the target type's constructor(s) and either (a)
+only offer itself as valid when a parameterless constructor exists, or (b) attempt to match
+in-scope fields/parameters to the constructor's parameter types the same way call-site candidate
+resolution already does. Low priority — the raw-expression fixup already covers this case, so it's
+a convenience gap, not a blocker.
+
+## `MoveMember`'s ledger `TryOpen` path still unexercised with entries actually present at apply time
+
+**Found:** 2026-09-27, same session as above. See
+`docs/current/blockers/resolved/blocking_error_movemember_ledger_discarded_on_apply.md` (now FIXED —
+the tool-layer discard bug is resolved) for full context. Every real (non-dry-run) `MoveMember` apply
+attempted so far either had zero unresolved call sites by the time of apply (this session's real
+apply resolved all 14 via `callSiteFixups` first) or was rejected before reaching the ledger-open
+check. `((IScopedOperationLedger)_workspaceManager).TryOpen(...)` at
+`AdvancedRefactoringTools.cs`'s `MoveMember` has therefore still never actually run.
+
+**Not fixed / not yet exercised:** construct a real apply where `autoResolveCallSites` is true,
+`callSiteFixups` deliberately covers fewer than all unresolved sites, and the apply still succeeds
+overall (i.e. the *resolved* sites compile, leaving only the *deliberately-unfixed* sites as
+`PendingLedgerEntries`) — confirm the ledger actually opens, blocks an unrelated write, and can be
+resolved by a follow-up `callSiteFixups`-carrying retry.
+
 ## `SentinelRefactoringTools` / `RefactoringStructuralTools` split left half-finished — duplicate `SyncTypeAndFilename` MCP tool registration
 
 **Found:** 2026-09-20, while investigating whether `SyncTypeAndFilename` is duplicated.
