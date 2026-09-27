@@ -71,6 +71,12 @@ public class WorkspaceTools
         _buildTest = new WorkspaceBuildTestTools(new WorkspaceBuildTestImpl(workspaceManager, diagnosticEngine, buildEngine, testRunEngine, logger));
         _fileEdit = new WorkspaceFileEditTools(new WorkspaceFileEditImpl(workspaceManager, readNav, logger, validationEngine, symbolNavigationEngine, writeAdvice));
         _healthMisc = new WorkspaceHealthMiscTools(new WorkspaceHealthMiscImpl(workspaceManager, config, buildEngine, logger));
+
+        // Search's mode:symbol/references dispatch targets. Built internally (not taken as ctor
+        // params) so the many existing `new WorkspaceTools(...)` call sites across the test suite
+        // don't all need updating for a dependency only Search uses.
+        _symbolNavigation = new SymbolNavigationImpl(symbolNavigationEngine, new ImpactAnalyzer(workspaceManager), workspaceManager, logger);
+        _symbolRelationship = new SymbolRelationshipImpl(new DiscoveryEngine(workspaceManager), new SemanticSearchEngine(workspaceManager), symbolNavigationEngine, workspaceManager, logger);
     }
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
@@ -611,20 +617,97 @@ public class WorkspaceTools
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
         CancellationToken cancellationToken = default)
         => _readNav.ListAll(reason, kind, projectName, cancellationToken);
-    [McpServerTool(Name = "SearchSolutionText")]
+
+
+    [McpServerTool(Name = "Search")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
-    [Description("Searches solution source files for pattern, matched both as a literal substring and as a regex in one pass. Use LocateSymbol for known symbol names instead.")]
-    public Task<SentinelCallToolResult<object>> SearchSolutionText(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("Text to search for, matched as both literal substring and regex.")]
-        [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
-        [Description("Restricts to matching file paths (glob). Omit for all files.")]
+    [Produces(DataTag.DocCommentId)]
+    [Produces(DataTag.ProjectName)]
+    [Description("Unified search entry point. mode selects what's being searched: text (free-text/regex scan - old SearchSolutionText), symbol (declaration lookup by name), references (callers/implementations of a symbol), or a declaration-kind listing (all/namespace/class/interface/method/property/struct/record/\"enum\"/\"enum member\"/constructor/field). query is the search pattern for text or the symbol name for symbol/references; it is ignored for every declaration-kind mode.")]
+    public Task<SentinelCallToolResult<object>> SearchSolution(
+    [Description(ToolParams.Reason)] ToolCallReason reason,
+    [Description(ToolParams.SearchModeValues)] SearchMode mode,
+    [Description("Search pattern for mode: text, or symbol name for mode: symbol/references. Ignored for mode: all and every declaration-kind mode.")]
+        string? query = null,
+    [Description("mode: text only. Restricts to matching file paths (glob). Omit for all files.")]
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
-        [Description("Caps total matches scanned.")]
-        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200, // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-        => _readNav.SearchSolutionText(reason, pattern, fileGlob, maxResults, cancellationToken);
+    [Description("mode: text only. Caps total matches scanned.")]
+        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
+    [Description("mode: symbol only. Restricts the search to one kind of symbol.")]
+        [ExternalInputRequired(DataTag.SymbolKind)] SymbolKindFilter symbolKind = SymbolKindFilter.any,
+    [Description("mode: symbol only. Restricts results to symbols declared inside this type.")]
+        [ExternalInputRequired(DataTag.ContainingType)] string? containingType = null,
+    [Description("mode: symbol only. Restricts results to symbols declared inside this namespace.")]
+        [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
+    [Description("mode: symbol/all/declaration-kind modes. Restricts to one project. Omit for the whole solution.")]
+        [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
+    [Description("mode: symbol only. false enables a prefix/contains search instead of an exact name match.")]
+        [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
+    [Description("mode: references only, required. callers: call sites only. implementations: overrides/interface implementations only. all: both, clearly labeled.")]
+        [Consumes(DataTag.SymbolKind)] FindReferencesKind? referencesKind = null,
+    [Description("mode: symbol/references only. Pins resolution when the name is ambiguous across files.")]
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
+    [Description("Required for mode: references. " + ToolParams.ContextSnippet)]
+        [Consumes(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+    [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+    [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+    CancellationToken cancellationToken = default)
+    => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, referencesKind, filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+
+
+    private static ListAllKind SearchModeToListAllKind(SearchMode mode) => mode switch
+    {
+        SearchMode.all => ListAllKind.all,
+        SearchMode.@namespace => ListAllKind.@namespace,
+        SearchMode.@class => ListAllKind.@class,
+        SearchMode.@interface => ListAllKind.@interface,
+        SearchMode.method => ListAllKind.method,
+        SearchMode.property => ListAllKind.property,
+        SearchMode.@struct => ListAllKind.@struct,
+        SearchMode.record => ListAllKind.record,
+        SearchMode.@enum => ListAllKind.@enum,
+        SearchMode.enumMember => ListAllKind.enumMember,
+        SearchMode.constructor => ListAllKind.constructor,
+        SearchMode.field => ListAllKind.field,
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unhandled SearchMode in declaration-listing dispatch.")
+    };
+
+
+    private Task<SentinelCallToolResult<object>> DispatchSearch(
+    ToolCallReason reason, SearchMode mode, string? query, string? fileGlob, int maxResults,
+    SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName,
+    bool exactMatch, FindReferencesKind? referencesKind, string? filePath, string? contextSnippet,
+    string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
+    {
+        switch (mode)
+        {
+            case SearchMode.text:
+                return _readNav.SearchSolutionText(reason, query ?? string.Empty, fileGlob, maxResults, cancellationToken);
+            case SearchMode.symbol:
+                return _symbolNavigation.LocateSymbol(reason, query ?? string.Empty, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, cancellationToken);
+            case SearchMode.references:
+                if (string.IsNullOrEmpty(contextSnippet))
+                {
+                    return Task.FromResult(new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = false,
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "contextSnippet is required for mode: references - pass a short unique verbatim fragment identifying the target symbol.")
+                    });
+                }
+                if (referencesKind is null)
+                {
+                    return Task.FromResult(new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = false,
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "referencesKind is required for mode: references - pass \"callers\", \"implementations\", or \"all\".")
+                    });
+                }
+                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, referencesKind.Value, filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            default:
+                return _readNav.ListAll(reason, SearchModeToListAllKind(mode), projectName, cancellationToken);
+        }
+    }
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns a filtered, paged slice of an operation result blob by changeId.")]
@@ -690,4 +773,10 @@ public class WorkspaceTools
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filePath, _workspaceManager.GetSolutionRoot());
         return _readNav.GetLargeResult(reason, resultId, filePathResolved, limit, offset, charLimit: charLimit, cancellationToken: cancellationToken);
     }
+
+
+    private readonly SymbolNavigationImpl _symbolNavigation;
+
+
+    private readonly SymbolRelationshipImpl _symbolRelationship;
 }

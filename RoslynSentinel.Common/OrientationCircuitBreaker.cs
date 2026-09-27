@@ -64,7 +64,7 @@ public class OrientationCircuitBreaker : IAutomaticCircuitBreaker
                 return null;
             }
 
-            return $"SearchSolutionText is DISABLED after {_consecutiveZeroMatchSearches} consecutive calls returned " +
+            return $"Search(mode: text) is DISABLED after {_consecutiveZeroMatchSearches} consecutive calls returned " +
                    "no matches. It will not run again until one of the tools below succeeds. You MUST call " +
                    "ListAll(kind: all) or ListSolutionItems(kind: all) now - browse the returned list for what " +
                    "you're looking for. GetFileOutline and ReadFile are also available once you have a real path " +

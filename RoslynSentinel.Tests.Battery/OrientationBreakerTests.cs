@@ -2,7 +2,7 @@
 // docs/current/plan-orientation-breaker.md): PersistentWorkspaceManager now implements two
 // independent breakers -> IManualCircuitBreaker (mutating-tools breaker, unchanged behavior,
 // manual reset only) and IAutomaticCircuitBreaker (new; trips after repeated zero-match
-// SearchSolutionText calls, auto-resets via RecordSearchOutcome/Reset()). Each interface
+// Search(mode: text) calls, auto-resets via RecordSearchOutcome/Reset()). Each interface
 // redeclares IsTripped()/StateMessage()/Reset() with its own explicit-interface-implementation
 // body on PersistentWorkspaceManager, so these tests also confirm the two breakers' state is
 // genuinely independent rather than accidentally sharing one implementation.
@@ -50,7 +50,7 @@ public class OrientationBreakerTests
         automaticBreaker.RecordSearchOutcome(0);
 
         Assert.That(automaticBreaker.IsTripped(), Is.True);
-        Assert.That(automaticBreaker.StateMessage(), Does.Contain("SearchSolutionText"));
+        Assert.That(automaticBreaker.StateMessage(), Does.Contain("Search(mode: text)"));
     }
 
     [Test]

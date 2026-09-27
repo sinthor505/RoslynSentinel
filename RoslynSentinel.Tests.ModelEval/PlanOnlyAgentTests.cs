@@ -68,7 +68,7 @@ public class PlanOnlyAgentTests
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
     // AddRoslynSentinelToolsBasic checks -> see WholeFileRewriteAgentTests.ActiveModes for why both
     // modes are needed even though this fixture blocks every mutating tool they'd otherwise expose:
-    // ApplyDiff/Build/ReadFile/ListAll/SearchSolutionText all live in SentinelWorkspaceTools (gated by
+    // ApplyDiff/Build/ReadFile/ListAll/Search all live in SentinelWorkspaceTools (gated by
     // "Workspace"), so there is no mode combination that yields read-only tools without ApplyDiff ->
     // the BlockedToolFilter below is what actually enforces "no edits", not the mode selection.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)

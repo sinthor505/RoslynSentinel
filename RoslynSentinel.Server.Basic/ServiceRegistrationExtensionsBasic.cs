@@ -574,10 +574,10 @@ public static class RoslynSentinelServiceExtensionsBasic
                 }));
 
             // Orientation breaker: after OrientationBreakerTripThreshold consecutive zero-match
-            // SearchSolutionText calls (see PersistentWorkspaceManager.RecordSearchOutcome), restrict
+            // Search(mode: text) calls (see PersistentWorkspaceManager.RecordSearchOutcome), restrict
             // tool calls to a small orienting allowlist until one of them succeeds. Exists because
-            // agents repeatedly retry SearchSolutionText with reworded guesses instead of switching to
-            // ListAll/GetFileOutline, even though both the system prompt and SearchSolutionText's own
+            // agents repeatedly retry text search with reworded guesses instead of switching to
+            // ListAll/GetFileOutline, even though both the system prompt and Search(mode: text)'s own
             // zero-match response already say to do so -> see docs/current/plan-orientation-breaker.md.
             filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
                 ModelContextProtocol.Protocol.CallToolRequestParams,
@@ -596,7 +596,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                         {
                             return new ModelContextProtocol.Protocol.CallToolResult
                             {
-                                Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage() ?? "SearchSolutionText is DISABLED. You MUST call ListAll(kind: all) or ListSolutionItems(kind: all) now." }],
+                                Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage() ?? "Search(mode: text) is DISABLED. You MUST call ListAll(kind: all) or ListSolutionItems(kind: all) now." }],
                                 IsError = true,
                             };
                         }
@@ -612,11 +612,21 @@ public static class RoslynSentinelServiceExtensionsBasic
                     {
                         if (automaticBreaker is not null)
                         {
-                            // SearchSolutionText's own outcome is now recorded inline, from inside
+                            // Search(mode: text)'s own outcome is now recorded inline, from inside
                             // WorkspaceReadNavigationImpl.SearchSolutionText itself, immediately after
                             // the match count is known -> not here. Recording it a second time here
-                            // would double-count every call against the trip threshold.
-                            if (toolName != "SearchSolutionText" && automaticBreaker.IsTripped() && result.IsError != true)
+                            // would double-count every call against the trip threshold. Every other
+                            // Search mode (symbol/references/declaration-kind listings) never reaches
+                            // that inline recording path, so only mode: text is excluded here - a
+                            // successful Search(mode: symbol) etc. must still reset the breaker like
+                            // any other tool.
+                            var isTextSearch = toolName == "Search" &&
+                                context.Params?.Arguments is { } args &&
+                                args.TryGetValue("mode", out var modeArg) &&
+                                modeArg.ValueKind == System.Text.Json.JsonValueKind.String &&
+                                modeArg.GetString() == "text";
+
+                            if (!isTextSearch && automaticBreaker.IsTripped() && result.IsError != true)
                             {
                                 automaticBreaker.Reset();
                             }

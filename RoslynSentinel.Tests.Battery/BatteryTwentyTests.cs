@@ -191,7 +191,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_LiteralPattern_ReturnsNoWarning()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "Order");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Order");
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.WarningDetails, Is.Null);
@@ -201,7 +201,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_RegexLikePattern_ReturnsBothLiteralAndRegexResults()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test message", @"^namespace TestProj");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: @"^namespace TestProj");
 
         Assert.That(result.IsSuccess, Is.True, "a pattern with regex metacharacters must still be searched literally, not just as regex");
         var payload = (TextSearchResult)result.SuccessData!;
@@ -215,7 +215,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         // "Order" contains no regex metacharacters, so every regex match is also a literal match
         // at the same file/line/col -> regexResults should be empty and the overlap reported.
-        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "Order");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Order");
 
         Assert.That(result.IsSuccess, Is.True);
         var payload = (TextSearchResult)result.SuccessData!;
@@ -228,7 +228,7 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_NoMatches_ReturnsNoMatchesError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "ThisPatternDoesNotAppearAnywhere");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "ThisPatternDoesNotAppearAnywhere");
 
         Assert.That(result.IsSuccess, Is.False, "Zero matches in both modes should surface as a failure so the protocol-level IsError filter picks it up.");
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
@@ -242,7 +242,7 @@ public class BatteryTwentyTests
         // perfectly normal literal substring to search for. Must not throw a parse error, and
         // literal search must still work.
         SetSource("namespace TestProj; // array like foo[bar\npublic class Order { }", "Test.cs");
-        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "foo[bar");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "foo[bar");
 
         Assert.That(result.IsSuccess, Is.True, "an unclosed '[' is not valid regex, but the literal substring search must still work");
         var payload = (TextSearchResult)result.SuccessData!;
@@ -268,7 +268,7 @@ public class BatteryTwentyTests
         }
         """, "Test.cs");
 
-        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "return a + b");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "return a + b");
 
         Assert.That(result.IsSuccess, Is.True);
         var payload = (TextSearchResult)result.SuccessData!;
@@ -290,7 +290,7 @@ public class BatteryTwentyTests
         }
         """, "Test.cs");
 
-        var result = await _workspaceTools.SearchSolutionText(reason: "test message", "using System");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "using System");
 
         Assert.That(result.IsSuccess, Is.True);
         var payload = (TextSearchResult)result.SuccessData!;
@@ -312,7 +312,7 @@ public class BatteryTwentyTests
                 "TestProj", projectCsproj, [("Foo.cs", initialContent, tempFile)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var before = await _workspaceTools.SearchSolutionText(reason: "test message", "Bar");
+            var before = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Bar");
             Assert.That(before.IsSuccess, Is.True);
             Assert.That(before.WorkspaceVersion, Is.Not.Null);
 
@@ -322,7 +322,7 @@ public class BatteryTwentyTests
                 new Dictionary<FilePathWrapper, string> { [tempFile] = updatedContent });
             Assert.That(applyResult.Success, Is.True);
 
-            var after = await _workspaceTools.SearchSolutionText(reason: "test message", "Baz");
+            var after = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Baz");
 
             Assert.That(after.IsSuccess, Is.True);
             Assert.That(after.WorkspaceVersion, Is.Not.Null);

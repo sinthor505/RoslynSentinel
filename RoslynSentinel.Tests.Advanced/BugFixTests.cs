@@ -1566,7 +1566,6 @@ public class TargetDto
     public string Email { get; set; }
 }";
             SetSource(code, "User.cs");
-            var engine = new ApiIntegrationEngine(_workspaceManager);
             var result = await new ApiAutomationEngine(_workspaceManager).AddValidationToPocoAsync("User.cs", "User");
             Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return non-empty result");
             // Should have using
@@ -1587,7 +1586,6 @@ public class TargetDto
     public string SKU { get; set; }
 }";
             SetSource(code, "Product.cs");
-            var engine = new ApiIntegrationEngine(_workspaceManager);
             var result = await new ApiAutomationEngine(_workspaceManager).AddValidationToPocoAsync("Product.cs", "Product");
             // String property should get [Required] and [StringLength]
             Assert.That(result.UpdatedText, Does.Contain("[Required]"), "String property should have [Required]");
@@ -1602,7 +1600,6 @@ public class TargetDto
     public int Quantity { get; set; }
 }";
             SetSource(code, "Widget.cs");
-            var engine = new ApiIntegrationEngine(_workspaceManager);
             var result = await new ApiAutomationEngine(_workspaceManager).AddValidationToPocoAsync("Widget.cs", "Widget");
             // Int property should get [Range]
             Assert.That(result.UpdatedText, Does.Contain("[Range(0, 2147483647)"), "Int property should have [Range(0, int.MaxValue)]");

@@ -42,12 +42,12 @@ public static class AgentSystemPrompts
           happening to code you did not intend to touch, you must report it as a defect, not
           silently accept or excuse it.
         - Never invent a tool name, parameter, method, or API that you have not directly observed
-          in this session (via ReadFile, ListAll, SearchSolutionText, GetFileOutline, or a tool
+          in this session (via ReadFile, ListAll, Search, GetFileOutline, or a tool
           result). If you are not sure a symbol exists, look it up before using it.
         - If you don't know the exact name of a method/type/file you need, do NOT guess plausible
           names and search for them one at a time - call ListAll (or ListSolutionItems with
           kind:"files") first to see what actually exists, then narrow from there. Repeatedly
-          retrying SearchSolutionText with slightly different guessed patterns after it returns no
+          retrying Search(mode: text) with slightly different guessed patterns after it returns no
           matches is a sign you should switch to listing instead of searching.
         - The MCP server validates most changes and rejects edits that result in new compiliation errors.
           Plan your edits in and perform them in a sequence that ensures each edit will chain to the next edit.

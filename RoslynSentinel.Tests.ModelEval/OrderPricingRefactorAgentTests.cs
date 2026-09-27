@@ -46,7 +46,7 @@ public class OrderPricingRefactorAgentTests
         # Task: Three small refactors in FixtureHelpers/OrderPricingCalculator.cs
 
         The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
-        straight to ReadFile/SearchSolutionText/ListAll on the paths below.
+        straight to ReadFile/Search/ListAll on the paths below.
 
         You have flexibility in exactly how you implement each step below - use whichever MCP
         tool(s) you judge appropriate (a dedicated refactoring tool or a direct edit), as long as
@@ -109,7 +109,7 @@ public class OrderPricingRefactorAgentTests
         """;
 
     // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks ->
-    // together they register ApplyDiff/Build/ReadFile/SearchSolutionText/ListSolutionItems plus
+    // together they register ApplyDiff/Build/ReadFile/Search/ListSolutionItems plus
     // SentinelRefactoringTools (ExtractMethodSafe, RenameSymbol, ChangeAccessibility,
     // ModifyModifier), without pulling in Advanced's larger tool catalog.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)

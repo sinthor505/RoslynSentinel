@@ -86,8 +86,8 @@ public class OrientationBreakerFilterTests
 
     private async Task<CallToolResult> SearchForGuaranteedNoMatchAsync(string pattern) =>
         await _client.CallToolAsync(
-            "SearchSolutionText",
-            new Dictionary<string, object?> { ["reason"] = "test message", ["pattern"] = pattern }!,
+            "Search",
+            new Dictionary<string, object?> { ["reason"] = "test message", ["mode"] = "text", ["query"] = pattern }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
     [Test]
@@ -118,7 +118,7 @@ public class OrientationBreakerFilterTests
 
         Assert.That(blocked.IsError, Is.True, "A non-allowlisted tool call should be short-circuited while the orientation breaker is tripped.");
         var text = string.Join(" ", blocked.Content.OfType<TextContentBlock>().Select(b => b.Text));
-        Assert.That(text, Does.Contain("SearchSolutionText is DISABLED"));
+        Assert.That(text, Does.Contain("Search(mode: text) is DISABLED"));
     }
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
@@ -175,8 +175,8 @@ public class OrientationBreakerFilterTests
 
         // A pattern virtually certain to exist in the sample solution's own source.
         var matchResult = await _client.CallToolAsync(
-            "SearchSolutionText",
-            new Dictionary<string, object?> { ["reason"] = "test message", ["pattern"] = "class" }!,
+            "Search",
+            new Dictionary<string, object?> { ["reason"] = "test message", ["mode"] = "text", ["query"] = "class" }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
         Assert.That(matchResult.IsError, Is.Not.True);
 

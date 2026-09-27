@@ -70,6 +70,11 @@ public static class ToolParams
     public const string ListAllKindValues =
         "\"all\"|\"namespace\"|\"class\"|\"interface\"|\"method\"|\"property\"|\"struct\"|\"record\"|\"enum\"|\"enum member\"|\"constructor\"|\"field\"";
 
+
+    public const string SearchModeValues =
+    "\"text\"|\"symbol\"|\"references\"|\"all\"|\"namespace\"|\"class\"|\"interface\"|\"method\"|\"property\"|\"struct\"|\"record\"|\"enum\"|\"enum member\"|\"constructor\"|\"field\"";
+
+
     public const string SymbolKindFilter =
         "\"type\"|\"method\"|\"property\"|\"field\"|\"event\"|\"any\" (default)";
 

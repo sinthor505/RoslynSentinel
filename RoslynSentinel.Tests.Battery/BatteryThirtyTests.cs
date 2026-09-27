@@ -15,7 +15,6 @@ public class B30_RegressionTests
 {
     private PersistentWorkspaceManager _ws = null!;
     private SentinelConfiguration _cfg = null!;
-    private ApiIntegrationEngine _apiEngine = null!;
     private ModernizationEngine _modEngine = null!;
     private ThreadSafetyEngine _tsEngine = null!;
     private SyntaxUpgradeEngine _suEngine = null!;
@@ -24,7 +23,6 @@ public class B30_RegressionTests
     {
         _ws = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _cfg = new SentinelConfiguration();
-        _apiEngine = new ApiIntegrationEngine(_ws);
         _modEngine = new ModernizationEngine(_ws, _cfg);
         _tsEngine = new ThreadSafetyEngine(_ws);
         _suEngine = new SyntaxUpgradeEngine(_ws, _cfg);

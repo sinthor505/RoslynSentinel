@@ -306,3 +306,10 @@ public enum GitResetMode
     /// <summary>Move HEAD/branch and reset the index to match, but leave the working tree untouched, so those changes reappear as unstaged modifications. (git reset --mixed)</summary>
     mixed
 }
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SearchMode
+{
+    text, symbol, references, all, @namespace, @class, @interface, method, property, @struct, record, @enum,
+    [JsonStringEnumMemberName("enum member")] enumMember,
+    constructor, field,
+}

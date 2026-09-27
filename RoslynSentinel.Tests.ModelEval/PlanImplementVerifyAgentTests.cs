@@ -63,7 +63,7 @@ public class PlanImplementVerifyAgentTests
         # Task: Plan a fix for a bug in FixtureHelpers/BlockConverter.cs
 
         The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
-        straight to ReadFile/SearchSolutionText/ListAll on the path below.
+        straight to ReadFile/Search/ListAll on the path below.
 
         Users report that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs` sometimes
         changes unrelated formatting elsewhere in the same file, even though they only asked for
@@ -104,7 +104,7 @@ public class PlanImplementVerifyAgentTests
         # Task: Fix a bug in FixtureHelpers/BlockConverter.cs
 
         The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
-        straight to ReadFile/SearchSolutionText/ListAll on the path below.
+        straight to ReadFile/Search/ListAll on the path below.
 
         Users report that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs` sometimes
         changes unrelated formatting elsewhere in the same file, even though they only asked for
@@ -139,7 +139,7 @@ public class PlanImplementVerifyAgentTests
         # Task: Review a fix for a bug in FixtureHelpers/BlockConverter.cs
 
         The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
-        straight to ReadFile/SearchSolutionText/ListAll on the path below.
+        straight to ReadFile/Search/ListAll on the path below.
 
         Users had reported that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs`
         sometimes changed unrelated formatting elsewhere in the same file, even though they only
@@ -168,7 +168,7 @@ public class PlanImplementVerifyAgentTests
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
     // AddRoslynSentinelToolsBasic checks -> see WholeFileRewriteAgentTests.ActiveModes for why both
     // modes are needed for every phase here, including the read-only ones: the tools this fixture's
-    // prompts need (ReadFile/ListAll/SearchSolutionText/Build) live in SentinelWorkspaceTools, gated
+    // prompts need (ReadFile/ListAll/Search/Build) live in SentinelWorkspaceTools, gated
     // by "Workspace", alongside the mutating tools gated by "Refactor" -> the per-phase BlockedToolNames
     // filter below is what actually enforces read-only, not the mode selection.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
@@ -185,7 +185,7 @@ public class PlanImplementVerifyAgentTests
     };
 
     // The exact set of tools actually called across 20 real PlanImplementVerify transcripts
-    // against this fixture (58 ReadFile, 21 ApplyDiff, 18 SearchSolutionText, 15 Build, 4
+    // against this fixture (58 ReadFile, 21 ApplyDiff, 18 Search, 15 Build, 4
     // LoadSolution, 4 ListWorkspaceSolutions, 3 ListAll, 3 ChangeAccessibility, 1 UsingDirective,
     // 1 ModifyModifier, 1 ListSolutionItems -> 2026-09-05 analysis). Used only when
     // LlmOptions.MinimalToolSchema is set, to narrow the advertised tools/list schema down from
@@ -195,7 +195,7 @@ public class PlanImplementVerifyAgentTests
     // happened to use on this one fixture, not a general-purpose minimal toolset.
     private static readonly HashSet<string> MinimalToolNames = new(StringComparer.Ordinal)
     {
-        "ReadFile", "ApplyDiff", "SearchSolutionText", "Build", "LoadSolution",
+        "ReadFile", "ApplyDiff", "Search", "Build", "LoadSolution",
         "ListWorkspaceSolutions", "ListAll", "ChangeAccessibility", "UsingDirective",
         "ModifyModifier", "ListSolutionItems",
     };

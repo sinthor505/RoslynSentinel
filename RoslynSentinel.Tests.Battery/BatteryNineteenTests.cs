@@ -11,7 +11,6 @@ public class BatteryNineteenTests
     private CodeGenerationEngine _codeGenerationEngine;
     private ApiAutomationEngine _apiAutomationEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
-    private ApiIntegrationEngine _apiIntegrationEngine;
     private GenerationTools _generationTools;
     private ValidationEngine _validationEngine;
     private MappingEngine _mappingEngine;
@@ -64,7 +63,6 @@ public interface IOrderRepository
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         _apiAutomationEngine = new ApiAutomationEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _apiIntegrationEngine = new ApiIntegrationEngine(_workspaceManager);
         _validationEngine = new ValidationEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);

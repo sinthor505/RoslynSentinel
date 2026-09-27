@@ -90,7 +90,7 @@ public class WholeFileRewriteAgentTests
 
     // Level 3: no method/file names, no fix mechanism, no step list -> just the observable symptom.
     // The model has to locate the bug by reading BlockConverter.cs, discover BlockEditHelpers.cs's
-    // existing fix pattern itself (e.g. via SearchSolutionText/ListSolutionItems), and decide how to
+    // existing fix pattern itself (e.g. via Search/ListSolutionItems), and decide how to
     // reuse it. Reuses the same fixture and AssertFixApplied as the level-2 test above -> only the
     // prompt differs, so a pass/fail delta between the two tests isolates how much the scripted
     // guidance in the level-2 prompt was doing versus the model's own reasoning.
@@ -177,7 +177,7 @@ public class WholeFileRewriteAgentTests
         # Task: Fix a bug in FixtureHelpers/BlockConverter.cs
 
         The solution is already loaded - do not call ListWorkspaceSolutions or LoadSolution, go
-        straight to ReadFile/SearchSolutionText/ListAll on the path below.
+        straight to ReadFile/Search/ListAll on the path below.
 
         Users report that editing shapes via `{0}/FixtureHelpers/BlockConverter.cs` sometimes
         changes unrelated formatting elsewhere in the same file, even though they only asked for
@@ -270,7 +270,7 @@ public class WholeFileRewriteAgentTests
 
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
     // AddRoslynSentinelToolsBasic checks -> these two together register everything the prompts in
-    // this file need (ApplyDiff, Build, ReadFile, SearchSolutionText, ListSolutionItems via
+    // this file need (ApplyDiff, Build, ReadFile, Search, ListSolutionItems via
     // SentinelWorkspaceTools; SentinelRefactoringTools for edits) without
     // pulling in Advanced's much larger scanner/analyzer/asyncify tool catalog, which only adds
     // context bloat and slows the model down for tasks that never call those tools.
@@ -603,7 +603,7 @@ public class WholeFileRewriteAgentTests
         // self-correction sequence spanning two DIFFERENT tools (e.g. a real compiler error on
         // ApplyDiff, then a ModifyModifier/ChangeAccessibility retry) never trips the per-tool cap
         // but does trip a tight total cap the moment any third, unrelated benign hiccup occurs
-        // (almost always a zero-match SearchSolutionText). The total cap needs to be loose enough
+        // (almost always a zero-match Search). The total cap needs to be loose enough
         // to tolerate several independent single-retry corrections across a longer agentic run.
         // maxPerTool was raised from 2 to 4 on 2026-09-04: a PlanImplementVerify base-qwen3.5-9b
         // run made a wrong-then-right accessibility call on ONE tool (ApplyDiff: unqualified call

@@ -9,13 +9,11 @@ namespace RoslynSentinel.Tests.Battery;
 public class ApiIntegrationEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
-    private ApiIntegrationEngine _engine = null!;
     private static readonly (string, string)[] Stub = [("Other.cs", "public class Other {}")];
     [SetUp]
     public void SetUp()
     {
         _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ApiIntegrationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
 

@@ -19,7 +19,7 @@ public class SymbolNavigationTools
     [McpServerTool(Name = "LocateSymbol", UseStructuredContent = false, OutputSchemaType = typeof(LocateSymbolResult))]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
-    [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text - use SearchSolutionText for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
+    [Description("Locates declaration sites for a symbol by name. Only matches declared symbols, not arbitrary text - use Search for free text. Returns SymbolHandles containing projectName, docCommentId, and filePath.")]
     public Task<SentinelCallToolResult<object>> LocateSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
