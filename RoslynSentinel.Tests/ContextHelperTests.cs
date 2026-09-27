@@ -311,6 +311,57 @@ public class ContextHelperTests
     }
 
     [Test]
+    public void FindExactSnippetPosition_AllLinesIndentationOnlyDiffer_NamesWhitespaceNotArrangement()
+    {
+        // plan_contexterrorbuilder_orienting_guidance.md Step 6: every filtered snippet line
+        // matches source content once whitespace is collapsed - the diagnosis must name
+        // whitespace/indentation as the cause, not the generic "arrangement" wording that fires
+        // when lines match verbatim but are merely non-contiguous. Uses INTERNAL spacing
+        // differences (not leading indentation), since leading/trailing whitespace is already
+        // absorbed by DiagnoseNoMatch's pre-existing .Trim() and would never reach the new
+        // collapse fallback this test targets.
+        var source = "public class C {\n    int M() {\n        var  x = 1;\n        var  y = 2;\n    }\n}";
+        var snippet = "var x = 1;\nvar y = 2;";
+
+        var ex = Assert.Throws<ToolNotFoundException>(
+            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), snippet));
+        Assert.That(ex!.Message, Does.Contain("whitespace"));
+        Assert.That(ex.Message, Does.Not.Contain("not in the arrangement you supplied"));
+        Assert.That(ex.Message, Does.Contain("var x = 1;"));
+        Assert.That(ex.Message, Does.Contain("var y = 2;"));
+    }
+
+    [Test]
+    public void FindExactSnippetPosition_OneLineInternalSpacingDiffers_LabelsWhitespaceOnlyDistinctFromMiss()
+    {
+        // One line among several is whitespace-only (internal spacing), one line is a genuine
+        // content miss - the diagnosis must label the two differently, not lump both under one
+        // "diverging line" bucket.
+        var source = "public class C {\n    int M() {\n        int  x = 1;\n        int y = 2;\n    }\n}";
+        var snippet = "int x = 1;\nint z = 2;";
+
+        var ex = Assert.Throws<ToolNotFoundException>(
+            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), snippet));
+        Assert.That(ex!.Message, Does.Contain("whitespace differs only"));
+        Assert.That(ex.Message, Does.Contain("did NOT match"));
+    }
+
+    [Test]
+    public void FindExactSnippetPosition_CaseOnlyDifference_StaysGenuineMissNotWhitespaceOnly()
+    {
+        // Regression: a case-only difference must never be folded into the whitespace-only
+        // bucket - the collapse comparison added for Step 6 stays case-sensitive (Ordinal, not
+        // OrdinalIgnoreCase) specifically to avoid this.
+        var source = "public class C {\n    int M() {\n        var foo = 1;\n    }\n}";
+        var snippet = "var Foo = 1;";
+
+        var ex = Assert.Throws<ToolNotFoundException>(
+            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), snippet));
+        Assert.That(ex!.Message, Does.Not.Contain("whitespace differs only"));
+        Assert.That(ex.Message, Does.Not.Contain("except for \r\nwhitespace"));
+    }
+
+    [Test]
     public void FindExactSnippetPosition_LiteralMatch_ReturnsCorrectStartAndLength()
     {
         var source = "namespace Foo;\npublic class Bar { public int X => 42; }";

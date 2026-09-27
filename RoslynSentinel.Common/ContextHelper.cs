@@ -436,8 +436,18 @@ public static class ContextHelper
     /// snippet line matched somewhere in the file, just not in the arrangement supplied.
     /// </summary>
     private static string FormatAllMatchedDiagnosis(
-        int filteredCount, List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText)> hits)
+        int filteredCount, List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText, bool IsWhitespaceOnly)> hits)
     {
+        if (hits.All(h => h.IsWhitespaceOnly))
+        {
+            var wsLines = hits.OrderBy(h => h.SnippetLineIndex).ThenBy(h => h.SourceLineNumber)
+                .Select(h => $"snippet line {h.SnippetLineIndex + 1} -> source line {h.SourceLineNumber}: \"{h.SourceLineText}\"");
+            return $"Every line of your contextSnippet matches source line content exactly except for " +
+                   "whitespace (indentation/spacing) - ReplaceSnippet requires a byte-exact match. Copy " +
+                   "these lines directly from the file rather than retyping them:\n" +
+                   string.Join("\n", wsLines);
+        }
+
         var lines = hits.OrderBy(h => h.SnippetLineIndex).ThenBy(h => h.SourceLineNumber)
             .Select(h => $"snippet line {h.SnippetLineIndex + 1} was located at source line {h.SourceLineNumber}: \"{h.SourceLineText}\"");
         return $"{filteredCount} of {filteredCount} lines in contextSnippet were located individually in " +
@@ -498,7 +508,7 @@ public static class ContextHelper
     /// </summary>
     private static string FormatPartialMatchDiagnosis(
         int[] filteredIndexes, int[] matchedIndexes,
-        List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText)> hits,
+        List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText, bool IsWhitespaceOnly)> hits,
         (int SourceLineNumber, string SourceLineText, int Score)?[] nearest,
         string[] snippetLines, int similarityFloor)
     {
@@ -512,7 +522,9 @@ public static class ContextHelper
         };
         parts.AddRange(hits.Where(h => matchedSet.Contains(h.SnippetLineIndex))
             .OrderBy(h => h.SnippetLineIndex).ThenBy(h => h.SourceLineNumber)
-            .Select(h => $"  line {h.SnippetLineIndex + 1} -> source line {h.SourceLineNumber}: \"{h.SourceLineText}\""));
+            .Select(h => h.IsWhitespaceOnly
+                ? $"  line {h.SnippetLineIndex + 1} -> source line {h.SourceLineNumber}: whitespace differs only - \"{h.SourceLineText}\""
+                : $"  line {h.SnippetLineIndex + 1} -> source line {h.SourceLineNumber}: \"{h.SourceLineText}\""));
         return AppendUnmatchedLines(parts, unmatched, nearest, snippetLines, similarityFloor);
     }
 
@@ -524,7 +536,7 @@ public static class ContextHelper
     /// </summary>
     private static string FormatNoMatchDiagnosis(
         int[] filteredIndexes, int[] matchedIndexes,
-        List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText)> hits,
+        List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText, bool IsWhitespaceOnly)> hits,
         (int SourceLineNumber, string SourceLineText, int Score)?[] nearest,
         string[] snippetLines)
     {
@@ -549,12 +561,20 @@ public static class ContextHelper
     /// line in the same loop - two collections from one traversal, not two passes. Deliberately
     /// NOT Parallel.ForEach - see the plan doc's "Rejected" section.
     /// </summary>
+    /// <remarks>
+    /// A hit whose exact trimmed-text check misses is retried with internal whitespace runs
+    /// collapsed (still <see cref="StringComparison.Ordinal"/> - case-sensitive) and, if that
+    /// collapsed comparison matches, recorded as a hit with <c>IsWhitespaceOnly: true</c> instead
+    /// of falling through to the nearest-neighbor heuristic. This lets the formatters tell a model
+    /// "this line is right except for whitespace/indentation" apart from a genuine content miss.
+    /// Deliberately case-sensitive (no OrdinalIgnoreCase): see plan doc Step 6.
+    /// </remarks>
     private static (
-        List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText)> Hits,
+        List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText, bool IsWhitespaceOnly)> Hits,
         (int SourceLineNumber, string SourceLineText, int Score)?[] Nearest)
         GatherNoMatchEvidence(SourceText sourceText, string[] snippetLines, int[] filteredIndexes)
     {
-        var hits = new List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText)>();
+        var hits = new List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText, bool IsWhitespaceOnly)>();
         var nearest = new (int SourceLineNumber, string SourceLineText, int Score)?[snippetLines.Length];
         var sourceLines = sourceText.Lines;
 
@@ -571,7 +591,13 @@ public static class ContextHelper
                 var snippetLine = snippetLines[i];
                 if (sourceLineText.Contains(snippetLine, StringComparison.Ordinal))
                 {
-                    hits.Add((i, s + 1, sourceLineText));
+                    hits.Add((i, s + 1, sourceLineText, false));
+                    continue;
+                }
+
+                if (CollapseWhitespace(sourceLineText).Contains(CollapseWhitespace(snippetLine), StringComparison.Ordinal))
+                {
+                    hits.Add((i, s + 1, sourceLineText, true));
                     continue;
                 }
 
@@ -585,6 +611,13 @@ public static class ContextHelper
 
         return (hits, nearest);
     }
+
+    /// <summary>
+    /// Collapses runs of whitespace to a single space, for the whitespace-only-hit fallback in
+    /// <see cref="GatherNoMatchEvidence"/>. Case is left untouched - the fallback comparison stays
+    /// Ordinal, not OrdinalIgnoreCase, so a case-only difference is never folded into this bucket.
+    /// </summary>
+    private static string CollapseWhitespace(string text) => System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
 
     /// <summary>
     /// Diagnoses why <paramref name="contextSnippet"/> matched nothing in

@@ -206,6 +206,87 @@ than blending into either a no-match or a compiler-diagnostic message. Lower pri
 1-4; land it in the same pass if time allows, otherwise leave as a clearly-scoped follow-up (do not
 leave it undocumented - update the finding doc's status if deferred).
 
+### Step 6: whitespace-only mismatch diagnosis (addendum, 2026-09-26)
+
+Steps 1-5 above are implemented and confirmed working (`DiagnoseNoMatch`, `ContextErrorBuilder`,
+`GatherNoMatchEvidence`, `FormatNoMatchDiagnosis` and its three sub-formatters all exist in
+`ContextHelper.cs` as designed). This step addresses a gap found while investigating whether
+`ReplaceSnippet`/`ReplaceSnippetBatch` should switch to the whitespace-tolerant matcher
+(`finding_ambiguous_plan_instruction_replacesnippetbatch_oscillation.md`, item 4 of the
+2026-09-26 batch review).
+
+**Decision: keep `FindExactSnippetPosition` strict.** Switching `ReplaceSnippet`/
+`ReplaceSnippetBatch` to `FindSnippetPositionWithLength`'s whitespace-tolerant matching was
+considered and rejected: that matcher's whitespace-collapse comparisons use
+`StringComparison.OrdinalIgnoreCase` (`ContextHelper.cs` lines ~108, ~168), so "whitespace-tolerant"
+as currently coded is also silently *case-insensitive* - a model that mistypes an identifier's case
+(e.g. `Foo` vs `foo`) would match and write successfully as if `oldContent` were verbatim-correct,
+which is a correctness hole distinct from and worse than the formatting-friction problem this plan
+exists to fix. The multi-line sliding-window fallback is also line-count-sensitive: a snippet that
+miscounts blank lines when copied shifts the window and can match the wrong span with no error.
+Both risks are avoided entirely by leaving `ReplaceSnippet`/`ReplaceSnippetBatch` on the strict
+matcher and only improving the *diagnosis* shown after a strict-match failure, per this plan's
+original framing ("no orienting guidance on a genuine no-match") rather than loosening the write
+path itself.
+
+**The gap:** `DiagnoseNoMatch`'s snippet lines are trimmed (leading/trailing whitespace stripped)
+before the hit-check in `GatherNoMatchEvidence` (`sourceLineText.Contains(snippetLine,
+StringComparison.Ordinal)` where both sides come from `.Trim()`med text). This means:
+
+- A pure indentation mismatch (snippet line's leading/trailing whitespace differs from the source
+  line, internal spacing identical) already registers as a `hit` today - but if every line hits this
+  way, `FormatAllMatchedDiagnosis` fires with "N of N lines... were located individually... but not
+  in the arrangement you supplied," which is misleading wording for a reindentation case: nothing is
+  out of arrangement, the lines are in the same order, only the whitespace differs.
+- An *internal* whitespace difference (e.g. snippet has two spaces where the source has one, or a
+  tab where the source has a space, mid-line) is NOT absorbed by `.Trim()` and falls through to a
+  **miss**, picked up only by `LineSimilarityScore`'s generic shared-prefix heuristic - which reports
+  a "nearest" candidate but never names whitespace as the specific cause.
+
+Neither case tells the model "this is specifically a whitespace problem, not a content problem" -
+exactly the ambiguity this whole plan exists to remove for the *content*-mismatch case, left
+unaddressed for the whitespace-mismatch case.
+
+**The fix:** in `GatherNoMatchEvidence`'s per-line loop, when the existing ordinal trimmed-`Contains`
+check fails, add a second check comparing both sides with internal whitespace runs collapsed
+(`Regex.Replace(x, @"\s+", " ")` on both the snippet line and the source line, case-sensitive -
+do not add `OrdinalIgnoreCase` here, to avoid reintroducing the case-insensitivity risk this step's
+Decision explicitly avoided). Record a match from this second check as a distinct
+`(SnippetLineIndex, SourceLineNumber, SourceLineText)` tuple in a new `whitespaceOnlyHits` list,
+separate from `hits`, and thread it through `FormatNoMatchDiagnosis`:
+
+- If every filtered snippet line ends up in `whitespaceOnlyHits` (none needed the fallback for
+  nothing, i.e. every line's mismatch - if any - was whitespace-only): report a distinct message
+  naming whitespace/indentation explicitly as the cause, quoting each matched source line verbatim
+  so the model can copy it back exactly, e.g. "Every line of your snippet matches source line
+  content exactly except for whitespace (indentation/spacing) - ReplaceSnippet requires a
+  byte-exact match. Copy these lines directly from the file rather than retyping them: line N:
+  \"...\"". This replaces the misleading "not in the arrangement you supplied" wording for this
+  specific case.
+- If some lines are plain `hits`, some are `whitespaceOnlyHits`, and some are misses: keep
+  `FormatPartialMatchDiagnosis`'s existing per-line divergence report, but label whitespace-only
+  lines distinctly from genuine misses in the same output (e.g. "line 3: whitespace differs only"
+  vs "line 4: no match found, nearest candidate is...") rather than lumping both under one
+  "diverging line" bucket.
+- Zero-match case (`FormatZeroMatchedDiagnosis`) is unaffected - if nothing matched even with
+  whitespace collapsed, there is no whitespace-only case to report.
+
+**Tests for this step** (add to `RoslynSentinel.Tests/ContextHelperTests.cs`):
+
+- A snippet that differs from source only in indentation (leading whitespace) on every line -
+  assert the `FindExactSnippetPosition` throw's message names whitespace/indentation as the cause
+  and quotes the real source lines verbatim, not the generic "arrangement" wording.
+- A snippet that differs from source only in internal spacing (e.g. `int  x = 1;` vs `int x = 1;`)
+  on one line among several otherwise-verbatim lines - assert that line is labeled as a
+  whitespace-only divergence, distinct from a genuine content miss.
+- Regression: a snippet with a genuine case-only difference (e.g. `Foo` vs `foo`) must still be
+  reported as a miss/near-miss, not silently folded into the whitespace-only bucket - confirms the
+  collapse comparison stays case-sensitive.
+- `FindSnippetPositionWithLength` (already whitespace-tolerant at the match level) is unaffected by
+  this step and needs no new test here - this step is diagnosis-only and only changes messages
+  produced after a `matches.Count == 0` failure, which whitespace-tolerant matching mostly avoids
+  reaching in the first place for whitespace-only differences.
+
 ## Tests
 
 Add to `RoslynSentinel.Tests/ContextHelperTests.cs` (follow existing style/patterns in that file):
