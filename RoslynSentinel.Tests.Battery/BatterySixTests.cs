@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tests.Battery;
 /// Battery #6 -> Functional tests for three engines with 4–5 test-mentions but no real coverage:
 ///   A. DocumentationEngine   (4 tests) -> GenerateXmlDocStubs, DocumentPocoFields
 ///   B. ArchitecturalEngine   (5 tests) -> ConvertToBackgroundService, FindCircularDependencies
-///   C. ApiAutomationEngine   (4 tests) -> GenerateHttpClientForController, return-type mapping
+///   C. ApiGenerationEngine   (4 tests) -> GenerateHttpClientForController, return-type mapping
 ///
 /// SolutionManagementEngine is excluded (spawns real powershell.exe processes -> integration only).
 ///
@@ -207,19 +207,19 @@ public class NodeB
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// C. ApiAutomationEngine
+// C. ApiGenerationEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
 public class ApiAutomationEngineTests
 {
     private IWorkspaceManager _workspaceManager;
-    private ApiAutomationEngine _engine;
+    private ApiGenerationEngine _engine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ApiAutomationEngine(_workspaceManager);
+        _engine = new ApiGenerationEngine(_workspaceManager);
     }
 
     [TearDown]

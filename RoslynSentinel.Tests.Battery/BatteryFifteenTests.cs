@@ -2,11 +2,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Battery;
 // ────────────────────────────────────────────────────────────────────────────
-// Battery #15 -> ApiIntegrationEngine, AsyncOptimizationEngine,
+// Battery #15 -> ApiGenerationEngine, AsyncOptimizationEngine,
 //               CodeFlowEngine, CodeHealingEngine
 // ────────────────────────────────────────────────────────────────────────────
 [TestFixture]
-public class ApiIntegrationEngineTests
+public class ApiGenerationEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
     private static readonly (string, string)[] Stub = [("Other.cs", "public class Other {}")];
@@ -22,7 +22,7 @@ public class ApiIntegrationEngineTests
     [Test]
     public async Task AddValidationToPoco_UnknownFile_ReportsWithoutThrowing()
     {
-        var result = await new ApiAutomationEngine(_mgr).AddValidationToPocoAsync("NoSuchFile.cs", "PersonDto");
+        var result = await new ApiGenerationEngine(_mgr).AddValidationToPocoAsync("NoSuchFile.cs", "PersonDto");
         Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified), "Engines report not-found through Outcome instead of throwing.");
     }
 
@@ -35,7 +35,7 @@ public class PersonDto
     public string Name { get; set; }
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("PersonDto.cs", source)]));
-        var result = await new ApiAutomationEngine(_mgr).AddValidationToPocoAsync("PersonDto.cs", "PersonDto");
+        var result = await new ApiGenerationEngine(_mgr).AddValidationToPocoAsync("PersonDto.cs", "PersonDto");
         Assert.That(result.UpdatedText, Does.Contain("Required"), "string property should get [Required] attribute");
         Assert.That(result.UpdatedText, Does.Contain("StringLength"), "string property should get [StringLength] attribute");
     }
@@ -49,7 +49,7 @@ public class ProductDto
     public int Quantity { get; set; }
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("ProductDto.cs", source)]));
-        var result = await new ApiAutomationEngine(_mgr).AddValidationToPocoAsync("ProductDto.cs", "ProductDto");
+        var result = await new ApiGenerationEngine(_mgr).AddValidationToPocoAsync("ProductDto.cs", "ProductDto");
         Assert.That(result.UpdatedText, Does.Contain("Range"), "int property should get [Range] attribute");
     }
 }

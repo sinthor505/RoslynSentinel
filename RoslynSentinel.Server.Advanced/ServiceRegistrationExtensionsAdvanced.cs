@@ -31,7 +31,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<AdvancedTypeEngine>();
         services.AddSingleton<AnalysisEngine>();
         services.AddSingleton<AntiPatternEngine>();
-        services.AddSingleton<ApiAutomationEngine>();
+        services.AddSingleton<ApiGenerationEngine>();
         services.AddSingleton<ArchitecturalEngine>();
         services.AddSingleton<AsyncBatchEngine>();
         services.AddSingleton<AsyncOptimizationEngine>();

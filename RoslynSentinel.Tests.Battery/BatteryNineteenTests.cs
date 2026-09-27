@@ -9,7 +9,7 @@ public class BatteryNineteenTests
 {
     private IWorkspaceManager _workspaceManager;
     private CodeGenerationEngine _codeGenerationEngine;
-    private ApiAutomationEngine _apiAutomationEngine;
+    private ApiGenerationEngine _apiAutomationEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private GenerationTools _generationTools;
     private ValidationEngine _validationEngine;
@@ -61,7 +61,7 @@ public interface IOrderRepository
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-        _apiAutomationEngine = new ApiAutomationEngine(_workspaceManager);
+        _apiAutomationEngine = new ApiGenerationEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _validationEngine = new ValidationEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);

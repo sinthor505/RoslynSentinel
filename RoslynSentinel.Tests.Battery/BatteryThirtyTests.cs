@@ -47,7 +47,7 @@ public class Product {
     public string Name { get; set; }
 }";
         SetSource(code, "Product.cs");
-        var result = await new ApiAutomationEngine(_ws).AddValidationToPocoAsync("Product.cs", "Product");
+        var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Product.cs", "Product");
         // [Required] should be present exactly once
         var count = CountOccurrences(result.UpdatedText!, "[Required]");
         Assert.That(count, Is.EqualTo(1), "Expected exactly 1 [Required] attribute on Name");
@@ -66,7 +66,7 @@ public class Product {
     public string Description { get; set; }
 }";
         SetSource(code, "Product.cs");
-        var result = await new ApiAutomationEngine(_ws).AddValidationToPocoAsync("Product.cs", "Product");
+        var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Product.cs", "Product");
         // Name already had [Required] -> count must still be 1
         var requiredCount = CountOccurrences(result.UpdatedText!, "[Required]");
         Assert.That(requiredCount, Is.EqualTo(2), "Description should get [Required] but Name should NOT get a duplicate - total must be 2");
@@ -82,7 +82,7 @@ public class Order {
     public string Code { get; set; }
 }";
         SetSource(code, "Order.cs");
-        var result = await new ApiAutomationEngine(_ws).AddValidationToPocoAsync("Order.cs", "Order");
+        var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Order.cs", "Order");
         var count = CountOccurrences(result.UpdatedText!, "StringLength");
         Assert.That(count, Is.EqualTo(1), "Should not duplicate [StringLength]");
     }
@@ -97,7 +97,7 @@ public class Measurement {
     public int Value { get; set; }
 }";
         SetSource(code, "Measurement.cs");
-        var result = await new ApiAutomationEngine(_ws).AddValidationToPocoAsync("Measurement.cs", "Measurement");
+        var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Measurement.cs", "Measurement");
         var count = CountOccurrences(result.UpdatedText!, "[Range(");
         Assert.That(count, Is.EqualTo(1), "Should not duplicate [Range]");
     }
@@ -111,9 +111,9 @@ public class Customer {
     public int Age { get; set; }
 }";
         SetSource(code, "Customer.cs");
-        var first = await new ApiAutomationEngine(_ws).AddValidationToPocoAsync("Customer.cs", "Customer");
+        var first = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Customer.cs", "Customer");
         SetSource(first.UpdatedText!, "Customer.cs");
-        var second = await new ApiAutomationEngine(_ws).AddValidationToPocoAsync("Customer.cs", "Customer");
+        var second = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Customer.cs", "Customer");
         // Running twice must produce the same result -> no extra attributes appended
         var req1 = CountOccurrences(first.UpdatedText!, "[Required]");
         var req2 = CountOccurrences(second.UpdatedText!, "[Required]");

@@ -11,7 +11,7 @@ namespace RoslynSentinel.Server.Advanced;
 public class GenerationTools
 {
     private readonly CodeGenerationEngine _codeGenerationEngine;
-    private readonly ApiAutomationEngine _apiAutomationEngine;
+    private readonly ApiGenerationEngine _apiAutomationEngine;
     private readonly MappingEngine _mappingEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly ValidationEngine _validationEngine;
@@ -23,7 +23,7 @@ public class GenerationTools
     ILogger<GenerationTools> logger)
     {
         _codeGenerationEngine = new CodeGenerationEngine(workspaceManager);
-        _apiAutomationEngine = new ApiAutomationEngine(workspaceManager);
+        _apiAutomationEngine = new ApiGenerationEngine(workspaceManager);
         _mappingEngine = new MappingEngine(workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
         _validationEngine = new ValidationEngine(workspaceManager);
@@ -33,7 +33,7 @@ public class GenerationTools
 
     public GenerationTools(
         CodeGenerationEngine codeGenerationEngine,
-        ApiAutomationEngine apiAutomationEngine,
+        ApiGenerationEngine apiAutomationEngine,
         MappingEngine mappingEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         ValidationEngine validationEngine,

@@ -3,10 +3,10 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynSentinel.Advanced;
-public class ApiAutomationEngine
+public class ApiGenerationEngine
 {
     private readonly IWorkspaceManager _workspaceManager;
-    public ApiAutomationEngine(IWorkspaceManager workspaceManager)
+    public ApiGenerationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
