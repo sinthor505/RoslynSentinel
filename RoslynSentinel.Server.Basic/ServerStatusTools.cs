@@ -32,6 +32,17 @@ public class ServerStatusTools
         var automatic = (IAutomaticCircuitBreaker)_workspaceManager;
         var unrecoverable = (IUnrecoverableBreaker)_workspaceManager;
 
+        var declaredToolAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel", StringComparison.Ordinal) == true)
+            .ToArray();
+        var allDeclaredTools = McpToolSchemaPatcher.DiscoverAllDeclaredTools(declaredToolAssemblies)
+            .Select(t => new McpServerStatusDeclaredTool(
+                Name: t.ToolName,
+                ClassName: t.ClassName,
+                ActiveForThisMode: _activeToolSurface.ActiveToolClasses.Contains(t.ClassName)))
+            .OrderBy(t => t.Name, StringComparer.Ordinal)
+            .ToArray();
+
         return new SentinelCallToolResult<McpServerStatusResult>
         {
             IsSuccess = true,
@@ -68,7 +79,8 @@ public class ServerStatusTools
             StoppedByScript: new McpServerStatusStoppedByScript(
                 WasFound: _stoppedByScriptMarker.WasFound,
                 Details: _stoppedByScriptMarker.Details
-            )
+            ),
+            AllDeclaredTools: allDeclaredTools
         )
         };
     }
@@ -111,4 +123,11 @@ public sealed record McpServerStatusResult(
     int WorkspaceVersion,
     McpServerStatusBreakers Breakers,
     McpServerStatusToolSurface ToolSurface,
-    McpServerStatusStoppedByScript StoppedByScript);
+    McpServerStatusStoppedByScript StoppedByScript,
+    IReadOnlyCollection<McpServerStatusDeclaredTool> AllDeclaredTools);
+/// <summary>
+/// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
+/// by McpServerStatus's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
+/// process" independent of whether its class is currently active for this session's mode.
+/// </summary>
+public sealed record McpServerStatusDeclaredTool(string Name, string ClassName, bool ActiveForThisMode);

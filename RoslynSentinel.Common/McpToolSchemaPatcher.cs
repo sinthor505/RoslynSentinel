@@ -162,6 +162,40 @@ public static class McpToolSchemaPatcher
         return builder;
     }
 
+
+    /// <summary>
+    /// Reflects over every type in <paramref name="assemblies"/> to find every method carrying
+    /// <see cref="McpServerToolAttribute"/>, independent of whether that method's declaring class
+    /// is currently DI-registered/mode-gated. Used by McpServerStatus to report ground truth on
+    /// what tools exist in this process versus what is actually active for the current mode -
+    /// a hand-maintained registry (ToolClassRegistry) only tracks whole classes, not methods, and
+    /// can silently miss a gated or newly-added tool.
+    /// </summary>
+    public static IReadOnlyList<(string ToolName, string ClassName)> DiscoverAllDeclaredTools(params Assembly[] assemblies)
+    {
+        var discovered = new List<(string ToolName, string ClassName)>();
+
+        foreach (var assembly in assemblies.Distinct())
+        {
+            foreach (var type in assembly.GetTypes())
+            {
+                foreach (var method in type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                {
+                    var toolAttribute = method.GetCustomAttribute<McpServerToolAttribute>();
+                    if (toolAttribute is null)
+                    {
+                        continue;
+                    }
+
+                    discovered.Add((toolAttribute.Name ?? method.Name, type.Name));
+                }
+            }
+        }
+
+        return discovered;
+    }
+
+
     private static McpServerToolCreateOptions CreateOptions(IServiceProvider services, JsonSerializerOptions? serializerOptions) => new()
     {
         Services = services,
