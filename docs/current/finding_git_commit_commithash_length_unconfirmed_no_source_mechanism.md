@@ -2,7 +2,22 @@
 # not be corroborated against any server-side artifact, and the commit implementation has no
 # mechanism capable of producing a 41-character string
 
-**Status:** unconfirmed as a tool defect, but re-opened rather than closed as a one-off
+**Status:** RESOLVED 2026-09-26 -- the recommended length assertion (see "What unblocks it" item 3
+below) has shipped: `RoslynSentinel.Basic/GitImpl.cs:953-959` now validates
+`hash.Length != 40 || !hash.All(Uri.IsHexDigit)` on every commit and logs a structured
+`LogWarning` (not a throw) if the check ever fails, citing this doc in its own code comment. This
+guardrail has not fired across the many commits made since the 6-for-6 transcription-artifact
+evidence below was gathered, which -- combined with that evidence -- confirms the practical
+conclusion this doc was already leaning toward: every "41-character" report was an agent
+hand-transcription artifact, not a tool-side defect. No equivalent check exists yet on
+`RevertAsync`'s hash field; low priority since no 41-character report has ever involved `revert`.
+Doc kept for the full investigative history; do not treat as an open question.
+
+---
+
+## Original status (below, superseded by the Resolution above)
+
+**Status (historical):** unconfirmed as a tool defect, but re-opened rather than closed as a one-off
 transcription error -- the user separately reports having seen 41-character commit hashes mentioned
 in other, unrelated sessions, which weakens the "this was just this session's manual miscount"
 explanation below. The on-disk commit hashes for the 4 calls this doc originally investigated are
@@ -92,7 +107,7 @@ input this investigation could identify.
 ## What was ruled out
 
 - **Encoding/mojibake corruption** (the repo's known failure class, e.g.
-  `docs/current/finding_git_diff_output_mojibake_encoding_defect.md`) -- ruled out because mojibake
+  `docs/current/blockers/resolved/blocking_error_git_diff_mojibake_display.md`) -- ruled out because mojibake
   corrupts non-ASCII multi-byte sequences into extra/garbled characters; a SHA-1 hash is pure
   ASCII/hex and is not subject to that class of defect regardless of codepage.
 - **On-disk corruption of the commit object itself** (the "much bigger deal" scenario flagged in the
@@ -248,8 +263,8 @@ Any of the following would resolve the open question:
   contain no lengthening mechanism.
 - `RoslynSentinel.Basic/GitImpl.cs:323-401` -- `RunGitAsync`, including the UTF-8 encoding fix
   (lines 336-344) whose surrounding comment documents the unrelated prior mojibake bug.
-- `docs/current/finding_git_diff_output_mojibake_encoding_defect.md` -- the repo's actual confirmed
-  git-output encoding defect; cited here only to explain why it was checked and ruled out as a cause
-  of this symptom.
+- `docs/current/blockers/resolved/blocking_error_git_diff_mojibake_display.md` -- the repo's actual
+  confirmed (and since-fixed, commit `2b17473`) git-output encoding defect; cited here only to
+  explain why it was checked and ruled out as a cause of this symptom.
 - `.git/logs/HEAD` (lines 546-549 at time of writing) -- source of the verified 40-character on-disk
   hashes for the 4 commits in question.

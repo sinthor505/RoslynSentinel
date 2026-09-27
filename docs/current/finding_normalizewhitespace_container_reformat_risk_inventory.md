@@ -6,6 +6,29 @@ Informational — not a blocker, not yet scheduled for remediation. Seeds the fu
 caller-fixup/breaking-change tool audit and the `RedirectCalls`/call-shape-rewrite proposal
 (`docs/current/proposal_redirect_calls_tool.md`).
 
+**Re-confirmed 2026-09-26:** the underlying risk inventory is still substantively accurate
+(spot-checked 3 of ~20 files, 0 fixed) but this doc's file paths and helper name have gone stale --
+see "Path corrections" below. Also overlaps `docs/current/TODO.md`'s "Advanced side ~63-64
+occurrences" entry: same underlying `NormalizeWhitespace()`-pattern problem tracked at a broader
+file-count level. Treat this doc's inventory as the working checklist for that TODO.md follow-up,
+not a separate/redundant tracking artifact.
+
+### Path corrections (2026-09-26)
+
+- The helper is `RoslynSentinel.Common/RoslynFormattingHelper.cs` (not `FormattingHelper.cs` as
+  written throughout the rest of this doc).
+- Several "Risky" files have moved projects since this doc was written:
+  `GranularRefactoringEngine.cs`, `MappingEngine.cs`, `CodeStyleEngine.cs` are now under
+  `RoslynSentinel.Advanced/`, not `RoslynSentinel.Basic/`. `IDEStyleEngine.cs` is now at
+  `RoslynSentinel.Server.Advanced/IDEStyleEngine.cs`. `MsToolAugmentEngine.cs` and
+  `SyntaxUpgradeEngine.cs` are the only two still correctly under `RoslynSentinel.Basic/` as
+  originally listed.
+- Spot-checked and confirmed still risky/unfixed: `AdvancedStructuralEngine.cs` (15 unscoped sites
+  on whole-tree variables), `SyntaxUpgradeEngine.cs` (4 sites, not named in TODO.md's "Basic side
+  fully closed" entry -- apparently missed by that sweep), `MsToolAugmentEngine.cs` (2 sites, these
+  match the 2 sites TODO.md's Basic-closure entry names as deliberately left unfixed --
+  `Document`-less contexts with no annotation-scoped `Formatter.FormatAsync` overload available).
+
 ## Background
 
 This session fixed a real bug: `AddMemberAsync`/`InsertMemberAfterAsync`/`InsertMemberBeforeAsync`

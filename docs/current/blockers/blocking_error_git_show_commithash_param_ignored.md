@@ -5,6 +5,16 @@
 `RoslynSentinel.Server.Basic/GitTools.cs`'s `Git` method, not a git short-hash resolution bug in
 `GitImpl.ShowAsync`.
 
+**Re-confirmed 2026-09-26:** re-verified against current source and the live emitted MCP schema.
+`show` and `revert` were written together in commit `f80bf75` (2026-09-23) - this is a deliberate
+but incomplete design (`target` serves `diff`/`show`, `commitHash` is scoped to `revert`), not a
+later copy-paste drift. `commitHash`'s description still names only `revert`; nothing tells a
+caller it's a no-op for `show`. TODO.md line 115's "same range/first-commit handling as diff" claim
+describes `show`'s output capability accurately and doesn't contradict this doc - it's just silent
+on the parameter-name footgun. Fix recommendation unchanged: accept `commitHash` as an alias for
+`target` on `show` (and arguably `diff`), and fail fast rather than letting `"working"` reach
+`RunGitAsync` when `commitHash` was set but ignored.
+
 ## What was being attempted
 
 Inspecting a specific prior commit via the dogfooded `Git` tool, per CLAUDE.md's mandated

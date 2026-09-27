@@ -9,14 +9,30 @@ ERROR]` labels on all 5 `CompilerErrorLookupHelper.DescribeAsync` dump sites in
 during implementation: `ReplaceSnippetBatch` ~966 in addition to the 3 originally cited, plus
 `CreateFile` ~1077 found during this pass, for 5 total).
 
-**Still open (deferred, not started):** the plan's Step 5 - "Summary of distinct labeling targets
-(Category B)" item 2 above, the "position resolved but wrong node kind" family repeated across
-`GranularRefactoringEngine.cs`, `MappingEngine.cs`, `SemanticRefactoringLibrary.cs`,
-`MsToolAugmentEngine.cs`, `CodeGenerationEngine.cs`, plus the related raw-`ex.Message`-propagation
-sites in `SymbolNavigationEngine.cs`/`ImpactAnalyzer.cs`/`RefactoringEngine.cs`. Explicitly lower
-priority per the plan; deferred as a separately-scoped follow-up sweep (~7 files, a dozen-plus
-distinct sites) rather than folded into this pass. Full raw findings below remain the source
-inventory for that follow-up.
+**Still open (deferred, not started, except one incidental fix):** the plan's Step 5 - "Summary of
+distinct labeling targets (Category B)" item 2 above, the "position resolved but wrong node kind"
+family repeated across `GranularRefactoringEngine.cs`, `MappingEngine.cs`,
+`SemanticRefactoringLibrary.cs`, `MsToolAugmentEngine.cs`, `CodeGenerationEngine.cs`, plus the
+related raw-`ex.Message`-propagation sites in
+`SymbolNavigationEngine.cs`/`ImpactAnalyzer.cs`/`RefactoringEngine.cs`. Explicitly lower priority
+per the plan; deferred as a separately-scoped follow-up sweep (~7 files, a dozen-plus distinct
+sites) rather than folded into this pass. Full raw findings below remain the source inventory for
+that follow-up.
+
+**Re-confirmed 2026-09-26:** re-checked all 7 quoted Category-B strings plus the
+`SymbolNavigationEngine.cs` raw-propagation sites. 6 of 7 remain verbatim/unlabeled exactly as
+documented (`GranularRefactoringEngine.cs` x4, `MsToolAugmentEngine.cs` x4,
+`MappingEngine.cs:202`). One site has since changed:
+`SemanticRefactoringLibrary.cs:322`'s `"No statements found at the snippet location"` now reads
+`"// ErrorDetails: No statements found at..."` -- it's gained a distinguishing prefix, apparently as
+an incidental side effect of unrelated work on that method (no commit found referencing this
+wording change specifically; not confirmed deliberate). `SymbolNavigationEngine.cs:390,2553` still
+propagate raw `ex.Message` unlabeled, confirming that part of the doc unchanged.
+`SymbolNavigationEngine.cs:372`'s `"Snippet not found: "` prefix was already accounted for by the
+Category A/B fix above (2026-09-15/16), not part of Step 5 -- not new, not a contradiction.
+`CodeGenerationEngine.cs` and `ImpactAnalyzer.cs`/`RefactoringEngine.cs` sites were not
+individually re-verified this pass (time-bounded sampling); the 6/7-unlabeled pattern elsewhere
+makes it unlikely they differ, but flagging as not directly re-checked.
 
 ## What's broken
 

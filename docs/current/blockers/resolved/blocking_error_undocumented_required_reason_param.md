@@ -1,8 +1,17 @@
 # `reason` is a required parameter on `ReplaceSnippet` and `Git` with an empty schema `description` - undiscoverable until rejected
 
-**Status:** WORKED AROUND this session (task completed once `reason` was supplied on each call);
-not a live blocker. Writeup filed because the schema defect that caused the rejections is still on
-disk and will keep producing the identical surprise for the next caller of either tool.
+**Status:** RESOLVED 2026-09-26 -- confirmed fixed by source inspection. `ToolParams.cs:84`'s
+`Reason` constant now reads a populated description ("Why you're calling this now (min 10 chars,
+must contain a space)."), not an empty string. A commented-out block immediately below in the same
+file documents that an empty-description variant was tried and explicitly reverted ("caused models
+to omit the field or be surprised by the constraints, reverted to original"). Live schema checked
+end-to-end via `ToolSearch` across `Git`, `SearchSolutionText`, `ReadFile`, `GetMethodSource`,
+`LoadSolution` -- every tool's `reason` parameter now shows the populated description. This
+directory's other blocker doc's schema-emission layer (`McpToolSchemaPatcher.cs`) was also checked
+and confirmed unrelated -- it only patches missing `type`/bare-`true` nodes, never `description`,
+ruling out a schema-emission bug as the mechanism here or there. Closing; no longer a live blocker.
+
+## Original writeup (below, superseded by the Resolution above)
 
 ## What was being attempted
 

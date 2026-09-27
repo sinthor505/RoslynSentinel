@@ -6,6 +6,14 @@ fixed. This is a "document but continue" finding -- a session-scoped policy perm
 around it via `ReplaceSnippet` directly on the constructor/field text rather than halting the
 session.
 
+**Re-confirmed 2026-09-26:** `AddRemoveViewAction` (`ToolEnums.cs:187-191`) still has exactly
+`add`/`remove`/`view`; both tools' impl bodies still branch only on `view`/`add` with remove as the
+unconditional fallthrough. No other tool (`ChangeAccessibility`, `ModifyModifier`, `Member(replace)`)
+covers in-place retyping either. Confirmed unrelated to the batch-ledger/`ScopedOperationLedger`
+work (see [[finding_multifile_signature_change_sequencing_friction]]) -- that effort addresses
+*when* validation runs across staged edits, not *what operations* the parameter-editing enum
+supports; even with perfect batching, retyping a parameter still has no single-call expression.
+
 ## What was being attempted
 
 During the interface-widening sweep described in `docs/current/design_read_chokepoint.md`

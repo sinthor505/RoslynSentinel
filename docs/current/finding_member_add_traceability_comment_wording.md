@@ -1,6 +1,15 @@
 # Finding: Member(add)'s auto-inserted traceability comment reads as member documentation, not tool provenance
 
-**Status:** confirmed tool defect, not yet fixed.
+**Status:** RESOLVED 2026-09-25 -- the injection lines in `ContextHelper.cs` (`WithAddedByComment`
+and its call sites) have been disabled at all affected call sites. `Member(add)` no longer emits
+this comment at all, which supersedes the wording fix proposed below (there's no comment left to
+reword). Doc kept for history; do not treat as a live defect.
+
+---
+
+## Original finding (below, superseded by the Resolution above)
+
+**Status:** confirmed tool defect, not yet fixed (historical).
 
 ## What's broken
 

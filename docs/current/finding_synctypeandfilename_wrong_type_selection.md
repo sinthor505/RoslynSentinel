@@ -1,43 +1,48 @@
 # Finding: SyncTypeAndFilename renames to the first-declared type, not the target type
 
-**Status:** confirmed tool defect, not yet fixed.
+**Status:** FIXED 2026-09-19 (CLOSED.md, "Phase 5 of plan-open-blockers-remediation-v1"). Doc kept
+for repro/history; do not treat as an open defect.
 
-## What's broken
+## What was broken
 
 `SyncTypeAndFilename` renamed `DocumentationTools.cs`/`GitTools.cs` to match the **first** type
 declared in the file (`DocReadResult`, `GitStatusEntry`) instead of the target type actually named
 by the caller's `docCommentId` (`SentinelDocumentationTools`, `SentinelGitTools` — both declared
 last in their respective files). Confirmed via `^public class` grep order in both files: the tool
-picks whichever type appears first in source order, not the one the caller identified.
+picked whichever type appeared first in source order, not the one the caller identified.
 
-## How to reproduce
+## How to reproduce (pre-fix)
 
 Call `SyncTypeAndFilename` against a `.cs` file that declares more than one top-level type, where
-the type matching the given `docCommentId` is not the first one declared in the file. The tool
-renames the file to match the first-declared type's name instead of the target type's name.
+the type matching the given `docCommentId` is not the first one declared in the file. Pre-fix, the
+tool renamed the file to match the first-declared type's name instead of the target type's name.
 
-## Impact
+## Fix (2026-09-19)
 
-No MCP-tool path exists to fix the mistake once it happens — the tool creates the bad state via
-direct filesystem I/O (not a git-aware move), so recovering requires a manual `mv` outside the tool
-surface (`git mv` won't work either, since git isn't yet tracking the wrong name at that point).
-
-Don't trust `SyncTypeAndFilename`'s output filename on any multi-type file without independently
-verifying it targeted the right type.
+`StructuralRefinementEngine.SyncTypeAndFilenameAsync` (`RoslynSentinel.Basic`) gained an optional
+`targetTypeName` parameter — when supplied, matches it against the file's top-level type
+declarations explicitly instead of `.FirstOrDefault()` on declaration order; an unmatched name
+returns an actionable error naming every top-level type actually present in the file. When omitted,
+first-declared stays the default (documented as a real default for the common single-type-per-file
+case, not an accident). Wired through all 4 call-site layers (`RefactoringStructuralImpl`,
+`RefactoringStructuralTools`, the legacy `SentinelRefactoringTools` facade).
 
 ## Related, separately resolved: UndoLastApply couldn't reverse either bad rename
 
 At the time this was found, `UndoLastApply` also failed to revert either bad rename (both change
-IDs returned `NoReversibleItems`), which looked like it might be the same bug surfacing twice. It
-wasn't — root-caused separately (2026-09-10, commit `e3d32b8`) to `OperationBlobWriter` receiving
-slashed operation names (e.g. `"WrapRange/region"`) from several `SentinelAdvancedRefactoringTools`
-call sites, which broke the blob write for those specific tools and silently withheld a resolvable
-change ID. That fix is unrelated to `SyncTypeAndFilename`'s type-selection bug and does not resolve
-it — a rename that succeeds but targets the wrong type still produces a blob with no pre-image to
-undo (a `NoReversibleItems` case, not `NoOperationBlobFound`); `GetOperationDetail` is the
-recommended way to tell the two conditions apart.
+IDs returned `NoReversibleItems`). Two distinct causes, both now fixed:
+
+1. Root-caused separately (2026-09-10, commit `e3d32b8`) to `OperationBlobWriter` receiving slashed
+   operation names from several `SentinelAdvancedRefactoringTools` call sites, unrelated to
+   `SyncTypeAndFilename`.
+2. Fixed as part of this same 2026-09-19 pass: `SyncTypeAndFilename` deleted the old file via a bare
+   `FileIoHelper.DeleteAsync` call outside `ApplyProposedChangesAsync`'s tracked delete path, so the
+   old file's content was structurally unrecordable. Fix routes the delete through the existing
+   `deletePaths` mechanism instead, making the rename changeId genuinely revertible via
+   `UndoLastApply`.
 
 ## How to apply
 
-Don't rely on `UndoLastApply` as a safety net for `SyncTypeAndFilename` specifically — verify the
-target type manually before and after any call against a multi-type file.
+No longer a live caution — `targetTypeName` is available whenever addressing a specific type in a
+multi-type file matters. `GetOperationDetail` remains the recommended way to distinguish
+`NoReversibleItems` from `NoOperationBlobFound` for any tool.

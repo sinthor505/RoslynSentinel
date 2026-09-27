@@ -111,9 +111,19 @@ which is why all three were found back-to-back in the same plan execution.
 ## Related
 
 - `docs/current/proposal_batch_replacesnippet.md` - the most direct existing proposal for removing
-  the need for this workaround entirely.
+  the need for this workaround entirely. Status re-confirmed 2026-09-26: "Drafted, not yet
+  implemented" (line 171).
 - `docs/current/proposal_nonblocking_validation_mode.md` - likely overlaps; worth checking whether
-  it already covers `validateOnApply`'s discoverability specifically or only its existence.
+  it already covers `validateOnApply`'s discoverability specifically or only its existence. Status
+  re-confirmed 2026-09-26: "Design proposal only - not yet implemented" (line 180).
 - `docs/current/plans/plan_extract_symbol_resolver.md`,
   `docs/current/plans/plan_remove_dead_symbol_session_check.md` - the two plan executions this
   session where the pattern was needed and used.
+- `docs/current/plans/plan_scoped_operation_ledger.md` / `docs/current/proposal_scoped_operation_ledger.md`
+  - **complete but adjacent, does not close this finding.** `ScopedOperationLedger` shipped and is
+  wired end-to-end, but only into `MoveMember` (`AdvancedRefactoringTools.cs:565` is the only
+  `TryOpen` call site) - it's a call-site-tracking worklist scoped to instance-member-move blast
+  radius, not a general staged-multi-file-edit mechanism. It does nothing for this finding's actual
+  repro (interface + implementers signature change via `ReplaceSnippet`/`Member`). The
+  `validateOnApply:false` + terminal `Build` workaround remains the only path for that scenario
+  until `proposal_batch_replacesnippet.md` ships.

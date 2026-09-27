@@ -1,8 +1,45 @@
 # Finding: write-path tools report fabricated success on formatting-only no-op edits
 
-**Status:** DECISION (2026-09-14, Phase 2 of manual-selfrun-20260914-remediation-v1) — original
-"fabricated success" characterization does NOT hold once the actual response payload is checked.
-No code change made. See "Decision" section below before reading the rest of this doc as live.
+**Status:** RESOLVED 2026-09-2x -- the AST-normalization no-op check discussed in the Decision
+section below has since been disabled by default (`PersistentWorkspaceManager.cs:69`,
+`private const bool EnableAstNormalizationNoOpCheck = false;`), which fixes the actual symptom this
+finding was filed for. See "Resolution" immediately below; the 2026-09-14 Decision section and
+original finding are kept below that for history.
+
+## Resolution (2026-09-2x)
+
+**The concrete failure mode this caused:** whenever a model's edit and the pre-edit content
+normalized to the same AST under `NormalizeWhitespace()` -- most commonly a formatting-only fix,
+but this could also surface after some *other* tool/engine left the file in an unexpected
+formatting state the model was now trying to correct -- the write was silently skipped as a
+no-op. The tool still reported `Success: true`. A model that then read the file back to confirm its
+change would see the original, unmodified bytes, with no signal that anything had been rejected. It
+had no path to actually land the correction: retrying the identical fix produced the identical
+no-op, over and over. This is the thrash the original finding and the Decision section below were
+both circling without quite naming: the model wasn't wrong to keep retrying, and the tool wasn't
+lying about `Success: true` in isolation -- the check's threshold for "no-op" (AST-equality) was
+simply broader than "no-op" as a model needs it to mean (byte-equality), with no distinguishing
+signal between the two.
+
+**The fix:** `EnableAstNormalizationNoOpCheck` (`PersistentWorkspaceManager.cs:69`) defaults to
+`false`, gating off the AST-normalization comparison at lines 1360-1377. The separate,
+byte-identical check just above it (~line 1351, `preImage == newContent`) is untouched and still
+applies unconditionally -- a genuinely byte-for-byte-identical write is still correctly treated as
+a no-op, which is the right behavior and was never in question. With the AST check off, any edit
+that differs by even one byte -- including pure re-formatting -- now writes to disk for real, closing
+the thrash loop: the model's formatting fix lands, and a subsequent read confirms it did.
+
+`EnableAstNormalizationNoOpCheck` is a compile-time `const`, not a runtime setting; "toggle" here
+means the disable is a one-line, easily-reversible edit (flip back to `true`, rebuild) rather than
+code that would need to be reconstructed from scratch if the AST-level check is ever wanted back --
+not that it can be changed without a rebuild. The original reasoning for why the AST-equality check
+existed in the first place is not preserved here and is not needed to evaluate this resolution: the
+only thing that matters is that the current behavior (byte-identical -> no-op; anything else ->
+write) is the correct, working behavior, confirmed against source as of this update.
+
+---
+
+## Decision (2026-09-14, Phase 2)
 
 ## Decision (2026-09-14, Phase 2)
 

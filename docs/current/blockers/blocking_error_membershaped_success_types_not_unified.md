@@ -1,5 +1,17 @@
 # De-genericization task's premise -- "every one of the 17 tools has exactly ONE success shape: `AppliedChangeSummary`" -- is false for at least 6 of them
 
+**Status:** RESOLVED BY DECISION (2026-09-26) -- the repo owner has abandoned returning unified
+Structured Content as a design direction. The de-genericization pass this doc blocked (converting
+17 tools' return type to `Task<SentinelCallToolResult<AppliedChangeSummary>>`) will not proceed, so
+the `MemberChangedContentResult`/anonymous-`view`-shape divergence documented below is no longer a
+blocker for anything -- tool responses do not need to be unified. No code change made or required.
+Doc kept for the historical record of the premise-mismatch investigation; do not treat as a live
+blocker.
+
+---
+
+## Original writeup (below, superseded by the Decision above)
+
 **Status:** OPEN. No edits applied to disk. Blocked on a repo-owner design decision, not a tool defect
 in the usual sense -- see "Why this is a blocker, not just a false premise" below for why this still
 gets a writeup under this repo's CS####/environment-defect conventions.
