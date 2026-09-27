@@ -242,7 +242,8 @@ public record SentinelCallToolResult<T> : SentinelCallToolResult<T, ResultError>
 public record ResultError(
     string ErrorCode,
     string Message,
-    string? Detail = null
+    string? Detail = null,
+    IReadOnlyList<object>? StructuredDetail = null
 );
 
 // ── Large-result descriptor ───────────────────────────────────────────────────

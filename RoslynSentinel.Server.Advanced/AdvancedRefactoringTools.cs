@@ -571,7 +571,8 @@ public class AdvancedRefactoringTools
                         ErrorData = new ResultError(
                             ToolErrorCode.UnresolvedCallSites,
                             $"{unresolvedEntries.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site.",
-                            detail)
+                            detail,
+                            StructuredDetail: unresolvedEntries.Cast<object>().ToList())
                     };
                 }
 
@@ -584,7 +585,8 @@ public class AdvancedRefactoringTools
                         ErrorData = new ResultError(
                             ToolErrorCode.UnresolvedCallSites,
                             $"{result.SkippedCallSites.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site.",
-                            detail)
+                            detail,
+                            StructuredDetail: result.SkippedCallSites.Cast<object>().ToList())
                     };
                 }
 
