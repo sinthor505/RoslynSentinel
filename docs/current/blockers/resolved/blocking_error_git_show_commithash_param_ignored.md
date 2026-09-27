@@ -1,6 +1,42 @@
 # `Git` tool's `show` operation ignores `commitHash` entirely, silently falls back to `target`'s
 # default "working", surfacing as `fatal: ambiguous argument 'working'`
 
+**Status:** FIXED 2026-09-27, `RoslynSentinel.Server.Basic/GitTools.cs`. Runtime-verified after a
+server restart: `Git(operation: "show", commitHash: "f4d2d24", ...)` now returns the correct commit
+(`f4d2d249ab61165a03462209cee2344780ab6357`, "Fix Member(replace/remove) NotFound on
+interface-declared members") instead of the `fatal: ambiguous argument 'working'` error.
+
+## Fix applied
+
+Implemented option 1 from "What unblocks it" below. Two changes in `GitTools.cs`'s `Git` method:
+
+1. `commitHash`'s description and dispatch-review comment now mention `show`:
+   ```csharp
+   // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is used when operation=revert (required) or
+   // operation=show (optional alias for target - if both are set, commitHash wins); unused otherwise.
+   [Description("Required for operation=revert: commit hash to revert. Also accepted by operation=show as an alias for target (commitHash wins if both are set).")]
+   string? commitHash = null,
+   ```
+2. The dispatch line for `show` now prefers `commitHash` over `target` when set:
+   ```csharp
+   GitOperation.show => await _gitImpl.ShowAsync(gitRoot, !string.IsNullOrWhiteSpace(commitHash) ? commitHash : target, resolvedPaths, maxBytes, cancellationToken),
+   ```
+   (previously: `GitOperation.show => await _gitImpl.ShowAsync(gitRoot, target, resolvedPaths, maxBytes, cancellationToken),`)
+
+This makes the fallback-to-`"working"` silent-drop path structurally impossible whenever
+`commitHash` is supplied to `show` - satisfying option 3's intent (no explicit separate guard/error
+branch was added, since there is no longer a code path where a supplied `commitHash` can be ignored
+for `show`). Option 2 (docs-only fix) was not needed since option 1 was implemented directly.
+
+Applied via `ReplaceSnippet` (`batchEdits`, 2 entries), both `validate` and `apply` succeeded with 0
+diagnostics. Verified end-to-end after restarting the stale live server process (the fix was
+build-validated immediately but the running stdio server process was executing a pre-fix binary
+until restarted - see `feedback_stale_server_before_rebuild` memory).
+
+---
+
+## Original finding (below, superseded by the Fix above)
+
 **Status:** OPEN. Root cause traced to source (see below) - this is a parameter-routing defect in
 `RoslynSentinel.Server.Basic/GitTools.cs`'s `Git` method, not a git short-hash resolution bug in
 `GitImpl.ShowAsync`.

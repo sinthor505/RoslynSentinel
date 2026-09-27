@@ -43,8 +43,9 @@ public class GitTools
         GitStageScope? scope = null,
         [Description("stage/commit: paths to stage (CSV string or JSON array). Requires scope=\"listed\". Alias of paths - pass one, not both.")]
         string? files = null,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is required when operation=revert, unused otherwise.
-        [Description("Required for operation=revert: commit hash to revert.")]
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is used when operation=revert (required) or
+        // operation=show (optional alias for target - if both are set, commitHash wins); unused otherwise.
+        [Description("Required for operation=revert: commit hash to revert. Also accepted by operation=show as an alias for target (commitHash wins if both are set).")]
         string? commitHash = null,
         [Description("revert: true stages without committing; commit separately to finalize.")]
         bool noCommit = false,
@@ -96,7 +97,7 @@ public class GitTools
             GitOperation.status => await _gitImpl.StatusAsync(gitRoot, cancellationToken),
             GitOperation.log => await _gitImpl.LogAsync(gitRoot, count, branchName, resolvedPaths, cancellationToken),
             GitOperation.diff => await _gitImpl.DiffAsync(gitRoot, target, resolvedPaths, maxBytes, cancellationToken),
-            GitOperation.show => await _gitImpl.ShowAsync(gitRoot, target, resolvedPaths, maxBytes, cancellationToken),
+            GitOperation.show => await _gitImpl.ShowAsync(gitRoot, !string.IsNullOrWhiteSpace(commitHash) ? commitHash : target, resolvedPaths, maxBytes, cancellationToken),
             GitOperation.stage or GitOperation.add => await _gitImpl.StageAsync(gitRoot, scope ?? GitStageScope.tracked, resolvedPaths, cancellationToken),
             GitOperation.unstage => await _gitImpl.UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
             GitOperation.commit => await _gitImpl.CommitAsync(gitRoot, message, scope, resolvedPaths, amend, cancellationToken),
