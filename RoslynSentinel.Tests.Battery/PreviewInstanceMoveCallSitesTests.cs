@@ -130,6 +130,77 @@ public class PreviewInstanceMoveCallSitesTests
         });
     }
 
+
+    [Test]
+    public async Task ExistingNonEmptyDestinationClass_ClassifiesAsValidWithSuggestedFixAsync()
+    {
+        // Regression test for docs/current/blockers/blocking_error_movemember_instance_callsite_not_rewritten.md:
+        // PreviewInstanceMoveCallSitesAsync built its trial changeset from the source-file edit only
+        // (member removed), never including the destination-side edit (member added). Against an
+        // EXISTING destination class with real pre-existing members (not a fresh near-empty class),
+        // that incomplete changeset let every genuinely-unambiguous call site get misclassified as
+        // already-Valid with no SuggestedFix, so autoResolveCallSites silently skipped rewriting it.
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassExistingA.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class PreviewMoveClassExistingA
+            {
+                public void Foo()
+                {
+                }
+
+                public void Bar()
+                {
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassExistingB.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class PreviewMoveClassExistingB
+            {
+                public void Baz()
+                {
+                }
+
+                public void Qux()
+                {
+                }
+
+                private int _counter;
+            }
+            """, reloadSolution: false);
+
+        const string callerSource = """
+            namespace ContosoOrders.Core;
+
+            public class PreviewMoveCallerExistingDestination
+            {
+                private readonly PreviewMoveClassExistingB _classB = new PreviewMoveClassExistingB();
+
+                public void Do()
+                {
+                    var a = new PreviewMoveClassExistingA();
+                    a.Foo();
+                }
+            }
+            """;
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveCallerExistingDestination.cs"), callerSource);
+
+        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "PreviewMoveClassExistingA.cs"));
+
+        var results = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "PreviewMoveClassExistingA", ["Foo"], "PreviewMoveClassExistingB");
+
+        var fooSite = results.Single(r => r.CallExpression.Contains("Foo"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(fooSite.Status, Is.EqualTo(CallSiteStatus.Valid));
+            Assert.That(fooSite.SuggestedFix, Is.EqualTo("_classB.Foo"));
+            Assert.That(fooSite.Candidates, Does.Contain("_classB"));
+        });
+    }
+
+
     [Test]
     public async Task NoInScopeCandidate_ClassifiesAsNoCandidateIntroducibleAsync()
     {

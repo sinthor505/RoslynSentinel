@@ -899,6 +899,8 @@ public class AdvancedStructuralEngine
             .ToList();
 
         INamedTypeSymbol? destinationType = null;
+        Document? destinationDoc = null;
+        ClassDeclarationSyntax? destinationClassNode = null;
         foreach (var doc in solution.Projects.SelectMany(p => p.Documents))
         {
             var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
@@ -912,15 +914,45 @@ public class AdvancedStructuralEngine
             destinationType = candidateModel?.GetDeclaredSymbol(candidate, cancellationToken) as INamedTypeSymbol;
             if (destinationType != null)
             {
+                destinationDoc = doc;
+                destinationClassNode = candidate;
                 break;
             }
         }
 
-        var updatedSourceRoot = root.ReplaceNode(classNode, classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!);
-        var previewChanges = new Dictionary<FilePathWrapper, string>
+        // previewChanges must reflect the COMPLETE post-move state (member removed from the source
+        // class AND added to the destination class), not just the removal -> otherwise the trial
+        // compile does not reproduce the same diagnostics the real two-file apply would produce, and
+        // every call site gets misclassified as already-Valid. See
+        // docs/current/blockers/blocking_error_movemember_instance_callsite_not_rewritten.md.
+        var updatedSourceClass = classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!;
+        var previewChanges = new Dictionary<FilePathWrapper, string>();
+
+        if (destinationDoc?.FilePath != null && destinationClassNode != null)
         {
-            [filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedSourceRoot).ToFullString()
-        };
+            bool sameFile = string.Equals(Path.GetFullPath(filePath), Path.GetFullPath(destinationDoc.FilePath), StringComparison.OrdinalIgnoreCase);
+            if (sameFile)
+            {
+                var afterSourceEdit = root.ReplaceNode(classNode, updatedSourceClass);
+                var targetAfterSourceEdit = afterSourceEdit.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
+                var finalRoot = targetAfterSourceEdit != null
+                    ? afterSourceEdit.ReplaceNode(targetAfterSourceEdit, targetAfterSourceEdit.AddMembers(membersToMove.ToArray()))
+                    : afterSourceEdit;
+                previewChanges[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString();
+            }
+            else
+            {
+                var destinationRoot = await destinationDoc.GetSyntaxRootAsync(cancellationToken);
+                var updatedDestinationRoot = destinationRoot!.ReplaceNode(destinationClassNode, destinationClassNode.AddMembers(membersToMove.ToArray()));
+                previewChanges[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root.ReplaceNode(classNode, updatedSourceClass)).ToFullString();
+                previewChanges[destinationDoc.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDestinationRoot).ToFullString();
+            }
+        }
+        else
+        {
+            previewChanges[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root.ReplaceNode(classNode, updatedSourceClass)).ToFullString();
+        }
+
         var validation = await _validationEngine.ValidateChangesAsync(previewChanges, cancellationToken);
 
         var results = new List<PreviewCallSite>();
