@@ -738,6 +738,64 @@ public class WorkspaceFileEditImpl
         }
     }
 
+    public async Task<SentinelCallToolResult<object>> DeleteFile(
+        ToolCallReason reason,
+        FilePathWrapper filepath,
+        CancellationToken cancellationToken = default)
+    {
+        FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+        try
+        {
+            if (!filePathResolved.Validated)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsSuccess = false,
+                    ErrorData = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
+                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "DeleteFile: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
+                        : new ResultError(ToolErrorCode.InvalidArgument, "DeleteFile: 'filepath' is required.")
+                };
+            }
+
+            if (!File.Exists(filePathResolved.Absolute))
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsSuccess = false,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"DeleteFile: '{filePathResolved}' does not exist.")
+                };
+            }
+
+            var deletePaths = new[] { filePathResolved };
+            var result = await _workspaceManager.ApplyProposedChangesAsync([], validateChanges: false, cancellationToken: cancellationToken, deletePaths: deletePaths);
+            if (!result.Success)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsSuccess = false,
+                    ErrorData = new ResultError(ToolErrorCode.Exception, $"DeleteFile failed to delete '{filePathResolved}': {result.Summary}")
+                };
+            }
+
+            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "delete_file", result, cancellationToken: cancellationToken);
+            var strippedResult = result with { PreImages = null };
+            return new SentinelCallToolResult<object>()
+            {
+                IsSuccess = true,
+                SuccessData = strippedResult
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DeleteFile failed for '{FilePathWrapper}'", filePathResolved);
+            return new SentinelCallToolResult<object>()
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "DeleteFile")
+            };
+        }
+    }
+
     public async Task<SentinelCallToolResult<object>> CreateFile(
         ToolCallReason reason,
         FilePathWrapper filepath,

@@ -81,6 +81,15 @@ public class WorkspaceFileEditTools
     // file (to seed a valid compilation unit) and ignored for every other file extension -> a model
     // creating a non-.cs file can omit all three, but a model creating a .cs file must supply all
     // three or the call fails, and nothing besides the description text signals that split.
+    [McpServerTool(Name = "DeleteFile")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Deletes an existing file from disk and the workspace. Fails if the file does not exist. Use this after a refactor (e.g. MoveMember) empties a class/file down to nothing, instead of leaving an empty shell file behind.")]
+    public Task<SentinelCallToolResult<object>> DeleteFile(
+        [Description(ToolParams.Reason)] ToolCallReason reason,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        CancellationToken cancellationToken = default)
+        => _impl.DeleteFile(reason, filePath, cancellationToken);
+
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]
     [Description("Creates a new file. Fails if the file already exists - this tool never overwrites or writes free-form whole-file content. Parent directories are created automatically if missing.")]
