@@ -196,6 +196,41 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    public async Task Git_Commit_ReturnsCommitHashLengthMatchingActualHashAsync()
+    {
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "commit hash length test");
+        var result = await _gitTools.Git(reason: "test message", GitOperation.commit, message: "test commit", scope: GitStageScope.tracked);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var commit = result.SuccessData as GitCommitResult;
+        Assert.That(commit, Is.Not.Null);
+        Assert.That(commit!.CommitHashLength, Is.EqualTo(commit.CommitHash.Length),
+            "CommitHashLength must always match the literal length of CommitHash.");
+        Assert.That(commit.CommitHashLength, Is.EqualTo(40),
+            "A real commit's hash is a 40-character SHA-1.");
+    }
+
+    [Test]
+    public async Task Git_Revert_ReturnsCommitHashLengthMatchingActualHashAsync()
+    {
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "revert hash length test");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "commit to revert");
+        var log = await _gitTools.Git(reason: "test message", GitOperation.log, count: 1);
+        var hashToRevert = ((GitLogResult)log.SuccessData!).Commits[0].Hash;
+
+        var result = await _gitTools.Git(reason: "test message", GitOperation.revert, commitHash: hashToRevert);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var revert = result.SuccessData as GitRevertResult;
+        Assert.That(revert, Is.Not.Null);
+        Assert.That(revert!.CommitHashLength, Is.EqualTo(revert.CommitHash.Length),
+            "CommitHashLength must always match the literal length of CommitHash.");
+        Assert.That(revert.CommitHashLength, Is.EqualTo(40),
+            "A real revert commit's hash is a 40-character SHA-1.");
+    }
+
+    [Test]
     public async Task Git_Commit_RepoPath_IsRejectedAsync()
     {
         var result = await _gitTools.Git(reason: "test message", GitOperation.commit, message: "should be rejected", repoPath: _repoDir);

@@ -9,8 +9,24 @@ below) has shipped: `RoslynSentinel.Basic/GitImpl.cs:953-959` now validates
 guardrail has not fired across the many commits made since the 6-for-6 transcription-artifact
 evidence below was gathered, which -- combined with that evidence -- confirms the practical
 conclusion this doc was already leaning toward: every "41-character" report was an agent
-hand-transcription artifact, not a tool-side defect. No equivalent check exists yet on
-`RevertAsync`'s hash field; low priority since no 41-character report has ever involved `revert`.
+hand-transcription artifact, not a tool-side defect.
+
+**Update 2026-09-28 (7th occurrence, and the follow-up fix):** the same misreport happened again in
+a live session -- an agent visually read a real, correct 40-character hash as 41 characters, again
+without byte-counting it. The server log for that exact process (`Git` calls completing with
+`IsError = false`) confirmed the length-assertion `LogWarning` never fired, i.e. the hash was
+genuinely 40 characters the whole time; the agent's own later manual re-count (splitting the string
+into 4-char groups) also confirmed 40. This makes it 7-for-7. Rather than add another memory note
+(which only helps if a future agent remembers to distrust its own eyes), a `CommitHashLength`
+computed property (`=> CommitHash.Length`) was added directly to both `GitCommitResult` and
+`GitRevertResult` (`RoslynSentinel.Basic/GitImpl.cs`), so the byte-counted length is always present
+in the tool response itself -- eliminating the category of doubt structurally instead of relying on
+anyone counting correctly. `RevertAsync` (previously uncovered by the length assertion) now gets the
+same field too. Covered by
+`Git_Commit_ReturnsCommitHashLengthMatchingActualHashAsync` and
+`Git_Revert_ReturnsCommitHashLengthMatchingActualHashAsync` in
+`RoslynSentinel.Tests.Battery/GitToolsSmokeTests.cs`.
+
 Doc kept for the full investigative history; do not treat as an open question.
 
 ---
