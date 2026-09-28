@@ -143,6 +143,52 @@ public class RefactoringEngine
             : $"{kind} '{string.Join("', '", names)}'";
     }
 
+    /// <summary>
+    /// Detects a newMemberSource that holds 2+ complete member declarations and returns a specific,
+    /// recovery-oriented message (count, each member's kind+name, and the per-operation fix), or null
+    /// when the source is not a multi-member block. Needed because the single-member parse
+    /// (SyntaxFactory.ParseMemberDeclaration) only sees the first declaration: for replace, the
+    /// trailing declarations surfaced as a generic "not a valid member declaration" error that sent
+    /// agents off rewriting a perfectly valid member instead of splitting the call. The source is
+    /// parsed as the body of a throwaway class so every declaration is counted; any
+    /// IncompleteMemberSyntax (a statement or body fragment, not a member) makes this return null so
+    /// those inputs keep their existing "not a valid member" diagnosis.
+    /// </summary>
+    /// <param name="source">The caller-supplied newMemberSource.</param>
+    /// <param name="operation">"replace" or "addMember" - selects the recovery advice.</param>
+    /// <param name="targetMemberName">replace only: the member being replaced.</param>
+    internal static string? DetectMultipleMemberDeclarations(string source, string operation, string? targetMemberName = null)
+    {
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return null;
+        }
+
+        var probe = SyntaxFactory.ParseCompilationUnit("class __SentinelMemberCountProbe__\n{\n" + source + "\n}\n");
+        if (probe.Members.Count != 1 || probe.Members[0] is not ClassDeclarationSyntax probeClass)
+        {
+            return null;
+        }
+
+        var members = probeClass.Members;
+        if (members.Count < 2 || members.Any(m => m is IncompleteMemberSyntax))
+        {
+            return null;
+        }
+
+        var described = string.Join(", ", members.Select(DescribeParsedMember));
+        if (operation == "replace")
+        {
+            var target = string.IsNullOrEmpty(targetMemberName) ? "the target member" : $"'{targetMemberName}'";
+            return $"newMemberSource contains {members.Count} member declarations ({described}), but replace takes exactly one member - the single declaration that replaces {target}. " +
+                "Recovery: call Member(operation: replace) once per existing member you want to replace, passing just that member's full declaration, " +
+                "and call Member(operation: addMember, containerName: ..., position: \"after:<MemberName>\") once for each member that is new.";
+        }
+
+        return $"newMemberSource contains {members.Count} member declarations ({described}), but {operation} takes exactly one member per call. " +
+            $"Recovery: call Member(operation: {operation}) once per member, passing one full declaration each time; to keep them in order, give each call after the first position: \"after:<previous member's name>\".";
+    }
+
     // Adapters wiring ResolveBySnippetOrThrow's hintBuilder callback to the existing hint-text
     // formatters: BuildMemberHint is public on SymbolNavigationEngine so it's reused directly;
     // BuildTypeHint is private there, so its identical formatting is mirrored here rather than
@@ -1357,6 +1403,20 @@ public class RefactoringEngine
             };
         }
 
+        // Must run before the ContainsDiagnostics check below: a multi-member source always has
+        // parse diagnostics (the 2nd declaration is skipped-token trivia on the 1st), so checking
+        // diagnostics first misreported it as "not a valid member declaration".
+        var multipleMembersIssue = DetectMultipleMemberDeclarations(newSource, "replace", memberName);
+        if (multipleMembersIssue != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = $"// {multipleMembersIssue}"
+            };
+        }
+
         var newMember = SyntaxFactory.ParseMemberDeclaration(newSource);
         if (newMember == null || newMember.ContainsDiagnostics)
         {
@@ -1364,7 +1424,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.SourceInvalid,
                 FilePath = filePath,
-                Message = "// newSource is not a valid member declaration (method/property/class/etc. with a signature). " + "Provide the full member, not just a statement or method body."
+                Message = "// newMemberSource is not a valid member declaration. Provide the full member (signature + body, e.g. 'private decimal Foo() { ... }'), " +
+                    "not just a statement or method body fragment."
             };
         }
 
@@ -1375,7 +1436,7 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.SourceInvalid,
                 FilePath = filePath,
-                Message = $"// newSource is invalid: {trailingIssue}"
+                Message = $"// newMemberSource is invalid: {trailingIssue}"
             };
         }
 
@@ -1475,7 +1536,8 @@ public class RefactoringEngine
             };
         }
 
-        var trailingIssue = DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
+        var trailingIssue = DetectMultipleMemberDeclarations(newMemberSource, "addMember")
+            ?? DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
         if (trailingIssue != null)
         {
             return new DocumentEditResult
@@ -2692,7 +2754,8 @@ public class RefactoringEngine
             };
         }
 
-        var trailingIssue = DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
+        var trailingIssue = DetectMultipleMemberDeclarations(newMemberSource, "addMember")
+            ?? DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
         if (trailingIssue != null)
         {
             return new DocumentEditResult
@@ -2792,7 +2855,8 @@ public class RefactoringEngine
             };
         }
 
-        var trailingIssue = DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
+        var trailingIssue = DetectMultipleMemberDeclarations(newMemberSource, "addMember")
+            ?? DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
         if (trailingIssue != null)
         {
             return new DocumentEditResult

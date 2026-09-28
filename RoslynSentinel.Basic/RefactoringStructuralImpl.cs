@@ -425,8 +425,10 @@ public class RefactoringStructuralImpl
                     string errorReason = result.Outcome switch
                     {
                         EditOutcome.DocumentNotFound => $"Member: document '{filePathResolved}' not found in the workspace.",
-                        EditOutcome.SourceInvalid => $"Member: newMemberSource for '{memberName}' is not a valid member declaration. " +
-                            "Provide the full member (signature + body, e.g. 'private decimal Foo() { ... }'), not just a statement or method body fragment.",
+                        // Pass the engine's reason through: it distinguishes a multi-member source (replace
+                        // takes exactly one) from a genuinely malformed one, and a single hardcoded string
+                        // here previously reported both as "not a valid member declaration".
+                        EditOutcome.SourceInvalid => $"Member: replace of '{memberName}' rejected - {result.Message.TrimStart('/', ' ')}",
                         EditOutcome.TargetNotFound => $"Member: member '{memberName}' not found in '{filePathResolved}'.",
                         _ => $"Member: no changes produced for '{memberName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}"
                     };
