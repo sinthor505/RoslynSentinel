@@ -98,7 +98,7 @@ public class AdminTools
                 Environment.Exit(0);
             }, cancellationToken: cancellationToken);
 
-            return "Stopping. VS Code will respawn a fresh instance on its next tool call.";
+            return "Stopping. VS Code will rebuild the server binary and spawn a fresh instance on its next tool call.";
         }
 
         return $"Unknown op '{op}'. Valid ops: status, stop.";

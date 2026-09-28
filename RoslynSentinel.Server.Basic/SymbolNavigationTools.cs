@@ -1,7 +1,5 @@
 using System.ComponentModel;
 
-using Microsoft.Extensions.Logging;
-
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
@@ -41,7 +39,7 @@ public class SymbolNavigationTools
     [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol - if you only have a name, use LocateSymbol first to find the declaring file.")]
     public Task<SentinelCallToolResult<object>> InspectSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Description("info returns type, kind, accessibility, attributes, and documentation. blastRadius returns all call sites and affected projects - for a full caller/override breakdown instead of a summary, use FindReferences.")]
         [ToolOption(ToolOptionTag.Aspect)] InspectSymbolAspect aspect,
@@ -49,7 +47,7 @@ public class SymbolNavigationTools
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         CancellationToken cancellationToken = default
         ) =>
-        _impl.InspectSymbol(reason, filePath, contextSnippet, aspect, lineBefore, lineAfter, cancellationToken);
+        _impl.InspectSymbol(reason, filepath, contextSnippet, aspect, lineBefore, lineAfter, cancellationToken);
 
     [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]

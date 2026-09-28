@@ -1,7 +1,44 @@
 # `MoveMember` cannot move private nested classes, and does not detect that moved method bodies depend on them
 
-**Status:** OPEN 2026-09-28. Traced to a specific, reproducible cause (see "Root cause" below), not
-yet fixed.
+**Status:** FIXED 2026-09-28. Both root causes fixed in `AdvancedStructuralEngine.cs`
+(`MoveMemberAsync` and the new `RequireNoUnmovedDependencies` helper). Verified live against the
+exact repro in this doc after a server rebuild+restart:
+- `memberNames: ["ModernGuardRewriter"]` alone now resolves (previously immediate `NotFound`) and,
+  moved in isolation, correctly reports the resulting dangling reference as a `ValidationFailed`
+  post-move `CS0246` at the now-orphaned call site in the source file - expected, since the type's
+  only user (`UpgradeToModernGuardsAsync`) wasn't included in that call.
+- `memberNames: ["UpgradeToModernGuardsAsync"]` alone (the method, without its nested-type and
+  field dependencies) is now refused up front with `errorCode: InvalidArgument`, naming all three
+  missing dependencies: `Cannot move the requested member(s) out of 'SyntaxUpgradeEngine': their
+  bodies reference private/internal member(s) [ModernGuardRewriter, _config, _workspaceManager] of
+  'SyntaxUpgradeEngine' that are not included in this move ... Add the missing name(s) to
+  memberNames so they move together, or leave the referencing member(s) behind.` This is broader
+  and more correct than the fix originally scoped for - it also catches the instance-field
+  dependencies (`_config`, `_workspaceManager`) that the rewriter's constructor needs, not just the
+  nested type itself.
+
+The full production fold-in (moving all 17 `SyntaxUpgradeEngine` members plus resolving
+`callSiteFixups` for 31 affected test call sites) was not re-attempted end-to-end in this session -
+that remains a separate, larger task. This doc covers only the `MoveMember` tool defect, which is
+resolved.
+
+**Update 2026-09-28 (group 1, async family):** the same root cause reproduces against `public`
+nested `record` types, not just `private` nested classes - so the defect is broader than the title
+suggests: `MoveMember`'s member-lookup does not recognize ANY nested type declaration (class or
+record, any accessibility) as a movable member. See "Corroborating reproduction" below for the
+isolated repro. This blocked carving `AsyncOptimizationEngine`'s migration-candidate-scoring methods
+out into a new `AsyncMigrationEngine` class (group 1 of the engine-reorg plan) because 6 of the
+members to move are nested record/class types
+(`FlagMigrationCandidateEngineResult`, `CandidateScoredItem`, `FlagCandidatesInProjectEngineResult`,
+`RemovedCandidateInfo`, `RemoveMigrationCandidatesEngineResult`, `MigrationCandidateRemover`)
+that are constructed/returned by the methods being moved - the same "moved method references an
+un-moved same-class dependency" shape as the original `SyntaxUpgradeEngine` finding below, just with
+the roles of mover/dependency reversed (here the *methods* moved cleanly in isolation; it's the
+*record types they return* that `MoveMember` can't find by name, `NotFound`, immediately). No file
+was modified - both isolated calls were `dryRun: true` and the earlier batched attempt that included
+the record names alongside methods was `ValidationFailed` and not applied. Group 1 proceeded without
+this carve-out; see `project_engine_reorg_group1_async_family.md` (memory folder) for what group 1
+completed instead (rename + duplicate resolution) and its own deferral note.
 
 ## What was being attempted
 
@@ -174,11 +211,43 @@ determination to be reconstructed by hand across two isolated dry runs rather th
   `ModernizationEngine.cs` (see "Related finding" above) - is correct and should be kept regardless
   of how this bug is eventually fixed.
 
+## Corroborating reproduction (group 1, async family, 2026-09-28)
+
+Isolated exactly as the original finding recommends ("two isolated dry runs"): two separate
+`MoveMember` calls, both `dryRun: true`, both against `filepath:
+"RoslynSentinel.Advanced/AsyncOptimizationEngine.cs"`, `className: "AsyncOptimizationEngine"`,
+`targetClassName: "AsyncMigrationEngine"` (a not-yet-existing class, so `MoveMember` would need to
+create it):
+
+1. `memberNames: ["FlagMigrationCandidateEngineResult"]` (a `public record` with primary-constructor
+   parameters, each carrying an XML `<summary>` doc comment) - immediate `NotFound`:
+   > MoveMember failed: None of the requested member(s) [FlagMigrationCandidateEngineResult] were
+   > found in class 'AsyncOptimizationEngine'.
+2. `memberNames: ["RemovedCandidateInfo"]` (a plain one-line positional `record`, no doc comments,
+   as a control to rule out the XML-doc-comment-on-parameter syntax confusing the parser) - same
+   immediate `NotFound` with the same message shape.
+
+Both types are confirmed present by `GetFileOutline` (`FlagMigrationCandidateEngineResult` at line
+1661, `RemovedCandidateInfo` at line 3602). A separate larger batch call requesting 15 members
+together (9 methods + 6 nested types: the above two records plus `CandidateScoredItem`,
+`FlagCandidatesInProjectEngineResult`, `RemoveMigrationCandidatesEngineResult`,
+`MigrationCandidateRemover`) did not raise `NotFound` - it proceeded to `ValidationFailed` instead,
+because the 9 methods in the same request WERE found and moved, and the tool silently dropped the 6
+type names from the request rather than failing the whole call; the resulting staged
+`AsyncMigrationEngine.cs` then had methods whose bodies constructed/returned those record/class
+types with no declaration for them anywhere in the new file, i.e. `CS0246` at the exact lines where
+each method's body references its own return-type record. This confirms the same "silently ignored,
+not attempted, not reported" behavior noted in the original finding's second bullet, now shown to
+extend to `public record` types as well as `private class` types - the defect is on the member-kind
+filter itself, independent of accessibility or `class` vs `record`.
+
 ## Related
 
 - `project_engine_reorg_group9_placement_fixes_complete.md` and
   `project_engine_reorg_group3_in_progress.md` (memory folder) - the plan context this blocks,
   including the note that the `ImmutabilityEngine` -> `SyntaxModernizationEngine` fold-in is
   deferred to this same group 2.
+- `project_engine_reorg_group1_async_family.md` (memory folder) - group 1's corroborating
+  reproduction against nested `record` types, and what group 1 completed instead.
 - `docs/current/blockers/blocking_error_build_tool_suppresses_cs0618_warnings.md` - used as the
   format/style reference for this doc; unrelated root cause.

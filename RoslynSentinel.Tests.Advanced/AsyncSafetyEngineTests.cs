@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -7,14 +7,14 @@ namespace RoslynSentinel.Tests.Advanced;
 internal class AsyncSafetyEngineTests
 {
     private IWorkspaceManager _workspaceManager;
-    private AsyncSafetyEngine _asyncSafetyEngine;
+    private AsyncAnalysisEngine _asyncSafetyEngine;
 
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
+        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]

@@ -146,7 +146,7 @@ public class MutatingToolRejectionMessageTests
             "+    public static string FormatValue(string value) => value;\n" +
             " }\n";
 
-        var result = await wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filePath: helperPath, unifiedDiff: unifiedDiff);
+        var result = await wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filepath: helperPath, unifiedDiff: unifiedDiff);
 
         AssertRoutedThroughLookupHelper(result);
     }

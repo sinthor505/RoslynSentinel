@@ -186,12 +186,12 @@ public class WorkspaceTools
     [Description("Creates a new file; fails if it already exists.")]
     public Task<SentinelCallToolResult<object>> CreateFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Required for .cs files: namespace to seed the file with.")] string? namespaceName = null,
         [Description("Required for .cs files: kind of top-level type to seed (class/interface/etc). Use staticClass for a static utility class.")] NewTypeKind? typeKind = null,
         [Description("Required for .cs files: name of the seeded top-level type.")] string? typeName = null,
         CancellationToken cancellationToken = default)
-        => _fileEdit.CreateFile(reason, filePath, namespaceName, typeKind, typeName, cancellationToken);
+        => _fileEdit.CreateFile(reason, filepath, namespaceName, typeKind, typeName, cancellationToken);
 
     // The confirmationCode paramater was causing hallucinations and invalid tool calls. Reverted back to the original ApplyDiff tool but keeping this here (block-commented, since it depends
     // on ProposedChangeAction.confirmationCode, which is also commented out in ToolEnums.cs) in case we want to reintroduce ApplyDiff with a confirmationCode in the future.
@@ -533,7 +533,7 @@ public class WorkspaceTools
     [Description("Deletes a symbol only if it has zero usages anywhere in the codebase.")]
     public Task<SentinelCallToolResult<object>> SafeDeleteUnusedSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Preferred, with docCommentId - the most reliable resolution path.")] string projectName = "",
         [Description("Preferred, with projectName - from LocateSymbol/FindReferences.")] string docCommentId = "",
         [Description("Fallback if projectName/docCommentId aren't available; combine with contextSnippet to disambiguate.")]
@@ -546,7 +546,7 @@ public class WorkspaceTools
         [Description("Legacy fallback: 1-based column of the declaration site. Requires line too.")]
         [Consumes(DataTag.Offset, required: false)] int column = 0,
         CancellationToken cancellationToken = default)
-        => _projectManagement.SafeDeleteUnusedSymbol(reason, filePath, projectName, docCommentId, symbolName, contextSnippet, lineBefore, lineAfter, line, column, cancellationToken);
+        => _projectManagement.SafeDeleteUnusedSymbol(reason, filepath, projectName, docCommentId, symbolName, contextSnippet, lineBefore, lineAfter, line, column, cancellationToken);
 
     [McpServerTool(Name = "CreateProject")]
     [Produces(DataTag.ResultOnly)]
@@ -575,10 +575,10 @@ public class WorkspaceTools
     [Description("Returns a method's or constructor's full source text and attributes. For a constructor, pass the class name.")]
     public Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSource(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath, [Consumes(DataTag.MethodName, required: true)] string methodName, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Consumes(DataTag.MethodName, required: true)] string methodName, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filePath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         return _readNav.GetMethodSource(reason, filePathResolved, methodName, cancellationToken);
     }
 
@@ -587,21 +587,21 @@ public class WorkspaceTools
     [Description("Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine.")]
     public Task<SentinelCallToolResult<object>> ReadFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Omit to start from the first line.")] int? startLine = null,
         [Description("Omit to read through the last line.")] int? endLine = null,
         CancellationToken cancellationToken = default)
-        => _fileEdit.ReadFile(reason, filePath, startLine, endLine, cancellationToken);
+        => _fileEdit.ReadFile(reason, filepath, startLine, endLine, cancellationToken);
 
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file's types and members with 1-based line ranges (no bodies).")]
     public Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filePath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         return _readNav.GetFileOutline(reason, filePathResolved, cancellationToken);
     }
 

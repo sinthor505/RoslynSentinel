@@ -57,7 +57,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG1_FindBlockingCallsInAsync_ResultPropertySet_ShouldNotFlag()
     {
-        var engine = new AsyncSafetyEngine(_workspaceManager);
+        var engine = new AsyncAnalysisEngine(_workspaceManager);
         const string source = """
             class ActionContext { public string Result { get; set; } = ""; }
             class MyFilter
@@ -88,7 +88,7 @@ public class BugHuntTests
     [Test]
     public async Task BUG1_FindBlockingCallsInAsync_TaskResultRead_ShouldFlag()
     {
-        var engine = new AsyncSafetyEngine(_workspaceManager);
+        var engine = new AsyncAnalysisEngine(_workspaceManager);
         const string source = """
             class Worker
             {

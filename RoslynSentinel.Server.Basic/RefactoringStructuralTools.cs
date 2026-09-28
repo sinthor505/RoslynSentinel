@@ -112,7 +112,7 @@ public class RefactoringStructuralTools
     [Description("Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. Also views constructors.")]
     public Task<SentinelCallToolResult<object>> Member(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         //[Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
         //[Description("Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. Also views constructors.")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
@@ -147,7 +147,7 @@ public class RefactoringStructuralTools
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default) =>
-        _impl.Member(reason, filePath, operation, containerName, namespaceName, memberName, newMemberSource, position, typedKind, typedName, typedType,
+        _impl.Member(reason, filepath, operation, containerName, namespaceName, memberName, newMemberSource, position, typedKind, typedName, typedType,
             accessibility, hasSetter, isInit, isReadonly, isStatic, initializer, skipPrecheck, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff,
             requestParams, cancellationToken);
 
@@ -156,7 +156,7 @@ public class RefactoringStructuralTools
     [Description("Replaces an enum's complete member list in one operation. Use GetTypeInfo(typeName, include:\"members\") to see current values first.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyEnum(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
         [Description("List of member names in the desired order, either a comma-separated string (e.g. \"Pending,Shipped,Cancelled\") or a JSON array of strings (e.g. [\"Pending\",\"Shipped\",\"Cancelled\"]) - both are accepted; append \"=N\" for an explicit value (e.g. \"Archived=99\"). Omitted names are removed, new names are added, explicit values are preserved, and implicit members take the next ordinal from their predecessor - as if hand-typed. Pass the complete list every time, not a delta.")]
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string values,
@@ -167,7 +167,7 @@ public class RefactoringStructuralTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.ModifyEnum(reason, filePath, enumName, values, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+        _impl.ModifyEnum(reason, filepath, enumName, values, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
@@ -240,11 +240,11 @@ public class RefactoringStructuralTools
     [Description("Synchronizes the filename to match a type declared in the file.")]
     public Task<SentinelCallToolResult<object>> SyncTypeAndFilename(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("The top-level type in the file to sync the filename to. Omit to default to the first non-nested type declared in the file (fine for the common single-type-per-file case). Name it explicitly to get a specific result when the file declares more than one top-level type - without it, whichever type happens to be declared first wins, which is not necessarily the file's conceptual main type.")]
         string? targetTypeName = null,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.SyncTypeAndFilename(reason, filePath, targetTypeName, dryRun, returnDiff, cancellationToken);
+        _impl.SyncTypeAndFilename(reason, filepath, targetTypeName, dryRun, returnDiff, cancellationToken);
 }

@@ -144,7 +144,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     [Test]
     public async Task AsyncSafetyEngine_DetectAsyncVoid_DoesNotThrow()
     {
-        var engine = new AsyncSafetyEngine(_workspaceManager);
+        var engine = new AsyncAnalysisEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
         var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () => result = await engine.DetectAsyncVoidMethodsAsync(file), "AsyncSafetyEngine.DetectAsyncVoidMethodsAsync must not throw.");
@@ -154,7 +154,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     [Test]
     public async Task AsyncSafetyEngine_FindTaskYieldUsage_DoesNotThrow()
     {
-        var engine = new AsyncSafetyEngine(_workspaceManager);
+        var engine = new AsyncAnalysisEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
         Assert.DoesNotThrowAsync(async () => result = await engine.FindTaskYieldUsageAsync(_realFilePath), "AsyncSafetyEngine.FindTaskYieldUsageAsync must not throw.");
         Assert.That(result, Is.Not.Null);

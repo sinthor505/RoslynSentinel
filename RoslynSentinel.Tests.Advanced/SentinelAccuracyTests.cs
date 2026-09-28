@@ -11,12 +11,12 @@ namespace RoslynSentinel.Tests.Advanced;
 public class FireAndForgetAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AsyncSafetyEngine _engine = null!;
+    private AsyncAnalysisEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncSafetyEngine(_workspaceManager);
+        _engine = new AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3148,12 +3148,12 @@ public class C {
 public class AsyncSafetyEngineExtendedTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AsyncSafetyEngine _engine = null!;
+    private AsyncAnalysisEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncSafetyEngine(_workspaceManager);
+        _engine = new AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -3614,12 +3614,12 @@ public class C {
 public class UnawakedDisposeAsyncTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AsyncSafetyEngine _engine = null!;
+    private AsyncAnalysisEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncSafetyEngine(_workspaceManager);
+        _engine = new AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]

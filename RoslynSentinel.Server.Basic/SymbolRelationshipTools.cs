@@ -1,7 +1,5 @@
 using System.ComponentModel;
 
-using Microsoft.Extensions.Logging;
-
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
@@ -36,12 +34,12 @@ public class SymbolRelationshipTools
     [Description("Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields -> constructors -> destructors -> properties -> events -> methods -> nested types).")]
     public Task<SentinelCallToolResult<BestInsertionResult, ResultError>> GetBestInsertionPoint(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Consumes(DataTag.ContainerName)] string containerName,
         [Description("The kind of member being inserted.")]
         [ExternalInputRequired(DataTag.MemberKind)] InsertionMemberKind memberKind,
         CancellationToken cancellationToken = default) =>
-        _impl.GetBestInsertionPoint(reason, filePath, containerName, memberKind, cancellationToken);
+        _impl.GetBestInsertionPoint(reason, filepath, containerName, memberKind, cancellationToken);
 
     [McpServerTool(Name = "PreviewRenameImpact")]
     [Produces(DataTag.Report)]

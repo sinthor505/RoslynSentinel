@@ -15,7 +15,7 @@ public class ScanTools
     // private readonly AnalysisEngine _analysisEngine;
     private readonly SecurityEngine _securityEngine;
     private readonly AntiPatternEngine _antiPatternEngine;
-    private readonly AsyncSafetyEngine _asyncSafetyEngine;
+    private readonly AsyncAnalysisEngine _asyncSafetyEngine;
     private readonly ThreadSafetyEngine _threadSafetyEngine;
     private readonly ControlFlowEngine _controlFlowEngine;
     private readonly PerformanceEngine _performanceEngine;
@@ -36,7 +36,7 @@ public class ScanTools
     private readonly BreakingChangeEngine _breakingChangeEngine;
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<ScanTools> _logger;
-    public ScanTools(SecurityEngine securityEngine, AntiPatternEngine antiPatternEngine, AsyncSafetyEngine asyncSafetyEngine, ThreadSafetyEngine threadSafetyEngine, ControlFlowEngine controlFlowEngine, PerformanceEngine performanceEngine, DeadCodeEngine deadCodeEngine, DependencyEngine dependencyEngine, ArchitecturalEngine architecturalEngine, ProjectStructureEngine projectStructureEngine, DependencyInjectionEngine dependencyInjectionEngine, ProjectConsistencyEngine projectConsistencyEngine, MetricsEngine metricsEngine, CloneDetectionEngine cloneDetectionEngine, DiscoveryEngine discoveryEngine, StackOverflowEngine stackOverflowEngine, CodeStyleEngine codeStyleEngine, CodeStyleAnalysisEngine codeStyleAnalysisEngine, RefactoringEngine refactoringEngine, SymbolNavigationEngine symbolNavigationEngine, BreakingChangeEngine breakingChangeEngine, IWorkspaceManager workspaceManager, ILogger<ScanTools> logger, ResourceSafetyEngine resourceSafetyEngine = null)
+    public ScanTools(SecurityEngine securityEngine, AntiPatternEngine antiPatternEngine, AsyncAnalysisEngine asyncSafetyEngine, ThreadSafetyEngine threadSafetyEngine, ControlFlowEngine controlFlowEngine, PerformanceEngine performanceEngine, DeadCodeEngine deadCodeEngine, DependencyEngine dependencyEngine, ArchitecturalEngine architecturalEngine, ProjectStructureEngine projectStructureEngine, DependencyInjectionEngine dependencyInjectionEngine, ProjectConsistencyEngine projectConsistencyEngine, MetricsEngine metricsEngine, CloneDetectionEngine cloneDetectionEngine, DiscoveryEngine discoveryEngine, StackOverflowEngine stackOverflowEngine, CodeStyleEngine codeStyleEngine, CodeStyleAnalysisEngine codeStyleAnalysisEngine, RefactoringEngine refactoringEngine, SymbolNavigationEngine symbolNavigationEngine, BreakingChangeEngine breakingChangeEngine, IWorkspaceManager workspaceManager, ILogger<ScanTools> logger, ResourceSafetyEngine resourceSafetyEngine = null)
     {
         // _analysisEngine = analysisEngine;
         _securityEngine = securityEngine;

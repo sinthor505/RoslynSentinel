@@ -103,12 +103,12 @@ public class ThreadSafetyEngineTests
 public class AsyncSafetyEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AsyncSafetyEngine _engine = null!;
+    private AsyncAnalysisEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AsyncSafetyEngine(_workspaceManager);
+        _engine = new AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]

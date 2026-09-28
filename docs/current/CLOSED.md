@@ -5,6 +5,26 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## MoveMember couldn't move nested types and didn't detect un-moved same-class dependencies — fixed 2026-09-28
+
+`blocking_error_movemember_nested_class_dependency_not_moved.md` (moved to
+`docs/obsolete/blockers/`) documented two defects in `MoveMemberAsync`
+(`RoslynSentinel.Advanced/AdvancedStructuralEngine.cs`), found while trying to fold
+`SyntaxUpgradeEngine.cs` into `SyntaxModernizationEngine`: (1) the member-lookup filter didn't
+recognize nested type declarations as movable members at all, failing immediately with `NotFound`
+even when the type demonstrably existed; (2) moved method bodies were pasted into the target file
+verbatim with no detection of private/internal same-class dependencies (e.g. nested rewriter
+classes and the fields their constructors need), surfacing only as a downstream, unexplained
+`CS0246` after the move. Fixed by (1) adding a `BaseTypeDeclarationSyntax` branch to the
+member-filter predicate, and (2) a new `RequireNoUnmovedDependencies` helper that scans
+`membersToMove` for identifiers resolving to an unmoved private/internal sibling of the source
+class and throws `ToolInvalidArgumentException` naming every missing dependency before any change
+set is built. Verified live against the original repro after a rebuild: nested-type moves now
+resolve, and moving a method without its nested-type/field dependencies is refused up front with a
+message naming exactly what's missing. The related, larger production fold-in of
+`SyntaxUpgradeEngine` (31 test call sites need `callSiteFixups`) was not re-attempted end-to-end and
+remains open as ordinary follow-up work, not a tool defect.
+
 ## McpTasksHarness task-polling tests compared volatile `responseId` — fixed 2026-09-20
 
 `blocking_error_taskpolling_test_responseid_mismatch.md` (moved to `docs/obsolete/blockers/`)

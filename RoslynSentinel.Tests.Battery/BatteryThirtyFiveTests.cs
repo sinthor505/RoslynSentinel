@@ -16,7 +16,7 @@ public class BatteryThirtyFiveTests
     private AdvancedStructuralEngine _advancedStructuralEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
-    private AsyncSafetyEngine _asyncSafetyEngine;
+    private AsyncAnalysisEngine _asyncSafetyEngine;
 
     [SetUp]
     public void SetUp()
@@ -26,7 +26,7 @@ public class BatteryThirtyFiveTests
         _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
+        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
     }
 
     [TearDown]

@@ -9,14 +9,14 @@ public class QualityTests
 {
     private IWorkspaceManager _workspaceManager;
     private LogicOptimizationEngine _logicEngine;
-    private AsyncSafetyEngine _asyncSafetyEngine;
+    private AsyncAnalysisEngine _asyncSafetyEngine;
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _logicEngine = new LogicOptimizationEngine(_workspaceManager);
-        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
+        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
     }
 

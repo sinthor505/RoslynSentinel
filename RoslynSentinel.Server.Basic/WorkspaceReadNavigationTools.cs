@@ -39,20 +39,20 @@ public class WorkspaceReadNavigationTools
     [Description("Returns the full source text of a named method or constructor, plus a structured list of its attributes.")]
     public Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSource(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Method or constructor name. For a constructor, pass the containing class's name (e.g. \"OrderService\" for `public OrderService(...)`). Case-sensitive with case-insensitive fallback; returns the first match for overloaded names.")]
         [Consumes(DataTag.MethodName, required: true)] string methodName,
         CancellationToken cancellationToken = default)
-        => _impl.GetMethodSource(reason, filePath, methodName, cancellationToken);
+        => _impl.GetMethodSource(reason, filepath, methodName, cancellationToken);
 
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file - namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
     public Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         CancellationToken cancellationToken = default)
-        => _impl.GetFileOutline(reason, filePath, cancellationToken);
+        => _impl.GetFileOutline(reason, filepath, cancellationToken);
 
     [McpServerTool(Name = "ListAll")]
     [Produces(DataTag.Report)]

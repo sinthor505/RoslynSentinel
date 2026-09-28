@@ -88,7 +88,7 @@ public class MigrationScanResultTests
         _scanTools = new ScanTools(
             new SecurityEngine(_workspaceManager),
             _antiPatternEngine,
-            new AsyncSafetyEngine(_workspaceManager),
+            new AsyncAnalysisEngine(_workspaceManager),
             new ThreadSafetyEngine(_workspaceManager),
             new ControlFlowEngine(_workspaceManager),
             new PerformanceEngine(_workspaceManager),

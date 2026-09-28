@@ -80,7 +80,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     [Test]
     public async Task AsyncSafetyEngine_DetectAsyncVoidMethods_DoesNotThrow()
     {
-        var engine = new AsyncSafetyEngine(_workspaceManager);
+        var engine = new AsyncAnalysisEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
         Assert.DoesNotThrowAsync(async () => result = await engine.DetectAsyncVoidMethodsAsync(_realFilePath), "DetectAsyncVoidMethodsAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "Result must not be null.");
@@ -89,7 +89,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     [Test]
     public async Task AsyncSafetyEngine_FindConfigureAwaitMissing_DoesNotThrow()
     {
-        var engine = new AsyncSafetyEngine(_workspaceManager);
+        var engine = new AsyncAnalysisEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
         Assert.DoesNotThrowAsync(async () => result = await engine.FindConfigureAwaitMissingAsync(_realFilePath), "FindConfigureAwaitMissingAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
@@ -98,7 +98,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     [Test]
     public async Task AsyncSafetyEngine_FindBlockingCallsInAsync_DoesNotThrow()
     {
-        var engine = new AsyncSafetyEngine(_workspaceManager);
+        var engine = new AsyncAnalysisEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
         Assert.DoesNotThrowAsync(async () => result = await engine.FindBlockingCallsInAsyncAsync(_realFilePath), "FindBlockingCallsInAsyncAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
@@ -107,7 +107,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     [Test]
     public async Task AsyncSafetyEngine_FindUnsafeLazyInit_DoesNotThrow()
     {
-        var engine = new AsyncSafetyEngine(_workspaceManager);
+        var engine = new AsyncAnalysisEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
         Assert.DoesNotThrowAsync(async () => result = await engine.FindUnsafeLazyInitAsync(_realFilePath), "FindUnsafeLazyInitAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
@@ -116,7 +116,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     [Test]
     public async Task AsyncSafetyEngine_DetectValueTaskMisuse_DoesNotThrow()
     {
-        var engine = new AsyncSafetyEngine(_workspaceManager);
+        var engine = new AsyncAnalysisEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
         Assert.DoesNotThrowAsync(async () => result = await engine.DetectValueTaskMisuseAsync(_realFilePath), "DetectValueTaskMisuseAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
@@ -125,7 +125,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     [Test]
     public async Task AsyncSafetyEngine_FindUnawaitedFireAndForget_DoesNotThrow()
     {
-        var engine = new AsyncSafetyEngine(_workspaceManager);
+        var engine = new AsyncAnalysisEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
         Assert.DoesNotThrowAsync(async () => result = await engine.FindUnawaitedFireAndForgetAsync(_realFilePath), "FindUnawaitedFireAndForgetAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);

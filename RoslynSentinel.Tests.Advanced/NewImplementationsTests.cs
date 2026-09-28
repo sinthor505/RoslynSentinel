@@ -18,7 +18,7 @@ public class NewImplementationsTests
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private RefinementEngine _refinementEngine;
     private SecurityEngine _securityEngine;
-    private AsyncSafetyEngine _asyncSafetyEngine;
+    private AsyncAnalysisEngine _asyncSafetyEngine;
     [SetUp]
     public void Setup()
     {
@@ -29,7 +29,7 @@ public class NewImplementationsTests
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _refinementEngine = new RefinementEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
-        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
+        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
     }
 

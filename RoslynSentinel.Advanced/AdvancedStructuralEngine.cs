@@ -216,6 +216,11 @@ public class AdvancedStructuralEngine
                 return field.Declaration.Variables.Any(v => memberNames.Contains(v.Identifier.Text));
             }
 
+            if (m is BaseTypeDeclarationSyntax nestedType)
+            {
+                return memberNames.Contains(nestedType.Identifier.Text);
+            }
+
             return false;
         }).ToList();
 
@@ -226,6 +231,12 @@ public class AdvancedStructuralEngine
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var classSymbol = semanticModel?.GetDeclaredSymbol(classNode, cancellationToken) as INamedTypeSymbol;
+
+        if (classSymbol != null && semanticModel != null)
+        {
+            RequireNoUnmovedDependencies(classSymbol, semanticModel, membersToMove, memberNames, className, targetClassName);
+        }
+
         var baseType = classSymbol?.BaseType;
         bool targetIsBaseType = baseType != null && baseType.SpecialType != SpecialType.System_Object && baseType.Name == targetClassName;
 
@@ -243,6 +254,11 @@ public class AdvancedStructuralEngine
         // direct rewrite path below.
         var nonStaticMembers = membersToMove.Where(m =>
         {
+            if (m is BaseTypeDeclarationSyntax)
+            {
+                return false;
+            }
+
             var modifiers = m switch
             {
                 MethodDeclarationSyntax meth => meth.Modifiers,
@@ -316,6 +332,62 @@ public class AdvancedStructuralEngine
             .ToList();
 
         return await MoveMembersToNewClassAsync(solution, filePath, root, classNode, membersToMove, targetClassName, newClassMemberSymbols, cancellationToken);
+    }
+
+    /// <summary>
+    /// Refuses up front when a moved member's body references a private or internal sibling member
+    /// of the source class (including nested types) that is not itself part of this move -&gt; without
+    /// this check, MoveMemberAsync pastes the body into the target file verbatim and the reference
+    /// only fails to compile afterward, as an unexplained CS0246/CS0103 pointing at the target file
+    /// rather than at the real cause (an un-moved dependency back in the source class).
+    /// </summary>
+    private static void RequireNoUnmovedDependencies(
+        INamedTypeSymbol classSymbol,
+        SemanticModel semanticModel,
+        List<MemberDeclarationSyntax> membersToMove,
+        string[] memberNames,
+        string className,
+        string targetClassName)
+    {
+        var siblingsByName = classSymbol.GetMembers()
+            .Where(s => s.DeclaredAccessibility is Accessibility.Private or Accessibility.Internal or Accessibility.NotApplicable)
+            .Where(s => !memberNames.Contains(s.Name))
+            .ToLookup(s => s.Name, StringComparer.Ordinal);
+
+        if (siblingsByName.Count == 0)
+        {
+            return;
+        }
+
+        var missingDependencies = new SortedSet<string>(StringComparer.Ordinal);
+
+        foreach (var member in membersToMove)
+        {
+            var identifiers = member.DescendantNodes().OfType<SimpleNameSyntax>();
+            foreach (var identifier in identifiers)
+            {
+                if (!siblingsByName.Contains(identifier.Identifier.Text))
+                {
+                    continue;
+                }
+
+                var symbolInfo = semanticModel.GetSymbolInfo(identifier);
+                var resolved = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+                if (resolved != null && SymbolEqualityComparer.Default.Equals(resolved.ContainingType, classSymbol))
+                {
+                    missingDependencies.Add(identifier.Identifier.Text);
+                }
+            }
+        }
+
+        if (missingDependencies.Count > 0)
+        {
+            throw new ToolInvalidArgumentException(
+                $"Cannot move the requested member(s) out of '{className}': their bodies reference private/internal " +
+                $"member(s) [{string.Join(", ", missingDependencies)}] of '{className}' that are not included in this move " +
+                $"and would no longer be reachable from '{targetClassName}'. Add the missing name(s) to memberNames so they " +
+                "move together, or leave the referencing member(s) behind.");
+        }
     }
 
     private static async Task<MoveMemberResult> MoveMembersToBaseTypeAsync(

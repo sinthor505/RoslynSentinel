@@ -19,7 +19,7 @@ public class IntelligenceTools
     // private readonly DocumentationEngine _documentationEngine;
     private readonly DependencyEngine _dependencyEngine;
     private readonly ProjectStructureEngine _projectStructureEngine;
-    private readonly AsyncSafetyEngine _asyncSafetyEngine;
+    private readonly AsyncAnalysisEngine _asyncSafetyEngine;
     private readonly HealthOrchestrationEngine _healthOrchestrationEngine;
     // private readonly ArchitecturalEngine _architecturalEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
@@ -28,7 +28,7 @@ public class IntelligenceTools
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<IntelligenceTools> _logger;
-    public IntelligenceTools(ImpactAnalyzer impactAnalyzer, SemanticSearchEngine semanticSearchEngine, MetricsEngine metricsEngine, InventoryEngine inventoryEngine, DeadCodeEngine deadCodeEngine, DocumentationEngine documentationEngine, DependencyEngine dependencyEngine, ProjectStructureEngine projectStructureEngine, AsyncSafetyEngine asyncSafetyEngine, HealthOrchestrationEngine healthOrchestrationEngine, ArchitecturalEngine architecturalEngine, SymbolNavigationEngine symbolNavigationEngine, DependencyInjectionEngine dependencyInjectionEngine, DiscoveryEngine discoveryEngine, ProjectConsistencyEngine projectConsistencyEngine, ISolutionProvider workspaceManager, SentinelConfiguration config, ILogger<IntelligenceTools> logger, AntiPatternEngine antiPatternEngine = null)
+    public IntelligenceTools(ImpactAnalyzer impactAnalyzer, SemanticSearchEngine semanticSearchEngine, MetricsEngine metricsEngine, InventoryEngine inventoryEngine, DeadCodeEngine deadCodeEngine, DocumentationEngine documentationEngine, DependencyEngine dependencyEngine, ProjectStructureEngine projectStructureEngine, AsyncAnalysisEngine asyncSafetyEngine, HealthOrchestrationEngine healthOrchestrationEngine, ArchitecturalEngine architecturalEngine, SymbolNavigationEngine symbolNavigationEngine, DependencyInjectionEngine dependencyInjectionEngine, DiscoveryEngine discoveryEngine, ProjectConsistencyEngine projectConsistencyEngine, ISolutionProvider workspaceManager, SentinelConfiguration config, ILogger<IntelligenceTools> logger, AntiPatternEngine antiPatternEngine = null)
     {
         _impactAnalyzer = impactAnalyzer;
         _semanticSearchEngine = semanticSearchEngine;

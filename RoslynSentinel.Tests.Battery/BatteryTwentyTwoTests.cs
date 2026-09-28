@@ -19,7 +19,7 @@ public class BatteryTwentyTwoTests
     private DocumentationEngine _documentationEngine;
     private DependencyEngine _dependencyEngine;
     private ProjectStructureEngine _projectStructureEngine;
-    private AsyncSafetyEngine _asyncSafetyEngine;
+    private AsyncAnalysisEngine _asyncSafetyEngine;
     private HealthOrchestrationEngine _healthOrchestrationEngine;
     private ArchitecturalEngine _architecturalEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
@@ -114,7 +114,7 @@ public class OrderService : IOrderService
         _documentationEngine = new DocumentationEngine(_workspaceManager);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
-        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
+        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);

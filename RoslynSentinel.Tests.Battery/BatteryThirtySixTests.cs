@@ -15,7 +15,7 @@ namespace RoslynSentinel.Tests.Battery;
 public class BatteryThirtySixTests
 {
     private IWorkspaceManager _workspaceManager;
-    private AsyncSafetyEngine _asyncSafetyEngine;
+    private AsyncAnalysisEngine _asyncSafetyEngine;
     private SecurityEngine _securityEngine;
     private ProjectStructureEngine _structureEngine;
 
@@ -23,7 +23,7 @@ public class BatteryThirtySixTests
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
+        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _structureEngine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
     }

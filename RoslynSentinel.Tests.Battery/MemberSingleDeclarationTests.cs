@@ -52,7 +52,7 @@ public class MemberSingleDeclarationTests
         var result = await tools.Member(
             reason: "test multi member replace",
             operation: MemberAction.replace,
-            filePath: FixtureRelativePath,
+            filepath: FixtureRelativePath,
             memberName: "Alpha",
             newMemberSource: "public int Alpha() => 10;\n\npublic int Gamma() => 3;\n\nprivate string _delta = \"d\";");
 
@@ -85,7 +85,7 @@ public class MemberSingleDeclarationTests
         var result = await tools.Member(
             reason: "test malformed single replace",
             operation: MemberAction.replace,
-            filePath: FixtureRelativePath,
+            filepath: FixtureRelativePath,
             memberName: "Alpha",
             newMemberSource: "public int Alpha() { return ; + }");
 
@@ -111,7 +111,7 @@ public class MemberSingleDeclarationTests
         var result = await tools.Member(
             reason: "test multi member add",
             operation: MemberAction.addMember,
-            filePath: FixtureRelativePath,
+            filepath: FixtureRelativePath,
             containerName: "SingleDeclTarget",
             position: position,
             newMemberSource: "public int Gamma() => 3;\n\npublic string Name { get; set; } = \"\";");

@@ -18,7 +18,7 @@ public class ComprehensiveToolTests
     private ArchitecturalEngine _architecturalEngine;
     private AsyncBatchEngine _asyncBatchEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
-    private AsyncSafetyEngine _asyncSafetyEngine;
+    private AsyncAnalysisEngine _asyncSafetyEngine;
     private CodeFlowEngine _codeFlowEngine;
     private CodeGenerationEngine _codeGenerationEngine;
     private CodeHealingEngine _codeHealingEngine;
@@ -75,7 +75,7 @@ public class ComprehensiveToolTests
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
+        _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager, _config);
