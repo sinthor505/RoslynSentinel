@@ -15,7 +15,7 @@ public class PreviewInstanceMoveCallSitesTests
 {
     private TestSolutionFixture _fixture;
     private PersistentWorkspaceManager _workspaceManager;
-    private AdvancedStructuralEngine _engine;
+    private StructuralRefactoringEngine _engine;
 
     [SetUp]
     public async Task SetUpAsync()
@@ -26,7 +26,7 @@ public class PreviewInstanceMoveCallSitesTests
 
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        _engine = new AdvancedStructuralEngine(_workspaceManager, validationEngine);
+        _engine = new StructuralRefactoringEngine(_workspaceManager, validationEngine);
     }
 
     [TearDown]

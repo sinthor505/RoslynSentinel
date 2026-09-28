@@ -127,13 +127,13 @@ public class Greeter
 public class AdvancedStructuralEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
-    private AdvancedStructuralEngine _engine = null!;
+    private StructuralRefactoringEngine _engine = null!;
 
     [SetUp]
     public void SetUp()
     {
         _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AdvancedStructuralEngine(_mgr);
+        _engine = new StructuralRefactoringEngine(_mgr);
     }
 
     [TearDown]

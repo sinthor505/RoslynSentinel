@@ -13,7 +13,7 @@ public class BatteryTwentyFourTests
     private SentinelConfiguration _config;
     private RefactoringEngine _refactoringEngine;
     private StandardRefactoringEngine _standardRefactoringEngine;
-    private AdvancedStructuralEngine _advancedStructuralEngine;
+    private StructuralRefactoringEngine _advancedStructuralEngine;
     private MappingEngine _mappingEngine;
     private SemanticRefactoringLibrary _semanticRefactoringLibrary;
     private GranularRefactoringEngine _granularRefactoringEngine;
@@ -110,7 +110,7 @@ public enum Status { Active = 1, Pending = 2 }
         _config = new SentinelConfiguration();
         _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
-        _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+        _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
         _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
         _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);

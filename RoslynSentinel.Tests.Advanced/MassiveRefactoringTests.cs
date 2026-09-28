@@ -21,7 +21,7 @@ public class MassiveRefactoringTests
 
         var sr = new StructuralRefinementEngine(_workspaceManager, config);
         var standard = new StandardRefactoringEngine(_workspaceManager);
-        var advStruct = new AdvancedStructuralEngine(_workspaceManager);
+        var advStruct = new StructuralRefactoringEngine(_workspaceManager);
         var mapping = new MappingEngine(_workspaceManager);
         var semLib = new SemanticRefactoringLibrary(_workspaceManager);
         var granular = new GranularRefactoringEngine(_workspaceManager);

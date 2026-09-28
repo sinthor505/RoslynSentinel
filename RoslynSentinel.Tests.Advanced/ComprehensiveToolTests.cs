@@ -11,7 +11,7 @@ public class ComprehensiveToolTests
 {
     private AdvancedLogicEngine _advancedLogicEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
-    private AdvancedStructuralEngine _advancedStructuralEngine;
+    private StructuralRefactoringEngine _advancedStructuralEngine;
     private AdvancedTypeEngine _advancedTypeEngine;
     // private AnalysisEngine _analysisEngine;
     private ApiGenerationEngine _apiAutomationEngine;
@@ -69,7 +69,7 @@ public class ComprehensiveToolTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
-        _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+        _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _advancedTypeEngine = new AdvancedTypeEngine(_workspaceManager);
         _apiAutomationEngine = new ApiGenerationEngine(_workspaceManager);
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);

@@ -1779,7 +1779,7 @@ public class OtherClass
             private ProjectStructureEngine _projectStructureEngine;
             private GranularRefactoringEngine _granularRefactoringEngine;
             private RefactoringEngine _refactoringEngine;
-            private AdvancedStructuralEngine _advancedStructuralEngine;
+            private StructuralRefactoringEngine _advancedStructuralEngine;
             private CodeGenerationEngine _codeGenerationEngine;
             private StructuralRefinementEngine _structuralRefinementEngine;
             [SetUp]
@@ -1790,7 +1790,7 @@ public class OtherClass
                 _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
                 _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
                 _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
-                _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+                _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
                 _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
                 _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
             }
@@ -2417,7 +2417,7 @@ public class Processor
             private AdvancedLogicEngine _advancedLogicEngine;
             private RefactoringEngine _refactoringEngine;
             private ThreadSafetyEngine _threadSafetyEngine;
-            private AdvancedStructuralEngine _advancedStructuralEngine;
+            private StructuralRefactoringEngine _advancedStructuralEngine;
             private GranularRefactoringEngine _granularRefactoringEngine;
             [SetUp]
             public void Setup()
@@ -2428,7 +2428,7 @@ public class Processor
                 _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
                 _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
                 _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
-                _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+                _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
                 _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
             }
 
@@ -2671,7 +2671,7 @@ public class Processor
             private GranularRefactoringEngine _granularRefactoringEngine;
             private RefactoringEngine _refactoringEngine;
             private RefinementEngine _refinementEngine;
-            private AdvancedStructuralEngine _advancedStructuralEngine;
+            private StructuralRefactoringEngine _advancedStructuralEngine;
             private StructuralRefinementEngine _structuralRefinementEngine;
             [SetUp]
             public void Setup()
@@ -2681,7 +2681,7 @@ public class Processor
                 _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
                 _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
                 _refinementEngine = new RefinementEngine(_workspaceManager);
-                _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+                _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
                 _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
             }
 

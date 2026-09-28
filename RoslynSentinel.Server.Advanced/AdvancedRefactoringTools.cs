@@ -30,7 +30,7 @@ public class AdvancedRefactoringTools
     private readonly RefactoringEngine _refactoringEngine;
     private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
     //private readonly StandardRefactoringEngine _standardRefactoringEngine;
-    private readonly AdvancedStructuralEngine _advancedStructuralEngine;
+    private readonly StructuralRefactoringEngine _advancedStructuralEngine;
     private readonly MappingEngine _mappingEngine;
     private readonly SemanticRefactoringLibrary _semanticRefactoringLibrary;
     private readonly GranularRefactoringEngine _granularRefactoringEngine;
@@ -54,7 +54,7 @@ public class AdvancedRefactoringTools
     {
         _refactoringEngine = new RefactoringEngine(workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(workspaceManager);
-        _advancedStructuralEngine = new AdvancedStructuralEngine(workspaceManager);
+        _advancedStructuralEngine = new StructuralRefactoringEngine(workspaceManager);
         _mappingEngine = new MappingEngine(workspaceManager);
         _semanticRefactoringLibrary = new SemanticRefactoringLibrary(workspaceManager);
         _granularRefactoringEngine = new GranularRefactoringEngine(workspaceManager);
@@ -72,7 +72,7 @@ public class AdvancedRefactoringTools
     public AdvancedRefactoringTools(
         RefactoringEngine refactoringEngine,
         AdvancedRefactoringEngine advancedRefactoringEngine,
-        AdvancedStructuralEngine advancedStructuralEngine,
+        StructuralRefactoringEngine advancedStructuralEngine,
         MappingEngine mappingEngine,
         SemanticRefactoringLibrary semanticRefactoringLibrary,
         GranularRefactoringEngine granularRefactoringEngine,

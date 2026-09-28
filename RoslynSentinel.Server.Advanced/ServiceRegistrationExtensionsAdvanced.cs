@@ -27,7 +27,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         // don't use them, or because they're deliberately gated to the fuller Advanced tool set).
         services.AddSingleton<AdvancedLogicEngine>();
         services.AddSingleton<AdvancedRefactoringEngine>();
-        services.AddSingleton<AdvancedStructuralEngine>();
+        services.AddSingleton<StructuralRefactoringEngine>();
         services.AddSingleton<AdvancedTypeEngine>();
         services.AddSingleton<AntiPatternEngine>();
         services.AddSingleton<ApiGenerationEngine>();

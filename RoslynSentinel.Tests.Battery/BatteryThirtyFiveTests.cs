@@ -13,7 +13,7 @@ public class BatteryThirtyFiveTests
 {
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
-    private AdvancedStructuralEngine _advancedStructuralEngine;
+    private StructuralRefactoringEngine _advancedStructuralEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;
@@ -23,7 +23,7 @@ public class BatteryThirtyFiveTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+        _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);

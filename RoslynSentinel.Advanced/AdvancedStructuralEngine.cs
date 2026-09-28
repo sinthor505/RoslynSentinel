@@ -18,13 +18,13 @@ public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List
 /// </summary>
 public record AppliedCallSiteFixup(string FilePath, int Line, string FixupKey, string FixupValue);
 
-public class AdvancedStructuralEngine
+public class StructuralRefactoringEngine
 {
     private readonly IWorkspaceManager _workspaceManager;
 
     private readonly ValidationEngine? _validationEngine;
 
-    public AdvancedStructuralEngine(IWorkspaceManager workspaceManager, ValidationEngine? validationEngine = null)
+    public StructuralRefactoringEngine(IWorkspaceManager workspaceManager, ValidationEngine? validationEngine = null)
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
@@ -919,7 +919,7 @@ public class AdvancedStructuralEngine
     {
         if (_validationEngine == null)
         {
-            throw new InvalidOperationException("PreviewInstanceMoveCallSitesAsync requires a ValidationEngine - this AdvancedStructuralEngine instance was constructed without one.");
+            throw new InvalidOperationException("PreviewInstanceMoveCallSitesAsync requires a ValidationEngine - this StructuralRefactoringEngine instance was constructed without one.");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
