@@ -581,11 +581,14 @@ public class AdvancedRefactoringEngine
 
         var root = (await document.GetSyntaxRootAsync(cancellationToken))!;
         var text = await document.GetTextAsync(cancellationToken);
+        var candidates = _symbolNavigationEngine.ResolveCandidates(root, text, memberName, cancellationToken)
+            .Where(c => c.Kind is CandidateKind.Method or CandidateKind.Property or CandidateKind.Constructor)
+            .ToList();
         MemberDeclarationSyntax? target;
         try
         {
-            target = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, text, memberName, contextSnippet, lineBefore, lineAfter,
-                m => m is MethodDeclarationSyntax || m is PropertyDeclarationSyntax || m is ConstructorDeclarationSyntax);
+            target = SymbolNavigationEngine.ResolveBySnippetOrThrow(candidates, text, contextSnippet, lineBefore, lineAfter,
+                (c, m, mode) => _symbolNavigationEngine.BuildMemberHint(c.Select(x => x.Node).ToList(), m, mode))?.Node as MemberDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {

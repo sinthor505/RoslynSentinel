@@ -48,6 +48,36 @@ tool family, not a one-off:
   hand across incidents instead of shared once) and should be swept in the same pass as part of
   migrating callers onto `CandidateKind` below, though it is not itself one of the five resolvers
   this proposal replaces.
+- **A sixth independently-drifted lookup path, found 2026-09-27:** `FindCallersAsync`'s
+  no-`contextSnippet` declaration lookup (`SymbolNavigationEngine.cs:1462-1470`) builds its own
+  `decls` candidate list with the same shape as the dispatch tables above, but is not one of them --
+  it lives inside a resolver-adjacent method, not a resolver or a dispatch table already named:
+  ```csharp
+  var decls = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+      .Where(m => m switch
+      {
+          MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
+          PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
+          FieldDeclarationSyntax fd => fd.Declaration.Variables.Any(v => v.Identifier.Text == symbolName),
+          _ => false
+      }).ToList();
+  ```
+  `ClassDeclarationSyntax` (and every other `TypeDeclarationSyntax`) is a `MemberDeclarationSyntax`,
+  so it *is* walked by the `OfType<MemberDeclarationSyntax>()` query, but the switch's `_ => false`
+  arm silently drops it -- there is no `ClassDeclarationSyntax` case. Confirmed live: `Member(remove)`
+  on a top-level class (`ApiGenerationEngineTests`/`ApiAutomationEngineTests`, during the group-8
+  test-consolidation task) failed with `FindCallers: symbolName 'ApiGenerationEngineTests' was not
+  found declared in '...'` even though the class plainly existed and `GetFileOutline` confirmed it
+  immediately beforehand -- because `RefactoringStructuralImpl.cs:453`'s caller-precheck calls
+  `FindCallersAsync(filePathResolved, memberName, ...)` ahead of every `Member(remove)`, and this is
+  the query that precheck depends on. `skipPrecheck: true` worked around it (correctly -- that flag
+  exists precisely to skip this check), but the deeper implication is that the precheck itself cannot
+  see a class's real callers either, for the identical reason -- it was never a *class*-level caller
+  check to begin with, since the filter that builds its candidate list only understands
+  method/property/field. Full incident log: [[project_member_remove_dispatch_table_drift_pattern]]'s
+  2026-09-27 update. This is exactly the class of bug `ResolveCandidates` (section 1 below) is meant
+  to make structurally impossible -- a single, kind-complete declaration query used everywhere,
+  instead of a seventh hand-written subset appearing the next time a caller-precheck needs one.
 
 Several mutation methods -- `AddAttributeAsync` (`RefactoringEngine.cs:2730`), `ReplaceAttributeAsync`
 (`:2908`), `RemoveAttributeAsync` (`:3012`) -- rely on a **member-then-type fallback chain**:
@@ -223,10 +253,14 @@ sweep (see that doc's "Migration path" section for the pattern being mirrored):
    declaration-kind dispatch-table unification from
    [[project_member_remove_dispatch_table_drift_pattern]] as part of the same pass, since both are
    instances of the identical fragmentation problem (independently-maintained "which kinds/candidates
-   does this code recognize" logic). This is expected to be a multi-session effort given the call
-   count -- do not attempt in one pass, and this doc does not pre-specify the sweep's internal
-   ordering; track sweep progress the same way the read chokepoint's migration doc proposes (obsolete
-   warning count), not as a hand-maintained list here.
+   does this code recognize" logic). This sweep also covers `FindCallersAsync`'s `decls` filter
+   (`SymbolNavigationEngine.cs:1462-1470`, the sixth drifted path documented in Motivation above) --
+   its no-`contextSnippet` declaration lookup should call `ResolveCandidates` and filter/select from
+   the full candidate list instead of maintaining its own `MethodDeclarationSyntax`/
+   `PropertyDeclarationSyntax`/`FieldDeclarationSyntax`-only switch. This is expected to be a
+   multi-session effort given the call count -- do not attempt in one pass, and this doc does not
+   pre-specify the sweep's internal ordering; track sweep progress the same way the read chokepoint's
+   migration doc proposes (obsolete warning count), not as a hand-maintained list here.
 4. Only after the sweep is substantially complete should the five old resolvers actually be deleted.
    Until then they coexist with `ResolveCandidates`, calling into shared logic where practical to
    avoid the two families of resolver silently drifting apart from each other during the transition
@@ -253,7 +287,40 @@ sweep (see that doc's "Migration path" section for the pattern being mirrored):
 
 ## Status
 
-Design proposal only -- not implemented. Supersedes/fulfills
+Implementation in progress. Step 1 (new types, `ResolveCandidates`,
+`ResolveCandidatesWithSemanticAsync`, the four disambiguation helpers, five old resolvers marked
+`[Obsolete]`) landed 2026-09-27. Step 3's sweep is underway file-by-file, one commit per file:
+`RefactoringEngine.cs` (29 call sites) and the single call site in
+`RoslynSentinel.Advanced/AdvancedRefactoringEngine.cs` are done as of 2026-09-27/28.
+
+**A real gap found during the sweep, not anticipated by the original design:** every remaining
+production call site of `LocateSymbolAsync` --
+`RoslynSentinel.Basic/CompilerErrorLookupHelper.cs` (6 sites, "did you mean" diagnostic text for
+CS0103/missing-member/CS0122/duplicate-definition errors), `RoslynSentinel.Basic/SymbolNavigationImpl.cs`
+(the `LocateSymbol` MCP tool's own implementation), `RoslynSentinel.Basic/SymbolRelationshipImpl.cs`
+(`QuerySymbolRelationships`), and `RoslynSentinel.Basic/DiscoveryEngine.cs`
+(`FindAttributeUsagesAsync`) -- consumes `SymbolLocation`'s rich cross-solution metadata fields
+directly: `DocCommentId`, `ContainingNamespace`, `ProjectName`, `Signature`, `FilePath`, `Line`,
+`SymbolKind` (as a formatted string, e.g. `resolved.All(s => MemberSymbolKinds.Contains(s.SymbolKind))`
+in `SymbolRelationshipImpl.cs`). None of these fields exist on `SemanticSymbolCandidate` (section 3
+above), which only carries `Symbol, ContainingAssembly, FilePath, IsFromSource` -- deliberately
+minimal, since it was designed for the disambiguate-then-resolve-a-single-target use case, not for
+solution-wide "did you mean" / relationship-discovery output that a caller displays or serializes
+wholesale.
+
+These four call sites are a *different* consumer shape than the five resolvers this proposal
+replaces: they were never doing candidate disambiguation (picking one target to mutate) in the
+first place -- they use `LocateSymbolAsync`'s full result list as the answer itself. Migrating them
+would mean either (a) inlining `ISymbol`-to-string derivation logic for 6+ fields at 4+ call sites
+(duplicating formatting logic the proposal's whole point was to stop duplicating), or (b) extending
+`SemanticSymbolCandidate` with those fields as a follow-on design decision. Deliberately left
+unmigrated and `LocateSymbolAsync` left un-swept for these 4 sites pending that decision -- this is
+not an oversight, and not a "the sweep missed these" situation; re-attempting them the same way as
+the other sites is the wrong move without resolving the shape mismatch first. `LocateSymbolAsync`
+itself stays `[Obsolete]` (warning only) in the meantime since most of its callers *have* migrated;
+this residual set is the reason it cannot yet be deleted per step 4.
+
+Supersedes/fulfills
 `docs/current/proposal_unify_member_lookup_paths.md`'s dispatch-table-drift design notes, whose
 content on the three declaration-kind switch tables is folded into section 6 above rather than kept
 as a separate document; that content remains directly relevant (it is the narrower, already-analyzed
@@ -279,3 +346,6 @@ still-open bug.
   now-fixed incident.
 - `docs/current/blockers/resolved/blocking_error_member_remove_false_not_found.md` -- third
   same-symptom incident, distinct cause, the one that first raised unification as a question.
+- [[project_member_remove_dispatch_table_drift_pattern]]'s 2026-09-27 update -- fifth same-symptom
+  incident (top-level class removal), root-caused to `FindCallersAsync`'s `decls` filter, the sixth
+  drifted lookup path folded into this proposal's Motivation and migration scope.
