@@ -1,6 +1,6 @@
 # `MoveMember`/`PreviewInstanceMoveCallSitesAsync` reports `NoCandidateIntroducible` for call sites that have a correctly-typed, correctly-initialized sibling field in scope
 
-**Status:** FIXED 2026-09-28, commit `PENDING_COMMIT_HASH` -- root cause was a cross-compilation
+**Status:** FIXED 2026-09-28, commit `0629d1ccf8ac809e2ca8b8d1feca4e3552c06240` -- root cause was a cross-compilation
 `ITypeSymbol` identity mismatch, not the leading `LookupSymbols`-position hypothesis this doc
 originally proposed (that hypothesis was tested directly and refuted).
 
