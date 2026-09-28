@@ -9,47 +9,38 @@ namespace RoslynSentinel.Server.Advanced;
 [McpServerToolType]
 public class ModernizationTools
 {
-    private readonly ModernizationEngine _modernizationEngine;
-    private readonly ModernizationUpgradeEngine _modernizationUpgradeEngine;
-    private readonly ModernLoggingEngine _modernLoggingEngine;
+    private readonly SyntaxModernizationEngine _modernizationEngine;
     private readonly SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private readonly LogicOptimizationEngine _logicOptimizationEngine;
     private readonly CodeStyleEngine _codeStyleEngine;
     private readonly CodeHealingEngine _codeHealingEngine;
     private readonly AdvancedLogicEngine _advancedLogicEngine;
     private readonly IDEStyleEngine _ideStyleEngine;
-    private readonly ImmutabilityEngine _immutabilityEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly ISolutionProvider _workspaceManager;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<ModernizationTools> _logger;
 
     public ModernizationTools(
-        ModernizationEngine modernizationEngine,
-        ModernizationUpgradeEngine modernizationUpgradeEngine,
-        ModernLoggingEngine modernLoggingEngine,
+        SyntaxModernizationEngine modernizationEngine,
         SyntaxUpgradeEngine syntaxUpgradeEngine,
         LogicOptimizationEngine logicOptimizationEngine,
         CodeStyleEngine codeStyleEngine,
         CodeHealingEngine codeHealingEngine,
         AdvancedLogicEngine advancedLogicEngine,
         IDEStyleEngine ideStyleEngine,
-        ImmutabilityEngine immutabilityEngine,
         AsyncOptimizationEngine asyncOptimizationEngine,
         ISolutionProvider workspaceManager,
         SentinelConfiguration config,
         ILogger<ModernizationTools> logger)
     {
         _modernizationEngine = modernizationEngine;
-        _modernizationUpgradeEngine = modernizationUpgradeEngine;
-        _modernLoggingEngine = modernLoggingEngine;
         _syntaxUpgradeEngine = syntaxUpgradeEngine;
         _logicOptimizationEngine = logicOptimizationEngine;
         _codeStyleEngine = codeStyleEngine;
         _codeHealingEngine = codeHealingEngine;
         _advancedLogicEngine = advancedLogicEngine;
         _ideStyleEngine = ideStyleEngine;
-        _immutabilityEngine = immutabilityEngine;
         _asyncOptimizationEngine = asyncOptimizationEngine;
         _workspaceManager = workspaceManager;
         _config = config;

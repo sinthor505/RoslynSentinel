@@ -18,17 +18,12 @@
 //   B20 -> LogicOptimizationEngine.AddGuardClausesAsync: nullable params got null guards
 //   B04 -> AntiPatternEngine.DetectMissingCancellationToken: zero-param async methods skipped
 //   B16 -> SecurityAndSafetyEngine.DetectMissingNullChecksAsync: expression-bodied methods skipped
-
 #pragma warning disable CS8618
-
 using Microsoft.Extensions.Logging.Abstractions;
-
 using NUnit.Framework;
-
 using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Battery;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // B08 -> DeadCodeEngine: written-but-never-read must be flagged as unused
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,7 +32,6 @@ public class B08_DeadCode_WrittenButNeverRead
 {
     private IWorkspaceManager _workspaceManager = null!;
     private DeadCodeEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -47,7 +41,6 @@ public class B08_DeadCode_WrittenButNeverRead
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task DetectUnusedLocalVariables_VariableWrittenButNeverRead_IsReported()
     {
@@ -63,13 +56,9 @@ public class B08_DeadCode_WrittenButNeverRead
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("C.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectUnusedLocalVariablesAsync("C.cs");
-
-        Assert.That(reports.Count, Is.GreaterThanOrEqualTo(1),
-            "A variable that is assigned but never read must be reported as unused.");
-        Assert.That(reports.Any(r => r.SymbolName == "unused"), Is.True,
-            "The 'unused' variable must be in the report.");
+        Assert.That(reports.Count, Is.GreaterThanOrEqualTo(1), "A variable that is assigned but never read must be reported as unused.");
+        Assert.That(reports.Any(r => r.SymbolName == "unused"), Is.True, "The 'unused' variable must be in the report.");
     }
 
     [Test]
@@ -85,11 +74,8 @@ public class B08_DeadCode_WrittenButNeverRead
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("C.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectUnusedLocalVariablesAsync("C.cs");
-
-        Assert.That(reports.Any(r => r.SymbolName == "x"), Is.False,
-            "A variable that is both written and read must NOT be reported.");
+        Assert.That(reports.Any(r => r.SymbolName == "x"), Is.False, "A variable that is both written and read must NOT be reported.");
     }
 }
 
@@ -100,18 +86,14 @@ public class B08_DeadCode_WrittenButNeverRead
 public class B02_Immutability_ConstFieldNotReadonly
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private ImmutabilityEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ImmutabilityEngine(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task MakeClassImmutable_ClassWithConstField_DoesNotAddReadonlyToConst()
     {
@@ -126,16 +108,11 @@ public class B02_Immutability_ConstFieldNotReadonly
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Config.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Config.cs", "Config");
-
-        Assert.That(result.UpdatedText, Does.Not.Contain("const readonly"),
-            "const fields must NOT receive a readonly modifier.");
-        Assert.That(result.UpdatedText, Does.Contain("const int MaxRetries"),
-            "const field must remain unchanged.");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Config.cs", "Config");
+        Assert.That(result.UpdatedText, Does.Not.Contain("const readonly"), "const fields must NOT receive a readonly modifier.");
+        Assert.That(result.UpdatedText, Does.Contain("const int MaxRetries"), "const field must remain unchanged.");
         // The non-const field should get readonly
-        Assert.That(result.UpdatedText, Does.Contain("readonly string _name"),
-            "Non-const mutable field should receive readonly.");
+        Assert.That(result.UpdatedText, Does.Contain("readonly string _name"), "Non-const mutable field should receive readonly.");
     }
 }
 
@@ -147,7 +124,6 @@ public class B01_Instrumentation_ValidThrowStatement
 {
     private IWorkspaceManager _workspaceManager = null!;
     private InstrumentationEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -157,7 +133,6 @@ public class B01_Instrumentation_ValidThrowStatement
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task AddTryCatchToMethod_GeneratesValidThrowStatement()
     {
@@ -173,18 +148,13 @@ public class B01_Instrumentation_ValidThrowStatement
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AddTryCatchToMethodAsync("Service.cs", "Process");
-
         // The output must not contain a bare expression-statement "throw;"  written as
         // ExpressionStatement; instead it must appear as the ThrowStatement "throw;"
-        Assert.That(result.UpdatedText, Does.Contain("throw;"),
-            "catch block must end with a valid throw; rethrow statement.");
-        Assert.That(result.UpdatedText, Does.Contain("catch"),
-            "Output must contain a catch clause.");
+        Assert.That(result.UpdatedText, Does.Contain("throw;"), "catch block must end with a valid throw; rethrow statement.");
+        Assert.That(result.UpdatedText, Does.Contain("catch"), "Output must contain a catch clause.");
         // Must not contain syntax errors from invalid throw expression
-        Assert.That(result.UpdatedText, Does.Not.Contain("throw )"),
-            "Output must not contain broken throw expression syntax.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("throw )"), "Output must not contain broken throw expression syntax.");
     }
 
     [Test]
@@ -198,12 +168,9 @@ public class B01_Instrumentation_ValidThrowStatement
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Worker.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AddTryCatchToClassAsync("Worker.cs", "Worker");
-
         var throwCount = result.UpdatedText!.Split("throw;").Length - 1;
-        Assert.That(throwCount, Is.GreaterThanOrEqualTo(2),
-            "Each public method's catch block must contain a valid throw;");
+        Assert.That(throwCount, Is.GreaterThanOrEqualTo(2), "Each public method's catch block must contain a valid throw;");
     }
 }
 
@@ -216,7 +183,6 @@ public class B03_ArchitecturalEngine_ValidMemberAccess
 {
     private IWorkspaceManager _workspaceManager = null!;
     private ArchitecturalEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -226,7 +192,6 @@ public class B03_ArchitecturalEngine_ValidMemberAccess
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task ConvertToBackgroundService_ProducesValidMemberAccess()
     {
@@ -244,16 +209,12 @@ public class B03_ArchitecturalEngine_ValidMemberAccess
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("MyWorker.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertToBackgroundServiceAsync("MyWorker.cs", "MyWorker");
-
         // The result must contain "stoppingToken.IsCancellationRequested" as proper member access
-        Assert.That(result.UpdatedText, Does.Contain("stoppingToken.IsCancellationRequested"),
-            "Output must reference stoppingToken.IsCancellationRequested via member access.");
+        Assert.That(result.UpdatedText, Does.Contain("stoppingToken.IsCancellationRequested"), "Output must reference stoppingToken.IsCancellationRequested via member access.");
         // Crucially, the dotted form must NOT appear inside an IdentifierName literal string
         // in the output (which would indicate un-parsed invalid syntax)
-        Assert.That(result.UpdatedText, Does.Not.Contain("\"stoppingToken.IsCancellationRequested\""),
-            "Output must not contain dotted identifier as a literal string.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("\"stoppingToken.IsCancellationRequested\""), "Output must not contain dotted identifier as a literal string.");
     }
 }
 
@@ -266,7 +227,6 @@ public class B09_AdvancedRefactoring_IsTaskTypeNullGuard
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AdvancedRefactoringEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -276,7 +236,6 @@ public class B09_AdvancedRefactoring_IsTaskTypeNullGuard
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task OptimizeTaskWait_NonTaskDotWait_IsNotRewritten()
     {
@@ -292,11 +251,8 @@ public class B09_AdvancedRefactoring_IsTaskTypeNullGuard
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.OptimizeTaskWaitAsync("Service.cs");
-
-        Assert.That(result.UpdatedText, Does.Contain("_gate.WaitOne()"),
-            "Non-Task .WaitOne() must not be touched by OptimizeTaskWaitAsync.");
+        Assert.That(result.UpdatedText, Does.Contain("_gate.WaitOne()"), "Non-Task .WaitOne() must not be touched by OptimizeTaskWaitAsync.");
     }
 }
 
@@ -314,21 +270,14 @@ public class B18_ContextHelper_CaseSensitiveKeywords
         // and "Object" to match "object", so these valid identifiers were unreachable.
         // After camelCase conversion: "String" -> "string" IS a keyword, so suffix is added.
         // But "MyString" -> "myString" is NOT a keyword and must be returned as-is.
-
         // Use a minimal scope with no declarations
         var emptyScope = Microsoft.CodeAnalysis.CSharp.SyntaxFactory.Block();
-
         var result1 = ContextHelper.GetUniqueVariableName(emptyScope, "MyString");
-        Assert.That(result1, Is.EqualTo("myString"),
-            "'MyString' -> camelCase 'myString' is not a keyword and must be returned as-is.");
-
+        Assert.That(result1, Is.EqualTo("myString"), "'MyString' -> camelCase 'myString' is not a keyword and must be returned as-is.");
         var result2 = ContextHelper.GetUniqueVariableName(emptyScope, "MyObject");
-        Assert.That(result2, Is.EqualTo("myObject"),
-            "'MyObject' -> camelCase 'myObject' is not a keyword and must be returned as-is.");
-
+        Assert.That(result2, Is.EqualTo("myObject"), "'MyObject' -> camelCase 'myObject' is not a keyword and must be returned as-is.");
         var result3 = ContextHelper.GetUniqueVariableName(emptyScope, "MyInt");
-        Assert.That(result3, Is.EqualTo("myInt"),
-            "'MyInt' -> camelCase 'myInt' is not a keyword and must be returned as-is.");
+        Assert.That(result3, Is.EqualTo("myInt"), "'MyInt' -> camelCase 'myInt' is not a keyword and must be returned as-is.");
     }
 
     [Test]
@@ -344,14 +293,10 @@ public class B18_ContextHelper_CaseSensitiveKeywords
             }
             """;
         var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(source);
-        var method = tree.GetRoot().DescendantNodes()
-            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>()
-            .First();
-
+        var method = tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>().First();
         // "myValue" (camelCase of "MyValue") is different from "MyValue" in C# -> no conflict
         var result = ContextHelper.GetUniqueVariableName(method, "myValue");
-        Assert.That(result, Is.EqualTo("myValue"),
-            "'myValue' is case-sensitively distinct from existing 'MyValue' - must not add suffix.");
+        Assert.That(result, Is.EqualTo("myValue"), "'myValue' is case-sensitively distinct from existing 'MyValue' - must not add suffix.");
     }
 
     [Test]
@@ -366,13 +311,9 @@ public class B18_ContextHelper_CaseSensitiveKeywords
             }
             """;
         var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(source);
-        var method = tree.GetRoot().DescendantNodes()
-            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>()
-            .First();
-
+        var method = tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>().First();
         var result = ContextHelper.GetUniqueVariableName(method, "myValue");
-        Assert.That(result, Is.EqualTo("myValue1"),
-            "When exact-case 'myValue' exists, must return 'myValue1'.");
+        Assert.That(result, Is.EqualTo("myValue1"), "When exact-case 'myValue' exists, must return 'myValue1'.");
     }
 }
 
@@ -384,7 +325,6 @@ public class B19_TestingEngine_MSTestSupport
 {
     private IWorkspaceManager _workspaceManager = null!;
     private TestingEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -394,7 +334,6 @@ public class B19_TestingEngine_MSTestSupport
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task GenerateTestSkeleton_MsTestFramework_ProducesTestClassAndTestMethodAttributes()
     {
@@ -408,17 +347,11 @@ public class B19_TestingEngine_MSTestSupport
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var report = await _engine.GenerateTestSkeletonAsync("Calc.cs", "Calculator", framework: "mstest");
-
-        Assert.That(report.Content, Does.Contain("[TestClass]"),
-            "MSTest skeleton must include [TestClass] on the test class.");
-        Assert.That(report.Content, Does.Contain("[TestMethod]"),
-            "MSTest skeleton must include [TestMethod] on each test method.");
-        Assert.That(report.Content, Does.Contain("using Microsoft.VisualStudio.TestTools.UnitTesting;"),
-            "MSTest skeleton must have the correct using directive.");
-        Assert.That(report.Content, Does.Contain("Assert.Fail"),
-            "MSTest skeleton must contain Assert.Fail as the placeholder assertion.");
+        Assert.That(report.Content, Does.Contain("[TestClass]"), "MSTest skeleton must include [TestClass] on the test class.");
+        Assert.That(report.Content, Does.Contain("[TestMethod]"), "MSTest skeleton must include [TestMethod] on each test method.");
+        Assert.That(report.Content, Does.Contain("using Microsoft.VisualStudio.TestTools.UnitTesting;"), "MSTest skeleton must have the correct using directive.");
+        Assert.That(report.Content, Does.Contain("Assert.Fail"), "MSTest skeleton must contain Assert.Fail as the placeholder assertion.");
     }
 
     [Test]
@@ -433,13 +366,9 @@ public class B19_TestingEngine_MSTestSupport
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var report = await _engine.GenerateTestSkeletonAsync("Calc.cs", "Calculator", framework: "xunit");
-
-        Assert.That(report.Content, Does.Contain("[Fact]"),
-            "xUnit skeleton must include [Fact] on each test method.");
-        Assert.That(report.Content, Does.Not.Contain("[TestClass]"),
-            "xUnit skeleton must NOT include [TestClass].");
+        Assert.That(report.Content, Does.Contain("[Fact]"), "xUnit skeleton must include [Fact] on each test method.");
+        Assert.That(report.Content, Does.Not.Contain("[TestClass]"), "xUnit skeleton must NOT include [TestClass].");
     }
 
     [Test]
@@ -454,13 +383,9 @@ public class B19_TestingEngine_MSTestSupport
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var report = await _engine.GenerateTestSkeletonAsync("Calc.cs", "Calculator", framework: "nunit");
-
-        Assert.That(report.Content, Does.Contain("[TestFixture]"),
-            "NUnit skeleton must include [TestFixture] on the test class.");
-        Assert.That(report.Content, Does.Contain("[Test]"),
-            "NUnit skeleton must include [Test] on each test method.");
+        Assert.That(report.Content, Does.Contain("[TestFixture]"), "NUnit skeleton must include [TestFixture] on the test class.");
+        Assert.That(report.Content, Does.Contain("[Test]"), "NUnit skeleton must include [Test] on each test method.");
     }
 }
 
@@ -472,7 +397,6 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
 {
     private IWorkspaceManager _workspaceManager = null!;
     private DocumentationEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -482,7 +406,6 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task GenerateXmlDocStubs_MethodInsideRegion_ReceivesXmlDoc()
     {
@@ -498,13 +421,9 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.GenerateXmlDocumentationStubsAsync("Service.cs");
-
-        Assert.That(result.UpdatedText, Does.Contain("/// <summary>"),
-            "Method inside #region must receive XML doc summary stub.");
-        Assert.That(result.UpdatedText, Does.Contain("param name = \"input\""),
-            "Method inside #region must receive XML doc <param> stub.");
+        Assert.That(result.UpdatedText, Does.Contain("/// <summary>"), "Method inside #region must receive XML doc summary stub.");
+        Assert.That(result.UpdatedText, Does.Contain("param name = \"input\""), "Method inside #region must receive XML doc <param> stub.");
     }
 
     [Test]
@@ -518,12 +437,9 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.GenerateXmlDocumentationStubsAsync("Service.cs");
-
         var summaryCount = result.UpdatedText!.Split("/// <summary>").Length - 1;
-        Assert.That(summaryCount, Is.EqualTo(1),
-            "Methods that already have XML docs must not receive a second summary stub.");
+        Assert.That(summaryCount, Is.EqualTo(1), "Methods that already have XML docs must not receive a second summary stub.");
     }
 }
 
@@ -534,18 +450,16 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
 public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private ModernizationEngine _engine = null!;
-
+    private SyntaxModernizationEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ModernizationEngine(_workspaceManager, new SentinelConfiguration());
+        _engine = new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task ClassToRecord_SimpleClass_PropertiesNotDuplicated()
     {
@@ -559,20 +473,15 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Point.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ClassToRecordAsync("Point.cs", "Point");
-
         // Should produce: public record Point(int X, int Y)
-        Assert.That(result.UpdatedText, Does.Contain("record Point"),
-            "Output must contain a record declaration.");
+        Assert.That(result.UpdatedText, Does.Contain("record Point"), "Output must contain a record declaration.");
         // Count occurrences of "X" as a standalone word in the record output
         // There should be exactly ONE declaration of X (either as positional param or body member)
         var xCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"\bint X\b").Count;
-        Assert.That(xCount, Is.EqualTo(1),
-            "Property X must appear exactly once - no duplicate declarations.");
+        Assert.That(xCount, Is.EqualTo(1), "Property X must appear exactly once - no duplicate declarations.");
         var yCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"\bint Y\b").Count;
-        Assert.That(yCount, Is.EqualTo(1),
-            "Property Y must appear exactly once - no duplicate declarations.");
+        Assert.That(yCount, Is.EqualTo(1), "Property Y must appear exactly once - no duplicate declarations.");
     }
 
     [Test]
@@ -586,13 +495,9 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Shape.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ClassToRecordAsync("Shape.cs", "Shape");
-
-        Assert.That(result.UpdatedText, Does.Contain("record Shape"),
-            "Output must contain a record declaration.");
-        Assert.That(result.UpdatedText, Does.Contain("Area()"),
-            "Non-property member (method) must be preserved in the record.");
+        Assert.That(result.UpdatedText, Does.Contain("record Shape"), "Output must contain a record declaration.");
+        Assert.That(result.UpdatedText, Does.Contain("Area()"), "Non-property member (method) must be preserved in the record.");
     }
 }
 
@@ -603,18 +508,16 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
 public class B10_ModernizationEngine_OrChainFullPattern
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private ModernizationEngine _engine = null!;
-
+    private SyntaxModernizationEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ModernizationEngine(_workspaceManager, new SentinelConfiguration());
+        _engine = new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task ConvertToPatternMatching_OrChainWithThreeValues_AllValuesPresent()
     {
@@ -631,21 +534,15 @@ public class B10_ModernizationEngine_OrChainFullPattern
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("C.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertToPatternAsync("C.cs");
-
         // The result must contain all three values in some form
-        Assert.That(result.UpdatedText, Does.Contain("1"),
-            "Converted OR pattern must retain the first value (1).");
-        Assert.That(result.UpdatedText, Does.Contain("2"),
-            "Converted OR pattern must retain the second value (2).");
-        Assert.That(result.UpdatedText, Does.Contain("3"),
-            "Converted OR pattern must retain the third value (3).");
+        Assert.That(result.UpdatedText, Does.Contain("1"), "Converted OR pattern must retain the first value (1).");
+        Assert.That(result.UpdatedText, Does.Contain("2"), "Converted OR pattern must retain the second value (2).");
+        Assert.That(result.UpdatedText, Does.Contain("3"), "Converted OR pattern must retain the third value (3).");
         // If actual OR-pattern conversion occurred it should contain "or"
         if (result.UpdatedText!.Contains("is"))
         {
-            Assert.That(result.UpdatedText, Does.Contain("or").Or.Contain("||"),
-                "If converted to is-pattern, must include all values with 'or'; otherwise chain preserved.");
+            Assert.That(result.UpdatedText, Does.Contain("or").Or.Contain("||"), "If converted to is-pattern, must include all values with 'or'; otherwise chain preserved.");
         }
     }
 }
@@ -658,7 +555,6 @@ public class B20_LogicOptimization_NullableParamNoGuard
 {
     private IWorkspaceManager _workspaceManager = null!;
     private LogicOptimizationEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -668,7 +564,6 @@ public class B20_LogicOptimization_NullableParamNoGuard
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task AddGuardClauses_NullableStringParam_DoesNotAddNullGuard()
     {
@@ -683,11 +578,8 @@ public class B20_LogicOptimization_NullableParamNoGuard
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Processor.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AddGuardClausesAsync("Processor.cs", "Handle");
-
-        Assert.That(result.UpdatedText, Does.Not.Contain("ThrowIfNull(optionalName)"),
-            "Nullable parameter 'string?' must NOT receive an ArgumentNullException.ThrowIfNull guard.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("ThrowIfNull(optionalName)"), "Nullable parameter 'string?' must NOT receive an ArgumentNullException.ThrowIfNull guard.");
     }
 
     [Test]
@@ -702,11 +594,8 @@ public class B20_LogicOptimization_NullableParamNoGuard
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Processor.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AddGuardClausesAsync("Processor.cs", "Handle");
-
-        Assert.That(result.UpdatedText, Does.Contain("ThrowIfNull"),
-            "Non-nullable 'string' parameter must receive an ArgumentNullException guard.");
+        Assert.That(result.UpdatedText, Does.Contain("ThrowIfNull"), "Non-nullable 'string' parameter must receive an ArgumentNullException guard.");
     }
 }
 
@@ -718,7 +607,6 @@ public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -728,7 +616,6 @@ public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task DetectAntiPatterns_ZeroParamPublicAsyncMethod_IsFlagged()
     {
@@ -746,13 +633,8 @@ public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Service.cs");
-
-        Assert.That(findings.Any(f =>
-                f.Pattern == "MissingCancellationToken" &&
-                f.Snippet.Contains("LoadDataAsync")), Is.True,
-            "A public async Task method with zero parameters must be flagged for missing CancellationToken.");
+        Assert.That(findings.Any(f => f.Pattern == "MissingCancellationToken" && f.Snippet.Contains("LoadDataAsync")), Is.True, "A public async Task method with zero parameters must be flagged for missing CancellationToken.");
     }
 
     [Test]
@@ -770,13 +652,8 @@ public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Service.cs");
-
-        Assert.That(findings.Any(f =>
-                f.Pattern == "MissingCancellationToken" &&
-                f.Snippet.Contains("LoadDataAsync")), Is.False,
-            "A method that already has CancellationToken must NOT be flagged.");
+        Assert.That(findings.Any(f => f.Pattern == "MissingCancellationToken" && f.Snippet.Contains("LoadDataAsync")), Is.False, "A method that already has CancellationToken must NOT be flagged.");
     }
 }
 
@@ -788,7 +665,6 @@ public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
 {
     private IWorkspaceManager _workspaceManager = null!;
     private SecurityAndSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -798,7 +674,6 @@ public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task DetectMissingNullChecks_ExpressionBodiedMethod_WithReferenceParam_IsFlagged()
     {
@@ -811,11 +686,8 @@ public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Utils.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.DetectMissingNullChecksAsync("Utils.cs");
-
-        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.True,
-            "Expression-bodied method with non-nullable reference param used in body must be flagged.");
+        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.True, "Expression-bodied method with non-nullable reference param used in body must be flagged.");
     }
 
     [Test]
@@ -829,11 +701,8 @@ public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Utils.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.DetectMissingNullChecksAsync("Utils.cs");
-
-        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.False,
-            "Expression-bodied method using s?. on the parameter must NOT be flagged - it is null-safe.");
+        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.False, "Expression-bodied method using s?. on the parameter must NOT be flagged - it is null-safe.");
     }
 
     [Test]
@@ -847,10 +716,7 @@ public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Utils.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.DetectMissingNullChecksAsync("Utils.cs");
-
-        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.False,
-            "Expression-bodied method with nullable (string?) parameter must NOT be flagged.");
+        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.False, "Expression-bodied method with nullable (string?) parameter must NOT be flagged.");
     }
 }

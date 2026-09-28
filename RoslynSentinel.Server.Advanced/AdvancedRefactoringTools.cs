@@ -78,7 +78,7 @@ public class AdvancedRefactoringTools
         GranularRefactoringEngine granularRefactoringEngine,
         RefinementEngine refinementEngine,
         AdvancedTypeEngine advancedTypeEngine,
-        ModernizationEngine modernizationEngine,
+        SyntaxModernizationEngine modernizationEngine,
         MsToolAugmentEngine augmentEngine,
         CodeGenerationEngine codeGenerationEngine,
         SymbolNavigationEngine symbolNavigationEngine,

@@ -35,7 +35,6 @@ public class ComprehensiveToolTests
     private GranularRefactoringEngine _granularRefactoringEngine;
     private HealthOrchestrationEngine _healthOrchestrationEngine;
     private IDEStyleEngine _ideStyleEngine;
-    private ImmutabilityEngine _immutabilityEngine;
     private ImpactAnalyzer _impactAnalyzer;
     private IntelligenceTools _intelligenceTools;
     private InventoryEngine _inventoryEngine;
@@ -43,10 +42,8 @@ public class ComprehensiveToolTests
     private LogicOptimizationEngine _logicOptimizationEngine;
     private MappingEngine _mappingEngine;
     private MetricsEngine _metricsEngine;
-    private ModernizationEngine _modernizationEngine;
+    private SyntaxModernizationEngine _modernizationEngine;
     private ModernizationTools _modernizationTools;
-    private ModernizationUpgradeEngine _modernizationUpgradeEngine;
-    private ModernLoggingEngine _modernLoggingEngine;
     private PerformanceEngine _performanceEngine;
     private ProjectStructureEngine _projectStructureEngine;
     private QualityTools _qualityTools;
@@ -95,15 +92,12 @@ public class ComprehensiveToolTests
         _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
         _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
-        _immutabilityEngine = new ImmutabilityEngine(_workspaceManager);
         _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
         _metricsEngine = new MetricsEngine(_workspaceManager);
-        _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
-        _modernizationUpgradeEngine = new ModernizationUpgradeEngine(_workspaceManager);
-        _modernLoggingEngine = new ModernLoggingEngine(_workspaceManager);
+        _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
         _performanceEngine = new PerformanceEngine(_workspaceManager);
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
         _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
@@ -156,7 +150,7 @@ public class ComprehensiveToolTests
             _config,
             NullLogger<IntelligenceTools>.Instance);
 
-        _modernizationTools = new ModernizationTools(_modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine, _syntaxUpgradeEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        _modernizationTools = new ModernizationTools(_modernizationEngine, _syntaxUpgradeEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
 
         _qualityTools = new QualityTools(_testingEngine,
             _controlFlowEngine,

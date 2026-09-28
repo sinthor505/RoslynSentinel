@@ -1,11 +1,9 @@
 // Battery #11 -> ImmutabilityEngine / ThreadSafetyEngine / AsyncSafetyEngine / DeadCodeEngine
 // Adds dedicated XxxEngineTests fixture classes for 4 more engine classes.
 // All tests run in-memory via AdhocWorkspace (no MSBuild/project-file loading).
-
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Battery;
-
 // ════════════════════════════════════════════════════════════════════════════════
 // A. ImmutabilityEngine
 // ════════════════════════════════════════════════════════════════════════════════
@@ -13,39 +11,29 @@ namespace RoslynSentinel.Tests.Battery;
 public class ImmutabilityEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private ImmutabilityEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ImmutabilityEngine(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task MakeClassImmutable_ClassWithMutableField_AddsReadonlyModifier()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Entity.cs", "public class Entity { private int _age; }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", "public class Entity { private int _age; }")]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Entity.cs", "Entity");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Entity.cs", "Entity");
         Assert.That(result.UpdatedText, Does.Contain("readonly"), "Mutable field should get readonly modifier");
     }
 
     [Test]
     public async Task MakeClassImmutable_ClassWithSetterProperty_ConvertsToInit()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Entity.cs", "public class Entity { public string Name { get; set; } }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", "public class Entity { public string Name { get; set; } }")]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Entity.cs", "Entity");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Entity.cs", "Entity");
         Assert.That(result.UpdatedText, Does.Contain("init"), "set accessor should be replaced with init");
         Assert.That(result.UpdatedText, Does.Not.Contain(" set;"), "No plain setter should remain");
     }
@@ -53,12 +41,9 @@ public class ImmutabilityEngineTests
     [Test]
     public async Task MakeClassImmutable_UnknownFile_ReturnsEmptyString()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Other.cs", "public class Other {}")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("DoesNotExist.cs", "Entity");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("DoesNotExist.cs", "Entity");
         Assert.That(result.UpdatedText, Is.Null, "Unknown file should return null UpdatedText, not throw");
     }
 }
@@ -71,7 +56,6 @@ public class ThreadSafetyEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private ThreadSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -81,16 +65,12 @@ public class ThreadSafetyEngineTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task MakeMethodThreadSafe_SimpleMethod_AddsLockStatement()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Counter.cs", "public class Counter { private int _count; public void Increment() { _count++; } }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Counter.cs", "public class Counter { private int _count; public void Increment() { _count++; } }")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.MakeMethodThreadSafeAsync("Counter.cs", "Increment");
-
         Assert.That(result.UpdatedText, Does.Contain("lock"), "Method body should be wrapped in a lock statement");
         Assert.That(result.UpdatedText, Does.Contain("_lock"), "A lock object field should be added");
         Assert.That(result.UpdatedText!, Does.Not.StartWith("// ErrorDetails:"), "Should not return an error comment");
@@ -99,24 +79,18 @@ public class ThreadSafetyEngineTests
     [Test]
     public async Task MakeMethodThreadSafe_UnknownFile_ReturnsErrorComment()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Counter.cs", "public class Counter { public void Inc() { } }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Counter.cs", "public class Counter { public void Inc() { } }")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.MakeMethodThreadSafeAsync("DoesNotExist.cs", "Inc");
-
         Assert.That(result.Message, Does.StartWith("// ErrorDetails:"), "Unknown file should return error comment");
     }
 
     [Test]
     public async Task MakeMethodThreadSafe_UnknownMethod_ReturnsErrorComment()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Counter.cs", "public class Counter { public void Inc() { } }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Counter.cs", "public class Counter { public void Inc() { } }")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.MakeMethodThreadSafeAsync("Counter.cs", "NonExistentMethod");
-
         Assert.That(result.Message, Does.StartWith("// ErrorDetails:"), "Unknown method should return error comment");
         Assert.That(result.Message, Does.Contain("NonExistentMethod"), "ErrorDetails should mention the missing method name");
     }
@@ -130,7 +104,6 @@ public class AsyncSafetyEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -140,7 +113,6 @@ public class AsyncSafetyEngineTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Async.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -157,10 +129,8 @@ public class EventHandler
     public async void OnButtonClicked() { await System.Threading.Tasks.Task.Delay(1); }
 }");
         var reports = await _engine.DetectAsyncVoidMethodsAsync("Async.cs");
-
         Assert.That(reports, Is.Not.Empty, "async void method should be reported");
-        Assert.That(reports.Any(r => r.MethodName == "OnButtonClicked"), Is.True,
-            "Should report the async void method by name");
+        Assert.That(reports.Any(r => r.MethodName == "OnButtonClicked"), Is.True, "Should report the async void method by name");
     }
 
     [Test]
@@ -173,7 +143,6 @@ public class Service
     public async Task RunAsync() { await System.Threading.Tasks.Task.Delay(1); }
 }");
         var reports = await _engine.DetectAsyncVoidMethodsAsync("Async.cs");
-
         Assert.That(reports, Is.Empty, "async Task methods should NOT be reported");
     }
 
@@ -190,7 +159,6 @@ public class Worker
     }
 }");
         var reports = await _engine.FindTaskYieldUsageAsync("Async.cs");
-
         Assert.That(reports, Is.Not.Empty, "Task.Yield() call should be flagged");
         Assert.That(reports.Any(r => r.MethodName == "DoWorkAsync"), Is.True);
     }
@@ -204,7 +172,6 @@ public class DeadCodeEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private DeadCodeEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -214,21 +181,17 @@ public class DeadCodeEngineTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task FindUnusedPrivateMembers_NeverCalledPrivateMethod_ReportsIt()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", @"
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", @"
 public class Service
 {
     private void NeverCalled() { }
     public void Run() { }
 }")]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindUnusedPrivateMembersAsync("Service.cs", "Service");
-
         Assert.That(reports, Is.Not.Empty, "NeverCalled should be reported as dead code");
         Assert.That(reports.Any(r => r.SymbolName == "NeverCalled"), Is.True);
     }
@@ -236,29 +199,22 @@ public class Service
     [Test]
     public async Task FindUnusedPrivateMembers_PrivateMethodCalledFromPublic_ReturnsEmpty()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", @"
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", @"
 public class Service
 {
     private void Helper() { }
     public void Run() { Helper(); }
 }")]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindUnusedPrivateMembersAsync("Service.cs", "Service");
-
-        Assert.That(reports.Any(r => r.SymbolName == "Helper"), Is.False,
-            "Used private method should NOT be reported as dead code");
+        Assert.That(reports.Any(r => r.SymbolName == "Helper"), Is.False, "Used private method should NOT be reported as dead code");
     }
 
     [Test]
     public async Task FindUnusedPrivateMembers_UnknownFile_ThrowsFileNotFound()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Service { }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { }")]);
         _workspaceManager.SetTestSolution(solution);
-
-        Assert.ThrowsAsync<FileNotFoundException>(() =>
-            _engine.FindUnusedPrivateMembersAsync("DoesNotExist.cs", "Service"));
+        Assert.ThrowsAsync<FileNotFoundException>(() => _engine.FindUnusedPrivateMembersAsync("DoesNotExist.cs", "Service"));
     }
 }

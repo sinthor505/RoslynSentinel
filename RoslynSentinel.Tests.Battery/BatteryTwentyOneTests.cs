@@ -1,21 +1,16 @@
 // Battery #21 -> ModernizationTools
 // Tests all 26 public methods of ModernizationTools in-memory via TestSolutionBuilder.
-
 using Microsoft.Extensions.Logging.Abstractions;
-
 using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
-
 [TestFixture]
 public class BatteryTwentyOneTests
 {
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
-    private ModernizationEngine _modernizationEngine;
-    private ModernizationUpgradeEngine _modernizationUpgradeEngine;
-    private ModernLoggingEngine _modernLoggingEngine;
+    private SyntaxModernizationEngine _modernizationEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     // private AnalysisEngine _analysisEngine;
     private LogicOptimizationEngine _logicOptimizationEngine;
@@ -23,10 +18,8 @@ public class BatteryTwentyOneTests
     private CodeHealingEngine _codeHealingEngine;
     private AdvancedLogicEngine _advancedLogicEngine;
     private IDEStyleEngine _ideStyleEngine;
-    private ImmutabilityEngine _immutabilityEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private ModernizationTools _tools;
-
     private const string RichSource = @"
 using System;
 using System.Collections.Generic;
@@ -99,7 +92,6 @@ public class OrderService : IOrderService
     public async Task<Order> GetOrderAsync(int id) => await Task.FromResult(new Order(id, ""test"", _logger));
     public async Task SaveAsync(Order order) => await Task.CompletedTask;
 }";
-
     private const string AsyncSource = @"
 using System;
 using System.Threading;
@@ -133,34 +125,24 @@ public class Worker
         return ""data"";
     }
 }";
-
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
-        _modernizationUpgradeEngine = new ModernizationUpgradeEngine(_workspaceManager);
-        _modernLoggingEngine = new ModernLoggingEngine(_workspaceManager);
+        _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager, _config);
         _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
-        _immutabilityEngine = new ImmutabilityEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _tools = new ModernizationTools(
-            _modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine,
-            _syntaxUpgradeEngine, _logicOptimizationEngine,
-            _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine,
-            _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine,
-            _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        _tools = new ModernizationTools(_modernizationEngine, _syntaxUpgradeEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -168,7 +150,6 @@ public class Worker
     }
 
     // --- FixThreadSleep (via CodeHealingEngine) ---
-
     [Test]
     public async Task FixThreadSleep_FileWithThreadSleep_ReturnsUpdatedSource()
     {
@@ -185,7 +166,6 @@ public class Worker
     }
 
     // --- AddBraces (via SyntaxUpgradeEngine) ---
-
     [Test]
     public async Task AddBraces_FileWithBracelessStatements_ReturnsUpdatedSource()
     {
@@ -204,7 +184,6 @@ public class Worker
     }
 
     // --- UpgradePatternMatching (via SyntaxUpgradeEngine) ---
-
     [Test]
     public async Task UpgradePatternMatching_ValidFile_ReturnsSource()
     {
@@ -221,7 +200,6 @@ public class Worker
     }
 
     // --- UseIndexFromEnd (via CodeStyleEngine) ---
-
     [Test]
     public async Task UseIndexFromEnd_ValidFile_ReturnsSource()
     {
@@ -238,7 +216,6 @@ public class Worker
     }
 
     // --- UseFieldBackedProperties (via SyntaxUpgradeEngine) ---
-
     [Test]
     public async Task UseFieldBackedProperties_ValidFile_ReturnsSource()
     {
@@ -255,7 +232,6 @@ public class Worker
     }
 
     // --- ClassToRecord (via ModernizationEngine) ---
-
     [Test]
     public async Task ClassToRecord_SimpleClass_ReturnsRecord()
     {
@@ -273,7 +249,6 @@ public class Worker
     }
 
     // --- RecordToClass (via ModernizationEngine) ---
-
     [Test]
     public async Task RecordToClass_SimpleRecord_ReturnsClass()
     {
@@ -291,7 +266,6 @@ public class Worker
     }
 
     // --- SimplifyVerbosity (via CodeStyleEngine) ---
-
     [Test]
     public async Task SimplifyVerbosity_ValidFile_ReturnsSource()
     {
@@ -308,7 +282,6 @@ public class Worker
     }
 
     // --- UpgradeThreadSafety (via CodeStyleEngine) ---
-
     [Test]
     public async Task UpgradeThreadSafety_FileWithLock_ReturnsSource()
     {
@@ -325,7 +298,6 @@ public class Worker
     }
 
     // --- UseTimeProvider (via CodeStyleEngine) ---
-
     [Test]
     public async Task UseTimeProvider_ValidFile_ReturnsSource()
     {
@@ -342,7 +314,6 @@ public class Worker
     }
 
     // --- UpgradeToModernGuards (via SyntaxUpgradeEngine) ---
-
     [Test]
     public async Task UpgradeToModernGuards_ValidFile_ReturnsSource()
     {
@@ -361,7 +332,6 @@ public class Worker
     }
 
     // --- ConvertSwitchToExpression (via SyntaxUpgradeEngine) ---
-
     [Test]
     public async Task ConvertSwitchToExpression_FileWithSwitch_ReturnsSource()
     {
@@ -378,7 +348,6 @@ public class Worker
     }
 
     // --- CleanupImplicitSpans (via SyntaxUpgradeEngine) ---
-
     [Test]
     public async Task CleanupImplicitSpans_ValidFile_ReturnsSource()
     {
@@ -395,12 +364,11 @@ public class Worker
     }
 
     // --- ConvertToSourceGeneratedLogging (via ModernLoggingEngine) ---
-
     [Test]
     public async Task ConvertToSourceGeneratedLogging_ClassWithLogger_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync("Test.cs", "OrderService");
+        var result = await _modernizationEngine.ConvertToSourceGeneratedLoggingAsync("Test.cs", "OrderService");
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
@@ -408,12 +376,10 @@ public class Worker
     public async Task ConvertToSourceGeneratedLogging_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<FileNotFoundException>(
-            async () => await _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync("NonExistent.cs", "OrderService"));
+        Assert.ThrowsAsync<FileNotFoundException>(async () => await _modernizationEngine.ConvertToSourceGeneratedLoggingAsync("NonExistent.cs", "OrderService"));
     }
 
     // --- SimplifyBooleanExpressions (via LogicOptimizationEngine) ---
-
     [Test]
     public async Task SimplifyBooleanExpressions_ValidFile_ReturnsSource()
     {
@@ -430,7 +396,6 @@ public class Worker
     }
 
     // --- SimplifyMemberAccess (via IDEStyleEngine) ---
-
     [Test]
     public async Task SimplifyMemberAccess_ValidFile_ReturnsSource()
     {
@@ -447,13 +412,12 @@ public class Worker
     }
 
     // --- MakeClassImmutable (via ImmutabilityEngine) ---
-
     [Test]
     public async Task MakeClassImmutable_ClassWithMutableFields_ReturnsSource()
     {
         const string src = "namespace TestProj; public class Config { public string Host { get; set; } public int Port { get; set; } }";
         SetSource(src, "Config.cs");
-        var result = await _immutabilityEngine.MakeClassImmutableAsync("Config.cs", "Config");
+        var result = await _modernizationEngine.MakeClassImmutableAsync("Config.cs", "Config");
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
@@ -461,11 +425,10 @@ public class Worker
     public async Task MakeClassImmutable_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _immutabilityEngine.MakeClassImmutableAsync("NonExistent.cs", "Config"));
+        Assert.DoesNotThrowAsync(async () => await _modernizationEngine.MakeClassImmutableAsync("NonExistent.cs", "Config"));
     }
 
     // --- ConvertStaticToExtension (via AdvancedLogicEngine) ---
-
     [Test]
     public async Task ConvertStaticToExtension_StaticMethod_ReturnsSource()
     {
@@ -483,7 +446,6 @@ public class Worker
     }
 
     // --- InvertBooleanLogic ---
-
     [Test]
     public async Task InvertBooleanLogic_BoolField_ReturnsDictionary()
     {
@@ -494,7 +456,6 @@ public class Worker
     }
 
     // --- OptimizeToValueTask (via AsyncOptimizationEngine) ---
-
     [Test]
     public async Task OptimizeToValueTask_AsyncMethod_ReturnsSource()
     {
@@ -507,12 +468,10 @@ public class Worker
     public async Task OptimizeToValueTask_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _asyncOptimizationEngine.OptimizeToValueTaskAsync("NonExistent.cs", "M"));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _asyncOptimizationEngine.OptimizeToValueTaskAsync("NonExistent.cs", "M"));
     }
 
     // --- OptimizeIndependentAwaits (via AsyncOptimizationEngine) ---
-
     [Test]
     public async Task OptimizeIndependentAwaits_AsyncMethod_ReturnsSource()
     {
@@ -530,7 +489,6 @@ public class Worker
     }
 
     // --- UpgradeToPrimaryConstructor (via SyntaxUpgradeEngine) ---
-
     [Test]
     public async Task UpgradeToPrimaryConstructor_SimpleClass_ReturnsSource()
     {
@@ -555,7 +513,6 @@ public class Service
     }
 
     // --- FindUseFrozenCollections (via CodeStyleEngine) ---
-
     [Test]
     public async Task FindUseFrozenCollections_ValidFile_ReturnsList()
     {
@@ -565,7 +522,6 @@ public class Service
     }
 
     // --- UseExceptionExpressions (via SyntaxUpgradeEngine) ---
-
     [Test]
     public async Task UseExceptionExpressions_MethodWithGuard_ReturnsSource()
     {

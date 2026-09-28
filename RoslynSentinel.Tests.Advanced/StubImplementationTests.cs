@@ -1,9 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
-
 namespace RoslynSentinel.Tests.Advanced;
-
 /// <summary>
 /// Tests for the 4 methods that were previously stubs/no-ops but have now been fully implemented:
 /// - IDEStyleEngine.UseNullPropagationAsync
@@ -16,22 +14,18 @@ public class StubImplementationTests
 {
     private IWorkspaceManager _workspaceManager;
     private IDEStyleEngine _ideStyleEngine;
-    private ModernizationUpgradeEngine _modernizationEngine;
     private GranularRefactoringEngine _granularEngine;
-
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var config = new SentinelConfiguration();
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
-        _modernizationEngine = new ModernizationUpgradeEngine(_workspaceManager);
         _granularEngine = new GranularRefactoringEngine(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -41,7 +35,6 @@ public class StubImplementationTests
     // ══════════════════════════════════════════════════════════════
     // IDEStyleEngine.UseNullPropagationAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task UseNullPropagation_ConvertsIfNotNullInvocation_ToConditionalAccess()
     {
@@ -54,11 +47,8 @@ class C {
 class Foo { public void Bar() {} }
 ");
         var result = await _ideStyleEngine.UseNullPropagationAsync("Test.cs");
-
-        Assert.That(result.UpdatedText, Does.Contain("?.Bar()"),
-            "Should replace 'if (x != null) x.Bar()' with 'x?.Bar()'");
-        Assert.That(result.UpdatedText, Does.Not.Contain("if (x != null)"),
-            "The original if-check should be gone");
+        Assert.That(result.UpdatedText, Does.Contain("?.Bar()"), "Should replace 'if (x != null) x.Bar()' with 'x?.Bar()'");
+        Assert.That(result.UpdatedText, Does.Not.Contain("if (x != null)"), "The original if-check should be gone");
     }
 
     [Test]
@@ -73,7 +63,6 @@ class C {
 class Foo { public void Process() {} }
 ");
         var result = await _ideStyleEngine.UseNullPropagationAsync("Test.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("?.Process()"));
         Assert.That(result.UpdatedText, Does.Not.Contain("if (x != null)"));
     }
@@ -90,7 +79,6 @@ class C {
 class Foo { public void DoWork(int n, string s) {} }
 ");
         var result = await _ideStyleEngine.UseNullPropagationAsync("Test.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("?.DoWork(42,"));
     }
 
@@ -106,7 +94,6 @@ class C {
 class Foo { public void Run() {} }
 ");
         var result = await _ideStyleEngine.UseNullPropagationAsync("Test.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("?.Run()"));
     }
 
@@ -124,10 +111,8 @@ class Foo { public void Go() {} }
 ";
         SetSource(source);
         var result = await _ideStyleEngine.UseNullPropagationAsync("Test.cs");
-
         // has an else -> should NOT be transformed
-        Assert.That(result.UpdatedText, Does.Contain("if (x != null) x.Go()").Or.Contain("if (x != null)"),
-            "If-else patterns should remain unchanged");
+        Assert.That(result.UpdatedText, Does.Contain("if (x != null) x.Go()").Or.Contain("if (x != null)"), "If-else patterns should remain unchanged");
     }
 
     [Test]
@@ -142,7 +127,6 @@ class C {
 ";
         SetSource(source);
         var result = await _ideStyleEngine.UseNullPropagationAsync("Test.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("int y = x + 1"));
     }
 
@@ -157,7 +141,6 @@ class C {
     // ══════════════════════════════════════════════════════════════
     // ModernizationUpgradeEngine.UseSpanForParsingAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task UseSpanForParsing_ReplacesSubstring_WithAsSpanToString()
     {
@@ -168,10 +151,8 @@ class C {
     }
 }
 ");
-        var result = await _modernizationEngine.UseSpanForParsingAsync("Test.cs", "Parse");
-
-        Assert.That(result.UpdatedText, Does.Contain("AsSpan(1, 3).ToString()"),
-            "Substring(start,len) should become AsSpan(start,len).ToString()");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "Parse");
+        Assert.That(result.UpdatedText, Does.Contain("AsSpan(1, 3).ToString()"), "Substring(start,len) should become AsSpan(start,len).ToString()");
         Assert.That(result.UpdatedText, Does.Not.Contain(".Substring("));
     }
 
@@ -185,8 +166,7 @@ class C {
     }
 }
 ");
-        var result = await _modernizationEngine.UseSpanForParsingAsync("Test.cs", "GetSuffix");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "GetSuffix");
         Assert.That(result.UpdatedText, Does.Contain("AsSpan(5).ToString()"));
         Assert.That(result.UpdatedText, Does.Not.Contain(".Substring(5)"));
     }
@@ -203,12 +183,9 @@ class C {
     }
 }
 ");
-        var result = await _modernizationEngine.UseSpanForParsingAsync("Test.cs", "Process");
-
-        Assert.That(result.UpdatedText, Does.Not.Contain(".Substring("),
-            "All Substring calls should be converted");
-        Assert.That(result.UpdatedText!.Split("AsSpan").Length - 1, Is.EqualTo(2),
-            "Should have 2 AsSpan calls");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "Process");
+        Assert.That(result.UpdatedText, Does.Not.Contain(".Substring("), "All Substring calls should be converted");
+        Assert.That(result.UpdatedText!.Split("AsSpan").Length - 1, Is.EqualTo(2), "Should have 2 AsSpan calls");
     }
 
     [Test]
@@ -220,8 +197,7 @@ class C {
     string B(string s) { return s.Substring(2, 3); }
 }
 ");
-        var result = await _modernizationEngine.UseSpanForParsingAsync("Test.cs", "A");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "A");
         // Method A converted, B not
         Assert.That(result.UpdatedText, Does.Contain("AsSpan(0, 1)"), "Method A should be converted");
         Assert.That(result.UpdatedText, Does.Contain(".Substring(2, 3)"), "Method B should remain unchanged");
@@ -236,10 +212,8 @@ class C {
     string B(string s) { return s.Substring(2, 3); }
 }
 ");
-        var result = await _modernizationEngine.UseSpanForParsingAsync("Test.cs", "");
-
-        Assert.That(result.UpdatedText, Does.Not.Contain(".Substring("),
-            "With no method name, all Substring calls in file should be converted");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "");
+        Assert.That(result.UpdatedText, Does.Not.Contain(".Substring("), "With no method name, all Substring calls in file should be converted");
     }
 
     [Test]
@@ -247,14 +221,13 @@ class C {
     {
         const string source = "class C { void M() {} }";
         SetSource(source);
-        var result = await _modernizationEngine.UseSpanForParsingAsync("Test.cs", "NonExistent");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "NonExistent");
         Assert.That(result.UpdatedText, Does.Contain("class C"));
     }
 
     // ══════════════════════════════════════════════════════════════
     // ModernizationUpgradeEngine.UseThrowExpressionsAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task UseThrowExpressions_ConvertsVarPlusNullCheck_ToCoalesceThrow()
     {
@@ -268,12 +241,9 @@ class C {
     }
 }
 ");
-        var result = await _modernizationEngine.UseThrowExpressionsAsync("Test.cs");
-
-        Assert.That(result.UpdatedText, Does.Contain("?? throw"),
-            "var + null-check-throw should become coalescing throw");
-        Assert.That(result.UpdatedText, Does.Not.Contain("if (x == null) throw"),
-            "The standalone null-check-throw should be gone");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
+        Assert.That(result.UpdatedText, Does.Contain("?? throw"), "var + null-check-throw should become coalescing throw");
+        Assert.That(result.UpdatedText, Does.Not.Contain("if (x == null) throw"), "The standalone null-check-throw should be gone");
     }
 
     [Test]
@@ -290,10 +260,8 @@ class C {
     void DoWork(object o) {}
 }
 ");
-        var result = await _modernizationEngine.UseThrowExpressionsAsync("Test.cs");
-
-        Assert.That(result.UpdatedText, Does.Contain("DoWork(x)"),
-            "Statement after the null guard must be preserved");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
+        Assert.That(result.UpdatedText, Does.Contain("DoWork(x)"), "Statement after the null guard must be preserved");
     }
 
     [Test]
@@ -310,11 +278,9 @@ class C {
 }
 ";
         SetSource(source);
-        var result = await _modernizationEngine.UseThrowExpressionsAsync("Test.cs");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
         // Has else -> should not be merged into coalescing throw
-        Assert.That(result.UpdatedText, Does.Contain("if (x == null)"),
-            "if-else null checks must not be transformed");
+        Assert.That(result.UpdatedText, Does.Contain("if (x == null)"), "if-else null checks must not be transformed");
     }
 
     [Test]
@@ -322,7 +288,7 @@ class C {
     {
         const string source = "class C { void M() { int x = 1; } }";
         SetSource(source);
-        var result = await _modernizationEngine.UseThrowExpressionsAsync("Test.cs");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
         Assert.That(result.UpdatedText, Does.Contain("int x = 1"));
     }
 
@@ -330,14 +296,13 @@ class C {
     public async Task UseThrowExpressions_UnknownFile_ReturnsEmpty()
     {
         SetSource("class C {}");
-        var result = await _modernizationEngine.UseThrowExpressionsAsync("Missing.cs");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Missing.cs");
         Assert.That(result.UpdatedText, Is.Null);
     }
 
     // ══════════════════════════════════════════════════════════════
     // GranularRefactoringEngine.RunMicroRefactoringAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task RunMicroRefactoring_TypeToVar_ConvertsExplicitType()
     {
@@ -349,9 +314,7 @@ class C {
 }
 ");
         var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
-
-        Assert.That(result.UpdatedText, Does.Contain("var name ="),
-            "type-to-var should replace explicit type with var");
+        Assert.That(result.UpdatedText, Does.Contain("var name ="), "type-to-var should replace explicit type with var");
     }
 
     [Test]
@@ -366,9 +329,7 @@ class C {
 ";
         SetSource(source);
         var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
-
-        Assert.That(result.UpdatedText, Does.Contain("const int x"),
-            "const declarations must not be changed to var");
+        Assert.That(result.UpdatedText, Does.Contain("const int x"), "const declarations must not be changed to var");
     }
 
     [Test]
@@ -383,11 +344,8 @@ class C {
 }
 ");
         var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "remove-unused-local", 4);
-
-        Assert.That(result.UpdatedText, Does.Not.Contain("unused"),
-            "remove-unused-local should remove the declaration at target line");
-        Assert.That(result.UpdatedText, Does.Contain("used"),
-            "Other statements should remain");
+        Assert.That(result.UpdatedText, Does.Not.Contain("unused"), "remove-unused-local should remove the declaration at target line");
+        Assert.That(result.UpdatedText, Does.Contain("used"), "Other statements should remain");
     }
 
     [Test]
@@ -403,9 +361,7 @@ class C {
 }
 ");
         var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "add-braces", 4);
-
-        Assert.That(result.UpdatedText, Does.Contain("{"),
-            "add-braces should wrap the single statement body in a block");
+        Assert.That(result.UpdatedText, Does.Contain("{"), "add-braces should wrap the single statement body in a block");
     }
 
     [Test]
@@ -422,7 +378,6 @@ class C {
 ");
         // The if-statement starts at line 4
         var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "remove-braces", 4);
-
         // After removing braces: should have the statement without a block
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
@@ -438,21 +393,15 @@ class C {
 }
 ");
         var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "extract-constant", 4);
-
-        Assert.That(result.UpdatedText, Does.Contain("const string ExtractedConstant"),
-            "extract-constant should inject a const field");
-        Assert.That(result.UpdatedText, Does.Contain("ExtractedConstant"),
-            "The usage site should reference the new constant");
+        Assert.That(result.UpdatedText, Does.Contain("const string ExtractedConstant"), "extract-constant should inject a const field");
+        Assert.That(result.UpdatedText, Does.Contain("ExtractedConstant"), "The usage site should reference the new constant");
     }
 
     [Test]
     public async Task RunMicroRefactoring_UnknownId_ThrowsArgumentException()
     {
         SetSource("class C { void M() {} }");
-
-        Assert.ThrowsAsync<ArgumentException>(async () =>
-            await _granularEngine.RunMicroRefactoringAsync("Test.cs", "nonexistent-refactoring", 1),
-            "Unknown refactoring ID should throw ArgumentException with list of known IDs");
+        Assert.ThrowsAsync<ArgumentException>(async () => await _granularEngine.RunMicroRefactoringAsync("Test.cs", "nonexistent-refactoring", 1), "Unknown refactoring ID should throw ArgumentException with list of known IDs");
     }
 
     [Test]
@@ -466,7 +415,6 @@ class C {
     // ══════════════════════════════════════════════════════════════
     // Regression: previously-documented stubs now return non-empty results
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task UseNullPropagation_IsNoLongerAStub_ReturnsTransformedCode()
     {
@@ -477,9 +425,7 @@ class C {
 class Foo { public void Go() {} }
 ");
         var result = await _ideStyleEngine.UseNullPropagationAsync("Test.cs");
-
-        Assert.That(result.UpdatedText, Does.Contain("?."),
-            "UseNullPropagationAsync is no longer a stub - must produce null-conditional syntax");
+        Assert.That(result.UpdatedText, Does.Contain("?."), "UseNullPropagationAsync is no longer a stub - must produce null-conditional syntax");
     }
 
     [Test]
@@ -491,10 +437,8 @@ class C {
 }
 ");
         var before = "s.Substring(1, 2)";
-        var result = await _modernizationEngine.UseSpanForParsingAsync("Test.cs", "M");
-
-        Assert.That(result.UpdatedText, Does.Not.Contain(before),
-            "UseSpanForParsingAsync is no longer a no-op - must actually replace Substring");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "M");
+        Assert.That(result.UpdatedText, Does.Not.Contain(before), "UseSpanForParsingAsync is no longer a no-op - must actually replace Substring");
     }
 
     [Test]
@@ -509,10 +453,8 @@ class C {
     }
 }
 ");
-        var result = await _modernizationEngine.UseThrowExpressionsAsync("Test.cs");
-
-        Assert.That(result.UpdatedText, Does.Contain("??"),
-            "UseThrowExpressionsAsync is no longer a stub - must produce coalescing throw");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
+        Assert.That(result.UpdatedText, Does.Contain("??"), "UseThrowExpressionsAsync is no longer a stub - must produce coalescing throw");
     }
 
     [Test]
@@ -526,10 +468,7 @@ class C {
 }
 ");
         var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
-
-        Assert.That(result.UpdatedText, Does.Not.Contain("simulation mode"),
-            "RunMicroRefactoringAsync must no longer return fake simulation output");
-        Assert.That(result.UpdatedText, Does.Contain("var x"),
-            "Must return the actually transformed code");
+        Assert.That(result.UpdatedText, Does.Not.Contain("simulation mode"), "RunMicroRefactoringAsync must no longer return fake simulation output");
+        Assert.That(result.UpdatedText, Does.Contain("var x"), "Must return the actually transformed code");
     }
 }

@@ -9,13 +9,10 @@
 //
 // The real-solution smoke test that used to live here (RealSolution_SmokeTests_Battery28)
 // moved to RoslynSentinel.Tests.Integration/IntegrationTwentyNineTests.cs.
-
 #pragma warning disable CS8618
-
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Battery;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // B02-extra -> ImmutabilityEngine: readonly modifier spacing in more scenarios
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,18 +20,14 @@ namespace RoslynSentinel.Tests.Battery;
 public class B02extra_Immutability_ReadonlySpacing
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private ImmutabilityEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ImmutabilityEngine(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task MakeFieldReadonly_IntField_HasSpaceBeforeType()
     {
@@ -48,13 +41,9 @@ public class B02extra_Immutability_ReadonlySpacing
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Config.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Config.cs", "Config");
-
-        Assert.That(result.UpdatedText, Does.Contain("readonly int"),
-            "readonly modifier for 'int' field must be separated by a space: 'readonly int', not 'readonlyint'.");
-        Assert.That(result.UpdatedText, Does.Not.Contain("readonlyint"),
-            "There must be no fused 'readonlyint' token.");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Config.cs", "Config");
+        Assert.That(result.UpdatedText, Does.Contain("readonly int"), "readonly modifier for 'int' field must be separated by a space: 'readonly int', not 'readonlyint'.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("readonlyint"), "There must be no fused 'readonlyint' token.");
     }
 
     [Test]
@@ -70,11 +59,8 @@ public class B02extra_Immutability_ReadonlySpacing
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Greeter.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Greeter.cs", "Greeter");
-
-        Assert.That(result.UpdatedText, Does.Contain("readonly string"),
-            "readonly modifier for 'string' field must emit 'readonly string' not 'readonlystring'.");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Greeter.cs", "Greeter");
+        Assert.That(result.UpdatedText, Does.Contain("readonly string"), "readonly modifier for 'string' field must emit 'readonly string' not 'readonlystring'.");
     }
 
     [Test]
@@ -91,14 +77,10 @@ public class B02extra_Immutability_ReadonlySpacing
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Box.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Box.cs", "Box");
-
-        Assert.That(result.UpdatedText, Does.Not.Contain("readonlyint"),
-            "No field should produce 'readonlyint' - all must have space.");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Box.cs", "Box");
+        Assert.That(result.UpdatedText, Does.Not.Contain("readonlyint"), "No field should produce 'readonlyint' - all must have space.");
         var readonlyCount = result.UpdatedText!.Split("readonly int").Length - 1;
-        Assert.That(readonlyCount, Is.EqualTo(2),
-            "Both fields should get 'readonly int' with correct spacing.");
+        Assert.That(readonlyCount, Is.EqualTo(2), "Both fields should get 'readonly int' with correct spacing.");
     }
 
     [Test]
@@ -113,12 +95,9 @@ public class B02extra_Immutability_ReadonlySpacing
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Const.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Const.cs", "Const");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Const.cs", "Const");
         var readonlyCount = result.UpdatedText!.Split("readonly").Length - 1;
-        Assert.That(readonlyCount, Is.EqualTo(1),
-            "An already-readonly field must not get a second readonly modifier.");
+        Assert.That(readonlyCount, Is.EqualTo(1), "An already-readonly field must not get a second readonly modifier.");
     }
 
     [Test]
@@ -133,11 +112,8 @@ public class B02extra_Immutability_ReadonlySpacing
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Registry.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Registry.cs", "Registry");
-
-        Assert.That(result.UpdatedText, Does.Contain("readonly int"),
-            "Static field made readonly must still have space between 'readonly' and 'int'.");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Registry.cs", "Registry");
+        Assert.That(result.UpdatedText, Does.Contain("readonly int"), "Static field made readonly must still have space between 'readonly' and 'int'.");
     }
 }
 
@@ -149,7 +125,6 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -159,7 +134,6 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task DetectAntiPatterns_ZeroParam_ValueTaskReturn_IsFlagged()
     {
@@ -175,13 +149,8 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Fetcher.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Fetcher.cs");
-
-        Assert.That(findings.Any(f =>
-                f.Pattern == "MissingCancellationToken" &&
-                f.Snippet.Contains("FetchAsync")), Is.True,
-            "Zero-param async ValueTask method must also be flagged for missing CancellationToken.");
+        Assert.That(findings.Any(f => f.Pattern == "MissingCancellationToken" && f.Snippet.Contains("FetchAsync")), Is.True, "Zero-param async ValueTask method must also be flagged for missing CancellationToken.");
     }
 
     [Test]
@@ -196,13 +165,8 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Base.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Base.cs");
-
-        Assert.That(findings.Any(f =>
-                f.Pattern == "MissingCancellationToken" &&
-                f.Snippet.Contains("LoadAsync")), Is.False,
-            "Abstract methods have no body and must NOT be flagged.");
+        Assert.That(findings.Any(f => f.Pattern == "MissingCancellationToken" && f.Snippet.Contains("LoadAsync")), Is.False, "Abstract methods have no body and must NOT be flagged.");
     }
 
     [Test]
@@ -223,14 +187,11 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Service.cs");
         var ctFindings = findings.Where(f => f.Pattern == "MissingCancellationToken").ToList();
-
         // The zero-param overload should be flagged; the one with CT should not be duplicated
         // We can't easily distinguish overloads by snippet alone, but count should be == 1
-        Assert.That(ctFindings.Count, Is.EqualTo(1),
-            "Only the zero-param overload must be flagged; the CT-bearing overload must not add extra findings.");
+        Assert.That(ctFindings.Count, Is.EqualTo(1), "Only the zero-param overload must be flagged; the CT-bearing overload must not add extra findings.");
     }
 }
 
@@ -242,7 +203,6 @@ public class B16extra_SecuritySafety_NullConditionalGuards
 {
     private IWorkspaceManager _workspaceManager = null!;
     private SecurityAndSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -252,7 +212,6 @@ public class B16extra_SecuritySafety_NullConditionalGuards
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task DetectMissingNullChecks_ExprBody_ChainedNullConditional_NotFlagged()
     {
@@ -264,11 +223,8 @@ public class B16extra_SecuritySafety_NullConditionalGuards
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Fmt.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.DetectMissingNullChecksAsync("Fmt.cs");
-
-        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.False,
-            "Chained null-conditional s?.Trim()?.ToUpperInvariant() is null-safe; must not be flagged.");
+        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.False, "Chained null-conditional s?.Trim()?.ToUpperInvariant() is null-safe; must not be flagged.");
     }
 
     [Test]
@@ -282,13 +238,9 @@ public class B16extra_SecuritySafety_NullConditionalGuards
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Merger.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.DetectMissingNullChecksAsync("Merger.cs");
-
-        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'a'")), Is.False,
-            "Parameter 'a' guarded by ?. must NOT be flagged.");
-        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'b'")), Is.True,
-            "Parameter 'b' NOT guarded by ?. MUST be flagged.");
+        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'a'")), Is.False, "Parameter 'a' guarded by ?. must NOT be flagged.");
+        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'b'")), Is.True, "Parameter 'b' NOT guarded by ?. MUST be flagged.");
     }
 
     [Test]
@@ -305,11 +257,8 @@ public class B16extra_SecuritySafety_NullConditionalGuards
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Validator.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.DetectMissingNullChecksAsync("Validator.cs");
-
-        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.False,
-            "Block-bodied method with explicit null guard must NOT be flagged.");
+        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.False, "Block-bodied method with explicit null guard must NOT be flagged.");
     }
 
     [Test]
@@ -323,11 +272,8 @@ public class B16extra_SecuritySafety_NullConditionalGuards
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Const.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.DetectMissingNullChecksAsync("Const.cs");
-
-        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'ignored'")), Is.False,
-            "Parameter not used in body cannot cause a NullReferenceException; must NOT be flagged.");
+        Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'ignored'")), Is.False, "Parameter not used in body cannot cause a NullReferenceException; must NOT be flagged.");
     }
 }
 
@@ -339,7 +285,6 @@ public class WFextra_AdvancedLogic_WhileToFor
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AdvancedLogicEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -349,7 +294,6 @@ public class WFextra_AdvancedLogic_WhileToFor
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task ConvertWhileToFor_SimpleCounter_EmitsForKeyword()
     {
@@ -363,13 +307,9 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertWhileToForAsync("Looper.cs", 5);
-
-        Assert.That(result.UpdatedText, Does.Contain("for"),
-            "Converted output must contain a 'for' loop.");
-        Assert.That(result.UpdatedText, Does.Not.Contain("while"),
-            "The 'while' loop must be removed after conversion.");
+        Assert.That(result.UpdatedText, Does.Contain("for"), "Converted output must contain a 'for' loop.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("while"), "The 'while' loop must be removed after conversion.");
     }
 
     [Test]
@@ -389,17 +329,11 @@ public class Processor {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Processor.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertWhileToForAsync("Processor.cs", 6);
-
-        Assert.That(result.UpdatedText, Does.Contain("for"),
-            "Result must contain a for loop.");
+        Assert.That(result.UpdatedText, Does.Contain("for"), "Result must contain a for loop.");
         // i++ in the body must be gone (moved to incrementors)
-        var bodyStatements = result.UpdatedText!
-            .Split(new[] { "for " }, StringSplitOptions.None)
-            .Skip(1).FirstOrDefault() ?? "";
-        Assert.That(result.UpdatedText, Does.Contain("i * 2"),
-            "Body statement _data[i] = i * 2 must be preserved in the for body.");
+        var bodyStatements = result.UpdatedText!.Split(new[] { "for " }, StringSplitOptions.None).Skip(1).FirstOrDefault() ?? "";
+        Assert.That(result.UpdatedText, Does.Contain("i * 2"), "Body statement _data[i] = i * 2 must be preserved in the for body.");
     }
 
     [Test]
@@ -415,11 +349,8 @@ public class Safe {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Safe.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertWhileToForAsync("Safe.cs", 5);
-
-        Assert.That(result.UpdatedText, Does.Not.Contain("for ("),
-            "When no while is found, no for-loop must be emitted.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("for ("), "When no while is found, no for-loop must be emitted.");
     }
 
     [Test]
@@ -434,11 +365,8 @@ public class Streamer {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Streamer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertWhileToForAsync("Streamer.cs", 4);
-
         // Without a local declaration as the previous statement, engine returns unchanged
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
-            "Even when conversion is not applicable, result must not be null/empty.");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Even when conversion is not applicable, result must not be null/empty.");
     }
 }

@@ -2,12 +2,10 @@
 // Loads the solution configured via ROSLYN_SENTINEL_TEST_SLN env var, discovers a real .cs file, class, method, and project,
 // then exercises every engine's public async API against live code.
 // All tests are read-only (engines return new content strings; nothing is written to disk).
-
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Integration;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // B29 -> Remaining engines exercised against the configured real solution
 // ─────────────────────────────────────────────────────────────────────────────
@@ -16,15 +14,12 @@ namespace RoslynSentinel.Tests.Integration;
 public class B29_AllEngines_RealSolution_SmokeTests
 {
     private static readonly string SlnPath = Environment.GetEnvironmentVariable("ROSLYN_SENTINEL_TEST_SLN") ?? string.Empty;
-
     private IWorkspaceManager _workspaceManager = null!;
     private SentinelConfiguration _config = null!;
-
     private string _realFilePath = null!;
     private string _realClassName = null!;
     private string _realMethodName = null!;
     private string _realProjectName = null!;
-
     [SetUp]
     public async Task Setup()
     {
@@ -36,13 +31,9 @@ public class B29_AllEngines_RealSolution_SmokeTests
         _config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(SlnPath);
-
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
-
         // Capture project name from the first available project
-        _realProjectName = solution.Projects.FirstOrDefault()?.Name
-            ?? throw new InvalidOperationException("No projects found in solution.");
-
+        _realProjectName = solution.Projects.FirstOrDefault()?.Name ?? throw new InvalidOperationException("No projects found in solution.");
         // Discover a .cs file that has a class with at least one non-constructor method
         foreach (var project in solution.Projects)
         {
@@ -65,9 +56,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
                     continue;
                 }
 
-                var method = cls.DescendantNodes()
-                    .OfType<MethodDeclarationSyntax>()
-                    .FirstOrDefault(m => m.Body != null); // block-bodied only for flow analysis
+                var method = cls.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Body != null); // block-bodied only for flow analysis
                 if (method == null)
                 {
                     continue;
@@ -85,19 +74,15 @@ public class B29_AllEngines_RealSolution_SmokeTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     // ══════════════════════════════════════════════════════════════════════════
     // 1. AsyncSafetyEngine (6 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task AsyncSafetyEngine_DetectAsyncVoidMethods_DoesNotThrow()
     {
         var engine = new AsyncSafetyEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.DetectAsyncVoidMethodsAsync(_realFilePath),
-            "DetectAsyncVoidMethodsAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.DetectAsyncVoidMethodsAsync(_realFilePath), "DetectAsyncVoidMethodsAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "Result must not be null.");
     }
 
@@ -106,9 +91,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new AsyncSafetyEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.FindConfigureAwaitMissingAsync(_realFilePath),
-            "FindConfigureAwaitMissingAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.FindConfigureAwaitMissingAsync(_realFilePath), "FindConfigureAwaitMissingAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -117,9 +100,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new AsyncSafetyEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.FindBlockingCallsInAsyncAsync(_realFilePath),
-            "FindBlockingCallsInAsyncAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.FindBlockingCallsInAsyncAsync(_realFilePath), "FindBlockingCallsInAsyncAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -128,9 +109,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new AsyncSafetyEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.FindUnsafeLazyInitAsync(_realFilePath),
-            "FindUnsafeLazyInitAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.FindUnsafeLazyInitAsync(_realFilePath), "FindUnsafeLazyInitAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -139,9 +118,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new AsyncSafetyEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.DetectValueTaskMisuseAsync(_realFilePath),
-            "DetectValueTaskMisuseAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.DetectValueTaskMisuseAsync(_realFilePath), "DetectValueTaskMisuseAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -150,24 +127,19 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new AsyncSafetyEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.FindUnawaitedFireAndForgetAsync(_realFilePath),
-            "FindUnawaitedFireAndForgetAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.FindUnawaitedFireAndForgetAsync(_realFilePath), "FindUnawaitedFireAndForgetAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 3. SyntaxUpgradeEngine (5 tests) -> all features enabled by default config
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task SyntaxUpgradeEngine_UpgradeToModernGuards_DoesNotThrow()
     {
         var engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.UpgradeToModernGuardsAsync(_realFilePath)).UpdatedText!,
-            "UpgradeToModernGuardsAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.UpgradeToModernGuardsAsync(_realFilePath)).UpdatedText!, "UpgradeToModernGuardsAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "Must return non-null (empty string OK if feature gated or no candidates).");
     }
 
@@ -176,9 +148,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.AddBracesAsync(_realFilePath)).UpdatedText!,
-            "AddBracesAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.AddBracesAsync(_realFilePath)).UpdatedText!, "AddBracesAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -187,9 +157,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.UpgradePatternMatchingAsync(_realFilePath)).UpdatedText!,
-            "UpgradePatternMatchingAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.UpgradePatternMatchingAsync(_realFilePath)).UpdatedText!, "UpgradePatternMatchingAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -198,9 +166,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.UseFieldBackedPropertiesAsync(_realFilePath)).UpdatedText!,
-            "UseFieldBackedPropertiesAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.UseFieldBackedPropertiesAsync(_realFilePath)).UpdatedText!, "UseFieldBackedPropertiesAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -209,24 +175,19 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.CleanupImplicitSpansAsync(_realFilePath)).UpdatedText!,
-            "CleanupImplicitSpansAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.CleanupImplicitSpansAsync(_realFilePath)).UpdatedText!, "CleanupImplicitSpansAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 4. CodeHealingEngine (2 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task CodeHealingEngine_FixThreadSleep_DoesNotThrow()
     {
         var engine = new CodeHealingEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.FixThreadSleepAsync(_realFilePath)).UpdatedText!,
-            "FixThreadSleepAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.FixThreadSleepAsync(_realFilePath)).UpdatedText!, "FixThreadSleepAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "Must return non-null (empty string OK if no Thread.Sleep found or feature gated).");
     }
 
@@ -236,25 +197,20 @@ public class B29_AllEngines_RealSolution_SmokeTests
         // sl=0, el=0 causes AddRetryPolicyAsync to fall back to the first method in the file
         var engine = new CodeHealingEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.AddRetryPolicyAsync(_realFilePath, 0, 0, 3)).UpdatedText!,
-            "AddRetryPolicyAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.AddRetryPolicyAsync(_realFilePath, 0, 0, 3)).UpdatedText!, "AddRetryPolicyAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 5. AdvancedLogicEngine (3 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     [Ignore("API changed: InvertBooleanLogicAsync now returns EngineResultWrapper<List<DocumentEditResult>>")]
     public async Task AdvancedLogicEngine_InvertBooleanLogic_NonExistentBool_ReturnsEmptyDict()
     {
         var engine = new AdvancedLogicEngine(_workspaceManager);
         EngineResultWrapper<List<DocumentEditResult>>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.InvertBooleanLogicAsync(_realFilePath, "__nonExistentBoolXYZ__"),
-            "InvertBooleanLogicAsync must not throw even when bool name is not found.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.InvertBooleanLogicAsync(_realFilePath, "__nonExistentBoolXYZ__"), "InvertBooleanLogicAsync must not throw even when bool name is not found.");
         Assert.That(result, Is.Not.Null, "Must return a result (empty is OK when bool not found).");
     }
 
@@ -264,9 +220,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
         var engine = new AdvancedLogicEngine(_workspaceManager);
         string? result = null;
         // Line 1 is likely a using directive -> no foreach; method gracefully returns original
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.ConvertForEachToForAsync(_realFilePath, 1)).UpdatedText!,
-            "ConvertForEachToForAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.ConvertForEachToForAsync(_realFilePath, 1)).UpdatedText!, "ConvertForEachToForAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -275,25 +229,20 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new AdvancedLogicEngine(_workspaceManager);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.ConvertWhileToForAsync(_realFilePath, 1)).UpdatedText!,
-            "ConvertWhileToForAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.ConvertWhileToForAsync(_realFilePath, 1)).UpdatedText!, "ConvertWhileToForAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 6. AdvancedRefactoringEngine (2 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task AdvancedRefactoringEngine_ReplaceStringConcatWithInterpolation_DoesNotThrow()
     {
         var engine = new AdvancedRefactoringEngine(_workspaceManager);
         string? result = null;
         // Real file path is required; engine throws "File not found." on path miss
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.ReplaceStringConcatWithInterpolationAsync(_realFilePath)).UpdatedText!,
-            "ReplaceStringConcatWithInterpolationAsync must not throw when given a real file path.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.ReplaceStringConcatWithInterpolationAsync(_realFilePath)).UpdatedText!, "ReplaceStringConcatWithInterpolationAsync must not throw when given a real file path.");
         Assert.That(result, Is.Not.Null, "Must return non-null (unchanged source if no string concat found).");
     }
 
@@ -302,62 +251,50 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new AdvancedRefactoringEngine(_workspaceManager);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.OptimizeTaskWaitAsync(_realFilePath)).UpdatedText!,
-            "OptimizeTaskWaitAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.OptimizeTaskWaitAsync(_realFilePath)).UpdatedText!, "OptimizeTaskWaitAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 7. ModernizationEngine (3 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task ModernizationEngine_ClassToRecord_DoesNotThrow()
     {
-        var engine = new ModernizationEngine(_workspaceManager, _config);
+        var engine = new SyntaxModernizationEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.ClassToRecordAsync(_realFilePath, _realClassName)).UpdatedText!,
-            "ClassToRecordAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.ClassToRecordAsync(_realFilePath, _realClassName)).UpdatedText!, "ClassToRecordAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "Must return non-null (empty string if feature gated or class cannot be converted).");
     }
 
     [Test]
     public async Task ModernizationEngine_ConvertMethodToExpressionBody_DoesNotThrow()
     {
-        var engine = new ModernizationEngine(_workspaceManager, _config);
+        var engine = new SyntaxModernizationEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.ConvertMethodToExpressionBodyAsync(_realFilePath, _realMethodName)).UpdatedText!,
-            "ConvertMethodToExpressionBodyAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.ConvertMethodToExpressionBodyAsync(_realFilePath, _realMethodName)).UpdatedText!, "ConvertMethodToExpressionBodyAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task ModernizationEngine_ConvertToPattern_DoesNotThrow()
     {
-        var engine = new ModernizationEngine(_workspaceManager, _config);
+        var engine = new SyntaxModernizationEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.ConvertToPatternAsync(_realFilePath)).UpdatedText!,
-            "ConvertToPatternAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.ConvertToPatternAsync(_realFilePath)).UpdatedText!, "ConvertToPatternAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 8. GranularRefactoringEngine (3 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task GranularRefactoringEngine_RunMicroRefactoring_DoesNotThrow()
     {
         var engine = new GranularRefactoringEngine(_workspaceManager);
         string? result = null;
         // RunMicroRefactoringAsync has real dispatch -> use a known valid ID
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.RunMicroRefactoringAsync(_realFilePath, "add-braces", 1)).UpdatedText!,
-            "RunMicroRefactoringAsync must not throw on real solution with valid ID.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.RunMicroRefactoringAsync(_realFilePath, "add-braces", 1)).UpdatedText!, "RunMicroRefactoringAsync must not throw on real solution with valid ID.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -366,13 +303,10 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new GranularRefactoringEngine(_workspaceManager);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.InlineFieldAsync(_realFilePath, "__nonExistentFieldXYZ__")).UpdatedText!,
-            "InlineFieldAsync must not throw even when field is not found.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.InlineFieldAsync(_realFilePath, "__nonExistentFieldXYZ__")).UpdatedText!, "InlineFieldAsync must not throw even when field is not found.");
         Assert.That(result, Is.Not.Null, "Must return a non-null string (error message if field not found).");
         // Engine prefixes error messages with "// ERROR:" when field is missing
-        Assert.That(result, Does.StartWith("// ERROR:").Or.Not.Contain("System."),
-            "Non-found field must produce a graceful error message, not an exception trace.");
+        Assert.That(result, Does.StartWith("// ERROR:").Or.Not.Contain("System."), "Non-found field must produce a graceful error message, not an exception trace.");
     }
 
     [Test]
@@ -381,27 +315,21 @@ public class B29_AllEngines_RealSolution_SmokeTests
         var engine = new GranularRefactoringEngine(_workspaceManager);
         string? result = null;
         // Non-existent nested type -> engine returns original source or descriptive message
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.MoveTypeToOuterScopeAsync(_realFilePath, "__nonExistentNestedType__")).UpdatedText!,
-            "MoveTypeToOuterScopeAsync must not throw even when nested type is not found.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.MoveTypeToOuterScopeAsync(_realFilePath, "__nonExistentNestedType__")).UpdatedText!, "MoveTypeToOuterScopeAsync must not throw even when nested type is not found.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 9. ControlFlowEngine (3 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task ControlFlowEngine_AnalyzePathCoverage_DoesNotThrow()
     {
         var engine = new ControlFlowEngine(_workspaceManager);
         PathCoverageReport? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.AnalyzePathCoverageAsync(_realFilePath, _realMethodName),
-            "AnalyzePathCoverageAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.AnalyzePathCoverageAsync(_realFilePath, _realMethodName), "AnalyzePathCoverageAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "PathCoverageReport must not be null.");
-        Assert.That(result!.MethodName, Is.EqualTo(_realMethodName),
-            "Report must carry back the queried method name.");
+        Assert.That(result!.MethodName, Is.EqualTo(_realMethodName), "Report must carry back the queried method name.");
     }
 
     [Test]
@@ -409,9 +337,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new ControlFlowEngine(_workspaceManager);
         ControlFlowAnalysisResult? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.AnalyzeMethodControlFlowAsync(_realFilePath, _realMethodName),
-            "AnalyzeMethodControlFlowAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.AnalyzeMethodControlFlowAsync(_realFilePath, _realMethodName), "AnalyzeMethodControlFlowAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.MethodName, Is.EqualTo(_realMethodName));
     }
@@ -421,9 +347,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new ControlFlowEngine(_workspaceManager);
         DataFlowAnalysisResult? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.AnalyzeMethodDataFlowAsync(_realFilePath, _realMethodName),
-            "AnalyzeMethodDataFlowAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.AnalyzeMethodDataFlowAsync(_realFilePath, _realMethodName), "AnalyzeMethodDataFlowAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.MethodName, Is.EqualTo(_realMethodName));
     }
@@ -431,15 +355,12 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // ══════════════════════════════════════════════════════════════════════════
     // 10. CodeStyleEngine (4 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task CodeStyleEngine_FixDangerousLock_DoesNotThrow()
     {
         var engine = new CodeStyleEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.FixDangerousLockAsync(_realFilePath)).UpdatedText!,
-            "FixDangerousLockAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.FixDangerousLockAsync(_realFilePath)).UpdatedText!, "FixDangerousLockAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -448,9 +369,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new CodeStyleEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.SimplifyVerbosityAsync(_realFilePath)).UpdatedText!,
-            "SimplifyVerbosityAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.SimplifyVerbosityAsync(_realFilePath)).UpdatedText!, "SimplifyVerbosityAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -459,9 +378,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new CodeStyleEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.UseCollectionExpressionsAsync(_realFilePath)).UpdatedText!,
-            "UseCollectionExpressionsAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.UseCollectionExpressionsAsync(_realFilePath)).UpdatedText!, "UseCollectionExpressionsAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -470,24 +387,19 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new CodeStyleEngine(_workspaceManager, _config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.UseIndexFromEndAsync(_realFilePath)).UpdatedText!,
-            "UseIndexFromEndAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.UseIndexFromEndAsync(_realFilePath)).UpdatedText!, "UseIndexFromEndAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 11. PerformanceEngine (4 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task PerformanceEngine_AnalyzePerformance_DoesNotThrow()
     {
         var engine = new PerformanceEngine(_workspaceManager);
         List<PerformanceIssueReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.AnalyzePerformanceAsync(_realFilePath),
-            "AnalyzePerformanceAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.AnalyzePerformanceAsync(_realFilePath), "AnalyzePerformanceAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -496,9 +408,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new PerformanceEngine(_workspaceManager);
         List<PerformanceIssueReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.OptimizeResourceDisposalAsync(_realFilePath),
-            "OptimizeResourceDisposalAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.OptimizeResourceDisposalAsync(_realFilePath), "OptimizeResourceDisposalAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -507,9 +417,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new PerformanceEngine(_workspaceManager);
         List<PerformanceIssueReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.DetectInefficientStringComparisonsAsync(_realFilePath),
-            "DetectInefficientStringComparisonsAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.DetectInefficientStringComparisonsAsync(_realFilePath), "DetectInefficientStringComparisonsAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -518,25 +426,20 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new PerformanceEngine(_workspaceManager);
         List<PerformanceIssueReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.FindBoxingAllocationsAsync(_realFilePath),
-            "FindBoxingAllocationsAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.FindBoxingAllocationsAsync(_realFilePath), "FindBoxingAllocationsAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 12. DependencyEngine (2 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task DependencyEngine_GetProjectDependencies_DoesNotThrow()
     {
         var engine = new DependencyEngine(_workspaceManager);
         ProjectDependencyReport? result = null;
         // Uses real project name discovered in SetUp -> must not throw
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.GetProjectDependenciesAsync(_realProjectName, CancellationToken.None),
-            "GetProjectDependenciesAsync must not throw when given a real project name.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.GetProjectDependenciesAsync(_realProjectName, CancellationToken.None), "GetProjectDependenciesAsync must not throw when given a real project name.");
         Assert.That(result, Is.Not.Null, "ProjectDependencyReport must not be null.");
         Assert.That(result!.ProjectReferences, Is.Not.Null, "ProjectReferences list must not be null.");
         Assert.That(result.PackageReferences, Is.Not.Null, "PackageReferences list must not be null.");
@@ -547,29 +450,22 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new DependencyEngine(_workspaceManager);
         List<string>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.FindUnusedReferencesAsync(_realProjectName),
-            "FindUnusedReferencesAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.FindUnusedReferencesAsync(_realProjectName), "FindUnusedReferencesAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "Result list must not be null (may be empty).");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 13. ThreadSafetyEngine (2 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task ThreadSafetyEngine_MakeMethodThreadSafe_NonExistentMethod_GracefulError()
     {
         var engine = new ThreadSafetyEngine(_workspaceManager);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.MakeMethodThreadSafeAsync(_realFilePath, "__nonExistentMethodXYZ__")).UpdatedText!,
-            "MakeMethodThreadSafeAsync must not throw even when method is not found.");
-        Assert.That(result, Is.Not.Null,
-            "Must return non-null (error message string when method not found).");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.MakeMethodThreadSafeAsync(_realFilePath, "__nonExistentMethodXYZ__")).UpdatedText!, "MakeMethodThreadSafeAsync must not throw even when method is not found.");
+        Assert.That(result, Is.Not.Null, "Must return non-null (error message string when method not found).");
         // Engine returns "// ErrorDetails: Method '...' not found or has no body." for missing methods
-        Assert.That(result, Does.Contain("nonExistentMethodXYZ").Or.StartsWith("// ErrorDetails"),
-            "Non-found method must produce a graceful error string.");
+        Assert.That(result, Does.Contain("nonExistentMethodXYZ").Or.StartsWith("// ErrorDetails"), "Non-found method must produce a graceful error string.");
     }
 
     [Test]
@@ -578,29 +474,22 @@ public class B29_AllEngines_RealSolution_SmokeTests
         var engine = new ThreadSafetyEngine(_workspaceManager);
         string? result = null;
         // Pass a real method name; if method has no lock statements, engine returns source unchanged
-        Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.ConvertLockToSemaphoreSlimAsync(_realFilePath, _realMethodName)).UpdatedText!,
-            "ConvertLockToSemaphoreSlimAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.ConvertLockToSemaphoreSlimAsync(_realFilePath, _realMethodName)).UpdatedText!, "ConvertLockToSemaphoreSlimAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // 14. MsToolAugmentEngine (5 tests)
     // ══════════════════════════════════════════════════════════════════════════
-
     [Test]
     public async Task MsToolAugmentEngine_SortAndDeduplicateUsings_DoesNotThrow()
     {
         var engine = new MsToolAugmentEngine(_workspaceManager);
         UsingsCleanupResult? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.SortAndDeduplicateUsingsAsync(_realFilePath),
-            "SortAndDeduplicateUsingsAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.SortAndDeduplicateUsingsAsync(_realFilePath), "SortAndDeduplicateUsingsAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "UsingsCleanupResult must not be null.");
-        Assert.That(result!.UpdatedContent, Is.Not.Null.And.Not.Empty,
-            "UpdatedContent must contain the reformatted source.");
-        Assert.That(result.OriginalCount, Is.GreaterThanOrEqualTo(0),
-            "OriginalCount must be a non-negative integer.");
+        Assert.That(result!.UpdatedContent, Is.Not.Null.And.Not.Empty, "UpdatedContent must contain the reformatted source.");
+        Assert.That(result.OriginalCount, Is.GreaterThanOrEqualTo(0), "OriginalCount must be a non-negative integer.");
     }
 
     [Test]
@@ -609,13 +498,10 @@ public class B29_AllEngines_RealSolution_SmokeTests
         var engine = new MsToolAugmentEngine(_workspaceManager);
         MsAugmentResult? result = null;
         // preview=true (default) -> returns formatted content without writing to disk
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.FormatDocumentSafeAsync(_realFilePath, preview: true),
-            "FormatDocumentSafeAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.FormatDocumentSafeAsync(_realFilePath, preview: true), "FormatDocumentSafeAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True, "Formatting a real file must succeed.");
-        Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty,
-            "Formatted content must not be empty.");
+        Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty, "Formatted content must not be empty.");
     }
 
     [Test]
@@ -623,15 +509,12 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new MsToolAugmentEngine(_workspaceManager);
         MsAugmentResult? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.GenerateToStringSafeAsync(_realFilePath, _realClassName),
-            "GenerateToStringSafeAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.GenerateToStringSafeAsync(_realFilePath, _realClassName), "GenerateToStringSafeAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
         // IsSuccess OR graceful failure -> either way, result must carry a message
         if (!result!.Success)
         {
-            Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
-                "Failed result must carry a non-empty error message.");
+            Assert.That(result.Error, Is.Not.Null.And.Not.Empty, "Failed result must carry a non-empty error message.");
         }
     }
 
@@ -640,14 +523,10 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new MsToolAugmentEngine(_workspaceManager);
         MsAugmentResult? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.EncapsulateFieldSafeAsync(_realFilePath, "__nonExistentFieldXYZ__"),
-            "EncapsulateFieldSafeAsync must not throw when field is not found.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.EncapsulateFieldSafeAsync(_realFilePath, "__nonExistentFieldXYZ__"), "EncapsulateFieldSafeAsync must not throw when field is not found.");
         Assert.That(result, Is.Not.Null, "Must return a result object (not null) on field-not-found.");
-        Assert.That(result!.Success, Is.False,
-            "Result must be IsSuccess=false when field does not exist.");
-        Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
-            "ErrorDetails property must carry a descriptive message when field not found.");
+        Assert.That(result!.Success, Is.False, "Result must be IsSuccess=false when field does not exist.");
+        Assert.That(result.Error, Is.Not.Null.And.Not.Empty, "ErrorDetails property must carry a descriptive message when field not found.");
     }
 
     [Test]
@@ -655,9 +534,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new MsToolAugmentEngine(_workspaceManager);
         AddUsingsPreview? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.PreviewAddMissingUsingsAsync(_realFilePath),
-            "PreviewAddMissingUsingsAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.PreviewAddMissingUsingsAsync(_realFilePath), "PreviewAddMissingUsingsAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "AddUsingsPreview must not be null.");
     }
 }
@@ -671,13 +548,10 @@ public class B29_AllEngines_RealSolution_SmokeTests
 public class RealSolution_SmokeTests_Battery28
 {
     private static readonly string SlnPath = Environment.GetEnvironmentVariable("ROSLYN_SENTINEL_TEST_SLN") ?? string.Empty;
-
     private IWorkspaceManager _workspaceManager = null!;
-
     /// A real .cs file path and its first class name, discovered at SetUp time.
     private string _realFilePath = null!;
     private string _realClassName = null!;
-
     [SetUp]
     public async Task Setup()
     {
@@ -688,7 +562,6 @@ public class RealSolution_SmokeTests_Battery28
 
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(SlnPath);
-
         // Find one document that has at least one class declaration
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         foreach (var project in solution.Projects)
@@ -701,9 +574,7 @@ public class RealSolution_SmokeTests_Battery28
                 }
 
                 var root = await doc.GetSyntaxRootAsync();
-                var cls = root?.DescendantNodes()
-                    .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>()
-                    .FirstOrDefault();
+                var cls = root?.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>().FirstOrDefault();
                 if (cls != null)
                 {
                     _realFilePath = doc.FilePath;
@@ -712,22 +583,19 @@ public class RealSolution_SmokeTests_Battery28
                 }
             }
         }
+
         Assert.Ignore("No class-containing document found in the configured test solution.");
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     // ── Solution-wide engines (no required args) ────────────────────────────
-
     [Test]
     public async Task AntiPatternEngine_ScanAll_DoesNotThrow()
     {
         var engine = new AntiPatternEngine(_workspaceManager);
         List<AntiPatternFinding>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.DetectAntiPatternsAsync(),
-            "AntiPatternEngine must not throw on the real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.DetectAntiPatternsAsync(), "AntiPatternEngine must not throw on the real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -736,9 +604,7 @@ public class RealSolution_SmokeTests_Battery28
     {
         var engine = new SecurityAndSafetyEngine(_workspaceManager);
         List<SafetyIssue>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.DetectMissingNullChecksAsync(_realFilePath),
-            "SecurityAndSafetyEngine.DetectMissingNullChecksAsync must not throw on the real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.DetectMissingNullChecksAsync(_realFilePath), "SecurityAndSafetyEngine.DetectMissingNullChecksAsync must not throw on the real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -747,22 +613,17 @@ public class RealSolution_SmokeTests_Battery28
     {
         var engine = new ArchitecturalEngine(_workspaceManager);
         List<CircularDependencyChain>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.FindCircularDependenciesAsync(),
-            "ArchitecturalEngine.FindCircularDependenciesAsync must not throw on the real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.FindCircularDependenciesAsync(), "ArchitecturalEngine.FindCircularDependenciesAsync must not throw on the real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ── Per-file engines (use discovered real file) ─────────────────────────
-
     [Test]
     public async Task DeadCodeEngine_PerFile_DoesNotThrow()
     {
         var engine = new DeadCodeEngine(_workspaceManager);
         List<DeadCodeReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.DetectUnusedLocalVariablesAsync(_realFilePath),
-            $"DeadCodeEngine must not throw on real file: {_realFilePath}");
+        Assert.DoesNotThrowAsync(async () => result = await engine.DetectUnusedLocalVariablesAsync(_realFilePath), $"DeadCodeEngine must not throw on real file: {_realFilePath}");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -771,20 +632,15 @@ public class RealSolution_SmokeTests_Battery28
     {
         var engine = new DeadCodeEngine(_workspaceManager);
         List<DeadCodeReport>? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.DetectUnusedPrivateFieldsAsync(_realFilePath),
-            $"DeadCodeEngine.DetectUnusedPrivateFieldsAsync must not throw on real file.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.DetectUnusedPrivateFieldsAsync(_realFilePath), $"DeadCodeEngine.DetectUnusedPrivateFieldsAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task ImmutabilityEngine_MakeClassImmutable_DoesNotThrow()
     {
-        var engine = new ImmutabilityEngine(_workspaceManager);
         DocumentEditResult? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.MakeClassImmutableAsync(_realFilePath, _realClassName),
-            $"ImmutabilityEngine must not throw on class '{_realClassName}' in {_realFilePath}");
+        Assert.DoesNotThrowAsync(async () => result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync(_realFilePath, _realClassName), $"ImmutabilityEngine must not throw on class '{_realClassName}' in {_realFilePath}");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -793,9 +649,7 @@ public class RealSolution_SmokeTests_Battery28
     {
         var engine = new DocumentationEngine(_workspaceManager);
         DocumentEditResult? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.GenerateXmlDocumentationStubsAsync(_realFilePath),
-            $"DocumentationEngine.GenerateXmlDocumentationStubsAsync must not throw on real file.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.GenerateXmlDocumentationStubsAsync(_realFilePath), $"DocumentationEngine.GenerateXmlDocumentationStubsAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -804,9 +658,7 @@ public class RealSolution_SmokeTests_Battery28
     {
         var engine = new LogicOptimizationEngine(_workspaceManager);
         DocumentEditResult? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.SimplifyBooleanExpressionsAsync(_realFilePath),
-            $"LogicOptimizationEngine.SimplifyBooleanExpressionsAsync must not throw on real file.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.SimplifyBooleanExpressionsAsync(_realFilePath), $"LogicOptimizationEngine.SimplifyBooleanExpressionsAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -815,28 +667,21 @@ public class RealSolution_SmokeTests_Battery28
     {
         var engine = new TestingEngine(_workspaceManager);
         TestSkeletonReport? result = null;
-        Assert.DoesNotThrowAsync(async () =>
-            result = await engine.GenerateTestSkeletonAsync(_realFilePath, _realClassName),
-            $"TestingEngine.GenerateTestSkeletonAsync must not throw on class '{_realClassName}'.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.GenerateTestSkeletonAsync(_realFilePath, _realClassName), $"TestingEngine.GenerateTestSkeletonAsync must not throw on class '{_realClassName}'.");
         Assert.That(result, Is.Not.Null);
     }
 
     // ── SuccessDetails quality invariants ─────────────────────────────────────────────
-
     [Test]
     public async Task SecurityAndSafetyEngine_NoFindings_HaveNullFields()
     {
         var engine = new SecurityAndSafetyEngine(_workspaceManager);
         var issues = await engine.DetectMissingNullChecksAsync(_realFilePath);
-
         foreach (var issue in issues)
         {
-            Assert.That(issue.filePath.Absolute, Is.Not.Null.And.Not.Empty,
-                "Every SafetyIssue must have a non-empty FilePathWrapper.");
-            Assert.That(issue.Type, Is.Not.Null.And.Not.Empty,
-                "Every SafetyIssue must have a non-empty Type.");
-            Assert.That(issue.Description, Is.Not.Null.And.Not.Empty,
-                "Every SafetyIssue must have a non-empty Description.");
+            Assert.That(issue.filePath.Absolute, Is.Not.Null.And.Not.Empty, "Every SafetyIssue must have a non-empty FilePathWrapper.");
+            Assert.That(issue.Type, Is.Not.Null.And.Not.Empty, "Every SafetyIssue must have a non-empty Type.");
+            Assert.That(issue.Description, Is.Not.Null.And.Not.Empty, "Every SafetyIssue must have a non-empty Description.");
         }
     }
 
@@ -844,14 +689,9 @@ public class RealSolution_SmokeTests_Battery28
     public async Task ImmutabilityEngine_ReadonlyOutput_NoFusedTokens()
     {
         // B02 regression on real code: 'readonly' must always be followed by a space
-        var engine = new ImmutabilityEngine(_workspaceManager);
-        var result = await engine.MakeClassImmutableAsync(_realFilePath, _realClassName);
-
-        Assert.That(result, Does.Not.Contain("readonlystring"),
-            "B02 regression: 'readonly' and 'string' must always be space-separated.");
-        Assert.That(result, Does.Not.Contain("readonlyint"),
-            "B02 regression: 'readonly' and 'int' must always be space-separated.");
-        Assert.That(result, Does.Not.Contain("readonlybool"),
-            "B02 regression: 'readonly' and 'bool' must always be space-separated.");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync(_realFilePath, _realClassName);
+        Assert.That(result, Does.Not.Contain("readonlystring"), "B02 regression: 'readonly' and 'string' must always be space-separated.");
+        Assert.That(result, Does.Not.Contain("readonlyint"), "B02 regression: 'readonly' and 'int' must always be space-separated.");
+        Assert.That(result, Does.Not.Contain("readonlybool"), "B02 regression: 'readonly' and 'bool' must always be space-separated.");
     }
 }

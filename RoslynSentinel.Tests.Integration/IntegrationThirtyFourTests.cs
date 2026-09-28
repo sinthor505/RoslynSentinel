@@ -237,7 +237,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     public async Task ModernizationEngine_ClassToRecord_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
-        var engine = new ModernizationEngine(_workspaceManager, config);
+        var engine = new SyntaxModernizationEngine(_workspaceManager, config);
         string? result = null;
         var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () => result = (await engine.ClassToRecordAsync(file, _realClassName)).UpdatedText!, "ModernizationEngine.ClassToRecordAsync must not throw on real class.");
@@ -349,18 +349,6 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var engine = new GranularRefactoringEngine(_workspaceManager);
         Dictionary<FilePathWrapper, string>? result = null;
         Assert.DoesNotThrowAsync(async () => result = await engine.ExtractMembersToPartialAsync(_realFilePath, _realClassName, new[] { _realMethodName }), "GranularRefactoringEngine.ExtractMembersToPartialAsync must not throw on real class.");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // =========================================================================
-    // 14 -> ModernizationUpgradeEngine
-    // =========================================================================
-    [Test]
-    public async Task ModernizationUpgradeEngine_UpgradePatternMatching_DoesNotThrow()
-    {
-        var engine = new ModernizationUpgradeEngine(_workspaceManager);
-        string? result = null;
-        Assert.DoesNotThrowAsync(async () => result = (await engine.UpgradePatternMatchingAsync(_realFilePath)).UpdatedText!, "ModernizationUpgradeEngine.UpgradePatternMatchingAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
 

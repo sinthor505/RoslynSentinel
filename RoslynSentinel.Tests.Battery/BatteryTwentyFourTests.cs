@@ -25,7 +25,7 @@ public class BatteryTwentyFourTests
     private CodeFlowEngine _codeFlowEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private LogicOptimizationEngine _logicOptimizationEngine;
-    private ModernizationEngine _modernizationEngine;
+    private SyntaxModernizationEngine _modernizationEngine;
     private DiffEngine _diffEngine;
     private ValidationEngine _validationEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
@@ -122,7 +122,7 @@ public enum Status { Active = 1, Pending = 2 }
         _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
-        _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
+        _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
         _diffEngine = new DiffEngine();
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);

@@ -9,17 +9,12 @@
 //     the generic crash warning.
 //   - AsyncSafetyEngine.FindUnawaitedFireAndForgetAsync: _ = MethodAsync() discard
 //     assignments are now detected as fire-and-forget patterns.
-
 #pragma warning disable CS8618
-
 using Microsoft.Extensions.Logging.Abstractions;
-
 using NUnit.Framework;
-
 using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Battery;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. BlockingCallFalsePositiveTests
 //    DetectAntiPatternsAsync / BlockingTaskWait detection
@@ -30,7 +25,6 @@ public class BlockingCallFalsePositiveTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -40,7 +34,6 @@ public class BlockingCallFalsePositiveTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task DetectAntiPatterns_ContextResultAssignment_IsNotFlaggedAsBlockingCall()
     {
@@ -57,12 +50,9 @@ public class BlockingCallFalsePositiveTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Controller.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Controller.cs");
         var blocking = findings.Where(f => f.Pattern == "BlockingTaskWait").ToList();
-
-        Assert.That(blocking, Is.Empty,
-            "Assigning to context.Result (left-side) must NOT produce a BlockingTaskWait finding.");
+        Assert.That(blocking, Is.Empty, "Assigning to context.Result (left-side) must NOT produce a BlockingTaskWait finding.");
     }
 
     [Test]
@@ -78,12 +68,9 @@ public class BlockingCallFalsePositiveTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sneaky.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Sneaky.cs");
         var blocking = findings.Where(f => f.Pattern == "BlockingTaskWait").ToList();
-
-        Assert.That(blocking, Is.Not.Empty,
-            ".GetAwaiter().GetResult() must be flagged as BlockingTaskWait.");
+        Assert.That(blocking, Is.Not.Empty, ".GetAwaiter().GetResult() must be flagged as BlockingTaskWait.");
     }
 
     [Test]
@@ -99,12 +86,9 @@ public class BlockingCallFalsePositiveTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Deadlock.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Deadlock.cs");
         var blocking = findings.Where(f => f.Pattern == "BlockingTaskWait").ToList();
-
-        Assert.That(blocking, Is.Not.Empty,
-            ".Result on Task<T> inside an async method must be flagged.");
+        Assert.That(blocking, Is.Not.Empty, ".Result on Task<T> inside an async method must be flagged.");
     }
 
     [Test]
@@ -121,12 +105,9 @@ public class BlockingCallFalsePositiveTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("StringOps.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("StringOps.cs");
         var blocking = findings.Where(f => f.Pattern == "BlockingTaskWait").ToList();
-
-        Assert.That(blocking, Is.Empty,
-            "String.Replace() must not be caught by the .Result/.Wait name filter.");
+        Assert.That(blocking, Is.Empty, "String.Replace() must not be caught by the .Result/.Wait name filter.");
     }
 
     [Test]
@@ -142,12 +123,9 @@ public class BlockingCallFalsePositiveTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("SyncBlocking.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("SyncBlocking.cs");
         var blocking = findings.Where(f => f.Pattern == "BlockingTaskWait").ToList();
-
-        Assert.That(blocking, Is.Not.Empty,
-            "Task.Wait() in a sync method must still be flagged by DetectAntiPatternsAsync.");
+        Assert.That(blocking, Is.Not.Empty, "Task.Wait() in a sync method must still be flagged by DetectAntiPatternsAsync.");
     }
 }
 
@@ -161,7 +139,6 @@ public class AsyncVoidGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -171,7 +148,6 @@ public class AsyncVoidGotchaTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task DetectAsyncVoid_PublicAsyncVoidMethod_IsFlagged()
     {
@@ -183,9 +159,7 @@ public class AsyncVoidGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Bad.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectAsyncVoidMethodsAsync("Bad.cs");
-
         Assert.That(reports, Is.Not.Empty, "public async void must be flagged.");
     }
 
@@ -201,9 +175,7 @@ public class AsyncVoidGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Bad.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectAsyncVoidMethodsAsync("Bad.cs");
-
         Assert.That(reports, Is.Not.Empty, "private async void is still unsafe and must be flagged.");
     }
 
@@ -219,9 +191,7 @@ public class AsyncVoidGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Good.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectAsyncVoidMethodsAsync("Good.cs");
-
         Assert.That(reports, Is.Empty, "async Task must NOT be flagged as async void.");
     }
 
@@ -236,9 +206,7 @@ public class AsyncVoidGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Plain.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectAsyncVoidMethodsAsync("Plain.cs");
-
         Assert.That(reports, Is.Empty, "A class with no async methods must return an empty report list.");
     }
 
@@ -258,17 +226,12 @@ public class AsyncVoidGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyForm.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectAsyncVoidMethodsAsync("MyForm.cs");
-
         // Event handler is still reported -> but with an advisory message, NOT the crash warning.
-        Assert.That(reports, Has.Count.EqualTo(1),
-            "Event handlers matching (object sender, *EventArgs e) should still produce a report.");
+        Assert.That(reports, Has.Count.EqualTo(1), "Event handlers matching (object sender, *EventArgs e) should still produce a report.");
         Assert.That(reports[0].MethodName, Is.EqualTo("Button_Click"));
-        Assert.That(reports[0].Reason, Does.Contain("only acceptable use"),
-            "Event handler report should contain advisory language, not the crash warning.");
-        Assert.That(reports[0].Reason, Does.Not.Contain("cannot be awaited"),
-            "Event handler should NOT get the non-event-handler crash message.");
+        Assert.That(reports[0].Reason, Does.Contain("only acceptable use"), "Event handler report should contain advisory language, not the crash warning.");
+        Assert.That(reports[0].Reason, Does.Not.Contain("cannot be awaited"), "Event handler should NOT get the non-event-handler crash message.");
     }
 
     [Test]
@@ -285,12 +248,9 @@ public class AsyncVoidGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Worker.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectAsyncVoidMethodsAsync("Worker.cs");
-
         Assert.That(reports, Has.Count.EqualTo(1));
-        Assert.That(reports[0].Reason, Does.Contain("cannot be awaited"),
-            "Non-event-handler async void must receive the crash warning.");
+        Assert.That(reports[0].Reason, Does.Contain("cannot be awaited"), "Non-event-handler async void must receive the crash warning.");
     }
 }
 
@@ -304,7 +264,6 @@ public class LockInAsyncGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -314,7 +273,6 @@ public class LockInAsyncGotchaTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task FindBlockingCalls_ThreadSleepInsideAsync_IsFlagged()
     {
@@ -330,9 +288,7 @@ public class LockInAsyncGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Poller.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindBlockingCallsInAsyncAsync("Poller.cs");
-
         Assert.That(reports, Is.Not.Empty, "Thread.Sleep inside async method must be flagged.");
     }
 
@@ -350,9 +306,7 @@ public class LockInAsyncGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("WaitInAsync.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindBlockingCallsInAsyncAsync("WaitInAsync.cs");
-
         Assert.That(reports, Is.Not.Empty, ".Wait() inside async method must be flagged.");
     }
 
@@ -371,9 +325,7 @@ public class LockInAsyncGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("HiddenBlock.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindBlockingCallsInAsyncAsync("HiddenBlock.cs");
-
         Assert.That(reports, Is.Not.Empty, ".GetAwaiter().GetResult() inside async method must be flagged.");
     }
 
@@ -390,11 +342,8 @@ public class LockInAsyncGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("SyncOk.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindBlockingCallsInAsyncAsync("SyncOk.cs");
-
-        Assert.That(reports, Is.Empty,
-            "Thread.Sleep inside a synchronous method must NOT be flagged by FindBlockingCallsInAsyncAsync.");
+        Assert.That(reports, Is.Empty, "Thread.Sleep inside a synchronous method must NOT be flagged by FindBlockingCallsInAsyncAsync.");
     }
 }
 
@@ -407,7 +356,6 @@ public class ThreadSafeLockGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private ThreadSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -417,7 +365,6 @@ public class ThreadSafeLockGotchaTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task MakeMethodThreadSafe_NoExistingLock_AddsLockStatement()
     {
@@ -429,9 +376,7 @@ public class ThreadSafeLockGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Counter.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.MakeMethodThreadSafeAsync("Counter.cs", "Increment");
-
         Assert.That(result.UpdatedText, Does.Contain("lock"), "Method body must be wrapped in a lock statement.");
         Assert.That(result.UpdatedText, Does.Contain("_lock"), "A _lock field must be introduced.");
     }
@@ -446,11 +391,8 @@ public class ThreadSafeLockGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Worker.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.MakeMethodThreadSafeAsync("Worker.cs", "NonExistent");
-
-        Assert.That(result.Message, Does.Contain("ErrorDetails"),
-            "Requesting a non-existent method must return an error string, not throw.");
+        Assert.That(result.Message, Does.Contain("ErrorDetails"), "Requesting a non-existent method must return an error string, not throw.");
     }
 
     [Test]
@@ -466,9 +408,7 @@ public class ThreadSafeLockGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("AlreadyLocked.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.MakeMethodThreadSafeAsync("AlreadyLocked.cs", "DoWork");
-
         Assert.That(result, Is.Not.Null, "Engine must return a non-null result even for an already-locked method.");
         Assert.That(result.UpdatedText, Does.Contain("lock"), "The lock keyword must still be present in the result.");
     }
@@ -488,9 +428,7 @@ public class ThreadSafeLockGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Serialized.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertLockToSemaphoreSlimAsync("Serialized.cs", "Process");
-
         Assert.That(result.UpdatedText, Does.Contain("SemaphoreSlim"), "lock must be replaced with SemaphoreSlim.");
         Assert.That(result.UpdatedText, Does.Contain("WaitAsync"), "Converted method must call WaitAsync.");
     }
@@ -506,9 +444,7 @@ public class ThreadSafeLockGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("NoLock.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertLockToSemaphoreSlimAsync("NoLock.cs", "Process");
-
         Assert.That(result, Is.Not.Null, "Must return the original code, not null, when no lock exists.");
         Assert.That(result.UpdatedText, Does.Contain("NoLockAtAll"), "Original class name must be present in returned code.");
     }
@@ -524,11 +460,8 @@ public class ThreadSafeLockGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Migrated.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertLockToSemaphoreSlimAsync("Migrated.cs", "Run");
-
-        Assert.That(result.UpdatedText, Does.Contain("Release"),
-            "SemaphoreSlim.Release() must appear in the converted output.");
+        Assert.That(result.UpdatedText, Does.Contain("Release"), "SemaphoreSlim.Release() must appear in the converted output.");
     }
 }
 
@@ -542,7 +475,6 @@ public class ValueTaskMisuseGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -552,7 +484,6 @@ public class ValueTaskMisuseGotchaTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task DetectValueTaskMisuse_AwaitedOnceImmediately_IsNotFlagged()
     {
@@ -570,11 +501,8 @@ public class ValueTaskMisuseGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("GoodVT.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectValueTaskMisuseAsync("GoodVT.cs");
-
-        Assert.That(reports, Is.Empty,
-            "Awaiting a ValueTask local on the immediately-next statement must NOT be flagged.");
+        Assert.That(reports, Is.Empty, "Awaiting a ValueTask local on the immediately-next statement must NOT be flagged.");
     }
 
     [Test]
@@ -594,9 +522,7 @@ public class ValueTaskMisuseGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("DoubleVT.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectValueTaskMisuseAsync("DoubleVT.cs");
-
         Assert.That(reports, Is.Not.Empty, "Awaiting a ValueTask local twice must be flagged.");
     }
 
@@ -613,9 +539,7 @@ public class ValueTaskMisuseGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("CleanVT.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectValueTaskMisuseAsync("CleanVT.cs");
-
         Assert.That(reports, Is.Empty, "Expression-body ValueTask return with no local storage must return empty.");
     }
 
@@ -629,9 +553,7 @@ public class ValueTaskMisuseGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("NoVT.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.DetectValueTaskMisuseAsync("NoVT.cs");
-
         Assert.That(reports, Is.Empty, "A class with no ValueTask at all must return an empty list.");
     }
 }
@@ -646,7 +568,6 @@ public class ExceptionHandlingGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -656,7 +577,6 @@ public class ExceptionHandlingGotchaTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task AnalyzeExceptions_EmptyCatch_IsSwallowedException()
     {
@@ -671,11 +591,8 @@ public class ExceptionHandlingGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Swallower.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.AnalyzeExceptionHandlingAsync("Swallower.cs");
-
-        Assert.That(findings.Any(f => f.Pattern == "SwallowedException"), Is.True,
-            "An empty catch block must produce a SwallowedException finding.");
+        Assert.That(findings.Any(f => f.Pattern == "SwallowedException"), Is.True, "An empty catch block must produce a SwallowedException finding.");
     }
 
     [Test]
@@ -694,11 +611,8 @@ public class ExceptionHandlingGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("CommentSwallower.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.AnalyzeExceptionHandlingAsync("CommentSwallower.cs");
-
-        Assert.That(findings.Any(f => f.Pattern == "SwallowedException"), Is.True,
-            "A catch block containing only a comment (0 real statements) must be treated as a swallowed exception.");
+        Assert.That(findings.Any(f => f.Pattern == "SwallowedException"), Is.True, "A catch block containing only a comment (0 real statements) must be treated as a swallowed exception.");
     }
 
     [Test]
@@ -720,11 +634,8 @@ public class ExceptionHandlingGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Proper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.AnalyzeExceptionHandlingAsync("Proper.cs");
-
-        Assert.That(findings.All(f => f.Pattern != "SwallowedException"), Is.True,
-            "Catch that logs and rethrows must NOT be flagged as SwallowedException.");
+        Assert.That(findings.All(f => f.Pattern != "SwallowedException"), Is.True, "Catch that logs and rethrows must NOT be flagged as SwallowedException.");
     }
 
     [Test]
@@ -744,11 +655,8 @@ public class ExceptionHandlingGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Filtered.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.AnalyzeExceptionHandlingAsync("Filtered.cs");
-
-        Assert.That(findings.All(f => f.Pattern != "SwallowedException"), Is.True,
-            "A filtered catch that rethrows must NOT be flagged as SwallowedException.");
+        Assert.That(findings.All(f => f.Pattern != "SwallowedException"), Is.True, "A filtered catch that rethrows must NOT be flagged as SwallowedException.");
     }
 
     [Test]
@@ -767,11 +675,8 @@ public class ExceptionHandlingGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("SpecificCatch.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.AnalyzeExceptionHandlingAsync("SpecificCatch.cs");
-
-        Assert.That(findings.All(f => f.Pattern != "CatchAll"), Is.True,
-            "catch(IOException) must NOT be flagged as CatchAll.");
+        Assert.That(findings.All(f => f.Pattern != "CatchAll"), Is.True, "catch(IOException) must NOT be flagged as CatchAll.");
     }
 }
 
@@ -784,18 +689,14 @@ public class ExceptionHandlingGotchaTests
 public class ImmutabilityGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private ImmutabilityEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ImmutabilityEngine(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task MakeClassImmutable_SetAccessor_BecomesInit()
     {
@@ -804,9 +705,7 @@ public class ImmutabilityGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Entity.cs", "Entity");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Entity.cs", "Entity");
         Assert.That(result.UpdatedText, Does.Contain("init"), "set; accessor must be replaced with init;");
         Assert.That(result.UpdatedText, Does.Not.Contain("set;"), "set; must no longer be present after mutation.");
     }
@@ -821,9 +720,7 @@ public class ImmutabilityGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("AI.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("AI.cs", "AlreadyImmutable");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("AI.cs", "AlreadyImmutable");
         Assert.That(result, Is.Not.Null, "Must not return null for an already-immutable class.");
         Assert.That(result.UpdatedText, Does.Contain("init"), "init keyword must still be present.");
         Assert.That(result.UpdatedText, Does.Not.Contain("set;"), "No spurious set; must be introduced.");
@@ -840,9 +737,7 @@ public class ImmutabilityGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Mutable.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Mutable.cs", "MutableFields");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Mutable.cs", "MutableFields");
         Assert.That(result.UpdatedText, Does.Contain("readonly"), "Public mutable fields must receive the readonly modifier.");
     }
 
@@ -856,13 +751,9 @@ public class ImmutabilityGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Real.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Real.cs", "NonExistent");
-
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
-            "Unknown class name must return the original file content, not null or empty.");
-        Assert.That(result.UpdatedText, Does.Contain("RealClass"),
-            "The original class name must be present in the returned (unchanged) source.");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Real.cs", "NonExistent");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Unknown class name must return the original file content, not null or empty.");
+        Assert.That(result.UpdatedText, Does.Contain("RealClass"), "The original class name must be present in the returned (unchanged) source.");
     }
 
     [Test]
@@ -873,9 +764,7 @@ public class ImmutabilityGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Empty.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.MakeClassImmutableAsync("Empty.cs", "EmptyClass");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Empty.cs", "EmptyClass");
         Assert.That(result, Is.Not.Null, "Engine must not crash or return null for a class with no properties.");
         Assert.That(result.UpdatedText, Does.Contain("EmptyClass"), "Class name must be present in the returned code.");
     }
@@ -892,7 +781,6 @@ public class StringConcatInLoopGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -902,7 +790,6 @@ public class StringConcatInLoopGotchaTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task DetectAntiPatterns_StringLiteralRhsInForLoop_IsFlagged()
     {
@@ -918,11 +805,8 @@ public class StringConcatInLoopGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Builder.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Builder.cs");
-
-        Assert.That(findings.Any(f => f.Pattern == "StringConcatInLoop"), Is.True,
-            "+= with a string literal inside a for loop must be flagged as StringConcatInLoop.");
+        Assert.That(findings.Any(f => f.Pattern == "StringConcatInLoop"), Is.True, "+= with a string literal inside a for loop must be flagged as StringConcatInLoop.");
     }
 
     [Test]
@@ -940,11 +824,8 @@ public class StringConcatInLoopGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Greeter.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Greeter.cs");
-
-        Assert.That(findings.All(f => f.Pattern != "StringConcatInLoop"), Is.True,
-            "+= outside any loop must NOT be flagged as StringConcatInLoop.");
+        Assert.That(findings.All(f => f.Pattern != "StringConcatInLoop"), Is.True, "+= outside any loop must NOT be flagged as StringConcatInLoop.");
     }
 
     [Test]
@@ -964,11 +845,8 @@ public class StringConcatInLoopGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Concat.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("Concat.cs");
-
-        Assert.That(findings.Any(f => f.Pattern == "StringConcatInLoop"), Is.True,
-            "+= on a variable whose name ends in 'text' inside a foreach must be flagged.");
+        Assert.That(findings.Any(f => f.Pattern == "StringConcatInLoop"), Is.True, "+= on a variable whose name ends in 'text' inside a foreach must be flagged.");
     }
 
     [Test]
@@ -988,11 +866,8 @@ public class StringConcatInLoopGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("While.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync("While.cs");
-
-        Assert.That(findings.Any(f => f.Pattern == "StringConcatInLoop"), Is.True,
-            "+= with a string-literal RHS inside a while loop must be flagged.");
+        Assert.That(findings.Any(f => f.Pattern == "StringConcatInLoop"), Is.True, "+= with a string-literal RHS inside a while loop must be flagged.");
     }
 }
 
@@ -1006,7 +881,6 @@ public class MissingCancellationTokenGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -1016,7 +890,6 @@ public class MissingCancellationTokenGotchaTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task FindMissingCancellationTokens_AsyncMethodWithoutCtCallingCalleeWithCt_IsFlagged()
     {
@@ -1036,11 +909,8 @@ public class MissingCancellationTokenGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Missing.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.FindMissingCancellationTokensAsync("Missing.cs");
-
-        Assert.That(findings.Any(f => f.MethodName == "DoWorkAsync"), Is.True,
-            "An async method without a CancellationToken parameter that calls a callee accepting one must be flagged.");
+        Assert.That(findings.Any(f => f.MethodName == "DoWorkAsync"), Is.True, "An async method without a CancellationToken parameter that calls a callee accepting one must be flagged.");
     }
 
     [Test]
@@ -1060,11 +930,8 @@ public class MissingCancellationTokenGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("HasToken.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.FindMissingCancellationTokensAsync("HasToken.cs");
-
-        Assert.That(findings.All(f => f.MethodName != "DoWorkAsync"), Is.True,
-            "An async method that already has a CancellationToken parameter must NOT be flagged.");
+        Assert.That(findings.All(f => f.MethodName != "DoWorkAsync"), Is.True, "An async method that already has a CancellationToken parameter must NOT be flagged.");
     }
 
     [Test]
@@ -1083,11 +950,8 @@ public class MissingCancellationTokenGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("SyncCaller.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var findings = await _engine.FindMissingCancellationTokensAsync("SyncCaller.cs");
-
-        Assert.That(findings.All(f => f.MethodName != "DoWork"), Is.True,
-            "A synchronous method must NOT be flagged by FindMissingCancellationTokensAsync.");
+        Assert.That(findings.All(f => f.MethodName != "DoWork"), Is.True, "A synchronous method must NOT be flagged by FindMissingCancellationTokensAsync.");
     }
 }
 
@@ -1101,7 +965,6 @@ public class UnsafeTypeCastGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private SecurityAndSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -1111,7 +974,6 @@ public class UnsafeTypeCastGotchaTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task FindUnsafeCasts_DirectStringCast_IsFlagged()
     {
@@ -1122,11 +984,8 @@ public class UnsafeTypeCastGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Caster.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.FindUnsafeTypeCastsAsync("Caster.cs");
-
-        Assert.That(issues.Any(i => i.Type == "UnsafeCast"), Is.True,
-            "(string)obj is a direct cast and must be flagged as UnsafeCast.");
+        Assert.That(issues.Any(i => i.Type == "UnsafeCast"), Is.True, "(string)obj is a direct cast and must be flagged as UnsafeCast.");
     }
 
     [Test]
@@ -1141,11 +1000,8 @@ public class UnsafeTypeCastGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("NumCaster.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.FindUnsafeTypeCastsAsync("NumCaster.cs");
-
-        Assert.That(issues.Any(i => i.Type == "UnsafeCast"), Is.False,
-            "(int)double is a safe numeric conversion and must NOT be flagged as UnsafeCast.");
+        Assert.That(issues.Any(i => i.Type == "UnsafeCast"), Is.False, "(int)double is a safe numeric conversion and must NOT be flagged as UnsafeCast.");
     }
 
     [Test]
@@ -1160,11 +1016,8 @@ public class UnsafeTypeCastGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("SafeCaster.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.FindUnsafeTypeCastsAsync("SafeCaster.cs");
-
-        Assert.That(issues, Is.Empty,
-            "\"obj as string\" must NOT be flagged - it returns null instead of throwing.");
+        Assert.That(issues, Is.Empty, "\"obj as string\" must NOT be flagged - it returns null instead of throwing.");
     }
 
     [Test]
@@ -1181,11 +1034,8 @@ public class UnsafeTypeCastGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Pattern.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.FindUnsafeTypeCastsAsync("Pattern.cs");
-
-        Assert.That(issues, Is.Empty,
-            "\"obj is string s\" pattern matching must NOT be flagged as an unsafe cast.");
+        Assert.That(issues, Is.Empty, "\"obj is string s\" pattern matching must NOT be flagged as an unsafe cast.");
     }
 
     [Test]
@@ -1198,9 +1048,7 @@ public class UnsafeTypeCastGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("NoCasts.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var issues = await _engine.FindUnsafeTypeCastsAsync("NoCasts.cs");
-
         Assert.That(issues, Is.Empty, "A class with no casts must return an empty list.");
     }
 }
@@ -1216,7 +1064,6 @@ public class FireAndForgetGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -1226,7 +1073,6 @@ public class FireAndForgetGotchaTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task FindUnawaitedFireAndForget_RawCallToAsyncMethod_IsFlagged()
     {
@@ -1243,11 +1089,8 @@ public class FireAndForgetGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Launcher.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Launcher.cs");
-
-        Assert.That(reports, Is.Not.Empty,
-            "A raw unawaited call to an Async method must be flagged as fire-and-forget.");
+        Assert.That(reports, Is.Not.Empty, "A raw unawaited call to an Async method must be flagged as fire-and-forget.");
     }
 
     [Test]
@@ -1268,15 +1111,10 @@ public class FireAndForgetGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Discarder.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Discarder.cs");
-
-        Assert.That(reports, Is.Not.Empty,
-            "_ = RunAsync() is a discard fire-and-forget and must now be detected by the engine.");
-        Assert.That(reports[0].Reason, Does.Contain("RunAsync"),
-            "The report should name the fire-and-forgot method.");
-        Assert.That(reports[0].Reason, Does.Contain("discard"),
-            "The report should mention the discard pattern.");
+        Assert.That(reports, Is.Not.Empty, "_ = RunAsync() is a discard fire-and-forget and must now be detected by the engine.");
+        Assert.That(reports[0].Reason, Does.Contain("RunAsync"), "The report should name the fire-and-forgot method.");
+        Assert.That(reports[0].Reason, Does.Contain("discard"), "The report should mention the discard pattern.");
     }
 
     [Test]
@@ -1294,9 +1132,7 @@ public class FireAndForgetGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Careful.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Careful.cs");
-
         Assert.That(reports, Is.Empty, "Properly awaited tasks must NOT be flagged as fire-and-forget.");
     }
 
@@ -1310,9 +1146,7 @@ public class FireAndForgetGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Sync.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Sync.cs");
-
         Assert.That(reports, Is.Empty, "A class with no async code must return an empty fire-and-forget list.");
     }
 }
@@ -1327,7 +1161,6 @@ public class ConfigureAwaitInLibraryGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -1337,7 +1170,6 @@ public class ConfigureAwaitInLibraryGotchaTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task FindConfigureAwaitMissing_AwaitInNonControllerClass_IsFlagged()
     {
@@ -1354,11 +1186,8 @@ public class ConfigureAwaitInLibraryGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("DataService.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindConfigureAwaitMissingAsync("DataService.cs");
-
-        Assert.That(reports, Is.Not.Empty,
-            "await without .ConfigureAwait(false) in a library class must be flagged.");
+        Assert.That(reports, Is.Not.Empty, "await without .ConfigureAwait(false) in a library class must be flagged.");
     }
 
     [Test]
@@ -1376,11 +1205,8 @@ public class ConfigureAwaitInLibraryGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Multi.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindConfigureAwaitMissingAsync("Multi.cs");
-
-        Assert.That(reports.Count, Is.GreaterThanOrEqualTo(2),
-            "Each await without ConfigureAwait(false) should produce its own report.");
+        Assert.That(reports.Count, Is.GreaterThanOrEqualTo(2), "Each await without ConfigureAwait(false) should produce its own report.");
     }
 
     [Test]
@@ -1397,11 +1223,8 @@ public class ConfigureAwaitInLibraryGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Lib.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindConfigureAwaitMissingAsync("Lib.cs");
-
-        Assert.That(reports, Is.Empty,
-            "await with .ConfigureAwait(false) must NOT be flagged.");
+        Assert.That(reports, Is.Empty, "await with .ConfigureAwait(false) must NOT be flagged.");
     }
 
     [Test]
@@ -1420,10 +1243,7 @@ public class ConfigureAwaitInLibraryGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Products.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var reports = await _engine.FindConfigureAwaitMissingAsync("Products.cs");
-
-        Assert.That(reports, Is.Empty,
-            "A class named *Controller must not be flagged for missing ConfigureAwait(false).");
+        Assert.That(reports, Is.Empty, "A class named *Controller must not be flagged for missing ConfigureAwait(false).");
     }
 }

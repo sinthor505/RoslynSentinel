@@ -14,7 +14,7 @@ public class DeepFunctionalVerificationTests
     private ProjectStructureEngine _projectStructureEngine;
     private RefactoringEngine _refactoringEngine;
     private DependencyEngine _dependencyEngine;
-    private ModernizationEngine _modernizationEngine;
+    private SyntaxModernizationEngine _modernizationEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
 
     [SetUp]
@@ -28,7 +28,7 @@ public class DeepFunctionalVerificationTests
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
         _refactoringEngine = new RefactoringEngine(_workspaceManager, new NullLogger<RefactoringEngine>(), config);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
-        _modernizationEngine = new ModernizationEngine(_workspaceManager, config);
+        _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, config);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);
     }
 

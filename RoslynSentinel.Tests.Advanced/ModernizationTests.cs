@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tests.Advanced;
 public class ModernizationTests
 {
     private IWorkspaceManager _workspaceManager;
-    private ModernizationEngine _modernEngine;
+    private SyntaxModernizationEngine _modernEngine;
     private CodeStyleEngine _styleEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
 
@@ -18,7 +18,7 @@ public class ModernizationTests
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _modernEngine = new ModernizationEngine(_workspaceManager, config);
+        _modernEngine = new SyntaxModernizationEngine(_workspaceManager, config);
         _styleEngine = new CodeStyleEngine(_workspaceManager, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
     }

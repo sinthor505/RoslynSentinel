@@ -91,7 +91,7 @@ public class MyPoco {
     public string Name { get; set; }
     public void DoWork() {}
 }");
-        var modernizationEngine = new ModernizationEngine(_workspaceManager, config);
+        var modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, config);
         var result = await modernizationEngine.ClassToRecordAsync("Test.cs", "MyPoco");
         // Bug 2 fix: properties with [Required] cannot use positional syntax (would drop attributes),
         // so class-body record with init accessors is generated instead.

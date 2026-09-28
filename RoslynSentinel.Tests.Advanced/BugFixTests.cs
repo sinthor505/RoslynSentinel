@@ -1,6 +1,5 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
-
 using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
@@ -231,8 +230,6 @@ public class Destination
         Assert.That(result.UpdatedText, Does.Contain("Name"), "Should map Name property");
         Assert.That(result.UpdatedText, Does.Contain("Age"), "Should map Age property");
     }
-
-
 
     // ── Bug 48: FindTodoFixmeComments -> Exact Word Boundary Matching ──────────────
     [Test]
@@ -1771,8 +1768,6 @@ public class OtherClass
             Assert.That(result.UpdatedText, Does.Contain("=>"), "Method should have been converted to an expression body.");
         }
 
-
-
         /// <summary>
         /// Regression tests for 5 high-priority bugs: BUG-70, 71, 72, 73, 74
         /// </summary>
@@ -2211,7 +2206,7 @@ public class Calculator
                     var result = await _granularEngine.IntroduceParameterAsync(document.FilePath!, "x * 2", "multiplier");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                    // Should either succeed or return unchanged code, but not crash
+                // Should either succeed or return unchanged code, but not crash
                 }
 
                 [Test]
@@ -2235,7 +2230,7 @@ public class Processor
                     var result = await _granularEngine.IntroduceParameterAsync(document.FilePath!, "input", "text");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                    // Should either succeed or return unchanged code, but not crash
+                // Should either succeed or return unchanged code, but not crash
                 }
             }
         }
@@ -3123,7 +3118,7 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private ModernizationTools CreateTools() => new ModernizationTools(new ModernizationEngine(_workspaceManager, _config), new ModernizationUpgradeEngine(_workspaceManager), new ModernLoggingEngine(_workspaceManager), _engine, new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new ImmutabilityEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), _engine, new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
         [Test]
         public async Task AddBracesAsync_FileNotInWorkspace_ReturnsEmpty()
         {
@@ -3162,13 +3157,11 @@ namespace MyApp
     public class MakeClassImmutableNullReturnRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
-        private ImmutabilityEngine _engine;
         private SentinelConfiguration _config;
         [SetUp]
         public void Setup()
         {
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _engine = new ImmutabilityEngine(_workspaceManager);
             _config = new SentinelConfiguration();
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Foo.cs", "public class Foo { public string Name { get; set; } }")]);
             _workspaceManager.SetTestSolution(solution);
@@ -3176,18 +3169,18 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private ModernizationTools CreateTools() => new ModernizationTools(new ModernizationEngine(_workspaceManager, _config), new ModernizationUpgradeEngine(_workspaceManager), new ModernLoggingEngine(_workspaceManager), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), _engine, new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
         [Test]
         public async Task MakeClassImmutableAsync_FileNotInWorkspace_ReturnsEmpty()
         {
-            var result = await _engine.MakeClassImmutableAsync("nonexistent.cs", "MyClass");
+            var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass");
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
         }
 
         [Test]
         public async Task MakeClassImmutable_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
         {
-            var result = await _engine.MakeClassImmutableAsync("nonexistent.cs", "MyClass");
+            var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass");
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
         }
 
@@ -3196,7 +3189,7 @@ namespace MyApp
         {
             // When the file exists but the class doesn't, the engine returns the original
             // file content unchanged -> "no changes needed" is not the same as "file not found".
-            var result = await _engine.MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
+            var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
             Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
         }
 
@@ -3205,7 +3198,7 @@ namespace MyApp
         {
             // When the engine returns non-empty content (no changes needed), the tool
             // returns that content rather than throwing -> only file-not-found triggers IOE.
-            var result = await _engine.MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
+            var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
             Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
         }
     }

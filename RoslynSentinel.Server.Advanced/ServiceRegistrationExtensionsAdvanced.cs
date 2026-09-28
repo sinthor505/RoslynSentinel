@@ -50,15 +50,12 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<GranularRefactoringEngine>();
         services.AddSingleton<HealthOrchestrationEngine>();
         services.AddSingleton<IDEStyleEngine>();
-        services.AddSingleton<ImmutabilityEngine>();
         services.AddSingleton<InstrumentationEngine>();
         services.AddSingleton<LogicOptimizationEngine>();
         services.AddSingleton<MappingEngine>();
         services.AddSingleton<MetricsEngine>();
         services.AddSingleton<MigrationLedger>();
-        services.AddSingleton<ModernizationEngine>();
-        services.AddSingleton<ModernizationUpgradeEngine>();
-        services.AddSingleton<ModernLoggingEngine>();
+        services.AddSingleton<SyntaxModernizationEngine>();
         services.AddSingleton<OutParamRefactoringEngine>();
         services.AddSingleton<PathDrivenTestEngine>();
         services.AddSingleton<PerformanceEngine>();

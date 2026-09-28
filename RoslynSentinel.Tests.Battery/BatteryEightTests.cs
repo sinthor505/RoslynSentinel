@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Battery;
-
 /// <summary>
 /// Battery #8 -> Tests for five engines at 5-6 mention coverage:
 ///   A. InventoryEngine              (2 tests) -> GetCodeInventory
@@ -13,8 +12,7 @@ namespace RoslynSentinel.Tests.Battery;
 ///
 /// Total: 14 tests.
 /// </summary>
-
-// ════════════════════════════════════════════════════════════════════════════════
+ // ════════════════════════════════════════════════════════════════════════════════
 // A. InventoryEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
@@ -22,7 +20,6 @@ public class InventoryEngineTests
 {
     private IWorkspaceManager _workspaceManager;
     private InventoryEngine _engine;
-
     [SetUp]
     public void Setup()
     {
@@ -32,7 +29,6 @@ public class InventoryEngineTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -57,7 +53,6 @@ namespace ExpressRecipe.Services
     }
 }");
         var report = await _engine.GetCodeInventoryAsync("Test.cs");
-
         Assert.That(report.filePath.Absolute, Is.EqualTo("Test.cs"));
         Assert.That(report.Namespaces, Contains.Item("ExpressRecipe.Services"));
         Assert.That(report.Classes, Contains.Item("ProductService"));
@@ -72,8 +67,7 @@ namespace ExpressRecipe.Services
     public async Task GetCodeInventory_UnknownFile_ThrowsFileNotFound()
     {
         SetSource("public class Foo { }");
-        Assert.ThrowsAsync<FileNotFoundException>(async () =>
-            await _engine.GetCodeInventoryAsync("NonExistent.cs"));
+        Assert.ThrowsAsync<FileNotFoundException>(async () => await _engine.GetCodeInventoryAsync("NonExistent.cs"));
     }
 }
 
@@ -84,18 +78,14 @@ namespace ExpressRecipe.Services
 public class ModernizationUpgradeEngineTests
 {
     private IWorkspaceManager _workspaceManager;
-    private ModernizationUpgradeEngine _engine;
-
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ModernizationUpgradeEngine(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -111,34 +101,10 @@ public class Parser
 {
     public string Process(string input) { return input.Substring(1); }
 }");
-        var result = await _engine.UseSpanForParsingAsync("Test.cs", "Process");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "Process");
         Assert.That(result.UpdatedText, Does.Contain("Process"), "Method name should be preserved");
         Assert.That(result.UpdatedText, Does.Contain("AsSpan"), "Substring should be replaced with AsSpan");
         Assert.That(result.UpdatedText, Does.Not.Contain("Substring"), "Original Substring call should be gone");
-    }
-
-    [Test]
-    public async Task UpgradePatternMatching_OldStyleIsPattern_ReturnsNonNullString()
-    {
-        // PatternMatchingRewriter runs on any file -> this is a smoke test confirming
-        // the method completes without throwing regardless of match/no-match
-        SetSource(@"
-public class Processor
-{
-    public void Process(object obj)
-    {
-        if (obj is string)
-        {
-            var s = (string)obj;
-            System.Console.WriteLine(s);
-        }
-    }
-}");
-        var result = await _engine.UpgradePatternMatchingAsync("Test.cs");
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result.UpdatedText, Does.Contain("Process"), "Method name should be preserved");
-        Assert.That(result.UpdatedText!.Length, Is.GreaterThan(10), "Should return non-empty code");
     }
 
     [Test]
@@ -154,8 +120,7 @@ public class Guard
         if (x == null) throw new ArgumentNullException(""x"");
     }
 }");
-        var result = await _engine.UseThrowExpressionsAsync("Test.cs");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
         Assert.That(result.UpdatedText, Does.Contain("Validate"), "Method name should be preserved");
     }
@@ -169,7 +134,6 @@ public class DependencyEngineTests
 {
     private IWorkspaceManager _workspaceManager;
     private DependencyEngine _engine;
-
     [SetUp]
     public void Setup()
     {
@@ -179,17 +143,13 @@ public class DependencyEngineTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task GetProjectDependencies_KnownInMemoryProject_ReturnsEmptyLists()
     {
         // AdhocWorkspace projects have no ProjectReferences and no .csproj file
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("OrderService",
-            [("Order.cs", "public class Order { }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("OrderService", [("Order.cs", "public class Order { }")]);
         _workspaceManager.SetTestSolution(solution);
-
         var report = await _engine.GetProjectDependenciesAsync("OrderService", CancellationToken.None);
-
         Assert.That(report.ProjectReferences, Is.Empty, "In-memory project has no project references");
         Assert.That(report.PackageReferences, Is.Empty, "In-memory project has no .csproj file to parse");
     }
@@ -197,12 +157,9 @@ public class DependencyEngineTests
     [Test]
     public async Task GetProjectDependencies_UnknownProject_ThrowsInvalidOperation()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Test.cs", "public class Foo { }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", "public class Foo { }")]);
         _workspaceManager.SetTestSolution(solution);
-
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _engine.GetProjectDependenciesAsync("NonExistent", CancellationToken.None));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _engine.GetProjectDependenciesAsync("NonExistent", CancellationToken.None));
     }
 
     [Test]
@@ -210,12 +167,9 @@ public class DependencyEngineTests
     {
         // AdhocWorkspace compilation has no CompilationReference typed references (metadata only)
         // -> FindUnusedReferences returns empty because the cast check for CompilationReference fails
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("PriceService",
-            [("Price.cs", "public class Price { public decimal Amount { get; set; } }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("PriceService", [("Price.cs", "public class Price { public decimal Amount { get; set; } }")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.FindUnusedReferencesAsync("PriceService");
-
         Assert.That(result, Is.Empty, "AdhocWorkspace has no CompilationReferences to flag as unused");
     }
 }
@@ -227,18 +181,14 @@ public class DependencyEngineTests
 public class ModernLoggingEngineTests
 {
     private IWorkspaceManager _workspaceManager;
-    private ModernLoggingEngine _engine;
-
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ModernLoggingEngine(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -258,8 +208,7 @@ public class AuthService
         _logger.LogInformation(""User logged in"", userId);
     }
 }", "AuthService.cs");
-        var result = await _engine.ConvertToSourceGeneratedLoggingAsync("AuthService.cs", "AuthService");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("AuthService.cs", "AuthService");
         Assert.That(result.UpdatedText, Does.Contain("partial"), "Class should be made partial");
         Assert.That(result.UpdatedText, Does.Contain("LogInformationEvent1"), "Should generate LogInformationEvent1 method");
         Assert.That(result.UpdatedText, Does.Contain("LoggerMessage"), "Should add [LoggerMessage] attribute");
@@ -275,8 +224,7 @@ public class UserService
 {
     public string GetName() { return ""Alice""; }
 }", "UserService.cs");
-        var result = await _engine.ConvertToSourceGeneratedLoggingAsync("UserService.cs", "UserService");
-
+        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("UserService.cs", "UserService");
         Assert.That(result.UpdatedText, Does.Contain("GetName"), "Method should be unchanged");
         Assert.That(result.UpdatedText, Does.Not.Contain("partial"), "No logging calls - class should not be made partial");
         Assert.That(result.UpdatedText, Does.Not.Contain("LoggerMessage"), "Should not generate LoggerMessage attribute");
@@ -286,9 +234,7 @@ public class UserService
     public async Task ConvertToSourceGeneratedLogging_UnknownClass_ThrowsInvalidOperation()
     {
         SetSource(@"public class Foo { }", "Foo.cs");
-
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _engine.ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
     }
 }
 
@@ -300,7 +246,6 @@ public class IDEStyleEngineTests
 {
     private IWorkspaceManager _workspaceManager;
     private IDEStyleEngine _engine;
-
     [SetUp]
     public void Setup()
     {
@@ -310,7 +255,6 @@ public class IDEStyleEngineTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -328,7 +272,6 @@ public class Counter
     public void Increment() { this._count++; }
 }");
         var result = await _engine.SimplifyMemberAccessAsync("Test.cs");
-
         Assert.That(result.UpdatedText, Does.Not.Contain("this."), "this. qualifiers should be removed");
         Assert.That(result.UpdatedText, Does.Contain("_count"), "Field name should be preserved");
     }
@@ -349,7 +292,6 @@ public class Factory
 }
 public class Product { public string Name { get; set; } public decimal Price { get; set; } }");
         var result = await _engine.UseObjectInitializersAsync("Test.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("Name"), "Property Name should be in initializer");
         Assert.That(result.UpdatedText, Does.Contain("Price"), "Property Price should be in initializer");
         // Both assignments should be collapsed into object initializer -> no separate assignment statements
@@ -370,7 +312,6 @@ public class Checker
     }
 }");
         var result = await _engine.UseNullPropagationAsync("Test.cs");
-
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
         Assert.That(result.UpdatedText, Does.Contain("Check"), "Method name should be preserved in stub output");
     }

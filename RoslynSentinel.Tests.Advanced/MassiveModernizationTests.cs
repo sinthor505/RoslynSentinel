@@ -12,7 +12,7 @@ public class MassiveModernizationTests
     private RefactoringEngine _refactoringEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
-    private ModernizationEngine _modernizationEngine;
+    private SyntaxModernizationEngine _modernizationEngine;
     private ModernizationTools _modernizationTools;
 
     [SetUp]
@@ -24,19 +24,16 @@ public class MassiveModernizationTests
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
 
-        var modern = new ModernizationEngine(_workspaceManager, config);
+        var modern = new SyntaxModernizationEngine(_workspaceManager, config);
         _modernizationEngine = modern;
-        var upgrade = new ModernizationUpgradeEngine(_workspaceManager);
-        var logging = new ModernLoggingEngine(_workspaceManager);
         var logic = new LogicOptimizationEngine(_workspaceManager);
         var style = new CodeStyleEngine(_workspaceManager, config);
         var healing = new CodeHealingEngine(_workspaceManager, config);
         var advLogic = new AdvancedLogicEngine(_workspaceManager);
         var ideStyle = new IDEStyleEngine(_workspaceManager);
-        var immutability = new ImmutabilityEngine(_workspaceManager);
         var asyncOpt = new AsyncOptimizationEngine(_workspaceManager);
 
-        _modernizationTools = new ModernizationTools(modern, upgrade, logging, _syntaxUpgradeEngine, logic, style, healing, advLogic, ideStyle, immutability, asyncOpt, _workspaceManager, config, NullLogger<ModernizationTools>.Instance);
+        _modernizationTools = new ModernizationTools(modern, _syntaxUpgradeEngine, logic, style, healing, advLogic, ideStyle, asyncOpt, _workspaceManager, config, NullLogger<ModernizationTools>.Instance);
     }
 
     [TearDown]

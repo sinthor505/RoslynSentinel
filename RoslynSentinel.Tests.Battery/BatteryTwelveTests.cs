@@ -131,13 +131,13 @@ public class SyntaxUpgradeEngineTests
 public class ModernizationEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private ModernizationEngine _engine = null!;
+    private SyntaxModernizationEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ModernizationEngine(_workspaceManager, new SentinelConfiguration());
+        _engine = new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
