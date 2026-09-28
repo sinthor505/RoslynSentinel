@@ -7,11 +7,12 @@ namespace RoslynSentinel.Advanced;
 
 public class PerformanceEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly SentinelConfiguration _config; private readonly IWorkspaceManager _workspaceManager;
 
-    public PerformanceEngine(IWorkspaceManager workspaceManager)
+    public PerformanceEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config = null)
     {
         _workspaceManager = workspaceManager;
+        _config = config;
     }
 
     public async Task<List<PerformanceIssueReport>> AnalyzePerformanceAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
@@ -882,6 +883,11 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> OptimizeResourceDisposalAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
+        if (!(_config?.IsFeatureEnabled("ResourceDisposal") ?? true))
+        {
+            return new List<PerformanceIssueReport>();
+        }
+
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
@@ -927,6 +933,11 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> DetectInefficientStringComparisonsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
+        if (!(_config?.IsFeatureEnabled("InefficientStringComparison") ?? true))
+        {
+            return new List<PerformanceIssueReport>();
+        }
+
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
@@ -962,6 +973,11 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> FindBoxingAllocationsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
+        if (!(_config?.IsFeatureEnabled("BoxingAllocation") ?? true))
+        {
+            return new List<PerformanceIssueReport>();
+        }
+
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)

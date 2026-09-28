@@ -1,8 +1,5 @@
 using System.ComponentModel;
 
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
@@ -125,7 +122,7 @@ public class RefactoringStructuralTools
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
         [Description("Required for remove and replace - the member to target. For overloaded targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
-        [Description("add or replace: require full trivia, signature and body. addTopLevelType: the full new type declaration (enum/class/record/struct/interface) - containerName is not used. Not used for addTypedMember, remove, or view.")]
+        [Description("add or replace: exactly one member declaration (full trivia, signature and body) - a source with 2+ member declarations is rejected with the count, names, and how to split the call. addTopLevelType: the full new type declaration (enum/class/record/struct/interface) - containerName is not used. Required for add. Not used for addTypedMember, remove, or view.")]
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
         [Description("addMember only: where to insert - null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\". Not used for addTopLevelType, addTypedMember, remove, replace, or view.")]
         [ExternalInputRequired(DataTag.Position)] string? position = null,

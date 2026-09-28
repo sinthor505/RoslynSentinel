@@ -1,11 +1,9 @@
 // Battery #23 -> QualityTools
 // Tests all 46 public methods of QualityTools in-memory via TestSolutionBuilder.
-
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
-
 [TestFixture]
 public class BatteryTwentyThreeTests
 {
@@ -24,7 +22,6 @@ public class BatteryTwentyThreeTests
     private AntiPatternEngine _antiPatternEngine;
     private ThreadSafetyEngine _threadSafetyEngine;
     private QualityTools _tools;
-
     private const string AsyncSource = @"
 using System;
 using System.Threading;
@@ -67,7 +64,6 @@ public class AsyncWorker
         await Task.CompletedTask;
     }
 }";
-
     private const string SecuritySource = @"
 using System;
 using System.Data.SqlClient;
@@ -86,7 +82,6 @@ public class DataService
         return ""C:\\Users\\admin\\file.txt"";
     }
 }";
-
     private const string QualitySource = @"
 using System;
 using System.Collections.Generic;
@@ -111,7 +106,6 @@ public class QualityClass
         await System.Threading.Tasks.Task.Delay(1);
     }
 }";
-
     [SetUp]
     public void Setup()
     {
@@ -126,25 +120,14 @@ public class QualityClass
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
-        _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
+        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
         _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
-        _tools = new QualityTools(_testingEngine,
-            _controlFlowEngine,
-            _analysisEngine,
-            new AntiPatternEngine(_workspaceManager),
-            new ThreadSafetyEngine(_workspaceManager),
-            _diagnosticEngine,
-            new CodeStyleAnalysisEngine(_workspaceManager),
-            new StackOverflowEngine(_workspaceManager),
-            new MsToolAugmentEngine(_workspaceManager),
-            _workspaceManager,
-            NullLogger<QualityTools>.Instance);
+        _tools = new QualityTools(_testingEngine, _controlFlowEngine, new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), _diagnosticEngine, new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -152,9 +135,7 @@ public class QualityClass
     }
 
     // ===================== THROW-GUARD METHODS =====================
-
     // --- AddGuardClauses ---
-
     [Test]
     public async Task AddGuardClauses_ValidMethod_ReturnsUpdatedSource()
     {
@@ -172,7 +153,6 @@ public class QualityClass
     }
 
     // --- AddBenchmarkStub ---
-
     [Test]
     public async Task AddBenchmarkStub_ValidClassAndMethod_ReturnsUpdatedSource()
     {
@@ -190,7 +170,6 @@ public class QualityClass
     }
 
     // --- AddConfigureAwaitFalse ---
-
     [Test]
     public async Task AddConfigureAwaitFalse_FileWithAwaits_ReturnsUpdatedSource()
     {
@@ -203,12 +182,10 @@ public class QualityClass
     public async Task AddConfigureAwaitFalse_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("NonExistent.cs"));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("NonExistent.cs"));
     }
 
     // --- RemoveConfigureAwaitFalse ---
-
     [Test]
     public async Task RemoveConfigureAwaitFalse_FileWithConfigureAwait_ReturnsUpdatedSource()
     {
@@ -222,12 +199,10 @@ public class QualityClass
     public async Task RemoveConfigureAwaitFalse_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync("NonExistent.cs"));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync("NonExistent.cs"));
     }
 
     // --- ConvertLockToSemaphoreSlim ---
-
     [Test]
     public async Task ConvertLockToSemaphoreSlim_MethodWithLock_ReturnsUpdatedSource()
     {
@@ -245,7 +220,6 @@ public class QualityClass
     }
 
     // --- ConvertToAsyncEnumerable---
-
     [Test]
     public async Task ConvertToAsyncEnumerable_ValidMethod_ReturnsUpdatedSource()
     {
@@ -265,7 +239,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- AddCancellationTokenToMethod---
-
     [Test]
     public async Task AddCancellationTokenToMethod_AsyncMethod_ReturnsUpdatedSource()
     {
@@ -283,7 +256,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- MakeMethodThreadSafe---
-
     [Test]
     public async Task MakeMethodThreadSafe_ValidMethod_ReturnsUpdatedSource()
     {
@@ -301,9 +273,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // ===================== NON-THROW METHODS =====================
-
     // --- AnalyzePerformance ---
-
     [Test]
     public async Task AnalyzePerformance_ValidFile_ReturnsList()
     {
@@ -313,7 +283,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- AnalyzeSecurity ---
-
     [Test]
     public async Task AnalyzeSecurity_FileWithSqlInjection_ReturnsList()
     {
@@ -323,7 +292,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- GenerateTestSkeleton ---
-
     [Test]
     public async Task GenerateTestSkeleton_ValidClass_ReturnsReport()
     {
@@ -333,7 +301,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- GenerateTestScaffold ---
-
     [Test]
     public async Task GenerateTestScaffold_ValidClass_ReturnsResult()
     {
@@ -343,7 +310,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- AnalyzePathCoverage ---
-
     [Test]
     public async Task AnalyzePathCoverage_ValidMethod_ReturnsReport()
     {
@@ -353,37 +319,33 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindPossibleDeadlocks ---
-
     [Test]
     public async Task FindPossibleDeadlocks_FileWithLock_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _analysisEngine.FindPossibleDeadlocksAsync(filePath: "Async.cs");
+        var result = await _antiPatternEngine.FindPossibleDeadlocksAsync(filePath: "Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
     // --- AnalyzeSemaphoreUsage ---
-
     [Test]
     public async Task AnalyzeSemaphoreUsage_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _analysisEngine.AnalyzeSemaphoreUsageAsync("Async.cs");
+        var result = await _antiPatternEngine.AnalyzeSemaphoreUsageAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
     // --- DetectMemoryLeaks ---
-
     [Test]
     public async Task DetectMemoryLeaks_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _analysisEngine.DetectMemoryLeaksAsync("Quality.cs");
+        var result = await new ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindTaskVoidUsage ---
-
     [Test]
     public async Task FindTaskVoidUsage_FileWithAsyncVoid_ReturnsList()
     {
@@ -393,7 +355,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindTaskYieldUsage ---
-
     [Test]
     public async Task FindTaskYieldUsage_ValidFile_ReturnsList()
     {
@@ -403,27 +364,24 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- DetectReflectionUsage ---
-
     [Test]
     public async Task DetectReflectionUsage_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _analysisEngine.DetectReflectionUsageAsync(filePath: "Quality.cs");
+        var result = await _antiPatternEngine.DetectReflectionUsageAsync(filePath: "Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
     // --- CheckForEmptyCatchBlocks ---
-
     [Test]
     public async Task CheckForEmptyCatchBlocks_FileWithEmptyCatch_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _analysisEngine.CheckForEmptyCatchBlocksAsync(filePath: "Quality.cs");
+        var result = await _antiPatternEngine.CheckForEmptyCatchBlocksAsync(filePath: "Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindTaskDelayUsage ---
-
     [Test]
     public async Task FindTaskDelayUsage_FileWithTaskDelay_ReturnsList()
     {
@@ -433,17 +391,15 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- CheckForRedundantCast ---
-
     [Test]
     public async Task CheckForRedundantCast_FileWithRedundantCast_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _analysisEngine.CheckForRedundantCastAsync(filePath: "Quality.cs");
+        var result = await _antiPatternEngine.CheckForRedundantCastAsync(filePath: "Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindTaskDelayZeroUsage ---
-
     [Test]
     public async Task FindTaskDelayZeroUsage_ValidFile_ReturnsList()
     {
@@ -453,7 +409,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindTaskWhenAllUsage ---
-
     [Test]
     public async Task FindTaskWhenAllUsage_ValidFile_ReturnsList()
     {
@@ -463,7 +418,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- DetectAntiPatterns ---
-
     [Test]
     public async Task DetectAntiPatterns_ValidFile_ReturnsList()
     {
@@ -473,27 +427,24 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindPossibleInfiniteLoops ---
-
     [Test]
     public async Task FindPossibleInfiniteLoops_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _analysisEngine.FindPossibleInfiniteLoopsAsync("Async.cs");
+        var result = await _antiPatternEngine.FindPossibleInfiniteLoopsAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
     // --- DetectMismatchedAwait ---
-
     [Test]
     public async Task DetectMismatchedAwait_FileWithMixedAsync_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _analysisEngine.DetectMismatchedAwaitAsync(filePath: "Async.cs");
+        var result = await _antiPatternEngine.DetectMismatchedAwaitAsync(filePath: "Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindHardcodedPaths ---
-
     [Test]
     public async Task FindHardcodedPaths_FileWithHardcodedPath_ReturnsList()
     {
@@ -503,7 +454,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindMutablePublicProperties ---
-
     [Test]
     public async Task FindMutablePublicProperties_ValidFile_ReturnsList()
     {
@@ -513,7 +463,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindNamingViolations ---
-
     [Test]
     public async Task FindNamingViolations_ValidFile_ReturnsList()
     {
@@ -523,7 +472,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindStringMagicValues ---
-
     [Test]
     public async Task FindStringMagicValues_ValidFile_ReturnsList()
     {
@@ -533,7 +481,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindMissingCancellationTokens ---
-
     [Test]
     public async Task FindMissingCancellationTokens_ValidFile_ReturnsList()
     {
@@ -543,7 +490,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- AnalyzeExceptionHandling ---
-
     [Test]
     public async Task AnalyzeExceptionHandling_FileWithCatch_ReturnsList()
     {
@@ -553,7 +499,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- CheckForSqlInjection ---
-
     [Test]
     public async Task CheckForSqlInjection_FileWithSqlInjection_ReturnsList()
     {
@@ -563,7 +508,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- AnalyzeMethodControlFlow ---
-
     [Test]
     public async Task AnalyzeMethodControlFlow_ValidMethod_ReturnsResult()
     {
@@ -573,7 +517,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- AnalyzeMethodDataFlow ---
-
     [Test]
     public async Task AnalyzeMethodDataFlow_ValidMethod_ReturnsResult()
     {
@@ -583,7 +526,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindConfigureAwaitMissing ---
-
     [Test]
     public async Task FindConfigureAwaitMissing_FileWithAwaits_ReturnsList()
     {
@@ -593,7 +535,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindBlockingCallsInAsync ---
-
     [Test]
     public async Task FindBlockingCallsInAsync_FileWithThreadSleep_ReturnsList()
     {
@@ -603,7 +544,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindAsyncInConstructor ---
-
     [Test]
     public async Task FindAsyncInConstructor_ValidFile_ReturnsList()
     {
@@ -613,7 +553,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindTaskRunInAsync ---
-
     [Test]
     public async Task FindTaskRunInAsync_ValidFile_ReturnsList()
     {
@@ -623,7 +562,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindConcurrentCollectionOpportunities ---
-
     [Test]
     public async Task FindConcurrentCollectionOpportunities_ValidFile_ReturnsList()
     {
@@ -633,7 +571,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindUnsafeLazyInit ---
-
     [Test]
     public async Task FindUnsafeLazyInit_ValidFile_ReturnsList()
     {
@@ -643,7 +580,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- DetectValueTaskMisuse ---
-
     [Test]
     public async Task DetectValueTaskMisuse_ValidFile_ReturnsList()
     {
@@ -653,7 +589,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindAsyncOverSync ---
-
     [Test]
     public async Task FindAsyncOverSync_FileWithSyncMethods_ReturnsList()
     {
@@ -663,7 +598,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindUnawaitedFireAndForget ---
-
     [Test]
     public async Task FindUnawaitedFireAndForget_FileWithFireAndForget_ReturnsList()
     {
@@ -673,7 +607,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindLongParameterList ---
-
     [Test]
     public async Task FindLongParameterList_ValidFile_ReturnsList()
     {
@@ -683,7 +616,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- OptimizeResourceDisposal ---
-
     [Test]
     public async Task OptimizeResourceDisposal_ValidFile_ReturnsList()
     {
@@ -693,7 +625,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- DetectInefficientStringComparisons ---
-
     [Test]
     public async Task DetectInefficientStringComparisons_ValidFile_ReturnsList()
     {
@@ -703,7 +634,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindBoxingAllocations ---
-
     [Test]
     public async Task FindBoxingAllocations_ValidFile_ReturnsList()
     {
@@ -713,7 +643,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindPrimitiveObsession ---
-
     [Test]
     public async Task FindPrimitiveObsession_ValidFile_ReturnsList()
     {
@@ -723,7 +652,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- FindInconsistentAsyncSuffix ---
-
     [Test]
     public async Task FindInconsistentAsyncSuffix_ValidFile_ReturnsList()
     {
@@ -733,7 +661,6 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     // --- GetDiagnosticsSummary ---
-
     [Test]
     public async Task GetDiagnosticsSummary_ValidFile_ReturnsSummaryResult()
     {

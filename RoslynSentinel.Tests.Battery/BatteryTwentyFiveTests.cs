@@ -1,11 +1,9 @@
 // Battery #25 -> Gap Coverage: 40 untested engine methods across 14 engines
 // Each group covers the specific methods that had zero test references.
 // All tests use in-memory AdhocWorkspace via TestSolutionBuilder (no MSBuild/project loading).
-
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Battery;
-
 // ════════════════════════════════════════════════════════════════════════════════
 // A. AdvancedLogicEngine -> 4 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
@@ -14,7 +12,6 @@ public class AdvancedLogicEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AdvancedLogicEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -24,7 +21,6 @@ public class AdvancedLogicEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task ConvertIfToSwitchStatementAsync_ValidMethod_ReturnsNonNull()
     {
@@ -38,9 +34,7 @@ public class Calc {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertIfToSwitchStatementAsync("Calc.cs", "Describe", CancellationToken.None);
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -49,9 +43,7 @@ public class Calc {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertIfToSwitchStatementAsync("NoSuchFile.cs", "Foo");
-
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -67,9 +59,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertForEachToForAsync("Looper.cs", 5);
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -84,9 +74,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertForToForEachAsync("Looper.cs", 4);
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -102,9 +90,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertWhileToForAsync("Looper.cs", 5);
-
         Assert.That(result, Is.Not.Null);
     }
 }
@@ -117,38 +103,32 @@ public class AnalysisEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AnalysisEngine _engine = null!;
-
+    private AntiPatternEngine _antiPatternEngine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AnalysisEngine(_workspaceManager, new SentinelConfiguration());
+        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task FindInterfaceExtractionCandidatesAsync_SmallClass_ReturnsNonNull()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Tiny { public void A() {} public void B() {} public void C() {} }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Tiny { public void A() {} public void B() {} public void C() {} }")]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.FindInterfaceExtractionCandidatesAsync(minPublicMethods: 2);
-
+        var result = await _antiPatternEngine.FindInterfaceExtractionCandidatesAsync(minPublicMethods: 2);
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task FindUninstantiatedTypesAsync_EmptyProject_ReturnsNonNull()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Used { public void Go() {} }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Used { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.FindUninstantiatedTypesAsync();
-
+        var result = await new DeadCodeEngine(_workspaceManager, new SentinelConfiguration()).FindUninstantiatedTypesAsync();
         Assert.That(result, Is.Not.Null);
     }
 
@@ -164,9 +144,7 @@ public class Guard {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Guard.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.DetectUnreachableCodeAsync("Guard.cs", "Method");
-
+        var result = await _antiPatternEngine.DetectUnreachableCodeAsync("Guard.cs", "Method");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -175,45 +153,34 @@ public class Guard {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.DetectUnreachableCodeAsync("NoFile.cs", "Foo");
-
+        var result = await _antiPatternEngine.DetectUnreachableCodeAsync("NoFile.cs", "Foo");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task AnalyzeSemaphoreUsageAsync_FileWithNoSemaphore_ReturnsNonNull()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Service { public void Go() {} }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.AnalyzeSemaphoreUsageAsync("Service.cs");
-
+        var result = await _antiPatternEngine.AnalyzeSemaphoreUsageAsync("Service.cs");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task FindInternalClassesThatCouldBePrivateAsync_SimpleProject_ReturnsNonNull()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Outer { internal class Inner {} }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Outer { internal class Inner {} }")]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.FindInternalClassesThatCouldBePrivateAsync();
-
+        var result = await new DeadCodeEngine(_workspaceManager, new SentinelConfiguration()).FindInternalClassesThatCouldBePrivateAsync();
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task FindLargeSwitchStatementsAsync_NoSwitch_ReturnsEmpty()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Service { public void Go() {} }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.FindLargeSwitchStatementsAsync(threshold: 5);
-
+        var result = await _antiPatternEngine.FindLargeSwitchStatementsAsync(threshold: 5);
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.Empty, "No switch statements, so nothing should be flagged");
     }
@@ -237,34 +204,17 @@ public class Router {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Router.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.FindLargeSwitchStatementsAsync(threshold: 5);
-
+        var result = await _antiPatternEngine.FindLargeSwitchStatementsAsync(threshold: 5);
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.Not.Empty, "A 6-case switch should exceed threshold of 5");
     }
 
     [Test]
-    public async Task OptimizeResourceDisposalAsync_SimpleFile_ReturnsNonNull()
-    {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Service { public void Go() {} }")]);
-        _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.OptimizeResourceDisposalAsync(filePath: "Service.cs");
-
-        Assert.That(result, Is.Not.Null);
-    }
-
-    [Test]
     public async Task DetectReflectionUsageAsync_FileWithNoReflection_ReturnsNonNull()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Service { public void Go() {} }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.DetectReflectionUsageAsync(filePath: "Service.cs");
-
+        var result = await _antiPatternEngine.DetectReflectionUsageAsync(filePath: "Service.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -277,9 +227,7 @@ public class Bar {}
 ";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("App.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
-        var result = await _engine.FindUnusedInterfacesAsync();
-
+        var result = await new DeadCodeEngine(_workspaceManager, new SentinelConfiguration()).FindUnusedInterfacesAsync();
         Assert.That(result, Is.Not.Null);
     }
 }
@@ -292,7 +240,6 @@ public class AntiPatternEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -302,16 +249,13 @@ public class AntiPatternEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task FindMutablePublicPropertiesAsync_ClassWithMutableProp_ReturnsNonNull()
     {
         var source = "public class Entity { public string Name { get; set; } = \"\"; }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.FindMutablePublicPropertiesAsync(filePath: "Entity.cs");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -321,9 +265,7 @@ public class AntiPatternEngineGapTests
         var source = "public class my_class { public int myField = 0; }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyClass.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.FindNamingViolationsAsync(filePath: "MyClass.cs");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -337,9 +279,7 @@ public class Service {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.FindMissingCancellationTokensAsync(filePath: "Service.cs");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -355,9 +295,7 @@ public class Service {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AnalyzeExceptionHandlingAsync("Service.cs");
-
         Assert.That(result, Is.Not.Null);
     }
 }
@@ -370,7 +308,6 @@ public class CodeHealingEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private CodeHealingEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -380,17 +317,13 @@ public class CodeHealingEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task AddRetryPolicyAsync_AnyInput_ReturnsNonNull()
     {
         // AddRetryPolicyAsync is a stub that always returns "" -> verify it at least doesn't throw
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Service { public void Go() {} }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AddRetryPolicyAsync("Service.cs", 1, 5, 3);
-
         Assert.That(result, Is.Not.Null, "Stub method should return a non-null string");
     }
 }
@@ -403,7 +336,6 @@ public class CodeStyleEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private CodeStyleEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -413,7 +345,6 @@ public class CodeStyleEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task UseIndexFromEndAsync_FileWithArrayAccess_ReturnsNonNull()
     {
@@ -425,9 +356,7 @@ public class Slicer {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Slicer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.UseIndexFromEndAsync("Slicer.cs");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -436,9 +365,7 @@ public class Slicer {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.UseIndexFromEndAsync("NoSuchFile.cs");
-
         Assert.That(result.UpdatedText, Is.Null);
     }
 }
@@ -451,7 +378,6 @@ public class ControlFlowEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private ControlFlowEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -461,7 +387,6 @@ public class ControlFlowEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task AnalyzeMethodDataFlowAsync_SimpleMethod_ReturnsResult()
     {
@@ -474,9 +399,7 @@ public class Calculator {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calculator.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AnalyzeMethodDataFlowAsync("Calculator.cs", "Add");
-
         Assert.That(result, Is.Not.Null);
         Assert.That(result.MethodName, Is.EqualTo("Add"));
     }
@@ -486,9 +409,7 @@ public class Calculator {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AnalyzeMethodDataFlowAsync("NoFile.cs", "Foo");
-
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty, "Should report an error for missing file");
     }
@@ -502,7 +423,6 @@ public class DeadCodeEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private DeadCodeEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -512,7 +432,6 @@ public class DeadCodeEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task DetectUnusedLocalVariablesAsync_MethodWithUnusedVar_ReturnsNonNull()
     {
@@ -525,9 +444,7 @@ public class Calc {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.DetectUnusedLocalVariablesAsync("Calc.cs");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -536,9 +453,7 @@ public class Calc {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.DetectUnusedLocalVariablesAsync("NoFile.cs");
-
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.Empty);
     }
@@ -552,7 +467,6 @@ public class DependencyEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private DependencyEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -562,16 +476,13 @@ public class DependencyEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task CheckPackageInconsistencyAsync_InMemorySolution_ReturnsNonNull()
     {
         // CheckPackageInconsistencyAsync reads .csproj files from disk; 
         // in-memory test solution has no real project files, so it should return empty or throw gracefully.
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Service {}")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         // The method may throw DirectoryNotFoundException when project dirs don't exist on disk.
         // Verify it either returns a non-null list OR throws a graceful exception (not NullReferenceException).
         List<string>? result = null;
@@ -580,14 +491,13 @@ public class DependencyEngineGapTests
         {
             result = await _engine.CheckPackageInconsistencyAsync();
         }
-        catch (Exception ex) when (ex is System.IO.DirectoryNotFoundException or System.IO.FileNotFoundException or InvalidOperationException)
+        catch (Exception ex)when (ex is System.IO.DirectoryNotFoundException or System.IO.FileNotFoundException or InvalidOperationException)
         {
             caughtEx = ex;
         }
 
         // Either a valid empty result OR a graceful expected exception is acceptable
-        Assert.That(result != null || caughtEx != null,
-            Is.True, "Should return a list or throw a known file-system exception, not crash with NullReferenceException");
+        Assert.That(result != null || caughtEx != null, Is.True, "Should return a list or throw a known file-system exception, not crash with NullReferenceException");
     }
 }
 
@@ -599,7 +509,6 @@ public class DependencyInjectionEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private DependencyInjectionEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -609,16 +518,13 @@ public class DependencyInjectionEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task AddDependencyAsync_ClassWithNoConstructor_ReturnsNonNull()
     {
         var source = "public class MyService { }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyService.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AddDependencyAsync("MyService.cs", "MyService", "ILogger", "logger");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -627,7 +533,6 @@ public class DependencyInjectionEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         // The method either returns empty/error string OR throws for an unknown file -> both are acceptable
         DocumentEditResult? result = null;
         Exception? caughtEx = null;
@@ -640,8 +545,7 @@ public class DependencyInjectionEngineGapTests
             caughtEx = ex;
         }
 
-        Assert.That(result != null || caughtEx != null, Is.True,
-            "Should return a string or throw a structured exception, not crash silently");
+        Assert.That(result != null || caughtEx != null, Is.True, "Should return a string or throw a structured exception, not crash silently");
     }
 }
 
@@ -653,7 +557,6 @@ public class GranularRefactoringEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private GranularRefactoringEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -663,17 +566,14 @@ public class GranularRefactoringEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task RunMicroRefactoringAsync_ValidFile_ReturnsNonNull()
     {
         var source = "public class Service { public void Go() { var x = 1; } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         // Use a real dispatch ID -> 'type-to-var' is safe on any code (converts explicit types)
         var result = await _engine.RunMicroRefactoringAsync("Service.cs", "type-to-var", 1);
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -682,9 +582,7 @@ public class GranularRefactoringEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.RunMicroRefactoringAsync("NoFile.cs", "r1", 1);
-
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -694,9 +592,7 @@ public class GranularRefactoringEngineGapTests
         var source = "public class Service { public void Go(int x) { var y = x + 1; } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.InlineParameterAsync("Service.cs", "Go", "x");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -705,9 +601,7 @@ public class GranularRefactoringEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.InlineParameterAsync("NoFile.cs", "Foo", "bar");
-
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -717,9 +611,7 @@ public class GranularRefactoringEngineGapTests
         var source = "public class Cache { public string Get(int key) { return key.ToString(); } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Cache.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertMethodToIndexerAsync("Cache.cs", "Get");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -728,9 +620,7 @@ public class GranularRefactoringEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertMethodToIndexerAsync("NoFile.cs", "Get");
-
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -744,9 +634,7 @@ public class Outer {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Outer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.MoveTypeToOuterScopeAsync("Outer.cs", "Inner");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -755,9 +643,7 @@ public class Outer {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.MoveTypeToOuterScopeAsync("NoFile.cs", "Inner");
-
         // Returns empty string or an error message -> must not throw
         Assert.That(result, Is.Not.Null);
     }
@@ -771,7 +657,6 @@ public class PerformanceEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private PerformanceEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -781,16 +666,12 @@ public class PerformanceEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task OptimizeResourceDisposalAsync_FileWithNoDisposable_ReturnsNonNull()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Service.cs", "public class Service { public void Go() {} }")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.OptimizeResourceDisposalAsync(filePath: "Service.cs");
-
         Assert.That(result, Is.Not.Null);
     }
 }
@@ -803,20 +684,15 @@ public class RefactoringEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private RefactoringEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new RefactoringEngine(
-            _workspaceManager,
-            NullLogger<RefactoringEngine>.Instance,
-            new SentinelConfiguration());
+        _engine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, new SentinelConfiguration());
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task ExtractMethodAsync_ValidRange_ReturnsResult()
     {
@@ -828,10 +704,8 @@ public class RefactoringEngineGapTests
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         // Line 3 = "        int sum = a + b;"
         var result = await _engine.ExtractMethodAsync("Calc.cs", 3, "int sum = a + b;", 3, "int sum = a + b;", "ComputeSum");
-
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success || result.ErrorMessage != null, Is.True, "Should return IsSuccess or a descriptive error");
     }
@@ -841,9 +715,7 @@ public class RefactoringEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ExtractMethodAsync("NoFile.cs", 1, "x", 1, "x", "NewMethod");
-
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.False, "Should fail gracefully for unknown file");
     }
@@ -858,9 +730,7 @@ public class Cache {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Cache.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertIndexerToMethodAsync("Cache.cs");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -869,9 +739,7 @@ public class Cache {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertIndexerToMethodAsync("NoFile.cs");
-
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -881,9 +749,7 @@ public class Cache {
         var source = "public class Service { public void Go(int a, int b) {} }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AddRemoveParamsAsync("Service.cs", "Go");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -892,9 +758,7 @@ public class Cache {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AddRemoveParamsAsync("NoFile.cs", "Foo");
-
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -910,9 +774,7 @@ public class Service {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AnalyzeControlFlowAsync("Service.cs", "Compute");
-
         Assert.That(result, Is.Not.Null);
         Assert.That(result.MethodName, Is.EqualTo("Compute"));
     }
@@ -922,9 +784,7 @@ public class Service {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AnalyzeControlFlowAsync("NoFile.cs", "Foo");
-
         Assert.That(result, Is.Not.Null, "Should return a ControlFlowSummary even for missing file");
     }
 
@@ -940,9 +800,7 @@ public class Service {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AnalyzeDataFlowAsync("Service.cs", "Sum");
-
         Assert.That(result, Is.Not.Null);
         Assert.That(result.MethodName, Is.EqualTo("Sum"));
     }
@@ -952,9 +810,7 @@ public class Service {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.AnalyzeDataFlowAsync("NoFile.cs", "Foo");
-
         Assert.That(result, Is.Not.Null, "Should return a DataFlowSummary even for missing file");
     }
 }
@@ -967,7 +823,6 @@ public class SymbolNavigationEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private SymbolNavigationEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -977,7 +832,6 @@ public class SymbolNavigationEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task GetSymbolInfoAsync_KnownMethodSnippet_ReturnsNonNull()
     {
@@ -987,10 +841,8 @@ public class Calculator {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calculator.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         // The method may return null if it can't resolve the symbol in in-memory workspace
         var result = await _engine.GetSymbolInfoAsync("Calculator.cs", "Add");
-
         // Either a valid result or null is acceptable -> method should not throw
         Assert.That((result == null || result.Name != null), Is.True, "Should return SymbolHoverInfo or null without throwing");
     }
@@ -1004,9 +856,7 @@ public class Dog : IAnimal { public void Speak() { } }
 ";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Animals.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.FindAllImplementationsAsync("IAnimal");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1015,9 +865,7 @@ public class Dog : IAnimal { public void Speak() { } }
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.FindAllImplementationsAsync("IDoesNotExist");
-
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.Empty);
     }
@@ -1033,9 +881,7 @@ public class Person {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Person.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.GetTypeMembersDetailAsync("Person");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1044,9 +890,7 @@ public class Person {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.GetTypeMembersDetailAsync("NoSuchType");
-
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.Empty);
     }
@@ -1060,9 +904,7 @@ public class Worker1 : IWorker { public void Work() {} public string Report() =>
 ";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Workers.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.VerifyInterfaceCompletenessAsync("IWorker");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1071,9 +913,7 @@ public class Worker1 : IWorker { public void Work() {} public string Report() =>
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.VerifyInterfaceCompletenessAsync("IDoesNotExist");
-
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.Empty);
     }
@@ -1088,9 +928,7 @@ public static class StringExtensions {
 ";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Extensions.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.FindExtensionMethodsAsync("string");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1099,9 +937,7 @@ public static class StringExtensions {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.FindExtensionMethodsAsync("SomeRandomType");
-
         Assert.That(result, Is.Not.Null);
     }
 }
@@ -1114,7 +950,6 @@ public class SyntaxUpgradeEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private SyntaxUpgradeEngine _engine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -1124,7 +959,6 @@ public class SyntaxUpgradeEngineGapTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     [Test]
     public async Task ConvertSwitchExpressionToStatementAsync_FileWithSwitchExpr_ReturnsNonNull()
     {
@@ -1138,9 +972,7 @@ public class Router {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Router.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertSwitchExpressionToStatementAsync("Router.cs");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1149,9 +981,7 @@ public class Router {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.ConvertSwitchExpressionToStatementAsync("NoFile.cs");
-
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -1161,9 +991,7 @@ public class Router {
         var source = "public class Entity { public string Name { get; set; } = \"\"; }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.UseFieldBackedPropertiesAsync("Entity.cs");
-
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1173,9 +1001,7 @@ public class Router {
         // Bug 4b fix: engine returns a comment message instead of empty string when file not found
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-
         var result = await _engine.UseFieldBackedPropertiesAsync("NoFile.cs");
-
         Assert.That(result.Message, Does.Contain("not found").Or.Contain("not in workspace"));
     }
 }

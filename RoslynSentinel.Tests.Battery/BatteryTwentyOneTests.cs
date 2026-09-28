@@ -153,7 +153,7 @@ public class Worker
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _tools = new ModernizationTools(
             _modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine,
-            _syntaxUpgradeEngine, _analysisEngine, _logicOptimizationEngine,
+            _syntaxUpgradeEngine, _logicOptimizationEngine,
             _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine,
             _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine,
             _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);

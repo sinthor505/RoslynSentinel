@@ -13,12 +13,10 @@
 //   ArgumentListSyntax -> ObjectCreationExpressionSyntax -> Lambda, so the direct parent is
 //   ArgumentSyntax, not the lambda. Fix: also skip when invocation.Parent is ArgumentSyntax
 //   inside an ObjectCreationExpressionSyntax whose type contains "ValueTask".
-
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
-
 [TestFixture]
 public class BatteryThirtyThreeTests
 {
@@ -41,7 +39,6 @@ public class BatteryThirtyThreeTests
     private DependencyInjectionEngine _dependencyInjectionEngine;
     private DiscoveryEngine _discoveryEngine;
     private IntelligenceTools _intelligenceTools;
-
     // ── additional engines for QualityTools (Bug #2) ───────────────────
     private PerformanceEngine _performanceEngine;
     private SecurityEngine _securityEngine;
@@ -53,50 +50,27 @@ public class BatteryThirtyThreeTests
     private DiagnosticEngine _diagnosticEngine;
     private QualityTools _qualityTools;
     private DiffEngine _diffEngine;
-
     [SetUp]
     public void SetUp()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-
         _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
         _semanticSearchEngine = new SemanticSearchEngine(_workspaceManager);
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
-        _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
+        _deadCodeEngine = new DeadCodeEngine(_workspaceManager, _config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _documentationEngine = new DocumentationEngine(_workspaceManager);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
-        _healthOrchestrationEngine = new HealthOrchestrationEngine(
-            _workspaceManager, _projectStructureEngine, _analysisEngine, _config);
+        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-
-        _intelligenceTools = new IntelligenceTools(_impactAnalyzer,
-            _semanticSearchEngine,
-            _metricsEngine,
-            _inventoryEngine,
-            _deadCodeEngine,
-            _analysisEngine,
-            _documentationEngine,
-            _dependencyEngine,
-            _projectStructureEngine,
-            _asyncSafetyEngine,
-            _healthOrchestrationEngine,
-            _architecturalEngine,
-            _symbolNavigationEngine,
-            _dependencyInjectionEngine,
-            _discoveryEngine,
-            new ProjectConsistencyEngine(_workspaceManager),
-            _workspaceManager,
-            _config,
-            NullLogger<IntelligenceTools>.Instance);
-
+        _intelligenceTools = new IntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, _config, NullLogger<IntelligenceTools>.Instance);
         _performanceEngine = new PerformanceEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _testingEngine = new TestingEngine(_workspaceManager);
@@ -105,24 +79,13 @@ public class BatteryThirtyThreeTests
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         _diffEngine = new DiffEngine();
+        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
-
-        _qualityTools = new QualityTools(_testingEngine,
-            _controlFlowEngine,
-            _analysisEngine,
-            new AntiPatternEngine(_workspaceManager),
-            new ThreadSafetyEngine(_workspaceManager),
-            _diagnosticEngine,
-            new CodeStyleAnalysisEngine(_workspaceManager),
-            new StackOverflowEngine(_workspaceManager),
-            new MsToolAugmentEngine(_workspaceManager),
-            _workspaceManager,
-            NullLogger<QualityTools>.Instance);
+        _qualityTools = new QualityTools(_testingEngine, _controlFlowEngine, new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), _diagnosticEngine, new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -132,7 +95,6 @@ public class BatteryThirtyThreeTests
     // ═══════════════════════════════════════════════════════════════════════════
     //  BUG #1 -> CheckForUnusedEventSubscriptions false positives
     // ═══════════════════════════════════════════════════════════════════════════
-
     // Mirrors the real ProductRepository.cs pattern that triggered the bug:
     //   sql += " AND Name LIKE @Name"
     private const string SqlConcatSource = @"
@@ -151,7 +113,6 @@ public class QueryBuilder
         return await Task.FromResult(sql);
     }
 }";
-
     private const string NumericPlusEqualsSource = @"
 namespace TestProj;
 
@@ -165,7 +126,6 @@ public class Counter
         return total;
     }
 }";
-
     private const string RealEventSource = @"
 using System;
 namespace TestProj;
@@ -187,18 +147,13 @@ public class SubscriberService
 
     private void HandleClick(object sender, EventArgs e) { }
 }";
-
     [Test]
     public async Task CheckForUnusedEventSubscriptions_SqlStringConcatenation_NoFalsePositives()
     {
         SetSource(SqlConcatSource, "QueryBuilder.cs");
         var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("QueryBuilder.cs");
-
         Assert.That(results, Is.Not.Null);
-        Assert.That(
-            results.Any(r => r.Type == "EventSubscriptionWithoutUnsubscription"),
-            Is.False,
-            "sql += string concatenation must NOT be flagged as EventSubscriptionWithoutUnsubscription");
+        Assert.That(results.Any(r => r.Type == "EventSubscriptionWithoutUnsubscription"), Is.False, "sql += string concatenation must NOT be flagged as EventSubscriptionWithoutUnsubscription");
     }
 
     [Test]
@@ -206,12 +161,8 @@ public class SubscriberService
     {
         SetSource(NumericPlusEqualsSource, "Counter.cs");
         var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Counter.cs");
-
         Assert.That(results, Is.Not.Null);
-        Assert.That(
-            results.Any(r => r.Type == "EventSubscriptionWithoutUnsubscription"),
-            Is.False,
-            "Numeric += accumulation must NOT be flagged as EventSubscriptionWithoutUnsubscription");
+        Assert.That(results.Any(r => r.Type == "EventSubscriptionWithoutUnsubscription"), Is.False, "Numeric += accumulation must NOT be flagged as EventSubscriptionWithoutUnsubscription");
     }
 
     [Test]
@@ -219,18 +170,13 @@ public class SubscriberService
     {
         SetSource(RealEventSource, "Subscriber.cs");
         var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Subscriber.cs");
-
         Assert.That(results, Is.Not.Null);
-        Assert.That(
-            results.Any(r => r.Type == "EventSubscriptionWithoutUnsubscription"),
-            Is.True,
-            "A real += event subscription with no matching -= MUST be reported");
+        Assert.That(results.Any(r => r.Type == "EventSubscriptionWithoutUnsubscription"), Is.True, "A real += event subscription with no matching -= MUST be reported");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     //  BUG #2 -> DetectMismatchedAwait false positives
     // ═══════════════════════════════════════════════════════════════════════════
-
     // Mirrors the real ProductRepository.cs pattern that triggered the bug:
     //   _cache.GetOrSetAsync(key, ct => new ValueTask<ProductDto?>(GetByIdFromDbAsync(id, ct)), ...)
     private const string ValueTaskWrapperSource = @"
@@ -258,7 +204,6 @@ public class CacheService
     private async Task<string?> FetchFromDbAsync(string id, CancellationToken ct)
         => await Task.FromResult(id);
 }";
-
     private const string TrulyUnawaitedSource = @"
 using System.Threading.Tasks;
 namespace TestProj;
@@ -273,7 +218,6 @@ public class FireForgetService
 
     private Task DoBackgroundWorkAsync() => Task.CompletedTask;
 }";
-
     // Three separate ValueTask<T> wrapper calls -> all must be clean after the fix
     private const string MultipleValueTaskWrappersSource = @"
 using System;
@@ -302,47 +246,41 @@ public class MultiCacheService
     private async Task<string?> FetchProductAsync(string id, CancellationToken ct) => await Task.FromResult(id);
     private async Task<string?> FetchCategoryAsync(string id, CancellationToken ct) => await Task.FromResult(id);
 }";
-
     [Test]
     public async Task DetectMismatchedAwait_ValueTaskWrapper_NoFalsePositives()
     {
         SetSource(ValueTaskWrapperSource, "CacheService.cs");
-        var results = await _analysisEngine.DetectMismatchedAwaitAsync("CacheService.cs");
-
+        var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("CacheService.cs");
         Assert.That(results, Is.Not.Null);
-        Assert.That(
-            results.Any(r => r.Contains("FetchFromDbAsync")),
-            Is.False,
-            "FetchFromDbAsync inside new ValueTask<T>(...) must NOT be flagged as unawaited");
+        Assert.That(results.Any(r => r.Contains("FetchFromDbAsync")), Is.False, "FetchFromDbAsync inside new ValueTask<T>(...) must NOT be flagged as unawaited");
     }
 
     [Test]
     public async Task DetectMismatchedAwait_TrulyUnawaitedTask_IsDetected()
     {
         SetSource(TrulyUnawaitedSource, "FireForget.cs");
-        var results = await _analysisEngine.DetectMismatchedAwaitAsync("FireForget.cs");
-
+        var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("FireForget.cs");
         Assert.That(results, Is.Not.Null);
-        Assert.That(
-            results.Any(r => r.Contains("DoBackgroundWorkAsync")),
-            Is.True,
-            "A truly fire-and-forget Task call MUST be flagged as a mismatched await");
+        Assert.That(results.Any(r => r.Contains("DoBackgroundWorkAsync")), Is.True, "A truly fire-and-forget Task call MUST be flagged as a mismatched await");
     }
 
     [Test]
     public async Task DetectMismatchedAwait_MultipleValueTaskWrappers_AllClean()
     {
         SetSource(MultipleValueTaskWrappersSource, "MultiCacheService.cs");
-        var results = await _analysisEngine.DetectMismatchedAwaitAsync("MultiCacheService.cs");
-
+        var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("MultiCacheService.cs");
         Assert.That(results, Is.Not.Null);
-        var wrappedMethods = new[] { "FetchUserAsync", "FetchProductAsync", "FetchCategoryAsync" };
+        var wrappedMethods = new[]
+        {
+            "FetchUserAsync",
+            "FetchProductAsync",
+            "FetchCategoryAsync"
+        };
         foreach (var method in wrappedMethods)
         {
-            Assert.That(
-                results.Any(r => r.Contains(method)),
-                Is.False,
-                $"{method} inside new ValueTask<T>(...) must NOT be flagged as unawaited");
+            Assert.That(results.Any(r => r.Contains(method)), Is.False, $"{method} inside new ValueTask<T>(...) must NOT be flagged as unawaited");
         }
     }
+
+    public AntiPatternEngine _antiPatternEngine;
 }

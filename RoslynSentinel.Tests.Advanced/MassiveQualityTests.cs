@@ -12,6 +12,7 @@ public class MassiveQualityTests
 {
     private IWorkspaceManager _workspaceManager;
     private AnalysisEngine _analysisEngine;
+    private PerformanceEngine _perfEngine;
     private SecurityEngine _securityEngine;
     private AsyncSafetyEngine _asyncSafetyEngine;
 
@@ -21,6 +22,7 @@ public class MassiveQualityTests
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);
+        _perfEngine = new PerformanceEngine(_workspaceManager, config);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
     }
@@ -43,7 +45,7 @@ public class MassiveQualityTests
     public async Task FindBoxingAllocations_ShouldIdentifyBoxing(int id)
     {
         SetSource($"public class C{id} {{ void M() {{ object o = {id}; }} }}", $"C{id}.cs");
-        var results = await _analysisEngine.FindBoxingAllocationsAsync(filePath: $"C{id}.cs");
+        var results = await _perfEngine.FindBoxingAllocationsAsync(filePath: $"C{id}.cs");
         Assert.That(results.Count, Is.EqualTo(1));
     }
 

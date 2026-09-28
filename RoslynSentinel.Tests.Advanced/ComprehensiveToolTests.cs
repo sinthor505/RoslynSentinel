@@ -94,7 +94,7 @@ public class ComprehensiveToolTests
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _documentationEngine = new DocumentationEngine(_workspaceManager);
         _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
-        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _analysisEngine, _config);
+        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
         _immutabilityEngine = new ImmutabilityEngine(_workspaceManager);
         _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
@@ -158,11 +158,10 @@ public class ComprehensiveToolTests
             _config,
             NullLogger<IntelligenceTools>.Instance);
 
-        _modernizationTools = new ModernizationTools(_modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine, _syntaxUpgradeEngine, _analysisEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        _modernizationTools = new ModernizationTools(_modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine, _syntaxUpgradeEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
 
         _qualityTools = new QualityTools(_testingEngine,
             _controlFlowEngine,
-            _analysisEngine,
             new AntiPatternEngine(_workspaceManager),
             new ThreadSafetyEngine(_workspaceManager),
             _diagnosticEngine,

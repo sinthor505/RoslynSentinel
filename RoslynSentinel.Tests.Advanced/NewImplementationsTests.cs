@@ -1,9 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
-
 namespace RoslynSentinel.Tests.Advanced;
-
 /// <summary>
 /// Comprehensive tests for all engine methods implemented in the current development cycle:
 /// AsyncSafetyEngine, DeadCodeEngine, AnalysisEngine, SecurityEngine,
@@ -21,7 +19,6 @@ public class NewImplementationsTests
     private RefinementEngine _refinementEngine;
     private SecurityEngine _securityEngine;
     private AsyncSafetyEngine _asyncSafetyEngine;
-
     [SetUp]
     public void Setup()
     {
@@ -34,11 +31,11 @@ public class NewImplementationsTests
         _refinementEngine = new RefinementEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
+        _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -54,7 +51,6 @@ public class NewImplementationsTests
     // ══════════════════════════════════════════════════════════════
     // DeadCodeEngine.FindUnusedPrivateMembersAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task FindUnusedPrivateMembers_ReturnsReport_ForUnreferencedPrivateMethod()
     {
@@ -64,14 +60,10 @@ public class MyClass
     private void UnusedHelper() { }
     public void Run() { }
 }", "MyClass.cs");
-
         var results = await _deadCodeEngine.FindUnusedPrivateMembersAsync("MyClass.cs", "MyClass");
-
         Assert.That(results, Is.Not.Null);
-        Assert.That(results.Any(r => r.SymbolName == "UnusedHelper"), Is.True,
-            "UnusedHelper is not called anywhere - should be flagged.");
-        Assert.That(results.All(r => r.SymbolName != "Run"), Is.True,
-            "Public method Run should not appear in the results.");
+        Assert.That(results.Any(r => r.SymbolName == "UnusedHelper"), Is.True, "UnusedHelper is not called anywhere - should be flagged.");
+        Assert.That(results.All(r => r.SymbolName != "Run"), Is.True, "Public method Run should not appear in the results.");
     }
 
     [Test]
@@ -83,11 +75,8 @@ public class Calculator
     private int Double(int x) => x * 2;
     public int Quadruple(int x) => Double(Double(x));
 }", "Calculator.cs");
-
         var results = await _deadCodeEngine.FindUnusedPrivateMembersAsync("Calculator.cs", "Calculator");
-
-        Assert.That(results.Any(r => r.SymbolName == "Double"), Is.False,
-            "Double is called by Quadruple and should not be flagged.");
+        Assert.That(results.Any(r => r.SymbolName == "Double"), Is.False, "Double is called by Quadruple and should not be flagged.");
     }
 
     [Test]
@@ -99,11 +88,8 @@ public class Config
     private int CacheSize { get; set; }
     public void Apply() { }
 }", "Config.cs");
-
         var results = await _deadCodeEngine.FindUnusedPrivateMembersAsync("Config.cs", "Config");
-
-        Assert.That(results.Any(r => r.SymbolName == "CacheSize"), Is.True,
-            "CacheSize is never read or written from outside its declaration - should be flagged.");
+        Assert.That(results.Any(r => r.SymbolName == "CacheSize"), Is.True, "CacheSize is never read or written from outside its declaration - should be flagged.");
     }
 
     [Test]
@@ -114,9 +100,7 @@ public class Empty
 {
     public void DoWork() { }
 }", "Empty.cs");
-
         var results = await _deadCodeEngine.FindUnusedPrivateMembersAsync("Empty.cs", "Empty");
-
         Assert.That(results, Is.Empty, "No private members means nothing to report.");
     }
 
@@ -128,9 +112,7 @@ public class LineChecker
 {
     private void Ghost() { }
 }", "LineChecker.cs");
-
         var results = await _deadCodeEngine.FindUnusedPrivateMembersAsync("LineChecker.cs", "LineChecker");
-
         var ghostReport = results.FirstOrDefault(r => r.SymbolName == "Ghost");
         Assert.That(ghostReport, Is.Not.Null, "Ghost should be reported.");
         Assert.That(ghostReport!.Line, Is.GreaterThan(0), "Line must be positive.");
@@ -141,7 +123,6 @@ public class LineChecker
     // ══════════════════════════════════════════════════════════════
     // DeadCodeEngine.FindUnusedConstructorsAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task FindUnusedConstructors_SkipsSingleConstructorClass()
     {
@@ -151,11 +132,8 @@ public class Service
     public Service(string name) { }
     public void Start() { }
 }", "Service.cs");
-
         var results = await _deadCodeEngine.FindUnusedConstructorsAsync("Service.cs");
-
-        Assert.That(results, Is.Empty,
-            "Single-constructor classes are skipped to avoid false positives with DI registration.");
+        Assert.That(results, Is.Empty, "Single-constructor classes are skipped to avoid false positives with DI registration.");
     }
 
     [Test]
@@ -168,12 +146,9 @@ public class Widget
     public Widget(int size) { }
     public static Widget CreateDefault() => new Widget();
 }", "Widget.cs");
-
         var results = await _deadCodeEngine.FindUnusedConstructorsAsync("Widget.cs");
-
         // Widget() is called; Widget(int) is not referenced
-        Assert.That(results, Is.Not.Empty,
-            "At least one constructor overload is unreferenced and should be reported.");
+        Assert.That(results, Is.Not.Empty, "At least one constructor overload is unreferenced and should be reported.");
         Assert.That(results.All(r => r.Type == "UnusedConstructorOverload"), Is.True);
     }
 
@@ -191,17 +166,13 @@ public class Pair
         var b = new Pair(1, 2);
     }
 }", "Pair.cs");
-
         var results = await _deadCodeEngine.FindUnusedConstructorsAsync("Pair.cs");
-
-        Assert.That(results, Is.Empty,
-            "Both constructors are explicitly instantiated so neither should be reported.");
+        Assert.That(results, Is.Empty, "Both constructors are explicitly instantiated so neither should be reported.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // DeadCodeEngine.CheckForUnusedEventSubscriptionsAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task CheckForUnusedEventSubscriptions_Reports_SubscriptionWithoutUnsubscribe()
     {
@@ -217,11 +188,8 @@ public class Subscriber
     }
     private void OnChanged(object s, System.EventArgs e) { }
 }", "Subscriber.cs");
-
         var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Subscriber.cs");
-
-        Assert.That(results.Any(r => r.SymbolName.Contains("Changed")), Is.True,
-            "_pub.Changed += OnChanged has no matching -= and should be reported.");
+        Assert.That(results.Any(r => r.SymbolName.Contains("Changed")), Is.True, "_pub.Changed += OnChanged has no matching -= and should be reported.");
         Assert.That(results.All(r => r.Type == "EventSubscriptionWithoutUnsubscription"), Is.True);
     }
 
@@ -237,11 +205,8 @@ public class Listener : System.IDisposable
     public void Dispose() { _pub.Fired -= Handle; }
     private void Handle(object s, System.EventArgs e) { }
 }", "Listener.cs");
-
         var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Listener.cs");
-
-        Assert.That(results.All(r => !r.SymbolName.Contains("Fired")), Is.True,
-            "Fired has a matching -= in Dispose and should not be flagged.");
+        Assert.That(results.All(r => !r.SymbolName.Contains("Fired")), Is.True, "Fired has a matching -= in Dispose and should not be flagged.");
     }
 
     [Test]
@@ -252,9 +217,7 @@ public class Clean
 {
     public void DoWork() { int x = 1 + 1; }
 }", "Clean.cs");
-
         var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Clean.cs");
-
         Assert.That(results, Is.Empty);
     }
 
@@ -277,17 +240,13 @@ public class Fan
     private void OnA(object s, System.EventArgs e) { }
     private void OnB(object s, System.EventArgs e) { }
 }", "Fan.cs");
-
         var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Fan.cs");
-
-        Assert.That(results.Count, Is.EqualTo(2),
-            "Both h.A and h.B are subscribed without unsubscribing.");
+        Assert.That(results.Count, Is.EqualTo(2), "Both h.A and h.B are subscribed without unsubscribing.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // AnalysisEngine.DetectMemoryLeaksAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task DetectMemoryLeaks_ReturnsEmpty_WhenFeatureDisabled()
     {
@@ -295,9 +254,7 @@ public class Fan
         SetSource(@"
 public class Pub { public event System.EventHandler Tick; }
 public class Sub { public Sub(Pub p) { p.Tick += Handle; } private void Handle(object s, System.EventArgs e) { } }");
-
-        var results = await _analysisEngine.DetectMemoryLeaksAsync("Test.cs");
-
+        var results = await new ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Test.cs");
         Assert.That(results, Is.Empty, "Feature toggle off should produce no results.");
     }
 
@@ -317,11 +274,8 @@ public class Dashboard
     }
     private void Refresh(object s, System.EventArgs e) { }
 }", "Dashboard.cs");
-
-        var results = await _analysisEngine.DetectMemoryLeaksAsync("Dashboard.cs");
-
-        Assert.That(results.Any(r => r.Contains("Dashboard") && r.Contains("Tick")), Is.True,
-            "Dashboard subscribes to _clock.Tick without IDisposable - potential memory leak.");
+        var results = await new ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Dashboard.cs");
+        Assert.That(results.Any(r => r.Contains("Dashboard") && r.Contains("Tick")), Is.True, "Dashboard subscribes to _clock.Tick without IDisposable - potential memory leak.");
     }
 
     [Test]
@@ -337,17 +291,13 @@ public class Form : System.IDisposable
     public void Dispose() { _btn.Click -= OnClick; }
     private void OnClick(object s, System.EventArgs e) { }
 }", "Form.cs");
-
-        var results = await _analysisEngine.DetectMemoryLeaksAsync("Form.cs");
-
-        Assert.That(results.All(r => !r.Contains("Form") || !r.Contains("Click")), Is.True,
-            "Form implements IDisposable with proper unsubscription - should not be flagged.");
+        var results = await new ResourceSafetyEngine(_workspaceManager, _config).DetectMemoryLeaksAsync("Form.cs");
+        Assert.That(results.All(r => !r.Contains("Form") || !r.Contains("Click")), Is.True, "Form implements IDisposable with proper unsubscription - should not be flagged.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // AnalysisEngine.FindPossibleInfiniteLoopsAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task FindPossibleInfiniteLoops_Detects_WhileTrueWithoutExit()
     {
@@ -362,12 +312,9 @@ public class Pump
         }
     }
 }", "Pump.cs");
-
-        var results = await _analysisEngine.FindPossibleInfiniteLoopsAsync("Pump.cs");
-
+        var results = await _antiPatternEngine.FindPossibleInfiniteLoopsAsync("Pump.cs");
         Assert.That(results, Is.Not.Empty);
-        Assert.That(results.Any(r => r.Contains("while")), Is.True,
-            "while(true) without break/return/throw must be flagged.");
+        Assert.That(results.Any(r => r.Contains("while")), Is.True, "while(true) without break/return/throw must be flagged.");
     }
 
     [Test]
@@ -385,11 +332,8 @@ public class Poller
         }
     }
 }", "Poller.cs");
-
-        var results = await _analysisEngine.FindPossibleInfiniteLoopsAsync("Poller.cs");
-
-        Assert.That(results, Is.Empty,
-            "while(true) with a break statement has an exit path and must not be flagged.");
+        var results = await _antiPatternEngine.FindPossibleInfiniteLoopsAsync("Poller.cs");
+        Assert.That(results, Is.Empty, "while(true) with a break statement has an exit path and must not be flagged.");
     }
 
     [Test]
@@ -406,9 +350,7 @@ public class RetryLoop
         }
     }
 }", "RetryLoop.cs");
-
-        var results = await _analysisEngine.FindPossibleInfiniteLoopsAsync("RetryLoop.cs");
-
+        var results = await _antiPatternEngine.FindPossibleInfiniteLoopsAsync("RetryLoop.cs");
         Assert.That(results, Is.Empty, "while(true) with return is not an infinite loop.");
     }
 
@@ -420,9 +362,7 @@ public class Spin
 {
     public void Spin1() { for (;;) { System.Threading.Thread.Sleep(1); } }
 }", "Spin.cs");
-
-        var results = await _analysisEngine.FindPossibleInfiniteLoopsAsync("Spin.cs");
-
+        var results = await _antiPatternEngine.FindPossibleInfiniteLoopsAsync("Spin.cs");
         Assert.That(results, Is.Not.Empty, "for(;;) without exit should be flagged as potential infinite loop.");
     }
 
@@ -438,17 +378,13 @@ public class Reader
         while ((b = s.ReadByte()) != -1) { }
     }
 }", "Reader.cs");
-
-        var results = await _analysisEngine.FindPossibleInfiniteLoopsAsync("Reader.cs");
-
-        Assert.That(results, Is.Empty,
-            "while(condition) with a non-literal condition must not be flagged.");
+        var results = await _antiPatternEngine.FindPossibleInfiniteLoopsAsync("Reader.cs");
+        Assert.That(results, Is.Empty, "while(condition) with a non-literal condition must not be flagged.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // AnalysisEngine.GenerateCallTreeAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task GenerateCallTree_ListsRootMethodAndDirectCallee()
     {
@@ -458,9 +394,7 @@ public class Math
     public int Add(int a, int b) => a + b;
     public int Double(int x) => Add(x, x);
 }", "Math.cs");
-
-        var tree = await _analysisEngine.GenerateCallTreeAsync("Math.cs", "Double");
-
+        var tree = await _antiPatternEngine.GenerateCallTreeAsync("Math.cs", "Double");
         Assert.That(tree.UpdatedText, Is.Not.Null.And.Not.Empty);
         Assert.That(tree.UpdatedText, Does.Contain("Double"), "Root method must appear in call tree.");
         Assert.That(tree.UpdatedText, Does.Contain("Add"), "Direct callee Add must appear in call tree.");
@@ -470,11 +404,8 @@ public class Math
     public async Task GenerateCallTree_ReturnsNotFound_ForMissingFile()
     {
         SetSource("public class C { }", "C.cs");
-
-        var tree = await _analysisEngine.GenerateCallTreeAsync("Missing.cs", "Foo");
-
-        Assert.That(tree.Message, Does.Contain("not found").Or.Contain("File"),
-            "Missing file should produce an error message, not an exception.");
+        var tree = await _antiPatternEngine.GenerateCallTreeAsync("Missing.cs", "Foo");
+        Assert.That(tree.Message, Does.Contain("not found").Or.Contain("File"), "Missing file should produce an error message, not an exception.");
     }
 
     [Test]
@@ -488,10 +419,8 @@ public class Chain
     public void C() => D();
     public void D() { }
 }", "Chain.cs");
-
         // depth 2 should not include D (A -> B -> C is depth 2, D would be depth 3)
-        var tree = await _analysisEngine.GenerateCallTreeAsync("Chain.cs", "A", depth: 2);
-
+        var tree = await _antiPatternEngine.GenerateCallTreeAsync("Chain.cs", "A", depth: 2);
         Assert.That(tree.UpdatedText, Does.Contain("A"));
         Assert.That(tree.UpdatedText, Does.Contain("B"));
     }
@@ -499,7 +428,6 @@ public class Chain
     // ══════════════════════════════════════════════════════════════
     // AnalysisEngine.GenerateEqualityOverridesAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task GenerateEqualityOverrides_AddsEqualsAndGetHashCode_ForFields()
     {
@@ -509,9 +437,7 @@ public class Point
     private int _x;
     private int _y;
 }", "Point.cs");
-
-        var result = await _analysisEngine.GenerateEqualityOverridesAsync("Point.cs", "Point");
-
+        var result = await _antiPatternEngine.GenerateEqualityOverridesAsync("Point.cs", "Point");
         Assert.That(result.UpdatedText, Does.Contain("Equals"), "Equals override must be generated.");
         Assert.That(result.UpdatedText, Does.Contain("GetHashCode"), "GetHashCode override must be generated.");
         Assert.That(result.UpdatedText, Does.Contain("obj is Point other"), "Equals must use pattern matching.");
@@ -527,9 +453,7 @@ public class Person
     public string Name { get; set; }
     public int Age { get; set; }
 }", "Person.cs");
-
-        var result = await _analysisEngine.GenerateEqualityOverridesAsync("Person.cs", "Person");
-
+        var result = await _antiPatternEngine.GenerateEqualityOverridesAsync("Person.cs", "Person");
         Assert.That(result.UpdatedText, Does.Contain("Equals"));
         Assert.That(result.UpdatedText, Does.Contain("Name"), "Name property must appear in equality logic.");
         Assert.That(result.UpdatedText, Does.Contain("Age"), "Age property must appear in equality logic.");
@@ -544,9 +468,7 @@ public class Big
 {
     private int _a, _b, _c, _d, _e, _f, _g, _h, _i;
 }", "Big.cs");
-
-        var result = await _analysisEngine.GenerateEqualityOverridesAsync("Big.cs", "Big");
-
+        var result = await _antiPatternEngine.GenerateEqualityOverridesAsync("Big.cs", "Big");
         // With 9 fields (a..i) the builder pattern should be used
         Assert.That(result.UpdatedText, Does.Contain("GetHashCode"), "GetHashCode must still be generated.");
         Assert.That(result.UpdatedText, Does.Contain("HashCode").Or.Contain("hc"), "Should use HashCode builder for >8 fields.");
@@ -557,18 +479,13 @@ public class Big
     {
         SetSource(@"
 public class Marker { }", "Marker.cs");
-
-        var result = await _analysisEngine.GenerateEqualityOverridesAsync("Marker.cs", "Marker");
-
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
-            "A class with no fields or properties cannot generate equality overrides - "
-            + "that is reported through Outcome, not thrown.");
+        var result = await _antiPatternEngine.GenerateEqualityOverridesAsync("Marker.cs", "Marker");
+        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified), "A class with no fields or properties cannot generate equality overrides - " + "that is reported through Outcome, not thrown.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // SecurityEngine.AnalyzeSecurityAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task AnalyzeSecurity_Detects_HardcodedPassword()
     {
@@ -577,11 +494,8 @@ public class Config
 {
     private string password = ""SuperSecret123"";
 }", "Config.cs");
-
         var results = await _securityEngine.AnalyzeSecurityAsync("Config.cs");
-
-        Assert.That(results.Any(r => r.IssueType == "HardcodedSecret"), Is.True,
-            "Identifier named 'password' with a string literal should be flagged as HardcodedSecret.");
+        Assert.That(results.Any(r => r.IssueType == "HardcodedSecret"), Is.True, "Identifier named 'password' with a string literal should be flagged as HardcodedSecret.");
         Assert.That(results.Any(r => r.Description.Contains("password")), Is.True);
     }
 
@@ -593,11 +507,8 @@ public class Client
 {
     private string apiKey = ""abc123secretvalue"";
 }", "Client.cs");
-
         var results = await _securityEngine.AnalyzeSecurityAsync("Client.cs");
-
-        Assert.That(results.Any(r => r.IssueType == "HardcodedSecret"), Is.True,
-            "apiKey with a non-trivial string literal must be flagged.");
+        Assert.That(results.Any(r => r.IssueType == "HardcodedSecret"), Is.True, "apiKey with a non-trivial string literal must be flagged.");
     }
 
     [Test]
@@ -609,11 +520,8 @@ public class Hasher
 {
     public byte[] Hash(byte[] data) => MD5.HashData(data);
 }", "Hasher.cs");
-
         var results = await _securityEngine.AnalyzeSecurityAsync("Hasher.cs");
-
-        Assert.That(results.Any(r => r.IssueType == "WeakHashAlgorithm"), Is.True,
-            "MD5 usage must be reported as WeakHashAlgorithm.");
+        Assert.That(results.Any(r => r.IssueType == "WeakHashAlgorithm"), Is.True, "MD5 usage must be reported as WeakHashAlgorithm.");
     }
 
     [Test]
@@ -625,11 +533,8 @@ public class Verifier
 {
     public byte[] Sign(byte[] data) => SHA1.HashData(data);
 }", "Verifier.cs");
-
         var results = await _securityEngine.AnalyzeSecurityAsync("Verifier.cs");
-
-        Assert.That(results.Any(r => r.IssueType == "WeakHashAlgorithm"), Is.True,
-            "SHA1 must also be flagged as a weak algorithm.");
+        Assert.That(results.Any(r => r.IssueType == "WeakHashAlgorithm"), Is.True, "SHA1 must also be flagged as a weak algorithm.");
     }
 
     [Test]
@@ -649,11 +554,8 @@ public class TokenFactory
         return new Random().Next().ToString();
     }
 }", "TokenFactory.cs");
-
         var results = await _securityEngine.AnalyzeSecurityAsync("TokenFactory.cs");
-
-        Assert.That(results.Any(r => r.IssueType == "InsecureRandom"), Is.True,
-            "new Random() inside a method named GenerateToken (contains 'token') should be flagged.");
+        Assert.That(results.Any(r => r.IssueType == "InsecureRandom"), Is.True, "new Random() inside a method named GenerateToken (contains 'token') should be flagged.");
     }
 
     [Test]
@@ -665,16 +567,13 @@ public class Clean
     private readonly string _greeting = ""Hello"";
     public string Greet() => _greeting;
 }", "Clean.cs");
-
         var results = await _securityEngine.AnalyzeSecurityAsync("Clean.cs");
-
         Assert.That(results, Is.Empty, "No security issues expected in clean code.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // SecurityEngine.CheckForSqlInjectionAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task CheckForSqlInjection_Detects_InterpolatedStringPassedToSqlMethod()
     {
@@ -689,9 +588,7 @@ public class Repo
     }
     private void Execute(string sql) { }
 }", "Repo.cs");
-
         var results = await _securityEngine.CheckForSqlInjectionAsync("Repo.cs");
-
         // ExecuteScalar/Query/etc. in the method name list; engine checks method name from invocation
         // Use a known method name from the list: "ExecuteScalar"
         SetSource(@"
@@ -701,9 +598,7 @@ public class Repo2
     private IDb _db;
     public object GetUser(string name) => _db.ExecuteScalar($""SELECT * FROM Users WHERE Name = '{name}'"");
 }", "Repo2.cs");
-
         var results2 = await _securityEngine.CheckForSqlInjectionAsync("Repo2.cs");
-
         Assert.That(results2, Is.Not.Empty, "Interpolated string passed to ExecuteScalar should be flagged.");
         Assert.That(results2.Any(r => r.IssueType == "PossibleSqlInjection"), Is.True);
     }
@@ -718,11 +613,8 @@ public class Repo
     private IDb _db;
     public void GetUser(string id) => _db.Query(""SELECT * FROM User WHERE Id = "" + id);
 }", "Repo.cs");
-
         var results = await _securityEngine.CheckForSqlInjectionAsync("Repo.cs");
-
-        Assert.That(results, Is.Not.Empty,
-            "Dynamic string concatenation passed to a SQL method should be flagged.");
+        Assert.That(results, Is.Not.Empty, "Dynamic string concatenation passed to a SQL method should be flagged.");
         Assert.That(results.Any(r => r.IssueType == "PossibleSqlInjection"), Is.True);
     }
 
@@ -736,11 +628,8 @@ public class SafeRepo
     private IDb _db;
     public void GetUser() => _db.ExecuteNonQuery(""SELECT * FROM User WHERE Id = @Id"");
 }", "SafeRepo.cs");
-
         var results = await _securityEngine.CheckForSqlInjectionAsync("SafeRepo.cs");
-
-        Assert.That(results, Is.Empty,
-            "A pure string literal with no interpolation or concatenation should not be flagged.");
+        Assert.That(results, Is.Empty, "A pure string literal with no interpolation or concatenation should not be flagged.");
     }
 
     [Test]
@@ -755,17 +644,13 @@ public class Logger
     }
     private void Log(string msg) { }
 }", "Logger.cs");
-
         var results = await _securityEngine.CheckForSqlInjectionAsync("Logger.cs");
-
-        Assert.That(results, Is.Empty,
-            "Log() is not a SQL method - interpolated string here is fine.");
+        Assert.That(results, Is.Empty, "Log() is not a SQL method - interpolated string here is fine.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // AsyncSafetyEngine.FindTaskYieldUsageAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task FindTaskYieldUsage_Detects_TaskYieldCall()
     {
@@ -778,9 +663,7 @@ public class Worker
         await Task.Yield();
     }
 }", "Worker.cs");
-
         var results = await _asyncSafetyEngine.FindTaskYieldUsageAsync("Worker.cs");
-
         Assert.That(results, Is.Not.Empty, "Task.Yield() call should be reported.");
         Assert.That(results.Any(r => r.MethodName == "RunAsync"), Is.True);
     }
@@ -794,16 +677,13 @@ public class Quiet
 {
     public async Task DoAsync() { await Task.Delay(100); }
 }", "Quiet.cs");
-
         var results = await _asyncSafetyEngine.FindTaskYieldUsageAsync("Quiet.cs");
-
         Assert.That(results, Is.Empty, "No Task.Yield() means no reports.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // AsyncSafetyEngine.FindTaskDelayUsageAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task FindTaskDelayUsage_Detects_TaskDelayCall()
     {
@@ -813,9 +693,7 @@ public class Sleeper
 {
     public async Task SleepAsync() { await Task.Delay(500); }
 }", "Sleeper.cs");
-
         var results = await _asyncSafetyEngine.FindTaskDelayUsageAsync("Sleeper.cs");
-
         Assert.That(results, Is.Not.Empty, "Task.Delay() usage should be reported.");
         Assert.That(results.Any(r => r.MethodName == "SleepAsync"), Is.True);
     }
@@ -829,16 +707,13 @@ public class Busy
 {
     public async Task<int> ComputeAsync() { return await Task.FromResult(42); }
 }", "Busy.cs");
-
         var results = await _asyncSafetyEngine.FindTaskDelayUsageAsync("Busy.cs");
-
         Assert.That(results, Is.Empty, "Task.FromResult is not a Delay - should produce no report.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // AsyncSafetyEngine.FindTaskDelayZeroUsageAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task FindTaskDelayZeroUsage_Detects_TaskDelayZero()
     {
@@ -848,11 +723,8 @@ public class Yielder
 {
     public async Task YieldAsync() { await Task.Delay(0); }
 }", "Yielder.cs");
-
         var results = await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync("Yielder.cs");
-
-        Assert.That(results, Is.Not.Empty,
-            "Task.Delay(0) is a suboptimal yield pattern - should be reported as a Task.Yield() candidate.");
+        Assert.That(results, Is.Not.Empty, "Task.Delay(0) is a suboptimal yield pattern - should be reported as a Task.Yield() candidate.");
         Assert.That(results.Any(r => r.MethodName == "YieldAsync"), Is.True);
     }
 
@@ -865,9 +737,7 @@ public class Waiter
 {
     public async Task WaitAsync() { await Task.Delay(1000); }
 }", "Waiter.cs");
-
         var results = await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync("Waiter.cs");
-
         Assert.That(results, Is.Empty, "Task.Delay(1000) is not a zero-delay and must not be flagged.");
     }
 
@@ -880,16 +750,13 @@ public class Edge
 {
     public async Task WaitAsync(int ms) { await Task.Delay(ms); }
 }", "Edge.cs");
-
         var results = await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync("Edge.cs");
-
         Assert.That(results, Is.Empty, "Task.Delay with a variable argument should not be flagged.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // AsyncSafetyEngine.FindTaskWhenAllUsageAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task FindTaskWhenAllUsage_Detects_MultipleSequentialAwaits()
     {
@@ -906,11 +773,8 @@ public class Loader
         return a + b;
     }
 }", "Loader.cs");
-
         var results = await _asyncSafetyEngine.FindTaskWhenAllUsageAsync("Loader.cs");
-
-        Assert.That(results, Is.Not.Empty,
-            "LoadAsync has two sequential awaits that could run in parallel via Task.WhenAll.");
+        Assert.That(results, Is.Not.Empty, "LoadAsync has two sequential awaits that could run in parallel via Task.WhenAll.");
         Assert.That(results.Any(r => r.MethodName == "LoadAsync"), Is.True);
     }
 
@@ -923,9 +787,7 @@ public class Simple
 {
     public async Task<int> FetchAsync() { return await Task.FromResult(42); }
 }", "Simple.cs");
-
         var results = await _asyncSafetyEngine.FindTaskWhenAllUsageAsync("Simple.cs");
-
         Assert.That(results, Is.Empty, "A single await cannot be parallelized - nothing to flag.");
     }
 
@@ -938,16 +800,13 @@ public class Shell
 {
     public async Task NoOpAsync() { await Task.CompletedTask; }
 }", "Shell.cs");
-
         var results = await _asyncSafetyEngine.FindTaskWhenAllUsageAsync("Shell.cs");
-
         Assert.That(results, Is.Empty, "A single await on CompletedTask should not trigger the check.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // AdvancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task ReplaceStringConcat_Converts_LiteralPlusVariableToInterpolation()
     {
@@ -956,9 +815,7 @@ public class Greeter
 {
     public string Greet(string name) => ""Hello, "" + name + ""!"";
 }", "Greeter.cs");
-
         var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("$\""), "Output must contain an interpolated string.");
         Assert.That(result.UpdatedText, Does.Contain("{name}"), "Variable 'name' must be in an interpolation hole.");
         Assert.That(result.UpdatedText, Does.Not.Contain("\" + name + \""), "Original concat must be replaced.");
@@ -970,9 +827,7 @@ public class Greeter
         // Two string literals concatenated -> Roslyn folds these at compile time; no variable to interpolate
         SetSource(@"
 public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
-
         var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("C.cs");
-
         // Still returns content without throwing; may or may not convert (implementation-defined for pure literals)
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
@@ -981,9 +836,7 @@ public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
     public async Task ReplaceStringConcat_DoesNotChange_FileWithNoStringConcat()
     {
         SetSource(@"public class C { public string Hello() => ""Hi""; }", "C.cs");
-
         var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("C.cs");
-
         // No concat found means the engine reports TargetNotFound and leaves UpdatedText unset ->
         // no interpolation is introduced because there is nothing to rewrite.
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
@@ -999,17 +852,13 @@ public class Reporter
     public string Line1(string x) => ""A="" + x;
     public string Line2(string y) => ""B="" + y;
 }", "Reporter.cs");
-
         var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("Reporter.cs");
-
-        Assert.That(result.UpdatedText!.Contains("{x}") || result.UpdatedText!.Contains("{y}"), Is.True,
-            "At least one concat chain must be converted.");
+        Assert.That(result.UpdatedText!.Contains("{x}") || result.UpdatedText!.Contains("{y}"), Is.True, "At least one concat chain must be converted.");
     }
 
     // ══════════════════════════════════════════════════════════════
     // AdvancedRefactoringEngine.OptimizeTaskWaitAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task OptimizeTaskWait_Replaces_ResultPropertyWithAwait()
     {
@@ -1023,9 +872,7 @@ public class C
         var x = t.Result;
     }
 }", "C.cs");
-
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("C.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("await"), ".Result must be replaced by await.");
         Assert.That(result.UpdatedText, Does.Contain("async"), "Containing method must be made async.");
         Assert.That(result.UpdatedText, Does.Not.Contain(".Result"), ".Result must not remain in output.");
@@ -1043,9 +890,7 @@ public class C
         Task.Delay(100).Wait();
     }
 }", "C.cs");
-
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("C.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("await"));
         Assert.That(result.UpdatedText, Does.Not.Contain(".Wait()"), ".Wait() must be replaced.");
     }
@@ -1062,9 +907,7 @@ public class C
         var val = Task.FromResult(""data"").GetAwaiter().GetResult();
     }
 }", "C.cs");
-
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("C.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("await"), "GetAwaiter().GetResult() must be replaced by await.");
         Assert.That(result.UpdatedText, Does.Not.Contain("GetAwaiter"), "GetAwaiter chain must be gone.");
     }
@@ -1081,9 +924,7 @@ public class C
         return await Task.FromResult(1);
     }
 }", "C.cs");
-
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("C.cs");
-
         Assert.That(result.UpdatedText, Does.Contain("async"), "Already-async method should remain async.");
         Assert.That(result.UpdatedText, Does.Contain("await"), "Existing await must be preserved.");
         Assert.That(result.UpdatedText, Does.Not.Contain(".Result"), "No blocking calls to introduce.");
@@ -1092,7 +933,6 @@ public class C
     // ══════════════════════════════════════════════════════════════
     // GranularRefactoringEngine.IntroduceFieldAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task IntroduceField_ExtractsLiteralToPrivateReadonlyField()
     {
@@ -1108,9 +948,7 @@ public class C
         int line = 5;
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("42") + 1;
-
         var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", "var x = 42", "_answer");
-
         Assert.That(result.UpdatedText, Does.Contain("_answer"), "New field name must appear in output.");
         Assert.That(result.UpdatedText, Does.Contain("private"), "Extracted field must be private.");
         Assert.That(result.UpdatedText, Does.Contain("readonly").Or.Contain("_answer"), "Field should be readonly.");
@@ -1121,10 +959,8 @@ public class C
     {
         const string source = "public class C { public void M() { } }";
         SetSource(source, "C.cs");
-
         // Snippet points to class declaration -> no expression there; graceful fallback returns original
         var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", "public class C", "_f");
-
         // Should return the original source unchanged (graceful fallback)
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
@@ -1132,7 +968,6 @@ public class C
     // ══════════════════════════════════════════════════════════════
     // GranularRefactoringEngine.IntroduceParameterAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task IntroduceParameter_AddsParameterToContainingMethod()
     {
@@ -1147,9 +982,7 @@ public class C
         int line = 5;
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("30") + 1;
-
         var result = await _granularRefactoringEngine.IntroduceParameterAsync("C.cs", "int timeout = 30", "timeoutMs");
-
         Assert.That(result.UpdatedText, Does.Contain("timeoutMs"), "New parameter name must appear.");
         Assert.That(result.UpdatedText, Does.Contain("M("), "Method M signature must be present.");
     }
@@ -1157,7 +990,6 @@ public class C
     // ══════════════════════════════════════════════════════════════
     // GranularRefactoringEngine.IntroduceVariableAsync
     // ══════════════════════════════════════════════════════════════
-
     [Test]
     public async Task IntroduceVariable_ExtractsExpressionToLocalVar()
     {
@@ -1172,10 +1004,10 @@ public class C
         int line = 5;
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("6") + 1;
-
         var result = await _granularRefactoringEngine.IntroduceVariableAsync("C.cs", "6 * 7", "product");
-
         Assert.That(result.UpdatedText, Does.Contain("product"), "Extracted variable name must appear.");
         Assert.That(result.UpdatedText, Does.Contain("var"), "Local variable should be declared with var.");
     }
+
+    public AntiPatternEngine _antiPatternEngine;
 }

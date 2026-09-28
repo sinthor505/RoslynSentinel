@@ -10,6 +10,7 @@ public class FeatureToggleTests
     private SentinelConfiguration _config;
     private ProjectStructureEngine _structureEngine;
     private AnalysisEngine _analysisEngine;
+    private PerformanceEngine _perfEngine;
 
     [SetUp]
     public void Setup()
@@ -18,6 +19,7 @@ public class FeatureToggleTests
         _config = new SentinelConfiguration();
         _structureEngine = new ProjectStructureEngine(_workspaceManager, _config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
+        _perfEngine = new PerformanceEngine(_workspaceManager, _config);
     }
 
     [TearDown]
@@ -54,12 +56,12 @@ public class FeatureToggleTests
         SetSource("public class C { object o = 1; }");
 
         // Act 1: Enabled
-        var result1 = await _analysisEngine.FindBoxingAllocationsAsync();
+        var result1 = await _perfEngine.FindBoxingAllocationsAsync("Test.cs");
         Assert.That(result1.Count, Is.GreaterThan(0));
 
         // Act 2: Disable
         _config.SetFeatureStatus("BoxingAllocation", false);
-        var result2 = await _analysisEngine.FindBoxingAllocationsAsync();
+        var result2 = await _perfEngine.FindBoxingAllocationsAsync("Test.cs");
 
         // Assert
         Assert.That(result2.Count, Is.Zero, "Boxing should be skipped when disabled.");

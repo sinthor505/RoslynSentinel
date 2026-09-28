@@ -40,6 +40,7 @@ public class BugFixTests
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
         _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
+        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
@@ -313,7 +314,7 @@ public class Processor : IProcessor
     private void Helper() { }
 }";
         SetSource(code, "Processor.cs");
-        var result = await _analysisEngine.GenerateCallTreeAsync("Processor.cs", "Processor.Process");
+        var result = await _antiPatternEngine.GenerateCallTreeAsync("Processor.cs", "Processor.Process");
         Assert.That(result, Is.Not.Null, "Should generate call tree");
         // Should show Processor.Helper(), not IProcessor
         Assert.That(result.UpdatedText, Does.Contain("Processor") | Does.Contain("Helper"), "Should show concrete implementation type");
@@ -618,7 +619,7 @@ public class Calculator
     }
 }";
         SetSource(code, "Calculator.cs");
-        var result = await _analysisEngine.GenerateCallTreeAsync("Calculator.cs", "TestMethod", depth: 2);
+        var result = await _antiPatternEngine.GenerateCallTreeAsync("Calculator.cs", "TestMethod", depth: 2);
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return call tree");
     }
 
@@ -645,7 +646,7 @@ public class Service
     }
 }";
         SetSource(code, "Service.cs");
-        var duplicates = await _analysisEngine.FindDuplicateMethodsAsync(minStatements: 2);
+        var duplicates = await _antiPatternEngine.FindDuplicateMethodsAsync(minStatements: 2);
         Assert.That(duplicates, Is.Not.Null, "Should return duplicate findings");
     }
 
@@ -664,6 +665,7 @@ public class Service
     {
         private IWorkspaceManager _workspaceManager;
         private AnalysisEngine _analysisEngine;
+        private AntiPatternEngine _antiPatternEngine;
         private RefactoringEngine _refactoringEngine;
         private CodeGenerationEngine _codeGenerationEngine;
         private TestingEngine _testingEngine;
@@ -674,6 +676,7 @@ public class Service
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             var config = new SentinelConfiguration();
             _analysisEngine = new AnalysisEngine(_workspaceManager, config);
+            _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
             _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
             _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
             _testingEngine = new TestingEngine(_workspaceManager);
@@ -702,7 +705,7 @@ public class Svc
     public Task<int> SomeAsync() => Task.FromResult(1);
 }";
             SetSource(src, "Svc.cs");
-            var results = await _analysisEngine.DetectMismatchedAwaitAsync("Svc.cs");
+            var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("Svc.cs");
             Assert.That(results, Is.Empty, "Discard _ = Task.Run(...) should not be flagged as missing await");
         }
 
@@ -722,7 +725,7 @@ public class Svc
     public Task<string> GetMoreAsync() => Task.FromResult("""");
 }";
             SetSource(src, "Svc.cs");
-            var results = await _analysisEngine.DetectMismatchedAwaitAsync("Svc.cs");
+            var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("Svc.cs");
             Assert.That(results, Is.Empty, "Task.WhenAll pattern should not be flagged as missing await");
         }
 
@@ -898,7 +901,7 @@ public class Product
     public List<string> Tags { get; set; }
 }";
             SetSource(src, "Product.cs");
-            var result = await _analysisEngine.GenerateEqualityOverridesAsync("Product.cs", "Product");
+            var result = await _antiPatternEngine.GenerateEqualityOverridesAsync("Product.cs", "Product");
             Assert.That(result.UpdatedText, Does.Contain("SequenceEqual"), "List<T> property should use Enumerable.SequenceEqual for value-based comparison");
             Assert.That(result.UpdatedText, Does.Not.Contain("Tags == other.Tags"), "List<T> should NOT use reference equality (==)");
         }
@@ -908,7 +911,7 @@ public class Product
         {
             const string src = @"public class Point { public int X { get; set; } public int Y { get; set; } }";
             SetSource(src, "Point.cs");
-            var result = await _analysisEngine.GenerateEqualityOverridesAsync("Point.cs", "Point");
+            var result = await _antiPatternEngine.GenerateEqualityOverridesAsync("Point.cs", "Point");
             // Scalar int properties use == which is fine
             Assert.That(result.UpdatedText, Does.Contain("X == other.X"), "Scalar int property should use == equality");
         }
@@ -931,7 +934,7 @@ public class Product
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             var config = new SentinelConfiguration();
             _analysisEngine = new AnalysisEngine(_workspaceManager, config);
-            _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
+            _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
         }
 
         [TearDown]
@@ -1004,7 +1007,7 @@ public class MyTests
     }
 }";
             SetSource(src, "MyTests.cs");
-            var results = await _analysisEngine.DetectMismatchedAwaitAsync("MyTests.cs");
+            var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("MyTests.cs");
             Assert.That(results, Is.Empty, "FooAsync inside Moq .Setup(s => s.FooAsync()) lambda should not be flagged as missing await");
         }
 
@@ -1024,7 +1027,7 @@ public class MyTests
     }
 }";
             SetSource(src, "MyTests.cs");
-            var results = await _analysisEngine.DetectMismatchedAwaitAsync("MyTests.cs");
+            var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("MyTests.cs");
             Assert.That(results, Is.Empty, "FooAsync inside parenthesized lambda .Setup((s) => s.FooAsync()) should not be flagged");
         }
     }
@@ -1056,7 +1059,7 @@ public class MyTests
             _config = new SentinelConfiguration();
             _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
             _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
-            _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
+            _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
             _diEngine = new DependencyInjectionEngine(_workspaceManager);
             _navigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         }
@@ -3045,6 +3048,8 @@ namespace MyApp
             Assert.That(result.SourceCode, Does.Contain("DoWork"), "Decorator source should include the interface methods");
         }
     }
+
+    public AntiPatternEngine _antiPatternEngine;
 }
 
 /// <summary>
@@ -3072,7 +3077,7 @@ public class AddGuardClausesNullReturnRegressionTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-    private QualityTools CreateTools() => new QualityTools(new TestingEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new AnalysisEngine(_workspaceManager, _config), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
+    private QualityTools CreateTools() => new QualityTools(new TestingEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
     [Test]
     public async Task AddGuardClausesAsync_FileNotInWorkspace_ReturnsEmpty()
     {
@@ -3129,7 +3134,7 @@ public class AddBenchmarkStubNullReturnRegressionTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-    private QualityTools CreateTools() => new QualityTools(_engine, new ControlFlowEngine(_workspaceManager), new AnalysisEngine(_workspaceManager, _config), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
+    private QualityTools CreateTools() => new QualityTools(_engine, new ControlFlowEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
     [Test]
     public async Task AddBenchmarkStubAsync_FileNotInWorkspace_ReturnsEmpty()
     {
@@ -3186,7 +3191,7 @@ public class AddBracesNullReturnRegressionTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-    private ModernizationTools CreateTools() => new ModernizationTools(new ModernizationEngine(_workspaceManager, _config), new ModernizationUpgradeEngine(_workspaceManager), new ModernLoggingEngine(_workspaceManager), _engine, new AnalysisEngine(_workspaceManager, _config), new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new ImmutabilityEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+    private ModernizationTools CreateTools() => new ModernizationTools(new ModernizationEngine(_workspaceManager, _config), new ModernizationUpgradeEngine(_workspaceManager), new ModernLoggingEngine(_workspaceManager), _engine, new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new ImmutabilityEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
     [Test]
     public async Task AddBracesAsync_FileNotInWorkspace_ReturnsEmpty()
     {
@@ -3239,7 +3244,7 @@ public class MakeClassImmutableNullReturnRegressionTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-    private ModernizationTools CreateTools() => new ModernizationTools(new ModernizationEngine(_workspaceManager, _config), new ModernizationUpgradeEngine(_workspaceManager), new ModernLoggingEngine(_workspaceManager), new SyntaxUpgradeEngine(_workspaceManager, _config), new AnalysisEngine(_workspaceManager, _config), new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), _engine, new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+    private ModernizationTools CreateTools() => new ModernizationTools(new ModernizationEngine(_workspaceManager, _config), new ModernizationUpgradeEngine(_workspaceManager), new ModernLoggingEngine(_workspaceManager), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), _engine, new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
     [Test]
     public async Task MakeClassImmutableAsync_FileNotInWorkspace_ReturnsEmpty()
     {

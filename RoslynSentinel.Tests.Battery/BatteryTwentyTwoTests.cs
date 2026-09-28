@@ -1,11 +1,9 @@
 // Battery #22 -> IntelligenceTools
 // Tests all 45 public methods of IntelligenceTools in-memory via TestSolutionBuilder.
-
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
-
 [TestFixture]
 public class BatteryTwentyTwoTests
 {
@@ -30,7 +28,6 @@ public class BatteryTwentyTwoTests
     private SymbolRelationshipTools _symbolRelationshipTools;
     private SymbolNavigationTools _symbolNavigationTools;
     private ScanTools _scanTools;
-
     private const string RichSource = @"
 using System;
 using System.Collections.Generic;
@@ -103,7 +100,6 @@ public class OrderService : IOrderService
     public async Task<Order> GetOrderAsync(int id) => await Task.FromResult(new Order(id, ""test"", _logger));
     public async Task SaveAsync(Order order) => await Task.CompletedTask;
 }";
-
     [SetUp]
     public void Setup()
     {
@@ -113,58 +109,28 @@ public class OrderService : IOrderService
         _semanticSearchEngine = new SemanticSearchEngine(_workspaceManager);
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
-        _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
+        _deadCodeEngine = new DeadCodeEngine(_workspaceManager, _config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _documentationEngine = new DocumentationEngine(_workspaceManager);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
-        _healthOrchestrationEngine = new HealthOrchestrationEngine(
-            _workspaceManager, _projectStructureEngine, _analysisEngine, _config);
+        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
+        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _tools = new IntelligenceTools(
-            _impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine,
-            _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine,
-            _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine,
-            _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine,
-            _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager),
-            _workspaceManager,
-            _config, NullLogger<IntelligenceTools>.Instance);
-
+        _tools = new IntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, _config, NullLogger<IntelligenceTools>.Instance);
         // Symbol-level tools moved to SentinelSymbolTools (Basic) in the server split.
-        _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(
-            _discoveryEngine,
-            _semanticSearchEngine,
-            _symbolNavigationEngine,
-            _workspaceManager,
-            NullLogger<SymbolRelationshipImpl>.Instance));
-
-        _symbolNavigationTools = new SymbolNavigationTools(new SymbolNavigationImpl(
-            _symbolNavigationEngine,
-            _impactAnalyzer,
-            _workspaceManager,
-            NullLogger<SymbolNavigationImpl>.Instance));
-
+        _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(_discoveryEngine, _semanticSearchEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance));
+        _symbolNavigationTools = new SymbolNavigationTools(new SymbolNavigationImpl(_symbolNavigationEngine, _impactAnalyzer, _workspaceManager, NullLogger<SymbolNavigationImpl>.Instance));
         // GetPublicApiSurface moved to ScanTools (Advanced).
-        _scanTools = new ScanTools(
-            _analysisEngine, new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager),
-            _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager),
-            new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _architecturalEngine,
-            _projectStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager),
-            _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine,
-            new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config),
-            new CodeStyleAnalysisEngine(_workspaceManager),
-            new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config),
-            _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager),
-            _workspaceManager, NullLogger<ScanTools>.Instance);
+        _scanTools = new ScanTools(_analysisEngine, new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _architecturalEngine, _projectStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager), _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine, new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeStyleAnalysisEngine(_workspaceManager), new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config), _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager), _workspaceManager, NullLogger<ScanTools>.Instance);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -172,21 +138,17 @@ public class OrderService : IOrderService
     }
 
     // --- RunScanDetector ---
-
     [Test]
     public async Task RunScanDetector_UnusedReferencesWithoutProjectScope_ReturnsInvalidArgument()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _scanTools.RunScanDetector(
-            reason: "test message", detector: ScanTools.DetectorId.unused_references, scope: ToolScope.file, filePath: "Test.cs");
-
+        var result = await _scanTools.RunScanDetector(reason: "test message", detector: ScanTools.DetectorId.unused_references, scope: ToolScope.file, filePath: "Test.cs");
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
     // --- GetComprehensiveHealthReport ---
-
     [Test]
     public async Task GetComprehensiveHealthReport_ValidSolution_ReturnsReport()
     {
@@ -196,7 +158,6 @@ public class OrderService : IOrderService
     }
 
     // --- GetBlastRadius (via InspectSymbol) ---
-
     [Test]
     public async Task GetBlastRadius_ValidMethod_ReturnsReport()
     {
@@ -206,7 +167,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindMethodsByReturnType (via FindByName) ---
-
     [Ignore("API changed: FindByName removed")]
     [Test]
     public async Task FindMethodsByReturnType_ValidType_ReturnsList()
@@ -215,7 +175,6 @@ public class OrderService : IOrderService
     }
 
     // --- GetSolutionMetrics ---
-
     [Test]
     public async Task GetSolutionMetrics_LoadedSolution_ReturnsMetrics()
     {
@@ -233,7 +192,6 @@ public class OrderService : IOrderService
     }
 
     // --- GetCodeInventory ---
-
     [Test]
     public async Task GetCodeInventory_ValidFile_ReturnsInventory()
     {
@@ -243,7 +201,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindUnusedPrivateMembers (via DeadCodeEngine) ---
-
     [Test]
     public async Task FindUnusedPrivateMembers_ValidClass_ReturnsList()
     {
@@ -253,7 +210,6 @@ public class OrderService : IOrderService
     }
 
     // --- DetectUnusedPrivateFields (via DeadCodeEngine) ---
-
     [Test]
     public async Task DetectUnusedPrivateFields_ValidFile_ReturnsList()
     {
@@ -263,7 +219,6 @@ public class OrderService : IOrderService
     }
 
     // --- DetectUnusedLocalVariables (via DeadCodeEngine) ---
-
     [Test]
     public async Task DetectUnusedLocalVariables_ValidFile_ReturnsList()
     {
@@ -273,37 +228,33 @@ public class OrderService : IOrderService
     }
 
     // --- DetectLongParameterLists (via AnalysisEngine) ---
-
     [Test]
     public async Task DetectLongParameterLists_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _analysisEngine.DetectLongParameterListsAsync();
+        var result = await _antiPatternEngine.DetectLongParameterListsAsync();
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindUninstantiatedTypes (via AnalysisEngine) ---
-
     [Test]
     public async Task FindUninstantiatedTypes_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _analysisEngine.FindUninstantiatedTypesAsync();
+        var result = await _deadCodeEngine.FindUninstantiatedTypesAsync();
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindCircularDependencies (no params, via AnalysisEngine) ---
-
     [Test]
     public async Task FindCircularDependencies_NoParams_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _analysisEngine.FindCircularDependenciesAsync();
+        var result = await _architecturalEngine.FindCircularDependenciesAsync();
         Assert.That(result, Is.Not.Null);
     }
 
     // --- GenerateCallTree (via GetCallGraph "tree") ---
-
     [Test]
     public async Task GenerateCallTree_ValidMethod_ReturnsString()
     {
@@ -313,7 +264,6 @@ public class OrderService : IOrderService
     }
 
     // --- DocumentPocoFields (via DocumentationEngine) ---
-
     [Test]
     public async Task DocumentPocoFields_ValidClass_ReturnsString()
     {
@@ -323,17 +273,15 @@ public class OrderService : IOrderService
     }
 
     // --- GenerateEqualityOverrides (via AnalysisEngine) ---
-
     [Test]
     public async Task GenerateEqualityOverrides_ValidClass_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _analysisEngine.GenerateEqualityOverridesAsync("Test.cs", "Order");
+        var result = await _antiPatternEngine.GenerateEqualityOverridesAsync("Test.cs", "Order");
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindUnusedReferences (via DependencyEngine) ---
-
     [Test]
     public async Task FindUnusedReferences_ValidProject_ReturnsList()
     {
@@ -347,7 +295,6 @@ public class OrderService : IOrderService
     // .csproj XML -> Roslyn's in-memory Project model has no NuGet-version API), so unlike the
     // rest of this battery it can't run against TestSolutionBuilder's in-memory fake project
     // path. Uses a real on-disk solution via TestSolutionFixture instead.
-
     [Test]
     public async Task CheckPackageInconsistency_ValidSolution_ReturnsList()
     {
@@ -355,43 +302,38 @@ public class OrderService : IOrderService
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var dependencyEngine = new DependencyEngine(workspaceManager);
-
         var result = await dependencyEngine.CheckPackageInconsistencyAsync();
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindUnusedInterfaces (via AnalysisEngine) ---
-
     [Test]
     public async Task FindUnusedInterfaces_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _analysisEngine.FindUnusedInterfacesAsync();
+        var result = await _deadCodeEngine.FindUnusedInterfacesAsync();
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindInternalClassesThatCouldBePrivate (via AnalysisEngine) ---
-
     [Test]
     public async Task FindInternalClassesThatCouldBePrivate_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _analysisEngine.FindInternalClassesThatCouldBePrivateAsync();
+        var result = await _deadCodeEngine.FindInternalClassesThatCouldBePrivateAsync();
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindLargeSwitchStatements (via AnalysisEngine) ---
-
     [Test]
     public async Task FindLargeSwitchStatements_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _analysisEngine.FindLargeSwitchStatementsAsync();
+        var result = await _antiPatternEngine.FindLargeSwitchStatementsAsync();
         Assert.That(result, Is.Not.Null);
     }
 
     // --- FindStructuralSmells (via ProjectStructureEngine) ---
-
     [Test]
     public async Task FindStructuralSmells_ValidSolution_ReturnsList()
     {
@@ -401,7 +343,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindUnusedConstructors (via DeadCodeEngine) ---
-
     [Test]
     public async Task FindUnusedConstructors_ValidFile_ReturnsList()
     {
@@ -411,7 +352,6 @@ public class OrderService : IOrderService
     }
 
     // --- CheckForUnusedEventSubscriptions (via DeadCodeEngine) ---
-
     [Test]
     public async Task CheckForUnusedEventSubscriptions_ValidFile_ReturnsList()
     {
@@ -421,7 +361,6 @@ public class OrderService : IOrderService
     }
 
     // --- GetSymbolInfo (via InspectSymbol) ---
-
     [Test]
     public async Task GetSymbolInfo_ValidSymbolSnippet_ReturnsInfo()
     {
@@ -431,7 +370,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindAllImplementations (via FindByName) ---
-
     [Ignore("API changed: FindByName removed")]
     [Test]
     public async Task FindAllImplementations_ValidInterface_ReturnsList()
@@ -440,7 +378,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindReadonlyFieldCandidates (via SymbolNavigationEngine) ---
-
     [Test]
     public async Task FindReadonlyFieldCandidates_ValidFile_ReturnsList()
     {
@@ -450,7 +387,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindDiRegistrations (now GetDiRegistrations) ---
-
     [Test]
     public async Task FindDiRegistrations_ValidSolution_ReturnsList()
     {
@@ -460,7 +396,6 @@ public class OrderService : IOrderService
     }
 
     // --- GetTypeMembersDetail (via GetTypeInfo) ---
-
     [Test]
     public async Task GetTypeMembersDetail_ValidType_ReturnsList()
     {
@@ -470,7 +405,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindExtensionMethods (via FindByName) ---
-
     [Ignore("API changed: FindByName removed")]
     [Test]
     public async Task FindExtensionMethods_ValidType_ReturnsList()
@@ -479,7 +413,6 @@ public class OrderService : IOrderService
     }
 
     // --- AnalyzeTypeCohesion (via MetricsEngine) ---
-
     [Test]
     public async Task AnalyzeTypeCohesion_ValidFile_ReturnsList()
     {
@@ -489,7 +422,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindCircularDependencies (with projectName, via ArchitecturalEngine) ---
-
     [Test]
     public async Task FindCircularDependencies_WithProjectName_ReturnsList()
     {
@@ -499,7 +431,6 @@ public class OrderService : IOrderService
     }
 
     // --- GetCallGraph ---
-
     [Test]
     public async Task GetCallGraph_ValidMethod_ReturnsCallGraph()
     {
@@ -513,13 +444,11 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "NoSuchMethod99");
-
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
     // --- GetReverseCallGraph (via GetCallGraph "reverse") ---
-
     [Test]
     public async Task GetReverseCallGraph_ValidMethod_ReturnsCallGraph()
     {
@@ -533,13 +462,11 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "NoSuchMethod99", "reverse");
-
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
     // --- MoveFileToNamespaceFolder ---
-
     [Test]
     public async Task MoveFileToNamespaceFolder_ValidFile_ReturnsString()
     {
@@ -549,7 +476,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindAllThrowSites (via DiscoveryEngine) ---
-
     [Test]
     public async Task FindAllThrowSites_ValidSolution_ReturnsList()
     {
@@ -559,7 +485,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindObjectCreationSites (via FindByName) ---
-
     [Ignore("API changed: FindByName removed")]
     [Test]
     public async Task FindObjectCreationSites_ValidType_ReturnsList()
@@ -568,7 +493,6 @@ public class OrderService : IOrderService
     }
 
     // --- GetPublicApiSurface ---
-
     [Test]
     public async Task GetPublicApiSurface_ValidProject_ReturnsList()
     {
@@ -578,7 +502,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindServicesNotRegistered (via DependencyInjectionEngine) ---
-
     [Test]
     public async Task FindServicesNotRegistered_ValidSolution_ReturnsList()
     {
@@ -588,7 +511,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindBestInsertionPoint (now GetBestInsertionPoint) ---
-
     [Test]
     public async Task FindBestInsertionPoint_ValidClass_ReturnsResult()
     {
@@ -598,7 +520,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindTodoFixmeComments (via DiscoveryEngine) ---
-
     [Test]
     public async Task FindTodoFixmeComments_ValidSolution_ReturnsList()
     {
@@ -608,7 +529,6 @@ public class OrderService : IOrderService
     }
 
     // --- PreviewRenameImpact ---
-
     [Test]
     public async Task PreviewRenameImpact_ValidSymbol_ReturnsPreview()
     {
@@ -618,7 +538,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindCallersSafe (via FindReferences) ---
-
     [Test]
     public async Task FindCallersSafe_ValidSymbol_ReturnsList()
     {
@@ -628,7 +547,6 @@ public class OrderService : IOrderService
     }
 
     // --- FindImplementationsSafe (via FindReferences) ---
-
     [Test]
     public async Task FindImplementationsSafe_ValidInterface_ReturnsList()
     {
@@ -638,13 +556,11 @@ public class OrderService : IOrderService
     }
 
     // --- FindReferences(kind: all) ---
-
     [Test]
     public async Task FindReferences_KindAll_ReturnsBothCallersAndImplementations()
     {
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "ProcessAsync", FindReferencesKind.all, filePath: "Test.cs");
-
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
         var json = System.Text.Json.JsonSerializer.Serialize(result.SuccessData);
@@ -653,7 +569,6 @@ public class OrderService : IOrderService
     }
 
     // --- QuerySymbolRelationships (renamed from FindUsages) ---
-
     [Test]
     public async Task QuerySymbolRelationships_ObjectCreationsForRealType_ReturnsResult()
     {
@@ -668,11 +583,9 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "ProcessAsync", FindUsagesSearchKind.objectCreations);
-
         Assert.That(result.IsSuccess, Is.False, "objectCreations against a method name must be rejected, not silently return [].");
         Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.Message, Does.Contain("FindReferences"),
-            "The guard should point the caller at FindReferences instead of objectCreations for a member name.");
+        Assert.That(result.ErrorData!.Message, Does.Contain("FindReferences"), "The guard should point the caller at FindReferences instead of objectCreations for a member name.");
     }
 
     [Test]
@@ -682,7 +595,6 @@ public class OrderService : IOrderService
         // "IOrderService" has zero attribute usages, but a real implementor exists (OrderService) ->
         // broaden-on-empty should surface that under 'implementorsOf' instead of just returning [].
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "IOrderService", FindUsagesSearchKind.attributeUsages);
-
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.WarningDetails, Is.Not.Null.And.Contains("Broadened"));
         Assert.That(result.WarningDetails, Does.Contain("implementorsOf"));
@@ -693,7 +605,6 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "ThisNameAppearsNowhereInTheSolution", FindUsagesSearchKind.attributeUsages);
-
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.WarningDetails, Does.Contain("nothing found under any kind"));
     }
@@ -718,11 +629,11 @@ public class ProbeAttribute : Attribute { }
 public class AttributedTarget { }
 ";
         SetSource(source, "AttributeProbe.cs");
-
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages);
-
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
         var sites = (result.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
         Assert.That(sites, Is.Not.Null.And.Count.EqualTo(1));
     }
+
+    public AntiPatternEngine _antiPatternEngine;
 }

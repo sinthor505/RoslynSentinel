@@ -136,7 +136,7 @@ public class HealthOrchestrationEngineTests
         var config = new SentinelConfiguration();
         var pse = new ProjectStructureEngine(_mgr, config);
         var ae = new AnalysisEngine(_mgr, config);
-        _engine = new HealthOrchestrationEngine(_mgr, pse, ae, config);
+        _engine = new HealthOrchestrationEngine(_mgr, pse, config, new PerformanceEngine(_mgr), new AntiPatternEngine(_mgr, config));
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));
     }

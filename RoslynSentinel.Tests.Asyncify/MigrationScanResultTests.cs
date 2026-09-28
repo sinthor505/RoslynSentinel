@@ -53,7 +53,6 @@ public class MigrationScanResultTests
         _qualityTools = new QualityTools(
             new TestingEngine(_workspaceManager),
             new ControlFlowEngine(_workspaceManager),
-            new AnalysisEngine(_workspaceManager, new SentinelConfiguration()),
             _antiPatternEngine,
             new ThreadSafetyEngine(_workspaceManager),
             new DiagnosticEngine(_workspaceManager),

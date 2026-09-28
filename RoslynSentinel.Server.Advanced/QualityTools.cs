@@ -12,7 +12,6 @@ public class QualityTools
 {
     private readonly TestingEngine _testingEngine;
     private readonly ControlFlowEngine _controlFlowEngine;
-    private readonly AnalysisEngine _analysisEngine;
     private readonly AntiPatternEngine _antiPatternEngine;
     private readonly ThreadSafetyEngine _threadSafetyEngine;
     private readonly DiagnosticEngine _diagnosticEngine;
@@ -25,7 +24,6 @@ public class QualityTools
     public QualityTools(
         TestingEngine testingEngine,
         ControlFlowEngine controlFlowEngine,
-        AnalysisEngine analysisEngine,
         AntiPatternEngine antiPatternEngine,
         ThreadSafetyEngine threadSafetyEngine,
         DiagnosticEngine diagnosticEngine,
@@ -37,7 +35,6 @@ public class QualityTools
     {
         _testingEngine = testingEngine;
         _controlFlowEngine = controlFlowEngine;
-        _analysisEngine = analysisEngine;
         _antiPatternEngine = antiPatternEngine;
         _threadSafetyEngine = threadSafetyEngine;
         _diagnosticEngine = diagnosticEngine;

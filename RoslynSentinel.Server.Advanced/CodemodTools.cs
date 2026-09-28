@@ -6,6 +6,7 @@ namespace RoslynSentinel.Server.Advanced;
 [McpServerToolType]
 public class CodemodTools
 {
+    private readonly AntiPatternEngine _antiPatternEngine;
     private readonly ApiGenerationEngine _apiAutomationEngine; // ── shared engines ────────────────────────────────────────────────────────
     private readonly RefactoringEngine _refactoringEngine;
     private readonly LogicOptimizationEngine _logicOptimizationEngine;
@@ -40,7 +41,7 @@ public class CodemodTools
     private readonly AdvancedRefactoringTools _advancedRefactoringTools;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<CodemodTools> _logger;
-    public CodemodTools(RefactoringEngine refactoringEngine, LogicOptimizationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, AdvancedLogicEngine advancedLogicEngine, ModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, ProjectStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, GranularRefactoringEngine granularRefactoringEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, CodeFlowEngine codeFlowEngine, AdvancedStructuralEngine advancedStructuralEngine, ModernLoggingEngine modernLoggingEngine, ImmutabilityEngine immutabilityEngine, ArchitecturalEngine architecturalEngine, AnalysisEngine analysisEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiAutomationEngine)
+    public CodemodTools(RefactoringEngine refactoringEngine, LogicOptimizationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, AdvancedLogicEngine advancedLogicEngine, ModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, ProjectStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, GranularRefactoringEngine granularRefactoringEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, CodeFlowEngine codeFlowEngine, AdvancedStructuralEngine advancedStructuralEngine, ModernLoggingEngine modernLoggingEngine, ImmutabilityEngine immutabilityEngine, ArchitecturalEngine architecturalEngine, AnalysisEngine analysisEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiAutomationEngine, AntiPatternEngine antiPatternEngine = null)
     {
         _refactoringEngine = refactoringEngine;
         _logicOptimizationEngine = logicOptimizationEngine;
@@ -72,6 +73,7 @@ public class CodemodTools
         _workspaceManager = workspaceManager;
         _logger = logger;
         _apiAutomationEngine = apiAutomationEngine;
+        _antiPatternEngine = antiPatternEngine;
     }
 
     // ── 1. apply_file_codemod ─────────────────────────────────────────────────
@@ -79,7 +81,7 @@ public class CodemodTools
     [Produces(DataTag.ResultOnly)]
     [Description("Applies a file-wide code transformation. Call DescribeAdvancedToolOptions(\"apply_file_codemod\") for the list of transform values.")]
     public async Task<SentinelCallToolResult<object>> ApplyFileCodemod([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_file_codemod\") for valid values.")][ExternalInputRequired(DataTag.DataType)] string transform, [Description("Only used by add_configure_await_false: true (default) appends .ConfigureAwait(false) to all awaits.")][ExternalInputRequired(DataTag.LibraryMode)] bool libraryMode = true, [Description("Only used by format_document_safe / sort_and_deduplicate_usings: true returns updated content without writing to disk.")][ToolOption(ToolOptionTag.Preview)] bool preview = false, // RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
+ CancellationToken cancellationToken = default)
     {
         try
         {
@@ -540,7 +542,7 @@ public class CodemodTools
     [Description("Applies a method-scoped code transformation. Call DescribeAdvancedToolOptions(\"apply_method_codemod\") for the list of transform values.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: direction is required for transform=convert_expression_body ("ToExpression" or "ToBlock"); unused by other transforms. Enforced at runtime, not by the schema.
     public async Task<SentinelCallToolResult<object>> ApplyMethodCodemod([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [ExternalInputRequired(DataTag.MethodName, required: true)] string methodName, [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_method_codemod\") for valid values.")][ExternalInputRequired(DataTag.Transform)] string transform, [Description("Required for transform=convert_expression_body: \"ToExpression\" or \"ToBlock\". Unused by other transforms.")][ToolOption(ToolOptionTag.Direction)] string? direction = null, [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null, [Consumes(DataTag.LineBefore)] string? lineBefore = null, [Consumes(DataTag.LineAfter)] string? lineAfter = null, [Description("Only used by transform=make_method_thread_safe: the lock field's name.")][ExternalInputRequired(DataTag.SymbolName)] string lockFieldName = "_lock", // RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
+ CancellationToken cancellationToken = default)
     {
         try
         {
@@ -929,7 +931,7 @@ public class CodemodTools
     [Description("Applies a class-scoped code transformation. Call DescribeAdvancedToolOptions(\"apply_class_codemod\") for the list of transform values.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: propertyName is required by transforms that target a specific property (e.g. convert_property_safe); unused by class-wide transforms. direction is required for transform=convert_property_safe ("ToFullProperty" or "ToAutoProperty"). Enforced at runtime, not by the schema.
     public async Task<SentinelCallToolResult<object>> ApplyClassCodemod([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [ExternalInputRequired(DataTag.ClassName)] string className, [Description("The transformation to apply. See DescribeAdvancedToolOptions(\"apply_class_codemod\") for valid values.")][ExternalInputRequired(DataTag.Transform)] string transform, [Description("Required by transforms that target a single property (e.g. convert_property_safe). Unused by class-wide transforms.")][ExternalInputRequired(DataTag.PropertyName)] string? propertyName = null, [Description("Required for transform=convert_property_safe: \"ToFullProperty\" or \"ToAutoProperty\". Unused by other transforms.")][ToolOption(ToolOptionTag.Direction)] string? direction = null, [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null, [Consumes(DataTag.LineBefore)] string? lineBefore = null, [Consumes(DataTag.LineAfter)] string? lineAfter = null, // RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
+ CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1255,7 +1257,7 @@ public class CodemodTools
     [Description("Generates new code for a type or method. Call DescribeAdvancedToolOptions(\"generate\") for the list of kind values, their required parameters, and return types.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: filepath is required for every kind except generate_decorator_class. className/methodName/members/disambiguateLine requirements vary per kind -> see DescribeAdvancedToolOptions("generate"). Enforced at runtime, not by the schema.
     public async Task<SentinelCallToolResult<object>> Generate([Description("The kind of code to generate. See DescribeAdvancedToolOptions(\"generate\") for valid values.")] CodemodKind kind, [Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [Consumes(DataTag.ClassName)] string? className = null, [Consumes(DataTag.MethodName)] string? methodName = null, [Consumes(DataTag.MemberName)] string? members = null, [Description("Only used by kind=generate_decorator_class: the prefix for the generated decorator class name.")][ExternalInputRequired(DataTag.DecoratorPrefix)] string decoratorPrefix = "Logging", [Description("Only used by kind=generate_decorator_class: scopes the interface lookup to one project.")][ExternalInputRequired(DataTag.ProjectName)] string? projectName = null, [Description("Only used by kind=generate_path_driven_tests: \"NUnit\" (default), \"xunit\", or \"mstest\".")][ExternalInputRequired(DataTag.Framework)] string framework = "NUnit", [Description("Only used by kind=generate_path_driven_tests: resolves an overloaded method target.")][ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null, // RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
+ CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1382,7 +1384,7 @@ public class CodemodTools
                         };
                     }
 
-                    var result = await _analysisEngine.GenerateEqualityOverridesAsync(filePath, className, cancellationToken);
+                    var result = await _antiPatternEngine.GenerateEqualityOverridesAsync(filePath, className, cancellationToken);
                     if (string.IsNullOrEmpty(result.UpdatedText))
                     {
                         return new SentinelCallToolResult<object>()

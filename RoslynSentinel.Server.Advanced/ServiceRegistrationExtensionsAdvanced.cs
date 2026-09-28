@@ -64,6 +64,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<PathDrivenTestEngine>();
         services.AddSingleton<PerformanceEngine>();
         services.AddSingleton<RefinementEngine>();
+        services.AddSingleton<ResourceSafetyEngine>();
         services.AddSingleton<ScopedOperationLedgerEngine>();
         services.AddSingleton<SecurityAndSafetyEngine>();
         services.AddSingleton<SecurityEngine>();

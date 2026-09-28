@@ -1,11 +1,9 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
-
 using RoslynSentinel.Common;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
-
 [TestFixture]
 public class MassiveIntelligenceTests
 {
@@ -15,7 +13,6 @@ public class MassiveIntelligenceTests
     private SemanticSearchEngine _searchEngine;
     private InventoryEngine _inventoryEngine;
     private DeadCodeEngine _deadCodeEngine;
-
     [SetUp]
     public void Setup()
     {
@@ -26,11 +23,11 @@ public class MassiveIntelligenceTests
         _searchEngine = new SemanticSearchEngine(_workspaceManager);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
+        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", new[] { (fileName, source) });
@@ -113,7 +110,9 @@ public class MassiveIntelligenceTests
     public async Task Analysis_ShouldDetectLongParameterLists()
     {
         SetSource("public class C { public void M(int a, int b, int c, int d, int e, int f) {} }", "C.cs");
-        var issues = await _analysisEngine.DetectLongParameterListsAsync(threshold: 5);
+        var issues = await _antiPatternEngine.DetectLongParameterListsAsync(threshold: 5);
         Assert.That(issues.Count, Is.EqualTo(1));
     }
+
+    public AntiPatternEngine _antiPatternEngine;
 }

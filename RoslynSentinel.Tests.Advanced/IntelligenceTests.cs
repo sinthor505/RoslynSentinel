@@ -10,6 +10,7 @@ public class IntelligenceTests
 {
     private IWorkspaceManager _workspaceManager;
     private AnalysisEngine _analysisEngine;
+    private ArchitecturalEngine _architecturalEngine;
 
     [SetUp]
     public void Setup()
@@ -17,6 +18,7 @@ public class IntelligenceTests
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);
+        _architecturalEngine = new ArchitecturalEngine(_workspaceManager, config);
     }
 
     [TearDown]
@@ -51,7 +53,7 @@ public class IntelligenceTests
 
         _workspaceManager.SetTestSolution(solution);
 
-        var cycles = await _analysisEngine.FindCircularDependenciesAsync();
+        var cycles = await _architecturalEngine.FindCircularDependenciesAsync();
         Assert.That(cycles.Count, Is.Zero, "Linear should not be a cycle.");
     }
 
@@ -72,7 +74,7 @@ public class IntelligenceTests
 
         _workspaceManager.SetTestSolution(solution);
 
-        var cycles = await _analysisEngine.FindCircularDependenciesAsync();
+        var cycles = await _architecturalEngine.FindCircularDependenciesAsync();
 
         Assert.That(cycles.Count, Is.Zero, "Linear dependency should not be flagged as circular.");
     }

@@ -37,7 +37,7 @@ public class MassiveModernizationTests
         var immutability = new ImmutabilityEngine(_workspaceManager);
         var asyncOpt = new AsyncOptimizationEngine(_workspaceManager);
 
-        _modernizationTools = new ModernizationTools(modern, upgrade, logging, _syntaxUpgradeEngine, analysis, logic, style, healing, advLogic, ideStyle, immutability, asyncOpt, _workspaceManager, config, NullLogger<ModernizationTools>.Instance);
+        _modernizationTools = new ModernizationTools(modern, upgrade, logging, _syntaxUpgradeEngine, logic, style, healing, advLogic, ideStyle, immutability, asyncOpt, _workspaceManager, config, NullLogger<ModernizationTools>.Instance);
     }
 
     [TearDown]

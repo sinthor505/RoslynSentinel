@@ -13,7 +13,6 @@ public class ModernizationTools
     private readonly ModernizationUpgradeEngine _modernizationUpgradeEngine;
     private readonly ModernLoggingEngine _modernLoggingEngine;
     private readonly SyntaxUpgradeEngine _syntaxUpgradeEngine;
-    private readonly AnalysisEngine _analysisEngine;
     private readonly LogicOptimizationEngine _logicOptimizationEngine;
     private readonly CodeStyleEngine _codeStyleEngine;
     private readonly CodeHealingEngine _codeHealingEngine;
@@ -30,7 +29,6 @@ public class ModernizationTools
         ModernizationUpgradeEngine modernizationUpgradeEngine,
         ModernLoggingEngine modernLoggingEngine,
         SyntaxUpgradeEngine syntaxUpgradeEngine,
-        AnalysisEngine analysisEngine,
         LogicOptimizationEngine logicOptimizationEngine,
         CodeStyleEngine codeStyleEngine,
         CodeHealingEngine codeHealingEngine,
@@ -46,7 +44,6 @@ public class ModernizationTools
         _modernizationUpgradeEngine = modernizationUpgradeEngine;
         _modernLoggingEngine = modernLoggingEngine;
         _syntaxUpgradeEngine = syntaxUpgradeEngine;
-        _analysisEngine = analysisEngine;
         _logicOptimizationEngine = logicOptimizationEngine;
         _codeStyleEngine = codeStyleEngine;
         _codeHealingEngine = codeHealingEngine;

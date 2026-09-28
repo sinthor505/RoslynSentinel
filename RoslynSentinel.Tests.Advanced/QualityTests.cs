@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
-
 public class QualityTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -13,21 +12,20 @@ public class QualityTests
     private PerformanceEngine _perfEngine;
     private AnalysisEngine _analysisEngine;
     private AsyncSafetyEngine _asyncSafetyEngine;
-
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _logicEngine = new LogicOptimizationEngine(_workspaceManager);
-        _perfEngine = new PerformanceEngine(_workspaceManager);
+        _perfEngine = new PerformanceEngine(_workspaceManager, config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
+        _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private Solution CreateSolution(string source, string fileName = "Test.cs")
     {
         var adhocWorkspace = new AdhocWorkspace();
@@ -52,9 +50,9 @@ public class QualityTests
     {
         var source = "public class C { bool IsMatch(string s) => s.ToLower() == \"test\"; }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var issues = await _analysisEngine.DetectInefficientStringComparisonsAsync("C.cs");
+        var issues = await _perfEngine.DetectInefficientStringComparisonsAsync("C.cs");
         Assert.That(issues.Count, Is.GreaterThan(0));
-        Assert.That(issues[0], Contains.Substring("Inefficient string comparison"));
+        Assert.That(issues[0].Description, Contains.Substring("Inefficient string comparison"));
     }
 
     [Test]
@@ -62,7 +60,7 @@ public class QualityTests
     {
         var source = "public class C { public void M() { try { } catch { } } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var issues = await _analysisEngine.CheckForEmptyCatchBlocksAsync("C.cs");
+        var issues = await _antiPatternEngine.CheckForEmptyCatchBlocksAsync("C.cs");
         Assert.That(issues.Count, Is.EqualTo(1));
         Assert.That(issues[0], Contains.Substring("Empty catch block"));
     }
@@ -82,7 +80,7 @@ public class QualityTests
     {
         var source = "public class C { object a = new(); object b = new(); public void M() { lock(a) { lock(b) { } } } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var issues = await _analysisEngine.FindPossibleDeadlocksAsync(filePath: "C.cs");
+        var issues = await _antiPatternEngine.FindPossibleDeadlocksAsync(filePath: "C.cs");
         Assert.That(issues.Count, Is.EqualTo(1));
         Assert.That(issues[0], Contains.Substring("Nested lock statement"));
     }
@@ -92,8 +90,10 @@ public class QualityTests
     {
         var source = "public class C { public void M() { string s = \"test\"; var x = (string)s; } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var issues = await _analysisEngine.CheckForRedundantCastAsync("C.cs");
+        var issues = await _antiPatternEngine.CheckForRedundantCastAsync("C.cs");
         Assert.That(issues.Count, Is.EqualTo(1));
         Assert.That(issues[0], Does.Contain("Redundant cast in C.cs"));
     }
+
+    public AntiPatternEngine _antiPatternEngine;
 }

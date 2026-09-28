@@ -1527,7 +1527,8 @@ public class SymbolNavigationEngine
         {
             // Defect-3 fix: no filePath supplied -> resolve by name across the solution.
             // When multiple overloads exist, contextSnippet is used to pick one if supplied;
-            // otherwise all matching symbols are searched (union of references).
+            // otherwise the by-name resolution below throws unless narrowing leaves exactly one
+            // candidate - see the ambiguous-fallback fix comment further down.
             // ResolveCandidatesWithSemanticAsync's semantic half already scans every project in the
             // solution regardless of which document's root/text is passed for the free syntax half,
             // so any parseable document works here -- there is no "current file" in the by-name path.
@@ -1568,9 +1569,45 @@ public class SymbolNavigationEngine
                         // snippet not found in this document -> continue
                     }
                 }
-            }
 
-            symbol ??= PreferClassMember(memberMatches).FirstOrDefault()?.Symbol;
+                if (symbol == null)
+                {
+                    // The snippet was supplied specifically to disambiguate -> a miss must not
+                    // silently fall through to "pick one anyway" below. Without this guard, a
+                    // caller-supplied contextSnippet that doesn't match any candidate was dropped
+                    // on the floor and PreferClassMember(...).FirstOrDefault() picked an arbitrary
+                    // same-named symbol from anywhere in the solution instead - the root cause
+                    // traced in docs/current/blockers/resolved/blocking_error_member_replace_containername_regression_setup_overload.md's
+                    // investigation, reproduced here in the solution-wide by-name path.
+                    throw new InvalidOperationException(
+                        $"FindCallers: contextSnippet did not resolve to a symbol for symbolName " +
+                        $"'{symbolName}' in any of the {memberMatches.Count} candidate location(s) found " +
+                        "across the solution. This is NOT a confirmed zero-references result - the lookup " +
+                        "never ran. " + DescribeCandidateLocations(memberMatches) +
+                        "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
+                        "specific candidate you meant, or supply filePath to pin resolution to one file.");
+                }
+            }
+            else
+            {
+                var narrowed = PreferClassMember(memberMatches);
+                if (narrowed.Count > 1)
+                {
+                    // No contextSnippet was supplied and narrowing (class-vs-interface-member)
+                    // still leaves more than one same-named candidate -> FirstOrDefault() here
+                    // would silently pick an arbitrary one across the whole solution. Force the
+                    // caller to disambiguate instead of returning results for the wrong symbol.
+                    throw new InvalidOperationException(
+                        $"FindCallers: symbolName '{symbolName}' is ambiguous - {narrowed.Count} candidates " +
+                        "found across the solution and no contextSnippet was supplied to disambiguate. " +
+                        "This is NOT a confirmed result for any single symbol - resolution stopped before " +
+                        "the lookup ran. " + DescribeCandidateLocations(narrowed) +
+                        "Supply contextSnippet (a verbatim substring near the intended declaration) or " +
+                        "filePath to pin resolution to the one you mean.");
+                }
+
+                symbol = narrowed.FirstOrDefault()?.Symbol;
+            }
         }
 
         if (symbol == null)
@@ -1789,9 +1826,44 @@ public class SymbolNavigationEngine
                         // snippet not found in this document -> continue
                     }
                 }
-            }
 
-            symbol ??= PreferImplementableMember(memberMatches).FirstOrDefault()?.Symbol;
+                if (symbol == null)
+                {
+                    // The snippet was supplied specifically to disambiguate -> a miss must not
+                    // silently fall through to "pick one anyway" below. Without this guard, a
+                    // caller-supplied contextSnippet that doesn't match any candidate was dropped
+                    // on the floor and PreferImplementableMember(...).FirstOrDefault() picked an
+                    // arbitrary same-named symbol from anywhere in the solution instead - the same
+                    // defect shape fixed above in FindCallersAsync.
+                    throw new InvalidOperationException(
+                        $"FindImplementations: contextSnippet did not resolve to a symbol for symbolName " +
+                        $"'{symbolName}' in any of the {memberMatches.Count} candidate location(s) found " +
+                        "across the solution. This is NOT a confirmed zero-implementations result - the " +
+                        "lookup never ran. " + DescribeCandidateLocations(memberMatches) +
+                        "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
+                        "specific candidate you meant, or supply filePath to pin resolution to one file.");
+                }
+            }
+            else
+            {
+                var narrowed = PreferImplementableMember(memberMatches);
+                if (narrowed.Count > 1)
+                {
+                    // No contextSnippet was supplied and narrowing (implementable-vs-concrete)
+                    // still leaves more than one same-named candidate -> FirstOrDefault() here
+                    // would silently pick an arbitrary one across the whole solution. Force the
+                    // caller to disambiguate instead of returning results for the wrong symbol.
+                    throw new InvalidOperationException(
+                        $"FindImplementations: symbolName '{symbolName}' is ambiguous - {narrowed.Count} " +
+                        "candidates found across the solution and no contextSnippet was supplied to " +
+                        "disambiguate. This is NOT a confirmed result for any single symbol - resolution " +
+                        "stopped before the lookup ran. " + DescribeCandidateLocations(narrowed) +
+                        "Supply contextSnippet (a verbatim substring near the intended declaration) or " +
+                        "filePath to pin resolution to the one you mean.");
+                }
+
+                symbol = narrowed.FirstOrDefault()?.Symbol;
+            }
         }
 
         if (symbol == null)
@@ -2947,6 +3019,38 @@ public class SymbolNavigationEngine
             IsAbstract = typeSymbol.IsAbstract,
             IsSealed = typeSymbol.IsSealed
         };
+    }
+
+
+    /// <summary>
+    /// Solution-wide counterpart to DescribeNameOnlyCandidates: given a list of SemanticSymbolCandidate
+    /// (ISymbol-backed matches spanning every project, not one file's syntax nodes), builds a
+    /// "here are the N candidates that made this ambiguous" hint - file:line plus containing type,
+    /// capped at 3 with a "+N more" suffix, mirroring the same style. Used by FindCallersAsync/
+    /// FindImplementationsForMemberAsync's by-name-across-solution path when a contextSnippet misses
+    /// every candidate, or when no contextSnippet was supplied and narrowing still leaves more than
+    /// one candidate - both cases where silently picking FirstOrDefault() would resolve to an
+    /// arbitrary same-named symbol instead of the one the caller meant.
+    /// </summary>
+    public static string DescribeCandidateLocations(List<SemanticSymbolCandidate> candidates)
+    {
+        if (candidates.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var previews = candidates.Take(3).Select(c =>
+        {
+            var loc = c.Symbol.Locations.FirstOrDefault(l => l.IsInSource);
+            var line = loc != null ? loc.GetLineSpan().StartLinePosition.Line + 1 : -1;
+            var file = loc?.SourceTree?.FilePath ?? c.FilePath ?? "?";
+            var containingType = c.Symbol.ContainingType?.Name ?? c.Symbol.ContainingNamespace?.Name ?? "?";
+            return $"{file}:{line} ({containingType}.{c.Symbol.Name})";
+        });
+
+        var count = candidates.Count;
+        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
+        return $"Candidates: {string.Join(", ", previews)}{suffix}. ";
     }
 }
 /// <summary>

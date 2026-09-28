@@ -21,7 +21,7 @@ public class OrchestrationTests
         var config = new SentinelConfiguration();
         _structureEngine = new ProjectStructureEngine(_workspaceManager, config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);
-        _healthEngine = new HealthOrchestrationEngine(_workspaceManager, _structureEngine, _analysisEngine, config);
+        _healthEngine = new HealthOrchestrationEngine(_workspaceManager, _structureEngine, config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, config));
     }
 
     [TearDown]

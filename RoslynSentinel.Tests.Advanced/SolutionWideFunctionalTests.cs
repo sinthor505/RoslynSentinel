@@ -24,8 +24,9 @@ public class SolutionWideFunctionalTests
         _healthEngine = new HealthOrchestrationEngine(
             _workspaceManager,
             _projectStructureEngine,
-            _analysisEngine,
-            config);
+            config,
+            new PerformanceEngine(_workspaceManager),
+            new AntiPatternEngine(_workspaceManager, config));
 
         // Build a mock solution with 3 projects to test paging
         var solution = TestSolutionBuilder.CreateSolutionWithProject("ProjA", new[] { ("F1.cs", "class A {}") });
