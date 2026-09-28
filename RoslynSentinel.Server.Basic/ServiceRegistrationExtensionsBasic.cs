@@ -721,13 +721,17 @@ public static class RoslynSentinelServiceExtensionsBasic
     }
     // Added by AddMember (expected - used for diagnostics)
     /// <summary>
-    /// Registers the argument pre-flight filter: rejects a call whose arguments cannot succeed as
-    /// written, before the SDK's binder ever sees it.
+    /// Registers the argument pre-flight filter: first silently repairs a case-only parameter
+    /// name mismatch (e.g. "filepath" -> "filePath"), then rejects a call whose arguments still
+    /// cannot succeed as written, before the SDK's binder ever sees either.
     /// <para>
-    /// Covers two dispatch-layer defects that no per-tool fix can reach -> an unknown parameter is
+    /// Covers three dispatch-layer defects that no per-tool fix can reach -> an unknown parameter is
     /// silently discarded (the tool then runs on its defaults and reports <c>success:true</c> with
-    /// the wrong result), and a missing required parameter surfaces as a raw framework
-    /// <c>ArgumentException</c> naming an internal "arguments dictionary". See
+    /// the wrong result), a missing required parameter surfaces as a raw framework
+    /// <c>ArgumentException</c> naming an internal "arguments dictionary", and a parameter name
+    /// that is otherwise correct but differs from the declared one only by case is - absent the
+    /// normalization pass - indistinguishable from the first defect, forcing an avoidable
+    /// round-trip to fix a mistake the server could see and correct outright. See
     /// <see cref="ToolArgumentValidator"/> for the full analysis.
     /// </para>
     /// <para>
@@ -744,6 +748,9 @@ public static class RoslynSentinelServiceExtensionsBasic
             {
                 try
                 {
+                    ToolArgumentValidator.NormalizeParameterCase(
+                        context.Server, context.Params?.Name, context.Params?.Arguments);
+
                     var validationError = ToolArgumentValidator.Validate(
                         context.Server, context.Params?.Name, context.Params?.Arguments);
 

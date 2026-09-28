@@ -6,11 +6,13 @@ public static class ToolArgumentValidator
 {
     // Added by AddMember (expected - used for diagnostics)
     /// <summary>
-    /// Cache of tool name -> (all declared parameter names, required parameter names, and each
-    /// declared parameter's own schema node for type/enum checks). Cached because the schema is
-    /// fixed for the process lifetime and this runs on every single tool call.
+    /// Cache of tool name -> (all declared parameter names, required parameter names, each
+    /// declared parameter's own schema node for type/enum checks, and a case-insensitive ->
+    /// canonical-name lookup used only for the case-normalization pass in
+    /// <see cref="NormalizeParameterCase"/>). Cached because the schema is fixed for the process
+    /// lifetime and this runs on every single tool call.
     /// </summary>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties)> SchemaCache = new(StringComparer.Ordinal);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties, System.Collections.Generic.Dictionary<string, string> CaseInsensitiveLookup)> SchemaCache = new(StringComparer.Ordinal);
     // Added by AddMember (expected - used for diagnostics)
     /// <summary>
     /// Reads the declared and required parameter names, plus each declared parameter's own schema
@@ -21,7 +23,7 @@ public static class ToolArgumentValidator
     /// this validator exists to prevent. Returns <see langword="null"/> when the tool or its
     /// schema cannot be resolved, in which case the caller must skip validation rather than guess.
     /// </summary>
-    private static (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties)? TryGetSchemaParameters(
+    private static (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties, System.Collections.Generic.Dictionary<string, string> CaseInsensitiveLookup)? TryGetSchemaParameters(
         ModelContextProtocol.Server.McpServer? server, string? toolName)
     {
         if (server is null || string.IsNullOrEmpty(toolName))
@@ -86,7 +88,33 @@ public static class ToolArgumentValidator
             if (all.Count == 0)
                 return null;
 
-            var result = (All: all, Required: required, Properties: propertySchemas);
+            // Case-insensitive -> canonical lookup, used only to normalize a case-only mismatch
+            // (e.g. "filepath" -> "filePath") before Validate ever runs, so a caller that gets the
+            // name right but the case wrong doesn't burn a round-trip on it. Built once here rather
+            // than lowering on every call, since the schema is fixed for the process lifetime.
+            // A declared name is deliberately left OUT of the lookup - not overwritten - when two
+            // declared parameters collide case-insensitively (e.g. a tool that declared both "Id"
+            // and "id"), because normalizing to either one would silently discard the model's
+            // actual choice between two real, distinct parameters. That situation should fail the
+            // same way an unrecognised parameter always has, not be guessed away.
+            var caseInsensitiveLookup = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var caseInsensitiveCollisions = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in all)
+            {
+                if (caseInsensitiveCollisions.Contains(name))
+                    continue;
+
+                if (caseInsensitiveLookup.ContainsKey(name))
+                {
+                    caseInsensitiveLookup.Remove(name);
+                    caseInsensitiveCollisions.Add(name);
+                    continue;
+                }
+
+                caseInsensitiveLookup[name] = name;
+            }
+
+            var result = (All: all, Required: required, Properties: propertySchemas, CaseInsensitiveLookup: caseInsensitiveLookup);
             SchemaCache[toolName] = result;
             return result;
         }
@@ -181,50 +209,139 @@ public static class ToolArgumentValidator
         ["newContent"] = "the replacement text.",
         ["message"] = "the commit message describing what the change does.",
     };
-    // Added by AddMember (expected - used for diagnostics)
+
+
     /// <summary>
-    /// Checks a tool call's arguments against the tool's emitted input schema BEFORE dispatch, and
-    /// returns an actionable error message when the call cannot succeed as written -> or
-    /// <see langword="null"/> to let the call proceed.
+    /// Rewrites <paramref name="arguments"/> in place so that a parameter name differing from a
+    /// declared parameter only by case (e.g. "filepath" vs "filePath") is renamed to the declared
+    /// spelling, before <see cref="Validate"/> or the SDK's own argument binder ever sees it.
     /// <para>
-    /// Three dispatch-layer defects make this necessary, and none is fixable per-tool:
+    /// This is necessary, not just convenient: <c>AIFunctionArguments</c> binds by exact
+    /// (ordinal) key lookup, so a case-only mismatch is otherwise indistinguishable from any other
+    /// unknown parameter - the SDK would silently drop it and the tool would run on its default,
+    /// or (post-<see cref="Validate"/>) the caller would be rejected and forced to retype a name it
+    /// already had right except for case. <see cref="SuggestClosest"/> already treats a case-only
+    /// difference as a certain match for its "Did you mean" text; this does the same rewrite for
+    /// real instead of only suggesting it.
+    /// </para>
+    /// <para>
+    /// Only case-only differences are normalized. Any other near-miss (a genuine typo, or a
+    /// same-length name like the "paths"/"files" Git incident - see docs/current/blockers -
+    /// where the caller reached for a plausible but wrong parameter) is left for
+    /// <see cref="Validate"/> to reject with a suggestion, because guessing past anything more than
+    /// a case difference risks silently applying the wrong parameter rather than the misspelled
+    /// one.
+    /// </para>
+    /// <para>
+    /// Two situations are deliberately left un-normalized and fall through to
+    /// <see cref="Validate"/>'s ordinary error path instead:
     /// </para>
     /// <list type="bullet">
     /// <item><description>
-    /// An <b>unknown argument is silently discarded.</b> Argument binding is a pull model ->
-    /// <c>AIFunctionFactory</c> looks up each declared parameter by name in the arguments
-    /// dictionary and never inspects what is left over -> so a misspelled or misapplied parameter
-    /// name is simply never read. The tool then runs on its defaults and returns
-    /// <c>success:true</c> with the wrong result. That silent-wrong-behaviour class is the hardest
-    /// of all for a weak model to recover from: there is no error to react to. Confirmed live ->
-    /// <c>Git(operation:"stage", paths:"…")</c> quietly staged tracked files only, because
-    /// <c>stage</c> reads <c>files</c> and <c>paths</c> belonged to <c>diff</c>.
+    /// The tool's own schema declares two parameters that collide case-insensitively (e.g. both
+    /// "Id" and "id"). <see cref="TryGetSchemaParameters"/> excludes such names from its
+    /// case-insensitive lookup entirely, so neither is ever a normalization target - renaming to
+    /// either one would silently discard the caller's actual choice between two distinct
+    /// parameters.
     /// </description></item>
     /// <item><description>
-    /// A <b>missing required argument throws a raw framework exception.</b>
-    /// <c>AIFunctionFactory</c> raises "The arguments dictionary is missing a value for the
-    /// required parameter 'x'. (Parameter 'arguments')" -> dispatch-layer vocabulary describing an
-    /// internal data structure the caller never sees, with no example value and no route to a real
-    /// one, in violation of the never-leak-raw-exceptions convention in CLAUDE.md.
-    /// </description></item>
-    /// <item><description>
-    /// A <b>type-mismatched or invalid-enum argument throws a raw <c>JsonException</c>.</b> Passing
-    /// an array where the schema declares a scalar <c>string</c> (e.g. <c>Git(operation:"stage",
-    /// files:["a","b"])</c> -> the plural parameter name invites this), or a string that isn't one of
-    /// the schema's declared <c>enum</c> members (e.g. <c>Git(operation:"show")</c>, not a real
-    /// <c>GitOperation</c>), both crash during framework-level deserialization before the tool
-    /// method body ever runs -> no tool-level try/catch can intercept it. Confirmed live for both
-    /// shapes; see docs/current/finding_git_tool_array_param_and_invalid_operation_crash.md.
+    /// The call already supplies the canonical spelling alongside a case-only variant of it (e.g.
+    /// both "filePath" and "filepath" in the same call). Renaming the variant would silently
+    /// overwrite one of two values the caller explicitly passed. Left alone, the canonical key
+    /// keeps its original value and the variant is reported by <see cref="Validate"/> as an
+    /// ordinary unknown parameter, which is the same call.Count-preserving outcome as if
+    /// normalization had never run.
     /// </description></item>
     /// </list>
-    /// <para>
-    /// All three are caught here rather than in each tool because the fault is in the shared
-    /// dispatch path: a per-tool fix would have to be repeated on every tool and re-applied to
-    /// every tool added later, which is precisely the forgotten-call-site failure mode this repo
-    /// keeps hitting.
-    /// </para>
     /// </summary>
-    /// <returns>An error message to return to the caller, or null when the arguments are valid.</returns>
+    public static void NormalizeParameterCase(
+        ModelContextProtocol.Server.McpServer? server,
+        string? toolName,
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+    {
+        if (arguments is null || arguments.Count == 0)
+            return;
+
+        var schema = TryGetSchemaParameters(server, toolName);
+        if (schema is null)
+            return;
+
+        var (declared, _, _, caseInsensitiveLookup) = schema.Value;
+
+        // Collect renames first rather than mutating while enumerating arguments.Keys.
+        System.Collections.Generic.List<(string From, string To)>? renames = null;
+        foreach (var key in arguments.Keys)
+        {
+            if (declared.Contains(key))
+                continue;
+
+            if (!caseInsensitiveLookup.TryGetValue(key, out var canonical))
+                continue;
+
+            // The canonical spelling is already present in this same call - leave both keys as
+            // they are so Validate reports the variant as an unknown parameter instead of this
+            // pass silently overwriting one of two values the caller explicitly supplied.
+            if (arguments.ContainsKey(canonical))
+                continue;
+
+            (renames ??= new System.Collections.Generic.List<(string, string)>()).Add((key, canonical));
+        }
+
+        if (renames is null)
+            return;
+
+        foreach (var (from, to) in renames)
+        {
+            var value = arguments[from];
+            arguments.Remove(from);
+            arguments[to] = value;
+        }
+    }
+
+
+    // Added by AddMember (expected - used for diagnostics)/// <summary>
+                                                           /// Checks a tool call's arguments against the tool's emitted input schema BEFORE dispatch, and
+                                                           /// returns an actionable error message when the call cannot succeed as written -> or
+                                                           /// <see langword="null"/> to let the call proceed.
+                                                           /// <para>
+                                                           /// Three dispatch-layer defects make this necessary, and none is fixable per-tool:
+                                                           /// </para>
+                                                           /// <list type="bullet">
+                                                           /// <item><description>
+                                                           /// An <b>unknown argument is silently discarded.</b> Argument binding is a pull model ->
+                                                           /// <c>AIFunctionFactory</c> looks up each declared parameter by name in the arguments
+                                                           /// dictionary and never inspects what is left over -> so a misspelled or misapplied parameter
+                                                           /// name is simply never read. The tool then runs on its defaults and returns
+                                                           /// <c>success:true</c> with the wrong result. That silent-wrong-behaviour class is the hardest
+                                                           /// of all for a weak model to recover from: there is no error to react to. Confirmed live ->
+                                                           /// <c>Git(operation:"stage", paths:"…")</c> quietly staged tracked files only, because
+                                                           /// <c>stage</c> reads <c>files</c> and <c>paths</c> belonged to <c>diff</c>.
+                                                           /// </description></item>
+                                                           /// <item><description>
+                                                           /// A <b>missing required argument throws a raw framework exception.</b>
+                                                           /// <c>AIFunctionFactory</c> raises "The arguments dictionary is missing a value for the
+                                                           /// required parameter 'x'. (Parameter 'arguments')" -> dispatch-layer vocabulary describing an
+                                                           /// internal data structure the caller never sees, with no example value and no route to a real
+                                                           /// one, in violation of the never-leak-raw-exceptions convention in CLAUDE.md.
+                                                           /// </description></item>
+                                                           /// <item><description>
+                                                           /// A <b>type-mismatched or invalid-enum argument throws a raw <c>JsonException</c>.</b> Passing
+                                                           /// an array where the schema declares a scalar <c>string</c> (e.g. <c>Git(operation:"stage",
+                                                           /// files:["a","b"])</c> -> the plural parameter name invites this), or a string that isn't one of
+                                                           /// the schema's declared <c>enum</c> members (e.g. <c>Git(operation:"show")</c>, not a real
+                                                           /// <c>GitOperation</c>), both crash during framework-level deserialization before the tool
+                                                           /// method body ever runs -> no tool-level try/catch can intercept it. Confirmed live for both
+                                                           /// shapes; see docs/current/finding_git_tool_array_param_and_invalid_operation_crash.md.
+                                                           /// </description></item>
+                                                           /// </list>
+                                                           /// <para>
+                                                           /// All three are caught here rather than in each tool because the fault is in the shared
+                                                           /// dispatch path: a per-tool fix would have to be repeated on every tool and re-applied to
+                                                           /// every tool added later, which is precisely the forgotten-call-site failure mode this repo
+                                                           /// keeps hitting.
+                                                           /// </para>
+                                                           /// </summary>
+                                                           /// <returns>An error message to return to the caller, or null when the arguments are valid.</returns>
     public static string? Validate(
         ModelContextProtocol.Server.McpServer? server,
         string? toolName,
@@ -234,7 +351,7 @@ public static class ToolArgumentValidator
         if (schema is null)
             return null;
 
-        var (declared, required, propertySchemas) = schema.Value;
+        var (declared, required, propertySchemas, _) = schema.Value;
 
         // 1. Unknown arguments. Reported first and in full: if the caller both misspelled a
         //    parameter and omitted a required one, the misspelling is usually the cause of both.
