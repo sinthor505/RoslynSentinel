@@ -239,6 +239,10 @@ public class PreviewInstanceMoveCallSitesTests
             Assert.That(fooSite.Status, Is.EqualTo(CallSiteStatus.NoCandidateIntroducible));
             Assert.That(fooSite.Candidates, Is.Empty);
             Assert.That(fooSite.BlockReason, Does.Contain("PreviewMoveClassB"));
+            // Prep-step prose, not a receiver expression: names the field to add, where, and which
+            // existing receiver's construction to mirror (so configuration isn't silently dropped).
+            Assert.That(fooSite.SuggestedFix, Does.Contain("Add a field of type PreviewMoveClassB to PreviewMoveCallerNoCandidate"));
+            Assert.That(fooSite.SuggestedFix, Does.Contain("'a'"));
         });
     }
 
@@ -424,6 +428,267 @@ public class PreviewInstanceMoveCallSitesTests
         };
         var fixupApply = await _workspaceManager.ApplyProposedChangesAsync(fixupChange, validateChanges: false);
         Assert.That(fixupApply.Success, Is.True, fixupApply.Summary);
+    }
+
+    // docs/current/blockers/resolved/blocking_error_movemember_analysisengine_antipatternengine_friction.md:
+    // "new" is a zero-argument constructor call only. Against a target with no zero-arg constructor it
+    // used to build 'new Target()' anyway and surface one undifferentiated CS7036 per site from the
+    // compile gate; it must now be refused before any change set is built, naming the key and the
+    // real constructor signature.
+    [Test]
+    public async Task MoveMemberAsync_NewFixupTargetWithoutZeroArgCtor_RefusedWithSignatureAsync()
+    {
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewSourceA.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveNewSourceA
+            {
+                public void Foo()
+                {
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewTargetB.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveNewTargetB
+            {
+                public MoveNewTargetB(string name)
+                {
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewCallerB.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveNewCallerB
+            {
+                public void Do()
+                {
+                    var a = new MoveNewSourceA();
+                    a.Foo();
+                }
+            }
+            """);
+
+        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveNewSourceA.cs"));
+        var callerFile = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveNewCallerB.cs");
+        var callerBefore = await File.ReadAllTextAsync(callerFile);
+
+        var rows = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "MoveNewSourceA", ["Foo"], "MoveNewTargetB");
+        var row = rows.Single(r => r.CallExpression.Contains("Foo"));
+        Assume.That(row.Status, Is.EqualTo(CallSiteStatus.NoCandidateIntroducible));
+        var key = $"{row.FilePath}:{row.Line}";
+
+        var ex = Assert.ThrowsAsync<ToolInvalidArgumentException>(() =>
+            _engine.MoveMemberAsync(filePath, "MoveNewSourceA", ["Foo"], "MoveNewTargetB", null, default, true, new Dictionary<string, string> { [key] = "new" }));
+
+        var callerAfter = await File.ReadAllTextAsync(callerFile);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+            Assert.That(ex.Message, Does.Contain(key));
+            Assert.That(ex.Message, Does.Contain("MoveNewTargetB(string name)"));
+            Assert.That(ex.Message, Does.Contain("zero-argument"));
+            Assert.That(ex.Message, Does.Contain("No changes were made"));
+            Assert.That(callerAfter, Is.EqualTo(callerBefore));
+        });
+    }
+
+    [Test]
+    public async Task MoveMemberAsync_NewFixupParameterlessTarget_RewritesToNewTargetAsync()
+    {
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewSourceC.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveNewSourceC
+            {
+                public void Foo()
+                {
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewTargetD.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveNewTargetD
+            {
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewCallerD.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveNewCallerD
+            {
+                public void Do()
+                {
+                    var c = new MoveNewSourceC();
+                    c.Foo();
+                }
+            }
+            """);
+
+        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveNewSourceC.cs"));
+        var rows = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "MoveNewSourceC", ["Foo"], "MoveNewTargetD");
+        var row = rows.Single(r => r.CallExpression.Contains("Foo"));
+        var key = $"{row.FilePath}:{row.Line}";
+
+        var result = await _engine.MoveMemberAsync(filePath, "MoveNewSourceC", ["Foo"], "MoveNewTargetD", null, default, true, new Dictionary<string, string> { [key] = "new" });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.PendingLedgerEntries, Is.Null.Or.Empty);
+            var callerChange = result.Changes.Single(kv => kv.Key.ToString().Contains("MoveNewCallerD"));
+            Assert.That(callerChange.Value, Does.Contain("new MoveNewTargetD().Foo"));
+            Assert.That(result.AppliedFixups, Has.Count.EqualTo(1));
+            Assert.That(result.AppliedFixups![0].FixupKey, Is.EqualTo(key));
+            Assert.That(result.AppliedFixups[0].FixupValue, Is.EqualTo("new"));
+        });
+    }
+
+    // Bulk keys: one "*" entry stands in for every unresolved "FilePath:Line" key (86 identical
+    // entries in the originating blocker). Wildcard-resolved rows count as resolved - no ledger entry.
+    [Test]
+    public async Task MoveMemberAsync_GlobalWildcardFixup_ResolvesEveryUnresolvedSiteAsync()
+    {
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveWildSourceA.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveWildSourceA
+            {
+                public void Foo()
+                {
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveWildTargetB.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveWildTargetB
+            {
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveWildCaller1.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveWildCaller1
+            {
+                public void Do()
+                {
+                    var a = new MoveWildSourceA();
+                    a.Foo();
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveWildCaller2.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MoveWildCaller2
+            {
+                public void Do()
+                {
+                    var a = new MoveWildSourceA();
+                    a.Foo();
+                }
+            }
+            """);
+
+        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveWildSourceA.cs"));
+
+        var result = await _engine.MoveMemberAsync(filePath, "MoveWildSourceA", ["Foo"], "MoveWildTargetB", null, default, true, new Dictionary<string, string> { ["*"] = "new" });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.PendingLedgerEntries, Is.Null.Or.Empty);
+            Assert.That(result.SkippedCallSites, Is.Empty);
+            Assert.That(result.Changes.Single(kv => kv.Key.ToString().Contains("MoveWildCaller1")).Value, Does.Contain("new MoveWildTargetB().Foo"));
+            Assert.That(result.Changes.Single(kv => kv.Key.ToString().Contains("MoveWildCaller2")).Value, Does.Contain("new MoveWildTargetB().Foo"));
+            Assert.That(result.AppliedFixups, Has.Count.EqualTo(2));
+            Assert.That(result.AppliedFixups!.Select(f => f.FixupKey), Is.All.EqualTo("*"));
+        });
+    }
+
+    // Precedence: exact "FilePath:Line" > "FilePath:*" > "*". The file wildcard is given as a
+    // solution-relative, upper-cased path to also pin that file keys are normalized (relative paths
+    // resolved against the solution root) and matched case-insensitively.
+    [Test]
+    public async Task MoveMemberAsync_FixupKeyPrecedence_ExactBeatsFileWildcardBeatsGlobalAsync()
+    {
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MovePrecSourceA.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MovePrecSourceA
+            {
+                public void Foo()
+                {
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MovePrecTargetB.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MovePrecTargetB
+            {
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MovePrecCaller1.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MovePrecCaller1
+            {
+                public void First()
+                {
+                    var a = new MovePrecSourceA();
+                    a.Foo();
+                }
+
+                public void Second()
+                {
+                    var a = new MovePrecSourceA();
+                    a.Foo();
+                }
+            }
+            """, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MovePrecCaller2.cs"), """
+            namespace ContosoOrders.Core;
+
+            public class MovePrecCaller2
+            {
+                public void Do()
+                {
+                    var a = new MovePrecSourceA();
+                    a.Foo();
+                }
+            }
+            """);
+
+        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MovePrecSourceA.cs"));
+        var rows = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "MovePrecSourceA", ["Foo"], "MovePrecTargetB");
+        var caller1Rows = rows.Where(r => r.FilePath.ToString().Contains("MovePrecCaller1")).OrderBy(r => r.Line).ToList();
+        Assume.That(caller1Rows, Has.Count.EqualTo(2));
+        var exactKey = $"{caller1Rows[0].FilePath}:{caller1Rows[0].Line}";
+        var fileKey = Path.GetRelativePath(_workspaceManager.GetSolutionRoot()!, caller1Rows[0].FilePath).ToUpperInvariant() + ":*";
+
+        var result = await _engine.MoveMemberAsync(filePath, "MovePrecSourceA", ["Foo"], "MovePrecTargetB", null, default, true, new Dictionary<string, string>
+        {
+            [exactKey] = "_exactValue",
+            [fileKey] = "_fileValue",
+            ["*"] = "_globalValue",
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.PendingLedgerEntries, Is.Null.Or.Empty);
+            var caller1 = result.Changes.Single(kv => kv.Key.ToString().Contains("MovePrecCaller1")).Value;
+            Assert.That(caller1, Does.Contain("_exactValue.Foo"));
+            Assert.That(caller1, Does.Contain("_fileValue.Foo"));
+            Assert.That(caller1, Does.Not.Contain("_globalValue"));
+            Assert.That(caller1.IndexOf("_exactValue.Foo", StringComparison.Ordinal), Is.LessThan(caller1.IndexOf("_fileValue.Foo", StringComparison.Ordinal)));
+            var caller2 = result.Changes.Single(kv => kv.Key.ToString().Contains("MovePrecCaller2")).Value;
+            Assert.That(caller2, Does.Contain("_globalValue.Foo"));
+            Assert.That(result.AppliedFixups!.Select(f => f.FixupKey), Is.EquivalentTo(new[] { exactKey, fileKey, "*" }));
+        });
     }
 
     // NOTE: no test here for MoveOrderDependent (a call site inside a member that's itself being

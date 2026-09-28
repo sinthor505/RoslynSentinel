@@ -1040,7 +1040,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         try
         {
             return CurrentSolution ?? throw new SolutionNotLoadedException(
-                "No solution is loaded. Call LoadSolution with a .sln or .csproj path.");
+                "No solution is loaded. Call LoadSolution with a .sln, .slnx, or .csproj path.");
         }
         finally
         {

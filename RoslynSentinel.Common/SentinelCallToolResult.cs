@@ -79,6 +79,14 @@ public static class ToolErrorCode
     /// candidates (or "new"), rather than treating this as an opaque compiler-error failure.
     /// </summary>
     public const string UnresolvedCallSites = "UnresolvedCallSites";
+
+    /// <summary>
+    /// The proposed change set was well-formed and matched its target(s), but the write-path
+    /// compile gate (ValidationEngine delta-compile) found it would introduce new compiler errors,
+    /// so nothing was written. Distinct from <see cref="Exception"/> (an unexpected internal
+    /// failure) -> this is an expected, recoverable rejection: fix the listed diagnostics and retry.
+    /// </summary>
+    public const string ValidationFailed = "ValidationFailed";
 }
 
 // ── Envelope ──────────────────────────────────────────────────────────────────

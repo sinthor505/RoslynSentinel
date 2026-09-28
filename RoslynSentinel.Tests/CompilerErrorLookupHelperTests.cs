@@ -117,4 +117,37 @@ public class CompilerErrorLookupHelperTests
             "the real (other) file's path must be named so a model with a wrong path can redirect to it");
         Assert.That(description, Does.Contain("ReplaceBlockFormatted"));
     }
+
+    /// <summary>
+    /// Regression coverage for identical-diagnostic grouping. See
+    /// docs/current/blockers/resolved/blocking_error_movemember_analysisengine_antipatternengine_friction.md
+    /// -> one bad MoveMember callSiteFixups value produced 86 identical CS7036 lines, which read as 86
+    /// separate problems. Same Id + same Message must collapse to one line with a count and a capped
+    /// location list, in first-occurrence order; a distinct diagnostic keeps its own single-line form.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_IdenticalDiagnostics_CollapseIntoOneGroupedLine()
+    {
+        const string ctorMessage = "There is no argument given that corresponds to the required parameter 'workspaceManager' of 'Target.Target(IWorkspaceManager)'";
+        var diagnostics = new List<DiagnosticInfo>();
+        for (var i = 1; i <= 13; i++)
+        {
+            diagnostics.Add(new DiagnosticInfo("CS7036", "Error", ctorMessage, $"C:\\repo\\File{i}.cs", i * 10, 5, i * 10, 20));
+        }
+
+        diagnostics.Insert(3, new DiagnosticInfo("CS1002", "Error", "; expected", "C:\\repo\\Other.cs", 7, 1, 7, 2));
+        var report = new DiagnosticReport(false, diagnostics);
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+        var lines = description.Split('\n');
+
+        Assert.That(lines, Has.Length.EqualTo(2), "13 identical CS7036s + 1 CS1002 should render as exactly 2 lines");
+        Assert.That(lines[0], Does.StartWith("CS7036 (x13): " + ctorMessage + " at: C:\\repo\\File1.cs:10, C:\\repo\\File2.cs:20"),
+            "the grouped line comes first (first-occurrence order) and lists locations in original order");
+        Assert.That(lines[0], Does.EndWith("(+3 more)"),
+            $"locations beyond the cap of {CompilerErrorLookupHelper.MaxGroupedLocations} must be summarized, not listed");
+        Assert.That(lines[0], Does.Not.Contain("File11.cs"), "the 11th+ location is past the cap");
+        Assert.That(lines[1], Is.EqualTo("CS1002 at C:\\repo\\Other.cs:7: ; expected"),
+            "a non-repeated diagnostic keeps the original single-diagnostic format");
+    }
 }

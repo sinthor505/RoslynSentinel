@@ -32,44 +32,71 @@ public static class CompilerErrorLookupHelper
         SymbolNavigationEngine symbolNavigationEngine,
         CancellationToken cancellationToken = default)
     {
+        // Identical diagnostics (same Id AND same Message text) collapse into one line: a single
+        // root cause repeated at N sites (e.g. 86 identical CS7036s from one bad MoveMember
+        // callSiteFixups value) otherwise reads as N separate problems. GroupBy preserves the
+        // first-occurrence order of keys, so output order stays stable relative to the report.
         var parts = new List<string>();
-        foreach (var diagnostic in report.Diagnostics)
+        foreach (var group in report.Diagnostics.GroupBy(d => (d.Id, d.Message)))
         {
-            parts.Add(await DescribeOneAsync(diagnostic, symbolNavigationEngine, cancellationToken));
+            var items = group.ToList();
+            var first = items[0];
+            if (items.Count == 1)
+            {
+                var single = $"{first.Id} at {first.FilePath}:{first.StartLine}: {first.Message}";
+                var singleHint = await DescribeHintAsync(first, symbolNavigationEngine, cancellationToken);
+                parts.Add(singleHint == null ? single : single + "\n" + singleHint);
+                continue;
+            }
+
+            var locations = items.Select(d => $"{d.FilePath}:{d.StartLine}").Distinct().ToList();
+            var shown = string.Join(", ", locations.Take(MaxGroupedLocations));
+            var more = locations.Count > MaxGroupedLocations ? $" (+{locations.Count - MaxGroupedLocations} more)" : string.Empty;
+            var header = $"{first.Id} (x{items.Count}): {first.Message} at: {shown}{more}";
+            var hint = await DescribeHintAsync(first, symbolNavigationEngine, cancellationToken);
+            parts.Add(hint == null ? header : header + "\n" + hint);
         }
 
         return string.Join("\n", parts);
     }
 
-    private static async Task<string> DescribeOneAsync(
+    /// <summary>
+    /// Maximum number of file:line locations listed on one grouped diagnostic line before the rest
+    /// are summarized as "(+N more)".
+    /// </summary>
+    public const int MaxGroupedLocations = 10;
+
+    /// <summary>
+    /// Returns the targeted guidance text for a known diagnostic ID, or null when the ID has no
+    /// dedicated hint. For a grouped diagnostic this is computed once from the first occurrence -
+    /// every member of a group shares the same Id and Message, so the hint is identical.
+    /// </summary>
+    private static async Task<string?> DescribeHintAsync(
         DiagnosticInfo diagnostic,
         SymbolNavigationEngine symbolNavigationEngine,
         CancellationToken cancellationToken)
     {
-        var location = $"{diagnostic.FilePath}:{diagnostic.StartLine}";
-        var baseText = $"{diagnostic.Id} at {location}: {diagnostic.Message}";
-
         if (diagnostic.Id == "CS0103")
         {
-            return baseText + "\n" + await DescribeCs0103Async(diagnostic, symbolNavigationEngine, cancellationToken);
+            return await DescribeCs0103Async(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
         if (diagnostic.Id is "CS0117" or "CS1061")
         {
-            return baseText + "\n" + await DescribeMissingMemberAsync(diagnostic, symbolNavigationEngine, cancellationToken);
+            return await DescribeMissingMemberAsync(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
         if (diagnostic.Id == "CS0122")
         {
-            return baseText + "\n" + await DescribeCs0122Async(diagnostic, symbolNavigationEngine, cancellationToken);
+            return await DescribeCs0122Async(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
         if (diagnostic.Id is "CS0101" or "CS0111")
         {
-            return baseText + "\n" + await DescribeDuplicateDefinitionAsync(diagnostic, symbolNavigationEngine, cancellationToken);
+            return await DescribeDuplicateDefinitionAsync(diagnostic, symbolNavigationEngine, cancellationToken);
         }
 
-        return baseText;
+        return null;
     }
 
     private static async Task<string> DescribeCs0103Async(

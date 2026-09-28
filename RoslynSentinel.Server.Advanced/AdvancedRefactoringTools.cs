@@ -516,7 +516,7 @@ public class AdvancedRefactoringTools
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         [Description("Auto-rewrites unambiguous call sites when moving instance members (default true). Set false to require manual resolution via callSiteFixups.")]
         bool autoResolveCallSites = true,
-        [Description("Manual resolution for call sites autoResolveCallSites couldn't handle. Key is \"FilePath:Line\"; value is a receiver expression or \"new\".")]
+        [Description("Manual resolution for call sites autoResolveCallSites couldn't handle. Key: \"FilePath:Line\", \"FilePath:*\" (every unresolved site in that file) or \"*\" (every unresolved site); an exact line beats FilePath:*, which beats *. Value: a receiver expression (e.g. \"_target\" or \"new Target(_dep, _config)\" - pass ALL constructor arguments), or \"new\" = zero-argument 'new Target()' only, refused up front if Target has no zero-argument constructor.")]
         Dictionary<string, string>? callSiteFixups = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
@@ -564,13 +564,14 @@ public class AdvancedRefactoringTools
                     // ("{row.FilePath}:{row.Line}") - a bare filename here would silently never match.
                     var detail = string.Join("; ", unresolvedEntries.Select(e =>
                         $"{e.FilePath}:{e.Line} [{e.BrokenExpression}] {e.Status} ({e.BlockReason})" +
-                        (e.CandidatesInScope.Count > 0 ? $" - candidates in scope: {string.Join(", ", e.CandidatesInScope)}" : "")));
+                        (e.CandidatesInScope.Count > 0 ? $" - candidates in scope: {string.Join(", ", e.CandidatesInScope)}" : "") +
+                        (e.SuggestedFix != null ? $" - suggested fix: {e.SuggestedFix}" : "")));
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
                         IsSuccess = false,
                         ErrorData = new ResultError(
                             ToolErrorCode.UnresolvedCallSites,
-                            $"{unresolvedEntries.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site.",
+                            $"{unresolvedEntries.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site, or \"FilePath:*\" / \"*\" to apply one value to every unresolved site in a file / everywhere.",
                             detail,
                             StructuredDetail: unresolvedEntries.Cast<object>().ToList())
                     };
@@ -584,13 +585,19 @@ public class AdvancedRefactoringTools
                         IsSuccess = false,
                         ErrorData = new ResultError(
                             ToolErrorCode.UnresolvedCallSites,
-                            $"{result.SkippedCallSites.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site.",
+                            $"{result.SkippedCallSites.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site, or \"FilePath:*\" / \"*\" to apply one value to every unresolved site in a file / everywhere.",
                             detail,
                             StructuredDetail: result.SkippedCallSites.Cast<object>().ToList())
                     };
                 }
 
-                return new SentinelCallToolResult<AppliedChangeSummary> { IsSuccess = false, ErrorData = apply.Error };
+                // Raw compile-gate rejection. If caller-supplied fixups were applied and the errors sit
+                // on the very lines those fixups rewrote, say so up front - otherwise the dump reads as
+                // a compiler problem, not as "your fixup value is wrong".
+                var rawError = callSiteFixups is { Count: > 0 }
+                    ? AttributeValidationErrorsToCallSiteFixups(apply.Error, apply.Validation, result.AppliedFixups, _workspaceManager.GetSolutionRoot())
+                    : apply.Error;
+                return new SentinelCallToolResult<AppliedChangeSummary> { IsSuccess = false, ErrorData = rawError };
             }
 
             var summaryNote = $"Moved [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.";
@@ -624,6 +631,92 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = false, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MoveMember") };
         }
     }
+
+
+    /// <summary>
+    /// When MoveMember's compile gate rejects a change that included caller-supplied callSiteFixups,
+    /// prepends a note naming the fixup value(s) whose rewritten lines carry the new errors. The raw
+    /// compiler dump alone attributes them to the compiler, not to the value the caller chose, so a
+    /// caller cannot otherwise tell a bad fixup expression from a genuinely unrelated break.
+    /// Returns <paramref name="error"/> unchanged when no error lands on a fixup-rewritten line.
+    /// Matching uses the structured diagnostics (file + 1-based start line), never the message text.
+    /// </summary>
+    private static ResultError AttributeValidationErrorsToCallSiteFixups(
+        ResultError error,
+        DiagnosticReport? validation,
+        IReadOnlyList<AppliedCallSiteFixup>? appliedFixups,
+        string? solutionRoot)
+    {
+        if (validation == null || appliedFixups is not { Count: > 0 })
+        {
+            return error;
+        }
+
+        var fixupByLine = new Dictionary<string, AppliedCallSiteFixup>(StringComparer.OrdinalIgnoreCase);
+        foreach (var fixup in appliedFixups)
+        {
+            if (FixupLineKey(fixup.FilePath, fixup.Line, solutionRoot) is { } key)
+            {
+                fixupByLine.TryAdd(key, fixup);
+            }
+        }
+
+        var hitValues = new List<string>();
+        var hitCount = 0;
+        foreach (var diagnostic in validation.Diagnostics)
+        {
+            if (!string.Equals(diagnostic.Severity, "Error", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (FixupLineKey(diagnostic.FilePath, diagnostic.StartLine, solutionRoot) is not { } key
+                || !fixupByLine.TryGetValue(key, out var hit))
+            {
+                continue;
+            }
+
+            hitCount++;
+            if (!hitValues.Contains(hit.FixupValue, StringComparer.Ordinal))
+            {
+                hitValues.Add(hit.FixupValue);
+            }
+        }
+
+        if (hitCount == 0)
+        {
+            return error;
+        }
+
+        const int maxValuesShown = 3;
+        var valuesText = string.Join(", ", hitValues.Take(maxValuesShown).Select(v => $"'{v}'"))
+            + (hitValues.Count > maxValuesShown ? $" (+{hitValues.Count - maxValuesShown} more)" : "");
+        var note = $"{hitCount} error(s) are on lines rewritten by your callSiteFixups value(s) {valuesText} - the fixup expression itself is likely the cause. ";
+        return error with { Message = note + error.Message };
+    }
+
+
+    /// <summary>Normalized "fullPath:line" key; relative paths resolve against the solution root. Null if the path is unusable.</summary>
+    private static string? FixupLineKey(string? filePath, int line, string? solutionRoot)
+    {
+        if (string.IsNullOrEmpty(filePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var absolute = Path.IsPathRooted(filePath) || string.IsNullOrEmpty(solutionRoot)
+                ? filePath
+                : Path.Combine(solutionRoot, filePath);
+            return $"{Path.GetFullPath(absolute)}:{line}";
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
 
     [McpServerTool(Name = "IntroduceParameterObject")]
     [Produces(DataTag.ChangeId)]

@@ -30,7 +30,7 @@ public sealed class SolutionNotLoadedException : ToolException
 {
     public override string ErrorCode => ToolErrorCode.SolutionNotLoaded;
 
-    public SolutionNotLoadedException(string message = "No solution is loaded. Call LoadSolution with a .sln or .csproj path.")
+    public SolutionNotLoadedException(string message = "No solution is loaded. Call LoadSolution with a .sln, .slnx, or .csproj path.")
         : base(message)
     {
     }
@@ -46,6 +46,22 @@ public sealed class ToolNotFoundException : ToolException
     public override string ErrorCode => ToolErrorCode.NotFound;
 
     public ToolNotFoundException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
+/// A caller-supplied argument is well-formed at the schema level but cannot be honored given the
+/// actual code it targets (e.g. a MoveMember callSiteFixups value of "new" against a type with no
+/// zero-argument constructor). Thrown from the engine layer, where the semantic facts are known,
+/// BEFORE any change set is built - so the refusal names the real cause instead of deferring it to
+/// a less specific compile-gate rejection. Maps to <see cref="ToolErrorCode.InvalidArgument"/>.
+/// </summary>
+public sealed class ToolInvalidArgumentException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.InvalidArgument;
+
+    public ToolInvalidArgumentException(string message) : base(message)
     {
     }
 }

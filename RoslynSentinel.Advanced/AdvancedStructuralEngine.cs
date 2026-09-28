@@ -8,7 +8,15 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Advanced;
 
-public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null);
+public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null, List<AppliedCallSiteFixup>? AppliedFixups = null);
+
+/// <summary>
+/// One call site rewritten from a caller-supplied callSiteFixups entry (not an auto-resolved one).
+/// <paramref name="Line"/> is the 1-based line in the PROPOSED (post-rewrite, post-normalization)
+/// content, so it lines up with the compile gate's diagnostics - the MoveMember tool uses it to tell
+/// the caller when a rejection's errors sit on lines their own fixup value produced.
+/// </summary>
+public record AppliedCallSiteFixup(string FilePath, int Line, string FixupKey, string FixupValue);
 
 public class AdvancedStructuralEngine
 {
@@ -1029,8 +1037,12 @@ public class AdvancedStructuralEngine
 
                 if (candidates.Count == 0)
                 {
+                    // SuggestedFix on a non-Valid row is human-facing prep-step prose, never a receiver
+                    // expression: MoveInstanceMembersAsync only reads SuggestedFix as a receiver for
+                    // Valid rows, and ledger entries merely echo it back to the caller.
                     results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.NoCandidateIntroducible,
-                        $"No in-scope reference of type '{targetClassName}' found at this call site. Add a 'using' directive or introduce a field/parameter of that type.", null, []));
+                        $"No in-scope reference of type '{targetClassName}' found at this call site. Add a 'using' directive or introduce a field/parameter of that type.",
+                        BuildIntroduceFieldSuggestion(targetClassName, refNode, memberAccess), []));
                     continue;
                 }
 
@@ -1069,7 +1081,13 @@ public class AdvancedStructuralEngine
         CancellationToken cancellationToken)
     {
         var rows = await PreviewInstanceMoveCallSitesAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken);
-        var fixups = callSiteFixups ?? new Dictionary<string, string>();
+        var fixups = CallSiteFixupMap.Parse(callSiteFixups, _workspaceManager.GetSolutionRoot());
+
+        // Caller-supplied fixups actually applied, keyed by CallerFixupSiteKey(file, original line).
+        // Auto-resolved (Valid) rows are deliberately absent: only a caller's own value can be blamed
+        // for errors on the line it rewrote.
+        var callerFixupSources = new Dictionary<string, (string Key, string Value)>(StringComparer.OrdinalIgnoreCase);
+        var appliedFixups = new List<AppliedCallSiteFixup>();
 
         var resolvedReceivers = new Dictionary<(string FilePath, int Line), string>();
 
@@ -1085,12 +1103,16 @@ public class AdvancedStructuralEngine
                 continue;
             }
 
-            var key = $"{row.FilePath}:{row.Line}";
-            if (fixups.TryGetValue(key, out var fixup))
+            if (fixups.Match(row.FilePath, row.Line) is { } fixup)
             {
-                resolvedReceivers[(row.FilePath, row.Line)] = fixup;
+                resolvedReceivers[(row.FilePath, row.Line)] = fixup.Value;
+                callerFixupSources[CallerFixupSiteKey(row.FilePath, row.Line)] = fixup;
             }
         }
+
+        // Refuse BEFORE building or validating any change set - a bad "new" would otherwise surface
+        // only as one undifferentiated CS7036 per fixed-up site from the compile gate.
+        await EnsureNewFixupsAreConstructibleAsync(callerFixupSources.Values, existingTargetDoc, existingTargetClassNode, cancellationToken);
 
         var unresolvedRows = rows.Where(r => r.Status != CallSiteStatus.Valid && !resolvedReceivers.ContainsKey((r.FilePath, r.Line))).ToList();
         var skippedCallSites = new List<SkippedCallSite>();
@@ -1207,16 +1229,249 @@ public class AdvancedStructuralEngine
                 {
                     var line = original.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     var receiverExpr = linesToFix[line];
-                    var newReceiver = receiverExpr == "new"
+                    var newReceiver = receiverExpr == CallSiteFixupMap.NewKeyword
                         ? (ExpressionSyntax)SyntaxFactory.ObjectCreationExpression(SyntaxFactory.IdentifierName(targetClassName)).WithArgumentList(SyntaxFactory.ArgumentList())
                         : SyntaxFactory.ParseExpression(receiverExpr);
-                    return original.WithExpression(newReceiver);
+                    var rewritten = original.WithExpression(newReceiver);
+                    var siteKey = CallerFixupSiteKey(docFilePath, line);
+                    return callerFixupSources.ContainsKey(siteKey)
+                        ? rewritten.WithAdditionalAnnotations(new SyntaxAnnotation(CallerFixupAnnotationKind, siteKey))
+                        : rewritten;
                 });
             }
 
-            result[docFilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot).ToFullString();
+            // Whole-subtree normalization can shift line numbers, so fixup-rewritten sites are located
+            // by annotation on the FINAL tree - the same text the compile gate reports against.
+            var normalizedDocRoot = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot);
+            foreach (var annotated in normalizedDocRoot.GetAnnotatedNodes(CallerFixupAnnotationKind))
+            {
+                var finalLine = annotated.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                foreach (var annotation in annotated.GetAnnotations(CallerFixupAnnotationKind))
+                {
+                    if (annotation.Data != null && callerFixupSources.TryGetValue(annotation.Data, out var source))
+                    {
+                        appliedFixups.Add(new AppliedCallSiteFixup(docFilePath, finalLine, source.Key, source.Value));
+                    }
+                }
+            }
+
+            result[docFilePath] = normalizedDocRoot.ToFullString();
         }
 
-        return new MoveMemberResult(result, skippedCallSites, pendingLedgerEntries, pendingLedgerOperationName);
+        return new MoveMemberResult(result, skippedCallSites, pendingLedgerEntries, pendingLedgerOperationName, appliedFixups);
+    }
+
+    private const string CallerFixupAnnotationKind = "RoslynSentinel.MoveMember.CallerFixup";
+
+    private static string CallerFixupSiteKey(string filePath, int line) => $"{filePath}|{line}";
+
+
+    /// <summary>
+    /// Prep-step prose for a NoCandidateIntroducible call site: names the destination type, the type
+    /// that needs the new field, and the receiver whose construction it should mirror. It points the
+    /// caller at the current receiver's constructor arguments on purpose - a bare "new" or an inferred
+    /// argument list can compile while silently dropping configuration that receiver was built with.
+    /// </summary>
+    private static string BuildIntroduceFieldSuggestion(string targetClassName, SyntaxNode? refNode, MemberAccessExpressionSyntax? memberAccess)
+    {
+        var containingType = refNode?.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? "the calling type";
+        var receiver = memberAccess?.Expression;
+        var initialization = receiver == null || receiver is ThisExpressionSyntax
+            ? "initialize it with the same constructor arguments the current instance was created with"
+            : $"initialize it where the current receiver '{receiver}' is initialized, with the same constructor arguments";
+        return $"Add a field of type {targetClassName} to {containingType} ({initialization}), then retry MoveMember - the call site will then auto-resolve.";
+    }
+
+
+    /// <summary>
+    /// Enforces the documented "new" contract (docs/current/proposal_movemember_instance_callsite_resolution.md
+    /// section 2): "new" emits exactly 'new Target()' and nothing more. If Target has no accessible
+    /// instance constructor callable with zero arguments, refuse up front naming the offending keys and
+    /// the real constructor signature(s), instead of letting every fixed-up site fail the compile gate
+    /// with an undifferentiated CS7036. Deliberately does NOT infer constructor arguments from scope: a
+    /// guessed argument list can compile while silently dropping configuration (e.g. a per-test
+    /// SentinelConfiguration), which no compile gate can catch. A synthesized destination class (no
+    /// existing target) always has an implicit public parameterless constructor, so it needs no check.
+    /// </summary>
+    private static async Task EnsureNewFixupsAreConstructibleAsync(
+        IEnumerable<(string Key, string Value)> callerFixups,
+        Document? existingTargetDoc,
+        ClassDeclarationSyntax? existingTargetClassNode,
+        CancellationToken cancellationToken)
+    {
+        var newKeys = callerFixups
+            .Where(f => f.Value == CallSiteFixupMap.NewKeyword)
+            .Select(f => f.Key)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (newKeys.Count == 0 || existingTargetDoc == null || existingTargetClassNode == null)
+        {
+            return;
+        }
+
+        var model = await existingTargetDoc.GetSemanticModelAsync(cancellationToken);
+        if (model?.GetDeclaredSymbol(existingTargetClassNode, cancellationToken) is not INamedTypeSymbol targetType)
+        {
+            // Symbol unresolvable - leave it to the compile gate rather than refusing on a guess.
+            return;
+        }
+
+        bool zeroArgCallable = !targetType.IsAbstract && !targetType.IsStatic && targetType.InstanceConstructors.Any(c =>
+            c.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal &&
+            c.Parameters.All(p => p.IsOptional || p.IsParams));
+        if (zeroArgCallable)
+        {
+            return;
+        }
+
+        const int maxKeysShown = 3;
+        var name = targetType.Name;
+        var keyList = string.Join(", ", newKeys.Take(maxKeysShown).Select(k => $"\"{k}\"")) +
+            (newKeys.Count > maxKeysShown ? $" (+{newKeys.Count - maxKeysShown} more)" : "");
+        var signatures = targetType.InstanceConstructors.Length == 0
+            ? "(none)"
+            : string.Join("; ", targetType.InstanceConstructors.Select(c => FormatConstructorSignature(c, name)));
+        var widest = targetType.InstanceConstructors.OrderByDescending(c => c.Parameters.Length).FirstOrDefault();
+        var example = widest is { Parameters.Length: > 0 }
+            ? $"new {name}({string.Join(", ", widest.Parameters.Select(p => $"<{p.Name}>"))})"
+            : $"new {name}(<args>)";
+        var kindNote = targetType.IsStatic ? " (it is static)" : targetType.IsAbstract ? " (it is abstract)" : "";
+
+        throw new ToolInvalidArgumentException(
+            $"{newKeys.Count} callSiteFixups key(s) use the value \"new\": {keyList}. \"new\" means a zero-argument constructor call only ('new {name}()'), " +
+            $"but '{name}' has no accessible constructor callable with zero arguments{kindNote}. Its constructor(s): {signatures}. " +
+            $"Pass a full receiver expression instead, e.g. \"{example}\", or the name of an existing in-scope field/property of type '{name}'. " +
+            "Supply ALL constructor arguments explicitly, including configuration/options arguments: omitting an optional one can compile but silently change behavior. " +
+            "No changes were made.");
+    }
+
+
+    private static string FormatConstructorSignature(IMethodSymbol constructor, string typeName)
+    {
+        var parameters = constructor.Parameters.Select(p =>
+        {
+            var text = (p.IsParams ? "params " : "") + p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) + " " + p.Name;
+            if (p.HasExplicitDefaultValue)
+            {
+                text += " = " + (p.ExplicitDefaultValue switch
+                {
+                    null => "null",
+                    string s => $"\"{s}\"",
+                    bool b => b ? "true" : "false",
+                    var v => Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture),
+                });
+            }
+
+            return text;
+        });
+        return $"{SyntaxFacts.GetText(constructor.DeclaredAccessibility)} {typeName}({string.Join(", ", parameters)})".TrimStart();
+    }
+
+
+    /// <summary>
+    /// Parsed MoveMember callSiteFixups. Per unresolved call site, precedence is: an exact
+    /// "FilePath:Line" key, then "FilePath:*" (every unresolved site in that file), then "*" (every
+    /// unresolved site anywhere). Paths match case-insensitively after Path.GetFullPath normalization;
+    /// solution-relative paths resolve against the solution root. Keys and values are trimmed. The
+    /// "new" shorthand is matched case-SENSITIVELY on purpose: "new" is a reserved keyword and can never
+    /// be an identifier, whereas "New"/"NEW" are legal C# identifiers that could name a real field.
+    /// </summary>
+    private sealed class CallSiteFixupMap
+    {
+        public const string NewKeyword = "new";
+
+        private readonly Dictionary<string, (string Key, string Value)> _exact = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, (string Key, string Value)> _perFile = new(StringComparer.OrdinalIgnoreCase);
+        private (string Key, string Value)? _global;
+
+        public static CallSiteFixupMap Parse(Dictionary<string, string>? fixups, string? solutionRoot)
+        {
+            var map = new CallSiteFixupMap();
+            if (fixups == null)
+            {
+                return map;
+            }
+
+            var unusable = new List<string>();
+            foreach (var (rawKey, rawValue) in fixups)
+            {
+                var key = (rawKey ?? string.Empty).Trim();
+                var value = (rawValue ?? string.Empty).Trim();
+                if (value.Length == 0)
+                {
+                    unusable.Add($"\"{rawKey}\" (empty value)");
+                    continue;
+                }
+
+                if (key == "*")
+                {
+                    map._global = (key, value);
+                    continue;
+                }
+
+                // Split on the LAST ':' - the first one is usually a drive letter.
+                int colon = key.LastIndexOf(':');
+                var fullPath = colon > 0 ? NormalizePath(key[..colon], solutionRoot) : null;
+                var linePart = colon > 0 ? key[(colon + 1)..].Trim() : string.Empty;
+                if (fullPath == null)
+                {
+                    unusable.Add($"\"{rawKey}\"");
+                }
+                else if (linePart == "*")
+                {
+                    map._perFile[fullPath] = (key, value);
+                }
+                else if (int.TryParse(linePart, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var line) && line > 0)
+                {
+                    map._exact[$"{fullPath}:{line}"] = (key, value);
+                }
+                else
+                {
+                    unusable.Add($"\"{rawKey}\"");
+                }
+            }
+
+            if (unusable.Count > 0)
+            {
+                const int maxShown = 5;
+                throw new ToolInvalidArgumentException(
+                    $"{unusable.Count} callSiteFixups entr{(unusable.Count == 1 ? "y is" : "ies are")} unusable: {string.Join(", ", unusable.Take(maxShown))}" +
+                    (unusable.Count > maxShown ? $" (+{unusable.Count - maxShown} more)" : "") +
+                    ". Each key must be \"FilePath:Line\" (1-based line), \"FilePath:*\" (every unresolved call site in that file) or \"*\" (every unresolved call site), " +
+                    "and each value a non-empty receiver expression or \"new\". No changes were made.");
+            }
+
+            return map;
+        }
+
+        /// <summary>The fixup for an unresolved call site, by precedence, or null if none applies.</summary>
+        public (string Key, string Value)? Match(string filePath, int line)
+        {
+            var fullPath = NormalizePath(filePath, null) ?? filePath;
+            if (_exact.TryGetValue($"{fullPath}:{line}", out var exact))
+            {
+                return exact;
+            }
+
+            if (_perFile.TryGetValue(fullPath, out var perFile))
+            {
+                return perFile;
+            }
+
+            return _global;
+        }
+
+        private static string? NormalizePath(string path, string? solutionRoot)
+        {
+            try
+            {
+                var wrapped = FilePathWrapper.FromWire(path, solutionRoot);
+                return string.IsNullOrEmpty(wrapped.Absolute) ? null : Path.GetFullPath(wrapped.Absolute);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return null;
+            }
+        }
     }
 }

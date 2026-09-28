@@ -18,10 +18,17 @@ namespace RoslynSentinel.Common;
 /// surface this in place of the usual "call UndoLastApply" note. The server also trips its
 /// unrecoverable breaker in this case, so no further mutation is accepted this session.
 /// </param>
+/// <param name="Validation">
+/// The compile-gate report, populated only when <paramref name="Error"/> is a
+/// <see cref="ToolErrorCode.ValidationFailed"/> rejection. Lets a caller correlate the structured
+/// diagnostics with its own inputs (e.g. MoveMember matching diagnostic lines against the call-site
+/// lines it rewrote from callSiteFixups) instead of re-parsing the error message text.
+/// </param>
 public record ApplyOutcome(
     string? ChangeId,
     ResultError? Error,
     bool DryRun,
     string? Diff = null,
-    string? NotReversibleReason = null
+    string? NotReversibleReason = null,
+    DiagnosticReport? Validation = null
 );

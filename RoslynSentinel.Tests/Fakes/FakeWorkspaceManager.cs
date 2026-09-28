@@ -22,7 +22,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public Task<Solution> GetCurrentSolutionAsync(CancellationToken cancellationToken)
         => Task.FromResult(CurrentSolution
-            ?? throw new SolutionNotLoadedException("No solution is loaded. Call load_solution with a .sln or .csproj path."));
+            ?? throw new SolutionNotLoadedException("No solution is loaded. Call LoadSolution with a .sln, .slnx, or .csproj path."));
 
     public Task<Solution> GetSolutionAsync(ReadSource source, CancellationToken cancellationToken)
         => GetCurrentSolutionAsync(cancellationToken);

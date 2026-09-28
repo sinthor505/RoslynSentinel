@@ -499,7 +499,7 @@ public class WorkspaceReadNavigationImpl
             {
                 warnings.Add(
                     $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. " +
-                    "If you were searching for a known symbol by name, use LocateSymbol instead (semantic lookup, not text matching). " +
+                    "If you were searching for a known symbol by name, use Search with mode: symbol instead (semantic lookup, not text matching). " +
                     "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
                     "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
                 var justTripped = _workspaceManager.RecordSearchOutcome(0);
@@ -536,17 +536,17 @@ public class WorkspaceReadNavigationImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SearchSolutionText"),
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Search (mode: text)"),
                 Findings = findings
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SearchSolutionText failed for '{Pattern}'", pattern);
+            _logger.LogError(ex, "Search (mode: text) failed for '{Pattern}'", pattern);
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
-                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SearchSolutionText")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Search (mode: text)")
             };
         }
     }
