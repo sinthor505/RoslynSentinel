@@ -565,6 +565,7 @@ public class WorkspaceFileEditImpl
         }
 
         var perEditErrors = new List<string>();
+        var anySizeBoundExceeded = false;
         for (int i = 0; i < edits.Count; i++)
         {
             var edit = edits[i];
@@ -587,15 +588,21 @@ public class WorkspaceFileEditImpl
             if (exceeded.Count > 0)
             {
                 perEditErrors.Add($"edits[{i}] ({edit.FilePath}): {string.Join("; ", exceeded)}.");
+                anySizeBoundExceeded = true;
             }
         }
 
         if (perEditErrors.Count > 0)
         {
+            // Same escape-hatch advice as the single-edit path, appended once (not per edit) and only
+            // when a size bound tripped - it is noise for e.g. a missing newContent.
+            var sizeAdvice = anySizeBoundExceeded
+                ? "\n" + _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet").Sentence
+                : "";
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsSuccess = false,
-                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected before anchoring:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected before anchoring:\n" + string.Join("\n", perEditErrors) + sizeAdvice)
             };
         }
 

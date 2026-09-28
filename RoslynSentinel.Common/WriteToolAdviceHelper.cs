@@ -6,7 +6,10 @@ namespace RoslynSentinel.Common;
 /// </summary>
 public enum WriteEscapeRoute
 {
-    /// <summary>Rewrite the whole file (WriteFile).</summary>
+    /// <summary>
+    /// Rewrite the whole file (WriteFile). Least surgical, so it is only ever named last and is
+    /// never the primary route of oversize advice.
+    /// </summary>
     WholeFileRewrite,
 
     /// <summary>Apply the edit as a diff (ApplyUnifiedDiff/ApplyDiff).</summary>
@@ -23,11 +26,15 @@ public enum WriteEscapeRoute
 }
 
 /// <summary>
-/// Advice for a caller whose edit exceeded its tool's limits: the chosen route, the tool names
-/// that route uses (all verified present on this server's surface), and ready-made phrasing.
+/// Advice for a caller whose edit exceeded its tool's limits: the primary (first-named) route,
+/// every tool the advice names (all verified present on this server's surface), and ready-made
+/// phrasing.
 /// </summary>
-/// <param name="Route">Which escape hatch to take.</param>
-/// <param name="ToolNames">Tools the caller may be told to use. Never contains an unregistered tool.</param>
+/// <param name="Route">The first, most preferred escape hatch the sentence names.</param>
+/// <param name="ToolNames">
+/// Tools the caller may be told to use, in the order the sentence names them. Never contains an
+/// unregistered tool; the rejecting tool itself appears for the split-into-smaller-calls step.
+/// </param>
 /// <param name="Sentence">Ready-made phrasing for callers that just want a string.</param>
 public sealed record WriteAdvice(
     WriteEscapeRoute Route,
@@ -59,10 +66,10 @@ public sealed record WriteAdvice(
 /// without the tool->class map below.
 /// </para>
 /// <para>
-/// Basic-only by design. Every tool this can name is a gated whole-file-write tool, and all four
-/// live together in Basic's <c>WholeFileWriteTools</c>; Advanced has no whole-file-write
-/// tools at all. (Distinguish those from <em>mutating</em> tools generally, a much larger set
-/// spanning both projects -> Advanced's mutators are semantic refactorings, not escape hatches for
+/// Basic-only by design. Every tool this can name lives in Basic: the gated whole-file-write
+/// tools in <c>WholeFileWriteTools</c> and the structural tools in <c>RefactoringTools</c>;
+/// Advanced has no whole-file-write tools at all. (Distinguish those from <em>mutating</em>
+/// tools generally, a much larger set spanning both projects -> Advanced's mutators are semantic refactorings, not escape hatches for
 /// an oversized text edit, so they never appear here.)
 /// </para>
 /// </remarks>
@@ -126,37 +133,56 @@ public sealed class WriteToolAdviceHelper
     /// </param>
     public WriteAdvice AdviseForOversizedEdit(string rejectingToolName)
     {
-        if (IsExposed("WriteFile"))
+        var clauses = new List<string>();
+        var toolNames = new List<string>();
+        WriteEscapeRoute? primaryRoute = null;
+
+        // 1. Structural, Member(replace) first and by name: the common oversize case is replacing a
+        // whole method/property/constructor body, which Member does with no size limit.
+        if (IsExposed("Member"))
         {
-            return new WriteAdvice(
-                WriteEscapeRoute.WholeFileRewrite,
-                ["WriteFile"],
-                "For a whole-file rewrite, use WriteFile(operation=ReplaceFile).");
+            clauses.Add("If you are replacing a whole method/property/constructor, use Member(operation: replace) - it has no size limit.");
+            toolNames.Add("Member");
+            primaryRoute = WriteEscapeRoute.StructuredEdit;
         }
 
-        var diffTools = new[] { "ApplyUnifiedDiff", "ApplyDiff" }.Where(IsExposed).ToArray();
+        var otherStructuralTools = new[] { "RenameSymbol", "ChangeSignature", "ExtractMethodSafe" }
+            .Where(IsExposed).ToArray();
+        if (otherStructuralTools.Length > 0)
+        {
+            clauses.Add($"For a rename, signature change or extraction, use {string.Join("/", otherStructuralTools)}.");
+            toolNames.AddRange(otherStructuralTools);
+            primaryRoute ??= WriteEscapeRoute.StructuredEdit;
+        }
+
+        // 2. Diff, for several scattered changes in one file.
+        var diffTools = new[] { "ApplyDiff", "ApplyUnifiedDiff" }.Where(IsExposed).ToArray();
         if (diffTools.Length > 0)
         {
-            return new WriteAdvice(
-                WriteEscapeRoute.UnifiedDiff,
-                diffTools,
-                $"For an edit this size, use {diffTools[0]} instead.");
+            clauses.Add($"For several scattered changes in one file, use {string.Join(" or ", diffTools)}.");
+            toolNames.AddRange(diffTools);
+            primaryRoute ??= WriteEscapeRoute.UnifiedDiff;
         }
 
-        var structuralTools = new[] { "RenameSymbol", "ChangeSignature", "ExtractMethodSafe", "Member" }
-            .Where(IsExposed).ToArray();
-        if (structuralTools.Length > 0)
+        // 3. Split into smaller calls of the rejecting tool - always reachable, since the agent just
+        // called it.
+        clauses.Add(clauses.Count > 0
+            ? $"Otherwise split the edit into several smaller {rejectingToolName} calls, one per contiguous region."
+            : $"Split the edit into several smaller {rejectingToolName} calls, one per contiguous region.");
+        toolNames.Add(rejectingToolName);
+        primaryRoute ??= WriteEscapeRoute.SplitIntoSmallerEdits;
+
+        // 4. Whole-file rewrite, last and explicitly conditional: it is the least surgical option.
+        if (IsExposed("WriteFile"))
         {
-            return new WriteAdvice(
-                WriteEscapeRoute.StructuredEdit,
-                structuralTools,
-                $"If this is a structural change (rename, signature, extract, add/replace a member) rather than free text, use the matching Roslyn tool ({string.Join(", ", structuralTools)}) - those have no size limit. " +
-                $"Otherwise split the edit into several smaller {rejectingToolName} calls, one per contiguous region.");
+            clauses.Add("Only if you are genuinely rewriting most of the file, use WriteFile(operation=ReplaceFile).");
+            toolNames.Add("WriteFile");
+        }
+        else if (primaryRoute == WriteEscapeRoute.SplitIntoSmallerEdits)
+        {
+            clauses.Add("No whole-file write tool is available on this server.");
         }
 
-        return new WriteAdvice(
-            WriteEscapeRoute.SplitIntoSmallerEdits,
-            [rejectingToolName],
-            $"Split the edit into several smaller {rejectingToolName} calls, one per contiguous region. No whole-file write tool is available on this server.");
+        return new WriteAdvice(primaryRoute.Value, toolNames, string.Join(" ", clauses));
     }
 }

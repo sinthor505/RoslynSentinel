@@ -216,4 +216,63 @@ public class ReplaceSnippetBatchTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
     }
+
+    [Test]
+    public async Task ReplaceSnippet_BatchOversizeEdit_AppendsEscapeHatchAdviceOnceAsync()
+    {
+        // The single-edit path always carried escape-hatch advice on a size rejection; the batch
+        // path used to list the per-edit bounds with no way forward. Two oversized edits must still
+        // yield exactly one advice sentence, led by Member(replace).
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderStatus.cs");
+        var anchor = (await File.ReadAllTextAsync(targetFile)).Split('\n')[0].TrimEnd('\r');
+
+        var result = await tools.ReplaceSnippet(
+            reason: "test batch oversize advice",
+            ProposedChangeAction.validate,
+            batchEdits:
+            [
+                new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = new string('x', 2500) },
+                new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = new string('y', 2500) },
+            ]);
+
+        Assert.That(result.IsSuccess, Is.False);
+        var message = result.ErrorData!.Message;
+        Assert.Multiple(() =>
+        {
+            Assert.That(message, Does.Contain("newContent is 2500 chars"));
+            Assert.That(message, Does.Contain("Member(operation: replace)"));
+            Assert.That(message.Split("Member(operation: replace)").Length - 1, Is.EqualTo(1),
+                "the advice must be appended once per batch, not once per edit");
+        });
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_BatchNonSizeError_DoesNotAppendEscapeHatchAdviceAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var tools = BuildTools(workspaceManager);
+
+        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderStatus.cs");
+        var anchor = (await File.ReadAllTextAsync(targetFile)).Split('\n')[0].TrimEnd('\r');
+
+        var result = await tools.ReplaceSnippet(
+            reason: "test batch missing newContent",
+            ProposedChangeAction.validate,
+            batchEdits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = null! }]);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.Message, Does.Contain("newContent is required"));
+            Assert.That(result.ErrorData!.Message, Does.Not.Contain("Member(operation: replace)"),
+                "size advice is noise for a non-size rejection");
+        });
+    }
 }

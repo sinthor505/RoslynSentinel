@@ -29,15 +29,59 @@ public class WriteToolAdviceHelperTests
     }
 
     [Test]
-    public void AdviseForOversizedEdit_WriteFileExposed_PrefersWholeFileRewrite()
+    public void AdviseForOversizedEdit_AllToolsExposed_NamesMemberReplaceFirst()
     {
+        // An oversized snippet is almost always a whole-member rewrite, so Member(replace) must
+        // lead - the old WriteFile-first order steered agents to a whole-file rewrite instead.
         var helper = new WriteToolAdviceHelper([WholeFileWriteClass, RefactoringClass]);
 
         var advice = helper.AdviseForOversizedEdit("ReplaceSnippet");
 
-        Assert.That(advice.Route, Is.EqualTo(WriteEscapeRoute.WholeFileRewrite));
-        Assert.That(advice.ToolNames, Does.Contain("WriteFile"));
-        Assert.That(advice.Sentence, Does.Contain("WriteFile"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(advice.Route, Is.EqualTo(WriteEscapeRoute.StructuredEdit));
+            Assert.That(advice.ToolNames[0], Is.EqualTo("Member"));
+            Assert.That(advice.Sentence, Does.StartWith("If you are replacing a whole method/property/constructor, use Member(operation: replace)"));
+            Assert.That(advice.Sentence, Does.Contain("ApplyDiff"));
+            Assert.That(advice.Sentence, Does.Contain("smaller ReplaceSnippet calls"));
+        });
+    }
+
+    [Test]
+    public void AdviseForOversizedEdit_WriteFileExposed_IsNamedLastAfterMemberAndDiff()
+    {
+        var helper = new WriteToolAdviceHelper([WholeFileWriteClass, RefactoringClass]);
+
+        var advice = helper.AdviseForOversizedEdit("ReplaceSnippet");
+        var sentence = advice.Sentence;
+        var writeFileIndex = sentence.IndexOf("WriteFile", StringComparison.Ordinal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(advice.Route, Is.Not.EqualTo(WriteEscapeRoute.WholeFileRewrite));
+            Assert.That(advice.ToolNames[^1], Is.EqualTo("WriteFile"));
+            Assert.That(writeFileIndex, Is.GreaterThan(sentence.IndexOf("Member(operation: replace)", StringComparison.Ordinal)));
+            Assert.That(writeFileIndex, Is.GreaterThan(sentence.IndexOf("ApplyDiff", StringComparison.Ordinal)));
+            Assert.That(writeFileIndex, Is.GreaterThan(sentence.IndexOf("smaller ReplaceSnippet calls", StringComparison.Ordinal)));
+            Assert.That(sentence, Does.Contain("Only if you are genuinely rewriting most of the file, use WriteFile(operation=ReplaceFile)."));
+        });
+    }
+
+    [Test]
+    public void AdviseForOversizedEdit_OnlyWholeFileWriteClass_PrefersDiffAndStillPutsWriteFileLast()
+    {
+        var helper = new WriteToolAdviceHelper([WholeFileWriteClass]);
+
+        var advice = helper.AdviseForOversizedEdit("ReplaceSnippet");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(advice.Route, Is.EqualTo(WriteEscapeRoute.UnifiedDiff));
+            Assert.That(advice.Sentence, Does.Not.Contain("Member"));
+            Assert.That(advice.ToolNames[^1], Is.EqualTo("WriteFile"));
+            Assert.That(advice.Sentence.IndexOf("WriteFile", StringComparison.Ordinal),
+                Is.GreaterThan(advice.Sentence.IndexOf("ApplyDiff", StringComparison.Ordinal)));
+        });
     }
 
     [Test]
@@ -88,9 +132,9 @@ public class WriteToolAdviceHelperTests
 
             foreach (var toolName in advice.ToolNames)
             {
-                // SplitIntoSmallerEdits names the rejecting tool itself, which is by definition
-                // callable (the agent just called it) but isn't in the escape-hatch map.
-                if (advice.Route == WriteEscapeRoute.SplitIntoSmallerEdits)
+                // The split step names the rejecting tool itself, which is by definition callable
+                // (the agent just called it) but isn't in the escape-hatch map.
+                if (toolName == "ReplaceSnippet")
                 {
                     continue;
                 }
