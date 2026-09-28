@@ -1294,7 +1294,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ReplaceMemberAsync(FilePathWrapper filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReplaceMemberAsync(FilePathWrapper filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
     {
         // excludeInterfaceMembers: false -- replace must be able to target an interface's own
         // member declaration (e.g. ISolutionProvider.CurrentSolution), not just implementers.
@@ -1333,6 +1333,7 @@ public class RefactoringEngine
             var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, memberName, cancellationToken)
                 .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
                 .ToList());
+            memberCandidates = SymbolNavigationEngine.FilterByContainingType(memberCandidates, containerName);
             member = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node;
         }
@@ -1610,7 +1611,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveMemberAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveMemberAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
     {
         // excludeInterfaceMembers: false -- remove must be able to target an interface's own
         // member declaration, not just implementers. Same rationale as ReplaceMemberAsync above.
@@ -1648,6 +1649,7 @@ public class RefactoringEngine
             var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, memberName, cancellationToken)
                 .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
                 .ToList());
+            memberCandidates = SymbolNavigationEngine.FilterByContainingType(memberCandidates, containerName);
             member = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node;
         }

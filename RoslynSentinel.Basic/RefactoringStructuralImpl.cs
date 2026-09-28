@@ -419,7 +419,7 @@ public class RefactoringStructuralImpl
                         workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}.", cancellationToken: cancellationToken);
                 }
 
-                var result = await _refactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                var result = await _refactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
                 if (string.IsNullOrEmpty(result.UpdatedText))
                 {
                     string errorReason = result.Outcome switch
@@ -483,7 +483,7 @@ public class RefactoringStructuralImpl
                     return new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = new AppliedChangeSummary(enumRemoveApply.ChangeId, [filePathResolved], $"Removed '{memberName}' from enum '{removeEnumName}' in {Path.GetFileName(filePathResolved)}.", enumRemoveApply.DryRun, enumRemoveApply.Diff, _workspaceManager.WorkspaceVersion) };
                 }
 
-                var result = await _refactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                var result = await _refactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken: cancellationToken);
                 var removeError = RefactoringToolHelpers.RequireUpdatedText(result, "Member", filePathResolved);
                 if (removeError is not null)
                     return removeError;

@@ -1190,6 +1190,97 @@ public class Calc
             "A blank line must still separate UnrelatedMethodBefore from UnrelatedMethodAfter after the " +
             "removal - the untouched sibling on the far side of the removed member must not be respaced.");
     }
+
+
+    [Test]
+    public async Task ReplaceMember_WithContainerName_ScopesToRequestedContainerOnly()
+    {
+        // Regression test for docs/current/blockers/resolved/blocking_error_member_replace_ignores_containername_scoping.md:
+        // two classes in one file each declare their own same-named Setup() method. Without
+        // containerName-based scoping, ReplaceMemberAsync's member lookup fell back to a bare
+        // name match and always resolved to the FIRST same-named method in the file, regardless
+        // of which containerName was actually requested.
+        SetSource(@"
+public class FirstAccuracyTests
+{
+    private int _engine;
+
+    public void Setup()
+    {
+        _engine = 1;
+    }
+}
+
+public class SecondAccuracyTests
+{
+    private string _engine;
+
+    public void Setup()
+    {
+        _engine = ""two"";
+    }
+}
+", "Tests.cs");
+
+        var result = await _engine.ReplaceMemberAsync("Tests.cs", "Setup", "public void Setup() { _engine = 2; }", containerName: "SecondAccuracyTests");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("_engine = 1;"),
+            "FirstAccuracyTests.Setup() must be left untouched - containerName scoped this replace to SecondAccuracyTests.");
+        Assert.That(result.UpdatedText, Does.Contain("_engine = 2;"),
+            "SecondAccuracyTests.Setup() should have been replaced with the new body.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("_engine = \"two\";"),
+            "The old SecondAccuracyTests.Setup() body must be gone after the replace.");
+
+        var firstIndex = result.UpdatedText!.IndexOf("class FirstAccuracyTests", StringComparison.Ordinal);
+        var secondIndex = result.UpdatedText.IndexOf("class SecondAccuracyTests", StringComparison.Ordinal);
+        var replacedIndex = result.UpdatedText.IndexOf("_engine = 2;", StringComparison.Ordinal);
+        Assert.That(replacedIndex, Is.GreaterThan(secondIndex),
+            "The replaced Setup() body must land inside SecondAccuracyTests, not FirstAccuracyTests.");
+        Assert.That(secondIndex, Is.GreaterThan(firstIndex));
+    }
+
+
+    [Test]
+    public async Task RemoveMember_WithContainerName_ScopesToRequestedContainerOnly()
+    {
+        // Sibling regression test: same two-classes-same-method-name scenario, but for
+        // RemoveMemberAsync, which shares ReplaceMemberAsync's member-resolution code path
+        // and had the identical containerName-ignored bug.
+        SetSource(@"
+public class FirstAccuracyTests
+{
+    public void Setup()
+    {
+    }
+}
+
+public class SecondAccuracyTests
+{
+    public void Setup()
+    {
+    }
+}
+", "Tests.cs");
+
+        var result = await _engine.RemoveMemberAsync("Tests.cs", "Setup", containerName: "SecondAccuracyTests");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        var firstIndex = result.UpdatedText!.IndexOf("class FirstAccuracyTests", StringComparison.Ordinal);
+        var secondIndex = result.UpdatedText.IndexOf("class SecondAccuracyTests", StringComparison.Ordinal);
+        Assert.That(firstIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(secondIndex, Is.GreaterThanOrEqualTo(0));
+
+        var firstClassBody = result.UpdatedText.Substring(firstIndex, secondIndex - firstIndex);
+        Assert.That(firstClassBody, Does.Contain("public void Setup()"),
+            "FirstAccuracyTests.Setup() must be left untouched - containerName scoped this remove to SecondAccuracyTests.");
+
+        var secondClassBody = result.UpdatedText.Substring(secondIndex);
+        Assert.That(secondClassBody, Does.Not.Contain("public void Setup()"),
+            "SecondAccuracyTests.Setup() should have been removed.");
+    }
+
+
     [Test]
     public async Task AddModifier_PreservesLeadingDocComment()
     {
