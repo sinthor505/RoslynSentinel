@@ -164,6 +164,13 @@ public class BuildEngine
         process.StartInfo.ArgumentList.Add("--nologo");
         process.StartInfo.ArgumentList.Add("-v");
         process.StartInfo.ArgumentList.Add("quiet");
+        // Without this, MSBuild's incremental "up-to-date" check can skip recompiling a project
+        // entirely if its outputs are newer than its inputs by mtime (e.g. built moments earlier by
+        // this same tool, an IDE, or CI) -- and a skipped project emits no diagnostics at all, not
+        // zero diagnostics. That silently produced "0 Warning(s)" while DiagnosticsComplete stayed
+        // true even though real CS0618/Obsolete warnings existed on disk. fullBuild's whole purpose
+        // is an authoritative from-scratch compile, so always force one.
+        process.StartInfo.ArgumentList.Add("--no-incremental");
 
         // MSBuildLocator.RegisterDefaults() (see PersistentWorkspaceManager) pins this process's
         // environment to a specific MSBuild toolset. Strip the pin from the spawned "dotnet build"
