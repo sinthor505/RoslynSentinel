@@ -1534,7 +1534,49 @@ public class SymbolNavigationEngine
             // Defect-3 fix: no filePath supplied -> resolve by name across the solution.
             // When multiple overloads exist, contextSnippet is used to pick one if supplied;
             // otherwise all matching symbols are searched (union of references).
-            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, preferImplementable: false, cancellationToken);
+            // ResolveCandidatesWithSemanticAsync's semantic half already scans every project in the
+            // solution regardless of which document's root/text is passed for the free syntax half,
+            // so any parseable document works here -- there is no "current file" in the by-name path.
+            var anyDoc = solution.Projects.SelectMany(p => p.Documents).First();
+            var anyRoot = (await anyDoc.GetSyntaxRootAsync(cancellationToken))!;
+            var anyText = await anyDoc.GetTextAsync(cancellationToken);
+            var byNameCandidate = await ResolveCandidatesWithSemanticAsync(anyRoot, anyText, symbolName, includeSemantic: true, cancellationToken);
+            var memberMatches = (byNameCandidate.SemanticMatches ?? [])
+                .Where(c => c.Symbol is not INamedTypeSymbol)
+                .ToList();
+
+            if (contextSnippet != null)
+            {
+                foreach (var candidate in memberMatches)
+                {
+                    if (candidate.FilePath == null)
+                    {
+                        continue;
+                    }
+
+                    var doc = solution.Projects.SelectMany(p => p.Documents)
+                        .FirstOrDefault(d => d.FilePath == candidate.FilePath);
+                    if (doc == null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        symbol = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, null, null, cancellationToken);
+                        if (symbol != null)
+                        {
+                            break;
+                        }
+                    }
+                    catch (ToolException)
+                    {
+                        // snippet not found in this document -> continue
+                    }
+                }
+            }
+
+            symbol ??= PreferClassMember(memberMatches).FirstOrDefault()?.Symbol;
         }
 
         if (symbol == null)
@@ -1713,7 +1755,49 @@ public class SymbolNavigationEngine
         else
         {
             // Defect-3 fix: no filePath -> resolve by name across the solution.
-            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, preferImplementable: true, cancellationToken);
+            // ResolveCandidatesWithSemanticAsync's semantic half already scans every project in the
+            // solution regardless of which document's root/text is passed for the free syntax half,
+            // so any parseable document works here -- there is no "current file" in the by-name path.
+            var anyDoc = solution.Projects.SelectMany(p => p.Documents).First();
+            var anyRoot = (await anyDoc.GetSyntaxRootAsync(cancellationToken))!;
+            var anyText = await anyDoc.GetTextAsync(cancellationToken);
+            var byNameCandidate = await ResolveCandidatesWithSemanticAsync(anyRoot, anyText, symbolName, includeSemantic: true, cancellationToken);
+            var memberMatches = (byNameCandidate.SemanticMatches ?? [])
+                .Where(c => c.Symbol is not INamedTypeSymbol)
+                .ToList();
+
+            if (contextSnippet != null)
+            {
+                foreach (var candidate in memberMatches)
+                {
+                    if (candidate.FilePath == null)
+                    {
+                        continue;
+                    }
+
+                    var doc = solution.Projects.SelectMany(p => p.Documents)
+                        .FirstOrDefault(d => d.FilePath == candidate.FilePath);
+                    if (doc == null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        symbol = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, null, null, cancellationToken);
+                        if (symbol != null)
+                        {
+                            break;
+                        }
+                    }
+                    catch (ToolException)
+                    {
+                        // snippet not found in this document -> continue
+                    }
+                }
+            }
+
+            symbol ??= PreferImplementableMember(memberMatches).FirstOrDefault()?.Symbol;
         }
 
         if (symbol == null)
@@ -2933,6 +3017,35 @@ public class SymbolNavigationEngine
         }
 
         return candidates;
+    }
+
+
+    /// <summary>
+    /// Semantic-side counterpart to PreferNonInterfaceMember: given same-named ISymbol candidates,
+    /// prefer one that SymbolFinder.FindImplementationsAsync can actually act on (abstract, virtual,
+    /// override, or an interface member) over a plain concrete member -- otherwise FindImplementations
+    /// risks resolving to a symbol structurally incapable of having implementations, producing an
+    /// empty result indistinguishable from a genuine zero-implementations answer.
+    /// </summary>
+    public static List<SemanticSymbolCandidate> PreferImplementableMember(List<SemanticSymbolCandidate> candidates)
+    {
+        var implementable = candidates.Where(c =>
+            c.Symbol.IsAbstract || c.Symbol.IsVirtual || c.Symbol.IsOverride
+                || c.Symbol.ContainingType?.TypeKind == TypeKind.Interface).ToList();
+        return implementable.Count > 0 ? implementable : candidates;
+    }
+
+
+    /// <summary>
+    /// Semantic-side counterpart to PreferNonInterfaceMember, expressed over ISymbol candidates:
+    /// when an interface member and a same-named class member both match, prefer the class member --
+    /// any resolvable candidate finds the same call sites, so FindCallersAsync only needs a concrete
+    /// symbol to hand to SymbolFinder.FindReferencesAsync, not specifically the interface declaration.
+    /// </summary>
+    public static List<SemanticSymbolCandidate> PreferClassMember(List<SemanticSymbolCandidate> candidates)
+    {
+        var classMembers = candidates.Where(c => c.Symbol.ContainingType?.TypeKind == TypeKind.Class).ToList();
+        return classMembers.Count > 0 ? classMembers : candidates;
     }
 
 
