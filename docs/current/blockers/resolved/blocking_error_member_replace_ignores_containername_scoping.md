@@ -38,7 +38,7 @@ Regression tests added: `ReplaceMember_WithContainerName_ScopesToRequestedContai
 `RoslynSentinel.Tests.Basic/CodeEditingTests.cs`, reproducing the two-classes-same-method-name
 scenario directly against `RefactoringEngine`.
 
-Commit: (see git log for "Fix Member(replace/remove) ignoring containerName" on this branch).
+Commit: 76f6aed40a2324d9e3987be1174461b15b632792.
 
 ## What was being attempted
 
