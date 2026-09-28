@@ -235,8 +235,13 @@ public static class RoslynFormattingHelper
         var indentTrivia = (precedingMember ?? followingMember)?.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia)) ?? default;
         var indentText = indentTrivia != default ? indentTrivia.ToFullString() : "    ";
 
+        // Only one CRLF is needed here to produce a single blank line: precedingMember's own
+        // trailing trivia (standard Roslyn attachment - a token's trailing trivia runs through the
+        // end-of-line that terminates its own line) already supplies the line break that ends
+        // precedingMember's line. Adding a second CRLF here on top of that one is what previously
+        // produced two blank lines instead of one - see MemberInsertAfterEolTests.
         var blankLineBefore = precedingMember != null
-            ? new[] { SyntaxFactory.CarriageReturnLineFeed, SyntaxFactory.CarriageReturnLineFeed, SyntaxFactory.Whitespace(indentText) }
+            ? new[] { SyntaxFactory.CarriageReturnLineFeed, SyntaxFactory.Whitespace(indentText) }
             : new[] { SyntaxFactory.Whitespace(indentText) };
         var newMemberWithTrivia = newMember
             .WithLeadingTrivia(blankLineBefore.Concat(newMember.GetLeadingTrivia()))
@@ -260,7 +265,11 @@ public static class RoslynFormattingHelper
                 var followingIndentTrivia = followingLeadingTrivia.LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
                 var followingIndentText = followingIndentTrivia != default ? followingIndentTrivia.ToFullString() : indentText;
                 var nonWhitespaceLeading = followingLeadingTrivia.Where(t => !t.IsKind(SyntaxKind.WhitespaceTrivia) && !t.IsKind(SyntaxKind.EndOfLineTrivia));
-                var newFollowingLeading = new SyntaxTriviaList(SyntaxFactory.CarriageReturnLineFeed, SyntaxFactory.CarriageReturnLineFeed)
+                // Only one CRLF here for the same reason as blankLineBefore above: newMemberWithTrivia's
+                // trailing trivia (set above to a single CarriageReturnLineFeed) already supplies the line
+                // break that ends the new member's own line, so this only needs to add the blank line
+                // itself, not a second line-ending on top of it.
+                var newFollowingLeading = new SyntaxTriviaList(SyntaxFactory.CarriageReturnLineFeed)
                     .AddRange(nonWhitespaceLeading)
                     .Add(SyntaxFactory.Whitespace(followingIndentText));
                 var updatedFollowingMember = followingMember.WithLeadingTrivia(newFollowingLeading);
