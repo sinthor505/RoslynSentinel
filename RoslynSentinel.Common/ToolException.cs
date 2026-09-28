@@ -111,7 +111,10 @@ public sealed class NoSearchMatchesException : ToolException
     /// orientation breaker open -> lets the catch site attach a one-time Finding to the
     /// triggering call's own result instead of only a pre-check on the next call.
     /// </summary>
-    public bool JustTrippedBreaker { get; init; }
+    public bool JustTrippedBreaker
+    {
+        get; init;
+    }
 
     public NoSearchMatchesException(string message) : base(message)
     {
@@ -198,5 +201,21 @@ public static class ToolErrorMapper
         }
 
         return (ToolErrorCode.Exception, $"{context} failed unexpectedly ({ex.GetType().Name}). Data: {ex.Message}");
+    }
+}
+
+/// <summary>
+/// A <c>fileGlob</c> argument used a construct <c>GlobToRegex</c> doesn't support, or used a
+/// supported construct with malformed syntax (e.g. an unterminated <c>{</c> or <c>[</c>). Distinct
+/// from <see cref="NoSearchMatchesException"/>: the glob itself is rejected before it's ever matched
+/// against any file, rather than silently compiling to a pattern that matches nothing. Maps to
+/// <see cref="ToolErrorCode.InvalidArgument"/>.
+/// </summary>
+public sealed class GlobSyntaxException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.InvalidArgument;
+
+    public GlobSyntaxException(string message) : base(message)
+    {
     }
 }

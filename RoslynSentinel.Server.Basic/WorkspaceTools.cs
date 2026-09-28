@@ -627,7 +627,12 @@ public class WorkspaceTools
     [Description(ToolParams.SearchModeValues)] SearchMode mode,
     [Description("Search pattern for mode: text, or symbol name for mode: symbol/references. Ignored for mode: all and every declaration-kind mode.")]
         string? query = null,
-    [Description("mode: text only. Restricts to matching file paths (glob). Omit for all files.")]
+    [Description("mode: text only. Restricts to matching file paths (glob). Omit for all files. " +
+        "Supports '*' (within one path segment), '**'/'**/ ' (any depth), '?' (one char), " +
+        "'{a,b,...}' alternation, and '[abc]'/'[!abc]' character classes - any other special " +
+        "character is rejected with an error naming it, not silently treated as literal. A glob " +
+        "containing '/' matches the solution-relative path (e.g. '**/Foo.cs', 'MyProj/*.cs'); a " +
+        "glob with no '/' matches the bare filename only (e.g. '*.cs', 'Foo.cs').")]
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
     [Description("mode: text only. Caps total matches scanned.")]
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,

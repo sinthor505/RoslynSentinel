@@ -73,7 +73,10 @@ public class WorkspaceReadNavigationTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Text to search for, matched both as a literal substring and as a regex.")]
         [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
-        [Description("Restricts the search to files whose path matches this glob.")]
+        [Description("Restricts the search to files whose path matches this glob. Supports *, **, ?, " +
+            "{a,b,...} alternation, and [abc]/[!abc] character classes; other special characters are " +
+            "rejected with an error naming the unsupported construct. Matches the solution-relative " +
+            "path (with / separators) when the glob contains '/', otherwise matches the bare filename.")]
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
         [Description("Maximum number of matches to scan.")]
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,

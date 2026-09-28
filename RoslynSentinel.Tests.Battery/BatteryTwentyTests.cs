@@ -55,6 +55,13 @@ public class BatteryTwentyTests
         _workspaceManager.SetTestSolution(solution);
     }
 
+
+    private void SetSources(params (string fileName, string source)[] files)
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", files);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
     // --- Features (consolidated: list, update, get) ---
 
     [Test]
@@ -333,6 +340,98 @@ public class BatteryTwentyTests
         {
             File.Delete(tempFile);
         }
+    }
+
+
+    [Test]
+    [Description("blocking_error_search_fileglob_brace_pattern_silently_matches_nothing.md fix 1: " +
+             "'{a,b}' brace alternation must expand to real alternation, not compile to a literal " +
+             "directory name that never exists.")]
+    public async Task SearchSolutionText_BraceAlternationGlob_MatchesBothAlternatives()
+    {
+        SetSources(("OrderService.cs", "namespace TestProj; public class OrderService { public int Marker() => 1; }"),
+            ("PaymentTests.cs", "namespace TestProj; public class PaymentTests { public int Marker() => 2; }"));
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Marker",
+            fileGlob: "{OrderService.cs,PaymentTests.cs}");
+
+        Assert.That(result.IsSuccess, Is.True);
+        var payload = (TextSearchResult)result.SuccessData!;
+        var matchedFiles = payload.LiteralResults.Select(m => m.filePath.Absolute).Distinct().ToList();
+        Assert.That(matchedFiles, Has.Count.EqualTo(2), "both alternatives in the brace group should match");
+    }
+
+
+    [Test]
+    [Description("blocking_error_search_fileglob_brace_pattern_silently_matches_nothing.md fix 1: " +
+             "'[...]' character classes must translate to a real regex character class.")]
+    public async Task SearchSolutionText_CharacterClassGlob_MatchesListedChars()
+    {
+        SetSources(("Foo1.cs", "namespace TestProj; public class Foo1 { public int Marker() => 1; }"),
+            ("Foo9.cs", "namespace TestProj; public class Foo9 { public int Marker() => 2; }"));
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Marker",
+            fileGlob: "Foo[19].cs");
+
+        Assert.That(result.IsSuccess, Is.True);
+        var payload = (TextSearchResult)result.SuccessData!;
+        Assert.That(payload.LiteralResults.Select(m => m.filePath.Absolute).Distinct().Count(), Is.EqualTo(2));
+    }
+
+
+    [Test]
+    [Description("blocking_error_search_fileglob_brace_pattern_silently_matches_nothing.md fix 1: " +
+             "an unterminated '{' must be rejected loudly instead of silently matching nothing.")]
+    public async Task SearchSolutionText_UnterminatedBraceGlob_ReturnsInvalidArgument()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Order",
+            fileGlob: "{Foo,Bar");
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("{"));
+    }
+
+
+    [Test]
+    [Description("blocking_error_search_fileglob_brace_pattern_silently_matches_nothing.md fix 2+3: " +
+             "a glob that matches zero files must name the glob as the cause (not tell the caller " +
+             "to adjust the search pattern) and must not count toward the orientation breaker.")]
+    public async Task SearchSolutionText_GlobMatchesNoFiles_ReturnsGlobSpecificError()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Order",
+            fileGlob: "NoSuchFile*.cs");
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument),
+            "a glob matching zero files is a glob problem (InvalidArgument), not a query problem (NoMatches)");
+        Assert.That(result.ErrorData?.Message, Does.Contain("NoSuchFile*.cs"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("Test.cs"), "should name a real file as an example");
+        Assert.That(result.ErrorData?.Message, Does.Not.Contain("adjusting the search pattern"),
+            "the query was never at fault - the glob filtered out every document before matching ran");
+    }
+
+
+    [Test]
+    [Description("blocking_error_search_fileglob_brace_pattern_silently_matches_nothing.md fix 5: " +
+             "results must come back in a deterministic order across repeated identical searches, " +
+             "since the underlying collection is now a ConcurrentBag with no defined enumeration order.")]
+    public async Task SearchSolutionText_RepeatedIdenticalSearch_ReturnsSameOrderEachTime()
+    {
+        SetSources(("Alpha.cs", "namespace TestProj; public class Alpha { public int Marker() => 1; }"),
+            ("Beta.cs", "namespace TestProj; public class Beta { public int Marker() => 2; }"),
+            ("Gamma.cs", "namespace TestProj; public class Gamma { public int Marker() => 3; }"));
+
+        var firstRun = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Marker");
+        var secondRun = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Marker");
+
+        var firstPayload = (TextSearchResult)firstRun.SuccessData!;
+        var secondPayload = (TextSearchResult)secondRun.SuccessData!;
+        var firstOrder = firstPayload.LiteralResults.Select(m => m.filePath.Absolute).ToList();
+        var secondOrder = secondPayload.LiteralResults.Select(m => m.filePath.Absolute).ToList();
+
+        Assert.That(firstOrder, Is.EqualTo(secondOrder), "identical repeated searches must return matches in the same order");
+        Assert.That(firstOrder, Is.Ordered, "results should be sorted deterministically (by file path)");
     }
 
     // --- LoadSolution ---

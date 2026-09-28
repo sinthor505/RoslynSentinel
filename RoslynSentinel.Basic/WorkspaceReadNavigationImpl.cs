@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace RoslynSentinel.Basic;
 
@@ -405,8 +406,10 @@ public class WorkspaceReadNavigationImpl
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            var results = new List<TextSearchMatch>();
+            var results = new ConcurrentBag<TextSearchMatch>();
             var warnings = new List<string>();
+            var globMatchedPaths = new ConcurrentBag<string>();
+            int resultCount = 0;
             Regex? regex = null;
             bool regexPatternValid = true;
 
@@ -428,7 +431,7 @@ public class WorkspaceReadNavigationImpl
 
                 await Parallel.ForEachAsync(project.Documents, options2, async (document, ct2) =>
                 {
-                    if (results.Count >= maxResults)
+                    if (Volatile.Read(ref resultCount) >= maxResults)
                     {
                         return;
                     }
@@ -439,11 +442,16 @@ public class WorkspaceReadNavigationImpl
                         return;
                     }
 
+                    if (!string.IsNullOrEmpty(fileGlob) && globMatchedPaths.Count < 3)
+                    {
+                        globMatchedPaths.Add(docPath.Relative.Replace('\\', '/'));
+                    }
+
                     var text = await document.GetTextAsync(ct2);
                     var sourceText = text.ToString();
                     var lines = sourceText.Split('\n');
                     var root = await document.GetSyntaxRootAsync(ct2);
-                    for (int i = 0; i < lines.Length && results.Count < maxResults; i++)
+                    for (int i = 0; i < lines.Length && Volatile.Read(ref resultCount) < maxResults; i++)
                     {
                         var line = lines[i];
 
@@ -469,6 +477,7 @@ public class WorkspaceReadNavigationImpl
                         if (literalCol >= 0)
                         {
                             results.Add(new TextSearchMatch(docPath.Absolute, i + 1, literalCol + 1, BuildPreview(), MatchKind.Literal, EnclosingMemberAt(literalCol)));
+                            Interlocked.Increment(ref resultCount);
                         }
 
                         if (regex != null)
@@ -479,6 +488,7 @@ public class WorkspaceReadNavigationImpl
                                 if (m.Success)
                                 {
                                     results.Add(new TextSearchMatch(docPath.Absolute, i + 1, m.Index + 1, BuildPreview(), MatchKind.Regex, EnclosingMemberAt(m.Index)));
+                                    Interlocked.Increment(ref resultCount);
                                 }
                             }
                             catch (RegexMatchTimeoutException)
@@ -489,14 +499,48 @@ public class WorkspaceReadNavigationImpl
                 });
             });
 
-            var literalResults = results.Where(r => r.MatchedAs == MatchKind.Literal).ToList();
+            // ConcurrentBag has no defined enumeration order; sort deterministically before any
+            // maxResults truncation so repeated identical searches return identical result sets.
+            var orderedResults = results.OrderBy(r => r.filePath.Absolute, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.Line).ThenBy(r => r.Column).ToList();
+            var literalResults = orderedResults.Where(r => r.MatchedAs == MatchKind.Literal).Take(maxResults).ToList();
             var literalKeys = literalResults.Select(r => (r.filePath, r.Line, r.Column)).ToHashSet();
-            var rawRegexResults = results.Where(r => r.MatchedAs == MatchKind.Regex).ToList();
-            var regexResults = rawRegexResults.Where(r => !literalKeys.Contains((r.filePath, r.Line, r.Column))).ToList();
+            var rawRegexResults = orderedResults.Where(r => r.MatchedAs == MatchKind.Regex).ToList();
+            var regexResults = rawRegexResults.Where(r => !literalKeys.Contains((r.filePath, r.Line, r.Column))).Take(maxResults).ToList();
             int regexOverlapCount = rawRegexResults.Count - regexResults.Count;
+            int totalResultCount = literalResults.Count + regexResults.Count;
 
             if (literalResults.Count == 0 && regexResults.Count == 0)
             {
+                if (!string.IsNullOrEmpty(fileGlob) && globMatchedPaths.IsEmpty)
+                {
+                    var matchedAgainstDescription = fileGlob.Replace('\\', '/').Contains('/')
+                        ? "the solution-relative path"
+                        : "the bare filename";
+                    var sampleRelativePaths = solution.Projects
+                        .SelectMany(p => p.Documents)
+                        .Select(d =>
+                        {
+                            var wrapper = new FilePathWrapper(d.FilePath ?? "", _workspaceManager.GetSolutionRoot());
+                            // Relative is empty when no solution root is available to resolve against
+                            // (e.g. an in-memory solution with no backing .sln/.slnx) - fall back to
+                            // Absolute rather than silently dropping a real document from the samples.
+                            var path = string.IsNullOrEmpty(wrapper.Relative) ? wrapper.Absolute : wrapper.Relative;
+                            return path.Replace('\\', '/');
+                        })
+                        .Where(p => !string.IsNullOrEmpty(p))
+                        .Distinct()
+                        .Take(3)
+                        .ToList();
+                    var sampleText = sampleRelativePaths.Count > 0
+                        ? $"Example paths in this solution: {string.Join(", ", sampleRelativePaths)}."
+                        : "This solution has no documents to match against.";
+                    throw new GlobSyntaxException(
+                        $"fileGlob '{fileGlob}' matched 0 files (matched against {matchedAgainstDescription}), so the search for " +
+                        $"'{pattern}' never ran against any document. {sampleText} This is a glob problem, not a search-pattern problem - " +
+                        "widen or fix the fileGlob rather than changing the pattern.");
+                }
+
                 warnings.Add(
                     $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. " +
                     "If you were searching for a known symbol by name, use Search with mode: symbol instead (semantic lookup, not text matching). " +
@@ -505,9 +549,9 @@ public class WorkspaceReadNavigationImpl
                 var justTripped = _workspaceManager.RecordSearchOutcome(0);
                 throw new NoSearchMatchesException(string.Join(" ", warnings)) { JustTrippedBreaker = justTripped };
             }
-            else if (results.Count >= maxResults)
+            else if (totalResultCount >= maxResults)
             {
-                warnings.Add($"{results.Count} matches found - returning first ({maxResults}) matches scanned - Narrow fileGlob/pattern or increase maxResults to see more.");
+                warnings.Add($"{totalResultCount} matches found - returning first ({maxResults}) matches scanned - Narrow fileGlob/pattern or increase maxResults to see more.");
             }
 
             _workspaceManager.RecordSearchOutcome(literalResults.Count + regexResults.Count);
@@ -610,8 +654,14 @@ public class WorkspaceReadNavigationImpl
     }
 
     // Translates glob syntax to a regex fragment: "**/" matches any depth (including none),
-    // a lone "**" matches anything, and a single "*"/"?" stay within one path segment so they
-    // don't accidentally cross a "/" boundary.
+    // a lone "**" matches anything, a single "*"/"?" stay within one path segment so they don't
+    // accidentally cross a "/" boundary, "{a,b,...}" becomes alternation (each alternative
+    // translated recursively, so nested wildcards/classes inside a brace group still work), and
+    // "[abc]"/"[!abc]" become a (possibly negated) regex character class. Any other unsupported
+    // construct - or a "{"/"[" with no matching close - throws GlobSyntaxException naming the
+    // offending character and index, rather than silently Regex.Escape-ing it into a literal that
+    // will never match any real file (see docs/current/blockers/
+    // blocking_error_search_fileglob_brace_pattern_silently_matches_nothing.md).
     private static string GlobToRegex(string glob)
     {
         var sb = new StringBuilder();
@@ -641,6 +691,80 @@ public class WorkspaceReadNavigationImpl
                 sb.Append("[^/]");
                 i++;
             }
+            else if (glob[i] == '{')
+            {
+                int depth = 1;
+                int j = i + 1;
+                while (j < glob.Length && depth > 0)
+                {
+                    if (glob[j] == '{')
+                    {
+                        depth++;
+                    }
+                    else if (glob[j] == '}')
+                    {
+                        depth--;
+                    }
+                    j++;
+                }
+
+                if (depth != 0)
+                {
+                    throw new GlobSyntaxException(
+                        $"fileGlob '{glob}' has an unterminated '{{' starting at index {i}. " +
+                        "Close it with '}', e.g. '{Foo,Bar}'.");
+                }
+
+                var inner = glob[(i + 1)..(j - 1)];
+                var alternatives = SplitTopLevelCommas(inner);
+                if (alternatives.Count < 2)
+                {
+                    throw new GlobSyntaxException(
+                        $"fileGlob '{glob}' has a '{{...}}' group at index {i} with no top-level ',' " +
+                        "separator. Brace alternation needs at least two comma-separated options, e.g. '{Foo,Bar}'.");
+                }
+
+                sb.Append("(?:").Append(string.Join('|', alternatives.Select(GlobToRegex))).Append(')');
+                i = j;
+            }
+            else if (glob[i] == '}')
+            {
+                throw new GlobSyntaxException(
+                    $"fileGlob '{glob}' has an unmatched '}}' at index {i} with no preceding '{{'.");
+            }
+            else if (glob[i] == '[')
+            {
+                int j = glob.IndexOf(']', i + 1);
+                if (j < 0)
+                {
+                    throw new GlobSyntaxException(
+                        $"fileGlob '{glob}' has an unterminated '[' starting at index {i}. " +
+                        "Close it with ']', e.g. '[abc]' or '[!abc]'.");
+                }
+
+                var body = glob[(i + 1)..j];
+                var negate = body.StartsWith('!');
+                if (negate)
+                {
+                    body = body[1..];
+                }
+
+                if (body.Length == 0)
+                {
+                    throw new GlobSyntaxException(
+                        $"fileGlob '{glob}' has an empty '[...]' character class at index {i}. " +
+                        "List at least one character, e.g. '[abc]' or '[!abc]'.");
+                }
+
+                var escapedBody = Regex.Escape(body).Replace("\\-", "-");
+                sb.Append('[').Append(negate ? "^" : "").Append(escapedBody).Append(']');
+                i = j + 1;
+            }
+            else if (glob[i] == ']')
+            {
+                throw new GlobSyntaxException(
+                    $"fileGlob '{glob}' has an unmatched ']' at index {i} with no preceding '['.");
+            }
             else
             {
                 sb.Append(Regex.Escape(glob[i].ToString()));
@@ -649,6 +773,34 @@ public class WorkspaceReadNavigationImpl
         }
 
         return sb.ToString();
+    }
+
+    // Splits a "{...}" group's inner text on top-level commas only - a comma inside a nested
+    // "{...}" (e.g. "{a,{b,c}}") stays part of that nested group instead of splitting the outer one.
+    private static List<string> SplitTopLevelCommas(string inner)
+    {
+        var parts = new List<string>();
+        int depth = 0;
+        int start = 0;
+        for (int k = 0; k < inner.Length; k++)
+        {
+            if (inner[k] == '{')
+            {
+                depth++;
+            }
+            else if (inner[k] == '}')
+            {
+                depth--;
+            }
+            else if (inner[k] == ',' && depth == 0)
+            {
+                parts.Add(inner[start..k]);
+                start = k + 1;
+            }
+        }
+
+        parts.Add(inner[start..]);
+        return parts;
     }
 
     public async Task<SentinelCallToolResult<object>> GetOperationDetail(
