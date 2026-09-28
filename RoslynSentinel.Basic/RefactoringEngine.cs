@@ -4516,8 +4516,18 @@ public class RefactoringEngine
         }
     }
 
-    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePathWrapper filePath, string className, string paramName, string paramType, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePathWrapper filePath, string className, string paramName, string paramType, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, string? defaultValue = null, bool nullDefault = false)
     {
+        if (nullDefault && defaultValue != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: nullDefault and defaultValue are mutually exclusive - pass only one."
+            };
+        }
+
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -4586,6 +4596,15 @@ public class RefactoringEngine
         //.WithAddedByComment("AddConstructorParameter");
         var assignmentStatement = SyntaxFactory.ParseStatement($"{derivedFieldName} = {paramName};");
         var newParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName)).WithType(SyntaxFactory.ParseTypeName(paramType).WithTrailingTrivia(SyntaxFactory.Space));
+        if (nullDefault)
+        {
+            newParam = newParam.WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)));
+        }
+        else if (defaultValue != null)
+        {
+            newParam = newParam.WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.ParseExpression(defaultValue)));
+        }
+
         var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
         ConstructorDeclarationSyntax newCtor;
         if (ctor != null)

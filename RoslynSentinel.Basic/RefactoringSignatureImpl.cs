@@ -328,7 +328,7 @@ public class RefactoringSignatureImpl
         bool autoStage = true,
         bool dryRun = false,
         bool returnDiff = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string? defaultValue = null, bool nullDefault = false)
     {
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -351,11 +351,21 @@ public class RefactoringSignatureImpl
                 return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ConstructorParameter: paramType is required for operation 'add'.") };
             }
 
+            if (nullDefault && defaultValue != null)
+            {
+                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ConstructorParameter: nullDefault and defaultValue are mutually exclusive - pass only one.") };
+            }
+
+            if (nullDefault && operation != AddRemoveViewAction.add)
+            {
+                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"ConstructorParameter: nullDefault is only valid for operation 'add', not '{operation}'.") };
+            }
+
             DocumentEditResult updated;
             string resolvedFieldName;
             if (operation == AddRemoveViewAction.add)
             {
-                updated = await _refactoringEngine.AddConstructorParameterAsync(filePathResolved, className, paramName, paramType!, fieldName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _refactoringEngine.AddConstructorParameterAsync(filePathResolved, className, paramName, paramType!, fieldName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken, defaultValue: defaultValue, nullDefault: nullDefault);
                 // updated.Message carries "// paramName='x', fieldName='_x'" on success -> surface the
                 // resolved field name explicitly since it may differ from what the caller passed
                 // (see fieldName/paramName collision disambiguation in AddConstructorParameterAsync).
@@ -376,7 +386,7 @@ public class RefactoringSignatureImpl
             if (!autoStage)
             {
                 var noStageDescription = operation == AddRemoveViewAction.add
-                    ? $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePathResolved)}, backed by field '{resolvedFieldName}'."
+                    ? $"Added '{paramType} {paramName}{(nullDefault ? " = null" : defaultValue != null ? $" = {defaultValue}" : "")}' DI parameter to '{className}' in {Path.GetFileName(filePathResolved)}, backed by field '{resolvedFieldName}'."
                     : $"Removed '{paramName}' DI parameter from '{className}' in {Path.GetFileName(filePathResolved)}."
                         + (updated.Message?.Contains("fieldRemoved='True'") == true ? $" Also removed unused backing field '{resolvedFieldName}'." : "");
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
@@ -400,7 +410,7 @@ public class RefactoringSignatureImpl
                 return guardResult;
 
             var description = operation == AddRemoveViewAction.add
-                ? $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePathResolved)}, backed by field '{resolvedFieldName}'."
+                ? $"Added '{paramType} {paramName}{(nullDefault ? " = null" : defaultValue != null ? $" = {defaultValue}" : "")}' DI parameter to '{className}' in {Path.GetFileName(filePathResolved)}, backed by field '{resolvedFieldName}'."
                 : $"Removed '{paramName}' DI parameter from '{className}' in {Path.GetFileName(filePathResolved)}."
                     + (updated.Message?.Contains("fieldRemoved='True'") == true ? $" Also removed unused backing field '{resolvedFieldName}'." : "");
 

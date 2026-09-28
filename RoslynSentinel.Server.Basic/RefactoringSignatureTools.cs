@@ -80,7 +80,7 @@ public class RefactoringSignatureTools
 
     [McpServerTool(Name = "ConstructorParameter")]
     [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view DI constructor parameters on a class. For classes with the same name in the same file, combine className with contextSnippet/lineBefore/lineAfter to disambiguate.")]
+    [Description("Add, remove, or view DI constructor parameters on a class. For classes with the same name in the same file, combine className with contextSnippet/lineBefore/lineAfter to disambiguate. add supports an optional defaultValue/nullDefault so existing direct-construction call sites that don't pass the new argument keep compiling.")]
     public Task<SentinelCallToolResult<object>> ConstructorParameter(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filePath,
@@ -95,12 +95,15 @@ public class RefactoringSignatureTools
         [Consumes(DataTag.DataType, required: false)] string? paramType = null,
         [Description("add only. Overrides the default derived field name (_camelCase); passing fieldName equal to paramName or its underscore-prefixed form both resolve to '_paramName', never a bare name that would collide with the parameter.")]
         [Consumes(DataTag.SymbolName, required: false)] string? fieldName = null,
+        [Description("add only. Optional literal or expression for the new parameter's default value (e.g. \"null!\", \"new SentinelConfiguration()\") - omit for a required parameter. Setting this lets existing direct-construction call sites that omit this argument keep compiling. Do NOT pass the literal string \"null\" here to get a null default - use nullDefault:true instead (some MCP clients corrupt the string \"null\" in transit, silently producing a required parameter instead of one defaulted to null). Mutually exclusive with nullDefault.")]
+        [ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        CancellationToken cancellationToken = default) =>
-        _impl.ConstructorParameter(reason, filePath, operation, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+        CancellationToken cancellationToken = default,
+        [Description("add only. Sets the new parameter's default to the null literal directly, bypassing defaultValue entirely - use this instead of defaultValue:\"null\". Mutually exclusive with defaultValue.")] bool nullDefault = false) =>
+        _impl.ConstructorParameter(reason, filePath, operation, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, defaultValue, nullDefault);
 }

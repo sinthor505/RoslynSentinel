@@ -548,6 +548,45 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
+    [Test]
+    public async Task ConstructorParameter_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
+    {
+        SetMultiFile(
+            ("Order.cs", SimpleSource),
+            ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
+        var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", defaultValue: "\"\"");
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task ConstructorParameter_Add_WithNullDefault_BackwardCompatibleWithExistingCaller()
+    {
+        SetMultiFile(
+            ("Order.cs", SimpleSource),
+            ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
+        var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", nullDefault: true);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task ConstructorParameter_Add_NullDefaultAndDefaultValueBothSet_Refused()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", defaultValue: "\"\"", nullDefault: true);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData?.Message, Does.Contain("mutually exclusive"));
+    }
+
+    [Test]
+    public async Task ConstructorParameter_Add_NoDefaultValue_ExistingCallerBreaksAndIsRefused()
+    {
+        SetMultiFile(
+            ("Order.cs", SimpleSource),
+            ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
+        var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
+        Assert.That(result.IsSuccess, Is.False);
+    }
+
     // --- MethodSignature ---
 
     [Test]
