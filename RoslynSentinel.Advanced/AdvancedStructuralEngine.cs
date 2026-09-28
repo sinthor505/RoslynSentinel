@@ -1027,10 +1027,72 @@ public class AdvancedStructuralEngine
                     continue;
                 }
 
-                var candidates = refSemanticModel == null || refNode == null
+                // destinationType was resolved from the semantic model of whichever document first
+                // matched targetClassName - almost always a DIFFERENT Project/Compilation than
+                // refCompilation whenever the destination class lives in a different project from the
+                // call site (e.g. AntiPatternEngine in RoslynSentinel.Advanced vs. a call site in
+                // RoslynSentinel.Tests.Advanced). INamedTypeSymbol instances are compilation-scoped:
+                // SymbolEqualityComparer.Default.Equals(typeFromCompilationA, typeFromCompilationB)
+                // is false for "the same" type seen through two different compilations, even when one
+                // references the other's assembly directly, because they are genuinely distinct symbol
+                // objects. Every sibling field/property/parameter/local of the destination type at the
+                // call site therefore compared unequal and the site was misclassified as
+                // NoCandidateIntroducible despite an in-scope, correctly-typed, correctly-initialized
+                // candidate existing. Resolving destinationType's counterpart symbol IN refCompilation
+                // (via its fully-qualified metadata name) before comparing fixes this: same-compilation
+                // moves are unaffected (the round-trip is a no-op), and cross-project moves now compare
+                // two symbols that both belong to refCompilation. See
+                // docs/current/blockers/resolved/blocking_error_movemember_candidate_lookup_misses_sibling_field.md.
+                var destinationTypeMetadataName = destinationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted));
+                var destinationTypeInRefCompilation = (ITypeSymbol?)refCompilation?.GetTypeByMetadataName(destinationTypeMetadataName) ?? destinationType;
+
+                // LookupSymbols must be called at a position that reflects general lexical/member
+                // scope, not refNode.SpanStart itself: refNode is the referenced member's own
+                // identifier token (e.g. "AnalyzeSemaphoreUsageAsync" in "_engine.AnalyzeSemaphoreUsageAsync(...)"),
+                // which sits inside a MemberAccessExpressionSyntax's right-hand .Name. Roslyn's
+                // LookupSymbols treats a position there as a member lookup scoped to the receiver's
+                // OWN type (here, the source class being moved FROM), not the enclosing lexical
+                // scope - so sibling fields/locals of the destination type declared in the
+                // surrounding class/method were structurally invisible from that position, even
+                // when correctly typed and in scope everywhere else. Using the receiver expression's
+                // own SpanStart (falling back to refNode's when there is no member-access receiver,
+                // e.g. a bare identifier call) evaluates lexical scope correctly.
+                var lookupPosition = memberAccess?.Expression.SpanStart ?? refNode?.SpanStart;
+
+                // The type-identity comparison below must not rely solely on SymbolEqualityComparer
+                // across a compilation boundary: destinationType was bound in the destination class's
+                // OWN document/project compilation, while every field/property/parameter/local found
+                // by LookupSymbols here is bound in refSemanticModel's compilation (a DIFFERENT
+                // Project/Compilation whenever the destination class lives in another project, e.g.
+                // AntiPatternEngine in RoslynSentinel.Advanced vs. a call site in
+                // RoslynSentinel.Tests.Advanced). destinationTypeInRefCompilation above re-resolves it
+                // by metadata name so the SymbolEqualityComparer path can succeed, but as a
+                // compilation-independent guarantee this also falls back to comparing fully-qualified
+                // display names directly - a check that cannot be defeated by any cross-compilation
+                // symbol-identity subtlety, since it never compares ITypeSymbol instances against each
+                // other at all. See
+                // docs/current/blockers/resolved/blocking_error_movemember_candidate_lookup_misses_sibling_field.md.
+                bool IsDestinationType(ISymbol s)
+                {
+                    var candidateType = GetSymbolType(s);
+                    if (candidateType == null)
+                    {
+                        return false;
+                    }
+
+                    if (SymbolEqualityComparer.Default.Equals(candidateType, destinationTypeInRefCompilation))
+                    {
+                        return true;
+                    }
+
+                    var candidateTypeName = candidateType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted));
+                    return string.Equals(candidateTypeName, destinationTypeMetadataName, StringComparison.Ordinal);
+                }
+
+                var candidates = refSemanticModel == null || lookupPosition == null
                     ? new List<string>()
-                    : refSemanticModel.LookupSymbols(refNode.SpanStart)
-                        .Where(s => (s is IFieldSymbol || s is IPropertySymbol || s is IParameterSymbol || s is ILocalSymbol) && SymbolEqualityComparer.Default.Equals(GetSymbolType(s), destinationType))
+                    : refSemanticModel.LookupSymbols(lookupPosition.Value)
+                        .Where(s => (s is IFieldSymbol || s is IPropertySymbol || s is IParameterSymbol || s is ILocalSymbol) && IsDestinationType(s))
                         .Select(s => s.Name)
                         .Distinct()
                         .ToList();

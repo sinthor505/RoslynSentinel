@@ -691,6 +691,71 @@ public class PreviewInstanceMoveCallSitesTests
         });
     }
 
+    // Regression test for docs/current/blockers/resolved/blocking_error_movemember_candidate_lookup_misses_sibling_field.md.
+    // Root cause: destinationType was resolved from the destination class's own (upstream)
+    // compilation, but each call site's in-scope candidate fields were resolved from the
+    // *calling* document's (downstream) compilation. SymbolEqualityComparer.Default.Equals
+    // never treats an ITypeSymbol from one Compilation as equal to "the same" type as seen
+    // from a different Compilation, even across a direct ProjectReference - so a call site
+    // whose containing class already had a correctly-typed, correctly-initialized sibling
+    // field of the destination type was still reported NoCandidateIntroducible with an empty
+    // candidate list. This fixture uses two real AdhocWorkspace projects (not one), which is
+    // the minimum shape that can actually exercise the bug - a single-project fixture can
+    // never fail this way, since every symbol in it already shares one Compilation.
+    [Test]
+    public async Task CrossProjectSiblingField_ClassifiesAsValidNotNoCandidateIntroducibleAsync()
+    {
+        const string upstreamSource = """
+            namespace UpstreamLib;
+
+            public class UpstreamServiceA
+            {
+                public void Foo()
+                {
+                }
+            }
+
+            public class UpstreamServiceB
+            {
+            }
+            """;
+
+        const string downstreamSource = """
+            using UpstreamLib;
+
+            namespace DownstreamApp;
+
+            public class Caller
+            {
+                private readonly UpstreamServiceB _serviceB = new UpstreamServiceB();
+
+                public void Do()
+                {
+                    var a = new UpstreamServiceA();
+                    a.Foo();
+                }
+            }
+            """;
+
+        var solution = TestSolutionBuilder.CreateTwoProjectSolution(
+            "UpstreamLib",
+            [("UpstreamServiceA.cs", upstreamSource)],
+            "DownstreamApp",
+            [("Caller.cs", downstreamSource)]);
+
+        _workspaceManager.SetTestSolution(solution);
+
+        var results = await _engine.PreviewInstanceMoveCallSitesAsync("UpstreamServiceA.cs", "UpstreamServiceA", ["Foo"], "UpstreamServiceB");
+
+        var fooSite = results.Single(r => r.CallExpression.Contains("Foo"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(fooSite.Status, Is.EqualTo(CallSiteStatus.Valid),
+                $"status={fooSite.Status} candidates=[{string.Join(",", fooSite.Candidates)}] reason={fooSite.BlockReason}");
+            Assert.That(fooSite.Candidates, Does.Contain("_serviceB"));
+        });
+    }
+
     // NOTE: no test here for MoveOrderDependent (a call site inside a member that's itself being
     // moved in the same batch). Tried the obvious fixture -- Foo() called unqualified from Baz(),
     // both in memberNames -- and it classifies as Valid, not MoveOrderDependent: when both members
