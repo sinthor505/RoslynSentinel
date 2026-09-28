@@ -524,6 +524,7 @@ public class WorkspaceReadNavigationImpl
                 totalRecords: literalResults.Count + regexResults.Count,
                 workspaceVersion: _workspaceManager.WorkspaceVersion,
                 statusMessage: matchSummary.ToSummaryMessage("match"),
+                listSummary: matchSummary,
                 cancellationToken: cancellationToken);
             return searchResult with { WarningDetails = warning };
         }

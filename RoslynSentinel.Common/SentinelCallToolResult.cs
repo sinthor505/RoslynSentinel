@@ -190,6 +190,12 @@ public record SentinelCallToolResult<TSuccess, TError>
     {
         get; init;
     }
+
+
+    public ListSummary? ListSummary
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -209,12 +215,12 @@ public record SentinelCallToolResult<T> : SentinelCallToolResult<T, ResultError>
     /// ReadFile's offload paths silently diverge from GetLargeResult's expected file format).
     /// </summary>
     public static async Task<SentinelCallToolResult<T>> ForPossiblyLargeDataAsync(
-        T data, string? solutionRoot, string resultType, ResultWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null, string? statusMessage = null, CancellationToken cancellationToken = default)
+        T data, string? solutionRoot, string resultType, ResultWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null, string? statusMessage = null, ListSummary? listSummary = null, CancellationToken cancellationToken = default)
     {
         var stored = await LargeResultHelper.StoreLargeResultAsync(data, solutionRoot, wrapperType, cancellationToken);
         if (!stored.offloaded)
         {
-            return new SentinelCallToolResult<T> { IsSuccess = true, SuccessData = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion, StatusMessage = statusMessage };
+            return new SentinelCallToolResult<T> { IsSuccess = true, SuccessData = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion, StatusMessage = statusMessage, ListSummary = listSummary };
         }
 
         return new SentinelCallToolResult<T>
@@ -223,6 +229,7 @@ public record SentinelCallToolResult<T> : SentinelCallToolResult<T, ResultError>
             TotalRecords = totalRecords,
             WorkspaceVersion = workspaceVersion,
             StatusMessage = statusMessage,
+            ListSummary = listSummary,
             LargeResult = new LargeResultInfo(
                 resultType: resultType,
                 writtenToFile: true,

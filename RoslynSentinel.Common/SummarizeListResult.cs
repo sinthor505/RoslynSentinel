@@ -52,6 +52,9 @@ public record ListSummary(int TotalCount, int FileCount, IReadOnlyList<FileHitCo
 
         var shown = string.Join(", ", ByFile.Select(f => $"{f.FilePath} ({f.Count})"));
         var more = TruncatedFileCount > 0 ? $" (+{TruncatedFileCount} more file{(TruncatedFileCount == 1 ? "" : "s")})" : "";
-        return $"{TotalCount} {itemNoun}{(TotalCount == 1 ? "" : "s")} across {FileCount} file{(FileCount == 1 ? "" : "s")}: {shown}{more}.";
+        var itemPlural = itemNoun.EndsWith("ch", StringComparison.Ordinal) || itemNoun.EndsWith("sh", StringComparison.Ordinal) || itemNoun.EndsWith("s", StringComparison.Ordinal)
+            ? itemNoun + "es"
+            : itemNoun + "s";
+        return $"{TotalCount} {(TotalCount == 1 ? itemNoun : itemPlural)} across {FileCount} file{(FileCount == 1 ? "" : "s")}: {shown}{more}.";
     }
 }
