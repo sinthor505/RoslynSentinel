@@ -11,7 +11,7 @@ public class SolutionWideFunctionalTests
     private IWorkspaceManager _workspaceManager;
     private HealthOrchestrationEngine _healthEngine;
     private ProjectStructureEngine _projectStructureEngine;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
 
     [SetUp]
     public void Setup()
@@ -19,7 +19,6 @@ public class SolutionWideFunctionalTests
         _workspaceManager = new FakeWorkspaceManager();
         var config = new SentinelConfiguration();
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, config);
 
         _healthEngine = new HealthOrchestrationEngine(
             _workspaceManager,

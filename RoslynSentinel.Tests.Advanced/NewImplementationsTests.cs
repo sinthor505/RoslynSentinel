@@ -13,7 +13,7 @@ public class NewImplementationsTests
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private DeadCodeEngine _deadCodeEngine;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
     private GranularRefactoringEngine _granularRefactoringEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private RefinementEngine _refinementEngine;
@@ -25,7 +25,6 @@ public class NewImplementationsTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _refinementEngine = new RefinementEngine(_workspaceManager);

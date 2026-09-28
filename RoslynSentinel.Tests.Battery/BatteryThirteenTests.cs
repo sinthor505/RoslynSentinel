@@ -1,8 +1,6 @@
 // Battery #13 -> AnalysisEngine / CodeGenerationEngine / ControlFlowEngine / SymbolNavigationEngine
 // CodeGenerationEngine is sync/JSON-only (no workspace needed for its primary methods).
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Battery;
 // ════════════════════════════════════════════════════════════════════════════════
@@ -12,12 +10,11 @@ namespace RoslynSentinel.Tests.Battery;
 public class AnalysisEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AnalysisEngine _engine = null!;
+
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AnalysisEngine(_workspaceManager, new SentinelConfiguration());
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
     }
 

@@ -86,7 +86,6 @@ public class MigrationScanResultTests
         var config = new SentinelConfiguration();
         var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _scanTools = new ScanTools(
-            new AnalysisEngine(_workspaceManager, config),
             new SecurityEngine(_workspaceManager),
             _antiPatternEngine,
             new AsyncSafetyEngine(_workspaceManager),

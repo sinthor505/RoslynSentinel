@@ -102,13 +102,11 @@ public class Looper {
 public class AnalysisEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AnalysisEngine _engine = null!;
     private AntiPatternEngine _antiPatternEngine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AnalysisEngine(_workspaceManager, new SentinelConfiguration());
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
     }
 
@@ -491,7 +489,7 @@ public class DependencyEngineGapTests
         {
             result = await _engine.CheckPackageInconsistencyAsync();
         }
-        catch (Exception ex)when (ex is System.IO.DirectoryNotFoundException or System.IO.FileNotFoundException or InvalidOperationException)
+        catch (Exception ex) when (ex is System.IO.DirectoryNotFoundException or System.IO.FileNotFoundException or InvalidOperationException)
         {
             caughtEx = ex;
         }

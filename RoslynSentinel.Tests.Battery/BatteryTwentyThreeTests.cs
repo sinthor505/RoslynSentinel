@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
+
 [TestFixture]
 public class BatteryTwentyThreeTests
 {
@@ -14,7 +15,7 @@ public class BatteryTwentyThreeTests
     private TestingEngine _testingEngine;
     private ControlFlowEngine _controlFlowEngine;
     private LogicOptimizationEngine _logicOptimizationEngine;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
     private AsyncSafetyEngine _asyncSafetyEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AsyncBatchEngine _asyncBatchEngine;
@@ -116,7 +117,6 @@ public class QualityClass
         _testingEngine = new TestingEngine(_workspaceManager);
         _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);

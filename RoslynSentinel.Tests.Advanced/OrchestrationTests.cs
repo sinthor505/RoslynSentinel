@@ -12,7 +12,7 @@ public class OrchestrationTests
     private IWorkspaceManager _workspaceManager;
     private HealthOrchestrationEngine _healthEngine;
     private ProjectStructureEngine _structureEngine;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
 
     [SetUp]
     public void Setup()
@@ -20,7 +20,6 @@ public class OrchestrationTests
         _workspaceManager = new FakeWorkspaceManager();
         var config = new SentinelConfiguration();
         _structureEngine = new ProjectStructureEngine(_workspaceManager, config);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, config);
         _healthEngine = new HealthOrchestrationEngine(_workspaceManager, _structureEngine, config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, config));
     }
 

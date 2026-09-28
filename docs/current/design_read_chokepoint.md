@@ -166,10 +166,12 @@ rather than folded into feature work:
 
 ## Relationship to other in-flight proposals
 
-- **Staged/uncommitted writes** (discussed, not yet its own doc): this chokepoint is a prerequisite,
-  per Motivation above. Do not design staging's discard/commit semantics in detail until this is
-  substantially swept — the open question "how does `ReadFile` disambiguate staged vs. committed
-  content" stops being a special case to solve per-tool and becomes this interface's defining job.
+- **Staged/uncommitted writes**: this chokepoint is a prerequisite, per Motivation above. Now its
+  own document, `docs/current/proposal_staged_writes.md` — written once this chokepoint's Step 3
+  sweep completed (see Status below). That document also found the sweep's migrated call sites all
+  landed on `ReadSource.Committed` (398 of 398 production-code matches), with `IncludeStaged` used
+  nowhere except this file's own doc comment, and proposes a mechanical fix (rename-and-reintroduce)
+  to correct the values now that staging gives the two an actual reason to diverge.
 - **`PreviewSymbolTypeChangeImpact`/`ChangeSymbolType`** (`docs/current/proposal_changesymboltype_tool.md`):
   independent of this doc. That proposal's reference-finding half already goes through
   `SymbolFinder`/`FindReferences`-style APIs against whatever `Solution` it's handed; once this
@@ -227,7 +229,7 @@ nullable-return contract in `AsyncifyTools.cs`), `bf22560` (`ToolErrorMapper` st
 `SolutionNotLoadedException`), and `ca5738e` (`IWorkspaceReader` was never forwarded in
 `ServiceRegistrationExtensionsBasic`'s DI setup, breaking server startup). **Step 4 (staged writes)
 can now be designed in detail** per the ordering this document specifies — the sweep is no longer a
-blocking precondition.
+blocking precondition. That design is now written up at `docs/current/proposal_staged_writes.md`.
 
 **Sweep-tracking correction (2026-09-25):** early batches searched only for the
 `GetCurrentSolutionAsync(...)` method-call text pattern and missed the sync `CurrentSolution`

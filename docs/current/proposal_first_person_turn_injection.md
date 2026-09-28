@@ -83,7 +83,7 @@ is now the evidence:
 > the name is wrong or the type isn't loaded — I need to determine which before a third attempt.
 
 The repeat detector here is the same signal
-[`proposal_nonblocking_validation_mode.md`](proposal_nonblocking_validation_mode.md) needs for its
+[`proposal_nonblocking_validation_mode.md`](../obsolete/proposal_nonblocking_validation_mode.md) needs for its
 stall backstop ("no new information across N consecutive calls"), and the same signal the harness's
 existing `RepeatedToolFailure` breaker keys on. This is shared infrastructure, not a third
 implementation — and worth unifying deliberately, because step `11-final-verification` of run

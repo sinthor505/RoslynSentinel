@@ -9,7 +9,7 @@ public class FeatureToggleTests
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private ProjectStructureEngine _structureEngine;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
     private PerformanceEngine _perfEngine;
 
     [SetUp]
@@ -18,7 +18,6 @@ public class FeatureToggleTests
         _workspaceManager = new FakeWorkspaceManager();
         _config = new SentinelConfiguration();
         _structureEngine = new ProjectStructureEngine(_workspaceManager, _config);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _perfEngine = new PerformanceEngine(_workspaceManager, _config);
     }
 

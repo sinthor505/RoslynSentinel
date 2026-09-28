@@ -21,6 +21,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Integration;
+
 [TestFixture]
 [Category("Integration")]
 public class RealSolution_EngineSmoke_Battery34Tests
@@ -296,7 +297,6 @@ public class RealSolution_EngineSmoke_Battery34Tests
     public async Task AnalysisEngine_FindLargeTypes_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
-        var engine = new AnalysisEngine(_workspaceManager, config);
         var antiPatternEngine = new AntiPatternEngine(_workspaceManager);
         List<LargeTypeReport>? result = null;
         Assert.DoesNotThrowAsync(async () => result = await antiPatternEngine.FindLargeTypesAsync(), "AnalysisEngine.FindLargeTypesAsync must not throw on the real solution.");
@@ -307,7 +307,6 @@ public class RealSolution_EngineSmoke_Battery34Tests
     public async Task AnalysisEngine_GenerateCallTree_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
-        var engine = new AnalysisEngine(_workspaceManager, config);
         var antiPatternEngine = new AntiPatternEngine(_workspaceManager);
         string? result = null;
         var file = _realFilePath;
@@ -416,7 +415,6 @@ public class RealSolution_EngineSmoke_Battery34Tests
     public async Task AnalysisEngine_CallTree_IsNonEmpty()
     {
         var config = new SentinelConfiguration();
-        var engine = new AnalysisEngine(_workspaceManager, config);
         var antiPatternEngine = new AntiPatternEngine(_workspaceManager);
         var file = _realFilePath;
         var result = (await antiPatternEngine.GenerateCallTreeAsync(file, _realMethodName)).UpdatedText!;

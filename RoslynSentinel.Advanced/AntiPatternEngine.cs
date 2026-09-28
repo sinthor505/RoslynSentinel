@@ -1,11 +1,15 @@
+using System.Security.Cryptography;
+using System.Text;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
-using System.Text;
-using System.Security.Cryptography;
 
 namespace RoslynSentinel.Advanced;
+
+public record DuplicateMethodGroup(string Hash, List<MethodLocation> Locations);
+public record MethodLocation(FilePathWrapper filePath, string TypeName, string MethodName);
 public record MagicValueLocation(FilePathWrapper FilePath, int Line, string Snippet);
 public record MagicValueFinding(string Value, int OccurrenceCount, string SuggestedConstantName, List<MagicValueLocation> Locations);
 public record OutParamMethodFinding(string MethodName, string ContainingType, FilePathWrapper FilePath, int Line, string CurrentReturnType, List<string> OutParamNames, List<string> OutParamTypes, string SuggestedTupleReturn);
@@ -472,7 +476,7 @@ public class AntiPatternEngine
             var parameters = method.ParameterList.Parameters;
             // Zero-parameter public async methods should still accept CancellationToken
             // so callers can cancel long-running operations -> do NOT skip them.
-            var hasCt = parameters.Any(p => p.Type?.ToString()is string t && (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
+            var hasCt = parameters.Any(p => p.Type?.ToString() is string t && (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
             if (hasCt)
             {
                 continue;
@@ -900,7 +904,7 @@ public class AntiPatternEngine
             var receiver = ma.Expression;
             // Direct: Task.Run(...).Result  or  Task.Run(...).Wait()
             bool isTaskRun = false;
-            if (receiver is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax runMa && runMa.Expression.ToString()is "Task" or "Task.Factory" && runMa.Name.Identifier.Text is "Run" or "StartNew")
+            if (receiver is InvocationExpressionSyntax inv && inv.Expression is MemberAccessExpressionSyntax runMa && runMa.Expression.ToString() is "Task" or "Task.Factory" && runMa.Name.Identifier.Text is "Run" or "StartNew")
             {
                 isTaskRun = true;
             }
@@ -1359,7 +1363,7 @@ public class AntiPatternEngine
                 }
 
                 // Skip if already has CancellationToken
-                bool hasCt = method.ParameterList.Parameters.Any(p => p.Type?.ToString()is string t && (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
+                bool hasCt = method.ParameterList.Parameters.Any(p => p.Type?.ToString() is string t && (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
                 if (hasCt)
                 {
                     continue;
@@ -1372,7 +1376,7 @@ public class AntiPatternEngine
                     continue;
                 }
 
-                var body = (SyntaxNode? )method.Body ?? method.ExpressionBody;
+                var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
                 if (body == null)
                 {
                     continue;
@@ -1508,7 +1512,7 @@ public class AntiPatternEngine
                     continue;
                 }
 
-                if (oc.Type.ToString()is not ("Exception" or "System.Exception"))
+                if (oc.Type.ToString() is not ("Exception" or "System.Exception"))
                 {
                     continue;
                 }
@@ -2139,7 +2143,7 @@ public class AntiPatternEngine
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                var body = (SyntaxNode? )method.Body ?? method.ExpressionBody;
+                var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
                 if (body == null)
                 {
                     continue;
@@ -2155,7 +2159,7 @@ public class AntiPatternEngine
                         continue;
                     }
 
-                    if (model.GetDeclaredSymbol(p, cancellationToken)is not IParameterSymbol sym)
+                    if (model.GetDeclaredSymbol(p, cancellationToken) is not IParameterSymbol sym)
                     {
                         continue;
                     }
@@ -2493,7 +2497,7 @@ public class AntiPatternEngine
 
                     totalAsync++;
                     // Check for CancellationToken parameter.
-                    bool hasCt = method.ParameterList.Parameters.Any(p => p.Type?.ToString()is string t && (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
+                    bool hasCt = method.ParameterList.Parameters.Any(p => p.Type?.ToString() is string t && (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
                     if (hasCt)
                     {
                         withCt++;
@@ -2532,7 +2536,7 @@ public class AntiPatternEngine
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
         }
 
-        var documentList = new List<(Document, SyntaxNode, SemanticModel? )>();
+        var documentList = new List<(Document, SyntaxNode, SemanticModel?)>();
         foreach (var project in projects)
         {
             var docs = project.Documents.AsEnumerable();
@@ -2750,7 +2754,8 @@ public class AntiPatternEngine
             {
                 Outcome = EditOutcome.DocumentNotFound,
                 FilePath = filePath,
-                Message = $"// File not found: {filePath}"};
+                Message = $"// File not found: {filePath}"
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -2832,7 +2837,7 @@ public class AntiPatternEngine
             return;
         }
 
-        var indent = new string (' ', currentDepth * 2);
+        var indent = new string(' ', currentDepth * 2);
         sb.AppendLine($"{indent}- {symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}");
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         foreach (var syntaxRef in symbol.DeclaringSyntaxReferences)
@@ -2907,7 +2912,7 @@ public class AntiPatternEngine
         // Build: obj is ClassName other
         ExpressionSyntax body = SyntaxFactory.IsPatternExpression(SyntaxFactory.IdentifierName("obj"), SyntaxFactory.DeclarationPattern(SyntaxFactory.IdentifierName(className), SyntaxFactory.SingleVariableDesignation(SyntaxFactory.Identifier("other"))));
         // Chain: && field == other.field  (or SequenceEqual for collection types)
-        foreach (var(name, typeName)in fieldsWithTypes)
+        foreach (var (name, typeName) in fieldsWithTypes)
         {
             ExpressionSyntax equality;
             if (IsCollectionType(typeName))
@@ -3238,7 +3243,7 @@ public class AntiPatternEngine
 
                 // Skip: Task / ValueTask factory methods -> synchronous, no actual async work
                 // e.g. Task.FromResult(x), Task.FromException(ex), Task.FromCanceled(cancellationToken)
-                if (invocation.Expression is MemberAccessExpressionSyntax factoryMa && (factoryMa.Expression.ToString()is "Task" or "ValueTask") && factoryMa.Name.Identifier.Text is "FromResult" or "FromException" or "FromCanceled")
+                if (invocation.Expression is MemberAccessExpressionSyntax factoryMa && (factoryMa.Expression.ToString() is "Task" or "ValueTask") && factoryMa.Name.Identifier.Text is "FromResult" or "FromException" or "FromCanceled")
                 {
                     continue;
                 }
@@ -3534,7 +3539,7 @@ public class AntiPatternEngine
                 var methodName = method.Identifier.Text;
                 IMethodSymbol? containingSymbol = model?.GetDeclaredSymbol(method, cancellationToken) as IMethodSymbol;
                 // Find self-recursive calls -> use semantic model to skip overload chaining
-                SyntaxNode body = (SyntaxNode? )method.Body ?? method.ExpressionBody!;
+                SyntaxNode body = (SyntaxNode?)method.Body ?? method.ExpressionBody!;
                 var selfCalls = body.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(inv =>
                 {
                     var name = inv.Expression switch
@@ -3655,7 +3660,7 @@ public class AntiPatternEngine
                     // Find existing constraints declared for this type parameter
                     var constraintClause = method.ConstraintClauses.FirstOrDefault(cc => cc.Name.Identifier.Text == tName);
                     var existingConstraints = constraintClause?.Constraints.Select(c => c.ToString()).ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>();
-                    SyntaxNode bodyNode = (SyntaxNode? )method.Body ?? method.ExpressionBody!;
+                    SyntaxNode bodyNode = (SyntaxNode?)method.Body ?? method.ExpressionBody!;
                     // Collect parameter names whose declared type is exactly this type parameter.
                     // These are the expressions whose null comparison would be meaningless for value types.
                     var paramNamesOfT = method.ParameterList.Parameters.Where(p => p.Type?.ToString() == tName).Select(p => p.Identifier.Text).ToHashSet(StringComparer.Ordinal);

@@ -2,8 +2,6 @@
 // Each [Test] exercises exactly one detection rule -> positive (should flag) and
 // negative (should NOT flag, verifying false-positive guards).
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Advanced;
 // ════════════════════════════════════════════════════════════════════════════
@@ -259,12 +257,11 @@ public class C {
 public class SemaphoreAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AnalysisEngine _engine = null!;
+
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AnalysisEngine(_workspaceManager, new SentinelConfiguration());
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
     }
 
@@ -432,12 +429,11 @@ public class C {
 public class MismatchedAwaitAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AnalysisEngine _engine = null!;
+
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AnalysisEngine(_workspaceManager, new SentinelConfiguration());
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
     }
 
@@ -2389,13 +2385,12 @@ public class C {
 public class CircularTypeReferenceTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AnalysisEngine _engine = null!;
+
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var config = new SentinelConfiguration();
-        _engine = new AnalysisEngine(_workspaceManager, config);
     }
 
     [TearDown]
@@ -2558,13 +2553,12 @@ public class C {
 public class MissingGenericConstraintTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AnalysisEngine _engine = null!;
+
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var config = new SentinelConfiguration();
-        _engine = new AnalysisEngine(_workspaceManager, config);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
     }
 
@@ -2856,12 +2850,11 @@ public class C {
 public class AnalysisEngineExtended2Tests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AnalysisEngine _engine = null!;
+
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AnalysisEngine(_workspaceManager, new SentinelConfiguration());
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, new SentinelConfiguration());
     }
 

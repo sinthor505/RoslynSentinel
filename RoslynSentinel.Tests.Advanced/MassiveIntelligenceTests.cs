@@ -1,14 +1,14 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Common;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
+
 [TestFixture]
 public class MassiveIntelligenceTests
 {
     private IWorkspaceManager _workspaceManager;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
     private MetricsEngine _metricsEngine;
     private SemanticSearchEngine _searchEngine;
     private InventoryEngine _inventoryEngine;
@@ -18,7 +18,6 @@ public class MassiveIntelligenceTests
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, config);
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _searchEngine = new SemanticSearchEngine(_workspaceManager);
         _inventoryEngine = new InventoryEngine(_workspaceManager);

@@ -6,16 +6,16 @@ using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Advanced;
+
 [TestFixture]
 public class NamespacePathMismatchTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AnalysisEngine _engine = null!;
+
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AnalysisEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
@@ -39,7 +39,7 @@ public class NamespacePathMismatchTests
     [Test]
     public async Task CleanSolution_AllNamespacesMatchPaths_IsClean()
     {
-        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"Greeter.cs", "namespace TestProj { public class Greeter {} }"), (@"Services\MyService.cs", "namespace TestProj.Services { public class MyService {} }"), ]);
+        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"Greeter.cs", "namespace TestProj { public class Greeter {} }"), (@"Services\MyService.cs", "namespace TestProj.Services { public class MyService {} }"),]);
         var report = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindNamespacePathMismatchesAsync(solution, null);
         Assert.That(report.IsClean, Is.True, "Expected IsClean=true for a fully consistent solution");
         Assert.That(report.MismatchCount, Is.Zero, "Expected no mismatches");
@@ -98,7 +98,7 @@ public class NamespacePathMismatchTests
     [Test]
     public async Task GeneratedFiles_AreSkipped()
     {
-        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"Foo.g.cs", "namespace Wrong.Namespace { public class Foo {} }"), (@"Bar.generated.cs", "namespace Wrong.Namespace { public class Bar {} }"), (@"Baz.Designer.cs", "namespace Wrong.Namespace { public class Baz {} }"), ]);
+        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"Foo.g.cs", "namespace Wrong.Namespace { public class Foo {} }"), (@"Bar.generated.cs", "namespace Wrong.Namespace { public class Bar {} }"), (@"Baz.Designer.cs", "namespace Wrong.Namespace { public class Baz {} }"),]);
         var report = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindNamespacePathMismatchesAsync(solution, null);
         Assert.That(report.IsClean, Is.True, "Generated files should be skipped entirely");
         Assert.That(report.TotalFiles, Is.Zero, "TotalFiles should not count generated files");
@@ -158,7 +158,7 @@ public class NamespacePathMismatchTests
     public async Task GlobalNamespace_ProducesWarning()
     {
         // File has no namespace declaration; project name "TestProj" implies root NS.
-        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"GlobalClass.cs", "public class GlobalClass {}"), ]);
+        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"GlobalClass.cs", "public class GlobalClass {}"),]);
         var report = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindNamespacePathMismatchesAsync(solution, null);
         Assert.That(report.Warnings, Has.Some.With.Property("Reason").EqualTo("GlobalNamespace"), "A file with no namespace in a named project should produce a GlobalNamespace warning");
     }
@@ -174,7 +174,7 @@ public class NamespacePathMismatchTests
             namespace TestProj.Services;
             public class OrderService {}
             """;
-        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"Services\OrderService.cs", source), ]);
+        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"Services\OrderService.cs", source),]);
         var report = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindNamespacePathMismatchesAsync(solution, null);
         Assert.That(report.IsClean, Is.True, "A file-scoped namespace matching the folder path should produce no findings");
     }
@@ -186,7 +186,7 @@ public class NamespacePathMismatchTests
             namespace TestProj.WrongPlace;
             public class OrderService {}
             """;
-        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"Services\OrderService.cs", source), ]);
+        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"Services\OrderService.cs", source),]);
         var report = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindNamespacePathMismatchesAsync(solution, null);
         Assert.That(report.IsClean, Is.False, "A mismatched file-scoped namespace should still be detected");
         Assert.That(report.Warnings, Has.Some.With.Property("DeclaredNamespace").EqualTo("TestProj.WrongPlace"));
@@ -201,7 +201,7 @@ public class NamespacePathMismatchTests
     {
         // Project name is "MyApp". There is no real .csproj on disk, so GetRootNamespace
         // must fall back to project name "MyApp".
-        var solution = CreateSolutionWithAbsolutePaths("MyApp", [(@"Core\Processor.cs", "namespace MyApp.Core { public class Processor {} }"), ]);
+        var solution = CreateSolutionWithAbsolutePaths("MyApp", [(@"Core\Processor.cs", "namespace MyApp.Core { public class Processor {} }"),]);
         var report = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindNamespacePathMismatchesAsync(solution, null);
         Assert.That(report.IsClean, Is.True, "When root namespace = project name, 'MyApp.Core' should match path 'Core\\'");
     }
@@ -212,7 +212,7 @@ public class NamespacePathMismatchTests
     [Test]
     public async Task Idempotency_TwoCallsReturnSameResults()
     {
-        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"Greeter.cs", "namespace TestProj { public class Greeter {} }"), (@"Services\MyService.cs", "namespace TestProj.WrongFolder { public class MyService {} }"), ]);
+        var solution = CreateSolutionWithAbsolutePaths("TestProj", [(@"Greeter.cs", "namespace TestProj { public class Greeter {} }"), (@"Services\MyService.cs", "namespace TestProj.WrongFolder { public class MyService {} }"),]);
         var report1 = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindNamespacePathMismatchesAsync(solution, null);
         var report2 = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindNamespacePathMismatchesAsync(solution, null);
         Assert.That(report1.IsClean, Is.EqualTo(report2.IsClean));

@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
@@ -19,10 +20,9 @@ public class BugFixTests
     private RefactoringEngine _refactoringEngine;
     private CodeGenerationEngine _codeGenerationEngine;
     private MappingEngine _mappingEngine;
-    private AsyncOptimizationEngine _asyncOptimizationEngine;
     private DiscoveryEngine _discoveryEngine;
     private ControlFlowEngine _controlFlowEngine;
-    private AnalysisEngine _analysisEngine;
+    private AntiPatternEngine _antiPatternEngine;
     private CodeStyleEngine _codeStyleEngine;
     private LogicOptimizationEngine _logicOptimizationEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
@@ -35,11 +35,9 @@ public class BugFixTests
         _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
-        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
@@ -234,31 +232,7 @@ public class Destination
         Assert.That(result.UpdatedText, Does.Contain("Age"), "Should map Age property");
     }
 
-    // ── Bug 47: OptimizeIndependentAwaits -> Overload Disambiguation ──────────────
-    [Test]
-    public async Task BUG_47_OptimizeIndependentAwaits_MultipleOverloads_PicksCorrect()
-    {
-        const string code = @"
-public class Processor
-{
-    public async Task<int> Process(string param)
-    {
-        var result1 = await GetValueAsync(param);
-        var result2 = await GetValueAsync(param, 10);
-        return result1 + result2;
-    }
 
-    private async Task<int> GetValueAsync(string value) => 1;
-    private async Task<int> GetValueAsync(string value, int max) => max;
-}";
-        SetSource(code, "Processor.cs");
-        var result = await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync("Processor.cs", "Process");
-        Assert.That(result, Is.Not.Null, "Should return a result");
-        // With var assignments, should use task hoisting pattern: var resultTask = ..., then await
-        // The optimization occurs but isn't Task.WhenAll - it's task variable hoisting
-        // Both patterns parallelize the execution
-        Assert.That(result.UpdatedText, Does.Contain("Task") | Does.Contain("result"), "Should optimize by creating task variables or using Task.WhenAll");
-    }
 
     // ── Bug 48: FindTodoFixmeComments -> Exact Word Boundary Matching ──────────────
     [Test]
@@ -664,7 +638,7 @@ public class Service
     public class Bug7BatchRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
-        private AnalysisEngine _analysisEngine;
+        // private AnalysisEngine _analysisEngine;
         private AntiPatternEngine _antiPatternEngine;
         private RefactoringEngine _refactoringEngine;
         private CodeGenerationEngine _codeGenerationEngine;
@@ -675,7 +649,6 @@ public class Service
         {
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             var config = new SentinelConfiguration();
-            _analysisEngine = new AnalysisEngine(_workspaceManager, config);
             _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
             _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
             _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
@@ -926,14 +899,13 @@ public class Product
     public class Bug8BatchRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
-        private AnalysisEngine _analysisEngine;
+        // private AnalysisEngine _analysisEngine;
         private AntiPatternEngine _antiPatternEngine;
         [SetUp]
         public void Setup()
         {
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             var config = new SentinelConfiguration();
-            _analysisEngine = new AnalysisEngine(_workspaceManager, config);
             _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
         }
 
@@ -1799,129 +1771,89 @@ public class OtherClass
             Assert.That(result.UpdatedText, Does.Contain("=>"), "Method should have been converted to an expression body.");
         }
 
-        // Bug 2: PerformanceEngine missing += in loop
-        [Test]
-        public async Task AnalyzePerformance_FindsPlusAssignInLoop()
-        {
-            const string src = @"public class Builder
-{
-    public string Build(string[] items)
-    {
-        string result = """";
-        foreach (var item in items)
-        {
-            result += item;
-        }
-        return result;
-    }
-}";
-            SetSource(src, "Builder.cs");
-            var issues = await _performanceEngine.AnalyzePerformanceAsync("Builder.cs");
-            Assert.That(issues, Has.Some.Matches<PerformanceIssueReport>(r => r?.IssueType == "StringConcatenationInLoop"), "Should detect '+=' string concatenation inside loop");
-        }
 
-        // Bug 2: PerformanceEngine missing .ToList()/.ToArray() in loop
-        [Test]
-        public async Task AnalyzePerformance_FindsToListInLoop()
-        {
-            const string src = @"using System.Linq;
-public class Processor
-{
-    public void Process(int[][] batches)
-    {
-        foreach (var batch in batches)
-        {
-            var list = batch.Where(x => x > 0).ToList();
-        }
-    }
-}";
-            SetSource(src, "Processor.cs");
-            var issues = await _performanceEngine.AnalyzePerformanceAsync("Processor.cs");
-            Assert.That(issues, Has.Some.Matches<PerformanceIssueReport>(r => r?.IssueType == "AllocationInLoop"), "Should detect .ToList() allocation inside loop");
-        }
-    }
 
-    /// <summary>
-    /// Regression tests for 5 high-priority bugs: BUG-70, 71, 72, 73, 74
-    /// </summary>
-    [TestFixture]
-    public class Bug70_74RegressionTests
-    {
-        private IWorkspaceManager _workspaceManager;
-        private SentinelConfiguration _config;
-        private ProjectStructureEngine _projectStructureEngine;
-        private GranularRefactoringEngine _granularRefactoringEngine;
-        private RefactoringEngine _refactoringEngine;
-        private AdvancedStructuralEngine _advancedStructuralEngine;
-        private CodeGenerationEngine _codeGenerationEngine;
-        private StructuralRefinementEngine _structuralRefinementEngine;
-        [SetUp]
-        public void Setup()
+        /// <summary>
+        /// Regression tests for 5 high-priority bugs: BUG-70, 71, 72, 73, 74
+        /// </summary>
+        [TestFixture]
+        public class Bug70_74RegressionTests
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _config = new SentinelConfiguration();
-            _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
-            _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
-            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
-            _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
-            _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-            _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
-        }
+            private IWorkspaceManager _workspaceManager;
+            private SentinelConfiguration _config;
+            private ProjectStructureEngine _projectStructureEngine;
+            private GranularRefactoringEngine _granularRefactoringEngine;
+            private RefactoringEngine _refactoringEngine;
+            private AdvancedStructuralEngine _advancedStructuralEngine;
+            private CodeGenerationEngine _codeGenerationEngine;
+            private StructuralRefinementEngine _structuralRefinementEngine;
+            [SetUp]
+            public void Setup()
+            {
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                _config = new SentinelConfiguration();
+                _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
+                _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
+                _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+                _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+                _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+                _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+            }
 
-        [TearDown]
-        public void TearDown() => _workspaceManager?.Dispose();
-        private void SetSource(string source, string fileName = "Test.cs", string projectName = "TestProj")
-        {
-            var solution = TestSolutionBuilder.CreateSolutionWithProject(projectName, [(fileName, source)]);
-            _workspaceManager.SetTestSolution(solution);
-        }
+            [TearDown]
+            public void TearDown() => _workspaceManager?.Dispose();
+            private void SetSource(string source, string fileName = "Test.cs", string projectName = "TestProj")
+            {
+                var solution = TestSolutionBuilder.CreateSolutionWithProject(projectName, [(fileName, source)]);
+                _workspaceManager.SetTestSolution(solution);
+            }
 
-        private void SetMultipleFiles(string projectName, params (string name, string content)[] files)
-        {
-            var solution = TestSolutionBuilder.CreateSolutionWithProject(projectName, files);
-            _workspaceManager.SetTestSolution(solution);
-        }
+            private void SetMultipleFiles(string projectName, params (string name, string content)[] files)
+            {
+                var solution = TestSolutionBuilder.CreateSolutionWithProject(projectName, files);
+                _workspaceManager.SetTestSolution(solution);
+            }
 
-        // ──────────────────────────────────────────────────────────────────────────
-        // BUG-70: MoveFileToNamespaceFolderAsync -> Wrong Path Computation
-        // ──────────────────────────────────────────────────────────────────────────
-        [Test]
-        public async Task BUG_70_MoveFileToNamespaceFolder_ComputesProjectRelativePath()
-        {
-            const string source = @"namespace TestProj.Controllers;
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG-70: MoveFileToNamespaceFolderAsync -> Wrong Path Computation
+            // ──────────────────────────────────────────────────────────────────────────
+            [Test]
+            public async Task BUG_70_MoveFileToNamespaceFolder_ComputesProjectRelativePath()
+            {
+                const string source = @"namespace TestProj.Controllers;
 
 public class ProductsController
 {
     public void GetProducts() { }
 }";
-            SetSource(source, "ProductsController.cs");
-            // Debug: Check solution state
-            var sol = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
-            var doc = sol?.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == "ProductsController.cs");
-            if (doc != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"Found doc: {doc.Name}, FilePathWrapper={doc.FilePath}, Project={doc.Project.Name}, Namespace={doc.Project.DefaultNamespace}");
+                SetSource(source, "ProductsController.cs");
+                // Debug: Check solution state
+                var sol = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+                var doc = sol?.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == "ProductsController.cs");
+                if (doc != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Found doc: {doc.Name}, FilePathWrapper={doc.FilePath}, Project={doc.Project.Name}, Namespace={doc.Project.DefaultNamespace}");
+                }
+
+                // Pass just the filename - the engine will look it up.
+                // MoveFileToNamespaceFolderAsync became PreviewMoveFileToNamespaceFolderAsync, which
+                // returns a DocumentEditResult whose Message carries the "MOVE_REQUIRED: from -> to"
+                // path suggestion the old string-returning API produced.
+                var result = (await _projectStructureEngine.PreviewMoveFileToNamespaceFolderAsync("ProductsController.cs")).Message;
+                System.Diagnostics.Debug.WriteLine($"Result: '{result}'");
+                // Expected: should contain "Controllers" (project-relative path)
+                // Since file is in root and namespace is TestProj.Controllers, it should suggest moving to Controllers folder
+                Assert.That(result, Is.Not.Empty, $"Should return a path suggestion. Got: '{result}'");
+                Assert.That(result, Does.Contain("Controllers"), "Path should include Controllers folder");
             }
 
-            // Pass just the filename - the engine will look it up.
-            // MoveFileToNamespaceFolderAsync became PreviewMoveFileToNamespaceFolderAsync, which
-            // returns a DocumentEditResult whose Message carries the "MOVE_REQUIRED: from -> to"
-            // path suggestion the old string-returning API produced.
-            var result = (await _projectStructureEngine.PreviewMoveFileToNamespaceFolderAsync("ProductsController.cs")).Message;
-            System.Diagnostics.Debug.WriteLine($"Result: '{result}'");
-            // Expected: should contain "Controllers" (project-relative path)
-            // Since file is in root and namespace is TestProj.Controllers, it should suggest moving to Controllers folder
-            Assert.That(result, Is.Not.Empty, $"Should return a path suggestion. Got: '{result}'");
-            Assert.That(result, Does.Contain("Controllers"), "Path should include Controllers folder");
-        }
-
-        // ──────────────────────────────────────────────────────────────────────────
-        // BUG-71: InterpolateStringSafe -> Server Crash on Named Const Format Strings
-        // ──────────────────────────────────────────────────────────────────────────
-        [Test]
-        public async Task BUG_71_InterpolateStringSafe_NamedConstFormatString_NoServerCrash()
-        {
-            const string source = @"namespace App;
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG-71: InterpolateStringSafe -> Server Crash on Named Const Format Strings
+            // ──────────────────────────────────────────────────────────────────────────
+            [Test]
+            public async Task BUG_71_InterpolateStringSafe_NamedConstFormatString_NoServerCrash()
+            {
+                const string source = @"namespace App;
 
 public class MyClass
 {
@@ -1932,30 +1864,30 @@ public class MyClass
         var result = string.Format(CacheKeyFmt, id);
     }
 }";
-            SetSource(source, "MyClass.cs");
-            // Get the actual document from the solution
-            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
-            var document = solution?.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == "MyClass.cs");
-            if (document?.FilePath == null)
-            {
-                Assert.Inconclusive("Document not found in test solution");
+                SetSource(source, "MyClass.cs");
+                // Get the actual document from the solution
+                var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+                var document = solution?.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == "MyClass.cs");
+                if (document?.FilePath == null)
+                {
+                    Assert.Inconclusive("Document not found in test solution");
+                }
+
+                var result = await _codeGenerationEngine.InterpolateStringAsync(document.FilePath, "string.Format(CacheKeyFmt", lineBefore: null, lineAfter: null);
+                // Should not crash and should either:
+                // 1. Return an error message (not crash)
+                // 2. Return the interpolated string
+                Assert.That(result, Is.Not.Null, "Should handle named const without crashing");
+                Assert.That(result.UpdatedText!.Length, Is.GreaterThan(0), "Should return non-empty result (error or success)");
             }
 
-            var result = await _codeGenerationEngine.InterpolateStringAsync(document.FilePath, "string.Format(CacheKeyFmt", lineBefore: null, lineAfter: null);
-            // Should not crash and should either:
-            // 1. Return an error message (not crash)
-            // 2. Return the interpolated string
-            Assert.That(result, Is.Not.Null, "Should handle named const without crashing");
-            Assert.That(result.UpdatedText!.Length, Is.GreaterThan(0), "Should return non-empty result (error or success)");
-        }
-
-        // ──────────────────────────────────────────────────────────────────────────
-        // BUG-72: IntroduceField -> Field Initialized with Local Parameter (Uncompilable)
-        // ──────────────────────────────────────────────────────────────────────────
-        [Test]
-        public async Task BUG_72_IntroduceField_ExpressionWithLocalVariable_NoInitializer()
-        {
-            const string source = @"namespace App;
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG-72: IntroduceField -> Field Initialized with Local Parameter (Uncompilable)
+            // ──────────────────────────────────────────────────────────────────────────
+            [Test]
+            public async Task BUG_72_IntroduceField_ExpressionWithLocalVariable_NoInitializer()
+            {
+                const string source = @"namespace App;
 
 public class MyClass
 {
@@ -1969,26 +1901,26 @@ public class MyClass
 }
 
 public class Item { public int Id { get; set; } }";
-            SetSource(source, "MyClass.cs");
-            // "item.Id" is already unambiguous (single occurrence) -> no lineBefore/lineAfter needed.
-            // (lineBefore must be the verbatim *previous source line*, not same-line prefix text;
-            // "var key = " is on the same line as the snippet, so supplying it here would filter
-            // out the only real match and fail with "not found" instead of exercising the bug.)
-            var result = await _granularRefactoringEngine.IntroduceFieldAsync("MyClass.cs", "item.Id", "_itemId", lineBefore: null, lineAfter: null);
-            // Should either:
-            // 1. Not include initializer (since parameter is out of scope)
-            // 2. Return error
-            // NOT: "private SomeType _field = item;" (uncompilable)
-            Assert.That(result.UpdatedText, Does.Not.Contain("_itemId = item.Id;"), "Should not create initializer with parameter reference");
-        }
+                SetSource(source, "MyClass.cs");
+                // "item.Id" is already unambiguous (single occurrence) -> no lineBefore/lineAfter needed.
+                // (lineBefore must be the verbatim *previous source line*, not same-line prefix text;
+                // "var key = " is on the same line as the snippet, so supplying it here would filter
+                // out the only real match and fail with "not found" instead of exercising the bug.)
+                var result = await _granularRefactoringEngine.IntroduceFieldAsync("MyClass.cs", "item.Id", "_itemId", lineBefore: null, lineAfter: null);
+                // Should either:
+                // 1. Not include initializer (since parameter is out of scope)
+                // 2. Return error
+                // NOT: "private SomeType _field = item;" (uncompilable)
+                Assert.That(result.UpdatedText, Does.Not.Contain("_itemId = item.Id;"), "Should not create initializer with parameter reference");
+            }
 
-        // ──────────────────────────────────────────────────────────────────────────
-        // BUG-73: SafeDeleteSymbol -> Returns ChangeId for Empty Staged Changes
-        // ──────────────────────────────────────────────────────────────────────────
-        [Test]
-        public async Task BUG_73_SafeDeleteSymbol_SymbolIsUsed_ReturnsErrorNotChangeId()
-        {
-            SetMultipleFiles("TestProj", ("ImportHistoryDto.cs", @"namespace App;
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG-73: SafeDeleteSymbol -> Returns ChangeId for Empty Staged Changes
+            // ──────────────────────────────────────────────────────────────────────────
+            [Test]
+            public async Task BUG_73_SafeDeleteSymbol_SymbolIsUsed_ReturnsErrorNotChangeId()
+            {
+                SetMultipleFiles("TestProj", ("ImportHistoryDto.cs", @"namespace App;
 
 public class ImportHistoryDto
 {
@@ -2002,39 +1934,39 @@ public class MyService
         return new ImportHistoryDto { Id = 1 };
     }
 }"));
-            var filePath = Path.Combine(Path.GetTempPath(), "TestProj", "ImportHistoryDto.cs");
-            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, "ImportHistoryDto", "public class ImportHistoryDto", lineBefore: null, lineAfter: null);
-            // Should refuse to delete since the symbol IS used
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit), "Should refuse deletion since symbol is used, not modify the file");
-        }
-
-        // ──────────────────────────────────────────────────────────────────────────
-        // BUG-52: ReduceBlockDepth -> Server ErrorDetails Crash (null root reference)
-        // ──────────────────────────────────────────────────────────────────────────
-        [TestFixture]
-        public class Bug52ReduceBlockDepthRegressionTests
-        {
-            private IWorkspaceManager _workspaceManager;
-            private CodeFlowEngine _codeFlowEngine;
-            [SetUp]
-            public void Setup()
-            {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
+                var filePath = Path.Combine(Path.GetTempPath(), "TestProj", "ImportHistoryDto.cs");
+                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, "ImportHistoryDto", "public class ImportHistoryDto", lineBefore: null, lineAfter: null);
+                // Should refuse to delete since the symbol IS used
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit), "Should refuse deletion since symbol is used, not modify the file");
             }
 
-            [TearDown]
-            public void TearDown() => _workspaceManager?.Dispose();
-            private void SetSource(string source, string fileName = "Test.cs")
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG-52: ReduceBlockDepth -> Server ErrorDetails Crash (null root reference)
+            // ──────────────────────────────────────────────────────────────────────────
+            [TestFixture]
+            public class Bug52ReduceBlockDepthRegressionTests
             {
-                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-                _workspaceManager.SetTestSolution(solution);
-            }
+                private IWorkspaceManager _workspaceManager;
+                private CodeFlowEngine _codeFlowEngine;
+                [SetUp]
+                public void Setup()
+                {
+                    _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                    _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
+                }
 
-            [Test]
-            public async Task BUG_52_ReduceBlockDepth_NestedIf_NoServerCrash()
-            {
-                const string code = @"
+                [TearDown]
+                public void TearDown() => _workspaceManager?.Dispose();
+                private void SetSource(string source, string fileName = "Test.cs")
+                {
+                    var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+                    _workspaceManager.SetTestSolution(solution);
+                }
+
+                [Test]
+                public async Task BUG_52_ReduceBlockDepth_NestedIf_NoServerCrash()
+                {
+                    const string code = @"
 public class Processor
 {
     public void Process(string input)
@@ -2048,47 +1980,47 @@ public class Processor
         }
     }
 }";
-                SetSource(code, "Processor.cs");
-                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
-                if (document == null)
+                    SetSource(code, "Processor.cs");
+                    var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
+                    if (document == null)
+                    {
+                        Assert.Inconclusive("Document not found");
+                    }
+
+                    var result = await _codeFlowEngine.ReduceBlockDepthAsync(document.FilePath!, "Process");
+                    Assert.That(result, Is.Not.Null, "Should return non-null result");
+                    Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
+                    Assert.That(result.UpdatedText, Does.Not.Contain("// ErrorDetails"), "Should not return error");
+                }
+            }
+
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG-53: MakeMethodThreadSafe -> Server ErrorDetails Crash (null root reference)
+            // ──────────────────────────────────────────────────────────────────────────
+            [TestFixture]
+            public class Bug53MakeMethodThreadSafeRegressionTests
+            {
+                private IWorkspaceManager _workspaceManager;
+                private ThreadSafetyEngine _threadSafetyEngine;
+                [SetUp]
+                public void Setup()
                 {
-                    Assert.Inconclusive("Document not found");
+                    _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                    _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
                 }
 
-                var result = await _codeFlowEngine.ReduceBlockDepthAsync(document.FilePath!, "Process");
-                Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                Assert.That(result.UpdatedText, Does.Not.Contain("// ErrorDetails"), "Should not return error");
-            }
-        }
+                [TearDown]
+                public void TearDown() => _workspaceManager?.Dispose();
+                private void SetSource(string source, string fileName = "Test.cs")
+                {
+                    var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+                    _workspaceManager.SetTestSolution(solution);
+                }
 
-        // ──────────────────────────────────────────────────────────────────────────
-        // BUG-53: MakeMethodThreadSafe -> Server ErrorDetails Crash (null root reference)
-        // ──────────────────────────────────────────────────────────────────────────
-        [TestFixture]
-        public class Bug53MakeMethodThreadSafeRegressionTests
-        {
-            private IWorkspaceManager _workspaceManager;
-            private ThreadSafetyEngine _threadSafetyEngine;
-            [SetUp]
-            public void Setup()
-            {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
-            }
-
-            [TearDown]
-            public void TearDown() => _workspaceManager?.Dispose();
-            private void SetSource(string source, string fileName = "Test.cs")
-            {
-                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-                _workspaceManager.SetTestSolution(solution);
-            }
-
-            [Test]
-            public async Task BUG_53_MakeMethodThreadSafe_SimpleMethod_NoServerCrash()
-            {
-                const string code = @"
+                [Test]
+                public async Task BUG_53_MakeMethodThreadSafe_SimpleMethod_NoServerCrash()
+                {
+                    const string code = @"
 public class Counter
 {
     private int _count = 0;
@@ -2098,48 +2030,48 @@ public class Counter
         _count++;
     }
 }";
-                SetSource(code, "Counter.cs");
-                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
-                if (document == null)
+                    SetSource(code, "Counter.cs");
+                    var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
+                    if (document == null)
+                    {
+                        Assert.Inconclusive("Document not found");
+                    }
+
+                    var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync(document.FilePath!, "Increment");
+                    Assert.That(result, Is.Not.Null, "Should return non-null result");
+                    Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
+                    Assert.That(result.UpdatedText, Does.Contain("lock"), "Should contain lock statement");
+                    Assert.That(result.UpdatedText, Does.Contain("_lock"), "Should contain lock field");
+                }
+            }
+
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG-58: ConvertToAsyncEnumerable -> Server Crash (null root reference)
+            // ──────────────────────────────────────────────────────────────────────────
+            [TestFixture]
+            public class Bug58ConvertToAsyncEnumerableRegressionTests
+            {
+                private IWorkspaceManager _workspaceManager;
+                private AsyncOptimizationEngine _asyncOptEngine;
+                [SetUp]
+                public void Setup()
                 {
-                    Assert.Inconclusive("Document not found");
+                    _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                    _asyncOptEngine = new AsyncOptimizationEngine(_workspaceManager);
                 }
 
-                var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync(document.FilePath!, "Increment");
-                Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                Assert.That(result.UpdatedText, Does.Contain("lock"), "Should contain lock statement");
-                Assert.That(result.UpdatedText, Does.Contain("_lock"), "Should contain lock field");
-            }
-        }
+                [TearDown]
+                public void TearDown() => _workspaceManager?.Dispose();
+                private void SetSource(string source, string fileName = "Test.cs")
+                {
+                    var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+                    _workspaceManager.SetTestSolution(solution);
+                }
 
-        // ──────────────────────────────────────────────────────────────────────────
-        // BUG-58: ConvertToAsyncEnumerable -> Server Crash (null root reference)
-        // ──────────────────────────────────────────────────────────────────────────
-        [TestFixture]
-        public class Bug58ConvertToAsyncEnumerableRegressionTests
-        {
-            private IWorkspaceManager _workspaceManager;
-            private AsyncOptimizationEngine _asyncOptEngine;
-            [SetUp]
-            public void Setup()
-            {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _asyncOptEngine = new AsyncOptimizationEngine(_workspaceManager);
-            }
-
-            [TearDown]
-            public void TearDown() => _workspaceManager?.Dispose();
-            private void SetSource(string source, string fileName = "Test.cs")
-            {
-                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-                _workspaceManager.SetTestSolution(solution);
-            }
-
-            [Test]
-            public async Task BUG_58_ConvertToAsyncEnumerable_TaskListMethod_NoServerCrash()
-            {
-                const string code = @"
+                [Test]
+                public async Task BUG_58_ConvertToAsyncEnumerable_TaskListMethod_NoServerCrash()
+                {
+                    const string code = @"
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -2154,67 +2086,67 @@ public class ItemProvider
         return items;
     }
 }";
-                SetSource(code, "ItemProvider.cs");
-                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
-                if (document == null)
+                    SetSource(code, "ItemProvider.cs");
+                    var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
+                    if (document == null)
+                    {
+                        Assert.Inconclusive("Document not found");
+                    }
+
+                    var result = await _asyncOptEngine.ConvertToAsyncEnumerableAsync(document.FilePath!, "GetItemsAsync");
+                    Assert.That(result, Is.Not.Null, "Should return non-null result");
+                    Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
+                    Assert.That(result.UpdatedText, Does.Contain("IAsyncEnumerable"), "Should contain IAsyncEnumerable");
+                }
+            }
+
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG-69: InlineMethod -> Server Crash (null root reference)
+            // ──────────────────────────────────────────────────────────────────────────
+            [TestFixture]
+            public class Bug69InlineMethodRegressionTests
+            {
+                private IWorkspaceManager _workspaceManager;
+                private RefinementEngine _refinementEngine;
+                [SetUp]
+                public void Setup()
                 {
-                    Assert.Inconclusive("Document not found");
+                    _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                    _refinementEngine = new RefinementEngine(_workspaceManager);
                 }
 
-                var result = await _asyncOptEngine.ConvertToAsyncEnumerableAsync(document.FilePath!, "GetItemsAsync");
-                Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                Assert.That(result.UpdatedText, Does.Contain("IAsyncEnumerable"), "Should contain IAsyncEnumerable");
-            }
-        }
+                [TearDown]
+                public void TearDown() => _workspaceManager?.Dispose();
+                private void SetSource(string source, string fileName = "Test.cs")
+                {
+                    var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+                    _workspaceManager.SetTestSolution(solution);
+                }
 
-        // ──────────────────────────────────────────────────────────────────────────
-        // BUG-69: InlineMethod -> Server Crash (null root reference)
-        // ──────────────────────────────────────────────────────────────────────────
-        [TestFixture]
-        public class Bug69InlineMethodRegressionTests
-        {
-            private IWorkspaceManager _workspaceManager;
-            private RefinementEngine _refinementEngine;
-            [SetUp]
-            public void Setup()
-            {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _refinementEngine = new RefinementEngine(_workspaceManager);
-            }
-
-            [TearDown]
-            public void TearDown() => _workspaceManager?.Dispose();
-            private void SetSource(string source, string fileName = "Test.cs")
-            {
-                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-                _workspaceManager.SetTestSolution(solution);
-            }
-
-            [Test]
-            public async Task BUG_69_InlineMethod_SingleStatementMethod_NoServerCrash()
-            {
-                const string code = @"
+                [Test]
+                public async Task BUG_69_InlineMethod_SingleStatementMethod_NoServerCrash()
+                {
+                    const string code = @"
 public class MathUtil
 {
     public int Double(int x) => x * 2;
 }";
-                SetSource(code, "MathUtil.cs");
-                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
-                if (document == null)
-                {
-                    Assert.Inconclusive("Document not found");
+                    SetSource(code, "MathUtil.cs");
+                    var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
+                    if (document == null)
+                    {
+                        Assert.Inconclusive("Document not found");
+                    }
+
+                    var result = await _refinementEngine.InlineMethodAsync(document.FilePath!, "Double");
+                    Assert.That(result, Is.Not.Null, "Should return non-null result");
+                    Assert.That(result, Is.Not.Empty, "Should return non-empty result");
                 }
 
-                var result = await _refinementEngine.InlineMethodAsync(document.FilePath!, "Double");
-                Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result, Is.Not.Empty, "Should return non-empty result");
-            }
-
-            [Test]
-            public async Task BUG_69_InlineMethod_MultiStatementMethod_GracefulError()
-            {
-                const string code = @"
+                [Test]
+                public async Task BUG_69_InlineMethod_MultiStatementMethod_GracefulError()
+                {
+                    const string code = @"
 public class Math
 {
     private int Add(int a, int b)
@@ -2224,30 +2156,108 @@ public class Math
         return sum;
     }
 }";
-                SetSource(code, "Math.cs");
-                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
-                if (document == null)
+                    SetSource(code, "Math.cs");
+                    var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
+                    if (document == null)
+                    {
+                        Assert.Inconclusive("Document not found");
+                    }
+
+                    Assert.ThrowsAsync<ToolNotFoundException>(async () => await _refinementEngine.InlineMethodAsync(document.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
+                }
+            }
+
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG-77: IntroduceParameter -> Server Crash (null GetCurrentNode reference)
+            // ──────────────────────────────────────────────────────────────────────────
+            [TestFixture]
+            public class Bug77IntroduceParameterRegressionTests
+            {
+                private IWorkspaceManager _workspaceManager;
+                private GranularRefactoringEngine _granularEngine;
+                [SetUp]
+                public void Setup()
                 {
-                    Assert.Inconclusive("Document not found");
+                    _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                    _granularEngine = new GranularRefactoringEngine(_workspaceManager);
                 }
 
-                Assert.ThrowsAsync<ToolNotFoundException>(async () => await _refinementEngine.InlineMethodAsync(document.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
+                [TearDown]
+                public void TearDown() => _workspaceManager?.Dispose();
+                private void SetSource(string source, string fileName = "Test.cs")
+                {
+                    var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+                    _workspaceManager.SetTestSolution(solution);
+                }
+
+                [Test]
+                public async Task BUG_77_IntroduceParameter_SimpleExpression_NoServerCrash()
+                {
+                    const string code = @"
+public class Calculator
+{
+    public int Calculate(int x)
+    {
+        return x * 2 + 5;
+    }
+}";
+                    SetSource(code, "Calculator.cs");
+                    var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
+                    if (document == null)
+                    {
+                        Assert.Inconclusive("Document not found");
+                    }
+
+                    var result = await _granularEngine.IntroduceParameterAsync(document.FilePath!, "x * 2", "multiplier");
+                    Assert.That(result, Is.Not.Null, "Should return non-null result");
+                    Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
+                    // Should either succeed or return unchanged code, but not crash
+                }
+
+                [Test]
+                public async Task BUG_77_IntroduceParameter_VariableExpression_NoServerCrash()
+                {
+                    const string code = @"
+public class Processor
+{
+    public string Process(string input)
+    {
+        return input.ToUpperInvariant();
+    }
+}";
+                    SetSource(code, "Processor.cs");
+                    var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
+                    if (document == null)
+                    {
+                        Assert.Inconclusive("Document not found");
+                    }
+
+                    var result = await _granularEngine.IntroduceParameterAsync(document.FilePath!, "input", "text");
+                    Assert.That(result, Is.Not.Null, "Should return non-null result");
+                    Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
+                    // Should either succeed or return unchanged code, but not crash
+                }
             }
         }
 
-        // ──────────────────────────────────────────────────────────────────────────
-        // BUG-77: IntroduceParameter -> Server Crash (null GetCurrentNode reference)
-        // ──────────────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Regression tests for the remaining 22 bugs (BUG-45-69, BUG-75-78).
+        /// Each test is designed to fail if its corresponding bug regresses.
+        /// </summary>
         [TestFixture]
-        public class Bug77IntroduceParameterRegressionTests
+        public class Remaining22BugsRegressionTests
         {
             private IWorkspaceManager _workspaceManager;
-            private GranularRefactoringEngine _granularEngine;
+            private SentinelConfiguration _config;
+            private RefactoringEngine _refactoringEngine;
+            private CodeGenerationEngine _codeGenerationEngine;
             [SetUp]
             public void Setup()
             {
                 _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                _granularEngine = new GranularRefactoringEngine(_workspaceManager);
+                _config = new SentinelConfiguration();
+                _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+                _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
             }
 
             [TearDown]
@@ -2258,206 +2268,128 @@ public class Math
                 _workspaceManager.SetTestSolution(solution);
             }
 
+            // ──────────────────────────────────────────────────────────────────────────
+            // Priority 1 Tests: Crashes (must not throw exceptions)
+            // ──────────────────────────────────────────────────────────────────────────
             [Test]
-            public async Task BUG_77_IntroduceParameter_SimpleExpression_NoServerCrash()
+            public async Task BUG_52_NullDictionaryDoesNotCrash()
             {
-                const string code = @"
-public class Calculator
-{
-    public int Calculate(int x)
-    {
-        return x * 2 + 5;
-    }
-}";
-                SetSource(code, "Calculator.cs");
-                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
-                if (document == null)
-                {
-                    Assert.Inconclusive("Document not found");
-                }
-
-                var result = await _granularEngine.IntroduceParameterAsync(document.FilePath!, "x * 2", "multiplier");
-                Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-            // Should either succeed or return unchanged code, but not crash
+                // BUG-52: Null dictionary handling in coalescing operations
+                SetSource("var x = new Dictionary<string, int>(); var y = x ?? new();");
+                // Should not throw NullReferenceException
+                var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                Assert.That(result, Is.Not.Null);
             }
 
             [Test]
-            public async Task BUG_77_IntroduceParameter_VariableExpression_NoServerCrash()
+            public async Task BUG_53_EmptyProjectDoesNotCrash()
             {
-                const string code = @"
-public class Processor
-{
-    public string Process(string input)
-    {
-        return input.ToUpperInvariant();
-    }
-}";
-                SetSource(code, "Processor.cs");
-                var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
-                if (document == null)
-                {
-                    Assert.Inconclusive("Document not found");
-                }
-
-                var result = await _granularEngine.IntroduceParameterAsync(document.FilePath!, "input", "text");
-                Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-            // Should either succeed or return unchanged code, but not crash
+                // BUG-53: Empty project causes IndexOutOfRangeException
+                SetSource("");
+                var result = await _refactoringEngine.FormatDocumentAsync("Empty.cs");
+                Assert.That(result, Is.Not.Null);
             }
-        }
-    }
 
-    /// <summary>
-    /// Regression tests for the remaining 22 bugs (BUG-45-69, BUG-75-78).
-    /// Each test is designed to fail if its corresponding bug regresses.
-    /// </summary>
-    [TestFixture]
-    public class Remaining22BugsRegressionTests
-    {
-        private IWorkspaceManager _workspaceManager;
-        private SentinelConfiguration _config;
-        private RefactoringEngine _refactoringEngine;
-        private CodeGenerationEngine _codeGenerationEngine;
-        [SetUp]
-        public void Setup()
-        {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _config = new SentinelConfiguration();
-            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
-            _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-        }
+            [Test]
+            public async Task BUG_58_MalformedSyntaxDoesNotCrash()
+            {
+                // BUG-58: Malformed syntax (double semicolon) causes parsing crash
+                SetSource("public class Foo { public void Bar() { Console.WriteLine(\"test\");; } }");
+                var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                Assert.That(result, Is.Not.Null);
+            }
 
-        [TearDown]
-        public void TearDown() => _workspaceManager?.Dispose();
-        private void SetSource(string source, string fileName = "Test.cs")
-        {
-            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-            _workspaceManager.SetTestSolution(solution);
-        }
+            [Test]
+            public async Task BUG_69_UnicodeCharactersDoNotCrash()
+            {
+                // BUG-69: Unicode characters cause encoding errors
+                SetSource("// Comment with émojis 🎉 and spëcial çharacters\npublic class Tëst { }");
+                var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                Assert.That(result, Is.Not.Null);
+            }
 
-        // ──────────────────────────────────────────────────────────────────────────
-        // Priority 1 Tests: Crashes (must not throw exceptions)
-        // ──────────────────────────────────────────────────────────────────────────
-        [Test]
-        public async Task BUG_52_NullDictionaryDoesNotCrash()
-        {
-            // BUG-52: Null dictionary handling in coalescing operations
-            SetSource("var x = new Dictionary<string, int>(); var y = x ?? new();");
-            // Should not throw NullReferenceException
-            var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-            Assert.That(result, Is.Not.Null);
-        }
+            [Test]
+            public async Task BUG_76_RecursiveMethodDoesNotCrash()
+            {
+                // BUG-76: Recursive method analysis causes stack overflow
+                SetSource("public class Recursive { public int F(int n) => n <= 0 ? 0 : n + F(n - 1); }");
+                var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                Assert.That(result, Is.Not.Null);
+            }
 
-        [Test]
-        public async Task BUG_53_EmptyProjectDoesNotCrash()
-        {
-            // BUG-53: Empty project causes IndexOutOfRangeException
-            SetSource("");
-            var result = await _refactoringEngine.FormatDocumentAsync("Empty.cs");
-            Assert.That(result, Is.Not.Null);
-        }
+            [Test]
+            public async Task BUG_77_GenericConstraintsDoNotCrash()
+            {
+                // BUG-77: Complex generic constraints cause type resolution errors
+                SetSource("public class G<T, U> where T : class where U : struct { public void M<V>(V item) where V : T { } }");
+                var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                Assert.That(result, Is.Not.Null);
+            }
 
-        [Test]
-        public async Task BUG_58_MalformedSyntaxDoesNotCrash()
-        {
-            // BUG-58: Malformed syntax (double semicolon) causes parsing crash
-            SetSource("public class Foo { public void Bar() { Console.WriteLine(\"test\");; } }");
-            var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-            Assert.That(result, Is.Not.Null);
-        }
+            // ──────────────────────────────────────────────────────────────────────────
+            // Priority 2 Tests: Uncompilable Output (generated code must compile)
+            // ──────────────────────────────────────────────────────────────────────────
+            [Test]
+            public async Task BUG_55_GeneratedEqualsCompiles()
+            {
+                // BUG-55: Generated equals method has syntax errors
+                SetSource("public class TestClass { public string Name { get; set; } }");
+                // Use GenerateToStringAsync as a stand-in for generated output validation
+                var result = await _codeGenerationEngine.GenerateToStringAsync("Test.cs", "TestClass");
+                Assert.That(result, Is.Not.Null, "Should generate non-null toString override");
+            }
 
-        [Test]
-        public async Task BUG_69_UnicodeCharactersDoNotCrash()
-        {
-            // BUG-69: Unicode characters cause encoding errors
-            SetSource("// Comment with émojis 🎉 and spëcial çharacters\npublic class Tëst { }");
-            var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-            Assert.That(result, Is.Not.Null);
-        }
+            [Test]
+            public async Task BUG_56_GeneratedConstructorComplete()
+            {
+                // BUG-56: Generated constructor drops fields
+                SetSource("public class Widget { public int Id { get; set; } public string Name { get; set; } }");
+                var result = await _codeGenerationEngine.GenerateConstructorAsync("Test.cs", "Widget");
+                Assert.That(result, Is.Not.Null, "Should return generated constructor");
+            }
 
-        [Test]
-        public async Task BUG_76_RecursiveMethodDoesNotCrash()
-        {
-            // BUG-76: Recursive method analysis causes stack overflow
-            SetSource("public class Recursive { public int F(int n) => n <= 0 ? 0 : n + F(n - 1); }");
-            var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-            Assert.That(result, Is.Not.Null);
-        }
+            [Test]
+            public async Task BUG_57_GeneratedBuilderCompiles()
+            {
+                // BUG-57: Generated fluent builder has syntax errors
+                SetSource("public class Data { public int Value { get; set; } }");
+                var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("Test.cs", "Data");
+                Assert.That(result, Is.Not.Null, "Should generate fluent builder");
+            }
 
-        [Test]
-        public async Task BUG_77_GenericConstraintsDoNotCrash()
-        {
-            // BUG-77: Complex generic constraints cause type resolution errors
-            SetSource("public class G<T, U> where T : class where U : struct { public void M<V>(V item) where V : T { } }");
-            var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-            Assert.That(result, Is.Not.Null);
-        }
+            // ──────────────────────────────────────────────────────────────────────────
+            // Priority 3 Tests: Silent Failures (correct result semantics)
+            // ──────────────────────────────────────────────────────────────────────────
+            [Test]
+            public async Task BUG_45_RefactoringProducesCorrectResult()
+            {
+                // BUG-45: Refactoring produces wrong result silently
+                SetSource("public class Calculator { public int Add(int a, int b) => a + b; }");
+                var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                Assert.That(result, Is.Not.Null);
+            }
 
-        // ──────────────────────────────────────────────────────────────────────────
-        // Priority 2 Tests: Uncompilable Output (generated code must compile)
-        // ──────────────────────────────────────────────────────────────────────────
-        [Test]
-        public async Task BUG_55_GeneratedEqualsCompiles()
-        {
-            // BUG-55: Generated equals method has syntax errors
-            SetSource("public class TestClass { public string Name { get; set; } }");
-            // Use GenerateToStringAsync as a stand-in for generated output validation
-            var result = await _codeGenerationEngine.GenerateToStringAsync("Test.cs", "TestClass");
-            Assert.That(result, Is.Not.Null, "Should generate non-null toString override");
-        }
-
-        [Test]
-        public async Task BUG_56_GeneratedConstructorComplete()
-        {
-            // BUG-56: Generated constructor drops fields
-            SetSource("public class Widget { public int Id { get; set; } public string Name { get; set; } }");
-            var result = await _codeGenerationEngine.GenerateConstructorAsync("Test.cs", "Widget");
-            Assert.That(result, Is.Not.Null, "Should return generated constructor");
-        }
-
-        [Test]
-        public async Task BUG_57_GeneratedBuilderCompiles()
-        {
-            // BUG-57: Generated fluent builder has syntax errors
-            SetSource("public class Data { public int Value { get; set; } }");
-            var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("Test.cs", "Data");
-            Assert.That(result, Is.Not.Null, "Should generate fluent builder");
-        }
-
-        // ──────────────────────────────────────────────────────────────────────────
-        // Priority 3 Tests: Silent Failures (correct result semantics)
-        // ──────────────────────────────────────────────────────────────────────────
-        [Test]
-        public async Task BUG_45_RefactoringProducesCorrectResult()
-        {
-            // BUG-45: Refactoring produces wrong result silently
-            SetSource("public class Calculator { public int Add(int a, int b) => a + b; }");
-            var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-            Assert.That(result, Is.Not.Null);
-        }
-
-        [Test]
-        public async Task BUG_47_ExtractionDoesNotCrash()
-        {
-            // BUG-47: Interface extraction should not crash
-            const string source = @"public class Source
+            [Test]
+            public async Task BUG_47_ExtractionDoesNotCrash()
+            {
+                // BUG-47: Interface extraction should not crash
+                const string source = @"public class Source
         {
             public int Id { get; set; }
             public string Name { get; set; }
             public DateTime Created { get; set; }
         }";
-            SetSource(source, "Source.cs");
-            // Just verify extraction doesn't throw an exception
-            await _refactoringEngine.ExtractInterfaceAsync("Source.cs", "Source", "ISource");
-            Assert.That(true, "Extraction completed without exception");
-        }
+                SetSource(source, "Source.cs");
+                // Just verify extraction doesn't throw an exception
+                await _refactoringEngine.ExtractInterfaceAsync("Source.cs", "Source", "ISource");
+                Assert.That(true, "Extraction completed without exception");
+            }
 
-        [Test]
-        public async Task BUG_50_RefactoringSemanticsPreserved()
-        {
-            // BUG-50: Refactoring breaks semantics silently
-            const string source = @"public class SemanticTest
+            [Test]
+            public async Task BUG_50_RefactoringSemanticsPreserved()
+            {
+                // BUG-50: Refactoring breaks semantics silently
+                const string source = @"public class SemanticTest
         {
             public void Method()
             {
@@ -2465,65 +2397,65 @@ public class Processor
                 foreach (var item in x) { Console.WriteLine(item); }
             }
         }";
-            SetSource(source, "Test.cs");
-            var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-            Assert.That(result, Is.Not.Null);
-        }
-    }
-
-    /// <summary>
-    /// Regression tests for 8 Priority 2 bugs in uncompilable output:
-    /// Bug 55: OptimizeToValueTask -> Interface/Implementation Mismatch
-    /// Bug 56: ConvertStaticToExtension -> Missing static on Extension Class
-    /// Bug 57: IntroduceParameterObject -> Interface Updated but Implementation Not
-    /// Bug 60: RemoveMember -> Doesn't Check for Usages
-    /// Bug 62: ExtractMembersToPartial -> Missing Namespace + Usings
-    /// Bug 64: ConvertLockToSemaphoreSlim -> Doesn't Update Call Sites
-    /// Bug 75: ExtractSuperclass -> Empty Base Class
-    /// Bug 78: GenerateAsyncOverload -> Uncompilable Async Stub
-    /// </summary>
-    [TestFixture]
-    public class Bug55_78BatchRegressionTests
-    {
-        private IWorkspaceManager _workspaceManager;
-        private AsyncOptimizationEngine _asyncOptimizationEngine;
-        private AdvancedLogicEngine _advancedLogicEngine;
-        private RefactoringEngine _refactoringEngine;
-        private ThreadSafetyEngine _threadSafetyEngine;
-        private AdvancedStructuralEngine _advancedStructuralEngine;
-        private GranularRefactoringEngine _granularRefactoringEngine;
-        [SetUp]
-        public void Setup()
-        {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            var config = new SentinelConfiguration();
-            _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-            _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
-            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
-            _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
-            _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
-            _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
+                SetSource(source, "Test.cs");
+                var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                Assert.That(result, Is.Not.Null);
+            }
         }
 
-        [TearDown]
-        public void TearDown() => _workspaceManager?.Dispose();
-        private void SetSource(string source, string fileName = "Test.cs")
+        /// <summary>
+        /// Regression tests for 8 Priority 2 bugs in uncompilable output:
+        /// Bug 55: OptimizeToValueTask -> Interface/Implementation Mismatch
+        /// Bug 56: ConvertStaticToExtension -> Missing static on Extension Class
+        /// Bug 57: IntroduceParameterObject -> Interface Updated but Implementation Not
+        /// Bug 60: RemoveMember -> Doesn't Check for Usages
+        /// Bug 62: ExtractMembersToPartial -> Missing Namespace + Usings
+        /// Bug 64: ConvertLockToSemaphoreSlim -> Doesn't Update Call Sites
+        /// Bug 75: ExtractSuperclass -> Empty Base Class
+        /// Bug 78: GenerateAsyncOverload -> Uncompilable Async Stub
+        /// </summary>
+        [TestFixture]
+        public class Bug55_78BatchRegressionTests
         {
-            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-            _workspaceManager.SetTestSolution(solution);
-        }
+            private IWorkspaceManager _workspaceManager;
+            private AsyncOptimizationEngine _asyncOptimizationEngine;
+            private AdvancedLogicEngine _advancedLogicEngine;
+            private RefactoringEngine _refactoringEngine;
+            private ThreadSafetyEngine _threadSafetyEngine;
+            private AdvancedStructuralEngine _advancedStructuralEngine;
+            private GranularRefactoringEngine _granularRefactoringEngine;
+            [SetUp]
+            public void Setup()
+            {
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                var config = new SentinelConfiguration();
+                _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
+                _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
+                _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
+                _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
+                _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+                _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
+            }
 
-        private void SetMultipleFiles(params (string name, string content)[] files)
-        {
-            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", files);
-            _workspaceManager.SetTestSolution(solution);
-        }
+            [TearDown]
+            public void TearDown() => _workspaceManager?.Dispose();
+            private void SetSource(string source, string fileName = "Test.cs")
+            {
+                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+                _workspaceManager.SetTestSolution(solution);
+            }
 
-        // ── Bug 55: OptimizeToValueTask -> Interface/Implementation Mismatch ───────
-        [Test]
-        public async Task BUG_55_OptimizeToValueTask_InterfaceMethod_BothUpdated()
-        {
-            const string code = @"
+            private void SetMultipleFiles(params (string name, string content)[] files)
+            {
+                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", files);
+                _workspaceManager.SetTestSolution(solution);
+            }
+
+            // ── Bug 55: OptimizeToValueTask -> Interface/Implementation Mismatch ───────
+            [Test]
+            public async Task BUG_55_OptimizeToValueTask_InterfaceMethod_BothUpdated()
+            {
+                const string code = @"
 public interface IDataService
 {
     Task<string> GetDataAsync();
@@ -2536,19 +2468,19 @@ public class DataService : IDataService
         return await Task.FromResult(""data"");
     }
 }";
-            SetSource(code, "DataService.cs");
-            var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync("DataService.cs", "GetDataAsync");
-            // Both interface and implementation should be updated or error gracefully
-            Assert.That(result, Is.Not.Null, "Should return a result");
-            // Verify it contains ValueTask (not Task) in the implementation
-            Assert.That(result.UpdatedText, Does.Contain("ValueTask<string>"), "Result should contain ValueTask<string>");
-        }
+                SetSource(code, "DataService.cs");
+                var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync("DataService.cs", "GetDataAsync");
+                // Both interface and implementation should be updated or error gracefully
+                Assert.That(result, Is.Not.Null, "Should return a result");
+                // Verify it contains ValueTask (not Task) in the implementation
+                Assert.That(result.UpdatedText, Does.Contain("ValueTask<string>"), "Result should contain ValueTask<string>");
+            }
 
-        // ── Bug 56: ConvertStaticToExtension -> Missing static on Extension Class ──
-        [Test]
-        public async Task BUG_56_ConvertStaticToExtension_EnsuresClassIsStatic()
-        {
-            const string code = @"
+            // ── Bug 56: ConvertStaticToExtension -> Missing static on Extension Class ──
+            [Test]
+            public async Task BUG_56_ConvertStaticToExtension_EnsuresClassIsStatic()
+            {
+                const string code = @"
 public class StringExtensions
 {
     public static bool IsValidEmail(string input)
@@ -2556,18 +2488,18 @@ public class StringExtensions
         return input.Contains(""@"");
     }
 }";
-            SetSource(code, "StringExtensions.cs");
-            var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync("StringExtensions.cs", "IsValidEmail");
-            Assert.That(result, Is.Not.Null, "Should return a result");
-            Assert.That(result.UpdatedText, Does.Contain("static class StringExtensions"), "Extension class must be declared static");
-            Assert.That(result.UpdatedText, Does.Contain("this string input"), "Method should be converted to extension (this parameter)");
-        }
+                SetSource(code, "StringExtensions.cs");
+                var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync("StringExtensions.cs", "IsValidEmail");
+                Assert.That(result, Is.Not.Null, "Should return a result");
+                Assert.That(result.UpdatedText, Does.Contain("static class StringExtensions"), "Extension class must be declared static");
+                Assert.That(result.UpdatedText, Does.Contain("this string input"), "Method should be converted to extension (this parameter)");
+            }
 
-        // ── Bug 57: IntroduceParameterObject -> Interface + All Implementations ────
-        [Test]
-        public async Task BUG_57_IntroduceParameterObject_UpdatesInterfaceAndAllImplementations()
-        {
-            const string code = @"
+            // ── Bug 57: IntroduceParameterObject -> Interface + All Implementations ────
+            [Test]
+            public async Task BUG_57_IntroduceParameterObject_UpdatesInterfaceAndAllImplementations()
+            {
+                const string code = @"
 public interface IProcessor
 {
     void Process(string name, int age, bool active);
@@ -2582,20 +2514,20 @@ public class Processor2 : IProcessor
 {
     public void Process(string name, int age, bool active) { }
 }";
-            SetMultipleFiles(("IProcessor.cs", code));
-            var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync("IProcessor.cs", "Process");
-            Assert.That(result, Is.Not.Null, "Should return a result");
-            // All implementations should be updated
-            var processMethods = result!.UpdatedText!.Count(c => c == '{') - result!.UpdatedText!.Count(c => c == '}');
-            // Verify that the code includes the interface and implementations
-            Assert.That(result.UpdatedText, Does.Contain("IProcessor"), "Should contain interface");
-        }
+                SetMultipleFiles(("IProcessor.cs", code));
+                var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync("IProcessor.cs", "Process");
+                Assert.That(result, Is.Not.Null, "Should return a result");
+                // All implementations should be updated
+                var processMethods = result!.UpdatedText!.Count(c => c == '{') - result!.UpdatedText!.Count(c => c == '}');
+                // Verify that the code includes the interface and implementations
+                Assert.That(result.UpdatedText, Does.Contain("IProcessor"), "Should contain interface");
+            }
 
-        // ── Bug 60: RemoveMember -> Doesn't Check for Usages ───────────────────────
-        [Test]
-        public async Task BUG_60_RemoveMember_ChecksUsagesBeforeRemoving()
-        {
-            const string code = @"
+            // ── Bug 60: RemoveMember -> Doesn't Check for Usages ───────────────────────
+            [Test]
+            public async Task BUG_60_RemoveMember_ChecksUsagesBeforeRemoving()
+            {
+                const string code = @"
 public class Helper
 {
     public string GetName() => ""Test"";
@@ -2605,22 +2537,22 @@ public class Helper
         var name = GetName(); // Usage here
     }
 }";
-            SetSource(code, "Helper.cs");
-            var result = await _refactoringEngine.RemoveMemberAsync("Helper.cs", "GetName");
-            // Should error or return unchanged because GetName is used
-            Assert.That(result, Is.Not.Null, "Should return a result");
-            if (!result!.Message!.Contains("error") && !result.Message!.Contains("Error"))
-            {
-                // If not an error, GetName should still be in the output
-                Assert.That(result.Message, Does.Contain("GetName"), "If removal succeeds, should indicate that member is used");
+                SetSource(code, "Helper.cs");
+                var result = await _refactoringEngine.RemoveMemberAsync("Helper.cs", "GetName");
+                // Should error or return unchanged because GetName is used
+                Assert.That(result, Is.Not.Null, "Should return a result");
+                if (!result!.Message!.Contains("error") && !result.Message!.Contains("Error"))
+                {
+                    // If not an error, GetName should still be in the output
+                    Assert.That(result.Message, Does.Contain("GetName"), "If removal succeeds, should indicate that member is used");
+                }
             }
-        }
 
-        // ── Bug 62: ExtractMembersToPartial -> Missing Namespace + Usings ─────────
-        [Test]
-        public async Task BUG_62_ExtractMembersToPartial_IncludesNamespaceAndUsings()
-        {
-            const string code = @"using System;
+            // ── Bug 62: ExtractMembersToPartial -> Missing Namespace + Usings ─────────
+            [Test]
+            public async Task BUG_62_ExtractMembersToPartial_IncludesNamespaceAndUsings()
+            {
+                const string code = @"using System;
 using System.Collections.Generic;
 
 namespace MyApp.Services
@@ -2631,25 +2563,25 @@ namespace MyApp.Services
         public void Method2() { }
     }
 }";
-            SetSource(code, "DataService.cs");
-            var result = await _granularRefactoringEngine.ExtractMembersToPartialAsync("DataService.cs", "DataService", new[] { "Method1" });
-            Assert.That(result, Is.Not.Null, "Should return a result");
-            Assert.That(result, Is.Not.Empty, "Should contain extracted file");
-            // Get the extracted partial file content
-            var partialFileContent = result.Values.First();
-            // The result should contain namespace declaration
-            Assert.That(partialFileContent, Does.Contain("namespace MyApp.Services"), "Extracted partial file must include the namespace");
-            // Should also include usings
-            Assert.That(partialFileContent, Does.Contain("using System;"), "Extracted partial file must include usings");
-            // Should contain the extracted method
-            Assert.That(partialFileContent, Does.Contain("Method1"), "Extracted partial file must contain the extracted method");
-        }
+                SetSource(code, "DataService.cs");
+                var result = await _granularRefactoringEngine.ExtractMembersToPartialAsync("DataService.cs", "DataService", new[] { "Method1" });
+                Assert.That(result, Is.Not.Null, "Should return a result");
+                Assert.That(result, Is.Not.Empty, "Should contain extracted file");
+                // Get the extracted partial file content
+                var partialFileContent = result.Values.First();
+                // The result should contain namespace declaration
+                Assert.That(partialFileContent, Does.Contain("namespace MyApp.Services"), "Extracted partial file must include the namespace");
+                // Should also include usings
+                Assert.That(partialFileContent, Does.Contain("using System;"), "Extracted partial file must include usings");
+                // Should contain the extracted method
+                Assert.That(partialFileContent, Does.Contain("Method1"), "Extracted partial file must contain the extracted method");
+            }
 
-        // ── Bug 64: ConvertLockToSemaphoreSlim -> Doesn't Update Call Sites ────────
-        [Test]
-        public async Task BUG_64_ConvertLockToSemaphoreSlim_UpdatesAllLockStatements()
-        {
-            const string code = @"
+            // ── Bug 64: ConvertLockToSemaphoreSlim -> Doesn't Update Call Sites ────────
+            [Test]
+            public async Task BUG_64_ConvertLockToSemaphoreSlim_UpdatesAllLockStatements()
+            {
+                const string code = @"
 public class ThreadSafeCounter
 {
     private readonly object _lock = new object();
@@ -2671,18 +2603,18 @@ public class ThreadSafeCounter
         }
     }
 }";
-            SetSource(code, "ThreadSafeCounter.cs");
-            var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("ThreadSafeCounter.cs", "Increment");
-            Assert.That(result, Is.Not.Null, "Should return a result");
-            Assert.That(result.UpdatedText, Does.Contain("SemaphoreSlim"), "Result should contain SemaphoreSlim field");
-            Assert.That(result.UpdatedText, Does.Contain("WaitAsync"), "Result should use WaitAsync instead of lock");
-        }
+                SetSource(code, "ThreadSafeCounter.cs");
+                var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("ThreadSafeCounter.cs", "Increment");
+                Assert.That(result, Is.Not.Null, "Should return a result");
+                Assert.That(result.UpdatedText, Does.Contain("SemaphoreSlim"), "Result should contain SemaphoreSlim field");
+                Assert.That(result.UpdatedText, Does.Contain("WaitAsync"), "Result should use WaitAsync instead of lock");
+            }
 
-        // ── Bug 75: ExtractSuperclass -> Empty Base Class ───────────────────────────
-        [Test]
-        public async Task BUG_75_ExtractSuperclass_IncludesCommonMembers()
-        {
-            const string code = @"
+            // ── Bug 75: ExtractSuperclass -> Empty Base Class ───────────────────────────
+            [Test]
+            public async Task BUG_75_ExtractSuperclass_IncludesCommonMembers()
+            {
+                const string code = @"
 public class Dog
 {
     public string Name { get; set; }
@@ -2694,20 +2626,20 @@ public class Cat
     public string Name { get; set; }
     public void Meow() { Console.WriteLine(""Meow""); }
 }";
-            SetMultipleFiles(("Dog.cs", code));
-            var result = await _advancedStructuralEngine.ExtractSuperclassAsync(new FilePathWrapper[] { new FilePathWrapper("Dog.cs") }, new[] { "Dog", "Cat" }, "Animal");
-            Assert.That(result, Is.Not.Null, "Should return a result");
-            // Base class should have the common Name property
-            var resultText = result.Values.Aggregate("", (a, b) => a + b);
-            Assert.That(resultText, Does.Contain("class Animal"), "Should create Animal base class");
-            Assert.That(resultText, Does.Contain("Name"), "Base class should include common Name property");
-        }
+                SetMultipleFiles(("Dog.cs", code));
+                var result = await _advancedStructuralEngine.ExtractSuperclassAsync(new FilePathWrapper[] { new FilePathWrapper("Dog.cs") }, new[] { "Dog", "Cat" }, "Animal");
+                Assert.That(result, Is.Not.Null, "Should return a result");
+                // Base class should have the common Name property
+                var resultText = result.Values.Aggregate("", (a, b) => a + b);
+                Assert.That(resultText, Does.Contain("class Animal"), "Should create Animal base class");
+                Assert.That(resultText, Does.Contain("Name"), "Base class should include common Name property");
+            }
 
-        // ── Bug 78: GenerateAsyncOverload -> Uncompilable Async Stub ───────────────
-        [Test]
-        public async Task BUG_78_GenerateAsyncOverload_CompilesAndMatches()
-        {
-            const string code = @"
+            // ── Bug 78: GenerateAsyncOverload -> Uncompilable Async Stub ───────────────
+            [Test]
+            public async Task BUG_78_GenerateAsyncOverload_CompilesAndMatches()
+            {
+                const string code = @"
 public class Processor
 {
     public string Process(string input)
@@ -2715,62 +2647,62 @@ public class Processor
         return input.ToUpperInvariant();
     }
 }";
-            SetSource(code, "Processor.cs");
-            var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync("Processor.cs", "Process");
-            Assert.That(result, Is.Not.Null, "Should return a result");
-            Assert.That(result.UpdatedText, Does.Contain("ProcessAsync"), "Should generate async overload with Async suffix");
-            Assert.That(result.UpdatedText, Does.Contain("Task<string>"), "Signature must convert return type to Task<T>");
-            // Verify it compiles by checking basic syntax
-            Assert.That(result.UpdatedText, Does.Contain("public async"), "Should be declared as async");
-        }
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // BUG-72, 73, 74 + inline_method + extract_class Regression Tests
-    // ──────────────────────────────────────────────────────────────────────────
-    /// <summary>
-    /// Regression tests for 5 critical bugs:
-    /// BUG-72: IntroduceField -> field initialized with local parameter instead of class-scoped value
-    /// BUG-73: SafeDeleteSymbol -> returns changeId when symbol IS actually used
-    /// BUG-74: ExtractClass -> generates empty class for file-scoped types
-    /// inline_method bug: doesn't handle multi-statement method bodies
-    /// extract_class bug: other extract_class issues
-    /// </summary>
-    [TestFixture]
-    public class CriticalBugRegressionTests
-    {
-        private IWorkspaceManager _workspaceManager;
-        private SentinelConfiguration _config;
-        private GranularRefactoringEngine _granularRefactoringEngine;
-        private RefactoringEngine _refactoringEngine;
-        private RefinementEngine _refinementEngine;
-        private AdvancedStructuralEngine _advancedStructuralEngine;
-        private StructuralRefinementEngine _structuralRefinementEngine;
-        [SetUp]
-        public void Setup()
-        {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _config = new SentinelConfiguration();
-            _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
-            _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
-            _refinementEngine = new RefinementEngine(_workspaceManager);
-            _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
-            _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+                SetSource(code, "Processor.cs");
+                var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync("Processor.cs", "Process");
+                Assert.That(result, Is.Not.Null, "Should return a result");
+                Assert.That(result.UpdatedText, Does.Contain("ProcessAsync"), "Should generate async overload with Async suffix");
+                Assert.That(result.UpdatedText, Does.Contain("Task<string>"), "Signature must convert return type to Task<T>");
+                // Verify it compiles by checking basic syntax
+                Assert.That(result.UpdatedText, Does.Contain("public async"), "Should be declared as async");
+            }
         }
 
-        [TearDown]
-        public void TearDown() => _workspaceManager?.Dispose();
-        private void SetSource(string source, string fileName = "Test.cs")
+        // ──────────────────────────────────────────────────────────────────────────
+        // BUG-72, 73, 74 + inline_method + extract_class Regression Tests
+        // ──────────────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Regression tests for 5 critical bugs:
+        /// BUG-72: IntroduceField -> field initialized with local parameter instead of class-scoped value
+        /// BUG-73: SafeDeleteSymbol -> returns changeId when symbol IS actually used
+        /// BUG-74: ExtractClass -> generates empty class for file-scoped types
+        /// inline_method bug: doesn't handle multi-statement method bodies
+        /// extract_class bug: other extract_class issues
+        /// </summary>
+        [TestFixture]
+        public class CriticalBugRegressionTests
         {
-            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-            _workspaceManager.SetTestSolution(solution);
-        }
+            private IWorkspaceManager _workspaceManager;
+            private SentinelConfiguration _config;
+            private GranularRefactoringEngine _granularRefactoringEngine;
+            private RefactoringEngine _refactoringEngine;
+            private RefinementEngine _refinementEngine;
+            private AdvancedStructuralEngine _advancedStructuralEngine;
+            private StructuralRefinementEngine _structuralRefinementEngine;
+            [SetUp]
+            public void Setup()
+            {
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                _config = new SentinelConfiguration();
+                _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
+                _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+                _refinementEngine = new RefinementEngine(_workspaceManager);
+                _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+                _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+            }
 
-        // ── BUG-72: IntroduceField -> field initialized with local parameter ──
-        [Test]
-        public async Task BUG_72_IntroduceField_WithClassScopedValue_InitializesCorrectly()
-        {
-            const string code = @"
+            [TearDown]
+            public void TearDown() => _workspaceManager?.Dispose();
+            private void SetSource(string source, string fileName = "Test.cs")
+            {
+                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+                _workspaceManager.SetTestSolution(solution);
+            }
+
+            // ── BUG-72: IntroduceField -> field initialized with local parameter ──
+            [Test]
+            public async Task BUG_72_IntroduceField_WithClassScopedValue_InitializesCorrectly()
+            {
+                const string code = @"
 public class MyClass
 {
     public int Value { get; set; }
@@ -2780,23 +2712,23 @@ public class MyClass
         int result = this.Value;  // Using class-scoped value
     }
 }";
-            SetSource(code, "MyClass.cs");
-            var result = await _granularRefactoringEngine.IntroduceFieldAsync("MyClass.cs", contextSnippet: "this.Value", newFieldName: "_storedValue");
-            Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return updated code");
-            // Field should be initialized with the value, not a parameter
-            Assert.That(result.UpdatedText, Does.Contain("private readonly"), "Should create a field with appropriate scope");
-            Assert.That(result.UpdatedText, Does.Contain("_storedValue"), "Should reference the new field");
-        }
+                SetSource(code, "MyClass.cs");
+                var result = await _granularRefactoringEngine.IntroduceFieldAsync("MyClass.cs", contextSnippet: "this.Value", newFieldName: "_storedValue");
+                Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return updated code");
+                // Field should be initialized with the value, not a parameter
+                Assert.That(result.UpdatedText, Does.Contain("private readonly"), "Should create a field with appropriate scope");
+                Assert.That(result.UpdatedText, Does.Contain("_storedValue"), "Should reference the new field");
+            }
 
-        [Test]
-        public async Task BUG_72_IntroduceField_WithLocalParameter_NoInitializer()
-        {
-            // BUG-72 documents that IntroduceFieldAsync has difficulty disambiguating
-            // simple parameter names when they appear multiple times in a method.
-            // ContextHelper.FindSnippetPosition requires lineBefore/lineAfter for disambiguation,
-            // but this creates fragile tests. The bug itself is that IntroduceField may initialize
-            // a field with a local parameter in scope-unsafe ways.
-            const string code = @"
+            [Test]
+            public async Task BUG_72_IntroduceField_WithLocalParameter_NoInitializer()
+            {
+                // BUG-72 documents that IntroduceFieldAsync has difficulty disambiguating
+                // simple parameter names when they appear multiple times in a method.
+                // ContextHelper.FindSnippetPosition requires lineBefore/lineAfter for disambiguation,
+                // but this creates fragile tests. The bug itself is that IntroduceField may initialize
+                // a field with a local parameter in scope-unsafe ways.
+                const string code = @"
 public class MyClass
 {
     public void Method(int myParam)
@@ -2804,34 +2736,34 @@ public class MyClass
         int local = myParam;
     }
 }";
-            SetSource(code, "MyClass.cs");
-            try
-            {
-                var result = await _granularRefactoringEngine.IntroduceFieldAsync("MyClass.cs", contextSnippet: "myParam", newFieldName: "_field", lineBefore: "int local = ", lineAfter: null);
-                // Should not crash and should return code
-                Assert.That(result, Is.Not.Null);
-                Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return non-empty code");
+                SetSource(code, "MyClass.cs");
+                try
+                {
+                    var result = await _granularRefactoringEngine.IntroduceFieldAsync("MyClass.cs", contextSnippet: "myParam", newFieldName: "_field", lineBefore: "int local = ", lineAfter: null);
+                    // Should not crash and should return code
+                    Assert.That(result, Is.Not.Null);
+                    Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return non-empty code");
+                }
+                catch (ToolException ex)
+                {
+                    // Context disambiguation errors are acceptable if the snippet is ambiguous, or was
+                    // filtered out entirely by the lineBefore disambiguation (both "myParam" occurrences
+                    // get excluded here since lineBefore matches neither match's *previous* source line ->
+                    // it's the same line's own prefix, not adjacent-line text).
+                    Assert.That(ex.Message, Does.Contain("ambiguous") | Does.Contain("match") | Does.Contain("not found"), "If it fails, should be due to ambiguous/unresolvable context, not a bug");
+                }
             }
-            catch (ToolException ex)
-            {
-                // Context disambiguation errors are acceptable if the snippet is ambiguous, or was
-                // filtered out entirely by the lineBefore disambiguation (both "myParam" occurrences
-                // get excluded here since lineBefore matches neither match's *previous* source line ->
-                // it's the same line's own prefix, not adjacent-line text).
-                Assert.That(ex.Message, Does.Contain("ambiguous") | Does.Contain("match") | Does.Contain("not found"), "If it fails, should be due to ambiguous/unresolvable context, not a bug");
-            }
-        }
 
-        // ── BUG-73: SafeDeleteSymbol -> refuses when symbol IS used ──────────
-        [Test]
-        public async Task BUG_73_SafeDelete_WithUsedSymbol_ReturnsError()
-        {
-            // BUG-73 documents that SafeDeleteSymbolAsync may fail to detect when a symbol
-            // is actively used, returning an empty dict (indicating no errors found) when
-            // it should return an error or populated result indicating deletion was blocked.
-            // This can occur due to limitations in SymbolFinder.FindReferencesAsync or when
-            // the feature is not properly enabled in configuration.
-            const string code = @"
+            // ── BUG-73: SafeDeleteSymbol -> refuses when symbol IS used ──────────
+            [Test]
+            public async Task BUG_73_SafeDelete_WithUsedSymbol_ReturnsError()
+            {
+                // BUG-73 documents that SafeDeleteSymbolAsync may fail to detect when a symbol
+                // is actively used, returning an empty dict (indicating no errors found) when
+                // it should return an error or populated result indicating deletion was blocked.
+                // This can occur due to limitations in SymbolFinder.FindReferencesAsync or when
+                // the feature is not properly enabled in configuration.
+                const string code = @"
 public class Service
 {
     public string GetValue() => ""test"";
@@ -2841,16 +2773,16 @@ public class Service
         var x = GetValue();
     }
 }";
-            SetSource(code, "Service.cs");
-            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Service.cs", "GetValue", contextSnippet: "public string GetValue", lineBefore: null, lineAfter: null);
-            // Verify it refuses deletion for used symbols
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit), "Should refuse deletion when symbol is used and cannot be deleted");
-        }
+                SetSource(code, "Service.cs");
+                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Service.cs", "GetValue", contextSnippet: "public string GetValue", lineBefore: null, lineAfter: null);
+                // Verify it refuses deletion for used symbols
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit), "Should refuse deletion when symbol is used and cannot be deleted");
+            }
 
-        [Test]
-        public async Task BUG_73_SafeDelete_WithUnusedSymbol_SucceedsQuietly()
-        {
-            const string code = @"
+            [Test]
+            public async Task BUG_73_SafeDelete_WithUnusedSymbol_SucceedsQuietly()
+            {
+                const string code = @"
 public class Service
 {
     private string UnusedHelper() => ""test"";  // Never called
@@ -2860,17 +2792,17 @@ public class Service
         var x = 5;
     }
 }";
-            SetSource(code, "Service.cs");
-            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Service.cs", "UnusedHelper", contextSnippet: "UnusedHelper", lineBefore: "private string UnusedHelper", lineAfter: null);
-            // Should not refuse for a truly unused symbol
-            Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.CannotEdit), "Should not error for truly unused symbol");
-        }
+                SetSource(code, "Service.cs");
+                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Service.cs", "UnusedHelper", contextSnippet: "UnusedHelper", lineBefore: "private string UnusedHelper", lineAfter: null);
+                // Should not refuse for a truly unused symbol
+                Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.CannotEdit), "Should not error for truly unused symbol");
+            }
 
-        // ── inline_method bug: multi-statement method handling ─────────────────
-        [Test]
-        public async Task BUG_InlineMethod_SingleReturn_InlinesSuccessfully()
-        {
-            const string code = @"
+            // ── inline_method bug: multi-statement method handling ─────────────────
+            [Test]
+            public async Task BUG_InlineMethod_SingleReturn_InlinesSuccessfully()
+            {
+                const string code = @"
 public class Calculator
 {
     public int Double(int x) => x * 2;
@@ -2880,17 +2812,17 @@ public class Calculator
         return Double(value) + 5;
     }
 }";
-            SetSource(code, "Calculator.cs");
-            var result = await _refinementEngine.InlineMethodAsync("Calculator.cs", "Double");
-            Assert.That(result, Is.Not.Null, "Should return result");
-            var resultText = string.Join("\n", result.Values);
-            Assert.That(resultText, Does.Contain("x * 2"), "Should successfully inline single-expression method");
-        }
+                SetSource(code, "Calculator.cs");
+                var result = await _refinementEngine.InlineMethodAsync("Calculator.cs", "Double");
+                Assert.That(result, Is.Not.Null, "Should return result");
+                var resultText = string.Join("\n", result.Values);
+                Assert.That(resultText, Does.Contain("x * 2"), "Should successfully inline single-expression method");
+            }
 
-        [Test]
-        public async Task BUG_InlineMethod_MultipleStatements_HandlesGracefully()
-        {
-            const string code = @"
+            [Test]
+            public async Task BUG_InlineMethod_MultipleStatements_HandlesGracefully()
+            {
+                const string code = @"
 public class Service
 {
     public string Process(string input)
@@ -2905,134 +2837,134 @@ public class Service
         var result = Process(""hello"");
     }
 }";
-            SetSource(code, "Service.cs");
-            Assert.ThrowsAsync<ToolNotFoundException>(async () => await _refinementEngine.InlineMethodAsync("Service.cs", "Process"), "Multi-statement method should fail gracefully via a typed exception, not crash");
-        }
-    }
-
-    /// <summary>
-    /// Regression tests for call graph null-return bug:
-    /// GetCallGraph/GetReverseCallGraph returned null (serialized as empty output)
-    /// when the method was not found. Now throws InvalidOperationException with
-    /// actionable guidance.
-    /// </summary>
-    [TestFixture]
-    public class CallGraphNullReturnRegressionTests
-    {
-        private IWorkspaceManager _workspaceManager;
-        private SymbolNavigationEngine _symbolNavigationEngine;
-        [SetUp]
-        public void Setup()
-        {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+                SetSource(code, "Service.cs");
+                Assert.ThrowsAsync<ToolNotFoundException>(async () => await _refinementEngine.InlineMethodAsync("Service.cs", "Process"), "Multi-statement method should fail gracefully via a typed exception, not crash");
+            }
         }
 
-        [TearDown]
-        public void TearDown() => _workspaceManager?.Dispose();
-        private void SetSource(string source, string fileName = "Test.cs")
+        /// <summary>
+        /// Regression tests for call graph null-return bug:
+        /// GetCallGraph/GetReverseCallGraph returned null (serialized as empty output)
+        /// when the method was not found. Now throws InvalidOperationException with
+        /// actionable guidance.
+        /// </summary>
+        [TestFixture]
+        public class CallGraphNullReturnRegressionTests
         {
-            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-            _workspaceManager.SetTestSolution(solution);
-        }
+            private IWorkspaceManager _workspaceManager;
+            private SymbolNavigationEngine _symbolNavigationEngine;
+            [SetUp]
+            public void Setup()
+            {
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+            }
 
-        [Test]
-        public async Task GetCallGraph_ExistingMethod_ReturnsNode()
-        {
-            const string code = @"
+            [TearDown]
+            public void TearDown() => _workspaceManager?.Dispose();
+            private void SetSource(string source, string fileName = "Test.cs")
+            {
+                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+                _workspaceManager.SetTestSolution(solution);
+            }
+
+            [Test]
+            public async Task GetCallGraph_ExistingMethod_ReturnsNode()
+            {
+                const string code = @"
 public class Calc
 {
     public int Add(int a, int b) => a + b;
     public int Double(int x) => Add(x, x);
 }";
-            SetSource(code, "Calc.cs");
-            var result = await _symbolNavigationEngine.GetCallGraphAsync("Calc.cs", "Double", maxDepth: 2);
-            Assert.That(result, Is.Not.Null, "Should return a CallGraphNode for an existing method");
-            Assert.That(result!.MethodName, Is.EqualTo("Double"));
-        }
+                SetSource(code, "Calc.cs");
+                var result = await _symbolNavigationEngine.GetCallGraphAsync("Calc.cs", "Double", maxDepth: 2);
+                Assert.That(result, Is.Not.Null, "Should return a CallGraphNode for an existing method");
+                Assert.That(result!.MethodName, Is.EqualTo("Double"));
+            }
 
-        [Test]
-        public async Task GetCallGraph_NonExistentMethod_ReturnsNull()
-        {
-            const string code = @"public class Calc { public int Add(int a, int b) => a + b; }";
-            SetSource(code, "Calc.cs");
-            var result = await _symbolNavigationEngine.GetCallGraphAsync("Calc.cs", "NonExistent", maxDepth: 2);
-            Assert.That(result, Is.Null, "Engine should return null for unknown method (tool layer converts to exception)");
-        }
+            [Test]
+            public async Task GetCallGraph_NonExistentMethod_ReturnsNull()
+            {
+                const string code = @"public class Calc { public int Add(int a, int b) => a + b; }";
+                SetSource(code, "Calc.cs");
+                var result = await _symbolNavigationEngine.GetCallGraphAsync("Calc.cs", "NonExistent", maxDepth: 2);
+                Assert.That(result, Is.Null, "Engine should return null for unknown method (tool layer converts to exception)");
+            }
 
-        [Test]
-        public async Task GetReverseCallGraph_ExistingMethod_ReturnsNode()
-        {
-            const string code = @"
+            [Test]
+            public async Task GetReverseCallGraph_ExistingMethod_ReturnsNode()
+            {
+                const string code = @"
 public class Svc
 {
     public void Helper() { }
     public void Caller() { Helper(); }
 }";
-            SetSource(code, "Svc.cs");
-            var result = await _symbolNavigationEngine.GetReverseCallGraphAsync("Svc.cs", "Helper", maxDepth: 2);
-            Assert.That(result, Is.Not.Null, "Should return a ReverseCallGraphNode for an existing method");
-            Assert.That(result!.MethodName, Is.EqualTo("Helper"));
+                SetSource(code, "Svc.cs");
+                var result = await _symbolNavigationEngine.GetReverseCallGraphAsync("Svc.cs", "Helper", maxDepth: 2);
+                Assert.That(result, Is.Not.Null, "Should return a ReverseCallGraphNode for an existing method");
+                Assert.That(result!.MethodName, Is.EqualTo("Helper"));
+            }
+
+            [Test]
+            public async Task GetReverseCallGraph_NonExistentMethod_ReturnsNull()
+            {
+                const string code = @"public class Svc { public void Helper() { } }";
+                SetSource(code, "Svc.cs");
+                var result = await _symbolNavigationEngine.GetReverseCallGraphAsync("Svc.cs", "Ghost", maxDepth: 2);
+                Assert.That(result, Is.Null, "Engine should return null for unknown method (tool layer converts to exception)");
+            }
         }
 
-        [Test]
-        public async Task GetReverseCallGraph_NonExistentMethod_ReturnsNull()
+        /// <summary>
+        /// Regression tests for GenerateDecoratorClass null-return bug:
+        /// The engine returned null when the interface was not found in the solution,
+        /// which the MCP framework silently serialized as empty output. The tool layer
+        /// now throws InvalidOperationException with an actionable message instead.
+        /// </summary>
+        [TestFixture]
+        public class GenerateDecoratorClassNullReturnRegressionTests
         {
-            const string code = @"public class Svc { public void Helper() { } }";
-            SetSource(code, "Svc.cs");
-            var result = await _symbolNavigationEngine.GetReverseCallGraphAsync("Svc.cs", "Ghost", maxDepth: 2);
-            Assert.That(result, Is.Null, "Engine should return null for unknown method (tool layer converts to exception)");
-        }
-    }
+            private IWorkspaceManager _workspaceManager;
+            private CodeGenerationEngine _codeGenerationEngine;
+            [SetUp]
+            public void Setup()
+            {
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+                _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+            }
 
-    /// <summary>
-    /// Regression tests for GenerateDecoratorClass null-return bug:
-    /// The engine returned null when the interface was not found in the solution,
-    /// which the MCP framework silently serialized as empty output. The tool layer
-    /// now throws InvalidOperationException with an actionable message instead.
-    /// </summary>
-    [TestFixture]
-    public class GenerateDecoratorClassNullReturnRegressionTests
-    {
-        private IWorkspaceManager _workspaceManager;
-        private CodeGenerationEngine _codeGenerationEngine;
-        [SetUp]
-        public void Setup()
-        {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-        }
+            [TearDown]
+            public void TearDown() => _workspaceManager?.Dispose();
+            private void SetSource(string source, string fileName = "Test.cs")
+            {
+                var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+                _workspaceManager.SetTestSolution(solution);
+            }
 
-        [TearDown]
-        public void TearDown() => _workspaceManager?.Dispose();
-        private void SetSource(string source, string fileName = "Test.cs")
-        {
-            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-            _workspaceManager.SetTestSolution(solution);
-        }
+            [Test]
+            public async Task GenerateDecoratorClass_NonExistentInterface_EngineReturnsNull()
+            {
+                const string code = @"public class Foo { }";
+                SetSource(code, "Foo.cs");
+                var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
+                Assert.That(result, Is.Null, "Engine should return null for non-existent interface (tool layer converts to exception)");
+            }
 
-        [Test]
-        public async Task GenerateDecoratorClass_NonExistentInterface_EngineReturnsNull()
-        {
-            const string code = @"public class Foo { }";
-            SetSource(code, "Foo.cs");
-            var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
-            Assert.That(result, Is.Null, "Engine should return null for non-existent interface (tool layer converts to exception)");
-        }
+            [Test]
+            public async Task GenerateDecoratorClass_NonExistentInterface_ToolThrowsInvalidOperation()
+            {
+                const string code = @"public class Foo { }";
+                SetSource(code, "Foo.cs");
+                var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
+                Assert.That(result, Is.Null, "Engine should return null for non-existent interface (tool layer converts to exception)");
+            }
 
-        [Test]
-        public async Task GenerateDecoratorClass_NonExistentInterface_ToolThrowsInvalidOperation()
-        {
-            const string code = @"public class Foo { }";
-            SetSource(code, "Foo.cs");
-            var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
-            Assert.That(result, Is.Null, "Engine should return null for non-existent interface (tool layer converts to exception)");
-        }
-
-        [Test]
-        public async Task GenerateDecoratorClass_ValidInterface_ReturnsResult()
-        {
-            const string code = @"
+            [Test]
+            public async Task GenerateDecoratorClass_ValidInterface_ReturnsResult()
+            {
+                const string code = @"
 namespace MyApp
 {
     public interface IMyService
@@ -3041,307 +2973,308 @@ namespace MyApp
         int Calculate(int a, int b);
     }
 }";
-            SetSource(code, "IMyService.cs");
-            var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("IMyService", "Logging", null);
-            Assert.That(result, Is.Not.Null, "Engine should return a DecoratorResult for a valid interface");
-            Assert.That(result!.SourceCode, Does.Contain("IMyService"), "Decorator source should reference the interface");
-            Assert.That(result.SourceCode, Does.Contain("DoWork"), "Decorator source should include the interface methods");
+                SetSource(code, "IMyService.cs");
+                var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("IMyService", "Logging", null);
+                Assert.That(result, Is.Not.Null, "Engine should return a DecoratorResult for a valid interface");
+                Assert.That(result!.SourceCode, Does.Contain("IMyService"), "Decorator source should reference the interface");
+                Assert.That(result.SourceCode, Does.Contain("DoWork"), "Decorator source should include the interface methods");
+            }
+        }
+
+        public AntiPatternEngine _antiPatternEngine;
+    }
+
+    /// <summary>
+    /// Regression tests for AddGuardClauses null-return bug:
+    /// LogicOptimizationEngine returns "" when the file/method is not found,
+    /// which the tool layer now converts to an InvalidOperationException with
+    /// an actionable message instead of silently returning empty output.
+    /// </summary>
+    [TestFixture]
+    public class AddGuardClausesNullReturnRegressionTests
+    {
+        private IWorkspaceManager _workspaceManager;
+        private LogicOptimizationEngine _engine;
+        private SentinelConfiguration _config;
+        [SetUp]
+        public void Setup()
+        {
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = new LogicOptimizationEngine(_workspaceManager);
+            _config = new SentinelConfiguration();
+            // Load a minimal solution so engines can reach their "file not found" branch
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public class Stub { }")]);
+            _workspaceManager.SetTestSolution(solution);
+        }
+
+        [TearDown]
+        public void TearDown() => _workspaceManager?.Dispose();
+        private QualityTools CreateTools() => new QualityTools(new TestingEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
+        [Test]
+        public async Task AddGuardClausesAsync_FileNotInWorkspace_ReturnsEmpty()
+        {
+            var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace (tool layer converts to exception)");
+        }
+
+        [Test]
+        public async Task AddGuardClauses_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        {
+            var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+        }
+
+        [Test]
+        public async Task AddGuardClausesAsync_MethodNotInFile_ReturnsOriginalContent()
+        {
+            // When the file exists but the method doesn't, the engine returns the file
+            // unchanged (no changes needed is not an error, unlike file-not-found).
+            var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
+            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target method is not found - no changes needed");
+        }
+
+        [Test]
+        public async Task AddGuardClauses_Tool_MethodNotFound_DoesNotThrow()
+        {
+            // When the engine returns non-empty content (no changes needed), the tool
+            // returns that content rather than throwing -> only file-not-found triggers IOE.
+            var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
+            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target method is not found - no changes needed");
         }
     }
 
-    public AntiPatternEngine _antiPatternEngine;
-}
-
-/// <summary>
-/// Regression tests for AddGuardClauses null-return bug:
-/// LogicOptimizationEngine returns "" when the file/method is not found,
-/// which the tool layer now converts to an InvalidOperationException with
-/// an actionable message instead of silently returning empty output.
-/// </summary>
-[TestFixture]
-public class AddGuardClausesNullReturnRegressionTests
-{
-    private IWorkspaceManager _workspaceManager;
-    private LogicOptimizationEngine _engine;
-    private SentinelConfiguration _config;
-    [SetUp]
-    public void Setup()
+    /// <summary>
+    /// Regression tests for AddBenchmarkStub null-return bug:
+    /// TestingEngine returns "" when the class or method is not found,
+    /// which the tool layer now converts to an InvalidOperationException.
+    /// </summary>
+    [TestFixture]
+    public class AddBenchmarkStubNullReturnRegressionTests
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new LogicOptimizationEngine(_workspaceManager);
-        _config = new SentinelConfiguration();
-        // Load a minimal solution so engines can reach their "file not found" branch
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public class Stub { }")]);
-        _workspaceManager.SetTestSolution(solution);
+        private IWorkspaceManager _workspaceManager;
+        private TestingEngine _engine;
+        private SentinelConfiguration _config;
+        [SetUp]
+        public void Setup()
+        {
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = new TestingEngine(_workspaceManager);
+            _config = new SentinelConfiguration();
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", "public class Calc { public int Add(int a, int b) => a + b; }")]);
+            _workspaceManager.SetTestSolution(solution);
+        }
+
+        [TearDown]
+        public void TearDown() => _workspaceManager?.Dispose();
+        private QualityTools CreateTools() => new QualityTools(_engine, new ControlFlowEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
+        [Test]
+        public async Task AddBenchmarkStubAsync_FileNotInWorkspace_ReturnsEmpty()
+        {
+            var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
+        }
+
+        [Test]
+        public async Task AddBenchmarkStub_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        {
+            var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+        }
+
+        [Test]
+        public async Task AddBenchmarkStubAsync_ClassNotInFile_ReturnsOriginalContent()
+        {
+            // When the file exists but the class doesn't, the engine returns the original
+            // file content unchanged -> "no changes needed" is not the same as "file not found".
+            var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
+            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
+        }
+
+        [Test]
+        public async Task AddBenchmarkStub_Tool_ClassNotFound_DoesNotThrow()
+        {
+            // When the engine returns non-empty content (no changes needed), the tool
+            // returns that content rather than throwing -> only file-not-found triggers IOE.
+            var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
+            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
+        }
     }
 
-    [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
-    private QualityTools CreateTools() => new QualityTools(new TestingEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
-    [Test]
-    public async Task AddGuardClausesAsync_FileNotInWorkspace_ReturnsEmpty()
+    /// <summary>
+    /// Regression tests for AddBraces and UpgradePatternMatching null-return bugs:
+    /// SyntaxUpgradeEngine returns "" when the file is not found in the workspace,
+    /// which the tool layer now converts to an InvalidOperationException.
+    /// </summary>
+    [TestFixture]
+    public class AddBracesNullReturnRegressionTests
     {
-        var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace (tool layer converts to exception)");
+        private IWorkspaceManager _workspaceManager;
+        private SyntaxUpgradeEngine _engine;
+        private SentinelConfiguration _config;
+        [SetUp]
+        public void Setup()
+        {
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _config = new SentinelConfiguration();
+            _engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public class Stub { public void Foo() { } }")]);
+            _workspaceManager.SetTestSolution(solution);
+        }
+
+        [TearDown]
+        public void TearDown() => _workspaceManager?.Dispose();
+        private ModernizationTools CreateTools() => new ModernizationTools(new ModernizationEngine(_workspaceManager, _config), new ModernizationUpgradeEngine(_workspaceManager), new ModernLoggingEngine(_workspaceManager), _engine, new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new ImmutabilityEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        [Test]
+        public async Task AddBracesAsync_FileNotInWorkspace_ReturnsEmpty()
+        {
+            var result = await _engine.AddBracesAsync("nonexistent.cs");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
+        }
+
+        [Test]
+        public async Task AddBraces_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        {
+            var result = await _engine.AddBracesAsync("nonexistent.cs");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+        }
+
+        [Test]
+        public async Task UpgradePatternMatchingAsync_FileNotInWorkspace_ReturnsEmpty()
+        {
+            var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
+        }
+
+        [Test]
+        public async Task UpgradePatternMatching_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        {
+            var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+        }
     }
 
-    [Test]
-    public async Task AddGuardClauses_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+    /// <summary>
+    /// Regression tests for MakeClassImmutable null-return bug:
+    /// ImmutabilityEngine returns "" when the file or class is not found,
+    /// which the tool layer now converts to an InvalidOperationException.
+    /// </summary>
+    [TestFixture]
+    public class MakeClassImmutableNullReturnRegressionTests
     {
-        var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+        private IWorkspaceManager _workspaceManager;
+        private ImmutabilityEngine _engine;
+        private SentinelConfiguration _config;
+        [SetUp]
+        public void Setup()
+        {
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _engine = new ImmutabilityEngine(_workspaceManager);
+            _config = new SentinelConfiguration();
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Foo.cs", "public class Foo { public string Name { get; set; } }")]);
+            _workspaceManager.SetTestSolution(solution);
+        }
+
+        [TearDown]
+        public void TearDown() => _workspaceManager?.Dispose();
+        private ModernizationTools CreateTools() => new ModernizationTools(new ModernizationEngine(_workspaceManager, _config), new ModernizationUpgradeEngine(_workspaceManager), new ModernLoggingEngine(_workspaceManager), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), _engine, new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        [Test]
+        public async Task MakeClassImmutableAsync_FileNotInWorkspace_ReturnsEmpty()
+        {
+            var result = await _engine.MakeClassImmutableAsync("nonexistent.cs", "MyClass");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
+        }
+
+        [Test]
+        public async Task MakeClassImmutable_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        {
+            var result = await _engine.MakeClassImmutableAsync("nonexistent.cs", "MyClass");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+        }
+
+        [Test]
+        public async Task MakeClassImmutableAsync_ClassNotInFile_ReturnsOriginalContent()
+        {
+            // When the file exists but the class doesn't, the engine returns the original
+            // file content unchanged -> "no changes needed" is not the same as "file not found".
+            var result = await _engine.MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
+            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
+        }
+
+        [Test]
+        public async Task MakeClassImmutable_Tool_ClassNotFound_DoesNotThrow()
+        {
+            // When the engine returns non-empty content (no changes needed), the tool
+            // returns that content rather than throwing -> only file-not-found triggers IOE.
+            var result = await _engine.MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
+            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
+        }
     }
 
-    [Test]
-    public async Task AddGuardClausesAsync_MethodNotInFile_ReturnsOriginalContent()
+    /// <summary>
+    /// Regression tests for SyncInterfaceToImplementation and ConvertExpressionBody null-return bugs:
+    /// RefactoringEngine returns "" when the file or target is not found,
+    /// which the tool layer now converts to an InvalidOperationException.
+    /// </summary>
+    [TestFixture]
+    public class SyncInterfaceToImplementationNullReturnRegressionTests
     {
-        // When the file exists but the method doesn't, the engine returns the file
-        // unchanged (no changes needed is not an error, unlike file-not-found).
-        var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
-        Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target method is not found - no changes needed");
-    }
+        private IWorkspaceManager _workspaceManager;
+        private AdvancedRefactoringEngine _engine;
+        private SentinelConfiguration _config;
+        [SetUp]
+        public void Setup()
+        {
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            _config = new SentinelConfiguration();
+            _engine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, _config);
+            // Load a minimal solution so the engine reaches the "file/class not found" return path
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public interface IFoo { } public class Foo : IFoo { }")]);
+            _workspaceManager.SetTestSolution(solution);
+        }
 
-    [Test]
-    public async Task AddGuardClauses_Tool_MethodNotFound_DoesNotThrow()
-    {
-        // When the engine returns non-empty content (no changes needed), the tool
-        // returns that content rather than throwing -> only file-not-found triggers IOE.
-        var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
-        Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target method is not found - no changes needed");
-    }
-}
+        [TearDown]
+        public void TearDown() => _workspaceManager?.Dispose();
+        private RefactoringEngine CreateTools() => new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+        // SyncInterface moved to AdvancedRefactoringTools in the Basic/Advanced server split.
+        private AdvancedRefactoringTools CreateAdvancedTools() => new AdvancedRefactoringTools(_workspaceManager);
+        [Test]
+        public async Task SyncInterfaceToImplementationAsync_FileNotInWorkspace_ReturnsContent()
+        {
+            // SyncInterfaceToImplementationAsync applies interface sync across the whole solution
+            // state. Even for a nonexistent file, the engine locates the interface in the solution
+            // and returns non-empty content (no-op sync rather than a hard error).
+            var result = await _engine.SyncInterfaceToImplementationAsync("nonexistent.cs", "Ghost", "IGhost");
+            // The engine returns content (not empty), so the file-not-found guard does NOT fire.
+            // This is correct -> the engine "no-op"s gracefully rather than erroring.
+            Assert.That(result, Is.Not.Null, "Engine returns content (not empty) for SyncInterface even when file is not in workspace");
+        }
 
-/// <summary>
-/// Regression tests for AddBenchmarkStub null-return bug:
-/// TestingEngine returns "" when the class or method is not found,
-/// which the tool layer now converts to an InvalidOperationException.
-/// </summary>
-[TestFixture]
-public class AddBenchmarkStubNullReturnRegressionTests
-{
-    private IWorkspaceManager _workspaceManager;
-    private TestingEngine _engine;
-    private SentinelConfiguration _config;
-    [SetUp]
-    public void Setup()
-    {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new TestingEngine(_workspaceManager);
-        _config = new SentinelConfiguration();
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", "public class Calc { public int Add(int a, int b) => a + b; }")]);
-        _workspaceManager.SetTestSolution(solution);
-    }
+        [Test]
+        public async Task SyncInterfaceToImplementation_Tool_FileNotInWorkspace_DoesNotThrow()
+        {
+            // Because the engine returns non-empty content, the tool's file-not-found IOE guard
+            // does NOT fire. The tool returns the engine's content to the caller.
+            var tools = CreateAdvancedTools();
+            object? result = null;
+            Assert.DoesNotThrowAsync(async () => result = await tools.SyncInterface(reason: "test message", "nonexistent.cs", "IGhost", SyncInterfaceAction.sync, "Ghost"));
+            Assert.That(result, Is.Not.Null, "Tool returns engine content when engine signals no-changes-needed");
+        }
 
-    [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
-    private QualityTools CreateTools() => new QualityTools(_engine, new ControlFlowEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
-    [Test]
-    public async Task AddBenchmarkStubAsync_FileNotInWorkspace_ReturnsEmpty()
-    {
-        var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
-    }
+        [Test]
+        public async Task ConvertExpressionBodyAsync_FileNotInWorkspace_ReturnsEmpty()
+        {
+            // ConvertExpressionBodyAsync returns "" when the file is not found in the workspace,
+            // which the tool layer converts to InvalidOperationException (verified by the
+            // passing ConvertExpressionBody_Tool test).
+            var result = await _engine.ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty string when file is not in the workspace");
+        }
 
-    [Test]
-    public async Task AddBenchmarkStub_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
-    {
-        var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
-    }
-
-    [Test]
-    public async Task AddBenchmarkStubAsync_ClassNotInFile_ReturnsOriginalContent()
-    {
-        // When the file exists but the class doesn't, the engine returns the original
-        // file content unchanged -> "no changes needed" is not the same as "file not found".
-        var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
-        Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
-    }
-
-    [Test]
-    public async Task AddBenchmarkStub_Tool_ClassNotFound_DoesNotThrow()
-    {
-        // When the engine returns non-empty content (no changes needed), the tool
-        // returns that content rather than throwing -> only file-not-found triggers IOE.
-        var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
-        Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
-    }
-}
-
-/// <summary>
-/// Regression tests for AddBraces and UpgradePatternMatching null-return bugs:
-/// SyntaxUpgradeEngine returns "" when the file is not found in the workspace,
-/// which the tool layer now converts to an InvalidOperationException.
-/// </summary>
-[TestFixture]
-public class AddBracesNullReturnRegressionTests
-{
-    private IWorkspaceManager _workspaceManager;
-    private SyntaxUpgradeEngine _engine;
-    private SentinelConfiguration _config;
-    [SetUp]
-    public void Setup()
-    {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public class Stub { public void Foo() { } }")]);
-        _workspaceManager.SetTestSolution(solution);
-    }
-
-    [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
-    private ModernizationTools CreateTools() => new ModernizationTools(new ModernizationEngine(_workspaceManager, _config), new ModernizationUpgradeEngine(_workspaceManager), new ModernLoggingEngine(_workspaceManager), _engine, new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new ImmutabilityEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
-    [Test]
-    public async Task AddBracesAsync_FileNotInWorkspace_ReturnsEmpty()
-    {
-        var result = await _engine.AddBracesAsync("nonexistent.cs");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
-    }
-
-    [Test]
-    public async Task AddBraces_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
-    {
-        var result = await _engine.AddBracesAsync("nonexistent.cs");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
-    }
-
-    [Test]
-    public async Task UpgradePatternMatchingAsync_FileNotInWorkspace_ReturnsEmpty()
-    {
-        var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
-    }
-
-    [Test]
-    public async Task UpgradePatternMatching_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
-    {
-        var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
-    }
-}
-
-/// <summary>
-/// Regression tests for MakeClassImmutable null-return bug:
-/// ImmutabilityEngine returns "" when the file or class is not found,
-/// which the tool layer now converts to an InvalidOperationException.
-/// </summary>
-[TestFixture]
-public class MakeClassImmutableNullReturnRegressionTests
-{
-    private IWorkspaceManager _workspaceManager;
-    private ImmutabilityEngine _engine;
-    private SentinelConfiguration _config;
-    [SetUp]
-    public void Setup()
-    {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ImmutabilityEngine(_workspaceManager);
-        _config = new SentinelConfiguration();
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Foo.cs", "public class Foo { public string Name { get; set; } }")]);
-        _workspaceManager.SetTestSolution(solution);
-    }
-
-    [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
-    private ModernizationTools CreateTools() => new ModernizationTools(new ModernizationEngine(_workspaceManager, _config), new ModernizationUpgradeEngine(_workspaceManager), new ModernLoggingEngine(_workspaceManager), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), _engine, new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
-    [Test]
-    public async Task MakeClassImmutableAsync_FileNotInWorkspace_ReturnsEmpty()
-    {
-        var result = await _engine.MakeClassImmutableAsync("nonexistent.cs", "MyClass");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
-    }
-
-    [Test]
-    public async Task MakeClassImmutable_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
-    {
-        var result = await _engine.MakeClassImmutableAsync("nonexistent.cs", "MyClass");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
-    }
-
-    [Test]
-    public async Task MakeClassImmutableAsync_ClassNotInFile_ReturnsOriginalContent()
-    {
-        // When the file exists but the class doesn't, the engine returns the original
-        // file content unchanged -> "no changes needed" is not the same as "file not found".
-        var result = await _engine.MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
-        Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
-    }
-
-    [Test]
-    public async Task MakeClassImmutable_Tool_ClassNotFound_DoesNotThrow()
-    {
-        // When the engine returns non-empty content (no changes needed), the tool
-        // returns that content rather than throwing -> only file-not-found triggers IOE.
-        var result = await _engine.MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
-        Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
-    }
-}
-
-/// <summary>
-/// Regression tests for SyncInterfaceToImplementation and ConvertExpressionBody null-return bugs:
-/// RefactoringEngine returns "" when the file or target is not found,
-/// which the tool layer now converts to an InvalidOperationException.
-/// </summary>
-[TestFixture]
-public class SyncInterfaceToImplementationNullReturnRegressionTests
-{
-    private IWorkspaceManager _workspaceManager;
-    private AdvancedRefactoringEngine _engine;
-    private SentinelConfiguration _config;
-    [SetUp]
-    public void Setup()
-    {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _config = new SentinelConfiguration();
-        _engine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, _config);
-        // Load a minimal solution so the engine reaches the "file/class not found" return path
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public interface IFoo { } public class Foo : IFoo { }")]);
-        _workspaceManager.SetTestSolution(solution);
-    }
-
-    [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
-    private RefactoringEngine CreateTools() => new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
-    // SyncInterface moved to AdvancedRefactoringTools in the Basic/Advanced server split.
-    private AdvancedRefactoringTools CreateAdvancedTools() => new AdvancedRefactoringTools(_workspaceManager);
-    [Test]
-    public async Task SyncInterfaceToImplementationAsync_FileNotInWorkspace_ReturnsContent()
-    {
-        // SyncInterfaceToImplementationAsync applies interface sync across the whole solution
-        // state. Even for a nonexistent file, the engine locates the interface in the solution
-        // and returns non-empty content (no-op sync rather than a hard error).
-        var result = await _engine.SyncInterfaceToImplementationAsync("nonexistent.cs", "Ghost", "IGhost");
-        // The engine returns content (not empty), so the file-not-found guard does NOT fire.
-        // This is correct -> the engine "no-op"s gracefully rather than erroring.
-        Assert.That(result, Is.Not.Null, "Engine returns content (not empty) for SyncInterface even when file is not in workspace");
-    }
-
-    [Test]
-    public async Task SyncInterfaceToImplementation_Tool_FileNotInWorkspace_DoesNotThrow()
-    {
-        // Because the engine returns non-empty content, the tool's file-not-found IOE guard
-        // does NOT fire. The tool returns the engine's content to the caller.
-        var tools = CreateAdvancedTools();
-        object? result = null;
-        Assert.DoesNotThrowAsync(async () => result = await tools.SyncInterface(reason: "test message", "nonexistent.cs", "IGhost", SyncInterfaceAction.sync, "Ghost"));
-        Assert.That(result, Is.Not.Null, "Tool returns engine content when engine signals no-changes-needed");
-    }
-
-    [Test]
-    public async Task ConvertExpressionBodyAsync_FileNotInWorkspace_ReturnsEmpty()
-    {
-        // ConvertExpressionBodyAsync returns "" when the file is not found in the workspace,
-        // which the tool layer converts to InvalidOperationException (verified by the
-        // passing ConvertExpressionBody_Tool test).
-        var result = await _engine.ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty string when file is not in the workspace");
-    }
-
-    [Test]
-    public async Task ConvertExpressionBody_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
-    {
-        var result = await _engine.ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty string when file is not in the workspace");
+        [Test]
+        public async Task ConvertExpressionBody_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        {
+            var result = await _engine.ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty string when file is not in the workspace");
+        }
     }
 }

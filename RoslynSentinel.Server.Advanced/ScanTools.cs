@@ -1,15 +1,18 @@
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json.Serialization;
+
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Advanced;
+
 [McpServerToolType]
 public class ScanTools
 {
     private readonly ResourceSafetyEngine _resourceSafetyEngine;
-    private readonly AnalysisEngine _analysisEngine;
+    // private readonly AnalysisEngine _analysisEngine;
     private readonly SecurityEngine _securityEngine;
     private readonly AntiPatternEngine _antiPatternEngine;
     private readonly AsyncSafetyEngine _asyncSafetyEngine;
@@ -33,9 +36,9 @@ public class ScanTools
     private readonly BreakingChangeEngine _breakingChangeEngine;
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<ScanTools> _logger;
-    public ScanTools(AnalysisEngine analysisEngine, SecurityEngine securityEngine, AntiPatternEngine antiPatternEngine, AsyncSafetyEngine asyncSafetyEngine, ThreadSafetyEngine threadSafetyEngine, ControlFlowEngine controlFlowEngine, PerformanceEngine performanceEngine, DeadCodeEngine deadCodeEngine, DependencyEngine dependencyEngine, ArchitecturalEngine architecturalEngine, ProjectStructureEngine projectStructureEngine, DependencyInjectionEngine dependencyInjectionEngine, ProjectConsistencyEngine projectConsistencyEngine, MetricsEngine metricsEngine, CloneDetectionEngine cloneDetectionEngine, DiscoveryEngine discoveryEngine, StackOverflowEngine stackOverflowEngine, CodeStyleEngine codeStyleEngine, CodeStyleAnalysisEngine codeStyleAnalysisEngine, RefactoringEngine refactoringEngine, SymbolNavigationEngine symbolNavigationEngine, BreakingChangeEngine breakingChangeEngine, IWorkspaceManager workspaceManager, ILogger<ScanTools> logger, ResourceSafetyEngine resourceSafetyEngine = null)
+    public ScanTools(SecurityEngine securityEngine, AntiPatternEngine antiPatternEngine, AsyncSafetyEngine asyncSafetyEngine, ThreadSafetyEngine threadSafetyEngine, ControlFlowEngine controlFlowEngine, PerformanceEngine performanceEngine, DeadCodeEngine deadCodeEngine, DependencyEngine dependencyEngine, ArchitecturalEngine architecturalEngine, ProjectStructureEngine projectStructureEngine, DependencyInjectionEngine dependencyInjectionEngine, ProjectConsistencyEngine projectConsistencyEngine, MetricsEngine metricsEngine, CloneDetectionEngine cloneDetectionEngine, DiscoveryEngine discoveryEngine, StackOverflowEngine stackOverflowEngine, CodeStyleEngine codeStyleEngine, CodeStyleAnalysisEngine codeStyleAnalysisEngine, RefactoringEngine refactoringEngine, SymbolNavigationEngine symbolNavigationEngine, BreakingChangeEngine breakingChangeEngine, IWorkspaceManager workspaceManager, ILogger<ScanTools> logger, ResourceSafetyEngine resourceSafetyEngine = null)
     {
-        _analysisEngine = analysisEngine;
+        // _analysisEngine = analysisEngine;
         _securityEngine = securityEngine;
         _antiPatternEngine = antiPatternEngine;
         _asyncSafetyEngine = asyncSafetyEngine;
@@ -653,23 +656,23 @@ public class ScanTools
                         SuccessData = result81
                     };
                 case DetectorId.duplicate_blocks_in_hierarchy:
-                {
-                    if (string.IsNullOrEmpty(scopeName))
                     {
+                        if (string.IsNullOrEmpty(scopeName))
+                        {
+                            return new SentinelCallToolResult<object>()
+                            {
+                                IsSuccess = false,
+                                SuccessData = "duplicate_blocks_in_hierarchy requires scopeName to be the root type name."
+                            };
+                        }
+
+                        var result82 = await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(scopeName, null, 4, cancellationToken: cancellationToken);
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = false,
-                            SuccessData = "duplicate_blocks_in_hierarchy requires scopeName to be the root type name."
+                            IsSuccess = true,
+                            SuccessData = result82
                         };
                     }
-
-                    var result82 = await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(scopeName, null, 4, cancellationToken: cancellationToken);
-                    return new SentinelCallToolResult<object>()
-                    {
-                        IsSuccess = true,
-                        SuccessData = result82
-                    };
-                }
 
                 case DetectorId.duplicate_methods:
                     var result83 = await _antiPatternEngine.FindDuplicateMethodsAsync(5, projectName, cancellationToken: cancellationToken);
@@ -728,15 +731,15 @@ public class ScanTools
                         SuccessData = result90
                     };
                 case DetectorId.namespace_path_mismatches:
-                {
-                    var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-                    var result91 = await _architecturalEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken: cancellationToken);
-                    return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = true,
-                        SuccessData = result91
-                    };
-                }
+                        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+                        var result91 = await _architecturalEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken: cancellationToken);
+                        return new SentinelCallToolResult<object>()
+                        {
+                            IsSuccess = true,
+                            SuccessData = result91
+                        };
+                    }
 
                 case DetectorId.primitive_obsession:
                     var result92 = await _antiPatternEngine.FindPrimitiveObsessionAsync(resolvedFilePath, projectName, cancellationToken: cancellationToken);
@@ -763,7 +766,8 @@ public class ScanTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        SuccessData = $"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list."};
+                        SuccessData = $"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list."
+                    };
             }
         }
         catch (ArgumentException aex)
@@ -863,7 +867,8 @@ public class ScanTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        SuccessData = $"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode."};
+                        SuccessData = $"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode."
+                    };
             }
         }
         catch (Exception ex)
@@ -1137,7 +1142,7 @@ public class ScanTools
 
             return toolResult;
         }
-        catch (Exception ex)when (ex is ArgumentException && ex.Message.Contains("not found in solution"))
+        catch (Exception ex) when (ex is ArgumentException && ex.Message.Contains("not found in solution"))
         {
             return new SentinelCallToolResult<object>
             {
@@ -1166,20 +1171,20 @@ public class ScanTools
         var sb = new StringBuilder();
         sb.AppendLine($"scan - valid detector IDs grouped by domain ({total} total):");
         sb.AppendLine();
-        foreach (var(domain, ids)in byDomain)
+        foreach (var (domain, ids) in byDomain)
         {
             sb.AppendLine($"{domain} ({ids.Length}):");
             // Wrap ids at ~80 chars, indented two spaces
             const int Indent = 2;
             const int WrapAt = 80;
-            var line = new StringBuilder(new string (' ', Indent));
+            var line = new StringBuilder(new string(' ', Indent));
             foreach (var id in ids)
             {
                 string candidate = line.Length == Indent ? id.ToString() : ", " + id.ToString();
                 if (line.Length + candidate.Length > WrapAt && line.Length > Indent)
                 {
                     sb.AppendLine(line.ToString());
-                    line.Clear().Append(new string (' ', Indent)).Append(id.ToString());
+                    line.Clear().Append(new string(' ', Indent)).Append(id.ToString());
                 }
                 else
                 {

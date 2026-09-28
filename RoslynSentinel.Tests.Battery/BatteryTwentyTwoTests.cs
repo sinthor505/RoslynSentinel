@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
+
 [TestFixture]
 public class BatteryTwentyTwoTests
 {
@@ -14,7 +15,7 @@ public class BatteryTwentyTwoTests
     private MetricsEngine _metricsEngine;
     private InventoryEngine _inventoryEngine;
     private DeadCodeEngine _deadCodeEngine;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
     private DocumentationEngine _documentationEngine;
     private DependencyEngine _dependencyEngine;
     private ProjectStructureEngine _projectStructureEngine;
@@ -110,7 +111,6 @@ public class OrderService : IOrderService
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager, _config);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _documentationEngine = new DocumentationEngine(_workspaceManager);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
@@ -121,12 +121,12 @@ public class OrderService : IOrderService
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _tools = new IntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, _config, NullLogger<IntelligenceTools>.Instance);
+        _tools = new IntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, _config, NullLogger<IntelligenceTools>.Instance);
         // Symbol-level tools moved to SentinelSymbolTools (Basic) in the server split.
         _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(_discoveryEngine, _semanticSearchEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance));
         _symbolNavigationTools = new SymbolNavigationTools(new SymbolNavigationImpl(_symbolNavigationEngine, _impactAnalyzer, _workspaceManager, NullLogger<SymbolNavigationImpl>.Instance));
         // GetPublicApiSurface moved to ScanTools (Advanced).
-        _scanTools = new ScanTools(_analysisEngine, new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _architecturalEngine, _projectStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager), _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine, new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeStyleAnalysisEngine(_workspaceManager), new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config), _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager), _workspaceManager, NullLogger<ScanTools>.Instance);
+        _scanTools = new ScanTools(new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _architecturalEngine, _projectStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager), _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine, new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeStyleAnalysisEngine(_workspaceManager), new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config), _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager), _workspaceManager, NullLogger<ScanTools>.Instance);
     }
 
     [TearDown]

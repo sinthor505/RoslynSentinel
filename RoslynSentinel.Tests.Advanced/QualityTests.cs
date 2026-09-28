@@ -1,16 +1,14 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
-using RoslynSentinel.Common;
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
+
 public class QualityTests
 {
     private IWorkspaceManager _workspaceManager;
     private LogicOptimizationEngine _logicEngine;
-    private PerformanceEngine _perfEngine;
-    private AnalysisEngine _analysisEngine;
     private AsyncSafetyEngine _asyncSafetyEngine;
     [SetUp]
     public void Setup()
@@ -18,14 +16,13 @@ public class QualityTests
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _logicEngine = new LogicOptimizationEngine(_workspaceManager);
-        _perfEngine = new PerformanceEngine(_workspaceManager, config);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, config);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
+
     private Solution CreateSolution(string source, string fileName = "Test.cs")
     {
         var adhocWorkspace = new AdhocWorkspace();
@@ -43,16 +40,6 @@ public class QualityTests
         _workspaceManager.SetTestSolution(CreateSolution(source, "S.cs"));
         var result = await _logicEngine.AddGuardClausesAsync("S.cs", "M");
         Assert.That(result.UpdatedText!, Contains.Substring("ArgumentNullException.ThrowIfNull(input);"));
-    }
-
-    [Test]
-    public async Task DetectInefficientStringComparisons_Should_Flag_ToLower_Equals()
-    {
-        var source = "public class C { bool IsMatch(string s) => s.ToLower() == \"test\"; }";
-        _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var issues = await _perfEngine.DetectInefficientStringComparisonsAsync("C.cs");
-        Assert.That(issues.Count, Is.GreaterThan(0));
-        Assert.That(issues[0].Description, Contains.Substring("Inefficient string comparison"));
     }
 
     [Test]

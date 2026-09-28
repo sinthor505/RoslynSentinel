@@ -17,7 +17,7 @@ public class BatteryTwentyOneTests
     private ModernizationUpgradeEngine _modernizationUpgradeEngine;
     private ModernLoggingEngine _modernLoggingEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
     private LogicOptimizationEngine _logicOptimizationEngine;
     private CodeStyleEngine _codeStyleEngine;
     private CodeHealingEngine _codeHealingEngine;
@@ -143,7 +143,6 @@ public class Worker
         _modernizationUpgradeEngine = new ModernizationUpgradeEngine(_workspaceManager);
         _modernLoggingEngine = new ModernLoggingEngine(_workspaceManager);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager, _config);

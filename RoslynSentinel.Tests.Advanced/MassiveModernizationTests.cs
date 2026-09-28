@@ -28,7 +28,6 @@ public class MassiveModernizationTests
         _modernizationEngine = modern;
         var upgrade = new ModernizationUpgradeEngine(_workspaceManager);
         var logging = new ModernLoggingEngine(_workspaceManager);
-        var analysis = new AnalysisEngine(_workspaceManager, config);
         var logic = new LogicOptimizationEngine(_workspaceManager);
         var style = new CodeStyleEngine(_workspaceManager, config);
         var healing = new CodeHealingEngine(_workspaceManager, config);

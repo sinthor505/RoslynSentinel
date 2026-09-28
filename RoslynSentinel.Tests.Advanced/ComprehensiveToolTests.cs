@@ -13,7 +13,7 @@ public class ComprehensiveToolTests
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private AdvancedStructuralEngine _advancedStructuralEngine;
     private AdvancedTypeEngine _advancedTypeEngine;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
     private ApiGenerationEngine _apiAutomationEngine;
     private ArchitecturalEngine _architecturalEngine;
     private AsyncBatchEngine _asyncBatchEngine;
@@ -74,7 +74,6 @@ public class ComprehensiveToolTests
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
         _advancedTypeEngine = new AdvancedTypeEngine(_workspaceManager);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _apiAutomationEngine = new ApiGenerationEngine(_workspaceManager);
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
@@ -143,7 +142,6 @@ public class ComprehensiveToolTests
             _metricsEngine,
             _inventoryEngine,
             _deadCodeEngine,
-            _analysisEngine,
             _documentationEngine,
             _dependencyEngine,
             _projectStructureEngine,

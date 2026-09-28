@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
+
 [TestFixture]
 public class BatteryThirtyThreeTests
 {
@@ -28,7 +29,7 @@ public class BatteryThirtyThreeTests
     private MetricsEngine _metricsEngine;
     private InventoryEngine _inventoryEngine;
     private DeadCodeEngine _deadCodeEngine;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
     private DocumentationEngine _documentationEngine;
     private DependencyEngine _dependencyEngine;
     private ProjectStructureEngine _projectStructureEngine;
@@ -60,7 +61,6 @@ public class BatteryThirtyThreeTests
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager, _config);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _documentationEngine = new DocumentationEngine(_workspaceManager);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
@@ -70,7 +70,7 @@ public class BatteryThirtyThreeTests
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _intelligenceTools = new IntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, _config, NullLogger<IntelligenceTools>.Instance);
+        _intelligenceTools = new IntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, _config, NullLogger<IntelligenceTools>.Instance);
         _performanceEngine = new PerformanceEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _testingEngine = new TestingEngine(_workspaceManager);

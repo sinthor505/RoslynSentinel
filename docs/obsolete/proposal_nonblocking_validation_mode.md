@@ -1,5 +1,11 @@
 # Non-blocking validation mode (report, don't reject)
 
+> **Superseded (2026-09-28)** by [proposal_staged_writes.md](../current/proposal_staged_writes.md).
+> Its report-don't-reject output shape and the coordinated-multi-file motivation carry forward
+> there, applied to an in-memory stage so disk never regresses; the thrashing/stall-backstop
+> concern is covered by that proposal's startup-arg call cap. Kept for its design history and
+> Alternatives section.
+
 ## Motivation
 
 `ValidateAndApplyHelper.ValidateAndApplyAsync` (`RoslynSentinel.Common/ValidateAndApplyHelper.cs:49-57`)
@@ -150,7 +156,11 @@ would be evidence for a classifier, but should be evidence-driven rather than as
   stage twenty broken attempts as readily as it commits them, and staging removes the per-call
   compile feedback that currently forces a checkpoint, so a confused model could drift further
   before anything stops it. This proposal is the one that keeps feedback flowing every call.
-  If staging ships, this mode remains useful for exactly the case staging does not cover.
+  If staging ships, this mode remains useful for exactly the case staging does not cover. The
+  staging design itself is now written up in full at `docs/current/proposal_staged_writes.md`,
+  which reuses this document's report-don't-reject output shape. As of 2026-09-28 the user has
+  confirmed this document is superseded by that one for the coordinated-multi-file case — see the
+  banner at the top of this document.
 - **`PreviewSymbolTypeChangeImpact`/`ChangeSymbolType`**
   (`docs/current/proposal_changesymboltype_tool.md`) attacks the same motivating run from the other
   end: make the coordinated multi-file change expressible as a single atomic tool call, so no
@@ -177,5 +187,4 @@ would be evidence for a classifier, but should be evidence-driven rather than as
 
 ## Status
 
-Design proposal only — not yet implemented. Motivated by PlanStepRunner run
-`20260911-205633-213`, step `02-phase1-types-and-engine-fix`.
+Superseded -- not implemented; see banner.

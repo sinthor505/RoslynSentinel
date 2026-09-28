@@ -1,6 +1,5 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
-using RoslynSentinel.Common;
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
@@ -9,7 +8,7 @@ namespace RoslynSentinel.Tests.Advanced;
 public class IntelligenceTests
 {
     private IWorkspaceManager _workspaceManager;
-    private AnalysisEngine _analysisEngine;
+    // private AnalysisEngine _analysisEngine;
     private ArchitecturalEngine _architecturalEngine;
 
     [SetUp]
@@ -17,7 +16,6 @@ public class IntelligenceTests
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _analysisEngine = new AnalysisEngine(_workspaceManager, config);
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager, config);
     }
 
@@ -42,7 +40,7 @@ public class IntelligenceTests
         // Actually, for an ad-hoc test, it's easier to just prove the engine works on non-circular paths 
         // or a known complex solution. Since we can't easily force a cycle in Adhoc without hacks,
         // we verify it detects when references are NOT circular first.
-        
+
         var projectIdA = ProjectId.CreateNewId();
         var projectIdB = ProjectId.CreateNewId();
 
