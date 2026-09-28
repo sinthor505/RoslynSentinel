@@ -143,6 +143,28 @@ public class RefactoringEngine
             : $"{kind} '{string.Join("', '", names)}'";
     }
 
+    // Adapters wiring ResolveBySnippetOrThrow's hintBuilder callback to the existing hint-text
+    // formatters: BuildMemberHint is public on SymbolNavigationEngine so it's reused directly;
+    // BuildTypeHint is private there, so its identical formatting is mirrored here rather than
+    // widening that method's accessibility for one caller.
+    private static string BuildMemberHintForCandidates(SymbolNavigationEngine engine, List<SyntaxNodeCandidate> candidates, List<int> matches, string failureMode)
+    {
+        return engine.BuildMemberHint(candidates.Select(c => c.Node).ToList(), matches, failureMode);
+    }
+
+    private static string BuildTypeHintForCandidates(List<SyntaxNodeCandidate> candidates, List<int> matches, string failureMode)
+    {
+        if (candidates.Count == 0)
+        {
+            return $"contextSnippet {failureMode}: no candidates found.";
+        }
+
+        var previews = candidates.Take(3).Select(c => $"line {c.StartLine} `{c.Preview}`");
+        var count = candidates.Count;
+        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
+        return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
+    }
+
     public async Task<DocumentEditResult> FormatDocumentAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: _workspaceManager is ISolutionProvider-typed (40 construction sites
@@ -1277,6 +1299,9 @@ public class RefactoringEngine
         // excludeInterfaceMembers: false -- replace must be able to target an interface's own
         // member declaration (e.g. ISolutionProvider.CurrentSolution), not just implementers.
         // See docs/current/blockers/blocking_error_member_replace_interface_notfound.md.
+        // PreferNonInterfaceMember still runs unconditionally below: the old resolver's
+        // excludeInterfaceMembers only gated whether interface members entered the candidate pool
+        // at all, not whether the implementer-preference narrowing ran once both were present.
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1302,10 +1327,14 @@ public class RefactoringEngine
             };
         }
 
-        MemberDeclarationSyntax? member;
+        SyntaxNode? member;
         try
         {
-            member = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter, excludeInterfaceMembers: false);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, memberName, cancellationToken)
+                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
+                .ToList());
+            member = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {
@@ -1388,7 +1417,11 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? container = null;
         try
         {
-            container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, containerName, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            container = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -1581,6 +1614,9 @@ public class RefactoringEngine
     {
         // excludeInterfaceMembers: false -- remove must be able to target an interface's own
         // member declaration, not just implementers. Same rationale as ReplaceMemberAsync above.
+        // PreferNonInterfaceMember still runs unconditionally below: the old resolver's
+        // excludeInterfaceMembers only gated whether interface members entered the candidate pool
+        // at all, not whether the implementer-preference narrowing ran once both were present.
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1606,10 +1642,14 @@ public class RefactoringEngine
             };
         }
 
-        MemberDeclarationSyntax? member;
+        SyntaxNode? member;
         try
         {
-            member = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter, excludeInterfaceMembers: false);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, memberName, cancellationToken)
+                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
+                .ToList());
+            member = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {
@@ -2298,7 +2338,11 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? enumNode = null;
         try
         {
-            enumNode = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, enumName, contextSnippet, lineBefore, lineAfter);
+            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, enumName, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            enumNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -2602,7 +2646,11 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? container = null;
         try
         {
-            container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, containerName, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            container = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -2698,7 +2746,11 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? container = null;
         try
         {
-            container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, containerName, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            container = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -2814,7 +2866,10 @@ public class RefactoringEngine
         SyntaxNode? targetNode = null;
         try
         {
-            var memberNode = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
+            var allCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(allCandidates.Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+            var memberNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node;
             if (memberNode != null)
             {
                 targetNode = memberNode;
@@ -2834,7 +2889,11 @@ public class RefactoringEngine
         {
             try
             {
-                var typeNode = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+                var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+                    .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                    .ToList();
+                var typeNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                    (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node;
                 if (typeNode != null)
                 {
                     targetNode = typeNode;
@@ -2900,7 +2959,11 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? container = null;
         try
         {
-            container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, typeName, contextSnippet, lineBefore, lineAfter);
+            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, typeName, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            container = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -2995,8 +3058,22 @@ public class RefactoringEngine
         SyntaxNode? targetNode = null;
         try
         {
-            var memberTarget = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
-            targetNode = memberTarget ?? _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            var allCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(allCandidates.Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+            var memberTarget = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node;
+            if (memberTarget != null)
+            {
+                targetNode = memberTarget;
+            }
+            else
+            {
+                var typeCandidates = allCandidates
+                    .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                    .ToList();
+                targetNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                    (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node;
+            }
         }
         catch (InvalidOperationException ex)
         {
@@ -3086,7 +3163,10 @@ public class RefactoringEngine
         MemberDeclarationSyntax? memberTarget = null;
         try
         {
-            memberTarget = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+            memberTarget = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -3148,7 +3228,11 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? container = null;
         try
         {
-            container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, typeName, contextSnippet, lineBefore, lineAfter);
+            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, typeName, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            container = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -3226,7 +3310,10 @@ public class RefactoringEngine
         {
             try
             {
-                var target = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
+                var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, edit.TargetName, cancellationToken)
+                    .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+                var target = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, edit.ContextSnippet, edit.LineBefore, edit.LineAfter,
+                    (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
                 if (target == null)
                 {
                     errors.Add($"edits[{edit.Index}] ({edit.TargetName}): target not found.");
@@ -3339,8 +3426,20 @@ public class RefactoringEngine
         {
             try
             {
-                var memberTarget = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter, m => m is not BaseTypeDeclarationSyntax);
-                SyntaxNode? targetNode = memberTarget ?? _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, edit.TargetName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
+                var allCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, edit.TargetName, cancellationToken);
+                var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(allCandidates.Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+                var memberTarget = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, edit.ContextSnippet, edit.LineBefore, edit.LineAfter,
+                    (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node;
+                SyntaxNode? targetNode = memberTarget;
+                if (targetNode == null)
+                {
+                    var typeCandidates = allCandidates
+                        .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                        .ToList();
+                    targetNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, edit.ContextSnippet, edit.LineBefore, edit.LineAfter,
+                        (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node;
+                }
+
                 if (targetNode == null)
                 {
                     errors.Add($"edits[{edit.Index}] ({edit.TargetName}): target not found.");
@@ -3488,7 +3587,11 @@ public class RefactoringEngine
         {
             try
             {
-                var container = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, edit.TypeName, edit.ContextSnippet, edit.LineBefore, edit.LineAfter);
+                var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, edit.TypeName, cancellationToken)
+                    .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                    .ToList();
+                var container = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, edit.ContextSnippet, edit.LineBefore, edit.LineAfter,
+                    (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
                 if (container == null)
                 {
                     errors.Add($"edits[{edit.Index}] ({edit.TypeName}): type not found.");
@@ -3594,7 +3697,10 @@ public class RefactoringEngine
         MemberDeclarationSyntax? target = null;
         try
         {
-            target = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+            target = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -3675,7 +3781,10 @@ public class RefactoringEngine
         MemberDeclarationSyntax? target = null;
         try
         {
-            target = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+            target = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -3754,7 +3863,10 @@ public class RefactoringEngine
         MemberDeclarationSyntax? target = null;
         try
         {
-            target = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+            target = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -3844,7 +3956,10 @@ public class RefactoringEngine
         SyntaxNode? target = null;
         try
         {
-            target = _symbolNavigationEngine.ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
+            var candidates = SymbolNavigationEngine.PreferNonInterfaceMember(SymbolNavigationEngine.PreferConstructorOverType(_symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
+            candidates = SymbolNavigationEngine.FilterByContainingType(candidates, containingTypeName);
+            target = SymbolNavigationEngine.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, c, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {
@@ -4016,7 +4131,10 @@ public class RefactoringEngine
         SyntaxNode? target;
         try
         {
-            target = _symbolNavigationEngine.ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
+            var candidates = SymbolNavigationEngine.PreferNonInterfaceMember(SymbolNavigationEngine.PreferConstructorOverType(_symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
+            candidates = SymbolNavigationEngine.FilterByContainingType(candidates, containingTypeName);
+            target = SymbolNavigationEngine.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, c, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {
@@ -4078,7 +4196,10 @@ public class RefactoringEngine
         SyntaxNode? target;
         try
         {
-            target = _symbolNavigationEngine.ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
+            var candidates = SymbolNavigationEngine.PreferNonInterfaceMember(SymbolNavigationEngine.PreferConstructorOverType(_symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
+            candidates = SymbolNavigationEngine.FilterByContainingType(candidates, containingTypeName);
+            target = SymbolNavigationEngine.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, c, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {
@@ -4425,7 +4546,11 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? classNode = null;
         try
         {
-            classNode = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
+            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, className, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            classNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -4555,7 +4680,11 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? classNode;
         try
         {
-            classNode = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
+            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, className, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            classNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -4686,7 +4815,11 @@ public class RefactoringEngine
         BaseTypeDeclarationSyntax? classNode;
         try
         {
-            classNode = _symbolNavigationEngine.ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
+            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, className, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            classNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -4749,7 +4882,10 @@ public class RefactoringEngine
         MemberDeclarationSyntax? memberNode;
         try
         {
-            memberNode = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, methodName, cancellationToken)
+                .Where(c => c.Kind == CandidateKind.Method).ToList());
+            memberNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -4820,7 +4956,10 @@ public class RefactoringEngine
         MemberDeclarationSyntax? memberNode;
         try
         {
-            memberNode = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, methodName, cancellationToken)
+                .Where(c => c.Kind == CandidateKind.Method).ToList());
+            memberNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -4915,7 +5054,10 @@ public class RefactoringEngine
         MemberDeclarationSyntax? memberNode;
         try
         {
-            memberNode = _symbolNavigationEngine.ResolveMemberByNameOrSnippet(root, sourceText, methodName, contextSnippet, lineBefore, lineAfter, m => m is MethodDeclarationSyntax);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, methodName, cancellationToken)
+                .Where(c => c.Kind == CandidateKind.Method).ToList());
+            memberNode = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
