@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -206,7 +208,7 @@ public class SymbolNavigationEngine
             _ => SymbolFilter.TypeAndMember
         };
 
-        var results = new List<SymbolLocation>();
+        var results = new ConcurrentBag<SymbolLocation>();
         var seen = new HashSet<string>();
 
         var simpleName = symbolName.Contains('.')
