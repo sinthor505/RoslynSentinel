@@ -1481,14 +1481,18 @@ public class SymbolNavigationEngine
             // Shared by both branches below so the contextSnippet-failure message (immediately
             // below) can report whether symbolName itself WAS found nearby, instead of leaving the
             // caller unsure whether the name or the snippet is the actual problem.
-            var decls = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-                .Where(m => m switch
-                {
-                    MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
-                    PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
-                    FieldDeclarationSyntax fd => fd.Declaration.Variables.Any(v => v.Identifier.Text == symbolName),
-                    _ => false
-                }).ToList();
+            // Uses ResolveCandidates (kind-complete: methods/properties/fields/types/etc.) rather
+            // than a hand-written MethodDeclarationSyntax/PropertyDeclarationSyntax/
+            // FieldDeclarationSyntax-only switch -> the old switch's `_ => false` silently dropped
+            // ClassDeclarationSyntax (and every other type kind), so a top-level class's own
+            // caller-precheck could never resolve the class itself. See
+            // docs/current/proposal_universal_symbol_resolver.md's Motivation section (the "sixth
+            // drifted lookup path").
+            var declsSourceText = await document.GetTextAsync(cancellationToken);
+            var decls = ResolveCandidates(root, declsSourceText, symbolName, cancellationToken)
+                .Select(c => c.Node)
+                .OfType<MemberDeclarationSyntax>()
+                .ToList();
 
             if (contextSnippet != null)
             {
@@ -2532,10 +2536,15 @@ public class SymbolNavigationEngine
             return null;
         }
 
+        var candidates = PreferNonInterfaceMember(PreferConstructorOverType(
+            ResolveCandidates(root, sourceText, memberName, cancellationToken)
+                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum))
+                .ToList()));
         try
         {
-            var target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
-            return target is EnumMemberDeclarationSyntax enumMember && enumMember.Parent is EnumDeclarationSyntax enumDecl ? enumDecl.Identifier.Text : null;
+            var target = ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, m, mode) => BuildMemberHint(c.Select(x => x.Node).ToList(), m, mode));
+            return target?.Kind == CandidateKind.EnumMember && target.Node.Parent is EnumDeclarationSyntax enumDecl ? enumDecl.Identifier.Text : null;
         }
         catch (InvalidOperationException)
         {
@@ -2568,9 +2577,14 @@ public class SymbolNavigationEngine
             return false;
         }
 
+        var candidates = ResolveCandidates(root, sourceText, containerName, cancellationToken)
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList();
         try
         {
-            return ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter) is EnumDeclarationSyntax;
+            var resolved = ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, m, mode) => BuildTypeHint(c.Select(x => x.Node).Cast<BaseTypeDeclarationSyntax>().ToList(), m, mode));
+            return resolved?.Kind == CandidateKind.Enum;
         }
         catch (InvalidOperationException)
         {
@@ -2604,10 +2618,14 @@ public class SymbolNavigationEngine
             return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", []);
         }
 
+        var typeCandidates = ResolveCandidates(root, sourceText, containerName, cancellationToken)
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList();
         BaseTypeDeclarationSyntax? containerNode;
         try
         {
-            containerNode = ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+            containerNode = ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, m, mode) => BuildTypeHint(c.Select(x => x.Node).Cast<BaseTypeDeclarationSyntax>().ToList(), m, mode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
