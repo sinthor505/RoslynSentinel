@@ -1,7 +1,9 @@
 # `MoveMember` forces a shared-name dependency field into the move, then rejects the result for colliding with the target's own copy of that same field
 
-**Status:** OPEN, confirmed. No disk corruption - every reproduction below was either `dryRun: true`
-or rejected pre-write by `ValidationFailed` (confirmed nothing changed on disk).
+**Status:** FIXED 2026-09-28. No disk corruption occurred at any point while this was open - every
+reproduction below was either `dryRun: true` or rejected pre-write by `ValidationFailed` (confirmed
+nothing changed on disk). See "Fix implemented" section near the end for the file:line, what
+changed, and an important scope caveat for group 5's `CodeFlowEngine` case.
 
 ## What was being attempted
 
@@ -177,6 +179,113 @@ This second, independent reproduction (different classes, different field type i
 confirms the defect is general to `MoveMember`'s `RequireNoUnmovedDependencies` guardrail whenever
 source and target already separately declare a same-named dependency field, not an artifact specific
 to `_workspaceManager`/`IWorkspaceManager` or to the group-4 classes.
+
+## Root-cause investigation and fix design (2026-09-28, not implemented)
+
+A dedicated read-only investigation pinned the root cause to exact file:line and drafted a minimal
+fix, but stopped short of implementing it (multi-method control-flow change judged too large to
+guess at in a single pass). Full design in memory
+`project_movemember_duplicate_field_root_cause_and_fix_design.md`. Summary:
+
+- **Forcing branch**: `RequireNoUnmovedDependencies`,
+  `RoslynSentinel.Advanced/AdvancedStructuralEngine.cs:344-391`. Builds its sibling-dependency set
+  from `classSymbol.GetMembers()` (line 352) - the **source** class only. `targetClassName` is a
+  parameter but is used only for string interpolation in the exception message (lines 386-389); it is
+  never resolved to a symbol and never consulted before forcing a field into the required move set.
+- **Rejection branch**: not inside `RequireNoUnmovedDependencies` itself - it's downstream, in
+  `MoveInstanceMembersAsync` (lines 1204-1396), at two `AddMembers(membersToMove.ToArray())` call
+  sites (~line 1289 same-file branch, ~line 1294 cross-file branch) that blindly append every moved
+  member, including the forced-in field, onto the target class with no same-name check. The resulting
+  duplicate is what the write-path's own compile-validation gate correctly (if unhelpfully) flags as
+  CS0102/CS0229 two steps later.
+- Confirmed by search: no existing helper in this file resolves the target's symbol or checks
+  type-compatibility for a candidate field - this logic is entirely missing, not misapplied.
+- **Fix shape**: resolve the target class symbol before `RequireNoUnmovedDependencies` runs; for each
+  forced dependency that is a field, check whether the target already declares a same-name field with
+  an identical or implicitly-convertible type - if so, treat it as already-satisfied (exclude it from
+  `membersToMove` before both `AddMembers` calls, no body-rewrite needed since the bare-name reference
+  already resolves against the target's own field). If a same-name field exists but is
+  type-incompatible, keep failing, but fix the message to name the real problem instead of the
+  current self-contradictory advice. No new tool schema parameter required.
+- This would unblock both group 4 and group 5 once implemented and verified (group 5's
+  `CodeFlowEngine._workspaceManager: IWorkspaceReader` case depends on `IWorkspaceManager` being
+  assignable to `IWorkspaceReader` - not verified, worth confirming before assuming full coverage).
+- Not implemented this session; a regression test would belong in
+  `RoslynSentinel.Tests.Battery/PreviewInstanceMoveCallSitesTests.cs` alongside the existing
+  `MoveMemberAsync_*` family.
+
+## Fix implemented (2026-09-28)
+
+Implemented per the design above, with one refinement confirmed against actual source rather than
+assumed. Both changes landed atomically in a single `ApplyUnifiedDiff` call (caller and callee
+signatures had to change in lockstep - see below for why they could not be split).
+
+- `RoslynSentinel.Advanced/AdvancedStructuralEngine.cs`, `MoveMemberAsync`: now resolves
+  `targetClassSymbol` (an `INamedTypeSymbol?`) before calling `RequireNoUnmovedDependencies`, and
+  filters any field names the guardrail reports as already-satisfied out of `membersToMove` before
+  the `AddMembers` call sites, so the pre-existing target field is never duplicated.
+- `RoslynSentinel.Advanced/AdvancedStructuralEngine.cs:384-474`, `RequireNoUnmovedDependencies`:
+  signature changed to accept `INamedTypeSymbol? targetClassSymbol` and now returns
+  `HashSet<string> alreadySatisfiedFields` instead of `void`. For each forced field dependency, if the
+  target class already declares a same-name field, checks `SymbolEqualityComparer.Default.Equals`
+  (exact type match) or `Compilation.ClassifyConversion(sourceField.Type, targetField.Type).IsImplicit`
+  (implicit conversion, source type -> target type). Either match: treat as already-satisfied, exclude
+  from the move, no body rewrite needed (bare-name reference already resolves against the target's own
+  field post-move). Neither match: throw `ToolInvalidArgumentException` with a new message that names
+  the real problem (`"... already declares its own field named 'X' of an incompatible type ('Y')...
+  Rename one of the two fields first so they no longer collide, then retry."`) instead of the old
+  message's self-contradictory "add it to memberNames" advice.
+- Regression tests added in `RoslynSentinel.Tests.Battery/PreviewInstanceMoveCallSitesTests.cs`,
+  alongside the `MoveMemberAsync_*` family:
+  - `MoveMemberAsync_FieldDependencyAlreadySatisfiedOnTarget_MovesWithoutDuplicatingFieldAsync` -
+    moves a method depending on a same-name, same-type field that already exists on the target;
+    asserts the move succeeds and the target's field is not duplicated.
+  - `MoveMemberAsync_FieldDependencyIncompatibleTypeOnTarget_FailsWithCollisionMessageAsync` - same
+    scenario but the target's same-name field has an incompatible type (`int` vs `string`); asserts
+    `ToolInvalidArgumentException` with the new message naming the field and "incompatible type".
+  - Both pass. `Build`: 0 errors, 20 warnings (all pre-existing, same set characterized in every prior
+    engine-reorg group's memory). `RunTest` scoped to
+    `RoslynSentinel.Tests.Battery` filtered to `PreviewInstanceMoveCallSitesTests`: 14/14 passed,
+    0 failed, 0 skipped - no regressions in this test class.
+
+### Group 4: fix covers it, safe to retry
+
+`GranularRefactoringEngine`/`AdvancedRefactoringEngine`/`RefinementEngine`/`AdvancedTypeEngine` all
+declare `_workspaceManager` typed **exactly** `IWorkspaceManager`, identical to
+`StructuralRefactoringEngine`'s own field. `sameType` (`SymbolEqualityComparer.Default.Equals`) will
+match directly - no conversion-classification nuance involved. The fix should let all four folds
+proceed via `MoveMember` without forcing the field or hitting the CS0102/CS0229 collision. Not
+retried in this session (out of scope, reserved for the coordinator/follow-up).
+
+### Group 5: fix covers `AdvancedLogicEngine`, does NOT cover `CodeFlowEngine` - verified, not assumed
+
+`AdvancedLogicEngine`'s `_workspaceManager` is typed exactly `IWorkspaceManager`, matching
+`LogicSimplificationEngine`'s own field exactly (`sameType` match) - this fold should proceed cleanly,
+same as group 4.
+
+`CodeFlowEngine`'s `_workspaceManager` is typed `IWorkspaceReader`, and this pairing was checked
+against the actual interface declaration rather than assumed: `IWorkspaceManager.cs:14-16` confirms
+`public interface IWorkspaceManager : ..., IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter,
+ISymbolResolver, IWorkspaceReader` - i.e. `IWorkspaceManager` **extends** `IWorkspaceReader`
+(derived-to-base direction). The fix's check is `ClassifyConversion(sourceField.Type,
+targetField.Type).IsImplicit` where, for this move, `sourceField` is `CodeFlowEngine`'s field
+(`IWorkspaceReader`) and `targetField` is `LogicSimplificationEngine`'s pre-existing field
+(`IWorkspaceManager`). That is a **base-to-derived** conversion (`IWorkspaceReader ->
+IWorkspaceManager`), which C# does not treat as an implicit reference conversion - only the opposite
+direction (derived-to-base, `IWorkspaceManager -> IWorkspaceReader`) is implicit. So
+`implicitlyConvertible` evaluates `false` for this pairing, `sameType` is also `false`, and
+`CodeFlowEngine.ReduceBlockDepthAsync`'s move will land in the **incompatible-type rejection branch**,
+not the already-satisfied branch.
+
+This is not a silent failure, though: it now throws the new, correctly-worded
+`ToolInvalidArgumentException` naming `_workspaceManager`, both concrete types
+(`IWorkspaceReader`/`IWorkspaceManager`), and suggesting a rename - a real improvement over the old
+self-contradictory message, and the caller gets an accurate diagnosis instead of a CS0102 cascade.
+But it means group 5's `CodeFlowEngine` fold is **not unblocked by this fix as implemented** and
+still needs a manual resolution before `MoveMember` will move `ReduceBlockDepthAsync` automatically -
+options include widening `CodeFlowEngine`'s field to `IWorkspaceManager` first (a separate small
+edit), or renaming one of the two fields per the tool's own new suggestion. `AdvancedLogicEngine`'s
+two other methods are unaffected and can proceed.
 
 ## Related
 

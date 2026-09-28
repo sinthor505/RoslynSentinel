@@ -232,13 +232,53 @@ public class StructuralRefactoringEngine
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var classSymbol = semanticModel?.GetDeclaredSymbol(classNode, cancellationToken) as INamedTypeSymbol;
 
-        if (classSymbol != null && semanticModel != null)
-        {
-            RequireNoUnmovedDependencies(classSymbol, semanticModel, membersToMove, memberNames, className, targetClassName);
-        }
-
         var baseType = classSymbol?.BaseType;
         bool targetIsBaseType = baseType != null && baseType.SpecialType != SpecialType.System_Object && baseType.Name == targetClassName;
+
+        // Resolved BEFORE RequireNoUnmovedDependencies so that guardrail can tell "must move with
+        // this member" apart from "already satisfied by an existing same-name/compatible-type field
+        // on the target" -> see RequireNoUnmovedDependencies's own doc comment for why this ordering
+        // matters (moving it later reproduces the duplicate-field collision this exists to prevent).
+        INamedTypeSymbol? targetClassSymbol = null;
+        if (!targetIsBaseType)
+        {
+            var targetSearchDocs = targetFilePath.HasValue
+                ? solution.GetDocumentIdsWithFilePath(targetFilePath.Value).Select(solution.GetDocument).Where(d => d != null)
+                : solution.Projects.SelectMany(p => p.Documents);
+            foreach (var doc in targetSearchDocs)
+            {
+                if (doc?.FilePath == null)
+                {
+                    continue;
+                }
+
+                var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
+                var candidateNode = docRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
+                if (candidateNode == null)
+                {
+                    continue;
+                }
+
+                var candidateModel = await doc.GetSemanticModelAsync(cancellationToken);
+                targetClassSymbol = candidateModel?.GetDeclaredSymbol(candidateNode, cancellationToken) as INamedTypeSymbol;
+                break;
+            }
+        }
+
+        HashSet<string> alreadySatisfiedFields = new(StringComparer.Ordinal);
+        if (classSymbol != null && semanticModel != null)
+        {
+            alreadySatisfiedFields = RequireNoUnmovedDependencies(classSymbol, semanticModel, membersToMove, memberNames, className, targetClassName, targetClassSymbol);
+        }
+
+        if (alreadySatisfiedFields.Count > 0)
+        {
+            // The dependency is satisfied by the target's own existing field of the same name/
+            // compatible type -> exclude its declaration from the move so it is never duplicated
+            // onto the target. The moved bodies already reference it by bare name, which resolves
+            // correctly post-move against the target's pre-existing field - no rewrite needed.
+            membersToMove = membersToMove.Where(m => !(m is FieldDeclarationSyntax fd && fd.Declaration.Variables.Any(v => alreadySatisfiedFields.Contains(v.Identifier.Text)))).ToList();
+        }
 
         if (targetIsBaseType)
         {
@@ -341,14 +381,17 @@ public class StructuralRefactoringEngine
     /// only fails to compile afterward, as an unexplained CS0246/CS0103 pointing at the target file
     /// rather than at the real cause (an un-moved dependency back in the source class).
     /// </summary>
-    private static void RequireNoUnmovedDependencies(
+    private static HashSet<string> RequireNoUnmovedDependencies(
         INamedTypeSymbol classSymbol,
         SemanticModel semanticModel,
         List<MemberDeclarationSyntax> membersToMove,
         string[] memberNames,
         string className,
-        string targetClassName)
+        string targetClassName,
+        INamedTypeSymbol? targetClassSymbol)
     {
+        var alreadySatisfiedFields = new HashSet<string>(StringComparer.Ordinal);
+
         var siblingsByName = classSymbol.GetMembers()
             .Where(s => s.DeclaredAccessibility is Accessibility.Private or Accessibility.Internal or Accessibility.NotApplicable)
             .Where(s => !memberNames.Contains(s.Name))
@@ -356,10 +399,13 @@ public class StructuralRefactoringEngine
 
         if (siblingsByName.Count == 0)
         {
-            return;
+            return alreadySatisfiedFields;
         }
 
         var missingDependencies = new SortedSet<string>(StringComparer.Ordinal);
+        string? incompatibleFieldName = null;
+        ITypeSymbol? incompatibleSourceType = null;
+        ITypeSymbol? incompatibleTargetType = null;
 
         foreach (var member in membersToMove)
         {
@@ -373,11 +419,46 @@ public class StructuralRefactoringEngine
 
                 var symbolInfo = semanticModel.GetSymbolInfo(identifier);
                 var resolved = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
-                if (resolved != null && SymbolEqualityComparer.Default.Equals(resolved.ContainingType, classSymbol))
+                if (resolved == null || !SymbolEqualityComparer.Default.Equals(resolved.ContainingType, classSymbol))
                 {
-                    missingDependencies.Add(identifier.Identifier.Text);
+                    continue;
                 }
+
+                if (resolved is IFieldSymbol sourceField && targetClassSymbol != null)
+                {
+                    var targetField = targetClassSymbol.GetMembers(sourceField.Name).OfType<IFieldSymbol>().FirstOrDefault();
+                    if (targetField != null)
+                    {
+                        bool sameType = SymbolEqualityComparer.Default.Equals(sourceField.Type, targetField.Type);
+                        bool implicitlyConvertible = !sameType &&
+                            semanticModel.Compilation.ClassifyConversion(sourceField.Type, targetField.Type).IsImplicit;
+
+                        if (sameType || implicitlyConvertible)
+                        {
+                            alreadySatisfiedFields.Add(sourceField.Name);
+                        }
+                        else
+                        {
+                            incompatibleFieldName = sourceField.Name;
+                            incompatibleSourceType = sourceField.Type;
+                            incompatibleTargetType = targetField.Type;
+                        }
+
+                        continue;
+                    }
+                }
+
+                missingDependencies.Add(identifier.Identifier.Text);
             }
+        }
+
+        if (incompatibleFieldName != null)
+        {
+            throw new ToolInvalidArgumentException(
+                $"Cannot move the requested member(s) out of '{className}': their bodies reference field " +
+                $"'{incompatibleFieldName}' of '{className}' (type '{incompatibleSourceType}'), but '{targetClassName}' " +
+                $"already declares its own field named '{incompatibleFieldName}' of an incompatible type " +
+                $"('{incompatibleTargetType}'). Rename one of the two fields first so they no longer collide, then retry.");
         }
 
         if (missingDependencies.Count > 0)
@@ -388,6 +469,8 @@ public class StructuralRefactoringEngine
                 $"and would no longer be reachable from '{targetClassName}'. Add the missing name(s) to memberNames so they " +
                 "move together, or leave the referencing member(s) behind.");
         }
+
+        return alreadySatisfiedFields;
     }
 
     private static async Task<MoveMemberResult> MoveMembersToBaseTypeAsync(
