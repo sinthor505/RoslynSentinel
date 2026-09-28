@@ -137,6 +137,7 @@ public static class McpToolSchemaPatcher
                 {
                     McpServerTool tool = McpServerTool.Create(toolMethod, target: null, CreateOptions(services, serializerOptions));
                     ApplyConsumesTags(tool, toolMethod);
+                    ApplyReplaceSnippetLimits(tool, toolMethod);
                     return tool;
                 });
             }
@@ -154,6 +155,7 @@ public static class McpToolSchemaPatcher
                         createTargetFunc: (RequestContext<CallToolRequestParams> request) => CreateTarget(((MessageContext)request).Services, typeof(TToolType)),
                         CreateOptions(services, serializerOptions));
                     ApplyConsumesTags(tool, toolMethod);
+                    ApplyReplaceSnippetLimits(tool, toolMethod);
                     return tool;
                 });
             }
@@ -270,6 +272,62 @@ public static class McpToolSchemaPatcher
         if (anyTagged)
         {
             tool.ProtocolTool.InputSchema = JsonSerializer.SerializeToElement(schemaNode);
+        }
+    }
+
+    /// <summary>
+    /// Post-processes <paramref name="tool"/>'s already-built <see cref="Tool.InputSchema"/> to inline
+    /// the live <see cref="ReplaceSnippetOptions"/> line/char limits into the <c>oldContent</c>/
+    /// <c>newContent</c> parameter descriptions of the <c>ReplaceSnippet</c> tool method.
+    /// </summary>
+    /// <remarks>
+    /// Same reparse-by-parameter-name approach as <see cref="ApplyConsumesTags"/>, for the same reason:
+    /// <c>oldContent</c>/<c>newContent</c> are the tool method's own top-level parameters (schema'd via
+    /// AIJsonUtilities.CreateFunctionJsonSchema), not POCO properties, so RewriteBrokenSchemaNode's
+    /// ParameterAttributeProvider path can't see which parameter is being rewritten there. The limits
+    /// are runtime-configurable (ReplaceSnippetOptions.Configure, called from every server entry point
+    /// before AddRoslynSentinelTools*/WithSentinelTools runs), so they can't be baked into the
+    /// [Description] const strings in ToolParams - only a post-build patch like this can surface them.
+    /// </remarks>
+    private static void ApplyReplaceSnippetLimits(McpServerTool tool, MethodInfo toolMethod)
+    {
+        if (toolMethod.Name != "ReplaceSnippet")
+        {
+            return;
+        }
+
+        JsonNode? schemaNode = JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText());
+        if (schemaNode is not JsonObject schemaObj ||
+            !schemaObj.TryGetPropertyValue("properties", out JsonNode? propertiesNode) ||
+            propertiesNode is not JsonObject propertiesObj)
+        {
+            return;
+        }
+
+        bool anyPatched = PatchDescription(
+            propertiesObj,
+            "oldContent",
+            $"Verbatim text to find and replace using literal substring match. Limit: {ReplaceSnippetOptions.MaxOldContentLines} lines / {ReplaceSnippetOptions.MaxOldContentChars} chars (excluding leading indentation).");
+        anyPatched |= PatchDescription(
+            propertiesObj,
+            "newContent",
+            $"Verbatim replacement text for oldContent. Limit: {ReplaceSnippetOptions.MaxNewContentLines} lines / {ReplaceSnippetOptions.MaxNewContentChars} chars (excluding leading indentation).");
+
+        if (anyPatched)
+        {
+            tool.ProtocolTool.InputSchema = JsonSerializer.SerializeToElement(schemaNode);
+        }
+
+        static bool PatchDescription(JsonObject propertiesObj, string parameterName, string description)
+        {
+            if (!propertiesObj.TryGetPropertyValue(parameterName, out JsonNode? propNode) ||
+                propNode is not JsonObject propObj)
+            {
+                return false;
+            }
+
+            propObj["description"] = description;
+            return true;
         }
     }
 }
