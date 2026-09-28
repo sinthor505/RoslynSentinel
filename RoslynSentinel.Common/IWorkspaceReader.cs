@@ -44,7 +44,6 @@ public interface IWorkspaceReader
     /// </summary>
     Task<Microsoft.CodeAnalysis.Solution> GetSolutionAsync(ReadSource source, CancellationToken cancellationToken);
 
-
     // Added by AddMember (expected - used for diagnostics)
 
     /// <summary>

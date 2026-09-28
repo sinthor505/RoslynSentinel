@@ -191,7 +191,6 @@ public record SentinelCallToolResult<TSuccess, TError>
         get; init;
     }
 
-
     public ListSummary? ListSummary
     {
         get; init;

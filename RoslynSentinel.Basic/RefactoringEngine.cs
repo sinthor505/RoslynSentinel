@@ -4582,7 +4582,7 @@ public class RefactoringEngine
         // "_camelCase(paramName)" derivation, which always differs from paramName.
         var defaultFieldName = $"_{char.ToLower(paramName[0])}{paramName[1..]}";
         string derivedFieldName = fieldName == null || fieldName == paramName || fieldName == $"_{paramName}" ? defaultFieldName : fieldName;
-        var fieldDecl = ((FieldDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration($"private readonly {paramType} {derivedFieldName};")!);
+        var fieldDecl = (FieldDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration($"private readonly {paramType} {derivedFieldName};")!;
         //.WithAddedByComment("AddConstructorParameter");
         var assignmentStatement = SyntaxFactory.ParseStatement($"{derivedFieldName} = {paramName};");
         var newParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName)).WithType(SyntaxFactory.ParseTypeName(paramType).WithTrailingTrivia(SyntaxFactory.Space));

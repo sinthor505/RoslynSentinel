@@ -1,6 +1,4 @@
 using System.ComponentModel;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.Logging;
 
@@ -618,7 +616,6 @@ public class WorkspaceTools
         CancellationToken cancellationToken = default)
         => _readNav.ListAll(reason, kind, projectName, cancellationToken);
 
-
     [McpServerTool(Name = "Search")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
@@ -655,7 +652,6 @@ public class WorkspaceTools
     CancellationToken cancellationToken = default)
     => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, referencesKind, filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
-
     private static ListAllKind SearchModeToListAllKind(SearchMode mode) => mode switch
     {
         SearchMode.all => ListAllKind.all,
@@ -672,7 +668,6 @@ public class WorkspaceTools
         SearchMode.field => ListAllKind.field,
         _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unhandled SearchMode in declaration-listing dispatch.")
     };
-
 
     private Task<SentinelCallToolResult<object>> DispatchSearch(
     ToolCallReason reason, SearchMode mode, string? query, string? fileGlob, int maxResults,
@@ -774,9 +769,7 @@ public class WorkspaceTools
         return _readNav.GetLargeResult(reason, resultId, filePathResolved, limit, offset, charLimit: charLimit, cancellationToken: cancellationToken);
     }
 
-
     private readonly SymbolNavigationImpl _symbolNavigation;
-
 
     private readonly SymbolRelationshipImpl _symbolRelationship;
 }

@@ -162,7 +162,6 @@ public static class McpToolSchemaPatcher
         return builder;
     }
 
-
     /// <summary>
     /// Reflects over every type in <paramref name="assemblies"/> to find every method carrying
     /// <see cref="McpServerToolAttribute"/>, independent of whether that method's declaring class
@@ -194,7 +193,6 @@ public static class McpToolSchemaPatcher
 
         return discovered;
     }
-
 
     private static McpServerToolCreateOptions CreateOptions(IServiceProvider services, JsonSerializerOptions? serializerOptions) => new()
     {

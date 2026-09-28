@@ -2005,7 +2005,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     // Added by AddMember (expected - used for diagnostics)
     private readonly SymbolResolver _symbolResolver;
 
-
     /// <summary>
     /// <see cref="IWorkspaceReader"/> implementation. Serves a cached <see cref="Compilation"/> for
     /// <paramref name="projectId"/> when one exists; otherwise builds it once and caches the build
