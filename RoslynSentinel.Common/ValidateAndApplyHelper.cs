@@ -48,12 +48,13 @@ public static class ValidateAndApplyHelper
 
         if (!validation.Success)
         {
-            var detail = describeValidationFailure != null
+            var detail = validation.Diagnostics;
+            var detailString = describeValidationFailure != null
                 ? await describeValidationFailure(validation, cancellationToken)
                 : validation.Diagnostics.ToJson();
             return new ApplyOutcome(null, new ResultError(ToolErrorCode.ValidationFailed,
                 $"{operationName}: the change was valid and matched its target(s), but introduces new compiler errors - change not applied. " +
-                $"Fix the issue(s) below and retry:\n{detail}"), dryRun, Validation: validation);
+                $"Fix the issue(s) below and retry.", Detail: detailString, StructuredDetail: detail), dryRun, Validation: validation);
         }
 
         if (dryRun)
@@ -69,7 +70,7 @@ public static class ValidateAndApplyHelper
         if (!applyResult.Success)
         {
             return new ApplyOutcome(null, new ResultError(ToolErrorCode.Exception,
-                $"{operationName} apply failed: {applyResult.Summary}"), false);
+                $"{operationName} apply failed", Detail: applyResult.Summary), false);
         }
 
         var changeId = Guid.NewGuid().ToString("n")[..8];

@@ -1,13 +1,12 @@
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
 
 namespace RoslynSentinel.Basic;
 
@@ -423,11 +422,11 @@ public class WorkspaceReadNavigationImpl
                 warnings.Add($"Pattern '{pattern}' is not a valid regex - only literal substring matches are returned.");
             }
 
-            var options1 = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount };
+            var options1 = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount, TaskScheduler = TaskScheduler.Default };
 
             await Parallel.ForEachAsync(solution.Projects, options1, async (project, ct1) =>
             {
-                var options2 = new ParallelOptions { CancellationToken = ct1, MaxDegreeOfParallelism = Environment.ProcessorCount };
+                var options2 = new ParallelOptions { CancellationToken = ct1, MaxDegreeOfParallelism = Environment.ProcessorCount, TaskScheduler = TaskScheduler.Default };
 
                 await Parallel.ForEachAsync(project.Documents, options2, async (document, ct2) =>
                 {
