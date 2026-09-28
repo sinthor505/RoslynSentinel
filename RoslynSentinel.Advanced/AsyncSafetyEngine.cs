@@ -5,13 +5,15 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Advanced;
 
-public class AsyncSafetyEngine
+public class AsyncAnalysisEngine
 {
+    private readonly ThreadSafetyEngine? _threadSafetyEngine;
     private readonly IWorkspaceManager _workspaceManager;
 
-    public AsyncSafetyEngine(IWorkspaceManager workspaceManager)
+    public AsyncAnalysisEngine(IWorkspaceManager workspaceManager, ThreadSafetyEngine? threadSafetyEngine = null)
     {
         _workspaceManager = workspaceManager;
+        _threadSafetyEngine = threadSafetyEngine;
     }
 
     public async Task<List<AsyncSafetyReport>> DetectAsyncVoidMethodsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
@@ -596,130 +598,23 @@ public class AsyncSafetyEngine
         return reports;
     }
 
+    // Detection logic lives in ThreadSafetyEngine.FindUnsafeLazyInitAsync (kept as the single
+    // implementation per the engine-reorg plan's async-family duplicate resolution - it covers a
+    // superset of patterns, including the is-null pattern and Lazy<T> false-positive suppression).
+    // This method adapts that string-based result back into this engine's AsyncSafetyReport shape
+    // so existing callers of this signature keep working unchanged.
     public async Task<List<AsyncSafetyReport>> FindUnsafeLazyInitAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var documents = string.IsNullOrEmpty(filePath)
-            ? solution.Projects.SelectMany(p => p.Documents)
-            : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        var threadSafetyEngine = _threadSafetyEngine ?? new ThreadSafetyEngine(_workspaceManager);
+        var findings = await threadSafetyEngine.FindUnsafeLazyInitAsync(filePath: filePath, cancellationToken: cancellationToken);
 
         var reports = new List<AsyncSafetyReport>();
-
-        foreach (var document in documents)
+        foreach (var finding in findings)
         {
-            if (document == null)
-            {
-                continue;
-            }
-
-            var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null)
-            {
-                continue;
-            }
-
-            // Pattern 1: double-checked locking without volatile
-            foreach (var outerIf in root.DescendantNodes().OfType<IfStatementSyntax>())
-            {
-                if (!IsNullCheck(outerIf.Condition, out var checkedName))
-                {
-                    continue;
-                }
-
-                var lockStmt = outerIf.Statement is BlockSyntax b1
-                    ? b1.Statements.OfType<LockStatementSyntax>().FirstOrDefault()
-                    : outerIf.Statement as LockStatementSyntax;
-                if (lockStmt == null)
-                {
-                    continue;
-                }
-
-                var innerIf = lockStmt.Statement is BlockSyntax b2
-                    ? b2.Statements.OfType<IfStatementSyntax>().FirstOrDefault()
-                    : lockStmt.Statement as IfStatementSyntax;
-                if (innerIf == null)
-                {
-                    continue;
-                }
-
-                if (!IsNullCheck(innerIf.Condition, out var innerName))
-                {
-                    continue;
-                }
-
-                if (checkedName != innerName)
-                {
-                    continue;
-                }
-
-                var containingType = outerIf.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-                if (containingType == null)
-                {
-                    continue;
-                }
-
-                var isVolatile = containingType.Members.OfType<FieldDeclarationSyntax>()
-                    .Where(f => f.Declaration.Variables.Any(v => v.Identifier.Text == checkedName))
-                    .Any(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.VolatileKeyword)));
-
-                if (!isVolatile)
-                {
-                    var lineSpan = outerIf.GetLocation().GetLineSpan();
-                    reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name,
-                        containingType.Identifier.Text,
-                        $"Line {lineSpan.StartLinePosition.Line + 1}: Double-checked locking without volatile - field may be partially initialized. Use Lazy<T> or volatile."));
-                }
-            }
-
-            // Pattern 2: unguarded null initialization (if (field == null) field = new T(); without lock)
-            foreach (var ifStmt in root.DescendantNodes().OfType<IfStatementSyntax>())
-            {
-                if (!IsNullCheck(ifStmt.Condition, out var name))
-                {
-                    continue;
-                }
-
-                if (ifStmt.Statement.DescendantNodes().OfType<LockStatementSyntax>().Any())
-                {
-                    continue;
-                }
-                // Not inside a lock
-                if (ifStmt.Ancestors().OfType<LockStatementSyntax>().Any())
-                {
-                    continue;
-                }
-
-                var innerStmts = ifStmt.Statement is BlockSyntax blk
-                    ? blk.Statements
-                    : new SyntaxList<StatementSyntax>().Add(ifStmt.Statement);
-
-                var hasAssignment = innerStmts.OfType<ExpressionStatementSyntax>()
-                    .Any(s => s.Expression is AssignmentExpressionSyntax assign &&
-                              assign.Left is IdentifierNameSyntax leftId &&
-                              leftId.Identifier.Text == name);
-
-                if (!hasAssignment)
-                {
-                    continue;
-                }
-
-                var containingType = ifStmt.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-                if (containingType == null)
-                {
-                    continue;
-                }
-
-                var isField = containingType.Members.OfType<FieldDeclarationSyntax>()
-                    .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == name));
-
-                if (isField)
-                {
-                    var lineSpan = ifStmt.GetLocation().GetLineSpan();
-                    reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name,
-                        containingType.Identifier.Text,
-                        $"Line {lineSpan.StartLinePosition.Line + 1}: Double-checked locking without volatile - field may be partially initialized. Use Lazy<T> or volatile."));
-                }
-            }
+            var separatorIndex = finding.IndexOf(" - ", StringComparison.Ordinal);
+            var location = separatorIndex >= 0 ? finding[..separatorIndex] : finding;
+            var reason = separatorIndex >= 0 ? finding[(separatorIndex + 3)..] : finding;
+            reports.Add(new AsyncSafetyReport(string.IsNullOrEmpty(filePath) ? location : filePath, location, reason));
         }
         return reports;
     }
