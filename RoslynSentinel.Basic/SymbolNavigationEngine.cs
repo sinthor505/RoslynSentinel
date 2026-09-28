@@ -162,24 +162,18 @@ public class SymbolNavigationEngine
     /// Returns all matches. Overloads appear as separate entries distinguishable by Signature.
     /// When multiple results are returned, inspect Signature and ContainingType to pick the target,
     /// then supply the chosen FilePathWrapper + ContextSnippet to the next tool call.
-    /// </summary>    
-    [Obsolete("Use ResolveCandidatesWithSemanticAsync(includeSemantic: true) instead; its CandidateKind enum replaces this method's string symbolKind parameter. See docs/current/proposal_universal_symbol_resolver.md.", false)]
-
-    /// <summary>
-    /// Locates all declaration sites for a symbol by name without requiring a file path.
-    /// Returns structured SymbolLocation records whose FilePathWrapper and ContextSnippet fields
-    /// can be passed directly to inspect_symbol, find_references, get_call_graph, rename_symbol,
-    /// and all other filePath-gated tools -> eliminating the search_solution_text bootstrap step.
     ///
-    /// symbolName: simple or fully-qualified name (e.g. "GetById" or "Acme.SuccessData.Repo.GetById").
-    /// symbolKind: optional filter -> "type", "method", "property", "field", "event", or "any" (default).
-    /// projectName: optional -> restricts the search to a single project.
-    /// exactMatch: true (default) for exact name match; false for prefix/contains (discovery mode).
-    ///
-    /// Returns all matches. Overloads appear as separate entries distinguishable by Signature.
-    /// When multiple results are returned, inspect Signature and ContainingType to pick the target,
-    /// then supply the chosen FilePathWrapper + ContextSnippet to the next tool call.
-    /// </summary>    
+    /// Use this when you need a flattened, display-ready report of EVERY match's metadata at once
+    /// (Signature, ContainingType, ContainingNamespace, ProjectName, DocCommentId, Accessibility,
+    /// FilePath, Line, ContextSnippet) -- e.g. a "did you mean" hint or a solution-wide discovery
+    /// listing. This is NOT obsolete and is not a duplicate of ResolveCandidates/
+    /// ResolveCandidatesWithSemanticAsync: those two disambiguate down to ONE target declaration for
+    /// a caller that already knows which symbol it wants; this method deliberately returns every
+    /// match's data so the caller (or the agent reading the result) can compare them. If you only
+    /// need to disambiguate to one target and act on it, use ResolveCandidates (syntax-only, no
+    /// filePath needed) or ResolveCandidatesWithSemanticAsync (needs a solution-wide ISymbol)
+    /// instead -- see docs/current/proposal_universal_symbol_resolver.md.
+    /// </summary>
     public async Task<List<SymbolLocation>> LocateSymbolAsync(
         string symbolName,
         string symbolKind = "any",
@@ -2277,121 +2271,6 @@ public class SymbolNavigationEngine
         return $"Did you mean: {string.Join(", ", suggestions)}? ";
     }
 
-    /// <summary>
-    /// Resolves a member symbol by name across the solution without requiring a file path.
-    /// Used by FindCallersAsync and FindImplementationsForMemberAsync when filePath is null.
-    /// When contextSnippet is supplied, it is used to identify the specific overload.
-    ///
-    /// preferImplementable selects which disambiguation heuristic runs when multiple same-named
-    /// candidates are found and contextSnippet doesn't (or can't) narrow them: false prefers class
-    /// members over interface members (FindCallersAsync's need - any resolvable candidate finds the
-    /// same call sites); true prefers a candidate that SymbolFinder.FindImplementationsAsync can
-    /// actually act on - abstract/virtual/override/interface-member - since FindImplementationsForMemberAsync
-    /// otherwise risks resolving to a concrete, non-virtual method that structurally can never have
-    /// implementations, producing an empty result indistinguishable from a genuine zero-implementations answer.
-    /// </summary>
-    [Obsolete("Use ResolveCandidatesWithSemanticAsync(includeSemantic: true) plus a disambiguation helper instead. See docs/current/proposal_universal_symbol_resolver.md.", false)]
-
-    /// <summary>
-    /// Resolves a member symbol by name across the solution without requiring a file path.
-    /// Used by FindCallersAsync and FindImplementationsForMemberAsync when filePath is null.
-    /// When contextSnippet is supplied, it is used to identify the specific overload.
-    ///
-    /// preferImplementable selects which disambiguation heuristic runs when multiple same-named
-    /// candidates are found and contextSnippet doesn't (or can't) narrow them: false prefers class
-    /// members over interface members (FindCallersAsync's need - any resolvable candidate finds the
-    /// same call sites); true prefers a candidate that SymbolFinder.FindImplementationsAsync can
-    /// actually act on - abstract/virtual/override/interface-member - since FindImplementationsForMemberAsync
-    /// otherwise risks resolving to a concrete, non-virtual method that structurally can never have
-    /// implementations, producing an empty result indistinguishable from a genuine zero-implementations answer.
-    /// </summary>
-    public async Task<ISymbol?> ResolveSymbolByNameAsync(
-        Solution solution,
-        string symbolName,
-        string? contextSnippet,
-        bool preferImplementable,
-        CancellationToken cancellationToken = default)
-    {
-        foreach (var project in solution.Projects)
-        {
-            Compilation? compilation = null;
-            try
-            {
-                compilation = await project.GetCompilationAsync(cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "ResolveSymbolByName: could not compile project '{Project}'", project.Name);
-            }
-
-            if (compilation == null)
-            {
-                continue;
-            }
-
-            var candidates = compilation
-                .GetSymbolsWithName(symbolName, SymbolFilter.Member, cancellationToken: cancellationToken)
-                .ToList();
-
-            if (candidates.Count == 0)
-            {
-                continue;
-            }
-
-            if (contextSnippet != null)
-            {
-                // Use context snippet to pick the right overload: find the declaring document,
-                // then resolve via ContextHelper exactly as the filePath path does.
-                foreach (var candidate in candidates)
-                {
-                    foreach (var loc in candidate.Locations.Where(l => l.IsInSource))
-                    {
-                        var declFilePath = loc.SourceTree?.FilePath;
-                        if (declFilePath == null)
-                        {
-                            continue;
-                        }
-
-                        var doc = solution.Projects.SelectMany(p => p.Documents)
-                            .FirstOrDefault(d => d.FilePath == declFilePath);
-                        if (doc == null)
-                        {
-                            continue;
-                        }
-
-                        try
-                        {
-                            var found = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, null, null, cancellationToken);
-                            if (found != null)
-                            {
-                                return found;
-                            }
-                        }
-                        catch (ToolException)
-                        {
-                            // snippet not found in this document -> continue
-                        }
-                    }
-                }
-            }
-
-            // No contextSnippet or snippet resolution failed -> apply the caller-appropriate preference.
-            var preferred = preferImplementable
-                ? candidates.FirstOrDefault(s =>
-                    s.IsAbstract || s.IsVirtual || s.IsOverride || s.ContainingType?.TypeKind == TypeKind.Interface)
-                    ?? candidates.FirstOrDefault()
-                : candidates.FirstOrDefault(s =>
-                    s.ContainingType?.TypeKind == TypeKind.Class) ?? candidates.FirstOrDefault();
-
-            if (preferred != null)
-            {
-                return preferred;
-            }
-        }
-
-        return null;
-    }
-
     public string? GetMemberName(MemberDeclarationSyntax member)
     {
         return member switch
@@ -2414,184 +2293,6 @@ public class SymbolNavigationEngine
             StructDeclarationSyntax s => s.Identifier.Text,
             _ => null
         };
-    }
-
-    // Task I evaluation (docs/plan-tool-disambiguation-remediation-v1.md, addendum under Task I):
-    // NearMissList won over NearestSnippet/CorrectedCoordinates because it's the only strategy that
-    // shows an agent every real candidate instead of just the first one -> on a genuinely ambiguous
-    // snippet (2+ real matches), the other two strategies only ever surfaced candidate #1, which is
-    // actively misleading (an agent can't tell there were other matches worth choosing between, let
-    // alone which one it meant). NearMissList's per-candidate line + declaration preview is also the
-    // only shape that gives an agent enough to construct a corrected contextSnippet in one try. The
-    // other 2 strategies' dead code was deleted here per the plan's own Task I instruction.
-    /// <summary>
-    /// Resolves a member by name, optionally disambiguating with a contextSnippet when the name
-    /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
-    /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
-    /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildMemberHint).
-    /// </summary>
-    [Obsolete("Use ResolveCandidates plus a disambiguation helper (PreferConstructorOverType, PreferNonInterfaceMember, FilterByContainingType, ResolveBySnippetOrThrow) instead. See docs/current/proposal_universal_symbol_resolver.md.", false)]
-
-    // Task I evaluation (docs/plan-tool-disambiguation-remediation-v1.md, addendum under Task I):
-    // NearMissList won over NearestSnippet/CorrectedCoordinates because it's the only strategy that
-    // shows an agent every real candidate instead of just the first one -> on a genuinely ambiguous
-    // snippet (2+ real matches), the other two strategies only ever surfaced candidate #1, which is
-    // actively misleading (an agent can't tell there were other matches worth choosing between, let
-    // alone which one it meant). NearMissList's per-candidate line + declaration preview is also the
-    // only shape that gives an agent enough to construct a corrected contextSnippet in one try. The
-    // other 2 strategies' dead code was deleted here per the plan's own Task I instruction.
-    /// <summary>
-    /// Resolves a member by name, optionally disambiguating with a contextSnippet when the name
-    /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
-    /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
-    /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildMemberHint).
-    /// </summary>
-    public MemberDeclarationSyntax? ResolveMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, Func<MemberDeclarationSyntax, bool>? extraFilter = null, bool excludeInterfaceMembers = true)
-    {
-        var candidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName).Where(m => !excludeInterfaceMembers || m.Parent is not InterfaceDeclarationSyntax).Where(m => extraFilter == null || extraFilter(m)).ToList();
-        // A type's own name and its constructor's name are identical (both read from
-        // ClassDeclarationSyntax/StructDeclarationSyntax.Identifier and
-        // ConstructorDeclarationSyntax.Identifier), so "OrderService" matches both the class
-        // declaration and its constructor here. None of these tools operate on whole type
-        // declarations (ReplaceMember/ChangeAccessibility/etc. target "a method, property, or
-        // field"), so when a constructor shares the name, prefer it over the enclosing type ->
-        // otherwise the type declaration (found first, being the ancestor node) silently wins
-        // and callers asking for "the OrderService member" get the whole class back.
-        if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
-        {
-            candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
-        }
-
-        // When excludeInterfaceMembers is false, an interface and its implementer can both
-        // contribute a same-named candidate (e.g. IGreeter.Greet() and Greeter.Greet() in the
-        // same file) with nothing to tell them apart by name alone. Prefer the implementer, the
-        // same way the constructor-vs-type check above prefers the more specific member over the
-        // type declaration -> a caller resolving "Greet" almost always means the concrete member,
-        // not the interface's abstract declaration of it.
-        if (candidates.Count > 1 && candidates.Any(c => c.Parent is InterfaceDeclarationSyntax) && candidates.Any(c => c.Parent is not InterfaceDeclarationSyntax))
-        {
-            candidates = candidates.Where(c => c.Parent is not InterfaceDeclarationSyntax).ToList();
-        }
-
-        if (contextSnippet == null || candidates.Count <= 1)
-        {
-            // memberName alone already resolves unambiguously (zero or one candidate) -> a
-            // contextSnippet exists only to disambiguate between multiple same-named candidates,
-            // so there's nothing for it to do here. A caller that includes one defensively (or
-            // whose snippet has a whitespace/formatting mismatch against the file, unrelated to
-            // *which* member is meant) should not have the whole call fail over a match that was
-            // never actually needed -> confirmed regression: ContosoOrders ApplyDiscount (a single,
-            // non-overloaded method) failed ReplaceMember twice on contextSnippet mismatches that
-            // had no bearing on which member was targeted, before the caller gave up and switched
-            // tools entirely.
-            return candidates.FirstOrDefault();
-        }
-
-        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
-        if (matches.Count == 0)
-        {
-            throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "not found"));
-        }
-
-        if (matches.Count == 1)
-        {
-            var match = matches[0];
-            var matchedMember = candidates.FirstOrDefault(c => c.Span.Contains(match));
-            if (matchedMember != null)
-            {
-                return matchedMember;
-            }
-
-            // Snippet matched but didn't align to a candidate member -> treat as ambiguous
-            throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "ambiguous"));
-        }
-
-        // 2+ matches
-        throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "ambiguous"));
-    }
-
-    // EnumMemberDeclarationSyntax does not derive from MemberDeclarationSyntax (it hangs directly
-    // off EnumDeclarationSyntax, not off a Members list of MemberDeclarationSyntax), so it is
-    // invisible to ResolveMemberByNameOrSnippet's DescendantNodes().OfType<MemberDeclarationSyntax>()
-    // scan regardless of what GetMemberName returns for it. Confirmed: AddSummaryCommentAsync
-    // against an enum member (e.g. OrderStatus.Pending) fails "target not found" even though the
-    // enum type itself resolves fine. SummaryComment's three operations only ever call SyntaxNode-
-    // level trivia APIs (GetLeadingTrivia/WithLeadingTrivia) on the resolved target, never anything
-    // MemberDeclarationSyntax-specific, so this dedicated resolver returns the broader SyntaxNode
-    // and is used only by those three methods -> other tools (ReplaceMember, ModifyModifier, etc.)
-    // keep using ResolveMemberByNameOrSnippet as-is, since they need MemberDeclarationSyntax-only
-    // APIs (e.g. .Modifiers) that an enum member does not have.
-    [Obsolete("Use ResolveCandidates plus a disambiguation helper (PreferConstructorOverType, PreferNonInterfaceMember, FilterByContainingType, ResolveBySnippetOrThrow) instead. See docs/current/proposal_universal_symbol_resolver.md.", false)]
-
-    // EnumMemberDeclarationSyntax does not derive from MemberDeclarationSyntax (it hangs directly
-    // off EnumDeclarationSyntax, not off a Members list of MemberDeclarationSyntax), so it is
-    // invisible to ResolveMemberByNameOrSnippet's DescendantNodes().OfType<MemberDeclarationSyntax>()
-    // scan regardless of what GetMemberName returns for it. Confirmed: AddSummaryCommentAsync
-    // against an enum member (e.g. OrderStatus.Pending) fails "target not found" even though the
-    // enum type itself resolves fine. SummaryComment's three operations only ever call SyntaxNode-
-    // level trivia APIs (GetLeadingTrivia/WithLeadingTrivia) on the resolved target, never anything
-    // MemberDeclarationSyntax-specific, so this dedicated resolver returns the broader SyntaxNode
-    // and is used only by those three methods -> other tools (ReplaceMember, ModifyModifier, etc.)
-    // keep using ResolveMemberByNameOrSnippet as-is, since they need MemberDeclarationSyntax-only
-    // APIs (e.g. .Modifiers) that an enum member does not have.
-    public SyntaxNode? ResolveMemberOrEnumMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName = null, bool excludeInterfaceMembers = true)
-    {
-        var candidates = new List<SyntaxNode>();
-        candidates.AddRange(root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName && (!excludeInterfaceMembers || m.Parent is not InterfaceDeclarationSyntax)));
-        candidates.AddRange(root.DescendantNodes().OfType<EnumMemberDeclarationSyntax>().Where(m => m.Identifier.Text == memberName));
-
-        if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
-        {
-            candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
-        }
-
-        // Same rationale as ResolveMemberByNameOrSnippet's equivalent check: with
-        // excludeInterfaceMembers false, an interface and its implementer can both match the same
-        // name with nothing to disambiguate by name alone -> prefer the implementer.
-        if (candidates.Count > 1 && candidates.Any(c => c.Parent is InterfaceDeclarationSyntax) && candidates.Any(c => c.Parent is not InterfaceDeclarationSyntax))
-        {
-            candidates = candidates.Where(c => c.Parent is not InterfaceDeclarationSyntax).ToList();
-        }
-
-        // Sibling types can declare members with byte-identical text (e.g. two records each with
-        // "public string Name { get; set; } = "";"), which no line-based contextSnippet can tell
-        // apart -> narrowing by the member's own containing type first resolves that case without
-        // ever reaching snippet matching. Applied whenever the hint is given and actually narrows
-        // the set (never to an empty result, in case the caller's hint doesn't match reality).
-        if (containingTypeName != null && candidates.Count > 1)
-        {
-            var narrowed = candidates.Where(c => c.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text == containingTypeName).ToList();
-            if (narrowed.Count > 0)
-            {
-                candidates = narrowed;
-            }
-        }
-
-        if (contextSnippet == null || candidates.Count <= 1)
-        {
-            return candidates.FirstOrDefault();
-        }
-
-        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
-        if (matches.Count == 0)
-        {
-            throw new InvalidOperationException(BuildMemberHint(candidates, matches, "not found"));
-        }
-
-        if (matches.Count == 1)
-        {
-            var match = matches[0];
-            var matchedMember = candidates.FirstOrDefault(c => c.Span.Contains(match));
-            if (matchedMember != null)
-            {
-                return matchedMember;
-            }
-
-            throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
-        }
-
-        // 2+ matches
-        throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
     }
 
     /// <summary>
@@ -2788,61 +2489,6 @@ public class SymbolNavigationEngine
     }
 
     /// <summary>
-    /// Resolves a type by name, optionally disambiguating with a contextSnippet when the name
-    /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
-    /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
-    /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildTypeHint).
-    /// </summary>
-    /// <remarks>
-    /// The single chokepoint for 13 call sites across Member, ModifyEnum, ModifyBaseType and
-    /// others, so the generic-name normalization here covers all of them.
-    /// </remarks>
-    [Obsolete("Use ResolveCandidates plus a disambiguation helper (PreferConstructorOverType, PreferNonInterfaceMember, FilterByContainingType, ResolveBySnippetOrThrow) instead. See docs/current/proposal_universal_symbol_resolver.md.", false)]
-
-    /// <summary>
-    /// Resolves a type by name, optionally disambiguating with a contextSnippet when the name
-    /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
-    /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
-    /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildTypeHint).
-    /// </summary>
-    /// <remarks>
-    /// The single chokepoint for 13 call sites across Member, ModifyEnum, ModifyBaseType and
-    /// others, so the generic-name normalization here covers all of them.
-    /// </remarks>
-    public BaseTypeDeclarationSyntax? ResolveTypeByNameOrSnippet(SyntaxNode root, SourceText sourceText, string typeName, string? contextSnippet, string? lineBefore, string? lineAfter, Func<BaseTypeDeclarationSyntax, bool>? extraFilter = null)
-    {
-        var normalizedRequest = NormalizeTypeName(typeName);
-        var candidates = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => NormalizeTypeName(t.Identifier.Text) == normalizedRequest).Where(t => extraFilter == null || extraFilter(t)).ToList();
-        if (contextSnippet == null || candidates.Count <= 1)
-        {
-            // typeName alone already resolves unambiguously -> see the identical guard and
-            // rationale in ResolveMemberByNameOrSnippet above.
-            return candidates.FirstOrDefault();
-        }
-
-        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
-        if (matches.Count == 0)
-        {
-            throw new InvalidOperationException(BuildTypeHint(candidates, matches, "not found"));
-        }
-
-        if (matches.Count == 1)
-        {
-            var match = matches[0];
-            var matchedType = candidates.FirstOrDefault(c => c.Span.Contains(match));
-            if (matchedType != null)
-            {
-                return matchedType;
-            }
-
-            throw new InvalidOperationException(BuildTypeHint(candidates, matches, "ambiguous"));
-        }
-
-        throw new InvalidOperationException(BuildTypeHint(candidates, matches, "ambiguous"));
-    }
-
-
-    /// <summary>
     /// Returns every syntax-level declaration matching <paramref name="name"/> in this file's parse
     /// tree, unfiltered by kind or container. Replaces ResolveMemberByNameOrSnippet,
     /// ResolveMemberOrEnumMemberByNameOrSnippet, and ResolveTypeByNameOrSnippet's candidate-collection
@@ -2855,6 +2501,13 @@ public class SymbolNavigationEngine
     /// narrowing, etc.) is deliberately not performed here; callers apply the narrowest helper(s)
     /// they need over the returned list (see PreferConstructorOverType, PreferNonInterfaceMember,
     /// FilterByContainingType, ResolveBySnippetOrThrow below).
+    ///
+    /// Use this when you want to disambiguate down to ONE target declaration in the current file
+    /// (rename it, replace it, read it, etc.) and don't need solution-wide ISymbol data. For a
+    /// solution-wide ISymbol per match, call ResolveCandidatesWithSemanticAsync instead. For a
+    /// flattened, display-ready report of EVERY match (name, signature, containing type/namespace,
+    /// file, line, docCommentId) -- e.g. building a "did you mean" hint or a discovery listing --
+    /// use LocateSymbolAsync instead; that is a different consumer shape than this method solves.
     /// </summary>
     public List<SyntaxNodeCandidate> ResolveCandidates(SyntaxNode root, SourceText sourceText, string name, CancellationToken cancellationToken = default)
     {
@@ -2936,11 +2589,20 @@ public class SymbolNavigationEngine
         return results;
     }
 
-
     /// <summary>
     /// Solution-wide semantic companion to ResolveCandidates' syntax-only list. Opt-in only: callers
     /// that don't need cross-file ISymbol resolution should call ResolveCandidates directly rather
     /// than pay compilation cost for a Compilation they won't use.
+    ///
+    /// Use this when you need an actual ISymbol per match -- e.g. to hand to
+    /// SymbolFinder.FindReferencesAsync/FindImplementationsAsync, or to resolve a name with no
+    /// filePath pinned down (see FindCallersAsync/FindImplementationsForMemberAsync) -- then apply a
+    /// disambiguation helper (PreferClassMember, PreferImplementableMember, etc.) over
+    /// SemanticMatches to pick ONE target. SemanticSymbolCandidate is deliberately lean (Symbol,
+    /// ContainingAssembly, FilePath, IsFromSource); it does not flatten display-ready fields like
+    /// Signature/DocCommentId/ContainingNamespace onto every match. For that -- a report of EVERY
+    /// match's metadata at once, e.g. a "did you mean" hint or a solution-wide discovery listing --
+    /// use LocateSymbolAsync instead; that is a different consumer shape than this method solves.
     /// </summary>
     public async Task<SymbolCandidate> ResolveCandidatesWithSemanticAsync(SyntaxNode root, SourceText sourceText, string name, bool includeSemantic, CancellationToken cancellationToken = default)
     {
@@ -2980,7 +2642,6 @@ public class SymbolNavigationEngine
         return new SymbolCandidate(name, syntaxMatches, semanticMatches);
     }
 
-
     /// <summary>
     /// Disambiguation helper: a type's own name and its constructor's name are identical, so when
     /// both appear in the candidate set, prefer the constructor over the enclosing type declaration
@@ -3001,7 +2662,6 @@ public class SymbolNavigationEngine
         return candidates;
     }
 
-
     /// <summary>
     /// Disambiguation helper: when an interface member and a same-named implementer member both
     /// match, prefer the implementer -- mirrors the inline check previously duplicated across the
@@ -3019,7 +2679,6 @@ public class SymbolNavigationEngine
         return candidates;
     }
 
-
     /// <summary>
     /// Semantic-side counterpart to PreferNonInterfaceMember: given same-named ISymbol candidates,
     /// prefer one that SymbolFinder.FindImplementationsAsync can actually act on (abstract, virtual,
@@ -3035,7 +2694,6 @@ public class SymbolNavigationEngine
         return implementable.Count > 0 ? implementable : candidates;
     }
 
-
     /// <summary>
     /// Semantic-side counterpart to PreferNonInterfaceMember, expressed over ISymbol candidates:
     /// when an interface member and a same-named class member both match, prefer the class member --
@@ -3047,7 +2705,6 @@ public class SymbolNavigationEngine
         var classMembers = candidates.Where(c => c.Symbol.ContainingType?.TypeKind == TypeKind.Class).ToList();
         return classMembers.Count > 0 ? classMembers : candidates;
     }
-
 
     /// <summary>
     /// Disambiguation helper: narrows candidates to those declared inside a given containing type,
@@ -3064,7 +2721,6 @@ public class SymbolNavigationEngine
         var narrowed = candidates.Where(c => c.ContainingTypeName == containingTypeName).ToList();
         return narrowed.Count > 0 ? narrowed : candidates;
     }
-
 
     /// <summary>
     /// Disambiguation helper: resolves a contextSnippet against a candidate list the same way
@@ -3109,7 +2765,6 @@ public class SymbolNavigationEngine
         // 2+ matches
         throw new InvalidOperationException(hintBuilder(candidates, matches, "ambiguous"));
     }
-
 
     public string BuildMemberHint(List<SyntaxNode> candidates, List<int> matches, string failureMode)
     {

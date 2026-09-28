@@ -287,19 +287,34 @@ sweep (see that doc's "Migration path" section for the pattern being mirrored):
 
 ## Status
 
-Implementation in progress. Step 1 (new types, `ResolveCandidates`,
-`ResolveCandidatesWithSemanticAsync`, the four disambiguation helpers, five old resolvers marked
-`[Obsolete]`) landed 2026-09-27. Step 3's sweep is underway file-by-file, one commit per file:
-`RefactoringEngine.cs` (29 call sites) and the single call site in
-`RoslynSentinel.Advanced/AdvancedRefactoringEngine.cs` are done as of 2026-09-27/28.
+Complete for the five original resolvers, with `LocateSymbolAsync` deliberately kept as a permanent,
+separate-purpose sixth method (see below) rather than migrated.
 
-**A real gap found during the sweep, not anticipated by the original design:** every remaining
-production call site of `LocateSymbolAsync` --
-`RoslynSentinel.Basic/CompilerErrorLookupHelper.cs` (6 sites, "did you mean" diagnostic text for
+Step 1 (new types, `ResolveCandidates`, `ResolveCandidatesWithSemanticAsync`, the four syntax-side
+disambiguation helpers, five old resolvers marked `[Obsolete]`) landed 2026-09-27. Step 3's sweep ran
+file-by-file, one commit per file: `RefactoringEngine.cs` (29 call sites, commit `057345a`),
+`AdvancedRefactoringEngine.cs`'s single call site (commit `95729c2`), and
+`SymbolNavigationEngine.cs`'s five internal self-references -- `IsEnumContainerAsync`,
+`GetContainerMembersAsync`, `TryGetEnumMemberContainerNameAsync` (commit `a10ec37`), plus
+`FindCallersAsync`/`FindImplementationsForMemberAsync`'s by-name-across-solution fallback paths
+(commit `00c1641`, 2026-09-28) -- are all done. The last two needed a semantic-side disambiguation
+helper pair not in the original design (`PreferClassMember`/`PreferImplementableMember`, mirroring
+`PreferNonInterfaceMember`'s shape but over `SemanticSymbolCandidate`), added alongside the existing
+four.
+
+Step 4 (deletion) is complete for all four call-site-bearing resolvers --
+`ResolveMemberByNameOrSnippet`, `ResolveMemberOrEnumMemberByNameOrSnippet`, `ResolveTypeByNameOrSnippet`,
+`ResolveSymbolByNameAsync` -- once each reached zero callers solution-wide (2026-09-28). Build is
+0 errors/0 warnings solution-wide as of that deletion.
+
+**`LocateSymbolAsync` is intentionally excluded from this migration, permanently, not pending a
+follow-on decision.** Its 13 remaining production call sites --
+`RoslynSentinel.Basic/CompilerErrorLookupHelper.cs` (5 sites, "did you mean" diagnostic text for
 CS0103/missing-member/CS0122/duplicate-definition errors), `RoslynSentinel.Basic/SymbolNavigationImpl.cs`
-(the `LocateSymbol` MCP tool's own implementation), `RoslynSentinel.Basic/SymbolRelationshipImpl.cs`
+(the `LocateSymbol` MCP tool's own implementation -- not really a migration candidate, since the tool's
+contract *is* returning `List<SymbolLocation>`), `RoslynSentinel.Basic/SymbolRelationshipImpl.cs`
 (`QuerySymbolRelationships`), and `RoslynSentinel.Basic/DiscoveryEngine.cs`
-(`FindAttributeUsagesAsync`) -- consumes `SymbolLocation`'s rich cross-solution metadata fields
+(`FindAttributeUsagesAsync`) -- consume `SymbolLocation`'s rich cross-solution metadata fields
 directly: `DocCommentId`, `ContainingNamespace`, `ProjectName`, `Signature`, `FilePath`, `Line`,
 `SymbolKind` (as a formatted string, e.g. `resolved.All(s => MemberSymbolKinds.Contains(s.SymbolKind))`
 in `SymbolRelationshipImpl.cs`). None of these fields exist on `SemanticSymbolCandidate` (section 3
@@ -309,16 +324,20 @@ solution-wide "did you mean" / relationship-discovery output that a caller displ
 wholesale.
 
 These four call sites are a *different* consumer shape than the five resolvers this proposal
-replaces: they were never doing candidate disambiguation (picking one target to mutate) in the
-first place -- they use `LocateSymbolAsync`'s full result list as the answer itself. Migrating them
-would mean either (a) inlining `ISymbol`-to-string derivation logic for 6+ fields at 4+ call sites
-(duplicating formatting logic the proposal's whole point was to stop duplicating), or (b) extending
-`SemanticSymbolCandidate` with those fields as a follow-on design decision. Deliberately left
-unmigrated and `LocateSymbolAsync` left un-swept for these 4 sites pending that decision -- this is
-not an oversight, and not a "the sweep missed these" situation; re-attempting them the same way as
-the other sites is the wrong move without resolving the shape mismatch first. `LocateSymbolAsync`
-itself stays `[Obsolete]` (warning only) in the meantime since most of its callers *have* migrated;
-this residual set is the reason it cannot yet be deleted per step 4.
+replaces, and always were: they were never doing candidate disambiguation (picking one target to
+mutate) in the first place -- they use `LocateSymbolAsync`'s full result list as the answer itself,
+reporting every match's metadata at once rather than resolving down to a single target. Forcing them
+onto `ResolveCandidates`/`ResolveCandidatesWithSemanticAsync` would mean either inlining
+`ISymbol`-to-string derivation logic for 6+ fields at 4+ call sites (duplicating formatting logic this
+proposal's whole point was to stop duplicating), or bloating `SemanticSymbolCandidate` -- a record
+deliberately kept cheap for the common disambiguate-one-target case -- with fields only these four
+sites need. Neither is worth it for a method that already does its one job correctly. Decision
+(2026-09-28): leave `LocateSymbolAsync` as a permanent third method alongside `ResolveCandidates`/
+`ResolveCandidatesWithSemanticAsync`, not a deprecated one. Its `[Obsolete]` attribute has been
+removed accordingly, and all three methods' doc comments now cross-reference each other so a future
+caller picks the right one: `ResolveCandidates` for syntax-only single-target resolution,
+`ResolveCandidatesWithSemanticAsync` for solution-wide single-target `ISymbol` resolution, and
+`LocateSymbolAsync` for a flattened multi-match report used in "did you mean"/discovery output.
 
 Supersedes/fulfills
 `docs/current/proposal_unify_member_lookup_paths.md`'s dispatch-table-drift design notes, whose
