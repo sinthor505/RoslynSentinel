@@ -7,11 +7,11 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Advanced;
 
-public class LogicOptimizationEngine
+public class LogicSimplificationEngine
 {
     private readonly IWorkspaceManager _workspaceManager;
 
-    public LogicOptimizationEngine(IWorkspaceManager workspaceManager)
+    public LogicSimplificationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

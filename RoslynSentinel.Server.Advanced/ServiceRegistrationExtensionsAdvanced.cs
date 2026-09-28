@@ -51,7 +51,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<HealthOrchestrationEngine>();
         services.AddSingleton<IDEStyleEngine>();
         services.AddSingleton<InstrumentationEngine>();
-        services.AddSingleton<LogicOptimizationEngine>();
+        services.AddSingleton<LogicSimplificationEngine>();
         services.AddSingleton<MappingEngine>();
         services.AddSingleton<MetricsEngine>();
         services.AddSingleton<MigrationLedger>();

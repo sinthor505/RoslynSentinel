@@ -13,7 +13,7 @@ public class BatteryTwentyOneTests
     private SyntaxModernizationEngine _modernizationEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     // private AnalysisEngine _analysisEngine;
-    private LogicOptimizationEngine _logicOptimizationEngine;
+    private LogicSimplificationEngine _logicOptimizationEngine;
     private CodeStyleEngine _codeStyleEngine;
     private CodeHealingEngine _codeHealingEngine;
     private AdvancedLogicEngine _advancedLogicEngine;
@@ -132,7 +132,7 @@ public class Worker
         _config = new SentinelConfiguration();
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
-        _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
+        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager, _config);
         _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
@@ -379,7 +379,7 @@ public class Worker
         Assert.ThrowsAsync<FileNotFoundException>(async () => await _modernizationEngine.ConvertToSourceGeneratedLoggingAsync("NonExistent.cs", "OrderService"));
     }
 
-    // --- SimplifyBooleanExpressions (via LogicOptimizationEngine) ---
+    // --- SimplifyBooleanExpressions (via LogicSimplificationEngine) ---
     [Test]
     public async Task SimplifyBooleanExpressions_ValidFile_ReturnsSource()
     {

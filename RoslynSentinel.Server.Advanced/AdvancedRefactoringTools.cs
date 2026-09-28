@@ -40,7 +40,7 @@ public class AdvancedRefactoringTools
     //private readonly CodeStyleEngine _codeStyleEngine;
     //private readonly CodeFlowEngine _codeFlowEngine;
     //private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
-    //private readonly LogicOptimizationEngine _logicOptimizationEngine;
+    //private readonly LogicSimplificationEngine _logicOptimizationEngine;
     //private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
     private readonly MsToolAugmentEngine _augmentEngine;
     private readonly CodeGenerationEngine _codeGenerationEngine;

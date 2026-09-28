@@ -11,7 +11,7 @@ public class ModernizationTools
 {
     private readonly SyntaxModernizationEngine _modernizationEngine;
     private readonly SyntaxUpgradeEngine _syntaxUpgradeEngine;
-    private readonly LogicOptimizationEngine _logicOptimizationEngine;
+    private readonly LogicSimplificationEngine _logicOptimizationEngine;
     private readonly CodeStyleEngine _codeStyleEngine;
     private readonly CodeHealingEngine _codeHealingEngine;
     private readonly AdvancedLogicEngine _advancedLogicEngine;
@@ -24,7 +24,7 @@ public class ModernizationTools
     public ModernizationTools(
         SyntaxModernizationEngine modernizationEngine,
         SyntaxUpgradeEngine syntaxUpgradeEngine,
-        LogicOptimizationEngine logicOptimizationEngine,
+        LogicSimplificationEngine logicOptimizationEngine,
         CodeStyleEngine codeStyleEngine,
         CodeHealingEngine codeHealingEngine,
         AdvancedLogicEngine advancedLogicEngine,

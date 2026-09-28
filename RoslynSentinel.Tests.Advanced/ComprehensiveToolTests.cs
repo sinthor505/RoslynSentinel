@@ -39,7 +39,7 @@ public class ComprehensiveToolTests
     private IntelligenceTools _intelligenceTools;
     private InventoryEngine _inventoryEngine;
     private IWorkspaceManager _workspaceManager;
-    private LogicOptimizationEngine _logicOptimizationEngine;
+    private LogicSimplificationEngine _logicOptimizationEngine;
     private MappingEngine _mappingEngine;
     private MetricsEngine _metricsEngine;
     private SyntaxModernizationEngine _modernizationEngine;
@@ -94,7 +94,7 @@ public class ComprehensiveToolTests
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
         _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
-        _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
+        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);

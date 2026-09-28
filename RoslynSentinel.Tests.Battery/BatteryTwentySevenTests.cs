@@ -15,7 +15,7 @@
 //   B17 -> DocumentationEngine: HasStructuredTrivia excluded methods inside #region
 //   B11 -> ModernizationEngine.ClassToRecordAsync: duplicate property declarations (CS0102)
 //   B10 -> ModernizationEngine.TryConvertOrChainToPattern: only last value used (chain lost)
-//   B20 -> LogicOptimizationEngine.AddGuardClausesAsync: nullable params got null guards
+//   B20 -> LogicSimplificationEngine.AddGuardClausesAsync: nullable params got null guards
 //   B04 -> AntiPatternEngine.DetectMissingCancellationToken: zero-param async methods skipped
 //   B16 -> SecurityAndSafetyEngine.DetectMissingNullChecksAsync: expression-bodied methods skipped
 #pragma warning disable CS8618
@@ -548,18 +548,18 @@ public class B10_ModernizationEngine_OrChainFullPattern
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B20 -> LogicOptimizationEngine.AddGuardClausesAsync: nullable params skipped
+// B20 -> LogicSimplificationEngine.AddGuardClausesAsync: nullable params skipped
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class B20_LogicOptimization_NullableParamNoGuard
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private LogicOptimizationEngine _engine = null!;
+    private LogicSimplificationEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new LogicOptimizationEngine(_workspaceManager);
+        _engine = new LogicSimplificationEngine(_workspaceManager);
     }
 
     [TearDown]

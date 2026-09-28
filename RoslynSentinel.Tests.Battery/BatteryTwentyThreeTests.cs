@@ -14,7 +14,7 @@ public class BatteryTwentyThreeTests
     private SecurityEngine _securityEngine;
     private TestingEngine _testingEngine;
     private ControlFlowEngine _controlFlowEngine;
-    private LogicOptimizationEngine _logicOptimizationEngine;
+    private LogicSimplificationEngine _logicOptimizationEngine;
     // private AnalysisEngine _analysisEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
@@ -116,7 +116,7 @@ public class QualityClass
         _securityEngine = new SecurityEngine(_workspaceManager);
         _testingEngine = new TestingEngine(_workspaceManager);
         _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
-        _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
+        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);

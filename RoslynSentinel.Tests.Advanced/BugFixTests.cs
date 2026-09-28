@@ -23,7 +23,7 @@ public class BugFixTests
     private ControlFlowEngine _controlFlowEngine;
     private AntiPatternEngine _antiPatternEngine;
     private CodeStyleEngine _codeStyleEngine;
-    private LogicOptimizationEngine _logicOptimizationEngine;
+    private LogicSimplificationEngine _logicOptimizationEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     [SetUp]
@@ -39,7 +39,7 @@ public class BugFixTests
         _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
-        _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
+        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
     }
 
@@ -2981,7 +2981,7 @@ namespace MyApp
 
     /// <summary>
     /// Regression tests for AddGuardClauses null-return bug:
-    /// LogicOptimizationEngine returns "" when the file/method is not found,
+    /// LogicSimplificationEngine returns "" when the file/method is not found,
     /// which the tool layer now converts to an InvalidOperationException with
     /// an actionable message instead of silently returning empty output.
     /// </summary>
@@ -2989,13 +2989,13 @@ namespace MyApp
     public class AddGuardClausesNullReturnRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
-        private LogicOptimizationEngine _engine;
+        private LogicSimplificationEngine _engine;
         private SentinelConfiguration _config;
         [SetUp]
         public void Setup()
         {
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _engine = new LogicOptimizationEngine(_workspaceManager);
+            _engine = new LogicSimplificationEngine(_workspaceManager);
             _config = new SentinelConfiguration();
             // Load a minimal solution so engines can reach their "file not found" branch
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Stub.cs", "public class Stub { }")]);
@@ -3118,7 +3118,7 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), _engine, new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), _engine, new LogicSimplificationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
         [Test]
         public async Task AddBracesAsync_FileNotInWorkspace_ReturnsEmpty()
         {
@@ -3169,7 +3169,7 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicOptimizationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
         [Test]
         public async Task MakeClassImmutableAsync_FileNotInWorkspace_ReturnsEmpty()
         {

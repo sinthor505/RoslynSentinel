@@ -26,7 +26,7 @@ public class BatteryThirtyOneTests
     private CodeStyleEngine _codeStyleEngine;
     private CodeFlowEngine _codeFlowEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
-    private LogicOptimizationEngine _logicOptimizationEngine;
+    private LogicSimplificationEngine _logicOptimizationEngine;
     private SyntaxModernizationEngine _modernizationEngine;
     private ValidationEngine _validationEngine;
     private AdvancedRefactoringTools _tools;
@@ -49,7 +49,7 @@ public class BatteryThirtyOneTests
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
         _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
-        _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
+        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
         _validationEngine = new ValidationEngine(
             _workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);

@@ -26,7 +26,7 @@ public class MassiveModernizationTests
 
         var modern = new SyntaxModernizationEngine(_workspaceManager, config);
         _modernizationEngine = modern;
-        var logic = new LogicOptimizationEngine(_workspaceManager);
+        var logic = new LogicSimplificationEngine(_workspaceManager);
         var style = new CodeStyleEngine(_workspaceManager, config);
         var healing = new CodeHealingEngine(_workspaceManager, config);
         var advLogic = new AdvancedLogicEngine(_workspaceManager);

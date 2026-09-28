@@ -31,7 +31,7 @@ public class MassiveRefactoringTests
         var style = new CodeStyleEngine(_workspaceManager, config);
         var codeFlow = new CodeFlowEngine(_workspaceManager);
         var advRefactoring = new AdvancedRefactoringEngine(_workspaceManager);
-        var logicOpt = new LogicOptimizationEngine(_workspaceManager);
+        var logicOpt = new LogicSimplificationEngine(_workspaceManager);
         var modernization = new SyntaxModernizationEngine(_workspaceManager, config);
 
         _refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(

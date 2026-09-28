@@ -15,13 +15,13 @@ namespace RoslynSentinel.Tests.Advanced;
 public class ConvertToSwitchTests
 {
     private IWorkspaceManager _workspaceManager;
-    private LogicOptimizationEngine _logicOptimizationEngine;
+    private LogicSimplificationEngine _logicOptimizationEngine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
+        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
     }
 
     [TearDown]

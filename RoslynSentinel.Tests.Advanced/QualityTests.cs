@@ -8,14 +8,14 @@ namespace RoslynSentinel.Tests.Advanced;
 public class QualityTests
 {
     private IWorkspaceManager _workspaceManager;
-    private LogicOptimizationEngine _logicEngine;
+    private LogicSimplificationEngine _logicEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _logicEngine = new LogicOptimizationEngine(_workspaceManager);
+        _logicEngine = new LogicSimplificationEngine(_workspaceManager);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
     }

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Battery #17 -> LogicOptimizationEngine,
+// Battery #17 -> LogicSimplificationEngine,
 //               MsToolAugmentEngine, ProjectStructureEngine, RefinementEngine
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -11,13 +11,13 @@ namespace RoslynSentinel.Tests.Battery;
 public class LogicOptimizationEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
-    private LogicOptimizationEngine _engine = null!;
+    private LogicSimplificationEngine _engine = null!;
 
     [SetUp]
     public void SetUp()
     {
         _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new LogicOptimizationEngine(_mgr);
+        _engine = new LogicSimplificationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));
     }

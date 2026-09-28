@@ -656,9 +656,9 @@ public class RealSolution_SmokeTests_Battery28
     [Test]
     public async Task LogicOptimizationEngine_SimplifyBooleans_DoesNotThrow()
     {
-        var engine = new LogicOptimizationEngine(_workspaceManager);
+        var engine = new LogicSimplificationEngine(_workspaceManager);
         DocumentEditResult? result = null;
-        Assert.DoesNotThrowAsync(async () => result = await engine.SimplifyBooleanExpressionsAsync(_realFilePath), $"LogicOptimizationEngine.SimplifyBooleanExpressionsAsync must not throw on real file.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.SimplifyBooleanExpressionsAsync(_realFilePath), $"LogicSimplificationEngine.SimplifyBooleanExpressionsAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
 
