@@ -960,11 +960,13 @@ public class PerformanceEngine
             var left = bin.Left.ToString();
             var right = bin.Right.ToString();
 
-            if (left.Contains(".ToLowerInvariant()") || left.Contains(".ToUpperInvariant()") ||
+            if (left.Contains(".ToLower()") || left.Contains(".ToUpper()") ||
+                left.Contains(".ToLowerInvariant()") || left.Contains(".ToUpperInvariant()") ||
+                right.Contains(".ToLower()") || right.Contains(".ToUpper()") ||
                 right.Contains(".ToLowerInvariant()") || right.Contains(".ToUpperInvariant()"))
             {
                 var loc = bin.GetLocation().GetLineSpan().StartLinePosition;
-                issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "InefficientStringComparison", "Avoid using .ToLowerInvariant() or .ToUpperInvariant() for comparison. Use string.Equals with StringComparison.OrdinalIgnoreCase instead."));
+                issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "InefficientStringComparison", "Inefficient string comparison: avoid using .ToLower()/.ToUpper()/.ToLowerInvariant()/.ToUpperInvariant() for comparison. Use string.Equals with StringComparison.OrdinalIgnoreCase instead."));
             }
         }
 
@@ -1016,6 +1018,23 @@ public class PerformanceEngine
                         }
                     }
                 }
+            }
+        }
+
+        // Also catch value-type-to-object/dynamic boxing in variable/field initializers and plain
+        // assignments (e.g. "object o = 1;"), which the invocation-argument check above can't see.
+        var initializerExprs = root.DescendantNodes().OfType<EqualsValueClauseSyntax>().Select(e => e.Value)
+            .Concat(root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                .Where(a => a.IsKind(SyntaxKind.SimpleAssignmentExpression)).Select(a => a.Right));
+
+        foreach (var expr in initializerExprs)
+        {
+            var conversion = semanticModel.GetConversion(expr, cancellationToken);
+            if (conversion.IsBoxing)
+            {
+                var sourceType = semanticModel.GetTypeInfo(expr, cancellationToken).Type;
+                var loc = expr.GetLocation().GetLineSpan().StartLinePosition;
+                issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "BoxingAllocation", $"Boxing detected: converting value type '{sourceType?.Name}' to a reference type."));
             }
         }
 
