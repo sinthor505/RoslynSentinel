@@ -1771,7 +1771,7 @@ public class OtherClass
         {
             private IWorkspaceManager _workspaceManager;
             private SentinelConfiguration _config;
-            private ProjectStructureEngine _projectStructureEngine;
+            private SolutionStructureEngine _projectStructureEngine;
             private RefactoringEngine _refactoringEngine;
             private StructuralRefactoringEngine _advancedStructuralEngine;
             private CodeGenerationEngine _codeGenerationEngine;
@@ -1781,7 +1781,7 @@ public class OtherClass
             {
                 _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 _config = new SentinelConfiguration();
-                _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
+                _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
                 _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
                 _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
                 _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);

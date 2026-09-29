@@ -17,7 +17,7 @@ public class BatteryThirtySixTests
     private IWorkspaceManager _workspaceManager;
     private AsyncAnalysisEngine _asyncSafetyEngine;
     private SecurityEngine _securityEngine;
-    private ProjectStructureEngine _structureEngine;
+    private SolutionStructureEngine _structureEngine;
 
     [SetUp]
     public void Setup()
@@ -25,7 +25,7 @@ public class BatteryThirtySixTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
-        _structureEngine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _structureEngine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
@@ -315,7 +315,7 @@ class C {
         _workspaceManager.SetTestSolution(solution);
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.NameMismatch);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
 
         Assert.That(results, Is.Empty,
             "NAME_MISMATCH should be suppressed in AppHost projects");
@@ -331,7 +331,7 @@ class C {
         _workspaceManager.SetTestSolution(solution);
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.NameMismatch);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
 
         Assert.That(results.Any(r => r.Contains("NAME_MISMATCH")), Is.True,
             "NAME_MISMATCH should still be reported in non-AppHost projects");
@@ -347,7 +347,7 @@ class C {
         _workspaceManager.SetTestSolution(solution);
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.NameMismatch);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
 
         Assert.That(results, Is.Empty,
             "AppHost.New variant must also be suppressed");

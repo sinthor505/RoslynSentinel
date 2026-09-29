@@ -112,7 +112,7 @@ public class HealthOrchestrationEngineTests
     {
         _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var config = new SentinelConfiguration();
-        var pse = new ProjectStructureEngine(_mgr, config);
+        var pse = new SolutionStructureEngine(_mgr, config);
         _engine = new HealthOrchestrationEngine(_mgr, pse, config, new PerformanceEngine(_mgr), new AntiPatternEngine(_mgr, config));
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]));
     }

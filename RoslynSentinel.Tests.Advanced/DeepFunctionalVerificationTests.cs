@@ -11,7 +11,7 @@ public class DeepFunctionalVerificationTests
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private CodeStyleEngine _codeStyleEngine;
     private CodeHealingEngine _codeHealingEngine;
-    private ProjectStructureEngine _projectStructureEngine;
+    private SolutionStructureEngine _projectStructureEngine;
     private RefactoringEngine _refactoringEngine;
     private DependencyEngine _dependencyEngine;
     private SyntaxModernizationEngine _modernizationEngine;
@@ -25,7 +25,7 @@ public class DeepFunctionalVerificationTests
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager, config);
-        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
+        _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, config);
         _refactoringEngine = new RefactoringEngine(_workspaceManager, new NullLogger<RefactoringEngine>(), config);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, config);
@@ -140,7 +140,7 @@ public class C {
 }");
 
         // Act
-        var smells = await _projectStructureEngine.FindStructuralSmellsAsync(ProjectStructureEngine.StructuralSmellType.ThreadSafety);
+        var smells = await _projectStructureEngine.FindStructuralSmellsAsync(SolutionStructureEngine.StructuralSmellType.ThreadSafety);
 
         // Assert
         Assert.That(smells.Any(s => s.Contains("SemaphoreSlim")), Is.True);

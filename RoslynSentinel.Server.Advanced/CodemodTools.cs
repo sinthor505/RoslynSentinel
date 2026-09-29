@@ -22,7 +22,7 @@ public class CodemodTools
     private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly DocumentationEngine _documentationEngine;
-    private readonly ProjectStructureEngine _projectStructureEngine;
+    private readonly SolutionStructureEngine _projectStructureEngine;
     // ── apply_method_codemod engines ──────────────────────────────────────────
     private readonly ThreadSafetyEngine _threadSafetyEngine;
     private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
@@ -38,7 +38,7 @@ public class CodemodTools
     private readonly AdvancedRefactoringTools _advancedRefactoringTools;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<CodemodTools> _logger;
-    public CodemodTools(RefactoringEngine refactoringEngine, LogicSimplificationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, LogicSimplificationEngine advancedLogicEngine, SyntaxModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, ProjectStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, LogicSimplificationEngine codeFlowEngine, StructuralRefactoringEngine advancedStructuralEngine, ArchitecturalEngine architecturalEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiAutomationEngine, AntiPatternEngine antiPatternEngine = null)
+    public CodemodTools(RefactoringEngine refactoringEngine, LogicSimplificationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, LogicSimplificationEngine advancedLogicEngine, SyntaxModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, SolutionStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, LogicSimplificationEngine codeFlowEngine, StructuralRefactoringEngine advancedStructuralEngine, ArchitecturalEngine architecturalEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiAutomationEngine, AntiPatternEngine antiPatternEngine = null)
     {
         _refactoringEngine = refactoringEngine;
         _logicOptimizationEngine = logicOptimizationEngine;

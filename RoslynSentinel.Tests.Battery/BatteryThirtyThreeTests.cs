@@ -32,7 +32,7 @@ public class BatteryThirtyThreeTests
     // private AnalysisEngine _analysisEngine;
     private DocumentationEngine _documentationEngine;
     private DependencyEngine _dependencyEngine;
-    private ProjectStructureEngine _projectStructureEngine;
+    private SolutionStructureEngine _projectStructureEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;
     private HealthOrchestrationEngine _healthOrchestrationEngine;
     private ArchitecturalEngine _architecturalEngine;
@@ -63,7 +63,7 @@ public class BatteryThirtyThreeTests
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager, _config);
         _documentationEngine = new DocumentationEngine(_workspaceManager);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
-        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
+        _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);

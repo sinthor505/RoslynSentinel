@@ -43,7 +43,7 @@ public class ComprehensiveToolTests
     private SyntaxModernizationEngine _modernizationEngine;
     private ModernizationTools _modernizationTools;
     private PerformanceEngine _performanceEngine;
-    private ProjectStructureEngine _projectStructureEngine;
+    private SolutionStructureEngine _projectStructureEngine;
     private QualityTools _qualityTools;
     private RefactoringEngine _refactoringEngine;
     private AdvancedRefactoringTools _advancedRefactoringTools;
@@ -94,7 +94,7 @@ public class ComprehensiveToolTests
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
         _performanceEngine = new PerformanceEngine(_workspaceManager);
-        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
+        _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
         _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);

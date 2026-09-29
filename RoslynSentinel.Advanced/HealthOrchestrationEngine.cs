@@ -17,9 +17,9 @@ public class HealthOrchestrationEngine
     private readonly AntiPatternEngine _antiPatternEngine;
     private readonly PerformanceEngine _performanceEngine;
     private readonly IWorkspaceReader _workspaceManager;
-    private readonly ProjectStructureEngine _projectStructureEngine;
+    private readonly SolutionStructureEngine _projectStructureEngine;
     private readonly SentinelConfiguration _config;
-    public HealthOrchestrationEngine(IWorkspaceReader workspaceManager, ProjectStructureEngine projectStructureEngine, SentinelConfiguration config, PerformanceEngine performanceEngine, AntiPatternEngine antiPatternEngine)
+    public HealthOrchestrationEngine(IWorkspaceReader workspaceManager, SolutionStructureEngine projectStructureEngine, SentinelConfiguration config, PerformanceEngine performanceEngine, AntiPatternEngine antiPatternEngine)
     {
         _workspaceManager = workspaceManager;
         _projectStructureEngine = projectStructureEngine;

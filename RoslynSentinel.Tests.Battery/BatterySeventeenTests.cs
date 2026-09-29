@@ -117,13 +117,13 @@ public class MsToolAugmentEngineTests
 public class ProjectStructureEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
-    private ProjectStructureEngine _engine = null!;
+    private SolutionStructureEngine _engine = null!;
 
     [SetUp]
     public void SetUp()
     {
         _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ProjectStructureEngine(_mgr, new SentinelConfiguration());
+        _engine = new SolutionStructureEngine(_mgr, new SentinelConfiguration());
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));
     }

@@ -11,13 +11,13 @@ namespace RoslynSentinel.Tests.Advanced;
 public class MassiveStructuralTests
 {
     private IWorkspaceManager _workspaceManager;
-    private ProjectStructureEngine _structureEngine;
+    private SolutionStructureEngine _structureEngine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _structureEngine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _structureEngine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]

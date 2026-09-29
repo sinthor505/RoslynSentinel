@@ -18,14 +18,14 @@ public class BatteryThirtySevenTests
 {
     private IWorkspaceManager _workspaceManager;
     private AntiPatternEngine _antiPatternEngine;
-    private ProjectStructureEngine _structureEngine;
+    private SolutionStructureEngine _structureEngine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
-        _structureEngine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _structureEngine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
@@ -179,7 +179,7 @@ public static class DateHelper {
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Empty,
             "Static helper classes must not be flagged for TIME_ABSTRACTION - injecting TimeProvider is not applicable");
     }
@@ -194,7 +194,7 @@ public class SqlHelper {
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Not.Empty, "Helper classes must still be reported");
         Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
             "Helper classes must use LOW severity - injection is possible but these are utilities, not DI-injectable services");
@@ -210,7 +210,7 @@ public static class DateTimeExtensions {
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Empty,
             "Extension method classes must not be flagged for TIME_ABSTRACTION");
     }
@@ -227,7 +227,7 @@ public class NotificationRepository {
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Not.Empty, "Repository classes must still be reported");
         Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
             "Repository findings must use LOW severity - injection is possible but rarely high-value here");
@@ -245,7 +245,7 @@ public class LowStockMonitorWorker {
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Not.Empty, "Worker classes must still be reported");
         Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
             "Worker findings must use LOW severity");
@@ -261,7 +261,7 @@ public class MealPlanPdfExporter {
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Not.Empty, "Exporter classes must still be reported");
         Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
             "Exporter findings must use LOW severity");
@@ -279,7 +279,7 @@ public class BatchProductProcessor {
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Not.Empty, "Processor classes must still be reported");
         Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
             "Processor findings must use LOW severity");
@@ -297,7 +297,7 @@ public class OrderService {
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Not.Empty, "Service class must be reported");
         Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION]") && !r.Contains(":LOW")), Is.True,
             "Service class findings must use HIGH (default) severity - date-driven logic commonly needs mocking in tests");
@@ -313,7 +313,7 @@ public class MyTests {
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.TimeAbstraction);
         Assert.That(results, Is.Empty,
             "Test projects must be excluded - injecting TimeProvider into test fixtures is not applicable");
     }
@@ -332,7 +332,7 @@ public class MyTests {
         _workspaceManager.SetTestSolution(solution);
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.NameMismatch);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
         Assert.That(results, Is.Empty,
             "NAME_MISMATCH must be suppressed for .g.cs source-generator output files");
     }
@@ -346,7 +346,7 @@ public class MyTests {
         _workspaceManager.SetTestSolution(solution);
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.MultiType);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.MultiType);
         Assert.That(results, Is.Empty,
             "MULTI_TYPE must be suppressed for .g.cs files - generators routinely emit multiple types per file");
     }
@@ -361,7 +361,7 @@ public class MyTests {
         _workspaceManager.SetTestSolution(solution);
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
-            typeFilter: ProjectStructureEngine.StructuralSmellType.NameMismatch);
+            typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
         Assert.That(results.Any(r => r.Contains("NAME_MISMATCH")), Is.True,
             "NAME_MISMATCH must still fire for hand-written files where type ≠ filename");
     }

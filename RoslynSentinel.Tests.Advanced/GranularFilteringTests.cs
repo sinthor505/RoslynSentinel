@@ -10,14 +10,14 @@ namespace RoslynSentinel.Tests.Advanced;
 public class GranularFilteringTests
 {
     private IWorkspaceManager _workspaceManager;
-    private ProjectStructureEngine _projectStructureEngine;
+    private SolutionStructureEngine _projectStructureEngine;
     private MetricsEngine _metricsEngine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
         _metricsEngine = new MetricsEngine(_workspaceManager);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("ProjectA", new[] {
@@ -57,8 +57,8 @@ public class GranularFilteringTests
     public async Task FindStructuralSmells_WithTypeFilter_ShouldOnlyReturnSpecificType()
     {
         // Act
-        var multiTypeOnly = await _projectStructureEngine.FindStructuralSmellsAsync(typeFilter: ProjectStructureEngine.StructuralSmellType.MultiType);
-        var mismatchOnly = await _projectStructureEngine.FindStructuralSmellsAsync(typeFilter: ProjectStructureEngine.StructuralSmellType.NameMismatch);
+        var multiTypeOnly = await _projectStructureEngine.FindStructuralSmellsAsync(typeFilter: SolutionStructureEngine.StructuralSmellType.MultiType);
+        var mismatchOnly = await _projectStructureEngine.FindStructuralSmellsAsync(typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
 
         // Assert
         Assert.That(multiTypeOnly.Count, Is.EqualTo(1));

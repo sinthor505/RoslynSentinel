@@ -58,7 +58,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<MsToolAugmentEngine>();
         services.AddSingleton<PersistentWorkspaceManager>();
         services.AddSingleton<ProjectConsistencyEngine>();
-        services.AddSingleton<ProjectStructureEngine>();
+        services.AddSingleton<SolutionStructureEngine>();
         services.AddSingleton<RefactoringEngine>();
         services.AddSingleton<SemanticRefactoringLibrary>();
         services.AddSingleton<SemanticSearchEngine>();

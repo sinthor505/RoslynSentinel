@@ -13,13 +13,13 @@ namespace RoslynSentinel.Tests;
 public class StructureTests
 {
     private IWorkspaceManager _workspaceManager;
-    private ProjectStructureEngine _engine;
+    private SolutionStructureEngine _engine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _engine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
