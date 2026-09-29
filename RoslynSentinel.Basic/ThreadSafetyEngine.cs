@@ -387,8 +387,7 @@ public class ThreadSafetyEngine
                 // The then-branch must assign the same field
                 bool thenAssigns = ifStmt.Statement.DescendantNodesAndSelf()
                     .OfType<AssignmentExpressionSyntax>()
-                    .Any(a => a.Left is IdentifierNameSyntax ai && ai.Identifier.Text == fieldName &&
-                              a.Right is ObjectCreationExpressionSyntax or ImplicitObjectCreationExpressionSyntax);
+                    .Any(a => a.Left is IdentifierNameSyntax ai && ai.Identifier.Text == fieldName);
                 if (!thenAssigns)
                 {
                     continue;
