@@ -416,7 +416,7 @@ public class CreateFileDeleteFileTests
         var semanticRefactoringLibrary = new SemanticRefactoringLibrary(workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
         var codeStyleEngine = new CodeStyleEngine(workspaceManager, config);
-        var codeFlowEngine = new CodeFlowEngine(workspaceManager);
+        var codeFlowEngine = new LogicSimplificationEngine(workspaceManager);
         var msToolAugmentEngine = new MsToolAugmentEngine(workspaceManager);
         var codeGenerationEngine = new CodeGenerationEngine(workspaceManager);
         var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);

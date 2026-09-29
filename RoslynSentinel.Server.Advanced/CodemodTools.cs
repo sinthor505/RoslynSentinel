@@ -13,7 +13,7 @@ public class CodemodTools
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private readonly CodeStyleEngine _codeStyleEngine;
-    private readonly AdvancedLogicEngine _advancedLogicEngine;
+    private readonly LogicSimplificationEngine _advancedLogicEngine;
     private readonly SyntaxModernizationEngine _modernizationEngine;
     private readonly CodeGenerationEngine _codeGenerationEngine;
     // ── apply_file_codemod engines ────────────────────────────────────────────
@@ -27,7 +27,7 @@ public class CodemodTools
     private readonly ThreadSafetyEngine _threadSafetyEngine;
     private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
     private readonly StandardRefactoringEngine _standardRefactoringEngine;
-    private readonly CodeFlowEngine _codeFlowEngine;
+    private readonly LogicSimplificationEngine _codeFlowEngine;
     // ── apply_class_codemod engines ───────────────────────────────────────────
     private readonly StructuralRefactoringEngine _advancedStructuralEngine;
     private readonly ArchitecturalEngine _architecturalEngine;
@@ -38,7 +38,7 @@ public class CodemodTools
     private readonly AdvancedRefactoringTools _advancedRefactoringTools;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<CodemodTools> _logger;
-    public CodemodTools(RefactoringEngine refactoringEngine, LogicSimplificationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, AdvancedLogicEngine advancedLogicEngine, SyntaxModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, ProjectStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, CodeFlowEngine codeFlowEngine, StructuralRefactoringEngine advancedStructuralEngine, ArchitecturalEngine architecturalEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiAutomationEngine, AntiPatternEngine antiPatternEngine = null)
+    public CodemodTools(RefactoringEngine refactoringEngine, LogicSimplificationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, LogicSimplificationEngine advancedLogicEngine, SyntaxModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, ProjectStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, LogicSimplificationEngine codeFlowEngine, StructuralRefactoringEngine advancedStructuralEngine, ArchitecturalEngine architecturalEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiAutomationEngine, AntiPatternEngine antiPatternEngine = null)
     {
         _refactoringEngine = refactoringEngine;
         _logicOptimizationEngine = logicOptimizationEngine;
@@ -646,7 +646,7 @@ public class CodemodTools
                 {
                     try
                     {
-                        var r = await _advancedLogicEngine.ConvertStaticToExtensionAsync(filePath, methodName, cancellationToken);
+                        var r = await _logicOptimizationEngine.ConvertStaticToExtensionAsync(filePath, methodName, cancellationToken);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
                             return new SentinelCallToolResult<object>()
@@ -712,7 +712,7 @@ public class CodemodTools
 
                 case "extension_to_static":
                 {
-                    var r = await _advancedLogicEngine.ExtensionToStaticAsync(filePath, methodName, cancellationToken);
+                    var r = await _logicOptimizationEngine.ExtensionToStaticAsync(filePath, methodName, cancellationToken);
                     if (string.IsNullOrEmpty(r.UpdatedText))
                     {
                         return new SentinelCallToolResult<object>
@@ -837,7 +837,7 @@ public class CodemodTools
 
                 case "reduce_block_depth":
                 {
-                    var r = await _codeFlowEngine.ReduceBlockDepthAsync(filePath, methodName, cancellationToken);
+                    var r = await _logicOptimizationEngine.ReduceBlockDepthAsync(filePath, methodName, cancellationToken);
                     if (string.IsNullOrEmpty(r.UpdatedText))
                     {
                         return new SentinelCallToolResult<object>

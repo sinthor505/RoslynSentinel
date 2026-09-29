@@ -29,7 +29,7 @@ public class MassiveModernizationTests
         var logic = new LogicSimplificationEngine(_workspaceManager);
         var style = new CodeStyleEngine(_workspaceManager, config);
         var healing = new CodeHealingEngine(_workspaceManager, config);
-        var advLogic = new AdvancedLogicEngine(_workspaceManager);
+        var advLogic = new LogicSimplificationEngine(_workspaceManager);
         var ideStyle = new IDEStyleEngine(_workspaceManager);
         var asyncOpt = new AsyncOptimizationEngine(_workspaceManager);
 

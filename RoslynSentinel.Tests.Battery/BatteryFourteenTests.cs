@@ -10,12 +10,12 @@ namespace RoslynSentinel.Tests.Battery;
 public class AdvancedLogicEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
-    private AdvancedLogicEngine _engine = null!;
+    private LogicSimplificationEngine _engine = null!;
     [SetUp]
     public void SetUp()
     {
         _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AdvancedLogicEngine(_mgr);
+        _engine = new LogicSimplificationEngine(_mgr);
     }
 
     [TearDown]
@@ -25,7 +25,7 @@ public class AdvancedLogicEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-        var result = await _engine.InvertBooleanLogicAsync("NoSuchFile.cs", "myBool");
+        var result = await new LogicSimplificationEngine(_mgr).InvertBooleanLogicAsync("NoSuchFile.cs", "myBool");
         Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.DocumentNotFound), "unknown file should yield DocumentNotFound");
     }
 
@@ -34,7 +34,7 @@ public class AdvancedLogicEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-        var result = await _engine.ConvertIfToSwitchExpressionAsync("NoSuchFile.cs", "GetValue");
+        var result = await new LogicSimplificationEngine(_mgr).ConvertIfToSwitchExpressionAsync("NoSuchFile.cs", "GetValue");
         Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
     }
 
@@ -49,7 +49,7 @@ public static class MyExtensions
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Extensions.cs", source)]);
         _mgr.SetTestSolution(solution);
-        var result = await _engine.ExtensionToStaticAsync("Extensions.cs", "Shout");
+        var result = await new LogicSimplificationEngine(_mgr).ExtensionToStaticAsync("Extensions.cs", "Shout");
         Assert.That(result.UpdatedText, Does.Not.Contain("this string"), "this keyword should be stripped from first parameter");
         Assert.That(result.UpdatedText, Does.Contain("Shout"), "method should still be present");
     }

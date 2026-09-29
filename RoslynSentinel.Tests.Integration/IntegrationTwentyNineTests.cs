@@ -208,28 +208,28 @@ public class B29_AllEngines_RealSolution_SmokeTests
     [Ignore("API changed: InvertBooleanLogicAsync now returns EngineResultWrapper<List<DocumentEditResult>>")]
     public async Task AdvancedLogicEngine_InvertBooleanLogic_NonExistentBool_ReturnsEmptyDict()
     {
-        var engine = new AdvancedLogicEngine(_workspaceManager);
+        var engine = new LogicSimplificationEngine(_workspaceManager);
         EngineResultWrapper<List<DocumentEditResult>>? result = null;
-        Assert.DoesNotThrowAsync(async () => result = await engine.InvertBooleanLogicAsync(_realFilePath, "__nonExistentBoolXYZ__"), "InvertBooleanLogicAsync must not throw even when bool name is not found.");
+        Assert.DoesNotThrowAsync(async () => result = await new LogicSimplificationEngine(_workspaceManager).InvertBooleanLogicAsync(_realFilePath, "__nonExistentBoolXYZ__"), "InvertBooleanLogicAsync must not throw even when bool name is not found.");
         Assert.That(result, Is.Not.Null, "Must return a result (empty is OK when bool not found).");
     }
 
     [Test]
     public async Task AdvancedLogicEngine_ConvertForEachToFor_DoesNotThrow()
     {
-        var engine = new AdvancedLogicEngine(_workspaceManager);
+        var engine = new LogicSimplificationEngine(_workspaceManager);
         string? result = null;
         // Line 1 is likely a using directive -> no foreach; method gracefully returns original
-        Assert.DoesNotThrowAsync(async () => result = (await engine.ConvertForEachToForAsync(_realFilePath, 1)).UpdatedText!, "ConvertForEachToForAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await new LogicSimplificationEngine(_workspaceManager).ConvertForEachToForAsync(_realFilePath, 1)).UpdatedText!, "ConvertForEachToForAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task AdvancedLogicEngine_ConvertWhileToFor_DoesNotThrow()
     {
-        var engine = new AdvancedLogicEngine(_workspaceManager);
+        var engine = new LogicSimplificationEngine(_workspaceManager);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () => result = (await engine.ConvertWhileToForAsync(_realFilePath, 1)).UpdatedText!, "ConvertWhileToForAsync must not throw on real solution.");
+        Assert.DoesNotThrowAsync(async () => result = (await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync(_realFilePath, 1)).UpdatedText!, "ConvertWhileToForAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
     }
 

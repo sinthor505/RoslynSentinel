@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class ComprehensiveToolTests
 {
-    private AdvancedLogicEngine _advancedLogicEngine;
+    private LogicSimplificationEngine _advancedLogicEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private StructuralRefactoringEngine _advancedStructuralEngine;
     // private AnalysisEngine _analysisEngine;
@@ -18,7 +18,7 @@ public class ComprehensiveToolTests
     private AsyncBatchEngine _asyncBatchEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;
-    private CodeFlowEngine _codeFlowEngine;
+    private LogicSimplificationEngine _codeFlowEngine;
     private CodeGenerationEngine _codeGenerationEngine;
     private CodeHealingEngine _codeHealingEngine;
     private CodeStyleEngine _codeStyleEngine;
@@ -64,7 +64,7 @@ public class ComprehensiveToolTests
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
+        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _apiAutomationEngine = new ApiGenerationEngine(_workspaceManager);
@@ -72,7 +72,7 @@ public class ComprehensiveToolTests
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
-        _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
+        _codeFlowEngine = new LogicSimplificationEngine(_workspaceManager);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);

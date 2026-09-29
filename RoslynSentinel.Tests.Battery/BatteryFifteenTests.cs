@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Battery;
-
 [TestFixture]
 public class AsyncOptimizationEngineTests
 {
@@ -64,13 +63,13 @@ public class MyService
 public class CodeFlowEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
-    private CodeFlowEngine _engine = null!;
+    private LogicSimplificationEngine _engine = null!;
     private static readonly (string, string)[] Stub = [("Other.cs", "public class Other {}")];
     [SetUp]
     public void SetUp()
     {
         _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new CodeFlowEngine(_mgr);
+        _engine = new LogicSimplificationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
 
@@ -79,7 +78,7 @@ public class CodeFlowEngineTests
     [Test]
     public async Task ReduceBlockDepth_UnknownFile_ReturnsErrorComment()
     {
-        var result = await _engine.ReduceBlockDepthAsync("NoSuchFile.cs", "Process");
+        var result = await new LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("NoSuchFile.cs", "Process");
         Assert.That(result.Message, Does.StartWith("// ErrorDetails:"), "unknown file should return an error comment string");
     }
 
@@ -98,7 +97,7 @@ public class Processor
     }
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Processor.cs", source)]));
-        var result = await _engine.ReduceBlockDepthAsync("Processor.cs", "Process");
+        var result = await new LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("Processor.cs", "Process");
         Assert.That(result.UpdatedText, Does.Contain("return"), "early return should be added");
         Assert.That(result.UpdatedText, Does.Contain("!"), "inverted condition should use logical NOT");
     }
@@ -116,7 +115,7 @@ public class Logger
     }
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Logger.cs", source)]));
-        var result = await _engine.ReduceBlockDepthAsync("Logger.cs", "Log");
+        var result = await new LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("Logger.cs", "Log");
         Assert.That(result.UpdatedText!, Does.Not.StartWith("// ErrorDetails:"), "should return source, not error comment");
         Assert.That(result.UpdatedText, Does.Contain("Log"), "method name should still appear");
     }

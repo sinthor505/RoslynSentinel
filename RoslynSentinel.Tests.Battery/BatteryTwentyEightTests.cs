@@ -284,12 +284,12 @@ public class B16extra_SecuritySafety_NullConditionalGuards
 public class WFextra_AdvancedLogic_WhileToFor
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AdvancedLogicEngine _engine = null!;
+    private LogicSimplificationEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AdvancedLogicEngine(_workspaceManager);
+        _engine = new LogicSimplificationEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -307,7 +307,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertWhileToForAsync("Looper.cs", 5);
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Looper.cs", 5);
         Assert.That(result.UpdatedText, Does.Contain("for"), "Converted output must contain a 'for' loop.");
         Assert.That(result.UpdatedText, Does.Not.Contain("while"), "The 'while' loop must be removed after conversion.");
     }
@@ -329,7 +329,7 @@ public class Processor {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Processor.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertWhileToForAsync("Processor.cs", 6);
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Processor.cs", 6);
         Assert.That(result.UpdatedText, Does.Contain("for"), "Result must contain a for loop.");
         // i++ in the body must be gone (moved to incrementors)
         var bodyStatements = result.UpdatedText!.Split(new[] { "for " }, StringSplitOptions.None).Skip(1).FirstOrDefault() ?? "";
@@ -349,7 +349,7 @@ public class Safe {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Safe.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertWhileToForAsync("Safe.cs", 5);
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Safe.cs", 5);
         Assert.That(result.UpdatedText, Does.Not.Contain("for ("), "When no while is found, no for-loop must be emitted.");
     }
 
@@ -365,7 +365,7 @@ public class Streamer {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Streamer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertWhileToForAsync("Streamer.cs", 4);
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Streamer.cs", 4);
         // Without a local declaration as the previous statement, engine returns unchanged
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Even when conversion is not applicable, result must not be null/empty.");
     }

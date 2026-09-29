@@ -9,7 +9,7 @@ public class RefactoringTests
 {
     private IWorkspaceManager _workspaceManager;
     private RefactoringEngine _refactoringEngine;
-    private AdvancedLogicEngine _advancedLogicEngine;
+    private LogicSimplificationEngine _advancedLogicEngine;
     private CodeHealingEngine _healingEngine;
     [SetUp]
     public void Setup()
@@ -17,7 +17,7 @@ public class RefactoringTests
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
-        _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
+        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
         _healingEngine = new CodeHealingEngine(_workspaceManager, config);
     }
 
@@ -74,7 +74,7 @@ public class RefactoringTests
     {
         var source = "public static class Ext { public static void M(this string s) { } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
-        var result = await _advancedLogicEngine.ExtensionToStaticAsync("Ext.cs", "M");
+        var result = await new LogicSimplificationEngine(_workspaceManager).ExtensionToStaticAsync("Ext.cs", "M");
         Assert.That(result.UpdatedText!, Contains.Substring("public static void M(string s)"));
         Assert.That(result.UpdatedText!, Does.Not.Contain("this string"));
     }
@@ -84,7 +84,7 @@ public class RefactoringTests
     {
         var source = "public static class Ext { public static void M(string s) { } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
-        var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync("Ext.cs", "M");
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M");
         Assert.That(result.UpdatedText!, Contains.Substring("public static void M(this string s)"));
     }
 

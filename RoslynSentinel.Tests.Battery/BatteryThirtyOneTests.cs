@@ -16,10 +16,10 @@ public class BatteryThirtyOneTests
     private StructuralRefactoringEngine _advancedStructuralEngine;
     private MappingEngine _mappingEngine;
     private SemanticRefactoringLibrary _semanticRefactoringLibrary;
-    private AdvancedLogicEngine _advancedLogicEngine;
+    private LogicSimplificationEngine _advancedLogicEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
     private CodeStyleEngine _codeStyleEngine;
-    private CodeFlowEngine _codeFlowEngine;
+    private LogicSimplificationEngine _codeFlowEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private LogicSimplificationEngine _logicOptimizationEngine;
     private SyntaxModernizationEngine _modernizationEngine;
@@ -35,10 +35,10 @@ public class BatteryThirtyOneTests
         _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
         _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
-        _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
+        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
-        _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
+        _codeFlowEngine = new LogicSimplificationEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);

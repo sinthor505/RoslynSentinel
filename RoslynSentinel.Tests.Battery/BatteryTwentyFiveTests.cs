@@ -11,12 +11,12 @@ namespace RoslynSentinel.Tests.Battery;
 public class AdvancedLogicEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private AdvancedLogicEngine _engine = null!;
+    private LogicSimplificationEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AdvancedLogicEngine(_workspaceManager);
+        _engine = new LogicSimplificationEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -34,7 +34,7 @@ public class Calc {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertIfToSwitchStatementAsync("Calc.cs", "Describe", CancellationToken.None);
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertIfToSwitchStatementAsync("Calc.cs", "Describe", CancellationToken.None);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -43,7 +43,7 @@ public class Calc {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertIfToSwitchStatementAsync("NoSuchFile.cs", "Foo");
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertIfToSwitchStatementAsync("NoSuchFile.cs", "Foo");
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -59,7 +59,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertForEachToForAsync("Looper.cs", 5);
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertForEachToForAsync("Looper.cs", 5);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -74,7 +74,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertForToForEachAsync("Looper.cs", 4);
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertForToForEachAsync("Looper.cs", 4);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -90,7 +90,7 @@ public class Looper {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertWhileToForAsync("Looper.cs", 5);
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Looper.cs", 5);
         Assert.That(result, Is.Not.Null);
     }
 }

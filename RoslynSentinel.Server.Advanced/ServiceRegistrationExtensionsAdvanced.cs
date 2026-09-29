@@ -25,7 +25,6 @@ public static class RoslynSentinelServiceExtensionsAdvanced
 
         // Advanced-only engines: not registered by Basic (either because Basic's tool classes
         // don't use them, or because they're deliberately gated to the fuller Advanced tool set).
-        services.AddSingleton<AdvancedLogicEngine>();
         services.AddSingleton<AdvancedRefactoringEngine>();
         services.AddSingleton<StructuralRefactoringEngine>();
         services.AddSingleton<AntiPatternEngine>();
@@ -35,7 +34,6 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<AsyncOptimizationEngine>();
         services.AddSingleton<AsyncAnalysisEngine>();
         services.AddSingleton<CloneDetectionEngine>();
-        services.AddSingleton<CodeFlowEngine>();
         services.AddSingleton<CodeGenerationEngine>();
         services.AddSingleton<CodeGenerationEngine>();
         services.AddSingleton<CodeHealingEngine>();

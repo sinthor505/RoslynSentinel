@@ -16,7 +16,7 @@ public class BatteryTwentyOneTests
     private LogicSimplificationEngine _logicOptimizationEngine;
     private CodeStyleEngine _codeStyleEngine;
     private CodeHealingEngine _codeHealingEngine;
-    private AdvancedLogicEngine _advancedLogicEngine;
+    private LogicSimplificationEngine _advancedLogicEngine;
     private IDEStyleEngine _ideStyleEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private ModernizationTools _tools;
@@ -135,7 +135,7 @@ public class Worker
         _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager, _config);
-        _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
+        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _tools = new ModernizationTools(_modernizationEngine, _syntaxUpgradeEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
@@ -434,7 +434,7 @@ public class Worker
     {
         const string src = "namespace TestProj; public static class Helper { public static string Format(string s) => s.Trim(); }";
         SetSource(src, "Helper.cs");
-        var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync("Helper.cs", "Format");
+        var result = await _logicOptimizationEngine.ConvertStaticToExtensionAsync("Helper.cs", "Format");
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
@@ -442,7 +442,7 @@ public class Worker
     public async Task ConvertStaticToExtension_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _advancedLogicEngine.ConvertStaticToExtensionAsync("NonExistent.cs", "Format"));
+        Assert.DoesNotThrowAsync(async () => await _logicOptimizationEngine.ConvertStaticToExtensionAsync("NonExistent.cs", "Format"));
     }
 
     // --- InvertBooleanLogic ---

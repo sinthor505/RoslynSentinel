@@ -14,10 +14,10 @@ public class BatteryTwentyFourTests
     private StructuralRefactoringEngine _advancedStructuralEngine;
     private MappingEngine _mappingEngine;
     private SemanticRefactoringLibrary _semanticRefactoringLibrary;
-    private AdvancedLogicEngine _advancedLogicEngine;
+    private LogicSimplificationEngine _advancedLogicEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
     private CodeStyleEngine _codeStyleEngine;
-    private CodeFlowEngine _codeFlowEngine;
+    private LogicSimplificationEngine _codeFlowEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private LogicSimplificationEngine _logicOptimizationEngine;
     private SyntaxModernizationEngine _modernizationEngine;
@@ -105,10 +105,10 @@ public enum Status { Active = 1, Pending = 2 }
         _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
         _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
-        _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
+        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
-        _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
+        _codeFlowEngine = new LogicSimplificationEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
@@ -726,7 +726,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         const string src = "namespace TestProj; public static class Helper { public static string Trim(this string s) => s.Trim(); }";
         SetSource(src, "Helper.cs");
-        var result = await _advancedLogicEngine.ExtensionToStaticAsync("Helper.cs", "Trim");
+        var result = await _logicOptimizationEngine.ExtensionToStaticAsync("Helper.cs", "Trim");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1035,7 +1035,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ReduceBlockDepth_ValidMethod_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _codeFlowEngine.ReduceBlockDepthAsync("Order.cs", "GetStatus");
+        var result = await _logicOptimizationEngine.ReduceBlockDepthAsync("Order.cs", "GetStatus");
         Assert.That(result, Is.Not.Null);
     }
 

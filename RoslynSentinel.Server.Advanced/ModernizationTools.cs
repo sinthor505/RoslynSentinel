@@ -1,11 +1,8 @@
 using System.ComponentModel;
-
 using Microsoft.Extensions.Logging;
-
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Advanced;
-
 [McpServerToolType]
 public class ModernizationTools
 {
@@ -14,25 +11,13 @@ public class ModernizationTools
     private readonly LogicSimplificationEngine _logicOptimizationEngine;
     private readonly CodeStyleEngine _codeStyleEngine;
     private readonly CodeHealingEngine _codeHealingEngine;
-    private readonly AdvancedLogicEngine _advancedLogicEngine;
+    private readonly LogicSimplificationEngine _advancedLogicEngine;
     private readonly IDEStyleEngine _ideStyleEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly ISolutionProvider _workspaceManager;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<ModernizationTools> _logger;
-
-    public ModernizationTools(
-        SyntaxModernizationEngine modernizationEngine,
-        SyntaxUpgradeEngine syntaxUpgradeEngine,
-        LogicSimplificationEngine logicOptimizationEngine,
-        CodeStyleEngine codeStyleEngine,
-        CodeHealingEngine codeHealingEngine,
-        AdvancedLogicEngine advancedLogicEngine,
-        IDEStyleEngine ideStyleEngine,
-        AsyncOptimizationEngine asyncOptimizationEngine,
-        ISolutionProvider workspaceManager,
-        SentinelConfiguration config,
-        ILogger<ModernizationTools> logger)
+    public ModernizationTools(SyntaxModernizationEngine modernizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, LogicSimplificationEngine logicOptimizationEngine, CodeStyleEngine codeStyleEngine, CodeHealingEngine codeHealingEngine, LogicSimplificationEngine advancedLogicEngine, IDEStyleEngine ideStyleEngine, AsyncOptimizationEngine asyncOptimizationEngine, ISolutionProvider workspaceManager, SentinelConfiguration config, ILogger<ModernizationTools> logger)
     {
         _modernizationEngine = modernizationEngine;
         _syntaxUpgradeEngine = syntaxUpgradeEngine;
@@ -50,22 +35,17 @@ public class ModernizationTools
     [McpServerTool(Name = "InvertBooleanLogic")]
     [Produces(DataTag.ResultOnly)]
     [Description("Inverts all usages of a boolean identifier solution-wide (wraps with !, collapses double negations).")]
-    public async Task<SentinelCallToolResult<object>> InvertBooleanLogic(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string boolName,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> InvertBooleanLogic([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Consumes(DataTag.SymbolName, required: true)] string boolName, // RequestContext<CallToolRequestParams> requestParams = null,
+    CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-
         try
         {
-            var result = await _advancedLogicEngine.InvertBooleanLogicAsync(filePath, boolName, cancellationToken);
+            var result = await _logicOptimizationEngine.InvertBooleanLogicAsync(filePath, boolName, cancellationToken);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
-                SuccessData =  result
+                SuccessData = result
             };
         }
         catch (Exception ex)
@@ -74,7 +54,7 @@ public class ModernizationTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "InvertBooleanLogic")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InvertBooleanLogic")
             };
         }
     }

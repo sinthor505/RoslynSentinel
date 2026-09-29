@@ -24,9 +24,9 @@ public class MassiveRefactoringTests
         var advStruct = new StructuralRefactoringEngine(_workspaceManager);
         var mapping = new MappingEngine(_workspaceManager);
         var semLib = new SemanticRefactoringLibrary(_workspaceManager);
-        var advLogic = new AdvancedLogicEngine(_workspaceManager);
+        var advLogic = new LogicSimplificationEngine(_workspaceManager);
         var style = new CodeStyleEngine(_workspaceManager, config);
-        var codeFlow = new CodeFlowEngine(_workspaceManager);
+        var codeFlow = new LogicSimplificationEngine(_workspaceManager);
         var advRefactoring = new AdvancedRefactoringEngine(_workspaceManager);
         var logicOpt = new LogicSimplificationEngine(_workspaceManager);
         var modernization = new SyntaxModernizationEngine(_workspaceManager, config);

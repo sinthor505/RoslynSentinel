@@ -1935,12 +1935,12 @@ public class MyService
             public class Bug52ReduceBlockDepthRegressionTests
             {
                 private IWorkspaceManager _workspaceManager;
-                private CodeFlowEngine _codeFlowEngine;
+                private LogicSimplificationEngine _codeFlowEngine;
                 [SetUp]
                 public void Setup()
                 {
                     _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                    _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
+                    _codeFlowEngine = new LogicSimplificationEngine(_workspaceManager);
                 }
 
                 [TearDown]
@@ -1975,7 +1975,7 @@ public class Processor
                         Assert.Inconclusive("Document not found");
                     }
 
-                    var result = await _codeFlowEngine.ReduceBlockDepthAsync(document.FilePath!, "Process");
+                    var result = await new LogicSimplificationEngine(_workspaceManager).ReduceBlockDepthAsync(document.FilePath!, "Process");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
                     Assert.That(result.UpdatedText, Does.Not.Contain("// ErrorDetails"), "Should not return error");
@@ -2403,7 +2403,7 @@ public class Processor
         {
             private IWorkspaceManager _workspaceManager;
             private AsyncOptimizationEngine _asyncOptimizationEngine;
-            private AdvancedLogicEngine _advancedLogicEngine;
+            private LogicSimplificationEngine _advancedLogicEngine;
             private RefactoringEngine _refactoringEngine;
             private ThreadSafetyEngine _threadSafetyEngine;
             private StructuralRefactoringEngine _advancedStructuralEngine;
@@ -2413,7 +2413,7 @@ public class Processor
                 _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 var config = new SentinelConfiguration();
                 _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-                _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
+                _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
                 _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
                 _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
                 _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
@@ -2471,7 +2471,7 @@ public class StringExtensions
     }
 }";
                 SetSource(code, "StringExtensions.cs");
-                var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync("StringExtensions.cs", "IsValidEmail");
+                var result = await new LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("StringExtensions.cs", "IsValidEmail");
                 Assert.That(result, Is.Not.Null, "Should return a result");
                 Assert.That(result.UpdatedText, Does.Contain("static class StringExtensions"), "Extension class must be declared static");
                 Assert.That(result.UpdatedText, Does.Contain("this string input"), "Method should be converted to extension (this parameter)");
@@ -3101,7 +3101,7 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), _engine, new LogicSimplificationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), _engine, new LogicSimplificationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
         [Test]
         public async Task AddBracesAsync_FileNotInWorkspace_ReturnsEmpty()
         {
@@ -3152,7 +3152,7 @@ namespace MyApp
 
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
-        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new AdvancedLogicEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
         [Test]
         public async Task MakeClassImmutableAsync_FileNotInWorkspace_ReturnsEmpty()
         {
