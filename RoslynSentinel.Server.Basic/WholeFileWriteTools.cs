@@ -662,7 +662,7 @@ public class WholeFileWriteTools
                 : new SentinelCallToolResult<object>()
                 {
                     IsSuccess = false,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"ApplyUnifiedDiff validate failed: {validationResult.Diagnostics.ToInfo()}")
+                    ErrorData = new ResultError(ToolErrorCode.Exception, $"ApplyUnifiedDiff validate failed.", StructuredDetail: validationResult.Diagnostics)
                 };
             }
 
