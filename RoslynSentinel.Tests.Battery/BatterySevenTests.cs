@@ -94,12 +94,12 @@ public class MathHelper
 public class SemanticSearchEngineTests
 {
     private IWorkspaceManager _workspaceManager;
-    private SemanticSearchEngine _engine;
+    private DiscoveryEngine _engine;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new SemanticSearchEngine(_workspaceManager);
+        _engine = new DiscoveryEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -120,7 +120,7 @@ public class InventoryService
     public Task<Product> GetByIdAsync(int id) => null!;
     public string GetName() => ""name"";
 }");
-        var results = await _engine.FindMethodsByReturnTypeAsync("Task");
+        var results = await new DiscoveryEngine(_workspaceManager).FindMethodsByReturnTypeAsync("Task");
         Assert.That(results, Is.Not.Empty);
         Assert.That(results.Count, Is.EqualTo(2), "Should find exactly 2 Task-returning methods");
         Assert.That(results.All(r => r.MemberName is "GetAllAsync" or "GetByIdAsync"), Is.True);
@@ -135,7 +135,7 @@ public class OrderService
     public int GetCount() => 0;
     public string GetName() => ""name"";
 }");
-        var results = await _engine.FindMethodsByReturnTypeAsync("XmlDocument");
+        var results = await new DiscoveryEngine(_workspaceManager).FindMethodsByReturnTypeAsync("XmlDocument");
         Assert.That(results, Is.Empty, "No methods return XmlDocument - should yield empty list");
     }
 
@@ -150,7 +150,7 @@ public class ProductsController { }
 
 public class RegularClass { }
 ");
-        var results = await _engine.FindTypesByAttributeAsync("ApiController");
+        var results = await new DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("ApiController");
         Assert.That(results.Count, Is.EqualTo(1), "Only one class has ApiController attribute");
         Assert.That(results[0].MemberName, Is.EqualTo("ProductsController"));
     }
@@ -161,7 +161,7 @@ public class RegularClass { }
         SetSource(@"
 public class PlainDto { public int Id { get; set; } }
 ");
-        var results = await _engine.FindTypesByAttributeAsync("Obsolete");
+        var results = await new DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("Obsolete");
         Assert.That(results, Is.Empty, "No types have Obsolete attribute");
     }
 }

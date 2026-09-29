@@ -11,7 +11,7 @@ public class BatteryTwentyTwoTests
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private ImpactAnalyzer _impactAnalyzer;
-    private SemanticSearchEngine _semanticSearchEngine;
+    private DiscoveryEngine _semanticSearchEngine;
     private MetricsEngine _metricsEngine;
     private InventoryEngine _inventoryEngine;
     private DeadCodeEngine _deadCodeEngine;
@@ -107,7 +107,7 @@ public class OrderService : IOrderService
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
-        _semanticSearchEngine = new SemanticSearchEngine(_workspaceManager);
+        _semanticSearchEngine = new DiscoveryEngine(_workspaceManager);
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager, _config);
@@ -121,9 +121,9 @@ public class OrderService : IOrderService
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _tools = new IntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, _config, NullLogger<IntelligenceTools>.Instance);
+        _tools = new IntelligenceTools(_impactAnalyzer, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, _config, NullLogger<IntelligenceTools>.Instance);
         // Symbol-level tools moved to SentinelSymbolTools (Basic) in the server split.
-        _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(_discoveryEngine, _semanticSearchEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance));
+        _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(_discoveryEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance));
         _symbolNavigationTools = new SymbolNavigationTools(new SymbolNavigationImpl(_symbolNavigationEngine, _impactAnalyzer, _workspaceManager, NullLogger<SymbolNavigationImpl>.Instance));
         // GetPublicApiSurface moved to ScanTools (Advanced).
         _scanTools = new ScanTools(new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _architecturalEngine, _projectStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager), _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine, new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeStyleAnalysisEngine(_workspaceManager), new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config), _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager), _workspaceManager, NullLogger<ScanTools>.Instance);

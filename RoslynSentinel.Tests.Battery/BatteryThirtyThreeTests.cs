@@ -25,7 +25,7 @@ public class BatteryThirtyThreeTests
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private ImpactAnalyzer _impactAnalyzer;
-    private SemanticSearchEngine _semanticSearchEngine;
+    private DiscoveryEngine _semanticSearchEngine;
     private MetricsEngine _metricsEngine;
     private InventoryEngine _inventoryEngine;
     private DeadCodeEngine _deadCodeEngine;
@@ -57,7 +57,7 @@ public class BatteryThirtyThreeTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
-        _semanticSearchEngine = new SemanticSearchEngine(_workspaceManager);
+        _semanticSearchEngine = new DiscoveryEngine(_workspaceManager);
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager, _config);
@@ -70,7 +70,7 @@ public class BatteryThirtyThreeTests
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _intelligenceTools = new IntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, _config, NullLogger<IntelligenceTools>.Instance);
+        _intelligenceTools = new IntelligenceTools(_impactAnalyzer, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, _config, NullLogger<IntelligenceTools>.Instance);
         _performanceEngine = new PerformanceEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _testingEngine = new TestingEngine(_workspaceManager);

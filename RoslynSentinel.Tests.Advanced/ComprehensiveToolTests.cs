@@ -49,7 +49,7 @@ public class ComprehensiveToolTests
     private AdvancedRefactoringTools _advancedRefactoringTools;
     private SecurityEngine _securityEngine;
     private SemanticRefactoringLibrary _semanticRefactoringLibrary;
-    private SemanticSearchEngine _semanticSearchEngine;
+    private DiscoveryEngine _semanticSearchEngine;
     private SentinelConfiguration _config;
     private SolutionManagementEngine _solutionManagementEngine;
     private StandardRefactoringEngine _standardRefactoringEngine;
@@ -98,7 +98,7 @@ public class ComprehensiveToolTests
         _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
-        _semanticSearchEngine = new SemanticSearchEngine(_workspaceManager);
+        _semanticSearchEngine = new DiscoveryEngine(_workspaceManager);
         _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
@@ -126,7 +126,6 @@ public class ComprehensiveToolTests
             WriteToolAdviceHelper.WithAllToolsExposed());
 
         _intelligenceTools = new IntelligenceTools(_impactAnalyzer,
-            _semanticSearchEngine,
             _metricsEngine,
             _inventoryEngine,
             _deadCodeEngine,

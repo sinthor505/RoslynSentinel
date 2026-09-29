@@ -61,7 +61,6 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<SolutionStructureEngine>();
         services.AddSingleton<RefactoringEngine>();
         services.AddSingleton<SemanticRefactoringLibrary>();
-        services.AddSingleton<SemanticSearchEngine>();
         services.AddSingleton<SolutionManagementEngine>();
         services.AddSingleton<StandardRefactoringEngine>();
         services.AddSingleton<StructuralRefinementEngine>();

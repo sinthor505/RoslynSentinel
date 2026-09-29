@@ -3,14 +3,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
-
 [TestFixture]
 public class MassiveIntelligenceTests
 {
     private IWorkspaceManager _workspaceManager;
     // private AnalysisEngine _analysisEngine;
     private MetricsEngine _metricsEngine;
-    private SemanticSearchEngine _searchEngine;
+    private DiscoveryEngine _searchEngine;
     private InventoryEngine _inventoryEngine;
     private DeadCodeEngine _deadCodeEngine;
     [SetUp]
@@ -19,7 +18,7 @@ public class MassiveIntelligenceTests
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _metricsEngine = new MetricsEngine(_workspaceManager);
-        _searchEngine = new SemanticSearchEngine(_workspaceManager);
+        _searchEngine = new DiscoveryEngine(_workspaceManager);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, config);
@@ -42,7 +41,7 @@ public class MassiveIntelligenceTests
     public async Task Search_ShouldFindMethodsByReturnType(int id)
     {
         SetSource($"public class C{id} {{ public int M{id}() => {id}; }}", $"C{id}.cs");
-        var results = await _searchEngine.FindMethodsByReturnTypeAsync("int");
+        var results = await new DiscoveryEngine(_workspaceManager).FindMethodsByReturnTypeAsync("int");
         Assert.That(results.Any(r => r.MemberName == $"M{id}"), Is.True);
     }
 
@@ -58,7 +57,7 @@ public class MassiveIntelligenceTests
         // model (compilation.GetTypeByMetadataName), so the attribute class must actually
         // be declared/resolvable in source -> not just referenced by name.
         SetSource($"public class MyAttrAttribute : System.Attribute {{ }} [MyAttr] public class C{id} {{ }}", $"C{id}.cs");
-        var results = await _searchEngine.FindTypesByAttributeAsync("MyAttr");
+        var results = await new DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("MyAttr");
         Assert.That(results.Any(r => r.MemberName == $"C{id}"), Is.True);
     }
 

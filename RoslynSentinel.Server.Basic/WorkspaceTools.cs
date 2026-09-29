@@ -74,7 +74,7 @@ public class WorkspaceTools
         // params) so the many existing `new WorkspaceTools(...)` call sites across the test suite
         // don't all need updating for a dependency only Search uses.
         _symbolNavigation = new SymbolNavigationImpl(symbolNavigationEngine, new ImpactAnalyzer(workspaceManager), workspaceManager, logger);
-        _symbolRelationship = new SymbolRelationshipImpl(new DiscoveryEngine(workspaceManager), new SemanticSearchEngine(workspaceManager), symbolNavigationEngine, workspaceManager, logger);
+        _symbolRelationship = new SymbolRelationshipImpl(new DiscoveryEngine(workspaceManager), symbolNavigationEngine, workspaceManager, logger);
     }
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
