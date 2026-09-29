@@ -946,7 +946,7 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(refused.ErrorData!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
         var result = await _refactoringStructuralTools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet", skipPrecheck: true);
         Assert.That(result.IsSuccess, Is.False, "Removing an interface's sole implementation still breaks compilation - the separate compile-validation safety net catches it.");
-        Assert.That(result.ErrorData!.Message, Does.Contain("does not implement interface member"), "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped.");
+        Assert.That(result.ErrorData!.Detail, Does.Contain("does not implement interface member"), "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped. The diagnostic text now lives in .Detail, not .Message, since abfa5db moved compile-validation failures to a generic .Message wrapper plus a separate detail field.");
     }
 
     [Test]

@@ -1,5 +1,9 @@
 # `Member(remove, skipPrecheck: true)`'s compile-validation refusal no longer includes the CS0535 diagnostic text in `.Message`
 
+**Status: RESOLVED (2026-09-28).** Root cause confirmed as hypothesis (b) from this doc's own
+"What unblocks it" list: an intentional message-format change that the test wasn't migrated for.
+See "Resolution" section at the bottom for the fix, evidence, and verification.
+
 **Status: OPEN, not investigated.** Discovered via a routine full-solution `RunTest` during an
 unrelated engine-reorganization cleanup session; root cause not traced to source. This doc records
 the regression, the evidence for where it sits in the codebase's recent history, and what a future
@@ -190,3 +194,37 @@ proof either way - flagged as-is, not resolved.
 - Commits `1be77cf`, `a1c8372`, `abfa5db` - the hypothesis-only candidate causes; not yet diffed or
   confirmed against this code path.
 - `RoslynSentinel.Tests.Battery/BatteryTwentyFourTests.cs:923-949` - the failing test, verbatim above.
+
+## Resolution
+
+Confirmed via `Git(show, abfa5db)` and reading current source (both agree - the code has not moved
+further since):
+
+- `RoslynSentinel.Common/ValidateAndApplyHelper.cs:49-64` (`ValidateAndApplyAsync`, validation-failure
+  branch) is the exact `.Message`-construction site. `abfa5db` changed it from embedding
+  `validation.Diagnostics`/`describeValidationFailure`'s output directly in `.Message`
+  (`"...Fix the issue(s) below and retry:\n{detail}"`) to a fixed generic sentence
+  (`"...Fix the issue(s) below and retry."`) with the diagnostic text moved to a new `detailString`
+  argument, now carried on `ResultError.Detail` (`RoslynSentinel.Common/SentinelCallToolResult.cs:259`)
+  via `ResultError.ForPossiblyLargeDetailAsync`.
+- Traced the call path for `Member(remove)` specifically (the doc's step 1/2): the tool method lives
+  at `RoslynSentinel.Basic/RefactoringStructuralImpl.cs:355` (not `AdvancedStructuralEngine.cs` as this
+  doc's untraced hypothesis guessed), its non-enum remove path calls the local
+  `ValidateAndApplyAsync` wrapper at line 494, which (line 51-64) always passes
+  `describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(...)` down to
+  `ValidateAndApplyHelper`. That describer's output becomes `detailString`, which lands in
+  `ResultError.Detail` - so the CS0535 text is not dropped, only relocated. This confirms hypothesis
+  (b) from the "Root cause" section above: intentional move, test not migrated - not a 5th
+  dispatch-table-drift incident (the "Also flag" section's alternative is ruled out).
+- Fix: updated the test's second assertion in
+  `RoslynSentinel.Tests.Battery/BatteryTwentyFourTests.cs` to check `result.ErrorData!.Detail` instead
+  of `.Message` for the `"does not implement interface member"` text, via `ReplaceSnippet`
+  (auto-recompiled clean, 0 new diagnostics).
+- Verified: the test now passes standalone (`RunTest`, filter on the test name). Full-solution
+  `RunTest` after the fix: 2512 passed / 2627 total / 16 failed - back to the pre-existing baseline
+  (this doc's own recorded baseline was 2508/2623/16 before this session's unrelated field-removal
+  edits added 4 tests with zero new failures; 16 failures both before and after, confirming zero net
+  regression).
+- This blocker is closed. No production code changed - the tool's behavior (moving diagnostic detail
+  off `.Message` and onto `.Detail`) was itself intentional and correct; only the stale test assertion
+  needed updating.
