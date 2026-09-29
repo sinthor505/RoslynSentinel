@@ -810,7 +810,7 @@ public class Greeter
 {
     public string Greet(string name) => ""Hello, "" + name + ""!"";
 }", "Greeter.cs");
-        var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
         Assert.That(result.UpdatedText, Does.Contain("$\""), "Output must contain an interpolated string.");
         Assert.That(result.UpdatedText, Does.Contain("{name}"), "Variable 'name' must be in an interpolation hole.");
         Assert.That(result.UpdatedText, Does.Not.Contain("\" + name + \""), "Original concat must be replaced.");
@@ -822,7 +822,7 @@ public class Greeter
         // Two string literals concatenated -> Roslyn folds these at compile time; no variable to interpolate
         SetSource(@"
 public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
-        var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("C.cs");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("C.cs");
         // Still returns content without throwing; may or may not convert (implementation-defined for pure literals)
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
@@ -831,7 +831,7 @@ public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
     public async Task ReplaceStringConcat_DoesNotChange_FileWithNoStringConcat()
     {
         SetSource(@"public class C { public string Hello() => ""Hi""; }", "C.cs");
-        var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("C.cs");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("C.cs");
         // No concat found means the engine reports TargetNotFound and leaves UpdatedText unset ->
         // no interpolation is introduced because there is nothing to rewrite.
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
@@ -847,7 +847,7 @@ public class Reporter
     public string Line1(string x) => ""A="" + x;
     public string Line2(string y) => ""B="" + y;
 }", "Reporter.cs");
-        var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("Reporter.cs");
+        var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("Reporter.cs");
         Assert.That(result.UpdatedText!.Contains("{x}") || result.UpdatedText!.Contains("{y}"), Is.True, "At least one concat chain must be converted.");
     }
 

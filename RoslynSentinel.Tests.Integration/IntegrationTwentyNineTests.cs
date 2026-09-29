@@ -242,7 +242,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
         var engine = new AdvancedRefactoringEngine(_workspaceManager);
         string? result = null;
         // Real file path is required; engine throws "File not found." on path miss
-        Assert.DoesNotThrowAsync(async () => result = (await engine.ReplaceStringConcatWithInterpolationAsync(_realFilePath)).UpdatedText!, "ReplaceStringConcatWithInterpolationAsync must not throw when given a real file path.");
+        Assert.DoesNotThrowAsync(async () => result = (await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync(_realFilePath)).UpdatedText!, "ReplaceStringConcatWithInterpolationAsync must not throw when given a real file path.");
         Assert.That(result, Is.Not.Null, "Must return non-null (unchanged source if no string concat found).");
     }
 

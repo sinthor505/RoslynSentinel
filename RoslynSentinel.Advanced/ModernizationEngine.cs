@@ -854,4 +854,83 @@ public class SyntaxModernizationEngine
             UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
         };
     }
+
+    public async Task<DocumentEditResult> ReplaceStringConcatWithInterpolationAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath
+            };
+        }
+
+        // Find top-level string concat chains -> not a child of another string-concat-with-literal
+        var topLevelConcats = root.DescendantNodes().OfType<BinaryExpressionSyntax>().Where(b => b.IsKind(SyntaxKind.AddExpression) && ContainsStringLiteral(b)).Where(b => !b.Ancestors().OfType<BinaryExpressionSyntax>().Any(a => a.IsKind(SyntaxKind.AddExpression) && ContainsStringLiteral(a))).ToList();
+        if (topLevelConcats.Count == 0)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath
+            };
+        }
+
+        var newRoot = root.ReplaceNodes(topLevelConcats, (original, _) =>
+        {
+            var segments = FlattenConcatTree(original);
+            var contents = new List<InterpolatedStringContentSyntax>();
+            foreach (var seg in segments)
+            {
+                if (seg is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+                {
+                    var tokenText = lit.Token.Text;
+                    // Verbatim/raw strings have different escape semantics -> wrap as interpolation hole
+                    if (tokenText.StartsWith("@") || tokenText.StartsWith("\"\"\""))
+                    {
+                        contents.Add(SyntaxFactory.Interpolation(seg.WithoutTrivia()));
+                        continue;
+                    }
+
+                    // Strip surrounding quotes, double {{ and }} for the interpolated context
+                    var innerText = tokenText.Length >= 2 ? tokenText.Substring(1, tokenText.Length - 2) : string.Empty;
+                    var escapedText = innerText.Replace("{", "{{").Replace("}", "}}");
+                    if (!string.IsNullOrEmpty(escapedText))
+                    {
+                        contents.Add(SyntaxFactory.InterpolatedStringText(SyntaxFactory.Token(SyntaxTriviaList.Empty, SyntaxKind.InterpolatedStringTextToken, escapedText, lit.Token.ValueText, SyntaxTriviaList.Empty)));
+                    }
+                }
+                else
+                {
+                    contents.Add(SyntaxFactory.Interpolation(seg.WithoutTrivia()));
+                }
+            }
+
+            return SyntaxFactory.InterpolatedStringExpression(SyntaxFactory.Token(SyntaxKind.InterpolatedStringStartToken), SyntaxFactory.List(contents), SyntaxFactory.Token(SyntaxKind.InterpolatedStringEndToken)).WithTriviaFrom(original);
+        });
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            FilePath = filePath
+        };
+    }
+
+    private static bool ContainsStringLiteral(ExpressionSyntax expr) => (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression)) || (expr is BinaryExpressionSyntax bin && bin.IsKind(SyntaxKind.AddExpression) && (ContainsStringLiteral(bin.Left) || ContainsStringLiteral(bin.Right)));
+    private static List<ExpressionSyntax> FlattenConcatTree(ExpressionSyntax expr)
+    {
+        if (expr is BinaryExpressionSyntax bin && bin.IsKind(SyntaxKind.AddExpression))
+        {
+            return FlattenConcatTree(bin.Left).Concat(FlattenConcatTree(bin.Right)).ToList();
+        }
+
+        return new List<ExpressionSyntax>
+        {
+            expr
+        };
+    }
 }

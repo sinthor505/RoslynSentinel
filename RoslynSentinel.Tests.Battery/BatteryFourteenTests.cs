@@ -2,18 +2,15 @@ using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Battery;
-
 // ────────────────────────────────────────────────────────────────────────────
 // Battery #14 -> AdvancedLogicEngine, AdvancedRefactoringEngine,
 //               AdvancedStructuralEngine, AntiPatternEngine
 // ────────────────────────────────────────────────────────────────────────────
-
 [TestFixture]
 public class AdvancedLogicEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
     private AdvancedLogicEngine _engine = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -23,14 +20,11 @@ public class AdvancedLogicEngineTests
 
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
-
     [Test]
     public async Task InvertBooleanLogic_UnknownFile_ReturnsEmptyDict()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Other.cs", "public class Other {}")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-
         var result = await _engine.InvertBooleanLogicAsync("NoSuchFile.cs", "myBool");
         Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.DocumentNotFound), "unknown file should yield DocumentNotFound");
     }
@@ -38,10 +32,8 @@ public class AdvancedLogicEngineTests
     [Test]
     public async Task ConvertIfToSwitchExpression_UnknownFile_ReturnsEmptyString()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Other.cs", "public class Other {}")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-
         var result = await _engine.ConvertIfToSwitchExpressionAsync("NoSuchFile.cs", "GetValue");
         Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
     }
@@ -55,12 +47,9 @@ public static class MyExtensions
 {
     public static string Shout(this string s) => s.ToUpperInvariant();
 }";
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Extensions.cs", source)]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Extensions.cs", source)]);
         _mgr.SetTestSolution(solution);
-
         var result = await _engine.ExtensionToStaticAsync("Extensions.cs", "Shout");
-
         Assert.That(result.UpdatedText, Does.Not.Contain("this string"), "this keyword should be stripped from first parameter");
         Assert.That(result.UpdatedText, Does.Contain("Shout"), "method should still be present");
     }
@@ -71,7 +60,6 @@ public class AdvancedRefactoringEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
     private AdvancedRefactoringEngine _engine = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -81,16 +69,12 @@ public class AdvancedRefactoringEngineTests
 
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
-
     [Test]
     public async Task ReplaceStringConcat_UnknownFile_ThrowsFileNotFound()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Other.cs", "public class Other {}")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-
-        Assert.ThrowsAsync<FileNotFoundException>(
-            async () => await _engine.ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs"));
+        Assert.ThrowsAsync<FileNotFoundException>(async () => await new SyntaxModernizationEngine(_mgr, new SentinelConfiguration()).ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs"));
     }
 
     [Test]
@@ -102,24 +86,18 @@ public class Greeter
 {
     public string Greet(string name) => ""Hello "" + name + ""!"";
 }";
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Greeter.cs", source)]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Greeter.cs", source)]);
         _mgr.SetTestSolution(solution);
-
-        var result = await _engine.ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
-
+        var result = await new SyntaxModernizationEngine(_mgr, new SentinelConfiguration()).ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
         Assert.That(result.UpdatedText, Does.Contain("$\""), "result should use string interpolation syntax");
     }
 
     [Test]
     public async Task OptimizeTaskWait_UnknownFile_ThrowsFileNotFound()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Other.cs", "public class Other {}")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-
-        Assert.ThrowsAsync<FileNotFoundException>(
-            async () => await _engine.OptimizeTaskWaitAsync("NoSuchFile.cs"));
+        Assert.ThrowsAsync<FileNotFoundException>(async () => await _engine.OptimizeTaskWaitAsync("NoSuchFile.cs"));
     }
 }
 
@@ -128,7 +106,6 @@ public class AdvancedStructuralEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
     private StructuralRefactoringEngine _engine = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -138,14 +115,11 @@ public class AdvancedStructuralEngineTests
 
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
-
     [Test]
     public async Task ConvertAbstractClassToInterface_UnknownFile_ReturnsEmptyString()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Other.cs", "public class Other {}")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-
         var result = await _engine.ConvertAbstractClassToInterfaceAsync("NoSuchFile.cs", "MyBase");
         Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
     }
@@ -159,12 +133,9 @@ public abstract class Animal
 {
     public abstract void Speak();
 }";
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Animal.cs", source)]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Animal.cs", source)]);
         _mgr.SetTestSolution(solution);
-
         var result = await _engine.ConvertAbstractClassToInterfaceAsync("Animal.cs", "Animal");
-
         Assert.That(result.UpdatedText, Does.Contain("interface IAnimal"), "abstract class should become an interface");
         Assert.That(result.UpdatedText, Does.Contain("Speak"), "interface should include the abstract method signature");
     }
@@ -179,12 +150,9 @@ public class Widget
     private readonly int _id;
     public Widget(int id) { _id = id; }
 }";
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Widget.cs", source)]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Widget.cs", source)]);
         _mgr.SetTestSolution(solution);
-
         var result = await _engine.ReplaceConstructorWithFactoryAsync("Widget.cs", "Widget");
-
         Assert.That(result.UpdatedText, Does.Contain("static"), "factory method should be static");
         Assert.That(result.UpdatedText, Does.Contain("Create"), "factory method should be named Create");
     }
@@ -195,7 +163,6 @@ public class AntiPatternEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
     private AntiPatternEngine _engine = null!;
-
     [SetUp]
     public void SetUp()
     {
@@ -205,7 +172,6 @@ public class AntiPatternEngineTests
 
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
-
     [Test]
     public async Task DetectAntiPatterns_AsyncVoidMethod_ReturnsFindings()
     {
@@ -214,14 +180,9 @@ public class Handler
 {
     public async void OnEvent() { await System.Threading.Tasks.Task.CompletedTask; }
 }";
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Handler.cs", source)]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Handler.cs", source)]);
         _mgr.SetTestSolution(solution);
-
-        var findings = await _engine.DetectAntiPatternsAsync(
-            filePath: "Handler.cs",
-            patternFilter: new[] { "AsyncVoidMethod" });
-
+        var findings = await _engine.DetectAntiPatternsAsync(filePath: "Handler.cs", patternFilter: new[] { "AsyncVoidMethod" });
         Assert.That(findings, Is.Not.Empty, "async void method should be detected as an anti-pattern");
         Assert.That(findings.All(f => f.Pattern == "AsyncVoidMethod"), Is.True, "all findings should match the requested pattern");
     }
@@ -239,26 +200,18 @@ public class BigClass
         foreach (var s in list) result += s;
     }
 }";
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("BigClass.cs", source)]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("BigClass.cs", source)]);
         _mgr.SetTestSolution(solution);
-
         // Only ask for StringConcatInLoop; async void should NOT appear
-        var findings = await _engine.DetectAntiPatternsAsync(
-            filePath: "BigClass.cs",
-            patternFilter: new[] { "StringConcatInLoop" });
-
-        Assert.That(findings.All(f => f.Pattern == "StringConcatInLoop"), Is.True,
-            "pattern filter should exclude AsyncVoidMethod findings");
+        var findings = await _engine.DetectAntiPatternsAsync(filePath: "BigClass.cs", patternFilter: new[] { "StringConcatInLoop" });
+        Assert.That(findings.All(f => f.Pattern == "StringConcatInLoop"), Is.True, "pattern filter should exclude AsyncVoidMethod findings");
     }
 
     [Test]
     public async Task DetectAntiPatterns_UnknownFilePath_ReturnsEmpty()
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Other.cs", "public class Other {}")]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-
         var findings = await _engine.DetectAntiPatternsAsync(filePath: "Ghost.cs");
         Assert.That(findings, Is.Empty, "non-existent file path should yield no findings");
     }
