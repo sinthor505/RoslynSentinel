@@ -21,10 +21,10 @@ ClaudeFiles/
 *.csv
 *.json
 
-# The blanket *.json above swallows the Claude Code project config. settings.json is
-# checked in because it registers the dog-fooding PreToolUse hook - without it the hook
-# is inert on a fresh clone and enforcement silently doesn't exist. settings.local.json
-# stays ignored: it's per-machine (absolute paths, personal permission grants).
+# The blanket *.json above swallows the Claude Code project config; this negation counters
+# that one specifically (the .claude/* block further down needs its own separate negation -
+# see the comment there). settings.local.json stays ignored: it's per-machine (absolute
+# paths, personal permission grants).
 !.claude/settings.json
 
 *.trx
@@ -40,6 +40,16 @@ PlanStepRunner/
 # Per-run model-eval / research writeups (see docs/research/testing/README.md).
 # Untracked by design: new run records accrete continuously and should not require a commit.
 /docs/research/
-.claude/
+
+# NOTE: git cannot re-include a file whose PARENT DIRECTORY is itself excluded - a bare
+# ".claude/" pattern here would make every !.claude/... negation below a no-op for anything
+# not already tracked (this bit us once: enforce-dogfood.ps1 only appeared trackable because
+# it was already committed, not because its negation actually worked for new files). So this
+# excludes .claude/'s contents file-by-file instead of the directory itself, leaving room for
+# the hooks/ and settings.json negations below to actually apply.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/**
 docs/known-build-warnings.Solution.txt
 *.tmp

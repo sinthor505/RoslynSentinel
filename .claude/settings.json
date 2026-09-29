@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|Grep|.*__ReplaceSnippet|.*__Git",
         "hooks": [
           {
             "type": "command",
@@ -13,6 +13,24 @@
               "Bypass",
               "-File",
               "${CLAUDE_PROJECT_DIR}/.claude/hooks/enforce-dogfood.ps1"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*__Build",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe",
+            "args": [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/check-build-staleness.ps1"
             ]
           }
         ]
