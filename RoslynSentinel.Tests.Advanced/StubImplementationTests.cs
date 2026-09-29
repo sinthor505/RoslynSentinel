@@ -14,14 +14,12 @@ public class StubImplementationTests
 {
     private IWorkspaceManager _workspaceManager;
     private IDEStyleEngine _ideStyleEngine;
-    private GranularRefactoringEngine _granularEngine;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var config = new SentinelConfiguration();
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
-        _granularEngine = new GranularRefactoringEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -313,7 +311,7 @@ class C {
     }
 }
 ");
-        var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
+        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
         Assert.That(result.UpdatedText, Does.Contain("var name ="), "type-to-var should replace explicit type with var");
     }
 
@@ -328,7 +326,7 @@ class C {
 }
 ";
         SetSource(source);
-        var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
+        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
         Assert.That(result.UpdatedText, Does.Contain("const int x"), "const declarations must not be changed to var");
     }
 
@@ -343,7 +341,7 @@ class C {
     }
 }
 ");
-        var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "remove-unused-local", 4);
+        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "remove-unused-local", 4);
         Assert.That(result.UpdatedText, Does.Not.Contain("unused"), "remove-unused-local should remove the declaration at target line");
         Assert.That(result.UpdatedText, Does.Contain("used"), "Other statements should remain");
     }
@@ -360,7 +358,7 @@ class C {
     void DoWork() {}
 }
 ");
-        var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "add-braces", 4);
+        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "add-braces", 4);
         Assert.That(result.UpdatedText, Does.Contain("{"), "add-braces should wrap the single statement body in a block");
     }
 
@@ -377,7 +375,7 @@ class C {
 }
 ");
         // The if-statement starts at line 4
-        var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "remove-braces", 4);
+        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "remove-braces", 4);
         // After removing braces: should have the statement without a block
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
@@ -392,7 +390,7 @@ class C {
     }
 }
 ");
-        var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "extract-constant", 4);
+        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "extract-constant", 4);
         Assert.That(result.UpdatedText, Does.Contain("const string ExtractedConstant"), "extract-constant should inject a const field");
         Assert.That(result.UpdatedText, Does.Contain("ExtractedConstant"), "The usage site should reference the new constant");
     }
@@ -401,14 +399,14 @@ class C {
     public async Task RunMicroRefactoring_UnknownId_ThrowsArgumentException()
     {
         SetSource("class C { void M() {} }");
-        Assert.ThrowsAsync<ArgumentException>(async () => await _granularEngine.RunMicroRefactoringAsync("Test.cs", "nonexistent-refactoring", 1), "Unknown refactoring ID should throw ArgumentException with list of known IDs");
+        Assert.ThrowsAsync<ArgumentException>(async () => await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "nonexistent-refactoring", 1), "Unknown refactoring ID should throw ArgumentException with list of known IDs");
     }
 
     [Test]
     public async Task RunMicroRefactoring_UnknownFile_ReturnsEmpty()
     {
         SetSource("class C { void M() {} }");
-        var result = await _granularEngine.RunMicroRefactoringAsync("NoFile.cs", "type-to-var", 1);
+        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "type-to-var", 1);
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -467,7 +465,7 @@ class C {
     }
 }
 ");
-        var result = await _granularEngine.RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
+        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
         Assert.That(result.UpdatedText, Does.Not.Contain("simulation mode"), "RunMicroRefactoringAsync must no longer return fake simulation output");
         Assert.That(result.UpdatedText, Does.Contain("var x"), "Must return the actually transformed code");
     }

@@ -1371,14 +1371,12 @@ public class Startup
     public class Bug10BatchRegressionTests
     {
         private IWorkspaceManager _workspaceManager = null!;
-        private GranularRefactoringEngine _granularEngine = null!;
         private MappingEngine _mappingEngine = null!;
         private AsyncOptimizationEngine _asyncEngine = null!;
         [SetUp]
         public void Setup()
         {
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-            _granularEngine = new GranularRefactoringEngine(_workspaceManager);
             _mappingEngine = new MappingEngine(_workspaceManager);
             _asyncEngine = new AsyncOptimizationEngine(_workspaceManager);
         }
@@ -1406,7 +1404,7 @@ public class Startup
 }";
             SetSource(src, "OrderService.cs");
             // The context snippet matches the RHS of an existing var declaration
-            var result = await _granularEngine.IntroduceVariableAsync("OrderService.cs", contextSnippet: "await _repo.CreateOrderAsync()", newVariableName: "orderId");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("OrderService.cs", contextSnippet: "await _repo.CreateOrderAsync()", newVariableName: "orderId");
             // Should NOT produce duplicate var orderId = orderId;
             Assert.That(result.UpdatedText, Is.Null.Or.Not.Contain("var orderId = orderId"), "Must not produce a duplicate 'var orderId = orderId' declaration");
             // Should return no-op indicator
@@ -1424,7 +1422,7 @@ public class Startup
     }
 }";
             SetSource(src, "Calculator.cs");
-            var result = await _granularEngine.IntroduceVariableAsync("Calculator.cs", contextSnippet: "a + b", newVariableName: "sum");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("Calculator.cs", contextSnippet: "a + b", newVariableName: "sum");
             Assert.That(result.UpdatedText, Does.Contain("var sum = a + b"), "Should extract sub-expression to new var");
             Assert.That(result.UpdatedText, Does.Contain("sum * c"), "Original expression should be replaced with the new variable reference");
         }
@@ -1591,8 +1589,7 @@ public class TargetDto
     }
 }";
             SetSource(code, "Service.cs");
-            var engine = new GranularRefactoringEngine(_workspaceManager);
-            var result = await engine.InlineFieldAsync("Service.cs", "_config");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "_config");
             // Should error or explain why inlining failed
             Assert.That(result.Message, Does.Contain("ERROR"), "Should return error message when field has no initializer");
             Assert.That(result.Message, Does.Contain("Cannot inline"), "Should explain the inlining cannot proceed");
@@ -1611,8 +1608,7 @@ public class TargetDto
     }
 }";
             SetSource(code, "Service.cs");
-            var engine = new GranularRefactoringEngine(_workspaceManager);
-            var result = await engine.InlineFieldAsync("Service.cs", "_config");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "_config");
             // Should successfully inline (replace field reference with its value)
             Assert.That(result.UpdatedText, Does.Not.Contain("ERROR"), "Should not error when field has initializer");
             Assert.That(result.UpdatedText, Does.Not.Contain("private string _config"), "Should remove field declaration after inlining");
@@ -1624,8 +1620,7 @@ public class TargetDto
         {
             const string code = @"public class Service { }";
             SetSource(code, "Service.cs");
-            var engine = new GranularRefactoringEngine(_workspaceManager);
-            var result = await engine.InlineFieldAsync("Service.cs", "NonExistentField");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "NonExistentField");
             Assert.That(result.Message, Does.Contain("ERROR"), "Should return error when field not found");
             Assert.That(result.Message, Does.Contain("not found"), "Should explain that field was not found");
         }
@@ -1706,7 +1701,7 @@ public class OtherClass
     public string Name { get; set; }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await _advancedRefactoringEngine.ConvertExpressionBodyAsync("MyClass.cs", "NonExistentMethod", "ToExpressionBody");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "NonExistentMethod", "ToExpressionBody");
             Assert.That(result.Message, Does.Contain("not found"), "Should return an error message when the named member does not exist");
         }
 
@@ -1723,7 +1718,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await _advancedRefactoringEngine.ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody");
             Assert.That(result.Message, Does.Contain("Cannot convert"), "Should return an error message when method has multiple statements");
         }
 
@@ -1739,7 +1734,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await _advancedRefactoringEngine.ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToBlockBody");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToBlockBody");
             Assert.That(result.Message, Does.Contain("Cannot convert"), "Should return an error message when converting ToBlockBody but already a block body");
         }
 
@@ -1763,7 +1758,7 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await _advancedRefactoringEngine.ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
             Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "An unambiguous member should resolve by name alone; a mismatched contextSnippet should not block it.");
             Assert.That(result.UpdatedText, Does.Contain("=>"), "Method should have been converted to an expression body.");
         }
@@ -1777,7 +1772,6 @@ public class OtherClass
             private IWorkspaceManager _workspaceManager;
             private SentinelConfiguration _config;
             private ProjectStructureEngine _projectStructureEngine;
-            private GranularRefactoringEngine _granularRefactoringEngine;
             private RefactoringEngine _refactoringEngine;
             private StructuralRefactoringEngine _advancedStructuralEngine;
             private CodeGenerationEngine _codeGenerationEngine;
@@ -1788,7 +1782,6 @@ public class OtherClass
                 _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 _config = new SentinelConfiguration();
                 _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
-                _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
                 _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
                 _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
                 _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
@@ -1901,7 +1894,7 @@ public class Item { public int Id { get; set; } }";
                 // (lineBefore must be the verbatim *previous source line*, not same-line prefix text;
                 // "var key = " is on the same line as the snippet, so supplying it here would filter
                 // out the only real match and fail with "not found" instead of exercising the bug.)
-                var result = await _granularRefactoringEngine.IntroduceFieldAsync("MyClass.cs", "item.Id", "_itemId", lineBefore: null, lineAfter: null);
+                var result = await _advancedStructuralEngine.IntroduceFieldAsync("MyClass.cs", "item.Id", "_itemId", lineBefore: null, lineAfter: null);
                 // Should either:
                 // 1. Not include initializer (since parameter is out of scope)
                 // 2. Return error
@@ -2102,12 +2095,10 @@ public class ItemProvider
             public class Bug69InlineMethodRegressionTests
             {
                 private IWorkspaceManager _workspaceManager;
-                private RefinementEngine _refinementEngine;
                 [SetUp]
                 public void Setup()
                 {
                     _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                    _refinementEngine = new RefinementEngine(_workspaceManager);
                 }
 
                 [TearDown]
@@ -2133,7 +2124,7 @@ public class MathUtil
                         Assert.Inconclusive("Document not found");
                     }
 
-                    var result = await _refinementEngine.InlineMethodAsync(document.FilePath!, "Double");
+                    var result = await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document.FilePath!, "Double");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result, Is.Not.Empty, "Should return non-empty result");
                 }
@@ -2158,7 +2149,7 @@ public class Math
                         Assert.Inconclusive("Document not found");
                     }
 
-                    Assert.ThrowsAsync<ToolNotFoundException>(async () => await _refinementEngine.InlineMethodAsync(document.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
+                    Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
                 }
             }
 
@@ -2169,12 +2160,10 @@ public class Math
             public class Bug77IntroduceParameterRegressionTests
             {
                 private IWorkspaceManager _workspaceManager;
-                private GranularRefactoringEngine _granularEngine;
                 [SetUp]
                 public void Setup()
                 {
                     _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-                    _granularEngine = new GranularRefactoringEngine(_workspaceManager);
                 }
 
                 [TearDown]
@@ -2203,7 +2192,7 @@ public class Calculator
                         Assert.Inconclusive("Document not found");
                     }
 
-                    var result = await _granularEngine.IntroduceParameterAsync(document.FilePath!, "x * 2", "multiplier");
+                    var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document.FilePath!, "x * 2", "multiplier");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
                 // Should either succeed or return unchanged code, but not crash
@@ -2227,7 +2216,7 @@ public class Processor
                         Assert.Inconclusive("Document not found");
                     }
 
-                    var result = await _granularEngine.IntroduceParameterAsync(document.FilePath!, "input", "text");
+                    var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document.FilePath!, "input", "text");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
                 // Should either succeed or return unchanged code, but not crash
@@ -2418,7 +2407,6 @@ public class Processor
             private RefactoringEngine _refactoringEngine;
             private ThreadSafetyEngine _threadSafetyEngine;
             private StructuralRefactoringEngine _advancedStructuralEngine;
-            private GranularRefactoringEngine _granularRefactoringEngine;
             [SetUp]
             public void Setup()
             {
@@ -2429,7 +2417,6 @@ public class Processor
                 _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
                 _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
                 _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
-                _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
             }
 
             [TearDown]
@@ -2510,7 +2497,7 @@ public class Processor2 : IProcessor
     public void Process(string name, int age, bool active) { }
 }";
                 SetMultipleFiles(("IProcessor.cs", code));
-                var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync("IProcessor.cs", "Process");
+                var result = await _advancedStructuralEngine.IntroduceParameterObjectAsync("IProcessor.cs", "Process");
                 Assert.That(result, Is.Not.Null, "Should return a result");
                 // All implementations should be updated
                 var processMethods = result!.UpdatedText!.Count(c => c == '{') - result!.UpdatedText!.Count(c => c == '}');
@@ -2559,7 +2546,7 @@ namespace MyApp.Services
     }
 }";
                 SetSource(code, "DataService.cs");
-                var result = await _granularRefactoringEngine.ExtractMembersToPartialAsync("DataService.cs", "DataService", new[] { "Method1" });
+                var result = await _advancedStructuralEngine.ExtractMembersToPartialAsync("DataService.cs", "DataService", new[] { "Method1" });
                 Assert.That(result, Is.Not.Null, "Should return a result");
                 Assert.That(result, Is.Not.Empty, "Should contain extracted file");
                 // Get the extracted partial file content
@@ -2668,9 +2655,7 @@ public class Processor
         {
             private IWorkspaceManager _workspaceManager;
             private SentinelConfiguration _config;
-            private GranularRefactoringEngine _granularRefactoringEngine;
             private RefactoringEngine _refactoringEngine;
-            private RefinementEngine _refinementEngine;
             private StructuralRefactoringEngine _advancedStructuralEngine;
             private StructuralRefinementEngine _structuralRefinementEngine;
             [SetUp]
@@ -2678,9 +2663,7 @@ public class Processor
             {
                 _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 _config = new SentinelConfiguration();
-                _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
                 _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
-                _refinementEngine = new RefinementEngine(_workspaceManager);
                 _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
                 _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
             }
@@ -2708,7 +2691,7 @@ public class MyClass
     }
 }";
                 SetSource(code, "MyClass.cs");
-                var result = await _granularRefactoringEngine.IntroduceFieldAsync("MyClass.cs", contextSnippet: "this.Value", newFieldName: "_storedValue");
+                var result = await _advancedStructuralEngine.IntroduceFieldAsync("MyClass.cs", contextSnippet: "this.Value", newFieldName: "_storedValue");
                 Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return updated code");
                 // Field should be initialized with the value, not a parameter
                 Assert.That(result.UpdatedText, Does.Contain("private readonly"), "Should create a field with appropriate scope");
@@ -2734,7 +2717,7 @@ public class MyClass
                 SetSource(code, "MyClass.cs");
                 try
                 {
-                    var result = await _granularRefactoringEngine.IntroduceFieldAsync("MyClass.cs", contextSnippet: "myParam", newFieldName: "_field", lineBefore: "int local = ", lineAfter: null);
+                    var result = await _advancedStructuralEngine.IntroduceFieldAsync("MyClass.cs", contextSnippet: "myParam", newFieldName: "_field", lineBefore: "int local = ", lineAfter: null);
                     // Should not crash and should return code
                     Assert.That(result, Is.Not.Null);
                     Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return non-empty code");
@@ -2808,7 +2791,7 @@ public class Calculator
     }
 }";
                 SetSource(code, "Calculator.cs");
-                var result = await _refinementEngine.InlineMethodAsync("Calculator.cs", "Double");
+                var result = await _advancedStructuralEngine.InlineMethodAsync("Calculator.cs", "Double");
                 Assert.That(result, Is.Not.Null, "Should return result");
                 var resultText = string.Join("\n", result.Values);
                 Assert.That(resultText, Does.Contain("x * 2"), "Should successfully inline single-expression method");
@@ -2833,7 +2816,7 @@ public class Service
     }
 }";
                 SetSource(code, "Service.cs");
-                Assert.ThrowsAsync<ToolNotFoundException>(async () => await _refinementEngine.InlineMethodAsync("Service.cs", "Process"), "Multi-statement method should fail gracefully via a typed exception, not crash");
+                Assert.ThrowsAsync<ToolNotFoundException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Service.cs", "Process"), "Multi-statement method should fail gracefully via a typed exception, not crash");
             }
         }
 
@@ -3259,14 +3242,14 @@ namespace MyApp
             // ConvertExpressionBodyAsync returns "" when the file is not found in the workspace,
             // which the tool layer converts to InvalidOperationException (verified by the
             // passing ConvertExpressionBody_Tool test).
-            var result = await _engine.ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty string when file is not in the workspace");
         }
 
         [Test]
         public async Task ConvertExpressionBody_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
         {
-            var result = await _engine.ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty string when file is not in the workspace");
         }
     }

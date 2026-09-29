@@ -291,19 +291,17 @@ public class B29_AllEngines_RealSolution_SmokeTests
     [Test]
     public async Task GranularRefactoringEngine_RunMicroRefactoring_DoesNotThrow()
     {
-        var engine = new GranularRefactoringEngine(_workspaceManager);
         string? result = null;
         // RunMicroRefactoringAsync has real dispatch -> use a known valid ID
-        Assert.DoesNotThrowAsync(async () => result = (await engine.RunMicroRefactoringAsync(_realFilePath, "add-braces", 1)).UpdatedText!, "RunMicroRefactoringAsync must not throw on real solution with valid ID.");
+        Assert.DoesNotThrowAsync(async () => result = (await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync(_realFilePath, "add-braces", 1)).UpdatedText!, "RunMicroRefactoringAsync must not throw on real solution with valid ID.");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task GranularRefactoringEngine_InlineField_NonExistentField_ReturnsErrorString()
     {
-        var engine = new GranularRefactoringEngine(_workspaceManager);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () => result = (await engine.InlineFieldAsync(_realFilePath, "__nonExistentFieldXYZ__")).UpdatedText!, "InlineFieldAsync must not throw even when field is not found.");
+        Assert.DoesNotThrowAsync(async () => result = (await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync(_realFilePath, "__nonExistentFieldXYZ__")).UpdatedText!, "InlineFieldAsync must not throw even when field is not found.");
         Assert.That(result, Is.Not.Null, "Must return a non-null string (error message if field not found).");
         // Engine prefixes error messages with "// ERROR:" when field is missing
         Assert.That(result, Does.StartWith("// ERROR:").Or.Not.Contain("System."), "Non-found field must produce a graceful error message, not an exception trace.");
@@ -312,10 +310,9 @@ public class B29_AllEngines_RealSolution_SmokeTests
     [Test]
     public async Task GranularRefactoringEngine_MoveTypeToOuterScope_DoesNotThrow()
     {
-        var engine = new GranularRefactoringEngine(_workspaceManager);
         string? result = null;
         // Non-existent nested type -> engine returns original source or descriptive message
-        Assert.DoesNotThrowAsync(async () => result = (await engine.MoveTypeToOuterScopeAsync(_realFilePath, "__nonExistentNestedType__")).UpdatedText!, "MoveTypeToOuterScopeAsync must not throw even when nested type is not found.");
+        Assert.DoesNotThrowAsync(async () => result = (await new StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync(_realFilePath, "__nonExistentNestedType__")).UpdatedText!, "MoveTypeToOuterScopeAsync must not throw even when nested type is not found.");
         Assert.That(result, Is.Not.Null);
     }
 

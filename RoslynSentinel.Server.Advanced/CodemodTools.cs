@@ -25,7 +25,6 @@ public class CodemodTools
     private readonly ProjectStructureEngine _projectStructureEngine;
     // ── apply_method_codemod engines ──────────────────────────────────────────
     private readonly ThreadSafetyEngine _threadSafetyEngine;
-    private readonly GranularRefactoringEngine _granularRefactoringEngine;
     private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
     private readonly StandardRefactoringEngine _standardRefactoringEngine;
     private readonly CodeFlowEngine _codeFlowEngine;
@@ -39,7 +38,7 @@ public class CodemodTools
     private readonly AdvancedRefactoringTools _advancedRefactoringTools;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<CodemodTools> _logger;
-    public CodemodTools(RefactoringEngine refactoringEngine, LogicSimplificationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, AdvancedLogicEngine advancedLogicEngine, SyntaxModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, ProjectStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, GranularRefactoringEngine granularRefactoringEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, CodeFlowEngine codeFlowEngine, StructuralRefactoringEngine advancedStructuralEngine, ArchitecturalEngine architecturalEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiAutomationEngine, AntiPatternEngine antiPatternEngine = null)
+    public CodemodTools(RefactoringEngine refactoringEngine, LogicSimplificationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, AdvancedLogicEngine advancedLogicEngine, SyntaxModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, ProjectStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, CodeFlowEngine codeFlowEngine, StructuralRefactoringEngine advancedStructuralEngine, ArchitecturalEngine architecturalEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiAutomationEngine, AntiPatternEngine antiPatternEngine = null)
     {
         _refactoringEngine = refactoringEngine;
         _logicOptimizationEngine = logicOptimizationEngine;
@@ -57,7 +56,6 @@ public class CodemodTools
         _documentationEngine = documentationEngine;
         _projectStructureEngine = projectStructureEngine;
         _threadSafetyEngine = threadSafetyEngine;
-        _granularRefactoringEngine = granularRefactoringEngine;
         _outParamRefactoringEngine = outParamRefactoringEngine;
         _standardRefactoringEngine = standardRefactoringEngine;
         _codeFlowEngine = codeFlowEngine;
@@ -574,7 +572,7 @@ public class CodemodTools
                         };
                     }
 
-                    var r = await _advancedRefactoringEngine.ConvertExpressionBodyAsync(filePath, methodName, direction, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    var r = await _advancedStructuralEngine.ConvertExpressionBodyAsync(filePath, methodName, direction, contextSnippet, lineBefore, lineAfter, cancellationToken);
                     if (string.IsNullOrEmpty(r.UpdatedText))
                     {
                         return new SentinelCallToolResult<object>()
@@ -611,7 +609,7 @@ public class CodemodTools
 
                 case "convert_method_to_indexer":
                 {
-                    var r = await _granularRefactoringEngine.ConvertMethodToIndexerAsync(filePath, methodName, cancellationToken);
+                    var r = await _advancedStructuralEngine.ConvertMethodToIndexerAsync(filePath, methodName, cancellationToken);
                     if (string.IsNullOrEmpty(r.UpdatedText))
                     {
                         return new SentinelCallToolResult<object>()

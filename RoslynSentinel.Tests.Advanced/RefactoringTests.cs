@@ -1,36 +1,28 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
-
 using RoslynSentinel.Common;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
-
 public class RefactoringTests
 {
     private IWorkspaceManager _workspaceManager;
     private RefactoringEngine _refactoringEngine;
-    private RefinementEngine _refinementEngine;
     private AdvancedLogicEngine _advancedLogicEngine;
-    private GranularRefactoringEngine _granularEngine;
     private CodeHealingEngine _healingEngine;
-
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
-        _refinementEngine = new RefinementEngine(_workspaceManager);
         _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
-        _granularEngine = new GranularRefactoringEngine(_workspaceManager);
         _healingEngine = new CodeHealingEngine(_workspaceManager, config);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private Solution CreateSolution(string source, string fileName = "Test.cs")
     {
         var adhocWorkspace = new AdhocWorkspace();
@@ -48,16 +40,12 @@ public class RefactoringTests
         var solution = adhocWorkspace.CurrentSolution;
         var projectId = ProjectId.CreateNewId();
         solution = solution.AddProject(projectId, "TestProject", "TestProject", LanguageNames.CSharp);
-
         var filePath = "E:\\source\\repos\\Mixed.cs";
         var sourceCode = "namespace MyNamespace; public class ClassOne {} public class ClassTwo {}";
-
         var docId = DocumentId.CreateNewId(projectId);
         solution = solution.AddDocument(docId, "Mixed.cs", SourceText.From(sourceCode), filePath: filePath);
         _workspaceManager.SetTestSolution(solution);
-
         var results = await _refactoringEngine.MoveTypeToFileAsync(filePath, "ClassTwo");
-
         Assert.That(results.Count, Is.EqualTo(2));
         Assert.That(results[filePath], Does.Not.Contain("class ClassTwo"));
         Assert.That(results["E:\\source\\repos\\ClassTwo.cs"], Contains.Substring("class ClassTwo"));
@@ -75,7 +63,7 @@ public class RefactoringTests
     {
         var source = "public class C { public int GetTen() { return 10; } public void M() { var x = GetTen(); } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var result = await _refinementEngine.InlineMethodAsync("C.cs", "GetTen");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync("C.cs", "GetTen");
         var updatedContent = result.Values.FirstOrDefault(v => !v.StartsWith("// ErrorDetails:")) ?? "";
         Assert.That(updatedContent, Contains.Substring("var x = 10;"));
         Assert.That(updatedContent, Does.Not.Contain("GetTen()"));
@@ -105,7 +93,7 @@ public class RefactoringTests
     {
         var source = "public class C { private const int X = 42; public int M() => X; }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var result = await _granularEngine.InlineFieldAsync("C.cs", "X");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("C.cs", "X");
         Assert.That(result.UpdatedText!, Contains.Substring("=> 42;"));
         Assert.That(result.UpdatedText!, Does.Not.Contain("const int X"));
     }
@@ -115,7 +103,7 @@ public class RefactoringTests
     {
         var source = "public class C { public void M1() {} public void M2() {} }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var result = await _granularEngine.ExtractMembersToPartialAsync("C.cs", "C", new[] { "M2" });
+        var result = await new StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialAsync("C.cs", "C", new[] { "M2" });
         Assert.That(result.Count, Is.EqualTo(1));
         var partialCode = result.Values.First();
         Assert.That(partialCode, Contains.Substring("partial class C"));

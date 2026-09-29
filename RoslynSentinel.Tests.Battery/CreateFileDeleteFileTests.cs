@@ -414,7 +414,6 @@ public class CreateFileDeleteFileTests
         var standardRefactoringEngine = new StandardRefactoringEngine(workspaceManager);
         var mappingEngine = new MappingEngine(workspaceManager);
         var semanticRefactoringLibrary = new SemanticRefactoringLibrary(workspaceManager);
-        var granularRefactoringEngine = new GranularRefactoringEngine(workspaceManager);
         var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
         var codeStyleEngine = new CodeStyleEngine(workspaceManager, config);
         var codeFlowEngine = new CodeFlowEngine(workspaceManager);

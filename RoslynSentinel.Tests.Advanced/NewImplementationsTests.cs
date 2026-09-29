@@ -14,9 +14,7 @@ public class NewImplementationsTests
     private SentinelConfiguration _config;
     private DeadCodeEngine _deadCodeEngine;
     // private AnalysisEngine _analysisEngine;
-    private GranularRefactoringEngine _granularRefactoringEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
-    private RefinementEngine _refinementEngine;
     private SecurityEngine _securityEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;
     [SetUp]
@@ -25,9 +23,7 @@ public class NewImplementationsTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
-        _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
-        _refinementEngine = new RefinementEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
@@ -947,7 +943,7 @@ public class C
         int line = 5;
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("42") + 1;
-        var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", "var x = 42", "_answer");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "var x = 42", "_answer");
         Assert.That(result.UpdatedText, Does.Contain("_answer"), "New field name must appear in output.");
         Assert.That(result.UpdatedText, Does.Contain("private"), "Extracted field must be private.");
         Assert.That(result.UpdatedText, Does.Contain("readonly").Or.Contain("_answer"), "Field should be readonly.");
@@ -959,7 +955,7 @@ public class C
         const string source = "public class C { public void M() { } }";
         SetSource(source, "C.cs");
         // Snippet points to class declaration -> no expression there; graceful fallback returns original
-        var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", "public class C", "_f");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "public class C", "_f");
         // Should return the original source unchanged (graceful fallback)
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
@@ -981,7 +977,7 @@ public class C
         int line = 5;
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("30") + 1;
-        var result = await _granularRefactoringEngine.IntroduceParameterAsync("C.cs", "int timeout = 30", "timeoutMs");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync("C.cs", "int timeout = 30", "timeoutMs");
         Assert.That(result.UpdatedText, Does.Contain("timeoutMs"), "New parameter name must appear.");
         Assert.That(result.UpdatedText, Does.Contain("M("), "Method M signature must be present.");
     }
@@ -1003,7 +999,7 @@ public class C
         int line = 5;
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("6") + 1;
-        var result = await _granularRefactoringEngine.IntroduceVariableAsync("C.cs", "6 * 7", "product");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceVariableAsync("C.cs", "6 * 7", "product");
         Assert.That(result.UpdatedText, Does.Contain("product"), "Extracted variable name must appear.");
         Assert.That(result.UpdatedText, Does.Contain("var"), "Local variable should be declared with var.");
     }

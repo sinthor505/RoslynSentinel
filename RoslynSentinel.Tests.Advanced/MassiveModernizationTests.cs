@@ -76,7 +76,7 @@ public class MassiveModernizationTests
             public C{id}(int x) {{ _x = x; }}
             public int X => _x;
         }}", $"C{id}.cs");
-        var result = await _advancedRefactoringEngine.ConvertToPrimaryConstructorAsync($"C{id}.cs", $"C{id}");
+        var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync($"C{id}.cs", $"C{id}");
         Assert.That(result.UpdatedText!, Contains.Substring($"class C{id}(int x)"));
     }
 

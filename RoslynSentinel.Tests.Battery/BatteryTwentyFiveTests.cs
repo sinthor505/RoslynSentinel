@@ -489,7 +489,7 @@ public class DependencyEngineGapTests
         {
             result = await _engine.CheckPackageInconsistencyAsync();
         }
-        catch (Exception ex) when (ex is System.IO.DirectoryNotFoundException or System.IO.FileNotFoundException or InvalidOperationException)
+        catch (Exception ex)when (ex is System.IO.DirectoryNotFoundException or System.IO.FileNotFoundException or InvalidOperationException)
         {
             caughtEx = ex;
         }
@@ -554,12 +554,10 @@ public class DependencyInjectionEngineGapTests
 public class GranularRefactoringEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private GranularRefactoringEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new GranularRefactoringEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -571,7 +569,7 @@ public class GranularRefactoringEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         // Use a real dispatch ID -> 'type-to-var' is safe on any code (converts explicit types)
-        var result = await _engine.RunMicroRefactoringAsync("Service.cs", "type-to-var", 1);
+        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Service.cs", "type-to-var", 1);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -580,7 +578,7 @@ public class GranularRefactoringEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.RunMicroRefactoringAsync("NoFile.cs", "r1", 1);
+        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "r1", 1);
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -590,7 +588,7 @@ public class GranularRefactoringEngineGapTests
         var source = "public class Service { public void Go(int x) { var y = x + 1; } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.InlineParameterAsync("Service.cs", "Go", "x");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).InlineParameterAsync("Service.cs", "Go", "x");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -599,7 +597,7 @@ public class GranularRefactoringEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.InlineParameterAsync("NoFile.cs", "Foo", "bar");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).InlineParameterAsync("NoFile.cs", "Foo", "bar");
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -609,7 +607,7 @@ public class GranularRefactoringEngineGapTests
         var source = "public class Cache { public string Get(int key) { return key.ToString(); } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Cache.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertMethodToIndexerAsync("Cache.cs", "Get");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertMethodToIndexerAsync("Cache.cs", "Get");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -618,7 +616,7 @@ public class GranularRefactoringEngineGapTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertMethodToIndexerAsync("NoFile.cs", "Get");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertMethodToIndexerAsync("NoFile.cs", "Get");
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -632,7 +630,7 @@ public class Outer {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Outer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.MoveTypeToOuterScopeAsync("Outer.cs", "Inner");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("Outer.cs", "Inner");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -641,7 +639,7 @@ public class Outer {
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.MoveTypeToOuterScopeAsync("NoFile.cs", "Inner");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("NoFile.cs", "Inner");
         // Returns empty string or an error message -> must not throw
         Assert.That(result, Is.Not.Null);
     }

@@ -2,7 +2,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Advanced;
-
 /// <summary>
 /// Final regression tests for RoslynSentinel:
 /// - BUG-61: SyncTypeAndFilename uses staging mechanism
@@ -19,7 +18,6 @@ public class FinalRegressionTests
     private RefactoringEngine _refactoringEngine = null!;
     private AsyncOptimizationEngine _asyncOptimizationEngine = null!;
     private StructuralRefinementEngine _structuralRefinementEngine = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -32,7 +30,6 @@ public class FinalRegressionTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -42,7 +39,6 @@ public class FinalRegressionTests
     // ────────────────────────────────────────────────────────────────────────────
     // BUG-61: SyncTypeAndFilename -> Uses Staging Instead of Direct Write
     // ────────────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task BUG_61_SyncTypeAndFilename_UsesStagingMechanism()
     {
@@ -52,25 +48,18 @@ public class FinalRegressionTests
                 public class DataService { }
                 public class Helper { }
             }";
-
         SetSource(code, "WrongName.cs");
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)
-).Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-
         var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
-
         // Should use staging (Changes dict keyed by new path) instead of direct File.Move
-        Assert.That(result.Changes, Is.Not.Null.And.Not.Empty,
-            "Should use staging mechanism via Changes dictionary");
-        Assert.That(result.Changes!.Keys.First().Absolute, Does.Contain("DataService.cs"),
-            "Should identify primary type DataService");
+        Assert.That(result.Changes, Is.Not.Null.And.Not.Empty, "Should use staging mechanism via Changes dictionary");
+        Assert.That(result.Changes!.Keys.First().Absolute, Does.Contain("DataService.cs"), "Should identify primary type DataService");
     }
 
     // ────────────────────────────────────────────────────────────────────────────
     // BUG-60: RemoveMember -> Validates Usages Before Removal
     // ────────────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task BUG_60_RemoveMember_ErrorsWhenMemberIsUsed()
     {
@@ -84,17 +73,12 @@ public class FinalRegressionTests
                     var name = GetName();
                 }
             }";
-
         SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)
-).Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-
         var result = await _refactoringEngine.RemoveMemberAsync(filePath, "GetName");
-
         // Should error because GetName is used in UseHelper
-        Assert.That(result.Message, Does.Contain("ERROR") | Does.Contain("usages"),
-            "Should error when trying to remove a used member");
+        Assert.That(result.Message, Does.Contain("ERROR") | Does.Contain("usages"), "Should error when trying to remove a used member");
     }
 
     [Test]
@@ -107,23 +91,17 @@ public class FinalRegressionTests
                 
                 public void OtherMethod() { }
             }";
-
         SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)
-).Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-
         var result = await _refactoringEngine.RemoveMemberAsync(filePath, "UnusedMethod");
-
         // Should succeed and remove the unused method
-        Assert.That(result.UpdatedText, Does.Not.Contain("UnusedMethod"),
-            "Should remove unused member without errors");
+        Assert.That(result.UpdatedText, Does.Not.Contain("UnusedMethod"), "Should remove unused member without errors");
     }
 
     // ────────────────────────────────────────────────────────────────────────────
     // BUG-57: IntroduceParameterObject -> Warns About Interface Methods
     // ────────────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task BUG_57_IntroduceParameterObject_WarnsAboutInterfaceImplementation()
     {
@@ -137,25 +115,18 @@ public class FinalRegressionTests
             {
                 public void Process(string name, int age, bool active) { }
             }";
-
         SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)
-).Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-
-        var engine = new GranularRefactoringEngine(_workspaceManager);
-        var result = await engine.IntroduceParameterObjectAsync(filePath, "Process");
-
+        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync(filePath, "Process");
         Assert.That(result, Is.Not.Null);
         // Should create parameter object and possibly warn about interface
-        Assert.That(result.UpdatedText, Does.Contain("ProcessParameters") | Does.Contain("WARNING"),
-            "Should introduce parameter object or warn about interface");
+        Assert.That(result.UpdatedText, Does.Contain("ProcessParameters") | Does.Contain("WARNING"), "Should introduce parameter object or warn about interface");
     }
 
     // ────────────────────────────────────────────────────────────────────────────
     // BUG-55: OptimizeToValueTask -> Warns About Interface Signature Changes
     // ────────────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task BUG_55_OptimizeToValueTask_WarnsAboutInterfaceUpdate()
     {
@@ -172,24 +143,17 @@ public class FinalRegressionTests
                     return await Task.FromResult(""data"");
                 }
             }";
-
         SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)
-).Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-
         var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync(filePath, "GetDataAsync");
-
-        Assert.That(result.UpdatedText, Does.Contain("ValueTask<string>"),
-            "Should convert Task<T> to ValueTask<T>");
-        Assert.That(result.UpdatedText, Does.Contain("WARNING") | Does.Contain("interface"),
-            "Should warn about interface when it implements one");
+        Assert.That(result.UpdatedText, Does.Contain("ValueTask<string>"), "Should convert Task<T> to ValueTask<T>");
+        Assert.That(result.UpdatedText, Does.Contain("WARNING") | Does.Contain("interface"), "Should warn about interface when it implements one");
     }
 
     // ────────────────────────────────────────────────────────────────────────────
     // Additional Regression Tests
     // ────────────────────────────────────────────────────────────────────────────
-
     [Test]
     public async Task DisposalPattern_DocumentCanBeAnalyzed()
     {
@@ -201,15 +165,11 @@ public class FinalRegressionTests
                     var conn = new System.Collections.Hashtable();
                 }
             }";
-
         SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)
-).Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
-
         Assert.That(root, Is.Not.Null, "Should parse document without errors");
-        Assert.That(root?.ToFullString(), Does.Contain("DataAccess"),
-            "Should contain the class definition");
+        Assert.That(root?.ToFullString(), Does.Contain("DataAccess"), "Should contain the class definition");
     }
 
     [Test]
@@ -224,15 +184,10 @@ public class FinalRegressionTests
                     { ""Pro"", 2 }
                 };
             }";
-
         SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)
-).Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
-
-        var dictVar = root?.DescendantNodes().OfType<VariableDeclaratorSyntax>()
-            .FirstOrDefault(v => v.Identifier.Text == "TierRank");
-
+        var dictVar = root?.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault(v => v.Identifier.Text == "TierRank");
         Assert.That(dictVar, Is.Not.Null, "Should find static readonly dictionary");
     }
 
@@ -252,16 +207,11 @@ public class FinalRegressionTests
                     await Task.Delay(1000);
                 }
             }";
-
         SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)
-).Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
-
         // Look for Task.Run fire-and-forget pattern
-        var taskRunCall = root?.DescendantNodes().OfType<InvocationExpressionSyntax>()
-            .FirstOrDefault(i => i.ToString().Contains("Task.Run"));
-
+        var taskRunCall = root?.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(i => i.ToString().Contains("Task.Run"));
         Assert.That(taskRunCall, Is.Not.Null, "Should detect Task.Run fire-and-forget");
     }
 
@@ -273,12 +223,9 @@ public class FinalRegressionTests
             {
                 public void DoWork() { }
             }";
-
         SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)
-).Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
-
         Assert.That(root, Is.Not.Null);
         Assert.That(root?.ToFullString(), Does.Contain("Service"));
     }

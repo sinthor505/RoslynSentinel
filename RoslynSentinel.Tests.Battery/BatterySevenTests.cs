@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Battery;
-
 /// <summary>
 /// Battery #7 -> Tests for three engines at 6-mention coverage:
 ///   A. StandardRefactoringEngine (4 tests) -> ConvertMethodToProperty, MakeMethodStatic, InvertBoolean stub
@@ -11,8 +10,7 @@ namespace RoslynSentinel.Tests.Battery;
 ///
 /// Total: 13 tests. All workspace-based (SetSource / SetMultipleFiles).
 /// </summary>
-
-// ════════════════════════════════════════════════════════════════════════════════
+ // ════════════════════════════════════════════════════════════════════════════════
 // A. StandardRefactoringEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
@@ -20,7 +18,6 @@ public class StandardRefactoringEngineTests
 {
     private IWorkspaceManager _workspaceManager;
     private StandardRefactoringEngine _engine;
-
     [SetUp]
     public void Setup()
     {
@@ -30,7 +27,6 @@ public class StandardRefactoringEngineTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -47,7 +43,6 @@ public class Counter
     public int GetCount() { return _count; }
 }");
         var result = await _engine.ConvertMethodToPropertyAsync("Test.cs", "GetCount");
-
         // Method becomes an expression-bodied property -> no parameter list
         Assert.That(result.UpdatedText, Does.Contain("GetCount"), "Property name should be preserved");
         Assert.That(result.UpdatedText, Does.Contain("=>"), "Should produce expression-bodied property");
@@ -63,9 +58,7 @@ public class Calculator
     public int Add(int a, int b) { return a + b; }
 }";
         SetSource(source);
-
         var result = await _engine.ConvertMethodToPropertyAsync("Test.cs", "Add");
-
         // Methods with parameters cannot be converted -> source returned unchanged
         Assert.That(result.UpdatedText, Does.Contain("Add(int a, int b)"), "Parameterized method should remain unchanged");
         Assert.That(result.UpdatedText, Does.Not.Contain("Add =>"), "Should not produce arrow property for parameterized method");
@@ -80,7 +73,6 @@ public class MathHelper
     public int Multiply(int a, int b) { return a * b; }
 }");
         var result = await _engine.MakeMethodStaticAsync("Test.cs", "Multiply");
-
         Assert.That(result.UpdatedText, Does.Contain("static"), "Method with no instance access should receive static keyword");
         Assert.That(result.UpdatedText, Does.Contain("Multiply"), "Method name should be preserved");
     }
@@ -90,9 +82,7 @@ public class MathHelper
     {
         // InvertBoolean is a documented stub -> requires solution-wide reference tracking
         SetSource("public class C { public bool IsEnabled { get; set; } }");
-
         var result = await _engine.InvertBooleanAsync("Test.cs", "IsEnabled");
-
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit), "InvertBoolean stub should report CannotEdit");
     }
 }
@@ -105,7 +95,6 @@ public class SemanticSearchEngineTests
 {
     private IWorkspaceManager _workspaceManager;
     private SemanticSearchEngine _engine;
-
     [SetUp]
     public void Setup()
     {
@@ -115,7 +104,6 @@ public class SemanticSearchEngineTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -133,7 +121,6 @@ public class InventoryService
     public string GetName() => ""name"";
 }");
         var results = await _engine.FindMethodsByReturnTypeAsync("Task");
-
         Assert.That(results, Is.Not.Empty);
         Assert.That(results.Count, Is.EqualTo(2), "Should find exactly 2 Task-returning methods");
         Assert.That(results.All(r => r.MemberName is "GetAllAsync" or "GetByIdAsync"), Is.True);
@@ -149,7 +136,6 @@ public class OrderService
     public string GetName() => ""name"";
 }");
         var results = await _engine.FindMethodsByReturnTypeAsync("XmlDocument");
-
         Assert.That(results, Is.Empty, "No methods return XmlDocument - should yield empty list");
     }
 
@@ -165,7 +151,6 @@ public class ProductsController { }
 public class RegularClass { }
 ");
         var results = await _engine.FindTypesByAttributeAsync("ApiController");
-
         Assert.That(results.Count, Is.EqualTo(1), "Only one class has ApiController attribute");
         Assert.That(results[0].MemberName, Is.EqualTo("ProductsController"));
     }
@@ -177,7 +162,6 @@ public class RegularClass { }
 public class PlainDto { public int Id { get; set; } }
 ");
         var results = await _engine.FindTypesByAttributeAsync("Obsolete");
-
         Assert.That(results, Is.Empty, "No types have Obsolete attribute");
     }
 }
@@ -189,18 +173,14 @@ public class PlainDto { public int Id { get; set; } }
 public class AdvancedTypeEngineTests
 {
     private IWorkspaceManager _workspaceManager;
-    private AdvancedTypeEngine _engine;
-
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new AdvancedTypeEngine(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -215,13 +195,11 @@ public class DataService
 {
     public (int Id, string Name) GetData() { return (1, ""test""); }
 }");
-        var result = await _engine.ConvertTupleToClassAsync("Test.cs", "GetData", "DataResult");
-
+        var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertTupleToClassAsync("Test.cs", "GetData", "DataResult");
         var originalKey = result.Keys.FirstOrDefault(k => k.Contains("Test.cs"));
         Assert.That(originalKey.Absolute, Is.Not.Null.And.Not.Empty, "Should return updated original file");
         Assert.That(result[originalKey!], Does.Contain("DataResult"), "Original file should reference new class name");
         Assert.That(result[originalKey!], Does.Not.Contain("(int Id, string Name)"), "Tuple return type should be replaced");
-
         var newClassKey = result.Keys.FirstOrDefault(k => k.Contains("DataResult.cs"));
         Assert.That(newClassKey.Absolute, Is.Not.Null.And.Not.Empty, "Should generate DataResult.cs");
         Assert.That(result[newClassKey!], Does.Contain("public int Id"), "Generated class should have Id property");
@@ -236,8 +214,7 @@ public class Processor
 {
     public int Calculate(int x) { return x * 2; }
 }");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _engine.ConvertTupleToClassAsync("Test.cs", "Calculate", "Result"));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertTupleToClassAsync("Test.cs", "Calculate", "Result"));
     }
 
     [Test]
@@ -249,8 +226,7 @@ public class Product
     public int Price { get; set; }
     public string Name { get; set; }
 }");
-        var result = await _engine.ChangePropertyTypeAsync("Test.cs", "Product", "Price", "decimal");
-
+        var result = await new StructuralRefactoringEngine(_workspaceManager).ChangePropertyTypeAsync("Test.cs", "Product", "Price", "decimal");
         var key = result.Keys.FirstOrDefault(k => k.Contains("Test.cs"));
         Assert.That(key.Absolute, Is.Not.Null.And.Not.Empty, "Should return changes for the modified file");
         Assert.That(result[key!], Does.Contain("decimal Price"), "Property type should be updated to decimal");
@@ -261,9 +237,7 @@ public class Product
     public async Task ChangePropertyType_PropertyNotFound_Throws()
     {
         SetSource(@"public class Foo { public int Bar { get; set; } }");
-
-        Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _engine.ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string"));
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string"));
     }
 
     [Test]
@@ -277,8 +251,7 @@ public class Factory
         var item = new { Name = ""widget"", Quantity = 10 };
     }
 }");
-        var result = await _engine.ConvertAnonymousToNamedAsync("Test.cs", "ItemDto");
-
+        var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertAnonymousToNamedAsync("Test.cs", "ItemDto");
         var newClassKey = result.Keys.FirstOrDefault(k => k.Contains("ItemDto.cs"));
         Assert.That(newClassKey.Absolute, Is.Not.Null.And.Not.Empty, "Should generate ItemDto.cs");
         Assert.That(result[newClassKey!], Does.Contain("ItemDto"), "Generated class should be named ItemDto");

@@ -28,7 +28,6 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<AdvancedLogicEngine>();
         services.AddSingleton<AdvancedRefactoringEngine>();
         services.AddSingleton<StructuralRefactoringEngine>();
-        services.AddSingleton<AdvancedTypeEngine>();
         services.AddSingleton<AntiPatternEngine>();
         services.AddSingleton<ApiGenerationEngine>();
         services.AddSingleton<ArchitecturalEngine>();
@@ -47,7 +46,6 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<DeadCodeEngine>();
         services.AddSingleton<DependencyInjectionEngine>();
         services.AddSingleton<DocumentationEngine>();
-        services.AddSingleton<GranularRefactoringEngine>();
         services.AddSingleton<HealthOrchestrationEngine>();
         services.AddSingleton<IDEStyleEngine>();
         services.AddSingleton<InstrumentationEngine>();
@@ -59,7 +57,6 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<OutParamRefactoringEngine>();
         services.AddSingleton<PathDrivenTestEngine>();
         services.AddSingleton<PerformanceEngine>();
-        services.AddSingleton<RefinementEngine>();
         services.AddSingleton<ResourceSafetyEngine>();
         services.AddSingleton<ScopedOperationLedgerEngine>();
         services.AddSingleton<SecurityAndSafetyEngine>();

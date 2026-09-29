@@ -1,11 +1,9 @@
 // Battery #24 -> RefactoringTools
 // Tests all ~65 public methods of RefactoringTools in-memory via TestSolutionBuilder.
-
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
-
 [TestFixture]
 public class BatteryTwentyFourTests
 {
@@ -16,10 +14,7 @@ public class BatteryTwentyFourTests
     private StructuralRefactoringEngine _advancedStructuralEngine;
     private MappingEngine _mappingEngine;
     private SemanticRefactoringLibrary _semanticRefactoringLibrary;
-    private GranularRefactoringEngine _granularRefactoringEngine;
     private AdvancedLogicEngine _advancedLogicEngine;
-    private RefinementEngine _refinementEngine;
-    private AdvancedTypeEngine _advancedTypeEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
     private CodeStyleEngine _codeStyleEngine;
     private CodeFlowEngine _codeFlowEngine;
@@ -35,7 +30,6 @@ public class BatteryTwentyFourTests
     private MsToolAugmentEngine _msToolAugmentEngine;
     private AdvancedRefactoringTools _advTools;
     private GenerationTools _generationTools;
-
     private const string RefactorSource = @"
 using System;
 using System.Collections.Generic;
@@ -67,7 +61,6 @@ public class Dog : Animal
 
 public class Target {}
 ";
-
     private const string SimpleSource = @"
 namespace TestProj;
 
@@ -102,7 +95,6 @@ public interface IService
 
 public enum Status { Active = 1, Pending = 2 }
 ";
-
     [SetUp]
     public void Setup()
     {
@@ -113,10 +105,7 @@ public enum Status { Active = 1, Pending = 2 }
         _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
         _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
-        _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
         _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
-        _refinementEngine = new RefinementEngine(_workspaceManager);
-        _advancedTypeEngine = new AdvancedTypeEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
         _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
@@ -128,32 +117,14 @@ public enum Status { Active = 1, Pending = 2 }
         _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
         _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
         _generationTools = new GenerationTools(_workspaceManager, NullLogger<GenerationTools>.Instance);
-        _refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
-            _refactoringEngine,
-            _structuralRefinementEngine,
-            _symbolNavigationEngine,
-            _workspaceManager,
-            _validationEngine,
-            NullLogger<RefactoringStructuralImpl>.Instance));
-        _refactoringSignatureTools = new RefactoringSignatureTools(new RefactoringSignatureImpl(
-            _refactoringEngine,
-            _workspaceManager,
-            _validationEngine,
-            _symbolNavigationEngine,
-            NullLogger<RefactoringSignatureImpl>.Instance));
-        _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(new RefactoringExtractionDocsImpl(
-            _refactoringEngine,
-            _msToolAugmentEngine,
-            _symbolNavigationEngine,
-            _workspaceManager,
-            _validationEngine,
-            NullLogger<RefactoringExtractionDocsImpl>.Instance));
+        _refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(_refactoringEngine, _structuralRefinementEngine, _symbolNavigationEngine, _workspaceManager, _validationEngine, NullLogger<RefactoringStructuralImpl>.Instance));
+        _refactoringSignatureTools = new RefactoringSignatureTools(new RefactoringSignatureImpl(_refactoringEngine, _workspaceManager, _validationEngine, _symbolNavigationEngine, NullLogger<RefactoringSignatureImpl>.Instance));
+        _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(new RefactoringExtractionDocsImpl(_refactoringEngine, _msToolAugmentEngine, _symbolNavigationEngine, _workspaceManager, _validationEngine, NullLogger<RefactoringExtractionDocsImpl>.Instance));
         _advTools = new AdvancedRefactoringTools(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -167,9 +138,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // ===================== autoStage METHODS =====================
-
     // --- ExtractSuperclass ---
-
     [Test]
     public async Task ExtractSuperclass_AutoStageTrue_ReturnsAppliedChangeSummary()
     {
@@ -179,7 +148,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- SafeDeleteSymbol ---
-
     [Test]
     public async Task SafeDeleteSymbol_AutoStageTrue_ReturnsNotNull()
     {
@@ -189,7 +157,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ChangeSignature ---
-
     [Test]
     public async Task ChangeSignature_AutoStageTrue_ReturnsNotNull()
     {
@@ -199,7 +166,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ExtractInterface ---
-
     [Test]
     public async Task ExtractInterface_AutoStageTrue_ReturnsNotNull()
     {
@@ -209,7 +175,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- MoveTypeToFile ---
-
     [Test]
     public async Task MoveTypeToFile_AutoStageTrue_ReturnsNotNull()
     {
@@ -219,7 +184,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- MoveAllTypesToFiles ---
-
     [Test]
     public async Task MoveAllTypesToFiles_AutoStageTrue_ReturnsNotNull()
     {
@@ -232,7 +196,6 @@ public enum Status { Active = 1, Pending = 2 }
     // RenameSymbol takes a SymbolHandle (projectName, docCommentId) instead of
     // (filepath, methodName, contextSnippet) -> resolve the handle via SymbolNavigationEngine
     // first, matching how an agent would call LocateSymbol before RenameSymbol.
-
     [Test]
     public async Task RenameSymbol_ValidSymbol_ReturnsNotNull()
     {
@@ -241,10 +204,7 @@ public enum Status { Active = 1, Pending = 2 }
         // "GetLabel" is declared on both Order and IService in SimpleSource -> disambiguate.
         var located = await symbolNavEngine.LocateSymbolAsync("GetLabel", containingType: "Order");
         var handle = located.Single();
-
-        var result = await _refactoringSignatureTools.RenameSymbol(
-            reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
-            newName: "GetDisplayLabel");
+        var result = await _refactoringSignatureTools.RenameSymbol(reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!, newName: "GetDisplayLabel");
         Assert.That(result, Is.Not.Null);
         Assert.That(result.IsSuccess, Is.True);
     }
@@ -253,16 +213,12 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RenameSymbol_NonExistentSymbol_ReturnsErrorObject()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringSignatureTools.RenameSymbol(
-            reason: "test message", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol",
-            newName: "NewName");
-
+        var result = await _refactoringSignatureTools.RenameSymbol(reason: "test message", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol", newName: "NewName");
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
     // --- MoveAllTypesToFilesInProject ---
-
     [Test]
     public async Task MoveAllTypesToFilesInProject_AutoStageTrue_ReturnsNotNull()
     {
@@ -272,7 +228,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- MoveAllTypesToFilesInSolution ---
-
     [Test]
     public async Task MoveAllTypesToFilesInSolution_AutoStageTrue_ReturnsNotNull()
     {
@@ -282,7 +237,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- UsingDirective ---
-
     [Test]
     public async Task UsingDirective_AutoStageTrue_ReturnsNotNull()
     {
@@ -298,6 +252,7 @@ public enum Status { Active = 1, Pending = 2 }
         var result = await _refactoringExtractionDocsTools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq", autoStage: false);
         Assert.That(result, Is.Not.Null);
     }
+
     // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task UsingDirective_Add_ChangedContentReflectsActualDiffNotFabricatedString()
@@ -307,23 +262,19 @@ public enum Status { Active = 1, Pending = 2 }
         // picks up an unrelated whitespace fix in the same write as the using insertion. A
         // fabricated "using {namespaceName};" string could never reveal that second, bundled
         // change; the real diff must.
-        const string misindentedSource =
-            "namespace TestProj;\n\npublic class Order\n{\n  public int OrderId { get; set; }\n}\n";
+        const string misindentedSource = "namespace TestProj;\n\npublic class Order\n{\n  public int OrderId { get; set; }\n}\n";
         SetSource(misindentedSource, "Order.cs");
-
         var result = await _refactoringExtractionDocsTools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
-
         Assert.That(result.IsSuccess, Is.True);
         var summary = (AppliedChangeSummary)result.SuccessData!;
-
         // The added using line must be present in the diff...
         Assert.That(summary.Diff, Does.Contain("using System.Linq;"));
         // ...and so must the unrelated formatting change the fabricated string could never show.
         Assert.That(summary.Diff, Does.Contain("public int OrderId"));
         Assert.That(summary.Diff, Is.Not.EqualTo("using System.Linq;"));
     }
-    // --- ModifyEnum ---
 
+    // --- ModifyEnum ---
     [Test]
     public async Task ModifyEnum_AutoStageTrue_ReturnsNotNull()
     {
@@ -333,7 +284,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- Member on enum containers (routes to AddEnumMemberAsync/RemoveEnumMemberAsync/ReplaceEnumMemberAsync) ---
-
     [Test]
     public async Task Member_Add_OnEnumContainer_Succeeds()
     {
@@ -367,7 +317,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- InsertMemberAfter ---
-
     [Test]
     public async Task InsertMemberAfter_AutoStageTrue_ReturnsNotNull()
     {
@@ -377,7 +326,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- InsertMemberBefore ---
-
     [Test]
     public async Task InsertMemberBefore_AutoStageTrue_ReturnsNotNull()
     {
@@ -387,7 +335,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- AddAttribute ---
-
     [Test]
     public async Task AddAttribute_AutoStageTrue_ReturnsNotNull()
     {
@@ -397,7 +344,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- AddBaseType ---
-
     [Test]
     public async Task AddBaseType_AutoStageTrue_ReturnsNotNull()
     {
@@ -407,7 +353,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- RemoveAttribute ---
-
     [Test]
     public async Task RemoveAttribute_AutoStageTrue_ReturnsNotNull()
     {
@@ -417,7 +362,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- RemoveBaseType ---
-
     [Test]
     public async Task RemoveBaseType_AutoStageTrue_ReturnsNotNull()
     {
@@ -427,7 +371,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- MoveMember (pull-up to existing base class) ---
-
     [Test]
     public async Task MoveMember_ToBaseClass_AutoStageTrue_ReturnsNotNull()
     {
@@ -437,7 +380,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ChangeAccessibility ---
-
     [Test]
     public async Task ChangeAccessibility_AutoStageTrue_ReturnsNotNull()
     {
@@ -451,20 +393,16 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var versionBeforeAnyMutation = _workspaceManager.WorkspaceVersion;
-
         var first = await _refactoringSignatureTools.ChangeAccessibility(reason: "test message", "Order.cs", "OrderId", AccessibilityLevel.@internal);
         var firstSummary = (AppliedChangeSummary)first.SuccessData!;
         Assert.That(firstSummary.WorkspaceVersion, Is.Not.Null);
         Assert.That(firstSummary.WorkspaceVersion, Is.GreaterThan(versionBeforeAnyMutation));
-
         var second = await _refactoringSignatureTools.ChangeAccessibility(reason: "test message", "Order.cs", "CustomerName", AccessibilityLevel.@internal);
         var secondSummary = (AppliedChangeSummary)second.SuccessData!;
-        Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion!),
-            "A second mutation must stamp a strictly higher version than the first.");
+        Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion!), "A second mutation must stamp a strictly higher version than the first.");
     }
 
     // --- AddModifier ---
-
     [Test]
     public async Task AddModifier_AutoStageTrue_ReturnsNotNull()
     {
@@ -474,7 +412,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- RemoveModifier ---
-
     [Test]
     public async Task RemoveModifier_AutoStageTrue_ReturnsNotNull()
     {
@@ -487,9 +424,7 @@ public enum Status { Active = 1, Pending = 2 }
     // protected/etc.), so passing an accessibility keyword can no longer reach this method at all
     // -> JSON schema/binding rejects it before ModifyModifier runs, which is what
     // ModifyModifier_RejectsAccessibilityKeyword used to test at this layer.
-
     // --- SummaryComment ---
-
     [Test]
     public async Task SummaryComment_AutoStageTrue_ReturnsNotNull()
     {
@@ -499,7 +434,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- AddProperty ---
-
     [Test]
     public async Task AddProperty_AutoStageTrue_ReturnsNotNull()
     {
@@ -509,7 +443,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- AddField ---
-
     [Test]
     public async Task AddField_AutoStageTrue_ReturnsNotNull()
     {
@@ -519,7 +452,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- SortMembers ---
-
     [Test]
     public async Task SortMembers_AutoStageTrue_ReturnsNotNull()
     {
@@ -529,7 +461,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- WrapInTryCatch ---
-
     [Test]
     public async Task WrapInTryCatch_AutoStageTrue_ReturnsNotNull()
     {
@@ -539,7 +470,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ConstructorParameter ---
-
     [Test]
     public async Task ConstructorParameter_AutoStageTrue_ReturnsNotNull()
     {
@@ -551,9 +481,7 @@ public enum Status { Active = 1, Pending = 2 }
     [Test]
     public async Task ConstructorParameter_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
     {
-        SetMultiFile(
-            ("Order.cs", SimpleSource),
-            ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
+        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
         var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", defaultValue: "\"\"");
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
     }
@@ -561,9 +489,7 @@ public enum Status { Active = 1, Pending = 2 }
     [Test]
     public async Task ConstructorParameter_Add_WithNullDefault_BackwardCompatibleWithExistingCaller()
     {
-        SetMultiFile(
-            ("Order.cs", SimpleSource),
-            ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
+        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
         var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", nullDefault: true);
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
     }
@@ -580,15 +506,12 @@ public enum Status { Active = 1, Pending = 2 }
     [Test]
     public async Task ConstructorParameter_Add_NoDefaultValue_ExistingCallerBreaksAndIsRefused()
     {
-        SetMultiFile(
-            ("Order.cs", SimpleSource),
-            ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
+        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
         var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
         Assert.That(result.IsSuccess, Is.False);
     }
 
     // --- MethodSignature ---
-
     [Test]
     public async Task MethodSignature_View_ListsExistingParameters()
     {
@@ -608,9 +531,7 @@ public enum Status { Active = 1, Pending = 2 }
     [Test]
     public async Task MethodSignature_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
     {
-        SetMultiFile(
-            ("Order.cs", SimpleSource),
-            ("Caller.cs", "namespace TestProj;\npublic class Caller { public string Use(Order o) => o.GetStatus(); }"));
+        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public string Use(Order o) => o.GetStatus(); }"));
         var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool", defaultValue: "false");
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
     }
@@ -618,12 +539,8 @@ public enum Status { Active = 1, Pending = 2 }
     [Test]
     public async Task MethodSignature_Remove_LastParameter_UpdatesCallSite()
     {
-        var orderSourceWithRename = SimpleSource.Replace(
-            "public string GetLabel()",
-            "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
-        SetMultiFile(
-            ("Order.cs", orderSourceWithRename),
-            ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
+        var orderSourceWithRename = SimpleSource.Replace("public string GetLabel()", "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
+        SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
         var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
     }
@@ -641,12 +558,8 @@ public enum Status { Active = 1, Pending = 2 }
     [Test]
     public async Task MethodSignature_Remove_NamedArgumentCallSite_Refused()
     {
-        var orderSourceWithRename = SimpleSource.Replace(
-            "public string GetLabel()",
-            "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
-        SetMultiFile(
-            ("Order.cs", orderSourceWithRename),
-            ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(first: \"a\", last: \"b\"); }"));
+        var orderSourceWithRename = SimpleSource.Replace("public string GetLabel()", "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
+        SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(first: \"a\", last: \"b\"); }"));
         var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(result.IsSuccess, Is.False, "A named-argument call site cannot be safely rewritten and must refuse the whole operation.");
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -654,7 +567,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- WrapInRegion ---
-
     [Test]
     public async Task WrapInRegion_AutoStageTrue_ReturnsNotNull()
     {
@@ -664,9 +576,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // ===================== SIMPLE DELEGATION METHODS =====================
-
     // --- SyncTypeAndFilename ---
-
     [Test]
     public async Task SyncTypeAndFilename_ValidFile_ReturnsString()
     {
@@ -696,14 +606,9 @@ public enum Status { Active = 1, Pending = 2 }
             var oldPath = Path.Combine(tempDir, "Mismatched.cs");
             var newPath = Path.Combine(tempDir, "Widget.cs");
             File.WriteAllText(oldPath, mismatchedSource);
-
-            var solution = TestSolutionBuilder.CreateSolutionWithProject(
-                "TestProj", Path.Combine(tempDir, "TestProj.csproj"),
-                [("Mismatched.cs", mismatchedSource, oldPath)]);
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", Path.Combine(tempDir, "TestProj.csproj"), [("Mismatched.cs", mismatchedSource, oldPath)]);
             _workspaceManager.SetTestSolution(solution);
-
             var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath, dryRun: true);
-
             Assert.That(File.Exists(oldPath), Is.True, "dryRun must never delete the original file, even when validation fails.");
             Assert.That(File.Exists(newPath), Is.False, "dryRun must never write the renamed file.");
             if (result.IsSuccess)
@@ -733,23 +638,15 @@ public enum Status { Active = 1, Pending = 2 }
             var oldPath = Path.Combine(tempDir, "Mismatched.cs");
             var newPath = Path.Combine(tempDir, "Widget.cs");
             File.WriteAllText(oldPath, mismatchedSource);
-
-            var solution = TestSolutionBuilder.CreateSolutionWithProject(
-                "TestProj", Path.Combine(tempDir, "TestProj.csproj"),
-                [("Mismatched.cs", mismatchedSource, oldPath)]);
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", Path.Combine(tempDir, "TestProj.csproj"), [("Mismatched.cs", mismatchedSource, oldPath)]);
             _workspaceManager.SetTestSolution(solution);
-
             var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath);
-
             Assert.That(result.IsSuccess, Is.True, $"Expected rename to succeed; error: {result.ErrorData?.Message}");
             Assert.That(File.Exists(oldPath), Is.False, "Old file should be deleted after a successful rename.");
             Assert.That(File.Exists(newPath), Is.True, "New file should exist after a successful rename.");
-
             var currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
-            Assert.That(currentSolution.GetDocumentIdsWithFilePath(oldPath), Is.Empty,
-                "Old path must not remain tracked as a Document after the rename, or the type would be seen as declared twice.");
-            Assert.That(currentSolution.GetDocumentIdsWithFilePath(newPath), Is.Not.Empty,
-                "New path must be tracked as a Document after the rename.");
+            Assert.That(currentSolution.GetDocumentIdsWithFilePath(oldPath), Is.Empty, "Old path must not remain tracked as a Document after the rename, or the type would be seen as declared twice.");
+            Assert.That(currentSolution.GetDocumentIdsWithFilePath(newPath), Is.Not.Empty, "New path must be tracked as a Document after the rename.");
         }
         finally
         {
@@ -761,7 +658,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- InlineMethod ---
-
     [Test]
     public async Task InlineMethod_ValidMethod_ReturnsDictionary()
     {
@@ -771,7 +667,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ExtractMethod ---
-
     [Test]
     public async Task ExtractMethod_ValidLineRange_ReturnsResult()
     {
@@ -781,7 +676,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- IntroduceField ---
-
     [Test]
     public async Task IntroduceField_ValidContext_ReturnsString()
     {
@@ -791,7 +685,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- IntroduceParameter ---
-
     [Test]
     public async Task IntroduceParameter_ValidContext_ReturnsString()
     {
@@ -801,7 +694,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- InlineField ---
-
     [Test]
     public async Task InlineField_ValidField_ReturnsString()
     {
@@ -811,7 +703,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- InlineParameter ---
-
     [Test]
     public async Task InlineParameter_ValidParameter_ReturnsString()
     {
@@ -821,7 +712,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- MakeMethodStatic ---
-
     [Test]
     public async Task MakeMethodStatic_ValidMethod_ReturnsString()
     {
@@ -831,7 +721,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ExtensionToStatic ---
-
     [Test]
     public async Task ExtensionToStatic_ValidMethod_ReturnsString()
     {
@@ -842,7 +731,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ConvertAbstractToInterface ---
-
     [Test]
     public async Task ConvertAbstractToInterface_AbstractClass_ReturnsString()
     {
@@ -852,7 +740,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- GenerateMapping ---
-
     [Test]
     public async Task GenerateMapping_ValidTypes_ReturnsString()
     {
@@ -862,7 +749,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- WrapInUsing ---
-
     [Test]
     public async Task WrapInUsing_ValidLineRange_ReturnsString()
     {
@@ -872,7 +758,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ConvertAnonymousToNamed ---
-
     [Test]
     public async Task ConvertAnonymousToNamed_ValidFile_ReturnsDictionary()
     {
@@ -882,13 +767,10 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- InlineClass ---
-
     [Test]
     public async Task InlineClass_CrossFile_MovesMembers()
     {
-        SetMultiFile(
-            ("Helper.cs", "namespace App; public class Helper { public int Value; public void Go() {} }"),
-            ("Owner.cs", "namespace App; public class Owner {}"));
+        SetMultiFile(("Helper.cs", "namespace App; public class Helper { public int Value; public void Go() {} }"), ("Owner.cs", "namespace App; public class Owner {}"));
         // dryRun avoids writing to disk under a bare relative filename (resolves against the test
         // runner's CWD) -> without it, a stray file left by a prior run makes the diff spuriously
         // empty since the on-disk "before" already matches the freshly-computed "after".
@@ -901,7 +783,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- IntroduceVariable ---
-
     [Test]
     public async Task IntroduceVariable_ValidContext_ReturnsString()
     {
@@ -911,7 +792,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- InlineVariable ---
-
     [Test]
     public async Task InlineVariable_ValidVariable_ReturnsString()
     {
@@ -921,7 +801,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ConvertPropertyToMethods ---
-
     [Test]
     public async Task ConvertPropertyToMethods_ValidProperty_ReturnsString()
     {
@@ -931,7 +810,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ExtractMembersToPartial ---
-
     [Test]
     public async Task ExtractMembersToPartial_ValidMembers_ReturnsDictionary()
     {
@@ -941,17 +819,15 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ConvertMethodToIndexer ---
-
     [Test]
     public async Task ConvertMethodToIndexer_ValidMethod_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("Order.cs", "GetStatus");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("Order.cs", "GetStatus");
         Assert.That(result, Is.Not.Null);
     }
 
     // --- MoveTypeToOuterScope ---
-
     [Test]
     public async Task MoveTypeToOuterScope_ValidType_ReturnsString()
     {
@@ -962,7 +838,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ReplaceMember ---
-
     [Test]
     public async Task ReplaceMember_ValidMember_ReturnsString()
     {
@@ -972,7 +847,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- AddMemberToClass ---
-
     [Test]
     public async Task AddMemberToClass_ValidClass_ReturnsString()
     {
@@ -982,7 +856,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- RemoveMember ---
-
     [Test]
     public async Task RemoveMember_ValidMember_ReturnsString()
     {
@@ -1015,9 +888,7 @@ public enum Status { Active = 1, Pending = 2 }
             }
         }
         """, "Helper.cs");
-
         var result = await _refactoringStructuralTools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName");
-
         Assert.That(result.IsSuccess, Is.False, "A member with a real caller must be refused by default.");
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("caller"));
@@ -1044,9 +915,7 @@ public enum Status { Active = 1, Pending = 2 }
             }
         }
         """, "Helper.cs");
-
         var result = await _refactoringStructuralTools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName", skipPrecheck: true);
-
         Assert.That(result.IsSuccess, Is.False, "The engine's own caller check still applies even with skipPrecheck: true.");
     }
 
@@ -1072,15 +941,12 @@ public enum Status { Active = 1, Pending = 2 }
             public string Greet() => "hello";
         }
         """, "Greeter.cs");
-
         var refused = await _refactoringStructuralTools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet");
         Assert.That(refused.IsSuccess, Is.False, "An interface member's implementation must be caught by the default precheck.");
         Assert.That(refused.ErrorData!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
-
         var result = await _refactoringStructuralTools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet", skipPrecheck: true);
         Assert.That(result.IsSuccess, Is.False, "Removing an interface's sole implementation still breaks compilation - the separate compile-validation safety net catches it.");
-        Assert.That(result.ErrorData!.Message, Does.Contain("does not implement interface member"),
-            "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped.");
+        Assert.That(result.ErrorData!.Message, Does.Contain("does not implement interface member"), "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped.");
     }
 
     [Test]
@@ -1089,16 +955,14 @@ public enum Status { Active = 1, Pending = 2 }
         // An override with no callers of its own and nothing further overriding it isn't flagged by
         // either the tool-level precheck or the engine's caller check -> confirms the precheck isn't
         // over-broad (it doesn't flag every virtual/override method, only ones with real relationships).
-        SetMultiFile(
-            ("AnimalBase.cs", """
+        SetMultiFile(("AnimalBase.cs", """
             namespace TestProj;
 
             public class AnimalBase
             {
                 public virtual string Speak() => "...";
             }
-            """),
-            ("Dog.cs", """
+            """), ("Dog.cs", """
             namespace TestProj;
 
             public class Dog : AnimalBase
@@ -1106,7 +970,6 @@ public enum Status { Active = 1, Pending = 2 }
                 public override string Speak() => "woof";
             }
             """));
-
         var result = await _refactoringStructuralTools.Member(reason: "test message", "Dog.cs", MemberAction.remove, memberName: "Speak");
         Assert.That(result.IsSuccess, Is.True, "An override with no callers and nothing overriding it in turn must succeed under the default precheck.");
     }
@@ -1119,7 +982,6 @@ public enum Status { Active = 1, Pending = 2 }
     // disambiguation rule for when a same-named implementer is also in scope (see
     // RemoveMember_HasImplementationOnly_SkipPrecheckTrue_BypassesToolLevelCheck above, which exercises
     // that disambiguation from the other direction: same name, implementer must win over the interface).
-
     [Test]
     public async Task RemoveMember_InterfaceProperty_NoImplementerInFile_Succeeds()
     {
@@ -1131,7 +993,6 @@ public enum Status { Active = 1, Pending = 2 }
                 string Greeting { get; }
             }
             """, "IGreeter.cs");
-
         var result = await _refactoringStructuralTools.Member(reason: "test message", "IGreeter.cs", MemberAction.remove, memberName: "Greeting");
         Assert.That(result.IsSuccess, Is.True, "Member(remove) must be able to target a property declared directly on an interface.");
     }
@@ -1147,13 +1008,11 @@ public enum Status { Active = 1, Pending = 2 }
                 string Greet();
             }
             """, "IGreeter.cs");
-
         var result = await _refactoringStructuralTools.Member(reason: "test message", "IGreeter.cs", MemberAction.replace, memberName: "Greet", newMemberSource: "string Greet(string name);");
         Assert.That(result.IsSuccess, Is.True, "Member(replace) must be able to target a method declared directly on an interface.");
     }
 
     // --- ReplaceConstructorWithFactory ---
-
     [Test]
     public async Task ReplaceConstructorWithFactory_ValidClass_ReturnsString()
     {
@@ -1163,7 +1022,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- InvertAssignments ---
-
     [Test]
     public async Task InvertAssignments_ValidLineRange_ReturnsString()
     {
@@ -1173,7 +1031,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- ReduceBlockDepth ---
-
     [Test]
     public async Task ReduceBlockDepth_ValidMethod_ReturnsString()
     {
@@ -1183,7 +1040,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- OptimizeTaskWait ---
-
     [Test]
     public async Task OptimizeTaskWait_ValidFile_ReturnsString()
     {
@@ -1193,7 +1049,6 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- SyncInterfaceToImplementation ---
-
     [Test]
     public async Task SyncInterfaceToImplementation_ClassWithInterface_ReturnsString()
     {
@@ -1206,7 +1061,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     // --- IntroduceParameterObject---
-
     [Test]
     public async Task IntroduceParameterObject_ValidMethod_ReturnsString()
     {
@@ -1224,7 +1078,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     // --- UpdateXmlDocsFromSignature---
-
     [Test]
     public async Task UpdateXmlDocsFromSignature_ValidMethod_ReturnsString()
     {
@@ -1233,16 +1086,14 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     // --- ConvertExpressionBody ---
-
     [Test]
     public async Task ConvertExpressionBody_ToBlockBody_ReturnsString()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
-        var result = await _advancedRefactoringEngine.ConvertExpressionBodyAsync("Refactor.cs", "Sound", "ToBlockBody");
+        var result = await _advancedStructuralEngine.ConvertExpressionBodyAsync("Refactor.cs", "Sound", "ToBlockBody");
     }
 
     // --- ExtractConstant ---
-
     [Test]
     public async Task ExtractConstant_WithLiteralSnippet_ReturnsString()
     {
@@ -1252,7 +1103,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     // --- AnalyzeControlFlow ---
-
     [Test]
     public async Task AnalyzeControlFlow_ValidMethod_ReturnsSummary()
     {
@@ -1262,7 +1112,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     // --- AnalyzeDataFlow ---
-
     [Test]
     public async Task AnalyzeDataFlow_ValidMethod_ReturnsSummary()
     {
@@ -1272,7 +1121,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     // --- FormatDocumentPreview ---
-
     [Test]
     public async Task FormatDocumentPreview_ValidFile_ReturnsPreviewResult()
     {
@@ -1282,7 +1130,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     // --- ConvertToNullCoalescing ---
-
     [Test]
     public async Task ConvertToNullCoalescing_ValidFile_ReturnsString()
     {
@@ -1301,7 +1148,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     // --- ExtractLocalVariable ---
-
     [Test]
     public async Task ExtractLocalVariable_ValidContext_ReturnsString()
     {
@@ -1315,13 +1161,11 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _refactoringExtractionDocsTools.ExtractLocalVariable(reason: "test message", "NonExistent.cs", "GetLabel", "label");
-
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
     // --- ConvertToSwitch ---
-
     [Test]
     public async Task ConvertToSwitch_FileWithIfElseChain_ReturnsString()
     {
@@ -1339,7 +1183,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     // --- ConvertToPattern ---
-
     [Test]
     public async Task ConvertToPattern_ValidFile_ReturnsString()
     {
@@ -1370,18 +1213,12 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         try
         {
             var oldPath = Path.Combine(tempDir, "Mismatched.cs");
-
-            var solution = TestSolutionBuilder.CreateSolutionWithProject(
-                "TestProj", Path.Combine(tempDir, "TestProj.csproj"),
-                [("Mismatched.cs", mismatchedSource, oldPath)]);
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", Path.Combine(tempDir, "TestProj.csproj"), [("Mismatched.cs", mismatchedSource, oldPath)]);
             _workspaceManager.SetTestSolution(solution);
-
             var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "MainService");
-
             Assert.That(result.IsSuccess, Is.True, $"Expected rename to succeed; error: {result.ErrorData?.Message}");
             var summary = (AppliedChangeSummary)result.SuccessData!;
-            Assert.That(summary.AffectedFiles, Has.Some.Matches<FilePathWrapper>(p => p.Absolute.Contains("MainService.cs")),
-                "Should target MainService (explicitly named), not HelperResult (first-declared).");
+            Assert.That(summary.AffectedFiles, Has.Some.Matches<FilePathWrapper>(p => p.Absolute.Contains("MainService.cs")), "Should target MainService (explicitly named), not HelperResult (first-declared).");
         }
         finally
         {
@@ -1405,14 +1242,9 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         {
             var oldPath = Path.Combine(tempDir, "Mismatched.cs");
             File.WriteAllText(oldPath, mismatchedSource);
-
-            var solution = TestSolutionBuilder.CreateSolutionWithProject(
-                "TestProj", Path.Combine(tempDir, "TestProj.csproj"),
-                [("Mismatched.cs", mismatchedSource, oldPath)]);
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", Path.Combine(tempDir, "TestProj.csproj"), [("Mismatched.cs", mismatchedSource, oldPath)]);
             _workspaceManager.SetTestSolution(solution);
-
             var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "DoesNotExist");
-
             Assert.That(result.IsSuccess, Is.False);
             Assert.That(result.ErrorData!.Message, Does.Contain("DoesNotExist"));
             Assert.That(result.ErrorData!.Message, Does.Contain("HelperResult"));

@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
-
 [TestFixture]
 public class AdvancedToolsTests
 {
@@ -11,9 +10,7 @@ public class AdvancedToolsTests
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
-    private GranularRefactoringEngine _granularRefactoringEngine;
     private SentinelConfiguration _config;
-
     [SetUp]
     public void Setup()
     {
@@ -23,12 +20,10 @@ public class AdvancedToolsTests
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, _config);
-        _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
@@ -36,7 +31,6 @@ public class AdvancedToolsTests
     }
 
     // ===== Tool 1: DetectValueTaskMisuse =====
-
     [Test]
     public async Task DetectValueTaskMisuse_FlagsDoubleAwait()
     {
@@ -50,7 +44,6 @@ public class C {
     }
     ValueTask GetVT() => ValueTask.CompletedTask;
 }", "C.cs");
-
         var reports = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("C.cs");
         Assert.That(reports, Is.Not.Empty);
         Assert.That(reports.Any(r => r.Reason.Contains("awaited more than once")), Is.True);
@@ -70,7 +63,6 @@ public class C {
     ValueTask GetVT() => ValueTask.CompletedTask;
     void DoSomethingElse() {}
 }", "C.cs");
-
         var reports = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("C.cs");
         Assert.That(reports, Is.Not.Empty);
         Assert.That(reports.Any(r => r.Reason.Contains("deferred") || r.Reason.Contains("intervening")), Is.True);
@@ -87,14 +79,12 @@ public class C {
     }
     ValueTask GetVT() => ValueTask.CompletedTask;
 }", "C.cs");
-
         var reports = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("C.cs");
         // Immediate await (no stored variable) should not trigger stored-and-deferred or double-await
         Assert.That(reports.Any(r => r.Reason.Contains("awaited more than once") || r.Reason.Contains("deferred")), Is.False);
     }
 
     // ===== Tool 2: UpgradeToPrimaryConstructor =====
-
     [Test]
     public async Task UpgradeToPrimaryConstructor_ConvertsPureAssignmentCtor()
     {
@@ -105,9 +95,7 @@ public class MyService {
     public MyService(IRepo repo) { _repo = repo; }
     public void Do() { _repo.Save(); }
 }", "MyService.cs");
-
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("MyService.cs", "MyService");
-
         Assert.That(result.UpdatedText, Does.Contain("MyService(IRepo repo)"));
         Assert.That(result.UpdatedText, Does.Contain("repo.Save()"));
         Assert.That(result.UpdatedText, Does.Not.Contain("private readonly IRepo _repo"));
@@ -124,9 +112,7 @@ public class MyService {
     public MyService(IRepo repo) { _repo = repo; _repo.Init(); }
     public void Do() { _repo.Save(); }
 }", "MyService.cs");
-
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("MyService.cs", "MyService");
-
         Assert.That(result.Message, Does.Contain("// Cannot convert"));
     }
 
@@ -142,16 +128,13 @@ public class MyService {
     public MyService(IRepo repo, ILogger logger) { _repo = repo; _logger = logger; }
     public void Do() { var r = _repo; var l = _logger; }
 }", "MyService.cs");
-
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("MyService.cs", "MyService");
-
         Assert.That(result.UpdatedText, Does.Contain("MyService(IRepo repo, ILogger logger)"));
         Assert.That(result.UpdatedText, Does.Not.Contain("_repo"));
         Assert.That(result.UpdatedText, Does.Not.Contain("_logger"));
     }
 
     // ===== Tool 3: AddCancellationTokenToMethod =====
-
     [Test]
     public async Task AddCancellationTokenToMethod_AddsParameterToMethod()
     {
@@ -162,9 +145,7 @@ public class C {
         var x = 1;
     }
 }", "C.cs");
-
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("C.cs", "GetData");
-
         Assert.That(result.UpdatedText, Does.Contain("CancellationToken cancellationToken"));
     }
 
@@ -179,9 +160,7 @@ public class C {
         var x = 1;
     }
 }", "C.cs");
-
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("C.cs", "GetData");
-
         // Should return unchanged (not add a second CancellationToken)
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoChange));
         Assert.That(result.UpdatedText, Is.Null);
@@ -202,9 +181,7 @@ public interface IRepo {
     Task<int> GetAllAsync();
     Task<int> GetAllAsync(System.Threading.CancellationToken ct);
 }", "C.cs");
-
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("C.cs", "GetData");
-
         // Parameter should be added
         Assert.That(result.UpdatedText, Does.Contain("CancellationToken cancellationToken"));
         // Semantic model finds CT overload on IRepo -> should propagate
@@ -212,7 +189,6 @@ public interface IRepo {
     }
 
     // ===== Tool 4: SyncInterfaceToImplementation =====
-
     [Test]
     public async Task SyncInterfaceToImplementation_AddsMissingMethod()
     {
@@ -222,9 +198,7 @@ public class Service : IService {
     public void DoA() {}
     public void DoB() {}
 }", "Service.cs");
-
         var result = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
-
         Assert.That(result.UpdatedText, Does.Contain("void DoB()"));
         Assert.That(result.UpdatedText, Does.Contain("void DoA()"));
     }
@@ -238,9 +212,7 @@ public class Service : IService {
     public void DoA() {}
     public void DoB() {}
 }", "Service.cs");
-
         var result = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
-
         // No new members should have been added -> both already present
         // Count occurrences of DoB in interface section
         Assert.That(result.UpdatedText, Does.Not.Contain("// Interface not found"));
@@ -256,15 +228,12 @@ public class Service : IService {
     public void DoA() {}
     public string Name { get; set; }
 }", "Service.cs");
-
         var result = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
-
         Assert.That(result.UpdatedText, Does.Contain("Name"));
         Assert.That(result.UpdatedText, Does.Contain("get;"));
     }
 
     // ===== Tool 5: IntroduceParameterObject =====
-
     [Test]
     public async Task IntroduceParameterObject_CreatesRecord()
     {
@@ -276,9 +245,7 @@ public class C {
         var a = age;
     }
 }", "C.cs");
-
-        var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync("C.cs", "CreateUser");
-
+        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync("C.cs", "CreateUser");
         Assert.That(result.UpdatedText, Does.Contain("record CreateUserParameters"));
         Assert.That(result.UpdatedText, Does.Contain("request"));
         Assert.That(result.UpdatedText, Does.Contain("request.Name") | Does.Contain("Name"));
@@ -295,10 +262,7 @@ public class C {
         var a = age;
     }
 }", "C.cs");
-
-        var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync(
-            "C.cs", "CreateUser", "UserNameEmail", new[] { "name", "email" });
-
+        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync("C.cs", "CreateUser", "UserNameEmail", new[] { "name", "email" });
         Assert.That(result.UpdatedText, Does.Contain("record UserNameEmail"));
         // age should remain as a separate parameter
         Assert.That(result.UpdatedText, Does.Contain("int age"));
@@ -314,9 +278,7 @@ public class C {
         var y = count;
     }
 }", "C.cs");
-
-        var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync("C.cs", "Process");
-
+        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync("C.cs", "Process");
         // Record should be emitted and params rewritten
         Assert.That(result.UpdatedText, Does.Contain("record ProcessParameters"));
         Assert.That(result.UpdatedText, Does.Contain("ProcessParameters request"));

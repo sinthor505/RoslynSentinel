@@ -21,7 +21,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Integration;
-
 [TestFixture]
 [Category("Integration")]
 public class RealSolution_EngineSmoke_Battery34Tests
@@ -346,9 +345,8 @@ public class RealSolution_EngineSmoke_Battery34Tests
     [Test]
     public async Task GranularRefactoringEngine_ExtractMembersToPartial_DoesNotThrow()
     {
-        var engine = new GranularRefactoringEngine(_workspaceManager);
         Dictionary<FilePathWrapper, string>? result = null;
-        Assert.DoesNotThrowAsync(async () => result = await engine.ExtractMembersToPartialAsync(_realFilePath, _realClassName, new[] { _realMethodName }), "GranularRefactoringEngine.ExtractMembersToPartialAsync must not throw on real class.");
+        Assert.DoesNotThrowAsync(async () => result = await new StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialAsync(_realFilePath, _realClassName, new[] { _realMethodName }), "GranularRefactoringEngine.ExtractMembersToPartialAsync must not throw on real class.");
         Assert.That(result, Is.Not.Null);
     }
 
