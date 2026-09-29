@@ -156,7 +156,7 @@ public class GetLargeResultTests
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(5), "TotalRecords must match the item count in the file.");
-        Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total -> HasMorePages should be true.");
+        Assert.That(result.HasMoreData, Is.True, "limit=3 of 5 total -> HasMoreData should be true.");
 
         // GetLargeResult's Data is the flat, paged List<MigrationCandidateFinding> -> the same
         // shape every other SentinelCallToolResult<object>-returning tool uses; it used to be double-wrapped
@@ -182,7 +182,7 @@ public class GetLargeResultTests
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(4));
-        Assert.That(result.HasMorePages, Is.False, "limit=10 of 4 total -> HasMorePages should be false.");
+        Assert.That(result.HasMoreData, Is.False, "limit=10 of 4 total -> HasMoreData should be false.");
 
         var returnedEntries = result.SuccessData as List<ApiSurfaceEntry>;
         Assert.That(returnedEntries, Is.Not.Null, "Data should be List<ApiSurfaceEntry>.");
@@ -205,7 +205,7 @@ public class GetLargeResultTests
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(5));
-        Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total -> HasMorePages should be true.");
+        Assert.That(result.HasMoreData, Is.True, "limit=3 of 5 total -> HasMoreData should be true.");
 
         var returnedEntries = result.SuccessData as List<SolutionSymbolEntry>;
         Assert.That(returnedEntries, Is.Not.Null, "Data should be List<SolutionSymbolEntry> - ListAll's offloaded results must be pageable, not fall through to \"Unknown scan result type\".");
@@ -284,7 +284,7 @@ public class GetLargeResultTests
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, charLimit: LargeResultHelper.OffloadThresholdBytes);
 
         Assert.That(result.IsSuccess, Is.True);
-        Assert.That(result.HasMorePages, Is.False, "The whole stored text fits in one window, so there should be no more pages.");
+        Assert.That(result.HasMoreData, Is.False, "The whole stored text fits in one window, so there should be no more pages.");
         Assert.That(result.WarningDetails, Is.Null);
 
         var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
@@ -352,7 +352,7 @@ public class GetLargeResultTests
         Assert.That(result.IsSuccess, Is.True, "An offset far past the end of the stored text must clamp, not throw a Substring range exception.");
         var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
         Assert.That(text, Is.Empty);
-        Assert.That(result.HasMorePages, Is.False);
+        Assert.That(result.HasMoreData, Is.False);
     }
     // Added by InsertMemberAfter (expected - used for diagnostics)
 
@@ -368,6 +368,6 @@ public class GetLargeResultTests
         Assert.That(result.IsSuccess, Is.True);
         var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
         Assert.That(text.Length, Is.EqualTo(50), "A charLimit smaller than OffloadThresholdBytes should be honored as the window size, not ignored.");
-        Assert.That(result.HasMorePages, Is.True);
+        Assert.That(result.HasMoreData, Is.True);
     }
 }

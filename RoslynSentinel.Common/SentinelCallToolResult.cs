@@ -167,7 +167,7 @@ public record SentinelCallToolResult<TSuccess, TError>
     }
 
     /// <summary>True when there are additional pages beyond the current offset+limit window.</summary>
-    public bool HasMorePages
+    public bool HasMoreData
     {
         get; init;
     }

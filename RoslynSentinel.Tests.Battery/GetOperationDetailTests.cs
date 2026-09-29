@@ -154,7 +154,7 @@ public class GetOperationDetailTests
         var firstPage = await _tools.GetOperationDetail(reason: "test message", changeId, maxItems: 2);
         var firstData = (OperationDetailResult)firstPage.SuccessData!;
         Assert.That(firstData.Items, Has.Count.EqualTo(2));
-        Assert.That(firstPage.HasMorePages, Is.True);
+        Assert.That(firstPage.HasMoreData, Is.True);
         Assert.That(firstData.NextOffset, Is.EqualTo(2));
 
         var secondPage = await _tools.GetOperationDetail(reason: "test message", changeId, maxItems: 2, offset: firstData.NextOffset!.Value);
@@ -163,7 +163,7 @@ public class GetOperationDetailTests
         Assert.That(secondPage.IsSuccess, Is.True);
         Assert.That(secondData.Items, Has.Count.EqualTo(1));
         Assert.That(secondData.Items[0].FilePath, Does.Contain("C.cs"));
-        Assert.That(secondPage.HasMorePages, Is.False);
+        Assert.That(secondPage.HasMoreData, Is.False);
         Assert.That(secondData.NextOffset, Is.Null);
     }
 
@@ -181,7 +181,7 @@ public class GetOperationDetailTests
         Assert.That(result.IsSuccess, Is.True);
         var data = (OperationDetailResult)result.SuccessData!;
         Assert.That(data.Items, Is.Empty);
-        Assert.That(result.HasMorePages, Is.False);
+        Assert.That(result.HasMoreData, Is.False);
     }
 
     [Test]

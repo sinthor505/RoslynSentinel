@@ -855,7 +855,7 @@ public class WorkspaceReadNavigationImpl
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = true,
-                HasMorePages = hasMore,
+                HasMoreData = hasMore,
                 SuccessData = new OperationDetailResult
                 {
                     ChangeId = changeId,
@@ -1056,7 +1056,7 @@ public class WorkspaceReadNavigationImpl
                     IsSuccess = true,
                     SuccessData = pageData,
                     TotalRecords = rawText.Length,
-                    HasMorePages = hasMoreRaw,
+                    HasMoreData = hasMoreRaw,
                     WarningDetails = hasMoreRaw
                         ? $"Raw result truncated to a {length}-char window. Call GetLargeResult(resultId, offset: {nextOffset}, charLimit: <N>) to continue reading."
                         : null
@@ -1409,7 +1409,7 @@ public class WorkspaceReadNavigationImpl
                 // which doesn't match every other tool's flat SentinelCallToolResult<object> shape.
                 SuccessData = result.SuccessData,
                 TotalRecords = totalRecords,
-                HasMorePages = hasMorePages,
+                HasMoreData = hasMorePages,
             };
         }
         catch (Exception ex)

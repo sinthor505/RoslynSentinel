@@ -52,7 +52,7 @@ public class SolutionWideFunctionalTests
 
         // Assert
         Assert.That(report1.ProjectSummaries.Count, Is.EqualTo(2));
-        Assert.That(report1.HasMorePages, Is.True);
+        Assert.That(report1.HasMoreData, Is.True);
         Assert.That(report1.NextProjectOffset, Is.EqualTo(2));
 
         // Act - Page 2
@@ -60,7 +60,7 @@ public class SolutionWideFunctionalTests
 
         // Assert
         Assert.That(report2.ProjectSummaries.Count, Is.EqualTo(1));
-        Assert.That(report2.HasMorePages, Is.False);
+        Assert.That(report2.HasMoreData, Is.False);
         Assert.That(report2.NextProjectOffset, Is.Null);
     }
 

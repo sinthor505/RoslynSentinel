@@ -46,7 +46,7 @@ public class OrchestrationTests
         _workspaceManager.SetTestSolution(CreateLargeSolution(20));
         var report = await _healthEngine.GenerateComprehensiveHealthReportAsync(offset: 0, limit: 5);
         Assert.That(report.ProjectSummaries.Count, Is.LessThanOrEqualTo(5));
-        Assert.That(report.HasMorePages, Is.True);
+        Assert.That(report.HasMoreData, Is.True);
         Assert.That(report.NextProjectOffset, Is.EqualTo(5));
     }
 
@@ -55,7 +55,7 @@ public class OrchestrationTests
     {
         _workspaceManager.SetTestSolution(CreateLargeSolution(10));
         var report = await _healthEngine.GenerateComprehensiveHealthReportAsync(offset: 5, limit: 5);
-        Assert.That(report.HasMorePages, Is.False);
+        Assert.That(report.HasMoreData, Is.False);
     }
 
     [Test]

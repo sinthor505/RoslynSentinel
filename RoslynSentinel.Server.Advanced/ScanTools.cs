@@ -1091,7 +1091,7 @@ public class ScanTools
                     {
                         IsSuccess = true,
                         TotalRecords = apiResult.Count,
-                        HasMorePages = false,
+                        HasMoreData = false,
                         LargeResult = new LargeResultInfo(resultType: typeof(ApiSurfaceEntry).Name, writtenToFile: true, filePath: summaryResults.filePath.Absolute.ToString(), resultId: summaryResults.resultId!, sizeBytes: summaryResults.jsonBytes.Length, totalRecords: apiResult.Count, message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " + $"Use GetLargeResult(resultId: \"{summaryResults.resultId}\") to page through results. " + "Pass limit and offset to control page size (default limit: 50).")
                     };
                 }
@@ -1125,7 +1125,7 @@ public class ScanTools
                     {
                         IsSuccess = true,
                         TotalRecords = apiResult.Count,
-                        HasMorePages = false,
+                        HasMoreData = false,
                         LargeResult = new LargeResultInfo(resultType: typeof(ApiSurfaceEntry).Name, writtenToFile: true, filePath: summaryResults.filePath.Absolute.ToString(), resultId: summaryResults.resultId!, sizeBytes: summaryResults.jsonBytes.Length, totalRecords: apiResult.Count, message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " + $"Use GetLargeResult(resultId: \"{summaryResults.resultId}\") to page through results. " + "Pass limit and offset to control page size (default limit: 50).")
                     };
                 }

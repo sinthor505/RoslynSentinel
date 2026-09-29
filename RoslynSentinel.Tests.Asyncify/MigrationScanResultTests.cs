@@ -156,7 +156,7 @@ public class MigrationScanResultTests
             ErrorData = raw.ErrorData,
             LargeResult = raw.LargeResult,
             TotalRecords = raw.TotalRecords,
-            HasMorePages = raw.HasMorePages,
+            HasMoreData = raw.HasMoreData,
         };
     }
 
@@ -270,7 +270,7 @@ public class Svc
         Assert.That(result.LargeResult, Is.Null, "LargeResult should be null for a small page.");
         Assert.That(result.SuccessData!.Count, Is.EqualTo(3), "Page should contain 3 items.");
         Assert.That(result.TotalRecords, Is.EqualTo(10), "TotalRecords should reflect all candidates.");
-        Assert.That(result.HasMorePages, Is.True, "More pages exist beyond offset 2 + limit 3 = 5 < 10.");
+        Assert.That(result.HasMoreData, Is.True, "More pages exist beyond offset 2 + limit 3 = 5 < 10.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -354,7 +354,7 @@ public class Svc
         Assert.That(page1Result.SuccessData!.Count, Is.EqualTo(10));
         Assert.That(page1Result.TotalRecords, Is.EqualTo(totalFromT4),
             "TotalRecords from get_large_result must match TotalRecords from the original scan.");
-        Assert.That(page1Result.HasMorePages, Is.True);
+        Assert.That(page1Result.HasMoreData, Is.True);
 
         // ── verify structured records (not preview text) ──────────────────────
         var first = page1Result.SuccessData![0];

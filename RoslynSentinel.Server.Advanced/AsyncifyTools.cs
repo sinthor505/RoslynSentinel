@@ -274,7 +274,7 @@ public class AsyncifyTools
                 {
                     IsSuccess = true,
                     TotalRecords = totalCount,
-                    HasMorePages = hasMorePages,
+                    HasMoreData = hasMorePages,
                     LargeResult = new LargeResultInfo(
                         resultType: typeof(MigrationCandidateFinding).Name,
                         writtenToFile: true,
@@ -294,7 +294,7 @@ public class AsyncifyTools
                 IsSuccess = true,
                 SuccessData = page,
                 TotalRecords = totalCount,
-                HasMorePages = hasMorePages,
+                HasMoreData = hasMorePages,
             };
         }
     }

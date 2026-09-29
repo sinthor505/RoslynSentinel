@@ -246,6 +246,7 @@ public class WorkspaceFileEditImpl
                         totalLines,
                         source = slice
                     },
+                    HasMoreData = to < totalLines,
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }
@@ -273,6 +274,9 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
+                    // Paging here goes through LargeResult/GetLargeResult, not HasMoreData -> leaving it
+                    // false avoids signalling a second, redundant continuation mechanism.
+                    HasMoreData = false,
                     LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need, or use GetFileOutline to get the constructors, methods, helpers, members, enums, fields, properties, etc of a file without reading the entire file."),
                     SuccessData = new
                     {
@@ -294,6 +298,7 @@ public class WorkspaceFileEditImpl
                     totalLines,
                     source = fullText
                 },
+                HasMoreData = false,
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion,
             };
         }

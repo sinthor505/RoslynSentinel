@@ -4,6 +4,6 @@ public record ComprehensiveHealthReport(
     int TotalIssues,
     List<IssueCategoryCount> TotalIssuesByCategory,
     List<ProjectHealthSummary> ProjectSummaries,
-    bool HasMorePages,
+    bool HasMoreData,
     int? NextProjectOffset,
     string StatusMessage);
