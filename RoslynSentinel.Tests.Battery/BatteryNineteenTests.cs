@@ -9,7 +9,7 @@ public class BatteryNineteenTests
 {
     private IWorkspaceManager _workspaceManager;
     private CodeGenerationEngine _codeGenerationEngine;
-    private ApiGenerationEngine _apiAutomationEngine;
+    private ApiGenerationEngine _apiGenerationEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private GenerationTools _generationTools;
     private ValidationEngine _validationEngine;
@@ -61,12 +61,12 @@ public interface IOrderRepository
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
-        _apiAutomationEngine = new ApiGenerationEngine(_workspaceManager);
+        _apiGenerationEngine = new ApiGenerationEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _validationEngine = new ValidationEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _generationTools = new GenerationTools(_codeGenerationEngine, _apiAutomationEngine, _mappingEngine, _symbolNavigationEngine, _validationEngine, _workspaceManager, NullLogger<GenerationTools>.Instance);
+        _generationTools = new GenerationTools(_codeGenerationEngine, _apiGenerationEngine, _mappingEngine, _symbolNavigationEngine, _validationEngine, _workspaceManager, NullLogger<GenerationTools>.Instance);
     }
 
     [TearDown]
@@ -211,7 +211,7 @@ public interface IOrderRepository
     public async Task AddValidationToPoco_ValidClass_ReturnsCode()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _apiAutomationEngine.AddValidationToPocoAsync("Order.cs", "Order");
+        var result = await _apiGenerationEngine.AddValidationToPocoAsync("Order.cs", "Order");
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
@@ -219,7 +219,7 @@ public interface IOrderRepository
     public async Task AddValidationToPoco_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _apiAutomationEngine.AddValidationToPocoAsync("NonExistent.cs", "Order");
+        var result = await _apiGenerationEngine.AddValidationToPocoAsync("NonExistent.cs", "Order");
         Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 

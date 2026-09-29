@@ -1,4 +1,4 @@
-// Battery #13 -> AnalysisEngine / CodeGenerationEngine / ControlFlowEngine / SymbolNavigationEngine
+// Battery #13 -> CodeGenerationEngine / ControlFlowEngine / SymbolNavigationEngine
 // CodeGenerationEngine is sync/JSON-only (no workspace needed for its primary methods).
 using Microsoft.Extensions.Logging.Abstractions;
 

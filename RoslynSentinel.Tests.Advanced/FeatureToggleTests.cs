@@ -9,7 +9,6 @@ public class FeatureToggleTests
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private SolutionStructureEngine _structureEngine;
-    // private AnalysisEngine _analysisEngine;
     private PerformanceEngine _perfEngine;
 
     [SetUp]

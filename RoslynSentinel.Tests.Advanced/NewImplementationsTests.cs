@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Advanced;
 /// <summary>
 /// Comprehensive tests for all engine methods implemented in the current development cycle:
-/// AsyncSafetyEngine, DeadCodeEngine, AnalysisEngine, SecurityEngine,
-/// GranularRefactoringEngine, AdvancedRefactoringEngine, and RefinementEngine.
+/// AsyncSafetyEngine, DeadCodeEngine, SecurityEngine,
+/// GranularRefactoringEngine, AdvancedRefactoringEngine.
 /// </summary>
 [TestFixture]
 public class NewImplementationsTests
@@ -13,7 +13,6 @@ public class NewImplementationsTests
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private DeadCodeEngine _deadCodeEngine;
-    // private AnalysisEngine _analysisEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private SecurityEngine _securityEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;

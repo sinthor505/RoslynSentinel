@@ -11,7 +11,7 @@ namespace RoslynSentinel.Server.Advanced;
 public class GenerationTools
 {
     private readonly CodeGenerationEngine _codeGenerationEngine;
-    private readonly ApiGenerationEngine _apiAutomationEngine;
+    private readonly ApiGenerationEngine _apiGenerationEngine;
     private readonly MappingEngine _mappingEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly ValidationEngine _validationEngine;
@@ -23,7 +23,7 @@ public class GenerationTools
     ILogger<GenerationTools> logger)
     {
         _codeGenerationEngine = new CodeGenerationEngine(workspaceManager);
-        _apiAutomationEngine = new ApiGenerationEngine(workspaceManager);
+        _apiGenerationEngine = new ApiGenerationEngine(workspaceManager);
         _mappingEngine = new MappingEngine(workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
         _validationEngine = new ValidationEngine(workspaceManager);
@@ -33,7 +33,7 @@ public class GenerationTools
 
     public GenerationTools(
         CodeGenerationEngine codeGenerationEngine,
-        ApiGenerationEngine apiAutomationEngine,
+        ApiGenerationEngine apiGenerationEngine,
         MappingEngine mappingEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         ValidationEngine validationEngine,
@@ -41,7 +41,7 @@ public class GenerationTools
         ILogger<GenerationTools> logger)
     {
         _codeGenerationEngine = codeGenerationEngine;
-        _apiAutomationEngine = apiAutomationEngine;
+        _apiGenerationEngine = apiGenerationEngine;
         _mappingEngine = mappingEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         _validationEngine = validationEngine;
@@ -121,7 +121,7 @@ public class GenerationTools
 
         try
         {
-            var result = await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName, cancellationToken);
+            var result = await _apiGenerationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
                 return $"GenerateHttpClient: controller class '{controllerName}' not found in '{Path.GetFileName(filePath)}'. " +

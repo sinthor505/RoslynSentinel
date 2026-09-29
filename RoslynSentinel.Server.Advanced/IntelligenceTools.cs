@@ -13,9 +13,6 @@ public class IntelligenceTools
     private readonly ImpactAnalyzer _impactAnalyzer;
     private readonly MetricsEngine _metricsEngine;
     private readonly InventoryEngine _inventoryEngine;
-    // private readonly DeadCodeEngine _deadCodeEngine;
-    // private readonly AnalysisEngine _analysisEngine;
-    // private readonly DocumentationEngine _documentationEngine;
     private readonly DependencyEngine _dependencyEngine;
     private readonly SolutionStructureEngine _projectStructureEngine;
     private readonly AsyncAnalysisEngine _asyncSafetyEngine;
@@ -32,14 +29,10 @@ public class IntelligenceTools
         _impactAnalyzer = impactAnalyzer;
         _metricsEngine = metricsEngine;
         _inventoryEngine = inventoryEngine;
-        // _deadCodeEngine = deadCodeEngine;
-        // _analysisEngine = analysisEngine;
-        // _documentationEngine = documentationEngine;
         _dependencyEngine = dependencyEngine;
         _projectStructureEngine = projectStructureEngine;
         _asyncSafetyEngine = asyncSafetyEngine;
         _healthOrchestrationEngine = healthOrchestrationEngine;
-        // _architecturalEngine = architecturalEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         _dependencyInjectionEngine = dependencyInjectionEngine;
         _discoveryEngine = discoveryEngine;

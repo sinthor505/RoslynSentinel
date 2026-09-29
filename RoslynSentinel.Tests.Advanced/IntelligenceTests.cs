@@ -4,10 +4,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
+
 public class IntelligenceTests
 {
     private IWorkspaceManager _workspaceManager;
-    // private AnalysisEngine _analysisEngine;
     private ArchitecturalEngine _architecturalEngine;
     [SetUp]
     public void Setup()

@@ -1,10 +1,12 @@
 // Battery #21 -> ModernizationTools
 // Tests all 26 public methods of ModernizationTools in-memory via TestSolutionBuilder.
 using Microsoft.Extensions.Logging.Abstractions;
+
 using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
+
 [TestFixture]
 public class BatteryTwentyOneTests
 {
@@ -12,7 +14,6 @@ public class BatteryTwentyOneTests
     private SentinelConfiguration _config;
     private SyntaxModernizationEngine _modernizationEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
-    // private AnalysisEngine _analysisEngine;
     private LogicSimplificationEngine _logicOptimizationEngine;
     private CodeStyleEngine _codeStyleEngine;
     private CodeHealingEngine _codeHealingEngine;

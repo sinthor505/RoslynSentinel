@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json.Serialization;
+
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Advanced;
@@ -10,7 +12,6 @@ namespace RoslynSentinel.Server.Advanced;
 public class ScanTools
 {
     private readonly ResourceSafetyEngine _resourceSafetyEngine;
-    // private readonly AnalysisEngine _analysisEngine;
     private readonly SecurityEngine _securityEngine;
     private readonly AntiPatternEngine _antiPatternEngine;
     private readonly AsyncAnalysisEngine _asyncSafetyEngine;
@@ -35,7 +36,6 @@ public class ScanTools
     private readonly ILogger<ScanTools> _logger;
     public ScanTools(SecurityEngine securityEngine, AntiPatternEngine antiPatternEngine, AsyncAnalysisEngine asyncSafetyEngine, ThreadSafetyEngine threadSafetyEngine, ControlFlowEngine controlFlowEngine, PerformanceEngine performanceEngine, DeadCodeEngine deadCodeEngine, DependencyEngine dependencyEngine, SolutionStructureEngine projectStructureEngine, DependencyInjectionEngine dependencyInjectionEngine, ProjectConsistencyEngine projectConsistencyEngine, MetricsEngine metricsEngine, CloneDetectionEngine cloneDetectionEngine, DiscoveryEngine discoveryEngine, StackOverflowEngine stackOverflowEngine, CodeStyleEngine codeStyleEngine, CodeStyleAnalysisEngine codeStyleAnalysisEngine, RefactoringEngine refactoringEngine, SymbolNavigationEngine symbolNavigationEngine, BreakingChangeEngine breakingChangeEngine, IWorkspaceManager workspaceManager, ILogger<ScanTools> logger, ResourceSafetyEngine resourceSafetyEngine = null)
     {
-        // _analysisEngine = analysisEngine;
         _securityEngine = securityEngine;
         _antiPatternEngine = antiPatternEngine;
         _asyncSafetyEngine = asyncSafetyEngine;

@@ -15,7 +15,6 @@ public class BatteryTwentyThreeTests
     private TestingEngine _testingEngine;
     private ControlFlowEngine _controlFlowEngine;
     private LogicSimplificationEngine _logicOptimizationEngine;
-    // private AnalysisEngine _analysisEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AsyncBatchEngine _asyncBatchEngine;

@@ -3,11 +3,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
+
 [TestFixture]
 public class MassiveIntelligenceTests
 {
     private IWorkspaceManager _workspaceManager;
-    // private AnalysisEngine _analysisEngine;
     private MetricsEngine _metricsEngine;
     private DiscoveryEngine _searchEngine;
     private InventoryEngine _inventoryEngine;

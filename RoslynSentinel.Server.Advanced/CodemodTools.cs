@@ -1,5 +1,7 @@
 using System.ComponentModel;
+
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Advanced;
@@ -8,7 +10,7 @@ namespace RoslynSentinel.Server.Advanced;
 public class CodemodTools
 {
     private readonly AntiPatternEngine _antiPatternEngine;
-    private readonly ApiGenerationEngine _apiAutomationEngine; // ── shared engines ────────────────────────────────────────────────────────
+    private readonly ApiGenerationEngine _apiGenerationEngine; // ── shared engines ────────────────────────────────────────────────────────
     private readonly RefactoringEngine _refactoringEngine;
     private readonly LogicSimplificationEngine _logicOptimizationEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
@@ -32,13 +34,12 @@ public class CodemodTools
     // ── apply_class_codemod engines ───────────────────────────────────────────
     private readonly StructuralRefactoringEngine _advancedStructuralEngine;
     // ── generate engines ──────────────────────────────────────────────────────
-    // private readonly AnalysisEngine _analysisEngine;
     private readonly TestingEngine _testingEngine;
     private readonly PathDrivenTestEngine _pathDrivenTestEngine;
     private readonly AdvancedRefactoringTools _advancedRefactoringTools;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<CodemodTools> _logger;
-    public CodemodTools(RefactoringEngine refactoringEngine, LogicSimplificationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, LogicSimplificationEngine advancedLogicEngine, SyntaxModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, SolutionStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, LogicSimplificationEngine codeFlowEngine, StructuralRefactoringEngine advancedStructuralEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiAutomationEngine, AntiPatternEngine antiPatternEngine = null)
+    public CodemodTools(RefactoringEngine refactoringEngine, LogicSimplificationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, LogicSimplificationEngine advancedLogicEngine, SyntaxModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, SolutionStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, LogicSimplificationEngine codeFlowEngine, StructuralRefactoringEngine advancedStructuralEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, AdvancedRefactoringTools advancedRefactoringTools, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiGenerationEngine, AntiPatternEngine antiPatternEngine = null)
     {
         _refactoringEngine = refactoringEngine;
         _logicOptimizationEngine = logicOptimizationEngine;
@@ -60,12 +61,11 @@ public class CodemodTools
         _standardRefactoringEngine = standardRefactoringEngine;
         _codeFlowEngine = codeFlowEngine;
         _advancedStructuralEngine = advancedStructuralEngine;
-        // _analysisEngine = analysisEngine;
         _testingEngine = testingEngine;
         _pathDrivenTestEngine = pathDrivenTestEngine;
         _workspaceManager = workspaceManager;
         _logger = logger;
-        _apiAutomationEngine = apiAutomationEngine;
+        _apiGenerationEngine = apiGenerationEngine;
         _antiPatternEngine = antiPatternEngine;
     }
 
@@ -964,7 +964,7 @@ public class CodemodTools
                     {
                         try
                         {
-                            var r = await _apiAutomationEngine.AddValidationToPocoAsync(filePath, className, cancellationToken);
+                            var r = await _apiGenerationEngine.AddValidationToPocoAsync(filePath, className, cancellationToken);
                             if (string.IsNullOrEmpty(r.UpdatedText))
                             {
                                 return new SentinelCallToolResult<object>

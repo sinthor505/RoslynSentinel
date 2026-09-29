@@ -12,7 +12,6 @@ public class OrchestrationTests
     private IWorkspaceManager _workspaceManager;
     private HealthOrchestrationEngine _healthEngine;
     private SolutionStructureEngine _structureEngine;
-    // private AnalysisEngine _analysisEngine;
 
     [SetUp]
     public void Setup()

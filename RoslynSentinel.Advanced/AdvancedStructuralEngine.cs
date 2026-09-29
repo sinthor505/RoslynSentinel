@@ -1103,7 +1103,7 @@ public class StructuralRefactoringEngine
                     // MoveInstanceMembersAsync calls original.WithExpression(...) on the existing
                     // member-access node, which keeps its own .Name segment. A value that already
                     // includes ".{symbol.Name}" here produced a doubled method name on apply (e.g.
-                    // "_apiAutomationEngine.AddValidationToPocoAsync.AddValidationToPocoAsync").
+                    // "_apiGenerationEngine.AddValidationToPocoAsync.AddValidationToPocoAsync").
                     results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Valid, null, candidates[0], candidates));
                     continue;
                 }

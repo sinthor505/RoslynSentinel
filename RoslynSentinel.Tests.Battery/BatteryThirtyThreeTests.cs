@@ -29,7 +29,6 @@ public class BatteryThirtyThreeTests
     private MetricsEngine _metricsEngine;
     private InventoryEngine _inventoryEngine;
     private DeadCodeEngine _deadCodeEngine;
-    // private AnalysisEngine _analysisEngine;
     private DocumentationEngine _documentationEngine;
     private DependencyEngine _dependencyEngine;
     private SolutionStructureEngine _projectStructureEngine;

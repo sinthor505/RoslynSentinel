@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
@@ -635,7 +636,6 @@ public class Service
     public class Bug7BatchRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
-        // private AnalysisEngine _analysisEngine;
         private AntiPatternEngine _antiPatternEngine;
         private RefactoringEngine _refactoringEngine;
         private CodeGenerationEngine _codeGenerationEngine;
@@ -896,7 +896,6 @@ public class Product
     public class Bug8BatchRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
-        // private AnalysisEngine _analysisEngine;
         private AntiPatternEngine _antiPatternEngine;
         [SetUp]
         public void Setup()
@@ -2195,7 +2194,7 @@ public class Calculator
                     var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document.FilePath!, "x * 2", "multiplier");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                // Should either succeed or return unchanged code, but not crash
+                    // Should either succeed or return unchanged code, but not crash
                 }
 
                 [Test]
@@ -2219,7 +2218,7 @@ public class Processor
                     var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document.FilePath!, "input", "text");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
                     Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                // Should either succeed or return unchanged code, but not crash
+                    // Should either succeed or return unchanged code, but not crash
                 }
             }
         }

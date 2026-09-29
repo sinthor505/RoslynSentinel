@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
+
 [TestFixture]
 public class BatteryTwentyTwoTests
 {
@@ -14,7 +15,6 @@ public class BatteryTwentyTwoTests
     private MetricsEngine _metricsEngine;
     private InventoryEngine _inventoryEngine;
     private DeadCodeEngine _deadCodeEngine;
-    // private AnalysisEngine _analysisEngine;
     private DocumentationEngine _documentationEngine;
     private DependencyEngine _dependencyEngine;
     private SolutionStructureEngine _projectStructureEngine;

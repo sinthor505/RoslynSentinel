@@ -4,7 +4,7 @@ namespace RoslynSentinel.Tests.Battery;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Battery #17 -> LogicSimplificationEngine,
-//               MsToolAugmentEngine, ProjectStructureEngine, RefinementEngine
+//               MsToolAugmentEngine and ProjectStructureEngine.
 // ────────────────────────────────────────────────────────────────────────────
 
 [TestFixture]
