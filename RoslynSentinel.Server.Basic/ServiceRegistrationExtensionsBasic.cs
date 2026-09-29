@@ -506,11 +506,20 @@ public static class RoslynSentinelServiceExtensionsBasic
                             // that hint survives the offload instead of being silently dropped.
                             int? itemCount = null;
                             string? statusMessage = null;
+                            bool? isSuccess = null;
                             try
                             {
                                 var root = System.Text.Json.Nodes.JsonNode.Parse(text)?.AsObject();
                                 if (root != null)
                                 {
+                                    if (root.TryGetPropertyValue("isSuccess", out var isSuccessNode) &&
+                                        isSuccessNode != null &&
+                                        (isSuccessNode.GetValueKind() == System.Text.Json.JsonValueKind.True ||
+                                         isSuccessNode.GetValueKind() == System.Text.Json.JsonValueKind.False))
+                                    {
+                                        isSuccess = isSuccessNode.GetValue<bool>();
+                                    }
+
                                     if (root.TryGetPropertyValue("totalRecords", out var totalRecordsNode) &&
                                         totalRecordsNode != null &&
                                         totalRecordsNode.GetValueKind() == System.Text.Json.JsonValueKind.Number)
@@ -550,6 +559,17 @@ public static class RoslynSentinelServiceExtensionsBasic
 
                             var hint = itemCount is int n ? $" Result contains {n} item(s)." : "";
 
+                            // Preserve the original body's isSuccess onto the protocol-level IsError
+                            // flag: this filter overwrites result.Content below, so the IsError-sync
+                            // filter (which wraps this one and runs after it returns) would otherwise
+                            // inspect this offload envelope instead of the real body and find no
+                            // "isSuccess" key, silently leaving IsError at its prior (successful)
+                            // value even when the original tool call failed.
+                            if (isSuccess == false)
+                            {
+                                result.IsError = true;
+                            }
+
                             result.Content = [new ModelContextProtocol.Protocol.TextContentBlock
                             {
                                 Text = System.Text.Json.JsonSerializer.Serialize(new
@@ -558,6 +578,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     resultId = stored.resultId,
                                     sizeBytes = text.Length,
                                     itemCount,
+                                    isSuccess,
                                     statusMessage,
                                     message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}).{hint} Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."
                                 })
