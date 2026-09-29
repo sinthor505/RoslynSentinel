@@ -13,6 +13,51 @@ falling back to grep, regex search-and-replace, file-read loops, or manual text 
 If an agent reaches for a shell command to inspect or modify C# code, that is a gap in the tool
 surface, not a deficiency in the agent.
 
+## Where guidance belongs: CLAUDE.md vs. memory
+
+This file is loaded into **every** session unconditionally, from turn one. The auto-memory system
+(`MEMORY.md` and its linked files) is loaded **reactively**, by relevance — which usually means an
+agent finds a memory entry only *after* it has already made the mistake the entry warns about, not
+before. That difference in *when* something is seen, not how well-written it is, is what decides
+where a piece of guidance goes:
+
+- **Put it here** if it's a standing rule, convention, or gotcha an agent must follow or avoid
+  *before* acting — anywhere a fresh session doing the wrong thing on turn one, having never
+  searched memory, would be a real and repeatable failure. This is true almost by default for
+  anything that would otherwise be a `type: feedback` memory (that type exists specifically to stop
+  repeating corrections) and for `type: project` facts describing a still-true tool/architecture
+  limitation or required workaround (not a one-time resolved incident).
+- **Leave it in memory** if reactive discovery is fine — open ideas not yet built, one-off historical
+  incidents that are fully resolved, scoped facts about in-progress work, or pointers to external
+  systems. These are legitimately notes/WIP, not conventions every session needs up front.
+- **When promoting a memory entry into this file:** distill it — cut the incident narrative,
+  dated "updated on"/"superseded" history, and hedging, down to the current rule plus the one-line
+  "why" that makes it stick. Then mark the source memory file as superseded (banner + pointer to the
+  section here) and move its index line to `MEMORY_CLOSED.md`, so a future session that opens the raw
+  file directly doesn't mistake the incident history for the live procedure.
+- If unsure which side a piece of guidance belongs on, the test is: "would getting this wrong on
+  turn one, before ever searching memory, be a costly, repeatable mistake?" If yes, it belongs here.
+
+## Shell tool choice
+
+This is a **Windows environment: default to the PowerShell tool for every shell command.** Bash is
+fallback-only, for a genuine POSIX/Git-Bash-only need. Decide from the platform, not from how simple
+or "plain" a given command looks — one-line cmdlets (`Get-Process`, `.\script.ps1`, anything piped
+into `Select-String`/`Where-Object`) still fail when run through Bash: cmdlet resolution, `.`-relative
+path syntax, and non-terminating-error-to-exit-code translation all silently break crossing that
+boundary, and it's never the same failure mode twice. If a Bash call's result looks even slightly
+off, re-run it via the PowerShell tool before trusting it.
+
+## Diagnosing a "missing" or gated tool
+
+Before concluding a tool doesn't exist, theorizing about a stale binary, or building a duplicate:
+call `McpServerStatus` and check its `allDeclaredTools` field — a reflection-based, ground-truth list
+of every declared tool with `className` and `activeForThisMode`. Mode-gating (the tool's class isn't
+in the current session's active list) is far more common than a missing tool, and this answers both
+"does it exist" and "is it gated" in one call. Only fall back to a text search (`Search(mode: "text",
+query: "Name = \"ToolName\"")`, for a tool declared in an assembly this server flavor doesn't load)
+or stale-binary theories once this has come back empty.
+
 ## Dog-fooding is mandatory — this is an instruction, not background
 
 **All C# reads and writes, and all git operations, go through the RoslynSentinel MCP tools.** This
@@ -22,11 +67,23 @@ sessions.
 
 | Instead of | Use |
 | --- | --- |
-| `Read` a `.cs` | `ReadFile`, `GetFileOutline`, `GetMethodSource` |
-| `Grep` / `Glob` for C# symbols | `SearchSolutionText`, `LocateSymbol`, `FindReferences` |
+| `Read` a `.cs` | `ReadFile`, `GetFileOutline`, `GetMethodSource` (methods only — use `ReadFile` for fields/properties/constants) |
+| `Grep` / `Glob` for C# symbols | `Search(mode: text/symbol/references/declaration-kind)`, `FindReferences` |
 | `Edit` / `Write` a `.cs` | `Member`, `MethodSignature`, `ModifyModifier`, `ReplaceSnippet`, `ApplyDiff`, `RenameSymbol` |
 | `Bash(git status/log/diff/add/commit/revert)` | `Git(operation: ...)` |
 | `Bash(dotnet build/test)` | `Build`, `RunTest` |
+
+**Common first-try mistakes with the mutating tools:**
+- Never pass `filePath` together with `batchEdits` on `ReplaceSnippet` — each batch edit carries its
+  own path.
+- Order batch edits so definitions (methods, enum members, fields) come before the call sites that
+  reference them; the compile gate rejects any intermediate state that doesn't compile.
+- Rename a field and all of its usages in the same atomic batch.
+- `Member` cannot operate on top-level records — use `ReplaceSnippet` for those.
+- For disambiguation context, copy real surrounding lines from a `ReadFile`/`GetMethodSource` result.
+  Never invent context lines, and match whitespace/line endings exactly.
+- `ModifyEnum`'s `values` parameter is the complete member list, not add-only — omitting a member
+  deletes it.
 
 **Scope boundary:** non-C# files — `.md`, `.ps1`, `.json`, `.csproj` — are outside the Roslyn
 workspace and have no tool coverage. Use the normal file tools for those directly; that is the edge
@@ -59,6 +116,23 @@ The one exception is if the bypass itself caused a *new* tool-side symptom you c
 mutating tool now fails, or reports state inconsistent with what's on disk) — that residual effect
 gets the normal tool-failure treatment above, scoped to the actual anomaly rather than the violation
 that triggered it.
+
+**Never delete a tracked file with a shell command.** Deleting a file the server has touched
+(created via `CreateFile`, or just loaded into the solution) via `rm`/`Remove-Item` trips the
+external-drift detector on the very next mutating call and halts every mutating tool for the rest of
+the session with `errorCode: SessionHalted` — read-only tools keep working. Use `DeleteFile` instead,
+even for a file you're sure is safe to remove. If a session is already halted this way: call
+`ListExternalDiskChanges()` then `AcknowledgeExternalFileChanges()` to clear the latch — no fresh
+session needed. This is a self-inflicted bypass per the recovery rule above (report and continue),
+not a tool defect.
+
+**Never dispatch parallel subagents that all touch the same shared MCP server process for C#
+edits.** Subagents share the parent session's single server process, not a process each. If even one
+parallel participant bypasses dogfooding with a plain `Edit`/`Write` on a tracked `.cs` file, the
+write lands outside the drift detector's tracked chokepoint and trips the same session-wide
+`SessionHalted` latch above — for every other subagent and the parent session too, even callers that
+did nothing wrong, and there's no in-band reset short of killing the specific stdio server process by
+its full command line. Dispatch subagents for repo-wide mechanical edits **sequentially** instead.
 
 ## Failure doctrine: the environment is responsible
 
@@ -141,3 +215,80 @@ source before constructing an explanation for it.
   under every encoding in play, so this class of corruption is structurally impossible for them.
   This does not apply to non-ASCII characters that are the actual subject of a task (e.g. test
   fixture content intentionally containing accented characters).
+- In new method signatures, `CancellationToken` is always the last parameter.
+- Before hand-rolling a shell loop for a repeated task (e.g. N model-eval runs), check the repo root
+  for an existing front-door `.ps1` script first — it likely already handles the failure modes (build
+  races against a still-exiting `testhost.exe`, env vars, filter syntax) that a naive loop will hit.
+- The repo's top-level solution file is `RoslynSentinel.slnx` (XML format) — there is no root
+  `.sln`. Target `RoslynSentinel.slnx` directly for solution-wide `dotnet build`/`dotnet test`.
+
+## Architecture
+
+- **Dependency direction is one-way:** `Common` <- `Basic` <- `Advanced`, and `Server.Basic` <-
+  `Server.Advanced`. A helper needed by both a `Server.Basic` and a `Server.Advanced` tool class must
+  live in `RoslynSentinel.Common` — it cannot live in either project first and be reached by the
+  other. Check each project's `.csproj` `<ProjectReference>` list if unsure.
+- **`Server.Advanced` project-references `Basic`/`Server.Basic` rather than forking them** — it is
+  additive, not a parallel implementation. A fix in `RoslynSentinel.Basic` or `RoslynSentinel.Server.Basic`
+  is sufficient on its own; there is no duplicate to hunt for in Advanced. Verify with `build.ps1
+  -Flavor Solution` (or both `-Flavor Basic` and `-Flavor Advanced`) since Advanced consumes Basic's
+  compiled output rather than re-declaring it.
+- **Adding a new MCP tool requires three things, not one:** the `[McpServerToolType]`/
+  `[McpServerTool(Name = ...)]` attributes, an entry in `ToolClassRegistry.cs`'s mode dictionary, AND
+  an explicit `if (activeToolClasses.Contains("..."))` DI-registration block in
+  `ServiceRegistrationExtensionsBasic.cs` (or `...Advanced.cs`). None of these three alone makes a
+  tool callable — attributes without a registry entry and DI block silently produce a dead tool with
+  no error at startup.
+
+## Commits
+
+- Commit **only** the files changed in the current session — other sessions or in-flight work may
+  share this worktree, so leave unrelated dirty or untracked files unstaged. Before committing,
+  double-check that no session file was missed, so no amend is needed.
+- Stage explicitly via the `Git` tool naming every file (scope `listed`, not a blanket add). Never
+  use shell `git add`/`git commit`.
+- Every commit message includes the `Co-Authored-By` trailer (see attribution instructions).
+- Never count commit hash characters manually — read `CommitHashLength` off the `Git` tool's result.
+
+## Blocker workflow
+
+- Before writing a fix for an open blocker, check `git log` and `docs/current/CLOSED.md` /
+  `docs/current/proposals/` for prior attempts — the fix may already exist, or may have been tried
+  and reverted.
+- When a blocker is fixed: add a regression test, verify against the pre-existing-failure baseline,
+  then move its doc from `docs/current/blockers/` to resolved with a resolution note citing the
+  commit hash (see also the CS#### rule above and `docs/current/CLOSED.md` conventions).
+
+## Verification
+
+**Changed server source and a tool's live behavior contradicts current source? Stop the server.
+That's the whole fix.** VS Code only builds and spawns a fresh server when a session starts — it
+never rebuilds a server that's already running, and there is no version banner in tool responses
+that flags this for you (`McpServerStatus.buildTimeUtc` reads the on-disk DLL's mtime, not the
+loaded assembly's build identity, so it can look fresh while the running process still executes
+pre-fix logic). If you edited RoslynSentinel's own source this session, assume the live server is
+running the *old* binary. Do this immediately, don't troubleshoot around it:
+1. Call `McpServerControl(operation: stop)`. Give it a few real seconds to return before assuming
+   it's hung — a clean `Connection closed` is normal, not an error.
+2. VS Code relaunches it on a fresh build automatically. Reconnect and re-run `LoadSolution`.
+Today this is safe to do any time in your own session: writes go straight to disk, so nothing is
+held only in memory. It stops being automatically safe once in-memory-only edits are supported, or
+if other subagents are actively mid-operation against the same server — in either case, stopping the
+server can lose unwritten work, so check for that before reaching for step 1 reflexively.
+
+**`LoadSolution` does not rebind which binary executes tool logic — only which files it analyzes.**
+Pointing a live session's server at a different worktree's `.slnx` (e.g. a PlanStepRunner worktree)
+loads that worktree's *files*, but every tool call still runs the *already-running process's*
+compiled code — whatever branch it was originally built and launched from. This fails silently: file
+paths resolve, every call succeeds, the output just reflects the wrong branch's logic with no error
+anywhere. Before trusting a live tool result as evidence about a specific worktree's code, confirm
+the connected server was actually built from that worktree (`serverBuildTimeUtc`/DLL mtime vs. `git
+log` on the relevant file). If it wasn't and can't be rebuilt/rebound for that worktree from the
+current session, prefer `dotnet test` against that worktree directly over live MCP calls.
+
+- If `Build` reports a suspicious warning/error count, force a full rebuild; incremental builds can
+  skip recompiles and under-report.
+- Reload the workspace (`LoadSolution`) before concluding a change is "missing" — a stale in-memory
+  workspace looks identical to a real gap.
+- Compare test results against the known pre-existing-failure baseline
+  (`docs/current` / memory `reference_known_failing_tests`) and report only *new* failures.
