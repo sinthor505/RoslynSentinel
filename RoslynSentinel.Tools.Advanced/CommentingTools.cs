@@ -1,0 +1,362 @@
+using System.ComponentModel;
+
+using Microsoft.Extensions.Logging;
+
+using ModelContextProtocol.Server;
+
+namespace RoslynSentinel.Tools.Advanced;
+
+[McpServerToolType]
+public class CommentingTools
+{
+    private readonly CommentingEngine _commentingEngine;
+    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ILogger<CommentingTools> _logger;
+
+    private const int DefaultMaxMembers = 200;
+    private const int DefaultMaxTokens = 2000;
+
+    public CommentingTools(
+        CommentingEngine commentingEngine,
+        IWorkspaceManager workspaceManager,
+        ILogger<CommentingTools> logger)
+    {
+        _commentingEngine = commentingEngine;
+        _workspaceManager = workspaceManager;
+        _logger = logger;
+    }
+
+    [McpServerTool(Name = "BulkComment")]
+    [Description("Adds or refreshes /// summary doc comments across a solution, project, or file; re-invoke with the same scope while RemainingStale > 0 to continue.")]
+    // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName required for scope=project, filePath required
+    // for scope=file; neither is individually required by the schema (enforced at runtime instead).
+    public async Task<SentinelCallToolResult<CommentingResult>> BulkComment(
+        [Description(ToolParams.Reason)] ToolCallReason reason,
+        [Description("solution (default), project (needs projectName), or file (needs filePath).")]
+        ToolScope scope = ToolScope.solution,
+        [Description("Required for scope=project.")]
+        string? projectName = null,
+        [Description("Required for scope=file.")]
+        string? filePath = null,
+        [Description("true = validate only, don't write.")]
+        bool dryRun = false,
+        [Description("Cap on members processed this call; re-invoke to continue.")]
+        int maxMembers = DefaultMaxMembers,
+        [Description("Wall-clock cap in seconds. 0 = unbounded.")]
+        int maxRuntimeSeconds = 0,
+        RequestContext<CallToolRequestParams>? requestParams = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        }
+        catch (SolutionNotLoadedException)
+        {
+            return new SentinelCallToolResult<CommentingResult>
+            {
+                IsSuccess = false,
+                ErrorData =  new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                    "No solution is loaded. Call LoadSolution first.")
+            };
+        }
+
+        if (scope == ToolScope.project && string.IsNullOrEmpty(projectName))
+        {
+            return new SentinelCallToolResult<CommentingResult>
+            {
+                IsSuccess = false,
+                ErrorData =  new ResultError(MigrationErrorCode.InvalidArgument, "projectName is required when scope=project.")
+            };
+        }
+
+        if (scope == ToolScope.file && string.IsNullOrEmpty(filePath))
+        {
+            return new SentinelCallToolResult<CommentingResult>
+            {
+                IsSuccess = false,
+                ErrorData =  new ResultError(MigrationErrorCode.InvalidArgument, "filePath is required when scope=file.")
+            };
+        }
+
+        var halt = _workspaceManager.CheckBreaker();
+        if (halt != null)
+        {
+            return new SentinelCallToolResult<CommentingResult>
+            {
+                IsSuccess = false,
+                ErrorData =  new ResultError(MigrationErrorCode.Exception,
+                    $"Circuit breaker is open: {halt.Directive}")
+            };
+        }
+
+        try
+        {
+            var result = await RunAsync(scope, projectName, filePath, dryRun, maxMembers, maxRuntimeSeconds, cancellationToken);
+            return new SentinelCallToolResult<CommentingResult> { IsSuccess = true, SuccessData =  result };
+        }
+        catch (Exception ex)
+        {
+            return new SentinelCallToolResult<CommentingResult>
+            {
+                IsSuccess = false,
+                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "BulkComment")
+            };
+        }
+    }
+
+    private async Task<CommentingResult> RunAsync(
+        ToolScope scope, string? projectName, string? filePath, bool dryRun, int maxMembers, int maxRuntimeSeconds, CancellationToken cancellationToken)
+    {
+        var changeId = Guid.NewGuid().ToString("N")[..8];
+        var items = new List<OperationItemRecord>();
+        var touchedFiles = new HashSet<FilePathWrapper>();
+        var skipped = new List<FailureDetail>();
+
+        // Collapses per-member Skipped detail down to a reason->count dict and per-file activity down
+        // to a file count -> neither a specific skip reason's file/method nor which of hundreds of
+        // files a solution-wide call touched is actionable to a caller; the counts are.
+        void ApplySampling(CommentingResult result, List<FailureDetail> allSkipped)
+        {
+            result.SkippedByReason = FailureSummary.ByReason(allSkipped);
+            result.FilesTouched = touchedFiles.Count;
+        }
+
+        // ── Phase 1: seed (always runs, mechanical, no LLM) ─────────────────
+        var (seedChanges, seededCount, alreadyTaggedAtSeedTime, unresolvedProjects) = await _commentingEngine.SeedContentHashesAsync(
+            scope, projectName, filePath, cancellationToken);
+
+        // Distinct from a seed-apply validation failure below: here the [ContentHash] attribute
+        // itself could not be injected/verified for one or more touched projects, so
+        // SeedContentHashesAsync already dropped those projects' members out of seedChanges rather
+        // than stamping an attribute that can't compile. Surfaced separately because the fix differs
+        // (a project reference/attribute-generator problem) from a validation failure in the member
+        // edits themselves.
+        if (unresolvedProjects.Count > 0)
+        {
+            _logger.LogWarning(
+                "BulkComment: could not inject/verify ContentHashAttribute for {Count} project(s): {Projects}",
+                unresolvedProjects.Count, string.Join(", ", unresolvedProjects));
+        }
+
+        if (seedChanges.Count > 0 && !dryRun)
+        {
+            var seedApply = await _workspaceManager.ApplyProposedChangesAsync(seedChanges, validateChanges: true, cancellationToken: cancellationToken);
+            if (!seedApply.Success)
+            {
+                var diagnosticCount = seedApply.ValidationResult?.Diagnostics.Count ?? 0;
+                _logger.LogWarning("BulkComment: validation found {Count} error(s) in seed-phase changes; aborting before the work phase",
+                    diagnosticCount);
+
+                // Abort here rather than falling through to Phase 2: the seed writes were rejected,
+                // so FindStaleMembersAsync would see the pre-seed workspace and every stale member's
+                // eventual per-file apply would hit the same validation failure again -> previously
+                // this ran unabated until the circuit breaker tripped, having burned thousands of
+                // attempts to produce zero net comments (see docs history: "BulkComment fails to
+                // apply any comments").
+                var abortResult = new CommentingResult
+                {
+                    TotalMembers = alreadyTaggedAtSeedTime + seededCount,
+                    AlreadyCurrent = alreadyTaggedAtSeedTime,
+                    Seeded = 0,
+                    CommentedThisCall = 0,
+                    RemainingStale = seededCount,
+                    Severity = "halt",
+                    BreakerOpen = _workspaceManager.GetBreakerStatus().Open,
+                    DryRun = false,
+                };
+                ApplySampling(abortResult, seedChanges.Keys.Select(path => new FailureDetail
+                {
+                    FilePath = path,
+                    Reason = $"seed_validation_failed ({diagnosticCount} diagnostic(s)); no seed or comment changes were written this call",
+                    Outcome = ItemRecordOutcome.Failed,
+                }).ToList());
+                return abortResult;
+            }
+        }
+
+        foreach (var path in seedChanges.Keys)
+        {
+            touchedFiles.Add(path);
+        }
+
+        // ── Phase 2: find stale members. When dryRun, the seed-phase changes were never applied,
+        // so this walk sees the pre-seed workspace -> every never-tagged member is (correctly)
+        // reported as stale/planned work, same as a real run would find before seeding lands. ──
+        var allStaleMembers = await _commentingEngine.FindStaleMembersAsync(scope, projectName, filePath, cancellationToken);
+
+        // Members in a project whose ContentHashAttribute couldn't be injected/verified were
+        // already excluded from seedChanges above -> exclude them here too, otherwise Phase 2 would
+        // try to comment+apply them and hit the identical validation failure per file instead of
+        // the single seed-phase failure this was meant to replace.
+        var unresolvedProjectSet = unresolvedProjects.ToHashSet();
+        var staleMembers = unresolvedProjectSet.Count > 0
+            ? allStaleMembers.Where(m => !unresolvedProjectSet.Contains(m.ProjectName)).ToList()
+            : allStaleMembers;
+
+        if (unresolvedProjectSet.Count > 0)
+        {
+            foreach (var member in allStaleMembers.Where(m => unresolvedProjectSet.Contains(m.ProjectName)))
+            {
+                skipped.Add(new FailureDetail
+                {
+                    FilePath = member.FilePath,
+                    MethodName = member.MemberName,
+                    Reason = "content_hash_attribute_unresolved: ContentHashAttribute could not be injected/verified for this project",
+                    Outcome = ItemRecordOutcome.Skipped,
+                });
+                touchedFiles.Add(member.FilePath);
+            }
+        }
+
+        // Members with no [ContentHash] at all show up in both seededCount (this call's seed pass)
+        // and staleMembers (they're maximally stale) -> total scope size is the union of "already
+        // tagged before this call" and "newly seeded this call".
+        int totalMembers = alreadyTaggedAtSeedTime + seededCount;
+        int alreadyCurrentCount = totalMembers - staleMembers.Count;
+
+        if (dryRun)
+        {
+            var dryRunResult = new CommentingResult
+            {
+                TotalMembers = totalMembers,
+                AlreadyCurrent = alreadyCurrentCount,
+                Seeded = seededCount,
+                CommentedThisCall = 0,
+                RemainingStale = staleMembers.Count,
+                Severity = "ok",
+                BreakerOpen = false,
+                DryRun = true,
+            };
+            ApplySampling(dryRunResult, skipped.Concat(staleMembers.Select(m => new FailureDetail
+            {
+                FilePath = m.FilePath,
+                MethodName = m.MemberName,
+                Reason = "dry_run",
+                Outcome = ItemRecordOutcome.Skipped,
+            })).ToList());
+            return dryRunResult;
+        }
+
+        // ── Phase 2: comment stale members, up to maxMembers / maxRuntimeSeconds ──
+        // Applied per-file, not per-member: BulkComment operates at file granularity (one disk
+        // write per file, covering every stale member that file had), unlike the *Async* migration
+        // tools which apply per-member because a single member's edit there can touch multiple
+        // files. Grouping preserves each file's original stale-member order.
+        var deadline = maxRuntimeSeconds > 0 ? DateTime.UtcNow.AddSeconds(maxRuntimeSeconds) : (DateTime?)null;
+        int commented = 0;
+        int succeeded = 0;
+        int failed = 0;
+        var baseSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+
+        var membersByFile = staleMembers
+            .GroupBy(m => m.FilePath)
+            .Select(g => g.ToList())
+            .ToList();
+
+        foreach (var fileMembers in membersByFile)
+        {
+            var currentFilePath = fileMembers[0].FilePath;
+
+            // Cap/deadline checks apply per-member-slot so a file straddling the cap still processes
+            // as many of its own members as fit, same budget semantics as the old per-member loop.
+            var toProcess = new List<CommentingEngine.MemberSite>();
+            foreach (var site in fileMembers)
+            {
+                if (commented >= maxMembers)
+                {
+                    skipped.Add(new FailureDetail { FilePath = site.FilePath, MethodName = site.MemberName, Reason = "maxMembers cap reached", Outcome = ItemRecordOutcome.Skipped });
+                    touchedFiles.Add(site.FilePath);
+                    continue;
+                }
+
+                if (deadline.HasValue && DateTime.UtcNow >= deadline.Value)
+                {
+                    skipped.Add(new FailureDetail { FilePath = site.FilePath, MethodName = site.MemberName, Reason = "maxRuntimeSeconds cap reached", Outcome = ItemRecordOutcome.Skipped });
+                    touchedFiles.Add(site.FilePath);
+                    continue;
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                toProcess.Add(site);
+                commented++;
+            }
+
+            if (toProcess.Count == 0)
+            {
+                continue;
+            }
+
+            var (finalText, outcomes) = await _commentingEngine.CommentFileAsync(baseSolution, currentFilePath, toProcess, DefaultMaxTokens, cancellationToken);
+
+            var succeededSites = new HashSet<CommentingEngine.MemberSite>(outcomes.Where(o => o.Succeeded).Select(o => o.Site));
+            foreach (var outcome in outcomes.Where(o => !o.Succeeded))
+            {
+                skipped.Add(new FailureDetail { FilePath = outcome.Site.FilePath, MethodName = outcome.Site.MemberName, Reason = outcome.FailureReason ?? "unknown failure", Outcome = ItemRecordOutcome.Failed });
+                touchedFiles.Add(outcome.Site.FilePath);
+                failed++;
+            }
+
+            if (finalText == null || succeededSites.Count == 0)
+            {
+                continue;
+            }
+
+            var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
+                new Dictionary<FilePathWrapper, string> { { currentFilePath, finalText } }, validateChanges: true, cancellationToken: cancellationToken);
+
+            if (!applyResult.Success)
+            {
+                var reason = applyResult.ValidationResult != null
+                    ? $"apply validation failed ({applyResult.ValidationResult.Diagnostics.Count} diagnostic(s))"
+                    : "apply failed";
+                foreach (var site in toProcess.Where(s => succeededSites.Contains(s)))
+                {
+                    skipped.Add(new FailureDetail { FilePath = site.FilePath, MethodName = site.MemberName, Reason = reason, Outcome = ItemRecordOutcome.Failed });
+                    touchedFiles.Add(site.FilePath);
+                    failed++;
+                }
+                continue;
+            }
+
+            string? beforeSource = null;
+            applyResult.PreImages?.TryGetValue(currentFilePath, out beforeSource);
+            foreach (var site in toProcess.Where(s => succeededSites.Contains(s)))
+            {
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = site.FilePath,
+                    MethodName = site.MemberName,
+                    Outcome = ItemRecordOutcome.Succeeded,
+                    BeforeSource = beforeSource,
+                });
+                touchedFiles.Add(site.FilePath);
+                succeeded++;
+            }
+        }
+
+        _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped.Count - failed);
+
+        var blobName = await OperationBlobWriter.WriteBatchBlobOrTripAsync(_workspaceManager, "bulk_comment", changeId, items, _workspaceManager.GetSolutionRoot(), _logger, cancellationToken);
+
+        var status = _workspaceManager.GetBreakerStatus();
+
+        var finalResult = new CommentingResult
+        {
+            TotalMembers = totalMembers,
+            AlreadyCurrent = alreadyCurrentCount,
+            Seeded = seededCount,
+            CommentedThisCall = succeeded,
+            // Not-yet-successfully-commented members: failed/apply-failed members remain stale
+            // (their [ContentHash] was never updated) same as cap-skipped ones, so a re-invoke
+            // picks all of them back up via FindStaleMembersAsync.
+            RemainingStale = staleMembers.Count - succeeded,
+            Severity = status.Severity,
+            BreakerOpen = status.Open,
+            DryRun = false,
+            BlobName = blobName,
+        };
+        ApplySampling(finalResult, skipped);
+        return finalResult;
+    }
+}

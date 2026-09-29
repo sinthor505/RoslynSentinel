@@ -2,7 +2,6 @@ namespace RoslynSentinel.Common;
 
 public static class SummarizeListResult
 {
-    // Added by AddMember (expected - used for diagnostics)
     /// <summary>
     /// Builds a per-file hit-count breakdown for a list-shaped tool result. Intended for any tool
     /// whose result items each carry a file path (FindReferences' CallerInfo/ImplementationInfo,
@@ -26,10 +25,8 @@ public static class SummarizeListResult
         return new ListSummary(items.Count, byFile.Count, shown, byFile.Count - shown.Count);
     }
 }
-// Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>One file's hit count within a <see cref="ListSummary"/>.</summary>
 public record FileHitCount(string FilePath, int Count);
-// Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Per-file breakdown of a list-shaped tool result, built by <see cref="SummarizeListResult"/>.
 /// <see cref="ByFile"/> is sorted by <see cref="FileHitCount.Count"/> descending and capped at the

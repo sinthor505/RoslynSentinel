@@ -9,13 +9,13 @@ namespace RoslynSentinel.Tests.Battery;
 public class AdminToolsTests
 {
     private IWorkspaceManager _workspaceManager;
-    private RoslynSentinel.Server.Basic.AdminTools _tools;
+    private RoslynSentinel.Tools.Basic.AdminTools _tools;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _tools = new RoslynSentinel.Server.Basic.AdminTools(_workspaceManager);
+        _tools = new RoslynSentinel.Tools.Basic.AdminTools(_workspaceManager);
     }
 
     [TearDown]

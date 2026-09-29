@@ -1,7 +1,5 @@
 using Microsoft.CodeAnalysis;
 
-using ModelContextProtocol;
-
 namespace RoslynSentinel.Tests.Fakes;
 
 // Minimal IWorkspaceManager fake for tests that only need CurrentSolution / GetCurrentSolutionAsync,
@@ -42,7 +40,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     }
     public int WorkspaceVersion => 0;
 
-    public Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
+    public Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
         => throw new NotImplementedException();
     public BatchResultSummary? CheckBreaker() => throw new NotImplementedException();
     // Always under limit -> tests exercising real rate-limit behavior use their own IRateLimiter (see RunTestTests).
@@ -162,7 +160,6 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     IReadOnlyList<LedgerEntryBase> IScopedOperationLedger.GetOpenEntries() => [];
 
 
-    // Added by AddMember (expected - used for diagnostics)
 
     public async Task<Compilation> GetCompilationAsync(ProjectId projectId, ReadSource source, CancellationToken cancellationToken)
     {

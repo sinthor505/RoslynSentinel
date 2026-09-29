@@ -13,7 +13,6 @@ public static class ServerBuildInfo
 {
     public static readonly string Version;
     public static readonly DateTime BuildTimeUtc;
-    // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Full path to the running server's entry assembly (.dll) on disk. Lets a caller compare the
     /// binary's actual location against the repo/worktree path it's editing -> resolving both which
@@ -21,8 +20,8 @@ public static class ServerBuildInfo
     /// in the right repo, without a watcher, restart, or new failure mode. Empty when the entry
     /// assembly has no on-disk location (e.g. single-file publish).
     /// </summary>
+    /// 
     public static readonly string BinaryPath;
-    // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Process ID of the running server. Lets a caller that has already compared <see cref="BinaryPath"/>
     /// across multiple running instances (multi-instance ambiguity, see <see cref="BinaryPath"/>'s remarks)
@@ -112,7 +111,6 @@ public record SentinelCallToolResult<TSuccess, TError>
     /// </summary>
     public ServerInfo ServerInfo { get; init; } = new();
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Unique identifier for this specific response, generated fresh per instance. Not settable ->
     /// exists solely so a human or agent reviewing a transcript/log can locate the exact tool
@@ -193,7 +191,6 @@ public record SentinelCallToolResult<TSuccess, TError>
         get; init;
     }
 
-    // Added by AddMember (expected - used for diagnostics)
     public string? StatusMessage
     {
         get; init;
@@ -385,7 +382,7 @@ public sealed class ToolOptionsResult
         get; set;
     }
 }
-// Added by AddTopLevelType (expected - used for diagnostics)
+
 /// <summary>
 /// Groups the running server's build identity (version, build time, binary path, PID) under a
 /// single nested field instead of 4 flat top-level properties. See <see cref="ServerBuildInfo"/>

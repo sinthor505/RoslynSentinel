@@ -2,14 +2,13 @@ using NUnit.Framework;
 
 using Microsoft.Extensions.DependencyInjection;
 
-using RoslynSentinel.Basic;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tests;
 
 public class TestServiceProviderBuilderTests
 {
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public void Build_ResolvesFullBasicEngineGraph_WithoutThrowing()
     {
         // ValidateOnBuild=true means BuildServiceProvider itself throws AggregateException if any

@@ -30,16 +30,14 @@
 
   <ItemGroup>
     <Using Include="NUnit.Framework" />
-    <!--<Using Include="RoslynSentinel.Advanced" />-->
-    <Using Include="RoslynSentinel.Basic" />
     <Using Include="RoslynSentinel.Common" />
     <Using Include="RoslynSentinel.Server.Basic" />
-    <!--<Using Include="RoslynSentinel.Server.Advanced" />-->
+    <Using Include="RoslynSentinel.Tools.Basic" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj" />
-    <!--<ProjectReference Include="..\RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj" />-->
+    <ProjectReference Include="..\RoslynSentinel.Tools.Basic\RoslynSentinel.Tools.Basic.csproj" />
   </ItemGroup>
 
   <ItemGroup>

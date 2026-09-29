@@ -8,6 +8,9 @@
 //                                     + handler threw on empty result instead of returning gracefully
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 [Category("Battery30")]

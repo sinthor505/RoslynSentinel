@@ -105,7 +105,7 @@ $cases += [pscustomobject]@{
 # LastWriteTimeUtc to the second) - a buildTimeUtc older than the newest source file.
 $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("rs-staleness-fc-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
-$freshSource = Join-Path $tmpRoot 'RoslynSentinel.Server.Basic\ServerStatusTools.cs'
+$freshSource = Join-Path $tmpRoot 'RoslynSentinel.Tools.Basic\ServerStatusTools.cs'
 New-Item -ItemType Directory -Path (Split-Path $freshSource) -Force | Out-Null
 Set-Content -LiteralPath $freshSource -Value '// edited just now'
 (Get-Item $freshSource).LastWriteTimeUtc = (Get-Date).ToUniversalTime()

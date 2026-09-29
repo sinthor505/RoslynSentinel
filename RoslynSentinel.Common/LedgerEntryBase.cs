@@ -35,7 +35,7 @@ public enum CallSiteStatus
     NoCandidateBlocked,
     MoveOrderDependent
 }
-// Added by AddTopLevelType (expected - used for diagnostics)
+
 public sealed record CallSiteLedgerEntry : LedgerEntryBase
 {
     public required string BrokenExpression

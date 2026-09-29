@@ -7,8 +7,7 @@ namespace RoslynSentinel.Tests;
 
 public static class TestServiceProviderBuilder
 {
-    // Added by AddMember (expected - used for diagnostics)
-    /// <summary>
+       /// <summary>
     /// Builds a service provider using the real production registration
     /// (<see cref="ServiceRegistrationExtensionsBasic.AddRoslynSentinelEnginesBasic"/>) with
     /// <see cref="FakeWorkspaceManager"/> substituted for <see cref="PersistentWorkspaceManager"/>
@@ -53,8 +52,7 @@ public static class TestServiceProviderBuilder
     }
 
 
-    // Added by AddMember (expected - used for diagnostics)
-    /// <summary>
+       /// <summary>
     /// Builds a service provider using the real production registration with the real
     /// <see cref="PersistentWorkspaceManager"/> (no fake substitution). Use for tests that need
     /// actual on-disk solution loading, MSBuild, or file-watcher behavior -- pair with

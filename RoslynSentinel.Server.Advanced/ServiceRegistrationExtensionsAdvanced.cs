@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
+using RoslynSentinel.Engines.Advanced;
+
 namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
@@ -214,8 +216,8 @@ public static class RoslynSentinelServiceExtensionsAdvanced
                              !resolvedExcludeTools.Contains(ToolClassRegistry.CodemodToolClass);
         if (codemodActive)
         {
-            services.AddSingleton<CodemodTools>();
-            mcpBuilder.WithSentinelTools<CodemodTools>();
+            //services.AddSingleton<CodemodTools>();
+            //mcpBuilder.WithSentinelTools<CodemodTools>();
         }
         if (activeToolClasses.Contains("AsyncifyTools"))
         {

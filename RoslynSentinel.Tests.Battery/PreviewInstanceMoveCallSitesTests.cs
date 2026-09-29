@@ -7,6 +7,8 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
 
@@ -295,8 +297,7 @@ public class PreviewInstanceMoveCallSitesTests
         });
     }
 
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task MoveMemberAsync_UnambiguousInstanceMember_AppliesAutomaticallyAsync()
     {
         await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassA.cs"), """
@@ -477,8 +478,7 @@ public class PreviewInstanceMoveCallSitesTests
         });
     }
 
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task MoveMemberAsync_UnresolvedCallSite_OpensLedgerThatBlocksUnrelatedFileAsync()
     {
         await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassE.cs"), """

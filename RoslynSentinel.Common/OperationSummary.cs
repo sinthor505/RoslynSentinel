@@ -45,7 +45,7 @@ public sealed class OperationSummary
     /// Must not claim completion when <see cref="Outcome"/> is <see cref="OperationOutcome.PartialProgress"/> or <see cref="OperationOutcome.NoProgress"/>.
     /// </summary>
     public string Directive { get; init; } = "";
-    // Added by InsertMemberAfter (expected - used for diagnostics)
+
     public DirectiveKind DirectiveKind
     {
         get; init;

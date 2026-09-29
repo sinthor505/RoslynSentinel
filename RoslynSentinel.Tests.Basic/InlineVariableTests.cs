@@ -1,14 +1,10 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
-
-using RoslynSentinel.Common;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// Comprehensive tests for SemanticRefactoringLibrary.InlineVariableAsync
+/// Comprehensive tests for SemanticRefactoringEngine.InlineVariableAsync
 /// 
 /// Purpose: Inline a temporary variable by replacing all its usages with the assigned expression
 /// Use case: Convert `var x = 5; return x * 2;` to `return 5 * 2;`
@@ -27,13 +23,13 @@ namespace RoslynSentinel.Tests.Basic;
 public class InlineVariableTests
 {
     private IWorkspaceManager _workspaceManager;
-    private SemanticRefactoringLibrary _library;
+    private SemanticRefactoringEngine _semanticRefactoringEngine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _library = new SemanticRefactoringLibrary(_workspaceManager);
+        _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
     }
 
     [TearDown]
@@ -62,7 +58,7 @@ public class Calculator
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "x");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "x");
 
         Assert.That(result, Does.Contain("return 5 * 2"), "Literal should replace variable usage");
         Assert.That(result, Does.Not.Contain("var x = 5"), "Variable declaration should be removed");
@@ -85,7 +81,7 @@ public class Math
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "sum");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "sum");
 
         Assert.That(result, Does.Contain("(a + b)"), "Binary expression should be parenthesized");
         Assert.That(result, Does.Contain("(a + b) * 2"), "Parenthesized expression should replace variable");
@@ -110,7 +106,7 @@ public class StringTest
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "greeting");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "greeting");
 
         // At least one usage should be replaced
         Assert.That(result, Does.Contain("\"Hello, World!\""), "String should appear in the result");
@@ -137,7 +133,7 @@ public class Service
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "result");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "result");
 
         Assert.That(result, Does.Contain("(GetValue())"), "Method call should be parenthesized");
         Assert.That(result, Does.Contain("(GetValue()) + 10"), "Parenthesized call should replace variable");
@@ -163,7 +159,7 @@ public class Logic
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "doubled");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "doubled");
 
         Assert.That(result, Does.Contain("int first = (x * 2) + 5"), "First usage should be replaced");
         Assert.That(result, Does.Contain("int second = (x * 2) - 3"), "Second usage should be replaced");
@@ -187,7 +183,7 @@ public class Cleanup
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "unused");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "unused");
 
         Assert.That(result, Does.Not.Contain("var unused"), "Unused variable declaration should be removed");
         Assert.That(result, Does.Contain("Console.WriteLine(\"Done\")"), "Other statements should remain");
@@ -210,7 +206,7 @@ public class Expression
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "expr");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "expr");
 
         Assert.That(result, Does.Contain("(a + b + c) * 2"), "Complex expression should be parenthesized");
         Assert.That(result, Does.Not.Contain("var expr"), "Variable declaration should be removed");
@@ -233,7 +229,7 @@ public class Nested
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "nested");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "nested");
 
         Assert.That(result, Does.Contain("(Math.Max(x, 10))"), "Nested call should be parenthesized");
         Assert.That(result, Does.Contain("(Math.Max(x, 10)) + 5"), "Should inline nested call");
@@ -257,7 +253,7 @@ public class Simple
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "alias");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "alias");
 
         Assert.That(result, Does.Contain("return value + 10"), "Simple identifier should inline without extra parens");
         Assert.That(result, Does.Not.Contain("var alias"), "Variable declaration should be removed");
@@ -280,7 +276,7 @@ public class Conditional
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "result");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "result");
 
         Assert.That(result, Does.Contain("(x > 5 ? 10 : 20)"), "Ternary should be parenthesized");
         Assert.That(result, Does.Contain("(x > 5 ? 10 : 20) * 2"), "Should inline ternary with parens");
@@ -304,7 +300,7 @@ public class ArrayTest
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "value");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "value");
 
         // All usages should be replaced with the value
         Assert.That(result, Does.Contain("10"), "Value should appear multiple times");
@@ -330,7 +326,7 @@ public class ZeroTest
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "zero");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "zero");
 
         Assert.That(result, Does.Contain("return 0 == 0"), "Zero literal should inline");
         Assert.That(result, Does.Not.Contain("var zero"), "Variable declaration should be removed");
@@ -352,7 +348,7 @@ public class EmptyStringTest
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "empty");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "empty");
 
         // For unused variables, the declaration should be removed
         Assert.That(result, Does.Not.Contain("var empty"), "Unused variable declaration should be removed");
@@ -375,7 +371,7 @@ public class DecimalTest
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "taxRate");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "taxRate");
 
         Assert.That(result, Does.Contain("amount * 0.08m"), "Decimal literal should inline");
         Assert.That(result, Does.Not.Contain("var taxRate"), "Variable declaration should be removed");
@@ -398,7 +394,7 @@ public class NegativeTest
 }";
         SetSource(source);
 
-        var result = await _library.InlineVariableAsync("Test.cs", "negative");
+        var result = await _semanticRefactoringEngine.InlineVariableAsync("Test.cs", "negative");
 
         // The negative sign is a unary operator, so -42 might not need parens
         Assert.That(result, Does.Contain("* 2"), "Should inline negative number");

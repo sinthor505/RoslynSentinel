@@ -8,24 +8,43 @@
     <Configurations>Debug;Release;DebugVisualStudio</Configurations>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <WarningLevel>1</WarningLevel>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <WarningLevel>1</WarningLevel>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugVisualStudio|AnyCPU'">
+    <WarningLevel>1</WarningLevel>
+  </PropertyGroup>
+
 	<ItemGroup>
-		<!-- MSBuild packages already come in transitively via RoslynSentinel.Basic. -->
+		<!-- MSBuild packages already come in transitively via RoslynSentinel.Engines.Basic. -->
 		<!-- HTTP transport for MCP -->
+		<PackageReference Include="ModelContextProtocol" Version="2.2.0" />
 		<PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+		<PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
+		<PackageReference Include="Serilog" Version="4.3.0" />
+		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+		<PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
 		<!-- Logging -->
 		<PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
 	</ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RoslynSentinel.Basic\RoslynSentinel.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Engines.Basic\RoslynSentinel.Engines.Basic.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Tools.Basic\RoslynSentinel.Tools.Basic.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="ModelContextProtocol.Protocol" />
-    <Using Include="RoslynSentinel.Basic" />
     <Using Include="RoslynSentinel.Common" />
+    <Using Include="RoslynSentinel.Engines.Basic" />
+    <Using Include="RoslynSentinel.Tools.Basic" />
   </ItemGroup>
 
 </Project>

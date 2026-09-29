@@ -2,6 +2,9 @@ using System.Text;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Tools.Advanced;
+
 #pragma warning disable CS8618
 
 namespace RoslynSentinel.Tests.Asyncify;

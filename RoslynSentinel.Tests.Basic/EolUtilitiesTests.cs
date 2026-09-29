@@ -5,8 +5,7 @@ namespace RoslynSentinel.Tests.Basic;
 
 public class EolUtilitiesTests
 {
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public void DetectDominantEol_ReturnsLf_ForLfDominantText()
     {
         var content = "namespace Scratch;\n\npublic class ScratchCrlf\n{\n    public void DoWork()\n    {\n    }\n}\n";
@@ -14,8 +13,7 @@ public class EolUtilitiesTests
         var dominant = EolUtilities.DetectDominantEol(sourceText);
         Assert.That(dominant, Is.EqualTo("\n"));
     }
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ReplaceNodeFormattedAsync_PreservesLfDominant_ForLfFixture()
     {
         var lfContent = "namespace Scratch;\n\npublic class ScratchCrlf2\n{\n    public void DoWork()\n    {\n    }\n}\n";
@@ -36,8 +34,7 @@ public class EolUtilitiesTests
         var bareLfCount = System.Text.RegularExpressions.Regex.Matches(result, "(?<!\r)\n").Count;
         Assert.That(crlfCount, Is.Zero, $"Expected 0 CRLF but found {crlfCount}. Bare LF count: {bareLfCount}. Result: {result}");
     }
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ReplaceNodeFormattedAsync_WithEditorConfigCrlf_StillPreservesLfDominant()
     {
         var lfContent = "namespace Scratch;\n\npublic class ScratchCrlf3\n{\n    public void DoWork()\n    {\n    }\n}\n";
@@ -59,8 +56,7 @@ public class EolUtilitiesTests
         var bareLfCount = System.Text.RegularExpressions.Regex.Matches(result, "(?<!\r)\n").Count;
         Assert.That(crlfCount, Is.Zero, $"Expected 0 CRLF but found {crlfCount}. Bare LF count: {bareLfCount}. Result: {result}");
     }
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ReplaceNodeFormattedAsync_PreservesCrlfDominant_ForCrlfFixture()
     {
         var crlfContent = "namespace Scratch;\r\n\r\npublic class ScratchCrlf4\r\n{\r\n    public void DoWork()\r\n    {\r\n    }\r\n}\r\n";

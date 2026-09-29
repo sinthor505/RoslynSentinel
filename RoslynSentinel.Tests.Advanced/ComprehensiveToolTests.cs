@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
+using ModernizationTools = RoslynSentinel.Tools.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -47,7 +47,7 @@ public class ComprehensiveToolTests
     private RefactoringEngine _refactoringEngine;
     private AdvancedRefactoringTools _advancedRefactoringTools;
     private SecurityEngine _securityEngine;
-    private SemanticRefactoringLibrary _semanticRefactoringLibrary;
+    private SemanticRefactoringEngine _semanticRefactoringEngine;
     private DiscoveryEngine _semanticSearchEngine;
     private SentinelConfiguration _config;
     private SolutionManagementEngine _solutionManagementEngine;
@@ -96,7 +96,7 @@ public class ComprehensiveToolTests
         _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
         _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
         _securityEngine = new SecurityEngine(_workspaceManager);
-        _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
+        _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
         _semanticSearchEngine = new DiscoveryEngine(_workspaceManager);
         _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);

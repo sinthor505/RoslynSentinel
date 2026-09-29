@@ -10,8 +10,9 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
-using RoslynSentinel.Tests.ModelEval.AgentLoop;
+using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
+using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval;
 
@@ -59,7 +60,7 @@ public class TranscriptReplayTests
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
+            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
 
         var hostBuilder = Host.CreateApplicationBuilder();

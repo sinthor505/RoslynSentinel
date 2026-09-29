@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Tools.Advanced;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
 
@@ -23,7 +25,7 @@ public class MassiveRefactoringTests
         var standard = new StandardRefactoringEngine(_workspaceManager);
         var advStruct = new StructuralRefactoringEngine(_workspaceManager);
         var mapping = new MappingEngine(_workspaceManager);
-        var semLib = new SemanticRefactoringLibrary(_workspaceManager);
+        var semLib = new SemanticRefactoringEngine(_workspaceManager);
         var advLogic = new LogicSimplificationEngine(_workspaceManager);
         var style = new CodeStyleEngine(_workspaceManager, config);
         var codeFlow = new LogicSimplificationEngine(_workspaceManager);

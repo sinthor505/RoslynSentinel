@@ -38,15 +38,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RoslynSentinel.Basic\RoslynSentinel.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Engines.Basic\RoslynSentinel.Engines.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Tools.Basic\RoslynSentinel.Tools.Basic.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="NUnit.Framework" />
-    <Using Include="RoslynSentinel.Basic" />
     <Using Include="RoslynSentinel.Common" />
+    <Using Include="RoslynSentinel.Engines.Basic" />
+    <Using Include="RoslynSentinel.Tools.Basic" />
   </ItemGroup>
 
 </Project>

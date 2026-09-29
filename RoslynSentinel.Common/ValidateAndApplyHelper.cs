@@ -1,7 +1,5 @@
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol;
-
 namespace RoslynSentinel.Common;
 
 /// <summary>
@@ -23,7 +21,7 @@ public static class ValidateAndApplyHelper
         string operationName,
         bool dryRun = false,
         bool returnDiff = false,
-        IProgress<ProgressNotificationValue>? progress = default,
+        IProgress<EngineProgress>? progress = default,
         IReadOnlyCollection<FilePathWrapper>? removePaths = null,
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null,

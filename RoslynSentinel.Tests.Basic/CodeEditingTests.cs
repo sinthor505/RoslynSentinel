@@ -2,6 +2,8 @@ using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Basic;
+
 #pragma warning disable CS8618
 
 namespace RoslynSentinel.Tests.Basic;
@@ -86,8 +88,7 @@ public class Animal
 
         Assert.That(result.UpdatedText, Does.Contain("Speak"), "Method should be added to class.");
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task AddMember_AppendsWithBlankLineAndDoesNotReformatSiblings()
     {
         const string source = """
@@ -620,8 +621,7 @@ public enum ToolScope
             "must reject rather than silently no-op (see docs/current/issue_member_add_silent_persistence.md).");
         Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task InsertMemberAfter_PreservesBlankLineAndSiblingMembers()
     {
         const string source = """
@@ -1031,8 +1031,7 @@ public class Base
             .Or.Contain("public int Subtract(int a, int b) => a - b;\n\n\n    public int Multiply"),
             "Blank lines between untouched members below the edit must survive unchanged - a whole-file reformat would collapse them.");
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ChangeAccessibility_PreservesLeadingDocComment()
     {
         SetSource(@"
@@ -1153,8 +1152,7 @@ public class Calc
         Assert.That(blankLinesBetween1and2, Is.GreaterThanOrEqualTo(1), "Blank line between First and Second must survive.");
         Assert.That(blankLinesBetween2and3, Is.GreaterThanOrEqualTo(1), "Blank line between Second and Third must survive.");
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task RemoveMember_DoesNotReformatUnrelatedSiblingSpacingOrBlankLines()
     {
         SetSource(@"

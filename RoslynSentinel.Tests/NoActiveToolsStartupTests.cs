@@ -125,8 +125,7 @@ public class NoActiveToolsStartupTests
 
         Assert.That(failure, Is.Null);
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public void ModeAll_ResolvesToEveryRegisteredToolClass_IncludingAdminAndWholeFileWrite()
     {
         // Regression test for the "--mode=all" drift bug: each of the 4 server entry points used

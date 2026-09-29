@@ -2,7 +2,6 @@ namespace RoslynSentinel.Common;
 
 public record ActiveToolSurface
 {
-    // Added by AddMember (expected - used for diagnostics)
     /// <summary>Snapshot of what --mode/--include-tools/--exclude-tools resolved to at startup,
     /// captured once so an always-active tool (see SentinelServerStatusTools.McpServerStatus in
     /// RoslynSentinel.Server.Basic) can report the same values the startup guidance message in
@@ -12,10 +11,22 @@ public record ActiveToolSurface
     {
         get;
     }
-    public IReadOnlySet<string> ActiveModes { get; }
-    public IReadOnlySet<string> IncludeTools { get; }
-    public IReadOnlySet<string> ExcludeTools { get; }
-    public IReadOnlySet<string> ActiveToolClasses { get; }
+    public IReadOnlySet<string> ActiveModes
+    {
+        get;
+    }
+    public IReadOnlySet<string> IncludeTools
+    {
+        get;
+    }
+    public IReadOnlySet<string> ExcludeTools
+    {
+        get;
+    }
+    public IReadOnlySet<string> ActiveToolClasses
+    {
+        get;
+    }
 
     public ActiveToolSurface(
         string modeArg,
@@ -29,4 +40,5 @@ public record ActiveToolSurface
         IncludeTools = includeTools;
         ExcludeTools = excludeTools;
         ActiveToolClasses = activeToolClasses;
-    }}
+    }
+}

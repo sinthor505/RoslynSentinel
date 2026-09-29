@@ -7,8 +7,7 @@ namespace RoslynSentinel.Tests.Advanced;
 
 public static class McpTasksHarnessTestSupport
 {
-    // Added by AddMember (expected - used for diagnostics)
-    /// <summary>
+       /// <summary>
     /// Serializes a tool result's content for equality comparison, with <c>responseId</c> stripped
     /// from each text block's JSON - it's a fresh GUID per call (see
     /// <c>RoslynSentinel.Common.SentinelCallToolResult.ResponseId</c>), so a synchronous call and its

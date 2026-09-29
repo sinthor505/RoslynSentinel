@@ -1,16 +1,11 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
-using NUnit.Framework;
-
-using RoslynSentinel.Basic;
-
 namespace RoslynSentinel.Tests.Battery;
 
 [TestFixture]
 
 public class BuildEngineTests
 {
-    // Added by AddMember (expected - used for diagnostics)
     [Test]
     public async Task RunQuickBuildAsync_ZeroProjectScope_ReturnsInvalidInputWithBuildNotRunAsync()
     {
@@ -27,7 +22,6 @@ public class BuildEngineTests
 
         workspaceManager.Dispose();
     }
-    // Added by AddMember (expected - used for diagnostics)
     [Test]
     public async Task RunFullBuildAsync_ZeroProjectSolution_ReturnsInvalidInputWithBuildNotRunAsync()
     {

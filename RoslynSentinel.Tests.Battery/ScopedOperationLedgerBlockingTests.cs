@@ -136,8 +136,7 @@ public class ScopedOperationLedgerBlockingTests
             "the refused write must not have reached disk");
     }
 
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public void RecordUndo_OfFixChangeId_ReTripsBreakerAfterRelease()
     {
         // Resolve the only entry (breaker releases), then undo that fix's own changeId ->
@@ -189,8 +188,7 @@ public class ScopedOperationLedgerBlockingTests
         Assert.That(Ledger.TryRelease(), Is.False, "an unresolved entry must keep the breaker tripped");
     }
 
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public void RecordUndo_OfOpeningChangeId_InvalidatesEveryEntryEvenIfAlreadyFixed()
     {
         // Undoing the move that created the ledger (not one of its per-entry fixes) invalidates

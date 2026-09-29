@@ -120,8 +120,7 @@ public class OrientationBreakerFilterTests
         var text = string.Join(" ", blocked.Content.OfType<TextContentBlock>().Select(b => b.Text));
         Assert.That(text, Does.Contain("Search(mode: text) is DISABLED"));
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ThirdZeroMatchSearch_OwnResultCarriesOrientationBreakerFinding_NotFourthCall()
     {
         CallToolResult? thirdResult = null;

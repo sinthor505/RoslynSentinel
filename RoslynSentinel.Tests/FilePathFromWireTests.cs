@@ -135,8 +135,7 @@ public class FilePathFromWireTests
         Assert.That(result.Absolute, Does.StartWith(@"\\"),
             "Canonicalization must not collapse the UNC path's required leading double separator.");
     }
-    // Added by AddMember (expected - used for diagnostics)
-    // Regression coverage for the CreateFile "'filepath' is required" misdiagnosis bug: Validated
+       // Regression coverage for the CreateFile "'filepath' is required" misdiagnosis bug: Validated
     // == false used to be reported identically whether the path argument was bad or no solution was
     // loaded at all. FailureReason lets a caller tell these apart instead of guessing.
     [Test]

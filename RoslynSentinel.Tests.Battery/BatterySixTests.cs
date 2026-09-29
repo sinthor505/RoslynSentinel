@@ -1,6 +1,8 @@
 #pragma warning disable CS8618
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+
 namespace RoslynSentinel.Tests.Battery;
 /// <summary>
 /// Battery #6 -> Functional tests for three engines with 4–5 test-mentions but no real coverage:

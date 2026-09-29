@@ -4,7 +4,6 @@ namespace RoslynSentinel.Server.Basic;
 
 public static class ToolArgumentValidator
 {
-    // Added by AddMember (expected - used for diagnostics)
     /// <summary>
     /// Cache of tool name -> (all declared parameter names, required parameter names, each
     /// declared parameter's own schema node for type/enum checks, and a case-insensitive ->
@@ -13,7 +12,6 @@ public static class ToolArgumentValidator
     /// lifetime and this runs on every single tool call.
     /// </summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (System.Collections.Generic.HashSet<string> All, System.Collections.Generic.List<string> Required, System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement> Properties, System.Collections.Generic.Dictionary<string, string> CaseInsensitiveLookup)> SchemaCache = new(StringComparer.Ordinal);
-    // Added by AddMember (expected - used for diagnostics)
     /// <summary>
     /// Reads the declared and required parameter names, plus each declared parameter's own schema
     /// node (for type/enum checks), out of the tool's emitted JSON input schema. Reads the schema
@@ -126,7 +124,6 @@ public static class ToolArgumentValidator
             return null;
         }
     }
-    // Added by AddMember (expected - used for diagnostics)
     /// <summary>
     /// Nearest declared parameter to <paramref name="unknown"/>, or null when nothing is close
     /// enough to suggest. Turns "that parameter doesn't exist" into "you meant this one", which is
@@ -209,7 +206,6 @@ public static class ToolArgumentValidator
         ["newContent"] = "the replacement text.",
         ["message"] = "the commit message describing what the change does.",
     };
-
 
     /// <summary>
     /// Rewrites <paramref name="arguments"/> in place so that a parameter name differing from a
@@ -298,50 +294,48 @@ public static class ToolArgumentValidator
         }
     }
 
-
-    // Added by AddMember (expected - used for diagnostics)/// <summary>
-                                                           /// Checks a tool call's arguments against the tool's emitted input schema BEFORE dispatch, and
-                                                           /// returns an actionable error message when the call cannot succeed as written -> or
-                                                           /// <see langword="null"/> to let the call proceed.
-                                                           /// <para>
-                                                           /// Three dispatch-layer defects make this necessary, and none is fixable per-tool:
-                                                           /// </para>
-                                                           /// <list type="bullet">
-                                                           /// <item><description>
-                                                           /// An <b>unknown argument is silently discarded.</b> Argument binding is a pull model ->
-                                                           /// <c>AIFunctionFactory</c> looks up each declared parameter by name in the arguments
-                                                           /// dictionary and never inspects what is left over -> so a misspelled or misapplied parameter
-                                                           /// name is simply never read. The tool then runs on its defaults and returns
-                                                           /// <c>success:true</c> with the wrong result. That silent-wrong-behaviour class is the hardest
-                                                           /// of all for a weak model to recover from: there is no error to react to. Confirmed live ->
-                                                           /// <c>Git(operation:"stage", paths:"…")</c> quietly staged tracked files only, because
-                                                           /// <c>stage</c> reads <c>files</c> and <c>paths</c> belonged to <c>diff</c>.
-                                                           /// </description></item>
-                                                           /// <item><description>
-                                                           /// A <b>missing required argument throws a raw framework exception.</b>
-                                                           /// <c>AIFunctionFactory</c> raises "The arguments dictionary is missing a value for the
-                                                           /// required parameter 'x'. (Parameter 'arguments')" -> dispatch-layer vocabulary describing an
-                                                           /// internal data structure the caller never sees, with no example value and no route to a real
-                                                           /// one, in violation of the never-leak-raw-exceptions convention in CLAUDE.md.
-                                                           /// </description></item>
-                                                           /// <item><description>
-                                                           /// A <b>type-mismatched or invalid-enum argument throws a raw <c>JsonException</c>.</b> Passing
-                                                           /// an array where the schema declares a scalar <c>string</c> (e.g. <c>Git(operation:"stage",
-                                                           /// files:["a","b"])</c> -> the plural parameter name invites this), or a string that isn't one of
-                                                           /// the schema's declared <c>enum</c> members (e.g. <c>Git(operation:"show")</c>, not a real
-                                                           /// <c>GitOperation</c>), both crash during framework-level deserialization before the tool
-                                                           /// method body ever runs -> no tool-level try/catch can intercept it. Confirmed live for both
-                                                           /// shapes; see docs/current/finding_git_tool_array_param_and_invalid_operation_crash.md.
-                                                           /// </description></item>
-                                                           /// </list>
-                                                           /// <para>
-                                                           /// All three are caught here rather than in each tool because the fault is in the shared
-                                                           /// dispatch path: a per-tool fix would have to be repeated on every tool and re-applied to
-                                                           /// every tool added later, which is precisely the forgotten-call-site failure mode this repo
-                                                           /// keeps hitting.
-                                                           /// </para>
-                                                           /// </summary>
-                                                           /// <returns>An error message to return to the caller, or null when the arguments are valid.</returns>
+    /// Checks a tool call's arguments against the tool's emitted input schema BEFORE dispatch, and
+    /// returns an actionable error message when the call cannot succeed as written -> or
+    /// <see langword="null"/> to let the call proceed.
+    /// <para>
+    /// Three dispatch-layer defects make this necessary, and none is fixable per-tool:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>
+    /// An <b>unknown argument is silently discarded.</b> Argument binding is a pull model ->
+    /// <c>AIFunctionFactory</c> looks up each declared parameter by name in the arguments
+    /// dictionary and never inspects what is left over -> so a misspelled or misapplied parameter
+    /// name is simply never read. The tool then runs on its defaults and returns
+    /// <c>success:true</c> with the wrong result. That silent-wrong-behaviour class is the hardest
+    /// of all for a weak model to recover from: there is no error to react to. Confirmed live ->
+    /// <c>Git(operation:"stage", paths:"…")</c> quietly staged tracked files only, because
+    /// <c>stage</c> reads <c>files</c> and <c>paths</c> belonged to <c>diff</c>.
+    /// </description></item>
+    /// <item><description>
+    /// A <b>missing required argument throws a raw framework exception.</b>
+    /// <c>AIFunctionFactory</c> raises "The arguments dictionary is missing a value for the
+    /// required parameter 'x'. (Parameter 'arguments')" -> dispatch-layer vocabulary describing an
+    /// internal data structure the caller never sees, with no example value and no route to a real
+    /// one, in violation of the never-leak-raw-exceptions convention in CLAUDE.md.
+    /// </description></item>
+    /// <item><description>
+    /// A <b>type-mismatched or invalid-enum argument throws a raw <c>JsonException</c>.</b> Passing
+    /// an array where the schema declares a scalar <c>string</c> (e.g. <c>Git(operation:"stage",
+    /// files:["a","b"])</c> -> the plural parameter name invites this), or a string that isn't one of
+    /// the schema's declared <c>enum</c> members (e.g. <c>Git(operation:"show")</c>, not a real
+    /// <c>GitOperation</c>), both crash during framework-level deserialization before the tool
+    /// method body ever runs -> no tool-level try/catch can intercept it. Confirmed live for both
+    /// shapes; see docs/current/finding_git_tool_array_param_and_invalid_operation_crash.md.
+    /// </description></item>
+    /// </list>
+    /// <para>
+    /// All three are caught here rather than in each tool because the fault is in the shared
+    /// dispatch path: a per-tool fix would have to be repeated on every tool and re-applied to
+    /// every tool added later, which is precisely the forgotten-call-site failure mode this repo
+    /// keeps hitting.
+    /// </para>
+    /// </summary>
+    /// <returns>An error message to return to the caller, or null when the arguments are valid.</returns>
     public static string? Validate(
         ModelContextProtocol.Server.McpServer? server,
         string? toolName,

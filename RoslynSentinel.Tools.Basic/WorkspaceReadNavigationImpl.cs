@@ -1,0 +1,1448 @@
+using System.Collections.Concurrent;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.Extensions.Logging;
+
+namespace RoslynSentinel.Tools.Basic;
+
+/// <summary>Return payload for <c>GetMethodSource</c>.</summary>
+public record MethodSourceResult
+{
+    /// <summary>Scope/truncation metadata for the containing file. See <see cref="ReadEnvelope"/>.</summary>
+    public ReadEnvelope Envelope { get; init; } = null!;
+    /// <summary>Condensed method declaration: modifiers, return type, name, and parameter list -> no body.</summary>
+    public string Signature { get; init; } = "";
+    /// <summary>Attributes declared on the method, in declaration order.</summary>
+    public List<MethodAttributeInfo> Attributes { get; init; } = new();
+    /// <summary>Complete source text of the method including attributes and body.</summary>
+    public string Source { get; init; } = "";
+}
+
+/// <summary>One attribute applied to a method.</summary>
+public record MethodAttributeInfo
+{
+    /// <summary>Attribute name as written in source, e.g. "MigrationCandidate" or "Obsolete".</summary>
+    public string Name { get; init; } = "";
+    /// <summary>Argument list contents (no outer parentheses), e.g. "\"AsyncBridgeCandidate\", Score = 80". Empty string when no arguments.</summary>
+    public string Arguments { get; init; } = "";
+}
+
+/// <summary>
+/// Plain implementation class for the read/navigation slice of workspace tools: GetMethodSource,
+/// GetFileOutline, ListAll, SearchSolutionText, GetOperationDetail, GetLargeResult. Method bodies
+/// are verbatim moves from WorkspaceTools -> see docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md
+/// (Decision 1-Amendment). Not an [McpServerToolType]; the MCP surface lives in WorkspaceReadNavigationTools.
+///
+/// WorkspaceTools.cs still holds the six live/registered copies of these tools (each with a
+/// short comment pointing back here); this class is the shared implementation both
+/// WorkspaceReadNavigationTools and WorkspaceTools delegate to.
+/// </summary>
+public class WorkspaceReadNavigationImpl
+{
+    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ILogger<WorkspaceReadNavigationImpl> _logger;
+    // Points at the solution-wide shared instance (RoslynSentinel.Common.SharedJsonOptions.Default)
+    // rather than constructing its own, per docs/current/plans/plan_shared_json_serializer_options.md.
+    // Kept as a same-named field rather than replacing all 28 call sites with the fully-qualified
+    // name, since this is an internal serialize/deserialize round-trip within this class either way.
+    private static readonly JsonSerializerOptions _jsonOptions = RoslynSentinel.Common.SharedJsonOptions.Default;
+    public WorkspaceReadNavigationImpl(IWorkspaceManager workspaceManager, ILogger<WorkspaceReadNavigationImpl> logger)
+    {
+        _workspaceManager = workspaceManager;
+        _logger = logger;
+    }
+
+    // Candidate-suggestion behavior confirmed live: an agent asked to read a file at a slightly
+    // wrong path (e.g. missing a subfolder) retried the identical wrong path 2-3 times before
+    // giving up, even when ListSolutionItems's own earlier output already showed the real path ->
+    // the plain "file not found" message gave them nothing to act on. Searching the solution for
+    // files sharing the requested filename turns most of these into a one-shot redirect; when
+    // nothing matches by filename either, the message issues an explicit, unhedged directive
+    // rather than a suggestion, since softer phrasing ("consider calling X") was observed not
+    // changing the model's next action.
+    internal static ResultError BuildFileNotFoundError(Solution solution, string normalizedPath)
+    {
+        var requestedFileName = Path.GetFileName(normalizedPath);
+        var candidates = solution.Projects
+            .SelectMany(p => p.Documents)
+            .Where(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFileName(d.FilePath), requestedFileName, StringComparison.OrdinalIgnoreCase))
+            .Select(d => d.FilePath!)
+            .Distinct()
+            .Take(5)
+            .ToList();
+
+        if (candidates.Count > 0)
+        {
+            return new ResultError("FileNotFound",
+                $"'{requestedFileName}' does not exist at '{normalizedPath}'. A file with this name exists at a different path. " +
+                $"You MUST retry with the correct path:\n" +
+                string.Join("\n", candidates.Select(c => $"  - {c}")));
+        }
+
+        return new ResultError("FileNotFound",
+            $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). " +
+            "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.");
+    }
+
+    public async Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSource(
+        ToolCallReason reason,
+        string filepath, string methodName,
+        CancellationToken cancellationToken = default)
+    {
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        try
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var normalizedPath = Path.GetFullPath(filePathResolved);
+            var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
+            if (document == null)
+            {
+                return new SentinelCallToolResult<MethodSourceResult, ResultError>()
+                {
+                    IsSuccess = false,
+                    ErrorData = BuildFileNotFoundError(solution, normalizedPath)
+                };
+            }
+
+            var root = await document.GetSyntaxRootAsync(cancellationToken: cancellationToken);
+            if (root == null)
+            {
+                return new SentinelCallToolResult<MethodSourceResult, ResultError>()
+                {
+                    IsSuccess = false,
+                    ErrorData = new ResultError("SyntaxRootNotFound", "Syntax root not found.")
+                };
+            }
+
+            // Constructors are ConstructorDeclarationSyntax, not MethodDeclarationSyntax, but callers
+            // naturally pass the class name for "give me the source of its constructor" -> resolve
+            // both node kinds under the shared BaseMethodDeclarationSyntax base.
+            var method = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.Ordinal)) ?? root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.OrdinalIgnoreCase));
+            if (method == null)
+            {
+                return new SentinelCallToolResult<MethodSourceResult, ResultError>()
+                {
+                    IsSuccess = false,
+                    ErrorData = new ResultError("MethodNotFound", $"Method or constructor '{methodName}' not found in '{filePathResolved}'.")
+                };
+            }
+
+            var methodSource = method.ToFullString();
+            var methodBytes = System.Text.Encoding.UTF8.GetByteCount(methodSource);
+            var attributes = ExtractAttributes(method);
+            var signature = BuildSignature(method);
+            _logger.LogInformation("GetMethodSource: {SizeBytes} bytes for '{MethodName}'", methodBytes, methodName);
+            const int thresholdBytes = LargeResultHelper.OffloadThresholdBytes;
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+
+            var fileText = await document.GetTextAsync(cancellationToken);
+            var fileLineCount = fileText.Lines.Count;
+            var fileByteCount = System.Text.Encoding.UTF8.GetByteCount(fileText.ToString());
+            var methodSpan = method.GetLocation().GetLineSpan();
+            var envelope = ReadEnvelopeBuilder.Build(
+                fileLineCount, fileByteCount,
+                returnedFromLine: methodSpan.StartLinePosition.Line + 1,
+                returnedToLine: methodSpan.EndLinePosition.Line + 1);
+
+            if (methodBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
+            {
+                var fullResult = new MethodSourceResult { Envelope = envelope, Signature = signature, Source = methodSource, Attributes = attributes };
+                var stored = await LargeResultHelper.StoreLargeResultAsync(fullResult, solutionRoot, ResultWrapperType.MethodSource, cancellationToken);
+                return new SentinelCallToolResult<MethodSourceResult, ResultError>
+                {
+                    IsSuccess = true,
+                    LargeResult = new LargeResultInfo(resultType: "MethodSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: methodBytes, totalRecords: 1, message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " + $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."),
+                    SuccessData = new MethodSourceResult { Envelope = envelope, Signature = signature, Attributes = attributes },
+                    WorkspaceVersion = _workspaceManager.WorkspaceVersion,
+                };
+            }
+
+            return new SentinelCallToolResult<MethodSourceResult, ResultError>()
+            {
+                IsSuccess = true,
+                SuccessData = new MethodSourceResult
+                {
+                    Envelope = envelope,
+                    Signature = signature,
+                    Source = methodSource,
+                    Attributes = attributes
+                },
+                WorkspaceVersion = _workspaceManager.WorkspaceVersion,
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePathResolved);
+            return new SentinelCallToolResult<MethodSourceResult, ResultError>()
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodSource")
+            };
+        }
+    }
+
+    public async Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutline(
+        ToolCallReason reason,
+        string filepath,
+        CancellationToken cancellationToken = default)
+    {
+        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        try
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var normalizedPath = Path.GetFullPath(filePathResolved);
+            var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
+            if (document == null)
+            {
+                return new SentinelCallToolResult<FileOutlineResult, ResultError>()
+                {
+                    IsSuccess = false,
+                    ErrorData = BuildFileNotFoundError(solution, normalizedPath)
+                };
+            }
+
+            var root = await document.GetSyntaxRootAsync(cancellationToken: cancellationToken);
+            if (root == null)
+            {
+                return new SentinelCallToolResult<FileOutlineResult, ResultError>()
+                {
+                    IsSuccess = false,
+                    ErrorData = new ResultError("SyntaxRootNotFound", "Syntax root not found.")
+                };
+            }
+
+            var items = ExtractOutlineItems(root);
+
+            var fileText = await document.GetTextAsync(cancellationToken);
+            var fileLineCount = fileText.Lines.Count;
+            var fileByteCount = System.Text.Encoding.UTF8.GetByteCount(fileText.ToString());
+            var envelope = ReadEnvelopeBuilder.Build(fileLineCount, fileByteCount, returnedFromLine: 1, returnedToLine: fileLineCount);
+
+            return new SentinelCallToolResult<FileOutlineResult, ResultError>()
+            {
+                IsSuccess = true,
+                SuccessData = new FileOutlineResult { Envelope = envelope, Symbols = items },
+                WorkspaceVersion = _workspaceManager.WorkspaceVersion
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetFileOutline failed for '{FilePathWrapper}'", filePathResolved);
+            return new SentinelCallToolResult<FileOutlineResult, ResultError>()
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetFileOutline")
+            };
+        }
+    }
+
+    /// <summary>Walks a document's syntax tree and extracts the same outline entries GetFileOutline returns for one file -> shared with ListAll, which runs this across every document in the solution.</summary>
+    internal static List<OutlineItem> ExtractOutlineItems(SyntaxNode root)
+    {
+        var items = new List<OutlineItem>();
+        foreach (var node in root.DescendantNodes())
+        {
+            string? kind = null;
+            string? name = null;
+            string? container = null;
+            switch (node)
+            {
+                case BaseNamespaceDeclarationSyntax ns:
+                    kind = "namespace";
+                    name = ns.Name.ToString();
+                    break;
+                case ClassDeclarationSyntax cls:
+                    kind = "class";
+                    name = cls.Identifier.Text;
+                    container = (cls.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (cls.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case InterfaceDeclarationSyntax iface:
+                    kind = "interface";
+                    name = iface.Identifier.Text;
+                    container = (iface.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (iface.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case MethodDeclarationSyntax method:
+                    kind = "method";
+                    name = method.Identifier.Text;
+                    container = (method.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case PropertyDeclarationSyntax prop:
+                    kind = "property";
+                    name = prop.Identifier.Text;
+                    container = (prop.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                // Struct/record/enum, and enum members, constructors, and fields were never
+                // covered here -> a file containing only these (e.g. a pure enum file) produced
+                // an outline with nothing but a "namespace" entry, silently implying the file had
+                // no commentable/editable members at all. Confirmed live: an agent asked to add
+                // summary comments to every member skipped OrderStatus.cs's enum entirely because
+                // GetFileOutline gave no indication OrderStatus existed, then SummaryComment also
+                // failed once the agent tried it anyway (separate gap, see GetMemberName).
+                case StructDeclarationSyntax @struct:
+                    kind = "struct";
+                    name = @struct.Identifier.Text;
+                    container = (@struct.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (@struct.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case RecordDeclarationSyntax record:
+                    kind = "record";
+                    name = record.Identifier.Text;
+                    container = (record.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (record.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case EnumDeclarationSyntax @enum:
+                    kind = "enum";
+                    name = @enum.Identifier.Text;
+                    container = (@enum.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (@enum.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case EnumMemberDeclarationSyntax enumMember:
+                    kind = "enum member";
+                    name = enumMember.Identifier.Text;
+                    container = (enumMember.Parent as EnumDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case ConstructorDeclarationSyntax ctor:
+                    kind = "constructor";
+                    name = ctor.Identifier.Text;
+                    container = (ctor.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+                case FieldDeclarationSyntax field:
+                    kind = "field";
+                    name = field.Declaration.Variables.FirstOrDefault()?.Identifier.Text;
+                    container = (field.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+            }
+
+            if (kind == null || name == null)
+            {
+                continue;
+            }
+
+            var span = node.GetLocation().GetLineSpan();
+            items.Add(new OutlineItem(Kind: kind, Name: name, Container: container, StartLine: span.StartLinePosition.Line + 1, EndLine: span.EndLinePosition.Line + 1));
+        }
+
+        return items;
+    }
+
+    public async Task<SentinelCallToolResult<object>> ListAll(
+        ToolCallReason reason,
+        ListAllKind kind = ListAllKind.all,
+        string? projectName = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var projects = solution.Projects.AsEnumerable();
+            if (!string.IsNullOrEmpty(projectName))
+            {
+                projects = projects.Where(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            var kindFilter = kind switch
+            {
+                ListAllKind.all => null,
+                ListAllKind.enumMember => "enum member",
+                _ => kind.ToString()
+            };
+            var entries = new List<SolutionSymbolEntry>();
+            foreach (var project in projects)
+            {
+                foreach (var document in project.Documents)
+                {
+                    if (string.IsNullOrEmpty(document.FilePath))
+                    {
+                        continue;
+                    }
+
+                    var root = await document.GetSyntaxRootAsync(cancellationToken);
+                    if (root == null)
+                    {
+                        continue;
+                    }
+
+                    var filePath = new FilePathWrapper(document.FilePath, solutionRoot);
+                    foreach (var item in ExtractOutlineItems(root))
+                    {
+                        if (kindFilter != null && item.Kind != kindFilter)
+                        {
+                            continue;
+                        }
+
+                        entries.Add(new SolutionSymbolEntry(filePath, item.Kind, item.Name, item.Container, item.StartLine, item.EndLine));
+                    }
+                }
+            }
+
+            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
+                entries,
+                solutionRoot,
+                typeof(SolutionSymbolEntry).Name,
+                ResultWrapperType.SolutionSymbolEntryList,
+                totalRecords: entries.Count,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ListAll failed (kind={Kind}, projectName={ProjectName})", kind, projectName);
+            return new SentinelCallToolResult<object>()
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ListAll")
+            };
+        }
+    }
+
+    public async Task<SentinelCallToolResult<object>> SearchSolutionText(
+        ToolCallReason reason,
+        string pattern, string? fileGlob = null, int maxResults = 200,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var results = new ConcurrentBag<TextSearchMatch>();
+            var warnings = new List<string>();
+            var globMatchedPaths = new ConcurrentBag<string>();
+            int resultCount = 0;
+            Regex? regex = null;
+            bool regexPatternValid = true;
+
+            try
+            {
+                regex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase, matchTimeout: TimeSpan.FromSeconds(5));
+            }
+            catch (ArgumentException)
+            {
+                regexPatternValid = false;
+                warnings.Add($"Pattern '{pattern}' is not a valid regex - only literal substring matches are returned.");
+            }
+
+            var options1 = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount, TaskScheduler = TaskScheduler.Default };
+
+            await Parallel.ForEachAsync(solution.Projects, options1, async (project, ct1) =>
+            {
+                var options2 = new ParallelOptions { CancellationToken = ct1, MaxDegreeOfParallelism = Environment.ProcessorCount, TaskScheduler = TaskScheduler.Default };
+
+                await Parallel.ForEachAsync(project.Documents, options2, async (document, ct2) =>
+                {
+                    if (Volatile.Read(ref resultCount) >= maxResults)
+                    {
+                        return;
+                    }
+
+                    var docPath = new FilePathWrapper(document.FilePath ?? "", _workspaceManager.GetSolutionRoot());
+                    if (!string.IsNullOrEmpty(fileGlob) && !GlobMatchesFileName(docPath, fileGlob))
+                    {
+                        return;
+                    }
+
+                    if (!string.IsNullOrEmpty(fileGlob) && globMatchedPaths.Count < 3)
+                    {
+                        globMatchedPaths.Add(docPath.Relative.Replace('\\', '/'));
+                    }
+
+                    var text = await document.GetTextAsync(ct2);
+                    var sourceText = text.ToString();
+                    var lines = sourceText.Split('\n');
+                    var root = await document.GetSyntaxRootAsync(ct2);
+                    for (int i = 0; i < lines.Length && Volatile.Read(ref resultCount) < maxResults; i++)
+                    {
+                        var line = lines[i];
+
+                        string BuildPreview()
+                        {
+                            var preview = line.Trim();
+                            return preview.Length > 120 ? preview[..120] + "…" : preview;
+                        }
+
+                        string? EnclosingMemberAt(int col)
+                        {
+                            if (root == null || i >= text.Lines.Count)
+                            {
+                                return null;
+                            }
+                            var lineStart = text.Lines[i].Start;
+                            var lineLength = text.Lines[i].End - lineStart;
+                            var position = lineStart + Math.Clamp(col, 0, Math.Max(0, lineLength));
+                            return GetEnclosingMemberName(root, position);
+                        }
+
+                        var literalCol = line.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
+                        if (literalCol >= 0)
+                        {
+                            results.Add(new TextSearchMatch(docPath.Absolute, i + 1, literalCol + 1, BuildPreview(), MatchKind.Literal, EnclosingMemberAt(literalCol)));
+                            Interlocked.Increment(ref resultCount);
+                        }
+
+                        if (regex != null)
+                        {
+                            try
+                            {
+                                var m = regex.Match(line);
+                                if (m.Success)
+                                {
+                                    results.Add(new TextSearchMatch(docPath.Absolute, i + 1, m.Index + 1, BuildPreview(), MatchKind.Regex, EnclosingMemberAt(m.Index)));
+                                    Interlocked.Increment(ref resultCount);
+                                }
+                            }
+                            catch (RegexMatchTimeoutException)
+                            {
+                            }
+                        }
+                    }
+                });
+            });
+
+            // ConcurrentBag has no defined enumeration order; sort deterministically before any
+            // maxResults truncation so repeated identical searches return identical result sets.
+            var orderedResults = results.OrderBy(r => r.filePath.Absolute, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.Line).ThenBy(r => r.Column).ToList();
+            var literalResults = orderedResults.Where(r => r.MatchedAs == MatchKind.Literal).Take(maxResults).ToList();
+            var literalKeys = literalResults.Select(r => (r.filePath, r.Line, r.Column)).ToHashSet();
+            var rawRegexResults = orderedResults.Where(r => r.MatchedAs == MatchKind.Regex).ToList();
+            var regexResults = rawRegexResults.Where(r => !literalKeys.Contains((r.filePath, r.Line, r.Column))).Take(maxResults).ToList();
+            int regexOverlapCount = rawRegexResults.Count - regexResults.Count;
+            int totalResultCount = literalResults.Count + regexResults.Count;
+
+            if (literalResults.Count == 0 && regexResults.Count == 0)
+            {
+                if (!string.IsNullOrEmpty(fileGlob) && globMatchedPaths.IsEmpty)
+                {
+                    var matchedAgainstDescription = fileGlob.Replace('\\', '/').Contains('/')
+                        ? "the solution-relative path"
+                        : "the bare filename";
+                    var sampleRelativePaths = solution.Projects
+                        .SelectMany(p => p.Documents)
+                        .Select(d =>
+                        {
+                            var wrapper = new FilePathWrapper(d.FilePath ?? "", _workspaceManager.GetSolutionRoot());
+                            // Relative is empty when no solution root is available to resolve against
+                            // (e.g. an in-memory solution with no backing .sln/.slnx) - fall back to
+                            // Absolute rather than silently dropping a real document from the samples.
+                            var path = string.IsNullOrEmpty(wrapper.Relative) ? wrapper.Absolute : wrapper.Relative;
+                            return path.Replace('\\', '/');
+                        })
+                        .Where(p => !string.IsNullOrEmpty(p))
+                        .Distinct()
+                        .Take(3)
+                        .ToList();
+                    var sampleText = sampleRelativePaths.Count > 0
+                        ? $"Example paths in this solution: {string.Join(", ", sampleRelativePaths)}."
+                        : "This solution has no documents to match against.";
+                    throw new GlobSyntaxException(
+                        $"fileGlob '{fileGlob}' matched 0 files (matched against {matchedAgainstDescription}), so the search for " +
+                        $"'{pattern}' never ran against any document. {sampleText} This is a glob problem, not a search-pattern problem - " +
+                        "widen or fix the fileGlob rather than changing the pattern.");
+                }
+
+                warnings.Add(
+                    $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. " +
+                    "If you were searching for a known symbol by name, use Search with mode: symbol instead (semantic lookup, not text matching). " +
+                    "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
+                    "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
+                var justTripped = _workspaceManager.RecordSearchOutcome(0);
+                throw new NoSearchMatchesException(string.Join(" ", warnings)) { JustTrippedBreaker = justTripped };
+            }
+            else if (totalResultCount >= maxResults)
+            {
+                warnings.Add($"{totalResultCount} matches found - returning first ({maxResults}) matches scanned - Narrow fileGlob/pattern or increase maxResults to see more.");
+            }
+
+            _workspaceManager.RecordSearchOutcome(literalResults.Count + regexResults.Count);
+
+            string? warning = warnings.Count > 0 ? string.Join(" ", warnings) : null;
+            var payload = new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid);
+            var allMatches = literalResults.Concat(regexResults).ToList();
+            var matchSummary = SummarizeListResult.Build(allMatches, m => m.filePath.Absolute);
+            var searchResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
+                payload,
+                _workspaceManager.GetSolutionRoot(),
+                typeof(TextSearchMatch).Name,
+                ResultWrapperType.TextSearchMatchList,
+                totalRecords: literalResults.Count + regexResults.Count,
+                workspaceVersion: _workspaceManager.WorkspaceVersion,
+                statusMessage: matchSummary.ToSummaryMessage("match"),
+                listSummary: matchSummary,
+                cancellationToken: cancellationToken);
+            return searchResult with { WarningDetails = warning };
+        }
+        catch (NoSearchMatchesException ex)
+        {
+            var findings = ex.JustTrippedBreaker
+                ? new[] { new Finding("OrientationBreaker", ex.Message, FindingSeverity.Warning) }
+                : Array.Empty<Finding>();
+            return new SentinelCallToolResult<object>()
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Search (mode: text)"),
+                Findings = findings
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Search (mode: text) failed for '{Pattern}'", pattern);
+            return new SentinelCallToolResult<object>()
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Search (mode: text)")
+            };
+        }
+    }
+
+    /// <summary>
+    /// Walks up from <paramref name = "position"/> to the nearest named member declaration
+    /// (method, property, constructor, field/event, indexer, or operator) and returns its name.
+    /// Returns null if the position isn't inside any member -> e.g. a using directive, a
+    /// namespace-level comment, or a type declaration's own header.
+    /// </summary>
+    private static string? GetEnclosingMemberName(SyntaxNode root, int position)
+    {
+        if (position < root.FullSpan.Start || position > root.FullSpan.End)
+        {
+            return null;
+        }
+
+        var token = root.FindToken(position);
+        foreach (var node in token.Parent?.AncestorsAndSelf() ?? [])
+        {
+            switch (node)
+            {
+                case MethodDeclarationSyntax method:
+                    return method.Identifier.Text;
+                case ConstructorDeclarationSyntax ctor:
+                    return ctor.Identifier.Text;
+                case PropertyDeclarationSyntax prop:
+                    return prop.Identifier.Text;
+                case IndexerDeclarationSyntax:
+                    return "this[]";
+                case OperatorDeclarationSyntax op:
+                    return $"operator {op.OperatorToken.Text}";
+                case EventDeclarationSyntax evt:
+                    return evt.Identifier.Text;
+                case FieldDeclarationSyntax field:
+                    return string.Join(", ", field.Declaration.Variables.Select(v => v.Identifier.Text));
+                case EventFieldDeclarationSyntax eventField:
+                    return string.Join(", ", eventField.Declaration.Variables.Select(v => v.Identifier.Text));
+                case BaseTypeDeclarationSyntax:
+                    // Reached a type declaration without finding a member first -> e.g. the match
+                    // was on the class header itself, not inside any member body.
+                    return null;
+            }
+        }
+
+        return null;
+    }
+
+    // Globs without a path separator (e.g. "*.cs", "OrderService.cs") are matched against the
+    // bare filename so callers can filter by name without knowing the file's directory. Globs
+    // with a separator (e.g. "**/OrderService.cs", "ContosoOrders.Core/*.cs") are matched against
+    // the path relative to the solution root instead -> matching them against Path.GetFileName()
+    // would strip the very directory segment the glob is testing for, so a glob like "**/*.cs"
+    // could never match anything.
+    private static bool GlobMatchesFileName(FilePathWrapper filePath, string glob)
+    {
+        var normalizedGlob = glob.Replace('\\', '/');
+        var candidate = normalizedGlob.Contains('/') ? filePath.Relative.Replace('\\', '/') : Path.GetFileName(filePath.Absolute);
+        var regexPattern = "^" + GlobToRegex(normalizedGlob) + "$";
+        return Regex.IsMatch(candidate, regexPattern, RegexOptions.IgnoreCase);
+    }
+
+    // Translates glob syntax to a regex fragment: "**/" matches any depth (including none),
+    // a lone "**" matches anything, a single "*"/"?" stay within one path segment so they don't
+    // accidentally cross a "/" boundary, "{a,b,...}" becomes alternation (each alternative
+    // translated recursively, so nested wildcards/classes inside a brace group still work), and
+    // "[abc]"/"[!abc]" become a (possibly negated) regex character class. Any other unsupported
+    // construct - or a "{"/"[" with no matching close - throws GlobSyntaxException naming the
+    // offending character and index, rather than silently Regex.Escape-ing it into a literal that
+    // will never match any real file (see docs/current/blockers/
+    // blocking_error_search_fileglob_brace_pattern_silently_matches_nothing.md).
+    private static string GlobToRegex(string glob)
+    {
+        var sb = new StringBuilder();
+        int i = 0;
+        while (i < glob.Length)
+        {
+            if (glob[i] == '*' && i + 1 < glob.Length && glob[i + 1] == '*')
+            {
+                if (i + 2 < glob.Length && glob[i + 2] == '/')
+                {
+                    sb.Append("(?:.*/)?");
+                    i += 3;
+                }
+                else
+                {
+                    sb.Append(".*");
+                    i += 2;
+                }
+            }
+            else if (glob[i] == '*')
+            {
+                sb.Append("[^/]*");
+                i++;
+            }
+            else if (glob[i] == '?')
+            {
+                sb.Append("[^/]");
+                i++;
+            }
+            else if (glob[i] == '{')
+            {
+                int depth = 1;
+                int j = i + 1;
+                while (j < glob.Length && depth > 0)
+                {
+                    if (glob[j] == '{')
+                    {
+                        depth++;
+                    }
+                    else if (glob[j] == '}')
+                    {
+                        depth--;
+                    }
+                    j++;
+                }
+
+                if (depth != 0)
+                {
+                    throw new GlobSyntaxException(
+                        $"fileGlob '{glob}' has an unterminated '{{' starting at index {i}. " +
+                        "Close it with '}', e.g. '{Foo,Bar}'.");
+                }
+
+                var inner = glob[(i + 1)..(j - 1)];
+                var alternatives = SplitTopLevelCommas(inner);
+                if (alternatives.Count < 2)
+                {
+                    throw new GlobSyntaxException(
+                        $"fileGlob '{glob}' has a '{{...}}' group at index {i} with no top-level ',' " +
+                        "separator. Brace alternation needs at least two comma-separated options, e.g. '{Foo,Bar}'.");
+                }
+
+                sb.Append("(?:").Append(string.Join('|', alternatives.Select(GlobToRegex))).Append(')');
+                i = j;
+            }
+            else if (glob[i] == '}')
+            {
+                throw new GlobSyntaxException(
+                    $"fileGlob '{glob}' has an unmatched '}}' at index {i} with no preceding '{{'.");
+            }
+            else if (glob[i] == '[')
+            {
+                int j = glob.IndexOf(']', i + 1);
+                if (j < 0)
+                {
+                    throw new GlobSyntaxException(
+                        $"fileGlob '{glob}' has an unterminated '[' starting at index {i}. " +
+                        "Close it with ']', e.g. '[abc]' or '[!abc]'.");
+                }
+
+                var body = glob[(i + 1)..j];
+                var negate = body.StartsWith('!');
+                if (negate)
+                {
+                    body = body[1..];
+                }
+
+                if (body.Length == 0)
+                {
+                    throw new GlobSyntaxException(
+                        $"fileGlob '{glob}' has an empty '[...]' character class at index {i}. " +
+                        "List at least one character, e.g. '[abc]' or '[!abc]'.");
+                }
+
+                var escapedBody = Regex.Escape(body).Replace("\\-", "-");
+                sb.Append('[').Append(negate ? "^" : "").Append(escapedBody).Append(']');
+                i = j + 1;
+            }
+            else if (glob[i] == ']')
+            {
+                throw new GlobSyntaxException(
+                    $"fileGlob '{glob}' has an unmatched ']' at index {i} with no preceding '['.");
+            }
+            else
+            {
+                sb.Append(Regex.Escape(glob[i].ToString()));
+                i++;
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    // Splits a "{...}" group's inner text on top-level commas only - a comma inside a nested
+    // "{...}" (e.g. "{a,{b,c}}") stays part of that nested group instead of splitting the outer one.
+    private static List<string> SplitTopLevelCommas(string inner)
+    {
+        var parts = new List<string>();
+        int depth = 0;
+        int start = 0;
+        for (int k = 0; k < inner.Length; k++)
+        {
+            if (inner[k] == '{')
+            {
+                depth++;
+            }
+            else if (inner[k] == '}')
+            {
+                depth--;
+            }
+            else if (inner[k] == ',' && depth == 0)
+            {
+                parts.Add(inner[start..k]);
+                start = k + 1;
+            }
+        }
+
+        parts.Add(inner[start..]);
+        return parts;
+    }
+
+    public async Task<SentinelCallToolResult<object>> GetOperationDetail(
+        ToolCallReason reason,
+        string changeId, string? filter = null, int maxItems = 50, int offset = 0,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
+            if (blobPath == null)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsSuccess = false,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"No operation blob found for changeId '{changeId}'. Verify the changeId, or check that a solution is loaded.")
+                };
+            }
+
+            var json = await File.ReadAllTextAsync(blobPath, cancellationToken);
+            var doc = JsonSerializer.Deserialize<JsonElement>(json);
+            var allItems = doc.GetProperty("items").EnumerateArray().Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!).ToList();
+            IEnumerable<OperationItemRecord> filtered = allItems;
+            if (!string.IsNullOrEmpty(filter))
+            {
+                if (filter.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var pathFilter = filter[5..];
+                    filtered = allItems.Where(r => r.FilePath.Contains(pathFilter, StringComparison.OrdinalIgnoreCase));
+                }
+                else
+                {
+                    var outcome = ResolveOutcomeFilter(filter);
+                    if (outcome is null)
+                    {
+                        return new SentinelCallToolResult<object>()
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown filter \"{filter}\". Accepted prefixes: fail/err -> failures, warn/skip -> skipped, ok/pass/info/success -> succeeded, roll/revert/undo -> rolledback. Use file:<path> to filter by path, or omit for all items.")
+                        };
+                    }
+
+                    filtered = allItems.Where(r => r.Outcome == outcome.Value);
+                }
+            }
+
+            var filteredList = filtered.ToList();
+            var safeOffset = Math.Max(0, offset);
+            var slice = filteredList.Skip(safeOffset).Take(maxItems).ToList();
+            var nextOffset = safeOffset + slice.Count;
+            var hasMore = nextOffset < filteredList.Count;
+            return new SentinelCallToolResult<object>()
+            {
+                IsSuccess = true,
+                HasMoreData = hasMore,
+                SuccessData = new OperationDetailResult
+                {
+                    ChangeId = changeId,
+                    BlobName = Path.GetFileName(blobPath),
+                    TotalItems = filteredList.Count,
+                    ReturnedItems = slice.Count,
+                    Offset = safeOffset,
+                    NextOffset = hasMore ? nextOffset : null,
+                    Filter = filter,
+                    Items = slice,
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetOperationDetail failed for '{ChangeId}'", changeId);
+            return new SentinelCallToolResult<object>()
+            {
+                IsSuccess = false,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetOperationDetail")
+            };
+        }
+    }
+
+    // Maps a human-readable filter string to an ItemRecordOutcome via prefix matching.
+    // Returns null when the prefix is unrecognised so the caller can return a helpful error.
+    private static ItemRecordOutcome? ResolveOutcomeFilter(string filter)
+    {
+        string f = filter.ToLowerInvariant();
+        if (f.StartsWith("fail") || f.StartsWith("err"))
+            return ItemRecordOutcome.Failed;
+        if (f.StartsWith("skip") || f.StartsWith("warn"))
+            return ItemRecordOutcome.Skipped;
+        if (f.StartsWith("ok") || f.StartsWith("pass") || f.StartsWith("info") || f.StartsWith("success") || f.StartsWith("succeed"))
+            return ItemRecordOutcome.Succeeded;
+        if (f.StartsWith("roll") || f.StartsWith("revert") || f.StartsWith("undo"))
+            return ItemRecordOutcome.RolledBack;
+        if (f.StartsWith("manual") || f.StartsWith("needs_manual"))
+            return ItemRecordOutcome.NeedsManualReview;
+        return null;
+    }
+
+    private static string GetMethodOrCtorName(BaseMethodDeclarationSyntax member) => member switch
+    {
+        MethodDeclarationSyntax m => m.Identifier.Text,
+        ConstructorDeclarationSyntax c => c.Identifier.Text,
+        _ => ""
+    };
+
+    private static string BuildSignature(BaseMethodDeclarationSyntax method)
+    {
+        var modifiers = method.Modifiers.ToString();
+        var name = GetMethodOrCtorName(method);
+        var parameters = method.ParameterList.ToString();
+        if (method is MethodDeclarationSyntax m)
+        {
+            var returnType = m.ReturnType.ToString();
+            var typeParams = m.TypeParameterList?.ToString() ?? "";
+            return string.IsNullOrEmpty(modifiers) ? $"{returnType} {name}{typeParams}{parameters}" : $"{modifiers} {returnType} {name}{typeParams}{parameters}";
+        }
+
+        return string.IsNullOrEmpty(modifiers) ? $"{name}{parameters}" : $"{modifiers} {name}{parameters}";
+    }
+
+    private static List<MethodAttributeInfo> ExtractAttributes(BaseMethodDeclarationSyntax method) => method.AttributeLists.SelectMany(al => al.Attributes).Select(a => new MethodAttributeInfo { Name = a.Name.ToString(), Arguments = a.ArgumentList?.Arguments.ToString() ?? "", }).ToList();
+    public async Task<SentinelCallToolResult<object>> GetLargeResult(
+        ToolCallReason reason,
+        string? resultId = null,
+        string? filepath = null,
+        int limit = 50,
+        int offset = 0,
+        CancellationToken cancellationToken = default, int? charLimit = null)
+    {
+        FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+        var solutionRoot = _workspaceManager.GetSolutionRoot();
+        string? resolvedPath = null;
+
+        if (!string.IsNullOrEmpty(resultId) && !string.IsNullOrEmpty(solutionRoot))
+        {
+            var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "largeresults");
+            if (Directory.Exists(dir))
+            {
+                resolvedPath = Directory
+                    .EnumerateFiles(dir, $"largeresult_*_{resultId}.json")
+                    .FirstOrDefault();
+            }
+        }
+        else if (!string.IsNullOrEmpty(filePathResolved.Absolute))
+        {
+            // Validate: path must be inside the largeresults directory and match the largeresult_*.json pattern.
+            var fileName = System.IO.Path.GetFileName(filePathResolved.Absolute);
+            if (!string.IsNullOrEmpty(solutionRoot))
+            {
+                var resultsDir = System.IO.Path.GetFullPath(
+                    System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "largeresults"));
+                var candidate = System.IO.Path.GetFullPath(filePathResolved.Absolute);
+                if (candidate.StartsWith(resultsDir, StringComparison.OrdinalIgnoreCase)
+                    && fileName.StartsWith("largeresult_", StringComparison.OrdinalIgnoreCase)
+                    && fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                    && File.Exists(candidate))
+                {
+                    resolvedPath = candidate;
+                }
+            }
+        }
+
+        if (resolvedPath == null)
+        {
+            return new SentinelCallToolResult<object>
+            {
+                IsSuccess = false,
+                ErrorData = new ResultError("Exception",
+                                           "Result file not found. Supply a valid resultId or filePath pointing to a largeresult_*.json file in the largeresults directory.")
+            };
+        }
+
+        ResultWrapper all;
+        try
+        {
+            var json = await File.ReadAllTextAsync(resolvedPath, cancellationToken);
+            all = JsonSerializer.Deserialize<ResultWrapper>(
+                      json,
+                      _jsonOptions)
+                  ?? new ResultWrapper();
+
+            if (all.Data == null)
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsSuccess = false,
+                    ErrorData = new ResultError("Exception", "Result file has no SuccessData payload - it may be corrupt.")
+                };
+            }
+
+            // Raw (the generic MCP request-filter offload backstop, see
+            // docs/current/proposal_centralized_large_result_filter.md) has no known element shape ->
+            // the filter that wrote it only ever saw opaque serialized text, never a typed value -> so
+            // the list-shaped Skip(offset).Take(limit) paging every other case below uses does not
+            // apply. Instead this pages over the stored raw text itself as a byte/char window, sized
+            // and offset by the caller's charLimit/offset (a dedicated character-count parameter,
+            // distinct from limit's record-count meaning used by every other case below), capped so
+            // a single response can never itself exceed OffloadThresholdBytes. Without this cap,
+            // returning the whole stored payload here would let the very filter that offloaded it
+            // catch this response on the way back out and re-offload it under a new resultId -> an
+            // unbounded fetch/still-too-big/re-offload loop.
+            if (all.Type == ResultWrapperType.Raw)
+            {
+                var rawText = all.Data.ToString();
+                var start = Math.Clamp(offset, 0, rawText.Length);
+
+                // The offload filter's threshold check is on the raw response TEXT LENGTH (see
+                // AddCallToolFilter's block.Text.Length check in ServiceRegistrationExtensionsBasic.cs),
+                // i.e. the length of THIS method's own serialized SentinelCallToolResult, not just the raw slice
+                // we embed in it. Two things inflate the final size past the slice length: the
+                // envelope's own field names/punctuation (text/offset/nextOffset/totalChars, the
+                // outer success/data/totalRecords/hasMorePages wrapper), and JSON string-escaping of
+                // the slice content itself -> every '"' or '\' in the slice doubles in size once
+                // embedded as a JSON string value, and stored Raw payloads are frequently
+                // already-serialized JSON (quote-dense), so escaping overhead cannot be treated as a
+                // small fixed constant.
+                //
+                // Start from a worst-case bound (every slice char could double under escaping) and
+                // then verify by actually serializing the candidate response, shrinking if reality
+                // still exceeds the threshold. This guarantees the response this method returns can
+                // never itself be large enough for the filter to re-offload it, regardless of how
+                // quote-dense the stored content is.
+                const int envelopeOverheadBytes = 256;
+                var worstCaseMaxSlice = Math.Max(1, (LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes) / 2);
+                var requestedWindow = charLimit is > 0 && charLimit < worstCaseMaxSlice ? charLimit.Value : worstCaseMaxSlice;
+                var length = Math.Min(requestedWindow, rawText.Length - start);
+
+                object BuildRawPage(int candidateLength)
+                {
+                    var candidateSlice = rawText.Substring(start, candidateLength);
+                    var candidateNextOffset = start + candidateLength;
+                    var candidateHasMore = candidateNextOffset < rawText.Length;
+                    return new
+                    {
+                        text = candidateSlice,
+                        offset = start,
+                        nextOffset = candidateHasMore ? candidateNextOffset : (int?)null,
+                        totalChars = rawText.Length
+                    };
+                }
+
+                var pageData = BuildRawPage(length);
+                while (length > 0 && JsonSerializer.Serialize(pageData, _jsonOptions).Length > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
+                {
+                    length /= 2;
+                    pageData = BuildRawPage(length);
+                }
+
+                var nextOffset = start + length;
+                var hasMoreRaw = nextOffset < rawText.Length;
+
+                return new SentinelCallToolResult<object>
+                {
+                    IsSuccess = true,
+                    SuccessData = pageData,
+                    TotalRecords = rawText.Length,
+                    HasMoreData = hasMoreRaw,
+                    WarningDetails = hasMoreRaw
+                        ? $"Raw result truncated to a {length}-char window. Call GetLargeResult(resultId, offset: {nextOffset}, charLimit: <N>) to continue reading."
+                        : null
+                };
+            }
+
+            SentinelCallToolResult<object> result;
+
+            switch (all.Type)
+            {
+                case ResultWrapperType.MigrationCandidateFindingList:
+                    {
+                        var findings = JsonSerializer.Deserialize<List<MigrationCandidateFinding>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        // limit/offset were previously accepted but never applied -> the full
+                        // on-disk list was returned regardless of the requested page.
+                        var requested = Math.Min(limit, Math.Max(0, findings.Count - offset));
+                        var page = ShrinkListToFit(findings.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
+
+                case ResultWrapperType.ApiSurfaceEntryList:
+                    {
+                        var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, entries.Count - offset));
+                        var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
+                case ResultWrapperType.SolutionSymbolEntryList:
+                    {
+                        var entries = JsonSerializer.Deserialize<List<SolutionSymbolEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, entries.Count - offset));
+                        var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
+                case ResultWrapperType.CodeInventoryReport:
+                    {
+                        var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, entries.Count - offset));
+                        var page = ShrinkListToFit(entries.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
+                case ResultWrapperType.MethodSource:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // GetMethodSource returns inline when the result is small enough not to offload.
+                        var methodSource = JsonSerializer.Deserialize<MethodSourceResult>(all.Data.ToString(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = methodSource
+                        };
+                        break;
+                    }
+                case ResultWrapperType.MigrationScanSummary:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // returned inline when the summary is small enough not to offload.
+                        var migrationScanSummary = JsonSerializer.Deserialize<MigrationScanSummary>(all.Data.ToString(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = migrationScanSummary
+                        };
+                        break;
+                    }
+                case ResultWrapperType.FileSource:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // ReadFile returns inline when the result is small enough not to offload.
+                        var fileSource = JsonSerializer.Deserialize<FileSourceResult>(all.Data.ToString(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = fileSource
+                        };
+                        break;
+                    }
+                case ResultWrapperType.MemberChangedContent:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // returned inline when the changed content is small enough not to offload.
+                        var memberChangedContent = JsonSerializer.Deserialize<MemberChangedContentResult>(all.Data.ToString(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = memberChangedContent
+                        };
+                        break;
+                    }
+                case ResultWrapperType.AppliedChangeSummaryResult:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // returned inline when the change summary is small enough not to offload.
+                        var appliedChangeSummary = JsonSerializer.Deserialize<AppliedChangeSummary>(all.Data.ToString(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = appliedChangeSummary
+                        };
+                        break;
+                    }
+                case ResultWrapperType.BreakingChangeList:
+                    {
+                        var changes = JsonSerializer.Deserialize<List<BreakingChange>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, changes.Count - offset));
+                        var page = ShrinkListToFit(changes.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
+                case ResultWrapperType.TextSearchMatchList:
+                    {
+                        var searchResult = JsonSerializer.Deserialize<TextSearchResult>(all.Data.ToString(), _jsonOptions);
+                        if (searchResult is null)
+                        {
+                            result = new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = null };
+                            break;
+                        }
+
+                        var requestedLiteral = searchResult.LiteralResults.Skip(offset).Take(limit).ToList();
+                        var requestedRegex = searchResult.RegexResults.Skip(offset).Take(limit).ToList();
+                        var literalPage = requestedLiteral;
+                        var regexPage = requestedRegex;
+                        const int envelopeOverheadBytes = 256;
+                        while (literalPage.Count + regexPage.Count > 0 &&
+                               JsonSerializer.Serialize(searchResult with
+                               {
+                                   LiteralResults = literalPage,
+                                   RegexResults = regexPage
+                               }, _jsonOptions).Length
+                                   > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
+                        {
+                            if (literalPage.Count >= regexPage.Count && literalPage.Count > 0)
+                                literalPage = literalPage.Take(Math.Max(0, literalPage.Count / 2)).ToList();
+                            else if (regexPage.Count > 0)
+                                regexPage = regexPage.Take(Math.Max(0, regexPage.Count / 2)).ToList();
+                            else
+                                break;
+                        }
+
+                        var shrunk = literalPage.Count < requestedLiteral.Count || regexPage.Count < requestedRegex.Count;
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = searchResult with { LiteralResults = literalPage, RegexResults = regexPage },
+                            WarningDetails = shrunk
+                                ? $"Page shrunk to {literalPage.Count} literal + {regexPage.Count} regex record(s) to stay under the size threshold. Call again with offset: {offset + Math.Max(literalPage.Count, regexPage.Count)} to continue."
+                                : null
+                        };
+                        break;
+                    }
+                case ResultWrapperType.ProjectFileList:
+                    {
+                        var files = JsonSerializer.Deserialize<List<string>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, files.Count - offset));
+                        var page = ShrinkListToFit(files.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
+                case ResultWrapperType.ProjectInfoList:
+                    {
+                        var projects = JsonSerializer.Deserialize<List<ProjectInfoEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, projects.Count - offset));
+                        var page = ShrinkListToFit(projects.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
+                case ResultWrapperType.SolutionItemFileList:
+                    {
+                        var solutionItems = JsonSerializer.Deserialize<List<SolutionItemFile>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, solutionItems.Count - offset));
+                        var page = ShrinkListToFit(solutionItems.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
+                case ResultWrapperType.SolutionItemsAllResult:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // ListSolutionItems(kind: all) returns inline when small enough not to offload.
+                        var solutionItemsAll = JsonSerializer.Deserialize<SolutionItemsAllResult>(all.Data.ToString(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = solutionItemsAll
+                        };
+                        break;
+                    }
+                case ResultWrapperType.SymbolRelationshipResultList:
+                    {
+                        // Element shape varies by searchKind (ImplementationInfo, AttributeUsageSite,
+                        // ObjectCreationSite, ExtensionMethodInfo, SearchResult) - pass through as raw
+                        // JSON nodes instead of a single concrete record type.
+                        var items = (all.Data as JsonArray) ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, items.Count - offset));
+                        var page = ShrinkListToFit(items.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
+                case ResultWrapperType.BroadenedSymbolRelationshipResults:
+                    {
+                        // Dictionary<searchKind name, List<object>> - a map, not a flat list, so
+                        // limit/offset (list-shaped paging) don't apply; return the whole map.
+                        var broadenedMap = JsonSerializer.Deserialize<Dictionary<string, List<JsonNode?>>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = broadenedMap
+                        };
+                        break;
+                    }
+                case ResultWrapperType.ErrorStructuredDetailList:
+                    {
+                        // Offloaded ResultError.StructuredDetail (see ResultError.ForPossiblyLargeDetailAsync).
+                        // Element shape varies by which tool/branch produced it (LedgerEntryBase-derived
+                        // entries, SkippedCallSite, DiagnosticReport.Diagnostics, ...) - pass through as raw
+                        // JSON nodes instead of a single concrete record type, same as
+                        // SymbolRelationshipResultList above.
+                        var items = (all.Data as JsonArray) ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, items.Count - offset));
+                        var page = ShrinkListToFit(items.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
+                default:
+                    {
+                        return new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = false,
+                            ErrorData = new ResultError("Exception",
+                                          "Unknown scan result type.")
+                        };
+                    }
+            }
+            ;
+
+            // MethodSource/FileSource/MigrationScanSummary/MemberChangedContent wrap a single object, not a list - the array-shaped
+            // TotalRecords/HasMorePages computation below doesn't apply (and AsArray() on a
+            // single-object payload's first property, e.g. a string Signature, throws rather than
+            // returning null, since it's the wrong node kind rather than a missing one).
+            int totalRecords;
+            bool hasMorePages;
+            if (all.Type is ResultWrapperType.MethodSource or ResultWrapperType.FileSource or ResultWrapperType.MigrationScanSummary or ResultWrapperType.MemberChangedContent or ResultWrapperType.AppliedChangeSummaryResult or ResultWrapperType.SolutionItemsAllResult)
+            {
+                totalRecords = 1;
+                hasMorePages = false;
+            }
+            else if (all.Type is ResultWrapperType.BroadenedSymbolRelationshipResults)
+            {
+                // Map-shaped, not a flat list - report the number of relationship kinds that had
+                // results (matching the in-band WarningDetails summary), not a paged item count.
+                totalRecords = all.Data?.AsObject().Count ?? 0;
+                hasMorePages = false;
+            }
+            else
+            {
+                var dataArray = all.Data as JsonArray
+                    ?? all.Data?.AsObject().FirstOrDefault().Value?.AsArray()
+                    ?? [];
+                totalRecords = dataArray.Count;
+                hasMorePages = (offset + limit) < totalRecords;
+            }
+
+            return new SentinelCallToolResult<object>
+            {
+                IsSuccess = true,
+                // Unwrap: `result` is itself a SentinelCallToolResult<object> built above per ResultWrapperType.
+                // Returning it as-is here double-wraps the payload (SuccessData.SuccessData instead of SuccessData),
+                // which doesn't match every other tool's flat SentinelCallToolResult<object> shape.
+                SuccessData = result.SuccessData,
+                TotalRecords = totalRecords,
+                HasMoreData = hasMorePages,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new SentinelCallToolResult<object>
+            {
+                IsSuccess = false,
+                ErrorData = new ResultError("Exception",
+                              "Failed to read scan file.", ex.Message)
+            };
+        }
+    }
+
+       // Mirrors the Raw branch's worst-case-then-shrink loop (see the ResultWrapperType.Raw case in
+    // GetLargeResult) so every list-shaped switch branch there gets the same guarantee: the page
+    // this method hands back can never itself be large enough for the generic offload filter
+    // (ServiceRegistrationExtensionsBasic.cs's "Generic large-result offload backstop") to re-catch
+    // it and wrap it under a brand-new resultId, which would otherwise hand the caller an
+    // unterminating fetch/still-too-big/re-offload loop - see
+    // docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md. Halves the
+    // candidate page until the actual serialized size (not a guess) fits under
+    // OffloadThresholdBytes minus a fixed envelope overhead, verifying by real serialization the
+    // same way the Raw branch does, since element size varies too much across the ~10 record types
+    // this feeds to bound analytically.
+    private static List<T> ShrinkListToFit<T>(List<T> candidatePage, JsonSerializerOptions jsonOptions)
+    {
+        const int envelopeOverheadBytes = 256;
+        var page = candidatePage;
+        while (page.Count > 1 && JsonSerializer.Serialize(page, jsonOptions).Length > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
+        {
+            page = page.Take(Math.Max(1, page.Count / 2)).ToList();
+        }
+
+        return page;
+    }
+}

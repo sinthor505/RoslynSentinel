@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
+
 [TestFixture]
 public class BatteryTwentyFourTests
 {
@@ -13,7 +14,7 @@ public class BatteryTwentyFourTests
     private StandardRefactoringEngine _standardRefactoringEngine;
     private StructuralRefactoringEngine _advancedStructuralEngine;
     private MappingEngine _mappingEngine;
-    private SemanticRefactoringLibrary _semanticRefactoringLibrary;
+    private SemanticRefactoringEngine _semanticRefactoringEngine;
     private LogicSimplificationEngine _advancedLogicEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
     private CodeStyleEngine _codeStyleEngine;
@@ -104,7 +105,7 @@ public enum Status { Active = 1, Pending = 2 }
         _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
         _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
-        _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
+        _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
         _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
@@ -253,7 +254,6 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task UsingDirective_Add_ChangedContentReflectsActualDiffNotFabricatedString()
     {
@@ -1238,7 +1238,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         Assert.That(result, Is.Not.Null);
     }
 
-    // Added by AddMember (expected - used for diagnostics)
     // Regression test for blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md
     // Symptom 1: without targetTypeName, SyncTypeAndFilename picked whichever type happened to be
     // declared first, not necessarily the one the caller actually wanted. This reproduces that
@@ -1268,7 +1267,6 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         }
     }
 
-    // Added by AddMember (expected - used for diagnostics)
     // Companion negative case: an unknown targetTypeName must fail with an actionable error naming
     // the types that actually exist in the file, not silently fall back to the first-declared type.
     [Test]

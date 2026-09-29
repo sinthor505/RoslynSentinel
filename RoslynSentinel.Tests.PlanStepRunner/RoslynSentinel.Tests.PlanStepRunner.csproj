@@ -42,7 +42,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RoslynSentinel.Tools.PlanStepRunner\RoslynSentinel.Tools.PlanStepRunner.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Utilities.PlanStepRunner\RoslynSentinel.Utilities.PlanStepRunner.csproj" />
   </ItemGroup>
 
   <ItemGroup>

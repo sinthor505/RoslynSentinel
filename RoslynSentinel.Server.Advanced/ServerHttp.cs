@@ -73,7 +73,7 @@ public class ServerHttp
         var mcpBuilder = builder.Services.AddMcpServer().WithHttpTransport();
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
+            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes, includeTools, excludeTools);
 
         var app = builder.Build();

@@ -3,6 +3,9 @@
 // All tests run in-memory via AdhocWorkspace (no MSBuild/project-file loading).
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tests.Battery;
 // ════════════════════════════════════════════════════════════════════════════════
 // A. ImmutabilityEngine

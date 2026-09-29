@@ -1,14 +1,13 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Formatting;
-using Microsoft.Extensions.Logging;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Common;
 
 public static class RoslynFormattingHelper
 {
-    // Added by AddTopLevelType (expected - used for diagnostics)
     /// <summary>
     /// Controls which side wins when <see cref="RefactoringEngine"/>'s shared "replace a node, then
     /// format" helper decides whose leading trivia (blank lines, doc comments, etc.) to keep on the
@@ -78,7 +77,7 @@ public static class RoslynFormattingHelper
 
         return normalizedText;
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
+
     public static List<string> CheckPostWriteInvariants(string afterText, TriviaEditIntent triviaIntent, SyntaxNode? oldNode)
     {
         var problems = new List<string>();
@@ -102,7 +101,6 @@ public static class RoslynFormattingHelper
         return problems;
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// Batch form of <see cref="ReplaceNodeFormattedAsync"/>: replaces every old->new pair in
     /// <paramref name="replacements"/> against one evolving root and formats the whole set in a
@@ -205,7 +203,7 @@ public static class RoslynFormattingHelper
 
         return normalizedText;
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
+
     /// <summary>
     /// Inserts <paramref name = "newMember"/> into <paramref name = "container"/>'s member list at
     /// <paramref name = "insertIndex"/> (the position it should occupy in the resulting list -> i.e.
@@ -284,7 +282,7 @@ public static class RoslynFormattingHelper
         var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
         return EolUtilities.NormalizeEol(formattedText, dominantEol);
     }
-    // Added by AddMember (expected - used for diagnostics)
+
     /// <summary>
     /// Pure pass-through to <see cref="SyntaxNodeExtensions.NormalizeWhitespace{TNode}"/> (via
     /// <see cref="SyntaxNode.NormalizeWhitespace"/>) with identical arguments and identical

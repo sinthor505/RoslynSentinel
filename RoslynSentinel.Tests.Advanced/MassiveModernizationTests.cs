@@ -1,6 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
-using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+
+using ModernizationTools = RoslynSentinel.Tools.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;

@@ -528,7 +528,7 @@ public class DiffEngine
         return matches;
     }
 }
-// Added by AddTopLevelType (expected - used for diagnostics)
+
 /// <summary>
 /// The updated text from <see cref="DiffEngine.ApplyDiff(SourceText, string)"/>, paired with the
 /// <see cref="DiffHunkAnalyzer"/> report generated for the same call -> so a caller can surface

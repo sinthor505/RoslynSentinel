@@ -37,8 +37,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RoslynSentinel.Advanced\RoslynSentinel.Advanced.csproj" />
-    <ProjectReference Include="..\RoslynSentinel.Basic\RoslynSentinel.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj" />
@@ -47,9 +45,10 @@
 
   <ItemGroup>
     <Using Include="NUnit.Framework" />
-    <Using Include="RoslynSentinel.Advanced" />
-    <Using Include="RoslynSentinel.Basic" />
     <Using Include="RoslynSentinel.Common" />
+    <Using Include="RoslynSentinel.Common.AgentLoop" />
+    <Using Include="RoslynSentinel.Engines.Advanced" />
+    <Using Include="RoslynSentinel.Engines.Basic" />
     <Using Include="RoslynSentinel.Server.Advanced" />
     <Using Include="RoslynSentinel.Server.Basic" />
   </ItemGroup>

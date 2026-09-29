@@ -60,7 +60,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<ProjectConsistencyEngine>();
         services.AddSingleton<SolutionStructureEngine>();
         services.AddSingleton<RefactoringEngine>();
-        services.AddSingleton<SemanticRefactoringLibrary>();
+        services.AddSingleton<SemanticRefactoringEngine>();
         services.AddSingleton<SolutionManagementEngine>();
         services.AddSingleton<StandardRefactoringEngine>();
         services.AddSingleton<StructuralRefinementEngine>();
@@ -216,16 +216,6 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<WholeFileWriteTools>();
             mcpBuilder.WithSentinelTools<WholeFileWriteTools>();
         }
-        if (activeToolClasses.Contains("IntelligenceTools"))
-        {
-            // services.AddSingleton<IntelligenceTools>();
-            // mcpBuilder.WithTools<IntelligenceTools>();
-        }
-        if (activeToolClasses.Contains("ScanTools"))
-        {
-            // services.AddSingleton<ScanTools>();
-            // mcpBuilder.WithTools<ScanTools>();
-        }
         if (activeToolClasses.Contains("RefactoringTools"))
         {
             services.AddSingleton<RefactoringSignatureImpl>();
@@ -261,44 +251,6 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.TryAddSingleton<RefactoringExtractionDocsImpl>();
             services.AddSingleton<RefactoringExtractionDocsTools>();
             mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
-        }
-        if (activeToolClasses.Contains("AdvancedRefactoringTools"))
-        {
-            // services.AddSingleton<AdvancedRefactoringTools>();
-            // mcpBuilder.WithTools<AdvancedRefactoringTools>();
-        }
-        if (activeToolClasses.Contains("ModernizationTools"))
-        {
-            // services.AddSingleton<ModernizationTools>();
-            // mcpBuilder.WithTools<ModernizationTools>();
-        }
-        if (activeToolClasses.Contains("QualityTools"))
-        {
-            // services.AddSingleton<QualityTools>();
-            // mcpBuilder.WithTools<QualityTools>();
-        }
-        if (activeToolClasses.Contains("GenerationTools"))
-        {
-            // services.AddSingleton<GenerationTools>();
-            // mcpBuilder.WithTools<GenerationTools>();
-        }
-        if (activeToolClasses.Contains("CommentingTools"))
-        {
-            // services.AddSingleton<CommentingTools>();
-            // mcpBuilder.WithTools<CommentingTools>();
-        }
-        var codemodActive = (ToolClassRegistry.CodemodTriggerModes.Any(activeModes.Contains) ||
-                              resolvedIncludeTools.Contains(ToolClassRegistry.CodemodToolClass)) &&
-                             !resolvedExcludeTools.Contains(ToolClassRegistry.CodemodToolClass);
-        if (codemodActive)
-        {
-            // services.AddSingleton<CodemodTools>();
-            // mcpBuilder.WithTools<CodemodTools>();
-        }
-        if (activeToolClasses.Contains("AsyncifyTools"))
-        {
-            // services.AddSingleton<AsyncifyTools>();
-            // mcpBuilder.WithTools<AsyncifyTools>();
         }
 
         // Centralized error-to-success filter:
@@ -739,8 +691,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     TaskContinuationOptions.OnlyOnFaulted);
         }
     }
-    // Added by AddMember (expected - used for diagnostics)
-    /// <summary>
+       /// <summary>
     /// Registers the argument pre-flight filter: first silently repairs a case-only parameter
     /// name mismatch (e.g. "filepath" -> "filePath"), then rejects a call whose arguments still
     /// cannot succeed as written, before the SDK's binder ever sees either.

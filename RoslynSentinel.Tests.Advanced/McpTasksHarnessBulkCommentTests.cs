@@ -9,6 +9,8 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
+using RoslynSentinel.Tools.Advanced;
+
 namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
@@ -49,7 +51,7 @@ public class McpTasksHarnessBulkCommentTests
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
+            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
 
         var hostBuilder = Host.CreateApplicationBuilder();

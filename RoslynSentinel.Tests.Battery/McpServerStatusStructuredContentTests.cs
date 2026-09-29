@@ -14,14 +14,10 @@ namespace RoslynSentinel.Tests.Battery;
 
 public class McpServerStatusStructuredContentTests
 {
-    // Added by AddMember (expected - used for diagnostics)
-    private IHost _host = null!;
-    // Added by AddMember (expected - used for diagnostics)
-    private McpClient _client = null!;
-    // Added by AddMember (expected - used for diagnostics)
-    private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
-    // Added by AddMember (expected - used for diagnostics)
-    [SetUp]
+       private IHost _host = null!;
+       private McpClient _client = null!;
+       private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
+       [SetUp]
     public async Task SetUp()
     {
         var clientToServer = new Pipe();
@@ -50,16 +46,14 @@ public class McpServerStatusStructuredContentTests
 
         _client = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [TearDown]
+       [TearDown]
     public async Task TearDown()
     {
         await _client.DisposeAsync();
         await _host.StopAsync();
         _host.Dispose();
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Explicit("StructuredContent is currently not implemented")]
+       [Explicit("StructuredContent is currently not implemented")]
     [Test]
     public async Task McpServerStatus_ListTools_AdvertisesOutputSchema()
     {
@@ -76,8 +70,7 @@ public class McpServerStatusStructuredContentTests
             "The advertised outputSchema should be a real JSON Schema object, not the bare `true` " +
             "schema STJ emits for typeof(object) -- that shape is known to break LM Studio's tools/list handling.");
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Explicit("StructuredContent is currently not implemented")]
+       [Explicit("StructuredContent is currently not implemented")]
     [Test]
     public async Task McpServerStatus_Call_PopulatesStructuredContent_MatchingTextContent()
     {

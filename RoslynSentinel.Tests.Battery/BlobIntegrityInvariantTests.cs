@@ -143,7 +143,7 @@ public class BlobIntegrityInvariantTests
         // OperationBlobWriterTests). Pinned as a test because the literals are easy to copy from a
         // neighbouring call site, which is how there came to be seventeen of them.
         var toolsSource = Path.Combine(
-            FindRepoRoot(), "RoslynSentinel.Server.Advanced", "AdvancedRefactoringTools.cs");
+            FindRepoRoot(), "RoslynSentinel.Tools.Advanced", "AdvancedRefactoringTools.cs");
         Assert.That(File.Exists(toolsSource), Is.True, $"expected source at {toolsSource}");
 
         var offenders = File.ReadAllLines(toolsSource)

@@ -15,8 +15,8 @@ public static class ToolClassRegistry
             ["Workspace"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools"],
             ["Admin"] = ["AdminTools"],
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
-            ["Refactor"] = ["RefactoringTools"],
-            ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools", "RefactoringTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools"],
+            ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
 
             // Modernize/Quality/Generation/Asyncify register no classes in Basic today (commented
             // out pending Advanced-only tool classes) -> omitted here since an empty array would
@@ -61,7 +61,7 @@ public static class ToolClassRegistry
             ["Quality"] = ["QualityTools"],
             ["Generation"] = ["GenerationTools", "CommentingTools"],
             ["Asyncify"] = ["AsyncifyTools"],
-            ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools", "RefactoringTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
         };
 
     /// <summary>

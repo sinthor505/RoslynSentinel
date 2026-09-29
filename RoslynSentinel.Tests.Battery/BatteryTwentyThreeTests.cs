@@ -2,6 +2,10 @@
 // Tests all 46 public methods of QualityTools in-memory via TestSolutionBuilder.
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Advanced;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
 

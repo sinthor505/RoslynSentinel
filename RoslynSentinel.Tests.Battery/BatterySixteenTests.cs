@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+
 namespace RoslynSentinel.Tests.Battery;
 // ────────────────────────────────────────────────────────────────────────────
 // Battery #16 -> DependencyInjectionEngine,

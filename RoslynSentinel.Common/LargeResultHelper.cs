@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 
 namespace RoslynSentinel.Common;
 
@@ -45,7 +44,7 @@ public static class LargeResultHelper
         await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
         return (true, new FilePathWrapper(filePathString, solutionRoot, validated: true), resultId, jsonBytes);
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
+
     /// <summary>
     /// Writes already-serialized JSON text verbatim to a <see cref="ResultWrapperType.Raw"/> file,
     /// for callers that only have a final serialized response body -> not a typed value -> such as the

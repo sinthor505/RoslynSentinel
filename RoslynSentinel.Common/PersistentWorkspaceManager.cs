@@ -11,8 +11,6 @@ using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol;
-
 namespace RoslynSentinel.Common;
 
 /// <summary>
@@ -1048,7 +1046,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// <see cref="IWorkspaceReader"/> implementation. Both <see cref="ReadSource"/> values currently
     /// behave identically -- delegates straight to <see cref="GetCurrentSolutionAsync"/> -- because
@@ -1060,7 +1057,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         return await GetCurrentSolutionAsync(cancellationToken);
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
     /// <summary>
     /// <see cref="IWorkspaceReader"/> implementation. Returns null if no document is tracked at
     /// <paramref name="path"/>, rather than throwing -- callers that need "does this file exist in
@@ -1179,7 +1175,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         int retryCount = 3,
         bool validateChanges = false,
         bool rollbackOnPartialFailure = false,
-        IProgress<ProgressNotificationValue>? progress = default,
+        IProgress<EngineProgress>? progress = default,
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
     {
@@ -1990,19 +1986,14 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     public bool TryRelease() => _ledger.TryRelease();
     public IReadOnlyList<LedgerEntryBase> GetOpenEntries() => _ledger.GetOpenEntries();
 
-    // Added by AddMember (expected - used for diagnostics)
     private readonly UnrecoverableCircuitBreaker _unrecoverableBreaker;
 
-    // Added by AddMember (expected - used for diagnostics)
     private readonly MutationCircuitBreaker _mutationBreaker;
 
-    // Added by AddMember (expected - used for diagnostics)
     private readonly OrientationCircuitBreaker _orientationBreaker;
 
-    // Added by AddMember (expected - used for diagnostics)
     private readonly ToolCallRateLimiter _rateLimiter = new();
 
-    // Added by AddMember (expected - used for diagnostics)
     private readonly SymbolResolver _symbolResolver;
 
     /// <summary>

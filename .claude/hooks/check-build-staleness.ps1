@@ -8,7 +8,7 @@
 # PostToolUse receives the Build call's own tool_response, which carries this same envelope,
 # so this hook reads serverInfo.buildTimeUtc/binaryPath directly rather than re-deriving
 # anything from the filesystem - McpServerStatusResult itself (see
-# RoslynSentinel.Server.Basic/ServerStatusTools.cs) has no such field, only the shared
+# RoslynSentinel.Tools.Basic/ServerStatusTools.cs) has no such field, only the shared
 # envelope does. Comparing that timestamp to the newest .cs file under the repo tells us
 # whether the connected server is running a binary older than the latest source edit - VS
 # Code does not rebuild/relaunch an already-running server on its own, so a stale

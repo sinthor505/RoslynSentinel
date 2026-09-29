@@ -15,6 +15,10 @@
 //   inside an ObjectCreationExpressionSyntax whose type contains "ValueTask".
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Advanced;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
 

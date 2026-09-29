@@ -11,12 +11,11 @@ public class BatchTargetInput
 /// <summary>One unit of batch work: a file path plus an optional method-name filter (null = whole file).</summary>
 public class BatchTarget
 {
-    private string _filePath = "";
     public string FilePath
     {
-        get => _filePath;
-        set => _filePath = RoslynSentinel.Common.FilePathWrapper.NormalizeWirePath(value ?? "");
-    }
+        get;
+        set => field = RoslynSentinel.Common.FilePathWrapper.NormalizeWirePath(value ?? "");
+    } = "";
     public string[]? MethodNames
     {
         get; set;
@@ -102,7 +101,6 @@ public record BatchResultSummary : EngineResultBase
     /// <summary>"ok" | "caution" | "halt" -> keyed field, never infer from prose.</summary>
     public string Severity { get; init; } = "ok";
     public string Directive { get; init; } = "";
-    // Added by InsertMemberAfter (expected - used for diagnostics)
     public DirectiveKind DirectiveKind { get; init; } = DirectiveKind.Proceed;
 
     public bool BreakerOpen
@@ -139,7 +137,6 @@ public record BatchResultSummary : EngineResultBase
     {
         get; init;
     }
-    // Added by AddMember (expected - used for diagnostics)
     /// <summary>
     /// Derives <see cref="DirectiveKind"/> from this batch's own outcome counts, mirroring
     /// <see cref="OperationSummary.DeriveOutcome"/>'s reasoning: any real failure, or a run that
@@ -511,7 +508,7 @@ public class AsyncMigrateInput
         get; set;
     }
 }
-// Added by AddTopLevelType (expected - used for diagnostics)
+
 /// <summary>One edit in a batch <c>ReplaceSnippet</c> call.</summary>
 public class SnippetEdit
 {
@@ -533,7 +530,7 @@ public class SnippetEdit
         get; set;
     }
 }
-// Added by AddTopLevelType (expected - used for diagnostics)
+
 /// <summary>One edit in a batch ModifyModifier call.</summary>
 public class ModifierEdit
 {
@@ -561,7 +558,7 @@ public class ModifierEdit
         get; set;
     }
 }
-// Added by AddTopLevelType (expected - used for diagnostics)
+
 /// <summary>One edit in a batch ModifyAttribute call.</summary>
 public class AttributeEdit
 {
@@ -592,7 +589,7 @@ public class AttributeEdit
         get; set;
     }
 }
-// Added by AddTopLevelType (expected - used for diagnostics)
+
 /// <summary>One edit in a batch ModifyBaseType call.</summary>
 public class BaseTypeEdit
 {

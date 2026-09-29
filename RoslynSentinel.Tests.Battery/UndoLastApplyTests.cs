@@ -193,8 +193,7 @@ public class UndoLastApplyTests
         Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent));
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task UndoLastApply_NoOpRevert_ReportsDistinctlyFromRealRevertAsync()
     {
         // BeforeSource in the blob is identical to the file's current on-disk content, so
@@ -242,8 +241,7 @@ public class UndoLastApplyTests
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(currentContent));
     }
 
-    // Added by AddMember (expected - used for diagnostics)
-    // Regression test for blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md
+       // Regression test for blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md
     // Symptom 2: SyncTypeAndFilename used to delete the old file via a bare FileIoHelper.DeleteAsync
     // call outside ApplyProposedChangesAsync's tracked delete path, so the old path's content was
     // never captured as a pre-image anywhere and UndoLastApply could only ever report

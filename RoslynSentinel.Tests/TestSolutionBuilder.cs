@@ -132,8 +132,7 @@ public static class TestSolutionBuilder
 
         return solution;
     }
-    // Added by AddMember (expected - used for diagnostics)
-    public static Solution CreateEmptySolution()
+       public static Solution CreateEmptySolution()
     {
         return new AdhocWorkspace().CurrentSolution;
     }

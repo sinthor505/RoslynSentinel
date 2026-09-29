@@ -6,11 +6,9 @@ namespace RoslynSentinel.Tests.Battery;
 
 public class ModifyAttributeBatchTests
 {
-    // Added by AddMember (expected - used for diagnostics)
-    private const string FixtureRelativePath = "ContosoOrders.Core/AttributeBatchFixture.cs";
+       private const string FixtureRelativePath = "ContosoOrders.Core/AttributeBatchFixture.cs";
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private const string FixtureSource = """
+       private const string FixtureSource = """
     namespace ContosoOrders.Core;
 
     [Obsolete]
@@ -24,11 +22,9 @@ public class ModifyAttributeBatchTests
     }
     """;
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private const string SecondFixtureRelativePath = "ContosoOrders.Core/AttributeBatchFixtureSecond.cs";
+       private const string SecondFixtureRelativePath = "ContosoOrders.Core/AttributeBatchFixtureSecond.cs";
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private const string SecondFixtureSource = """
+       private const string SecondFixtureSource = """
     namespace ContosoOrders.Core;
 
     public class AttributeBatchTargetC
@@ -36,8 +32,7 @@ public class ModifyAttributeBatchTests
     }
     """;
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
+       private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
@@ -50,8 +45,7 @@ public class ModifyAttributeBatchTests
             NullLogger<RefactoringStructuralImpl>.Instance));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyAttribute_BatchTwoEditsSameFile_BothApplyAgainstOriginalSnapshotAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -78,8 +72,7 @@ public class ModifyAttributeBatchTests
         });
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyAttribute_BatchAcrossTwoFiles_AppliesBothInOneCallAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -108,8 +101,7 @@ public class ModifyAttributeBatchTests
         });
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyAttribute_BatchSameNodeTwice_RejectsWithoutWritingAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -134,8 +126,7 @@ public class ModifyAttributeBatchTests
         Assert.That(afterContent, Is.EqualTo(beforeContent));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyAttribute_BatchOneEditTargetNotFound_RejectsWholeBatchWithoutWritingAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -160,8 +151,7 @@ public class ModifyAttributeBatchTests
         Assert.That(afterContent, Is.EqualTo(beforeContent));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyAttribute_BothEditsAndSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -182,8 +172,7 @@ public class ModifyAttributeBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyAttribute_NeitherEditsNorSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -199,8 +188,7 @@ public class ModifyAttributeBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("edits"));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyAttribute_EmptyEditsArray_RejectsAsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -217,8 +205,7 @@ public class ModifyAttributeBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyAttribute_BatchExceedsMaxEditsCap_RejectsBeforeResolvingTargetsAsync()
     {
         using var fixture = new TestSolutionFixture();

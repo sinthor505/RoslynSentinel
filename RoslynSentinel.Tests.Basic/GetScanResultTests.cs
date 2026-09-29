@@ -260,8 +260,7 @@ public class GetLargeResultTests
             "A result file outside .roslynsentinel/largeresults/ must be rejected.");
         Assert.That(result.ErrorData, Is.Not.Null);
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-
+   
     // ═══════════════════════════════════════════════════════════════════════════
     // T9-T12 – ResultWrapperType.Raw (the generic MCP request-filter offload backstop,
     //          see docs/current/proposal_centralized_large_result_filter.md). Unlike every
@@ -293,8 +292,7 @@ public class GetLargeResultTests
             "The Raw case must replay the stored JSON text verbatim, not re-shape it.");
         Assert.That(roundTripped.RootElement.GetProperty("count").GetInt32(), Is.EqualTo(payload.count));
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-
+   
     [Test, CancelAfter(10000)]
     public async Task T10_GetLargeResult_Raw_OverThreshold_PagesInBoundedWindowsAndRoundTripsVerbatim()
     {
@@ -338,8 +336,7 @@ public class GetLargeResultTests
         Assert.That(reassembledDoc.RootElement.GetProperty("data").GetString(), Is.EqualTo(original),
             "Concatenating every page and re-parsing must reproduce the original stored JSON data exactly (structural round-trip).");
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-
+   
     [Test, CancelAfter(10000)]
     public async Task T11_GetLargeResult_Raw_NonZeroOffset_ClampsToTextLengthInsteadOfThrowing()
     {
@@ -354,8 +351,7 @@ public class GetLargeResultTests
         Assert.That(text, Is.Empty);
         Assert.That(result.HasMoreData, Is.False);
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-
+   
     [Test, CancelAfter(10000)]
     public async Task T12_GetLargeResult_Raw_CharLimitSmallerThanThreshold_UsesCharLimitAsWindowSize()
     {

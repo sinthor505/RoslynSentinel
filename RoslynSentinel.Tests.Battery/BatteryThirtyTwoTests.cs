@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Advanced;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;

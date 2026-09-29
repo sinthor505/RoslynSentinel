@@ -3,6 +3,9 @@
 // negative (should NOT flag, verifying false-positive guards).
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tests.Advanced;
 // ════════════════════════════════════════════════════════════════════════════
 // 1. FindUnawaitedFireAndForgetAsync -> null-conditional + chained patterns

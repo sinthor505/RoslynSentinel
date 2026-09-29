@@ -5,6 +5,9 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tests.Integration;
 // ─────────────────────────────────────────────────────────────────────────────
 // B29 -> Remaining engines exercised against the configured real solution

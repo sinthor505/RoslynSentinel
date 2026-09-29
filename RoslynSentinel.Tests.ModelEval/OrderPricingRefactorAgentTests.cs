@@ -10,8 +10,9 @@ using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Tests.ModelEval.AgentLoop;
+using RoslynSentinel.Common.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
+using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
@@ -152,7 +153,7 @@ public class OrderPricingRefactorAgentTests
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
+            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
 
         if (BlockWriteFile)

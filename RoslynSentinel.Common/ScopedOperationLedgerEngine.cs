@@ -138,6 +138,5 @@ public class ScopedOperationLedgerEngine : IScopedOperationLedger
         }
     }
 
-    // Added by AddMember (expected - used for diagnostics)
     private string? _openingChangeId;
 }

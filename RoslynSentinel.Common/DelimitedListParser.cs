@@ -4,7 +4,6 @@ namespace RoslynSentinel.Common;
 
 public static class DelimitedListParser
 {
-    // Added by AddMember (expected - used for diagnostics)
     /// <summary>
     /// Parses a caller-supplied "list of strings" parameter that may arrive as either a plain
     /// comma-separated string ("a.cs,b.cs") or a JSON array literal textified into the same string

@@ -112,7 +112,7 @@ namespace RoslynSentinel.Server.Advanced
 
                 mcpBuilder.WithTasks(
                     new InMemoryMcpTaskStore(),
-                    o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
+                    o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
 
                 mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes, includeTools, excludeTools);
 

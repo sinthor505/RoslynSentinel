@@ -1,3 +1,5 @@
+using RoslynSentinel.Common.AgentLoop;
+
 namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>
@@ -13,7 +15,7 @@ internal static class ModelTestingResultsArchiver
 {
     /// <summary>
     /// Call from a model-eval test fixture's TearDown with its own <c>_runDirectory</c> (the
-    /// leaf directory <see cref="AgentLoop.ModelAgentRunner.RunAsync"/> wrote the transcript
+    /// leaf directory <see cref="ModelAgentRunner.RunAsync"/> wrote the transcript
     /// into). No-ops quietly (logging via <see cref="TestContext"/> rather than throwing) if the
     /// directory doesn't exist -> e.g. SetUp's Assert.Ignore fired before any run happened -> since
     /// a failed archive copy should never mask or replace the test's own pass/fail outcome.

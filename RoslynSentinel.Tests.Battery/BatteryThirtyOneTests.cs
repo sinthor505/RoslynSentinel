@@ -4,6 +4,10 @@
 //   2. convert_method_to_indexer had silent no-op on method-not-found / wrong param count
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Advanced;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
@@ -15,7 +19,7 @@ public class BatteryThirtyOneTests
     private StandardRefactoringEngine _standardRefactoringEngine;
     private StructuralRefactoringEngine _advancedStructuralEngine;
     private MappingEngine _mappingEngine;
-    private SemanticRefactoringLibrary _semanticRefactoringLibrary;
+    private SemanticRefactoringEngine _semanticRefactoringEngine;
     private LogicSimplificationEngine _advancedLogicEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
     private CodeStyleEngine _codeStyleEngine;
@@ -34,7 +38,7 @@ public class BatteryThirtyOneTests
         _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
         _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
-        _semanticRefactoringLibrary = new SemanticRefactoringLibrary(_workspaceManager);
+        _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
         _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);

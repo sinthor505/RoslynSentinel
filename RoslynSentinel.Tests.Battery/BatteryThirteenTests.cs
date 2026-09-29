@@ -2,6 +2,9 @@
 // CodeGenerationEngine is sync/JSON-only (no workspace needed for its primary methods).
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tests.Battery;
 // ════════════════════════════════════════════════════════════════════════════════
 // A. AnalysisEngine

@@ -16,11 +16,9 @@ public class ModifyBaseTypeBatchTests
     private RefactoringStructuralTools _refactoringStructuralTools;
     private MsToolAugmentEngine _msToolAugmentEngine;
 
-    // Added by AddMember (expected - used for diagnostics)
-    private const string FixtureRelativePath = "ContosoOrders.Core/BaseTypeBatchFixture.cs";
+       private const string FixtureRelativePath = "ContosoOrders.Core/BaseTypeBatchFixture.cs";
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private const string FixtureSource = """
+       private const string FixtureSource = """
     namespace ContosoOrders.Core;
 
     public interface IBaseTypeBatchMarker
@@ -36,11 +34,9 @@ public class ModifyBaseTypeBatchTests
     }
     """;
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private const string SecondFixtureRelativePath = "ContosoOrders.Core/BaseTypeBatchFixtureSecond.cs";
+       private const string SecondFixtureRelativePath = "ContosoOrders.Core/BaseTypeBatchFixtureSecond.cs";
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private const string SecondFixtureSource = """
+       private const string SecondFixtureSource = """
     namespace ContosoOrders.Core;
 
     public class BaseTypeBatchTargetC
@@ -72,8 +68,7 @@ public class ModifyBaseTypeBatchTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyBaseType_BatchTwoEditsSameFile_BothApplyAgainstOriginalSnapshotAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -102,8 +97,7 @@ public class ModifyBaseTypeBatchTests
         });
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyBaseType_BatchAcrossTwoFiles_AppliesBothInOneCallAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -132,8 +126,7 @@ public class ModifyBaseTypeBatchTests
         });
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyBaseType_BatchSameNodeTwice_RejectsWithoutWritingAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -157,8 +150,7 @@ public class ModifyBaseTypeBatchTests
         Assert.That(afterContent, Is.EqualTo(beforeContent));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyBaseType_BatchOneEditTargetNotFound_RejectsWholeBatchWithoutWritingAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -182,8 +174,7 @@ public class ModifyBaseTypeBatchTests
         Assert.That(afterContent, Is.EqualTo(beforeContent));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyBaseType_BothEditsAndSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -203,8 +194,7 @@ public class ModifyBaseTypeBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyBaseType_NeitherEditsNorSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -219,8 +209,7 @@ public class ModifyBaseTypeBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("edits"));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyBaseType_EmptyEditsArray_RejectsAsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -236,8 +225,7 @@ public class ModifyBaseTypeBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyBaseType_BatchExceedsMaxEditsCap_RejectsBeforeResolvingTargetsAsync()
     {
         using var fixture = new TestSolutionFixture();

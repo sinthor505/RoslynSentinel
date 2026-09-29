@@ -50,7 +50,6 @@ public sealed class EngineResultWrapper<T>
         _data = data;
         Error = error;
     }
-    // Added by AddMember (expected - used for diagnostics)
     public static EngineResultWrapper<T> Failure(EngineOutcome outcome, EngineError error) => new(outcome, default, error);
 }
 

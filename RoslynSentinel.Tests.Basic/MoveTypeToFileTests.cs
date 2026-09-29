@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tests.Basic;
 

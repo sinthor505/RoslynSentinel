@@ -4,7 +4,6 @@ namespace RoslynSentinel.Common;
 
 public static class EolUtilities
 {
-    // Added by AddMember (expected - used for diagnostics)
     public static string DetectDominantEol(SourceText sourceText)
     {
         var endings = sourceText.Lines
@@ -17,7 +16,7 @@ public static class EolUtilities
             .Select(g => g.Key)
             .FirstOrDefault() ?? Environment.NewLine;
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
+
     public static string NormalizeEol(string content, string dominantEol)
     {
         var normalized = content.Replace("\r\n", "\n").Replace("\r", "\n");

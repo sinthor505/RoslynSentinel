@@ -9,8 +9,8 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
-using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
+using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
@@ -102,7 +102,7 @@ public class PlanThenExecuteAgentTests
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
+            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes);
 
         _runDirectory = Path.Combine(
@@ -242,7 +242,7 @@ public class PlanThenExecuteAgentTests
         UnrelatedCodeEquivalenceAssert.AssertMemberUnchanged(fixedPath, "UnrelatedMethodAfter",
             "public string UnrelatedMethodAfter(  string   s  )\n{\n        return s?.Trim() ?? \"\";\n}");
 
-        // Threshold is 2, not 1: CompilerErrorLookupHelper's guidance (see RoslynSentinel.Basic
+        // Threshold is 2, not 1: CompilerErrorLookupHelper's guidance (see RoslynSentinel.Engines.Basic
         // CompilerErrorLookupHelper.cs) is designed to be *read after* a failed ApplyDiff, so a
         // model that mis-qualifies a call (e.g. CS0103 on a static member of another class) and
         // then correctly follows the guidance on retry legitimately costs 2 error tool calls, not

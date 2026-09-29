@@ -2,6 +2,8 @@
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tests;
 
 /// <summary>

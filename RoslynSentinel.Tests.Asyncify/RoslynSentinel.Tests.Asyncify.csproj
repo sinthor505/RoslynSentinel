@@ -20,6 +20,10 @@
     </PackageReference>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
+    <PackageReference Include="ModelContextProtocol.Extensions.Tasks" Version="2.2.0" />
     <PackageReference Include="NUnit" Version="4.6.1" />
     <PackageReference Include="NUnit.Analyzers" Version="4.15.0">
       <PrivateAssets>all</PrivateAssets>
@@ -29,20 +33,23 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="ModelContextProtocol.Protocol" />
     <Using Include="NUnit.Framework" />
-    <Using Include="RoslynSentinel.Advanced" />
-    <Using Include="RoslynSentinel.Basic" />
     <Using Include="RoslynSentinel.Common" />
+    <Using Include="RoslynSentinel.Engines.Advanced" />
+    <Using Include="RoslynSentinel.Engines.Basic" />
     <Using Include="RoslynSentinel.Server.Advanced" />
     <Using Include="RoslynSentinel.Server.Basic" />
+    <Using Include="RoslynSentinel.Tools.Advanced" />
+    <Using Include="RoslynSentinel.Tools.Basic" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RoslynSentinel.Basic\RoslynSentinel.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Tools.Advanced\RoslynSentinel.Tools.Advanced.csproj" />
   </ItemGroup>
 
 	<PropertyGroup>

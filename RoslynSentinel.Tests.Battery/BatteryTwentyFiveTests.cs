@@ -3,6 +3,9 @@
 // All tests use in-memory AdhocWorkspace via TestSolutionBuilder (no MSBuild/project loading).
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tests.Battery;
 // ════════════════════════════════════════════════════════════════════════════════
 // A. AdvancedLogicEngine -> 4 untested methods

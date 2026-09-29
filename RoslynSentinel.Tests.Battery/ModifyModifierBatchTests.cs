@@ -6,11 +6,9 @@ namespace RoslynSentinel.Tests.Battery;
 
 public class ModifyModifierBatchTests
 {
-    // Added by AddMember (expected - used for diagnostics)
-    private const string FixtureRelativePath = "ContosoOrders.Core/ModifierBatchFixture.cs";
+       private const string FixtureRelativePath = "ContosoOrders.Core/ModifierBatchFixture.cs";
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private const string FixtureSource = """
+       private const string FixtureSource = """
     namespace ContosoOrders.Core;
 
     public class ModifierBatchTargetA
@@ -24,8 +22,7 @@ public class ModifyModifierBatchTests
     }
     """;
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
+       private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
         var diffEngine = new DiffEngine();
@@ -38,8 +35,7 @@ public class ModifyModifierBatchTests
             NullLogger<RefactoringStructuralImpl>.Instance));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyModifier_BatchTwoEditsSameFile_BothApplyAgainstOriginalSnapshotAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -66,8 +62,7 @@ public class ModifyModifierBatchTests
         });
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyModifier_BatchAcrossTwoFiles_AppliesBothInOneCallAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -106,8 +101,7 @@ public class ModifyModifierBatchTests
         });
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyModifier_BatchSameNodeTwice_RejectsWithoutWritingAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -131,8 +125,7 @@ public class ModifyModifierBatchTests
         Assert.That(newContent, Is.EqualTo(originalContent), "a same-node collision must not write anything");
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyModifier_BatchOneEditTargetNotFound_RejectsWholeBatchWithoutWritingAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -157,8 +150,7 @@ public class ModifyModifierBatchTests
             "one unresolvable edit in a batch must roll back the whole batch, not partially apply it");
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyModifier_BothEditsAndSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -179,8 +171,7 @@ public class ModifyModifierBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyModifier_NeitherEditsNorSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -194,8 +185,7 @@ public class ModifyModifierBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("required"));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyModifier_EmptyEditsArray_RejectsAsInvalidArgumentAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -209,8 +199,7 @@ public class ModifyModifierBatchTests
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task ModifyModifier_BatchExceedsMaxEditsCap_RejectsBeforeResolvingTargetsAsync()
     {
         using var fixture = new TestSolutionFixture();

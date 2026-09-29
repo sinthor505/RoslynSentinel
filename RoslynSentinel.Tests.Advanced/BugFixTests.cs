@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using ModernizationTools = RoslynSentinel.Server.Advanced.ModernizationTools;
+using ModernizationTools = RoslynSentinel.Tools.Advanced.ModernizationTools;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -1158,7 +1158,7 @@ public class Consumer
             Assert.That(results, Is.Not.Null, "FindCallersAsync must not throw when interface and class share same method name");
         }
 
-        // Added by InsertMemberAfter (expected - used for diagnostics)
+
         // ── 9e: FindImplementations -> no filePath, interface/class name collision now resolves to real implementations (regression test for the GetSolutionRoot bug) ───
         [Test]
         public async Task FindImplementationsForMemberAsync_NoFilePath_ClassInSameFileAsInterface_ReturnsNonEmpty()
@@ -1174,7 +1174,7 @@ public class Foo : IFoo
             Assert.That(results, Is.Not.Empty, "FindImplementationsForMemberAsync must resolve to the interface member (not the concrete class method) when no filePath/contextSnippet is supplied, so it can find Foo.GetNameAsync as a real implementation");
         }
 
-        // Added by InsertMemberAfter (expected - used for diagnostics)
+
         // ── 9f: FindCallers -> same collision shape, no regression from the preferImplementable split ───
         [Test]
         public async Task FindCallersAsync_NoFilePath_ClassInSameFileAsInterface_StillResolves()
@@ -1196,7 +1196,7 @@ public class Consumer
             Assert.That(results, Is.Not.Null, "FindCallersAsync's preferImplementable:false path must keep resolving via the class candidate exactly as before this change");
         }
 
-        // Added by InsertMemberAfter (expected - used for diagnostics)
+
         // ── 9g: FindImplementations -> resolved symbol is structurally incapable of having implementations ───
         [Test]
         public void FindImplementationsForMemberAsync_NoFilePath_ConcreteNonVirtualNoInterface_ThrowsActionableError()
@@ -1211,7 +1211,7 @@ public class Consumer
             Assert.That(ex.Message, Does.Contain("DoWork"));
         }
 
-        // Added by InsertMemberAfter (expected - used for diagnostics)
+
         // ── 9h: FindImplementations -> zero candidates anywhere now suggests near-miss names ───
         [Test]
         public void FindImplementationsForMemberAsync_TypoedName_SuggestsNearMissCandidate()

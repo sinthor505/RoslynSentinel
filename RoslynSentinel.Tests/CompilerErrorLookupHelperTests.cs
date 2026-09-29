@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Basic;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tests;
 

@@ -224,21 +224,38 @@ source before constructing an explanation for it.
 
 ## Architecture
 
-- **Dependency direction is one-way:** `Common` <- `Basic` <- `Advanced`, and `Server.Basic` <-
-  `Server.Advanced`. A helper needed by both a `Server.Basic` and a `Server.Advanced` tool class must
-  live in `RoslynSentinel.Common` — it cannot live in either project first and be reached by the
-  other. Check each project's `.csproj` `<ProjectReference>` list if unsure.
-- **`Server.Advanced` project-references `Basic`/`Server.Basic` rather than forking them** — it is
-  additive, not a parallel implementation. A fix in `RoslynSentinel.Basic` or `RoslynSentinel.Server.Basic`
-  is sufficient on its own; there is no duplicate to hunt for in Advanced. Verify with `build.ps1
-  -Flavor Solution` (or both `-Flavor Basic` and `-Flavor Advanced`) since Advanced consumes Basic's
-  compiled output rather than re-declaring it.
-- **Adding a new MCP tool requires three things, not one:** the `[McpServerToolType]`/
-  `[McpServerTool(Name = ...)]` attributes, an entry in `ToolClassRegistry.cs`'s mode dictionary, AND
-  an explicit `if (activeToolClasses.Contains("..."))` DI-registration block in
-  `ServiceRegistrationExtensionsBasic.cs` (or `...Advanced.cs`). None of these three alone makes a
-  tool callable — attributes without a registry entry and DI block silently produce a dead tool with
-  no error at startup.
+- **Layering is one-way:** `Common` <- `Engines.*` <- `Tools.*` <- `Server.*`. Each layer has one job:
+  - `RoslynSentinel.Engines.Basic` / `.Engines.Advanced` - Roslyn analysis and refactoring logic.
+    Keep MCP protocol types (`RequestContext<>`, tool attributes) out of engine code.
+  - `RoslynSentinel.Tools.Basic` / `.Tools.Advanced` / `.Tools.Experimental` - the
+    `[McpServerToolType]` classes. The `*Impl` classes backing the Basic tools live in `Tools.Basic`.
+  - `RoslynSentinel.Server.Basic` / `.Server.Advanced` - hosting, transport, mode resolution and DI
+    registration only. No tool or engine logic.
+  - `RoslynSentinel.Utilities.PlanStepRunner` - the plan-step harness exe. It references only
+    `Common`; the shared agent loop lives in `Common/AgentLoop`.
+- **Sibling projects cannot see each other.** `Tools.Advanced` does not reference `Tools.Basic`, and
+  `Engines.Basic` cannot reference `Engines.Advanced`. A helper needed on both sides goes one layer
+  down: `Engines.Basic` for engine logic, `Common` for result/MCP plumbing. Check each project's
+  `.csproj` `<ProjectReference>` list if unsure.
+- **Advanced is additive, not a fork.** `Engines.Advanced` builds on `Engines.Basic`, and
+  `Server.Advanced` references `Server.Basic` and `Tools.Basic` rather than re-declaring them, so a fix
+  in a Basic project is sufficient on its own; there is no duplicate to hunt for in Advanced. Verify
+  with `build.ps1 -Flavor Solution` (or both `-Flavor Basic` and `-Flavor Advanced`).
+- **Adding a new MCP tool requires three things, not one:**
+  1. the `[McpServerToolType]`/`[McpServerTool(Name = ...)]` class, in `Tools.Basic`,
+     `Tools.Advanced` or `Tools.Experimental`;
+  2. an entry in a mode dictionary in `Server.Basic/ToolClassRegistry.cs` (shared by both servers);
+  3. an explicit `if (activeToolClasses.Contains("..."))` DI-registration block in
+     `Server.Basic/ServiceRegistrationExtensionsBasic.cs` or
+     `Server.Advanced/ServiceRegistrationExtensionsAdvanced.cs`.
+
+  None of these alone makes a tool callable - attributes without a registry entry and DI block
+  silently produce a dead tool with no error at startup. A new `Tools.*` project also needs a
+  `<ProjectReference>` from the `Server.*` project that hosts it (`Tools.Experimental` is hosted by
+  `Server.Advanced` only).
+- **The `*Tools` suffix is reserved for classes that declare `[McpServerTool]` methods.** Helpers
+  used by tool classes take a different suffix (e.g. `TaskEnabledToolsHelper`), so the name alone
+  tells you whether a class exposes tools.
 
 ## Commits
 

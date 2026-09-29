@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618

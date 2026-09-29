@@ -1,6 +1,8 @@
 #pragma warning disable CS8618
 using Microsoft.CodeAnalysis;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 
 namespace RoslynSentinel.Tests.Advanced;

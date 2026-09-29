@@ -792,7 +792,6 @@ public class Order
         var data = (WorkspaceHealthReport)result.SuccessData!;
         Assert.That(data.BuildVerification, Is.Not.Null);
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
     [Test]
     public async Task Build_QuickBuild_ZeroProjectScope_ReturnsStructuredErrorReferencingListAll()
     {

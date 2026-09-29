@@ -600,8 +600,7 @@ public class ContextHelperTests
             () => ContextHelper.FindSnippetPosition(ApplyDiscountLikeSource, fabricatedSnippet));
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     [Description("FindAllSnippetMatchesWithLength: a multi-line lineBefore can never satisfy the "
                  + "single-line MatchLine comparison and must be rejected up front with a clear "
                  + "message, not silently filtered down to zero candidates and reported as NotFound.")]
@@ -624,8 +623,7 @@ public class ContextHelperTests
         Assert.That(ex.Message, Does.Contain("lineBefore"));
     }
 
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     [Description("DiagnoseNoMatch: mirrors the real entries/entries2 CS0103 bug - 4 of 5 snippet " +
                  "lines match verbatim at contiguous source lines and one line diverges (caller " +
                  "typed 'entries' where the file actually has 'entries2'). The error must name the " +

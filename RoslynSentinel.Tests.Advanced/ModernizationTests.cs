@@ -2,6 +2,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
 using Microsoft.Extensions.Logging.Abstractions;
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;

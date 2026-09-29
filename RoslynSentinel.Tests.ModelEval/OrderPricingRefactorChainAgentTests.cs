@@ -10,8 +10,8 @@ using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Tests.ModelEval.AgentLoop;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
+using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
@@ -112,7 +112,7 @@ public class OrderPricingRefactorChainAgentTests
         mcpBuilder.WithStreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream());
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
-            o => o.ExecutionModeSelector = TaskTools.SelectExecutionMode);
+            o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
         //mcpBuilder.AddRoslynSentinelToolsBasic(services, ActiveModes); // Temporarily commented out to give the model access to the full Advanced tool catalog as ExtractInterface is not in the Basic catalog and is required for rung 7.
         mcpBuilder.AddRoslynSentinelToolsAdvanced(services, ActiveModes);
 

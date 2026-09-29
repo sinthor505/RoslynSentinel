@@ -44,8 +44,6 @@ public interface IWorkspaceReader
     /// </summary>
     Task<Microsoft.CodeAnalysis.Solution> GetSolutionAsync(ReadSource source, CancellationToken cancellationToken);
 
-    // Added by AddMember (expected - used for diagnostics)
-
     /// <summary>
     /// Returns the requested project's <see cref="Microsoft.CodeAnalysis.Compilation"/>, from a
     /// per-project cache when a valid entry exists for <paramref name="source"/>. Throws

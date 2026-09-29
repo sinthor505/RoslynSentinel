@@ -29,14 +29,11 @@ public class UnrecoverableCircuitBreaker
         _logger = logger;
     }
 
-    // Added by AddMember (expected - used for diagnostics)
-    private readonly Lock _unrecoverableBreakerLock = new();
+       private readonly Lock _unrecoverableBreakerLock = new();
 
-    // Added by AddMember (expected - used for diagnostics)
-    private string? _unrecoverableHaltMessage;
+       private string? _unrecoverableHaltMessage;
 
-    // Added by AddMember (expected - used for diagnostics)
-    /// <summary>
+       /// <summary>
     /// Records an unrecoverable blob-integrity fault. Not reversible: see
     /// <see cref="IUnrecoverableBreaker"/> for why no reset exists.
     /// </summary>
@@ -65,8 +62,7 @@ public class UnrecoverableCircuitBreaker
             toolName, changeId, diagnostic);
     }
 
-    // Added by AddMember (expected - used for diagnostics)
-    public bool IsTripped()
+       public bool IsTripped()
     {
         lock (_unrecoverableBreakerLock)
         {
@@ -74,8 +70,7 @@ public class UnrecoverableCircuitBreaker
         }
     }
 
-    // Added by AddMember (expected - used for diagnostics)
-    public string? StateMessage()
+       public string? StateMessage()
     {
         lock (_unrecoverableBreakerLock)
         {

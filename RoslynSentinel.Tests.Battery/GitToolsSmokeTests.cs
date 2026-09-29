@@ -114,8 +114,7 @@ public class GitToolsSmokeTests
         Assert.That(sw.Elapsed, Is.LessThan(ResponseBound), $"Git(diff) took {sw.Elapsed}, expected under {ResponseBound}.");
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task Git_Reset_Soft_MovesHeadAndRestagesChangesAsync()
     {
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
@@ -136,8 +135,7 @@ public class GitToolsSmokeTests
             "git reset --soft should move HEAD past the second commit.");
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task Git_Reset_Mixed_UnstagesButKeepsWorkingTreeChangesAsync()
     {
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
@@ -156,8 +154,7 @@ public class GitToolsSmokeTests
             "git reset --mixed must never touch the working tree.");
     }
 
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task Git_Status_RepoPath_TargetsADifferentRepoThanTheLoadedSolutionAsync()
     {
         var otherRepoDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelGitSmoke_Other_" + Guid.NewGuid());
@@ -245,8 +242,7 @@ public class GitToolsSmokeTests
     }
 
 
-    // Added by AddMember (expected - used for diagnostics)
-    // Regression coverage for docs/current/blockers/resolved/blocking_error_git_diff_mojibake_display.md:
+       // Regression coverage for docs/current/blockers/resolved/blocking_error_git_diff_mojibake_display.md:
     // RunGitAsync previously decoded git's redirected stdout/stderr using Console.OutputEncoding
     // (the legacy OS codepage) instead of UTF-8, so any non-ASCII multi-byte character in a diffed
     // file's content came back as mojibake. This asserts the actual UTF-8 character round-trips.
@@ -269,8 +265,7 @@ public class GitToolsSmokeTests
     }
 
 
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task Git_Show_RoundTripsNonAsciiCharacterInFileContentCorrectlyAsync()
     {
         const string emDash = "—";
@@ -289,8 +284,7 @@ public class GitToolsSmokeTests
     }
 
 
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task Git_Diff_WarnsWhenOutputContainsReplacementCharacterAsync()
     {
         // Simulates a genuinely undecodable byte sequence reaching the diff text (rather than

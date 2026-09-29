@@ -13,6 +13,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tests.Battery;
 // ─────────────────────────────────────────────────────────────────────────────

@@ -14,21 +14,17 @@ namespace RoslynSentinel.Tests.Battery;
 
 public class LargeResultOffloadFilterTests
 {
-    // Added by AddMember (expected - used for diagnostics)
-
+   
     private IHost _host = null!;
     private McpClient _client = null!;
     private TestSolutionFixture _fixture = null!;
 
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-    // LargeResultHelper.OffloadThresholdBytes is 30 * 1024. Each CallerInfo record (CallerMethod,
+       // LargeResultHelper.OffloadThresholdBytes is 30 * 1024. Each CallerInfo record (CallerMethod,
     // CallerType, absolute FilePath under a temp dir, Line, CodeSnippet) serializes to well over
     // 100 bytes, so this many distinct callers of Target() comfortably exceeds the threshold
     // regardless of the sample solution's own (small) content.
-    private const int CallerCount = 400;    // Added by AddMember (expected - used for diagnostics)
-                                            // Added by InsertMemberAfter (expected - used for diagnostics)
-    private const string CallerMethodPrefix = "OffloadFilterCaller";
+    private const int CallerCount = 400;                                                  private const string CallerMethodPrefix = "OffloadFilterCaller";
     [SetUp]
     public async Task SetUp()
     {
@@ -92,8 +88,7 @@ public class LargeResultOffloadFilterTests
             cancellationToken: TestContext.CurrentContext.CancellationToken);
         Assert.That(loadResult.IsError, Is.Not.True, "Fixture solution failed to load - cannot exercise the filter without a loaded solution.");
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-
+   
     [TearDown]
     public async Task TearDown()
     {
@@ -168,8 +163,7 @@ public class LargeResultOffloadFilterTests
             "The reassembled offloaded text must contain the real caller list, not just the pointer.");
         Assert.That(reassembled.ToString(), Does.Contain($"{CallerMethodPrefix}{CallerCount - 1}"));
     }
-    // Added by InsertMemberAfter (expected - used for diagnostics)
-
+   
     [Test]
     public async Task UnderThresholdToolResponse_PassesThroughUnchanged()
     {
@@ -185,8 +179,7 @@ public class LargeResultOffloadFilterTests
             "A response under threshold must pass through unmodified - the filter must stay a pure pass-through for small tool results.");
     }
 
-    // Added by AddMember (expected - used for diagnostics)
-    [Test]
+       [Test]
     public async Task TypedBranchOffload_GetLargeResultFirstCall_ReturnsDataNotAnotherOffloadEnvelope()
     {
         // Regression test for the originally reported bug (see

@@ -20,6 +20,8 @@
 #pragma warning disable CS8618
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tests.Integration;
 [TestFixture]
 [Category("Integration")]
