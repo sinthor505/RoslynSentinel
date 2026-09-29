@@ -569,11 +569,13 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(
+                        ErrorData = await ResultError.ForPossiblyLargeDetailAsync(
                             ToolErrorCode.UnresolvedCallSites,
                             $"{unresolvedEntries.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site, or \"FilePath:*\" / \"*\" to apply one value to every unresolved site in a file / everywhere.",
                             detail,
-                            StructuredDetail: unresolvedEntries.Cast<object>().ToList())
+                            unresolvedEntries.Cast<object>().ToList(),
+                            _workspaceManager.GetSolutionRoot(),
+                            cancellationToken)
                     };
                 }
 
@@ -583,11 +585,13 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(
+                        ErrorData = await ResultError.ForPossiblyLargeDetailAsync(
                             ToolErrorCode.UnresolvedCallSites,
                             $"{result.SkippedCallSites.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site, or \"FilePath:*\" / \"*\" to apply one value to every unresolved site in a file / everywhere.",
                             detail,
-                            StructuredDetail: result.SkippedCallSites.Cast<object>().ToList())
+                            result.SkippedCallSites.Cast<object>().ToList(),
+                            _workspaceManager.GetSolutionRoot(),
+                            cancellationToken)
                     };
                 }
 

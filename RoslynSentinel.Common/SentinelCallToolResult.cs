@@ -257,8 +257,50 @@ public record ResultError(
     string ErrorCode,
     string Message,
     string? Detail = null,
-    IReadOnlyList<object>? StructuredDetail = null
-);
+    IReadOnlyList<object>? StructuredDetail = null,
+    LargeResultInfo? StructuredDetailLargeResult = null
+)
+{
+    /// <summary>
+    /// Builds a <see cref="ResultError"/> for a <paramref name="structuredDetail"/> list that may be
+    /// too large to inline (e.g. MoveMember's per-call-site unresolved-entry list). Mirrors
+    /// <see cref="SentinelCallToolResult{T}.ForPossiblyLargeDataAsync"/>: offloads to disk via
+    /// <see cref="LargeResultHelper.StoreLargeResultAsync{T}"/> and populates
+    /// <see cref="StructuredDetailLargeResult"/> instead of <see cref="StructuredDetail"/> when the
+    /// serialized list exceeds <see cref="LargeResultHelper.OffloadThresholdBytes"/> - without this,
+    /// an oversized error fell through to the generic Raw-text offload backstop
+    /// (ServiceRegistrationExtensionsBasic.cs's AddCallToolFilter), which pages the whole serialized
+    /// envelope as an opaque character window and destroys structuredDetail's JSON structure in the
+    /// process. detail/message stay inline either way so the error remains legible without a
+    /// GetLargeResult round trip.
+    /// </summary>
+    public static async Task<ResultError> ForPossiblyLargeDetailAsync(
+        string errorCode, string message, string? detail, IReadOnlyList<object>? structuredDetail,
+        string? solutionRoot, CancellationToken cancellationToken)
+    {
+        if (structuredDetail is null or { Count: 0 })
+        {
+            return new ResultError(errorCode, message, detail, structuredDetail);
+        }
+
+        var stored = await LargeResultHelper.StoreLargeResultAsync(
+            structuredDetail, solutionRoot, ResultWrapperType.ErrorStructuredDetailList, cancellationToken);
+        if (!stored.offloaded)
+        {
+            return new ResultError(errorCode, message, detail, structuredDetail);
+        }
+
+        return new ResultError(errorCode, message, detail, StructuredDetail: null, StructuredDetailLargeResult: new LargeResultInfo(
+            resultType: "ErrorStructuredDetailList",
+            writtenToFile: true,
+            filePath: stored.filePath,
+            resultId: stored.resultId!,
+            sizeBytes: stored.jsonBytes.Length,
+            totalRecords: structuredDetail.Count,
+            message: $"structuredDetail is {stored.jsonBytes.Length} bytes ({structuredDetail.Count} entries), over the inline threshold. " +
+                     $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through the full structured list."));
+    }
+}
 
 // ── Large-result descriptor ───────────────────────────────────────────────────
 

@@ -52,9 +52,15 @@ public static class ValidateAndApplyHelper
             var detailString = describeValidationFailure != null
                 ? await describeValidationFailure(validation, cancellationToken)
                 : validation.Diagnostics.ToJson();
-            return new ApplyOutcome(null, new ResultError(ToolErrorCode.ValidationFailed,
+            var validationError = await ResultError.ForPossiblyLargeDetailAsync(
+                ToolErrorCode.ValidationFailed,
                 $"{operationName}: the change was valid and matched its target(s), but introduces new compiler errors - change not applied. " +
-                $"Fix the issue(s) below and retry.", Detail: detailString, StructuredDetail: detail), dryRun, Validation: validation);
+                $"Fix the issue(s) below and retry.",
+                detailString,
+                detail.Cast<object>().ToList(),
+                workspaceManager.GetSolutionRoot(),
+                cancellationToken);
+            return new ApplyOutcome(null, validationError, dryRun, Validation: validation);
         }
 
         if (dryRun)

@@ -1342,6 +1342,26 @@ public class WorkspaceReadNavigationImpl
                         };
                         break;
                     }
+                case ResultWrapperType.ErrorStructuredDetailList:
+                    {
+                        // Offloaded ResultError.StructuredDetail (see ResultError.ForPossiblyLargeDetailAsync).
+                        // Element shape varies by which tool/branch produced it (LedgerEntryBase-derived
+                        // entries, SkippedCallSite, DiagnosticReport.Diagnostics, ...) - pass through as raw
+                        // JSON nodes instead of a single concrete record type, same as
+                        // SymbolRelationshipResultList above.
+                        var items = (all.Data as JsonArray) ?? [];
+                        var requested = Math.Min(limit, Math.Max(0, items.Count - offset));
+                        var page = ShrinkListToFit(items.Skip(offset).Take(limit).ToList(), _jsonOptions);
+                        result = new SentinelCallToolResult<object>
+                        {
+                            IsSuccess = true,
+                            SuccessData = page,
+                            WarningDetails = page.Count < requested
+                                ? $"Page shrunk from {requested} to {page.Count} record(s) to stay under the size threshold. Call again with offset: {offset + page.Count} to continue."
+                                : null
+                        };
+                        break;
+                    }
                 default:
                     {
                         return new SentinelCallToolResult<object>
