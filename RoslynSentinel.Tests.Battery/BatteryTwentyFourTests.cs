@@ -950,6 +950,45 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    public async Task RemoveMember_OnNamespaceLevelRecord_SkipPrecheckTrue_ReturnsActionableTypeKindMessage()
+    {
+        // Regression test for blocking_error_member_remove_skipprecheck_targetnotfound_ambiguous_symbol.md.
+        // Root cause: RemoveMemberAsync's candidate resolution deliberately excludes type-level
+        // declarations (Class/Interface/Struct/Record/Enum/EnumMember) from its member pool - this
+        // is by design (Member(remove) only ever operates on class-level members), not something
+        // skipPrecheck changes. Without skipPrecheck, a record with callers is caught first by the
+        // tool-level precheck (FindCallersAsync, which DOES resolve type declarations) and refused
+        // with a caller list - masking the fact that the removal itself could never have succeeded.
+        // With skipPrecheck: true, that precheck is bypassed and the removal falls through to the
+        // always-doomed type-kind exclusion, which previously reported a misleading generic
+        // "Member not found" (TargetNotFound) even though GetFileOutline shows the record present
+        // and unchanged. The fix makes that failure name the actual cause instead.
+        SetMultiFile(
+            ("Chain.cs", """
+            namespace TestProj;
+
+            public record CircularDependencyChain(string Name);
+            """),
+            ("Caller.cs", """
+            namespace TestProj;
+
+            public class Caller
+            {
+                public CircularDependencyChain Make() => new CircularDependencyChain("x");
+            }
+            """));
+
+        var withPrecheck = await _refactoringStructuralTools.Member(reason: "test message", "Chain.cs", MemberAction.remove, memberName: "CircularDependencyChain");
+        Assert.That(withPrecheck.IsSuccess, Is.False, "A record with a real caller must be refused by the default precheck.");
+        Assert.That(withPrecheck.ErrorData!.Message, Does.Contain("caller"), "Default refusal must come from the tool-level precheck, listing the caller.");
+
+        var skipPrecheck = await _refactoringStructuralTools.Member(reason: "test message", "Chain.cs", MemberAction.remove, memberName: "CircularDependencyChain", skipPrecheck: true);
+        Assert.That(skipPrecheck.IsSuccess, Is.False, "Member(remove) cannot remove a type-level declaration regardless of skipPrecheck.");
+        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("type-level declaration"), "The failure must name the actual cause (a type-level declaration Member(remove) structurally excludes), not a generic 'Member not found'.");
+        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("Record"), "The message must name the specific excluded kind found under this name.");
+    }
+
+    [Test]
     public async Task RemoveMember_OverrideWithNoCallersOrImplementations_SucceedsByDefault()
     {
         // An override with no callers of its own and nothing further overriding it isn't flagged by

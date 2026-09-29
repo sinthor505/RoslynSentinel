@@ -1706,14 +1706,33 @@ public class RefactoringEngine
         }
 
         SyntaxNode? member;
+        List<SyntaxNodeCandidate>? typeKindCandidatesForHint = null;
         try
         {
-            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, memberName, cancellationToken)
+            var allNameCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, memberName, cancellationToken);
+            var memberCandidates = SymbolNavigationEngine.PreferNonInterfaceMember(allNameCandidates
                 .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
                 .ToList());
             memberCandidates = SymbolNavigationEngine.FilterByContainingType(memberCandidates, containerName);
             member = SymbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => BuildMemberHintForCandidates(_symbolNavigationEngine, candidates, matches, failureMode))?.Node;
+
+            // Member(remove) only ever operates on class-level members (methods, properties,
+            // fields, etc.) -- Class/Interface/Struct/Record/Enum/EnumMember are excluded from
+            // memberCandidates above by design (type-level removal has no supported operation
+            // yet; see docs/current/blockers/blocking_error_member_remove_skipprecheck_targetnotfound_ambiguous_symbol.md).
+            // When the exclusion is *why* nothing resolved, surface that explicitly instead of
+            // the generic "Member not found" -- the name did resolve, just to a kind this
+            // operation cannot touch, and this holds regardless of skipPrecheck since both the
+            // precheck (FindCallersAsync, which does resolve type declarations) and this removal
+            // path see the same name; only skipPrecheck determines whether the caller ever sees
+            // this more specific message or the earlier caller-list refusal instead.
+            if (member == null)
+            {
+                typeKindCandidatesForHint = allNameCandidates
+                    .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)
+                    .ToList();
+            }
         }
         catch (InvalidOperationException ex)
         {
@@ -1727,6 +1746,22 @@ public class RefactoringEngine
 
         if (member == null)
         {
+            if (typeKindCandidatesForHint is { Count: > 0 })
+            {
+                var kindNames = string.Join(", ", typeKindCandidatesForHint.Select(c => c.Kind).Distinct());
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// '{memberName}' is a type-level declaration ({kindNames}), not a class member. " +
+                        "Member(remove) only removes class-level members (methods, properties, fields, constructors, " +
+                        "events, indexers) -- it does not support removing type declarations (classes, interfaces, " +
+                        "structs, records, enums, or enum members), and skipPrecheck does not change this. " +
+                        "There is currently no tool for removing a type declaration that still has callers; " +
+                        "use ReplaceSnippet or ApplyDiff to edit the file's raw text instead."
+                };
+            }
+
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
