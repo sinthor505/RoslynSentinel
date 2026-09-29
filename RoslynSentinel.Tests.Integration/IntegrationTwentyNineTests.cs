@@ -610,7 +610,7 @@ public class RealSolution_SmokeTests_Battery28
     {
         var engine = new ArchitecturalEngine(_workspaceManager);
         List<CircularDependencyChain>? result = null;
-        Assert.DoesNotThrowAsync(async () => result = await engine.FindCircularDependenciesAsync(), "ArchitecturalEngine.FindCircularDependenciesAsync must not throw on the real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularDependenciesAsync(), "ArchitecturalEngine.FindCircularDependenciesAsync must not throw on the real solution.");
         Assert.That(result, Is.Not.Null);
     }
 

@@ -94,7 +94,6 @@ public class MigrationScanResultTests
             new PerformanceEngine(_workspaceManager),
             new DeadCodeEngine(_workspaceManager),
             new DependencyEngine(_workspaceManager),
-            new ArchitecturalEngine(_workspaceManager),
             new SolutionStructureEngine(_workspaceManager, config),
             new DependencyInjectionEngine(_workspaceManager),
             new ProjectConsistencyEngine(_workspaceManager),

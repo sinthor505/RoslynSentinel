@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
-
 [TestFixture]
 public class BatteryTwentyTwoTests
 {
@@ -126,7 +125,7 @@ public class OrderService : IOrderService
         _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(_discoveryEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance));
         _symbolNavigationTools = new SymbolNavigationTools(new SymbolNavigationImpl(_symbolNavigationEngine, _impactAnalyzer, _workspaceManager, NullLogger<SymbolNavigationImpl>.Instance));
         // GetPublicApiSurface moved to ScanTools (Advanced).
-        _scanTools = new ScanTools(new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _architecturalEngine, _projectStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager), _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine, new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeStyleAnalysisEngine(_workspaceManager), new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config), _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager), _workspaceManager, NullLogger<ScanTools>.Instance);
+        _scanTools = new ScanTools(new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _projectStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager), _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine, new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeStyleAnalysisEngine(_workspaceManager), new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config), _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager), _workspaceManager, NullLogger<ScanTools>.Instance);
     }
 
     [TearDown]
@@ -250,7 +249,7 @@ public class OrderService : IOrderService
     public async Task FindCircularDependencies_NoParams_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _architecturalEngine.FindCircularDependenciesAsync();
+        var result = await _projectStructureEngine.FindCircularDependenciesAsync();
         Assert.That(result, Is.Not.Null);
     }
 
@@ -426,7 +425,7 @@ public class OrderService : IOrderService
     public async Task FindCircularDependencies_WithProjectName_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _architecturalEngine.FindCircularDependenciesAsync("TestProj");
+        var result = await _projectStructureEngine.FindCircularDependenciesAsync("TestProj");
         Assert.That(result, Is.Not.Null);
     }
 

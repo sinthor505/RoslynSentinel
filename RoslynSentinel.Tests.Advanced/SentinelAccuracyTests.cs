@@ -257,7 +257,6 @@ public class C {
 public class SemaphoreAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -429,7 +428,6 @@ public class C {
 public class MismatchedAwaitAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -2385,7 +2383,6 @@ public class C {
 public class CircularTypeReferenceTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -2403,7 +2400,7 @@ public class CircularTypeReferenceTests
 public class A { public A(B b) { } }
 public class B { public B(A a) { } }
 ");
-        var results = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
+        var results = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
         Assert.That(results, Is.Not.Empty, "A depends on B and B depends on A - circular dependency");
         Assert.That(results.Any(r => r.Contains("A") && r.Contains("B")), Is.True);
     }
@@ -2415,7 +2412,7 @@ public class B { public B(A a) { } }
 public class A { public A(B b) { } }
 public class B { public B() { } }
 ");
-        var results = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
+        var results = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
         Assert.That(results, Is.Empty, "A->B with B having no deps should not be circular");
     }
 
@@ -2427,7 +2424,7 @@ public class X { public X(Y y) { } }
 public class Y { public Y(Z z) { } }
 public class Z { public Z(X x) { } }
 ");
-        var results = await new ArchitecturalEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
+        var results = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
         Assert.That(results, Is.Not.Empty, "X->Y->Z->X is a three-way cycle");
     }
 }
@@ -2553,7 +2550,6 @@ public class C {
 public class MissingGenericConstraintTests
 {
     private IWorkspaceManager _workspaceManager = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -2850,7 +2846,6 @@ public class C {
 public class AnalysisEngineExtended2Tests
 {
     private IWorkspaceManager _workspaceManager = null!;
-
     [SetUp]
     public void Setup()
     {

@@ -4,13 +4,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
-
 public class IntelligenceTests
 {
     private IWorkspaceManager _workspaceManager;
     // private AnalysisEngine _analysisEngine;
     private ArchitecturalEngine _architecturalEngine;
-
     [SetUp]
     public void Setup()
     {
@@ -21,7 +19,6 @@ public class IntelligenceTests
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
-
     private Solution CreateSolution(string source, string fileName = "Test.cs")
     {
         var adhocWorkspace = new AdhocWorkspace();
@@ -40,18 +37,11 @@ public class IntelligenceTests
         // Actually, for an ad-hoc test, it's easier to just prove the engine works on non-circular paths 
         // or a known complex solution. Since we can't easily force a cycle in Adhoc without hacks,
         // we verify it detects when references are NOT circular first.
-
         var projectIdA = ProjectId.CreateNewId();
         var projectIdB = ProjectId.CreateNewId();
-
-        var solution = new AdhocWorkspace().CurrentSolution
-            .AddProject(projectIdA, "ProjA", "ProjA", LanguageNames.CSharp)
-            .AddProject(projectIdB, "ProjB", "ProjB", LanguageNames.CSharp)
-            .AddProjectReference(projectIdA, new ProjectReference(projectIdB));
-
+        var solution = new AdhocWorkspace().CurrentSolution.AddProject(projectIdA, "ProjA", "ProjA", LanguageNames.CSharp).AddProject(projectIdB, "ProjB", "ProjB", LanguageNames.CSharp).AddProjectReference(projectIdA, new ProjectReference(projectIdB));
         _workspaceManager.SetTestSolution(solution);
-
-        var cycles = await _architecturalEngine.FindCircularDependenciesAsync();
+        var cycles = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularDependenciesAsync();
         Assert.That(cycles.Count, Is.Zero, "Linear should not be a cycle.");
     }
 
@@ -60,20 +50,13 @@ public class IntelligenceTests
     {
         using var adhocWorkspace = new AdhocWorkspace();
         var solution = adhocWorkspace.CurrentSolution;
-
         var projAId = ProjectId.CreateNewId();
         var projBId = ProjectId.CreateNewId();
-
-        solution = solution.AddProject(projAId, "ProjA", "ProjA", LanguageNames.CSharp)
-                          .AddProject(projBId, "ProjB", "ProjB", LanguageNames.CSharp);
-
+        solution = solution.AddProject(projAId, "ProjA", "ProjA", LanguageNames.CSharp).AddProject(projBId, "ProjB", "ProjB", LanguageNames.CSharp);
         // A -> B
         solution = solution.AddProjectReference(projAId, new ProjectReference(projBId));
-
         _workspaceManager.SetTestSolution(solution);
-
-        var cycles = await _architecturalEngine.FindCircularDependenciesAsync();
-
+        var cycles = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularDependenciesAsync();
         Assert.That(cycles.Count, Is.Zero, "Linear dependency should not be flagged as circular.");
     }
 }

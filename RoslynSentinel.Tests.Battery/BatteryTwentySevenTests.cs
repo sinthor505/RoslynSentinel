@@ -209,7 +209,7 @@ public class B03_ArchitecturalEngine_ValidMemberAccess
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("MyWorker.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertToBackgroundServiceAsync("MyWorker.cs", "MyWorker");
+        var result = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("MyWorker.cs", "MyWorker");
         // The result must contain "stoppingToken.IsCancellationRequested" as proper member access
         Assert.That(result.UpdatedText, Does.Contain("stoppingToken.IsCancellationRequested"), "Output must reference stoppingToken.IsCancellationRequested via member access.");
         // Crucially, the dotted form must NOT appear inside an IdentifierName literal string
