@@ -246,6 +246,55 @@ public class PreviewInstanceMoveCallSitesTests
         });
     }
 
+    [Test]
+    public async Task OuterClassFieldOfDestinationType_NotTreatedAsUnqualifiedCandidateForNestedCallSiteAsync()
+    {
+        // Regression test for docs/current/blockers/blocking_error_movemember_batch_false_cs0120_cross_nested_class.md:
+        // an outer class field of the destination type must never be offered as a candidate receiver
+        // for a call site inside one of its nested classes - C# nested classes hold no implicit
+        // outer-instance reference, so an unqualified reference to it is always CS0120, never a valid
+        // rewrite. The nested class's OWN field of the source type is the only legitimate receiver,
+        // and that call site is not broken by the move at all (it never used the destination type),
+        // so it must be left alone / reported honestly, not silently pointed at the unreachable field.
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassA.cs"), ClassAWithFooSource, reloadSolution: false);
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassB.cs"), ClassBSource, reloadSolution: false);
+
+        const string callerSource = """
+        namespace ContosoOrders.Core;
+
+        public class PreviewMoveOuterFixture
+        {
+            private PreviewMoveClassB _outerFieldOfDestinationType;
+
+            public class PreviewMoveNestedFixture
+            {
+                private PreviewMoveClassA _innerFieldOfSourceType;
+
+                public void Do()
+                {
+                    _innerFieldOfSourceType = new PreviewMoveClassA();
+                    _innerFieldOfSourceType.Foo();
+                }
+            }
+        }
+        """;
+        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveOuterFixture.cs"), callerSource);
+
+        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "PreviewMoveClassA.cs"));
+
+        var results = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "PreviewMoveClassA", ["Foo"], "PreviewMoveClassB");
+
+        var fooSite = results.Single(r => r.CallExpression.Contains("Foo"));
+        Assert.Multiple(() =>
+        {
+            // Must NOT be Valid with the outer field as SuggestedFix - that would be the defect
+            // (a receiver unreachable from the nested call site, producing CS0120 on apply).
+            Assert.That(fooSite.Status, Is.EqualTo(CallSiteStatus.NoCandidateIntroducible));
+            Assert.That(fooSite.Candidates, Is.Empty);
+            Assert.That(fooSite.SuggestedFix, Does.Not.Contain("_outerFieldOfDestinationType"));
+        });
+    }
+
     // Added by AddMember (expected - used for diagnostics)
     [Test]
     public async Task MoveMemberAsync_UnambiguousInstanceMember_AppliesAutomaticallyAsync()

@@ -1244,10 +1244,48 @@ public class StructuralRefactoringEngine
                     return string.Equals(candidateTypeName, destinationTypeMetadataName, StringComparison.Ordinal);
                 }
 
+                // LookupSymbols surfaces a field/property by NAME as soon as it is lexically visible,
+                // which for a nested class includes every instance member declared on its enclosing
+                // type(s) - C# nested classes see enclosing-type member names in scope for lookup
+                // purposes, but (unlike VB.NET/Java inner classes) hold no implicit outer-instance
+                // reference, so referencing an outer instance field/property unqualified is always
+                // CS0120 ("An object reference is required..."), never a valid rewrite target. Without
+                // this check, a same-named/same-typed field declared on an outer or unrelated type
+                // (reachable only by name, not by instance) was picked as the "resolved" receiver for
+                // an already-correctly-compiling call site, corrupting it. See
+                // docs/current/blockers/blocking_error_movemember_batch_false_cs0120_cross_nested_class.md.
+                // A static candidate member needs no instance and is always fine; an instance candidate
+                // is only usable unqualified if it is declared on the call site's own enclosing type or
+                // one of that type's base types.
+                var enclosingTypeAtCallSite = lookupPosition == null ? null : refSemanticModel?.GetEnclosingSymbol(lookupPosition.Value, cancellationToken)?.ContainingType;
+
+                bool IsReachableUnqualified(ISymbol s)
+                {
+                    if (s.IsStatic)
+                    {
+                        return true;
+                    }
+
+                    if (enclosingTypeAtCallSite == null)
+                    {
+                        return false;
+                    }
+
+                    for (var t = enclosingTypeAtCallSite; t != null; t = t.BaseType)
+                    {
+                        if (SymbolEqualityComparer.Default.Equals(t, s.ContainingType))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+
                 var candidates = refSemanticModel == null || lookupPosition == null
                     ? new List<string>()
                     : refSemanticModel.LookupSymbols(lookupPosition.Value)
-                        .Where(s => (s is IFieldSymbol || s is IPropertySymbol || s is IParameterSymbol || s is ILocalSymbol) && IsDestinationType(s))
+                        .Where(s => (s is IFieldSymbol || s is IPropertySymbol || s is IParameterSymbol || s is ILocalSymbol) && IsDestinationType(s) && IsReachableUnqualified(s))
                         .Select(s => s.Name)
                         .Distinct()
                         .ToList();
