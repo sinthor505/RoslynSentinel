@@ -128,6 +128,8 @@ public record GitCommitResult : GitResult
     // actual defect - this field makes that whole category of doubt unnecessary to raise.
     public int CommitHashLength => CommitHash.Length;
     public string Message { get; set; } = "";
+
+    public List<string> RemainingStaged { get; set; } = [];
 }
 
 public record GitRevertResult : GitResult
@@ -515,7 +517,7 @@ public class GitImpl : IGitOperations
             var statusRaw = await RunGitAsync(gitRoot,
                 ["status", "--porcelain=v1"], cancellationToken);
             if (statusRaw.ExitCode != 0)
-                return new GitStatusResult { Success = false, Branch = branch, Error = statusRaw.Stderr.Trim() };
+                return new GitStatusResult { Success = false, Branch = branch, Error = CleanGitStderr(statusRaw.Stderr) };
 
             var staged = new List<GitStatusEntry>();
             var unstaged = new List<GitStatusEntry>();
@@ -609,7 +611,7 @@ public class GitImpl : IGitOperations
             var logRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (logRaw.ExitCode != 0)
-                return new GitLogResult { Success = false, Error = logRaw.Stderr.Trim() };
+                return new GitLogResult { Success = false, Error = CleanGitStderr(logRaw.Stderr) };
 
             var commits = new List<GitCommitEntry>();
             foreach (var record in logRaw.Stdout.Split(recordSep, StringSplitOptions.RemoveEmptyEntries))
@@ -684,7 +686,7 @@ public class GitImpl : IGitOperations
             var diffRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (diffRaw.ExitCode != 0)
-                return new GitDiffResult { Success = false, Error = diffRaw.Stderr.Trim() };
+                return new GitDiffResult { Success = false, Error = CleanGitStderr(diffRaw.Stderr) };
 
             var filesChanged = diffRaw.Stdout.Split('\n')
                 .Count(l => l.StartsWith("diff --git", StringComparison.Ordinal));
@@ -719,7 +721,7 @@ public class GitImpl : IGitOperations
             var metaRaw = await RunGitAsync(
                 gitRoot, ["show", $"--format={format}", "--no-patch", target], cancellationToken);
             if (metaRaw.ExitCode != 0)
-                return new GitShowResult { Success = false, Error = metaRaw.Stderr.Trim() };
+                return new GitShowResult { Success = false, Error = CleanGitStderr(metaRaw.Stderr) };
 
             var metaParts = metaRaw.Stdout.TrimEnd('\n', '\r').Split(fieldSep);
             if (metaParts.Length < 5)
@@ -739,7 +741,7 @@ public class GitImpl : IGitOperations
 
             var diffRaw = await RunGitAsync(gitRoot, [.. diffArgs], cancellationToken);
             if (diffRaw.ExitCode != 0)
-                return new GitShowResult { Success = false, Error = diffRaw.Stderr.Trim() };
+                return new GitShowResult { Success = false, Error = CleanGitStderr(diffRaw.Stderr) };
 
             var filesChanged = diffRaw.Stdout.Split('\n')
                 .Count(l => l.StartsWith("diff --git", StringComparison.Ordinal));
@@ -765,6 +767,200 @@ public class GitImpl : IGitOperations
             _logger.LogError(ex, "Git show failed (target={Target})", target);
             return new GitShowResult { Success = false, Error = $"Git show failed: {ex.Message}" };
         }
+    }
+
+    private enum PathClassification
+    {
+        /// <summary>Not tracked, not in the index, not on disk.</summary>
+        Missing,
+        /// <summary>Tracked and currently in the index.</summary>
+        InIndex,
+        /// <summary>Tracked in HEAD but not in the index (deletion staged or about to be staged).</summary>
+        HeadOnly,
+        /// <summary>Untracked but exists on disk.</summary>
+        Untracked
+    }
+
+    private record ClassifiedPath(string Path, PathClassification Classification);
+
+    /// <summary>
+    /// Validates that a path resolves within the repo root. Returns null if valid, or an error message
+    /// naming the path if it resolves outside.
+    /// </summary>
+    private static string? ValidateRepoRoot(string gitRoot, string path)
+    {
+        try
+        {
+            var repoPath = new DirectoryInfo(gitRoot).FullName.TrimEnd(Path.DirectorySeparatorChar);
+            var fullPath = Path.GetFullPath(Path.Combine(gitRoot, path));
+            var normRepoPath = repoPath + Path.DirectorySeparatorChar;
+
+            // Compare: path must start with repo root (with trailing separator) or equal repo root exactly
+            if (!fullPath.StartsWith(normRepoPath, StringComparison.OrdinalIgnoreCase) &&
+                !fullPath.Equals(repoPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Path resolves outside the repository root: {path}";
+            }
+
+            return null;
+        }
+        catch
+        {
+            return $"Invalid path: {path}";
+        }
+    }
+
+    /// <summary>
+    /// Parses the ignored-paths advisory from git stderr when `git add` exits with code 1.
+    /// Extracts paths between "The following paths are ignored" and the next hint/error line.
+    /// Returns a list of ignored paths, or empty if the pattern is not found.
+    /// </summary>
+    private static List<string> ParseIgnoredPaths(string stderr)
+    {
+        var ignoredPaths = new List<string>();
+        var lines = stderr.Split('\n');
+        var inIgnoredBlock = false;
+
+        foreach (var line in lines)
+        {
+            if (line.Contains("The following paths are ignored"))
+            {
+                inIgnoredBlock = true;
+                continue;
+            }
+
+            if (inIgnoredBlock)
+            {
+                // End of block: blank line, hint line, or other error text
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("hint:") || (!line.StartsWith('\t') && !line.StartsWith(' ')))
+                {
+                    if (!line.StartsWith("hint:") && !string.IsNullOrWhiteSpace(line))
+                        break;
+                    continue;
+                }
+
+                // This line is a path in the ignored block
+                ignoredPaths.Add(line.Trim());
+            }
+        }
+
+        return ignoredPaths;
+    }
+
+    /// <summary>
+    /// Cleans git stderr output by removing noisy CRLF warning lines and capping total length.
+    /// Removes lines matching:
+    /// - "warning: ... LF will be replaced by CRLF ..."
+    /// - "The file will have its original line endings ..."
+    /// Caps output at approximately 2000 characters with a "(N more lines omitted)" suffix.
+    /// </summary>
+    private static string CleanGitStderr(string stderr)
+    {
+        if (string.IsNullOrWhiteSpace(stderr))
+            return stderr;
+
+        var lines = stderr.Split('\n');
+        var cleaned = new List<string>();
+
+        foreach (var line in lines)
+        {
+            // Skip CRLF warning lines
+            if (line.Contains("warning:") && line.Contains("LF will be replaced by CRLF"))
+                continue;
+            if (line.Contains("The file will have its original line endings"))
+                continue;
+
+            cleaned.Add(line);
+        }
+
+        var result = string.Join("\n", cleaned).Trim();
+
+        // Cap at ~2000 characters
+        const int maxChars = 2000;
+        if (result.Length > maxChars)
+        {
+            // Count how many lines we're omitting
+            var truncated = result.Substring(0, maxChars);
+            var remainingText = result.Substring(maxChars);
+            var omittedLines = remainingText.Count(c => c == '\n');
+            result = truncated + $"\n({omittedLines} more lines omitted)";
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Classifies a list of paths by their git and filesystem state. Uses git ls-files (index),
+    /// git ls-tree (HEAD), and disk existence to determine whether each path is:
+    /// - Missing: not tracked, not indexed, not on disk
+    /// - InIndex: currently in the staging index
+    /// - HeadOnly: tracked in HEAD but not in the current index (deletion candidate)
+    /// - Untracked: untracked but exists on disk
+    ///
+    /// Paths are normalized to forward slashes for git compatibility. Normalizes input from the
+    /// caller's repo-relative paths.
+    /// </summary>
+    private async Task<List<ClassifiedPath>> ClassifyPathsAsync(
+        string gitRoot, List<string> filePaths, CancellationToken cancellationToken)
+    {
+        if (filePaths.Count == 0)
+            return [];
+
+        // Normalize paths: \ to / for git, and remove any trailing slashes.
+        var normalized = filePaths
+            .Select(p => p.Replace('\\', '/').TrimEnd('/'))
+            .ToList();
+
+        // Check index state: git --literal-pathspecs ls-files -z --cached -- <paths>
+        var lsFilesBase = new[] { "--literal-pathspecs", "ls-files", "-z", "--cached", "--" };
+        var lsFilesArgs = lsFilesBase.Concat(normalized).ToArray();
+        var lsFilesRaw = await RunGitAsync(gitRoot, lsFilesArgs, cancellationToken);
+
+        var inIndex = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (lsFilesRaw.ExitCode == 0 && lsFilesRaw.Stdout.Length > 0)
+        {
+            var indexPaths = lsFilesRaw.Stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var p in indexPaths)
+                inIndex.Add(p);
+        }
+
+        // Check HEAD state: git --literal-pathspecs ls-tree -r -z --name-only HEAD -- <paths>
+        // For an unborn HEAD (no commits), this will fail, which we treat as empty.
+        var lsTreeBase = new[] { "--literal-pathspecs", "ls-tree", "-r", "-z", "--name-only", "HEAD", "--" };
+        var lsTreeArgs = lsTreeBase.Concat(normalized).ToArray();
+        var lsTreeRaw = await RunGitAsync(gitRoot, lsTreeArgs, cancellationToken);
+
+        var inHead = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (lsTreeRaw.ExitCode == 0 && lsTreeRaw.Stdout.Length > 0)
+        {
+            var headPaths = lsTreeRaw.Stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var p in headPaths)
+                inHead.Add(p);
+        }
+
+        // Classify each path
+        var result = new List<ClassifiedPath>();
+        foreach (var path in normalized)
+        {
+            var inIndexState = inIndex.Contains(path);
+            var inHeadState = inHead.Contains(path);
+            var fullPath = Path.Combine(gitRoot, path);
+            var fileExists = File.Exists(fullPath);
+            var dirExists = Directory.Exists(fullPath);
+            var diskExists = fileExists || dirExists;
+
+            var classification = (inIndexState, inHeadState, diskExists) switch
+            {
+                (true, _, _) => PathClassification.InIndex,
+                (false, true, false) => PathClassification.HeadOnly,
+                (false, false, true) => PathClassification.Untracked,
+                _ => PathClassification.Missing
+            };
+
+            result.Add(new ClassifiedPath(path, classification));
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -812,22 +1008,111 @@ public class GitImpl : IGitOperations
                     stageArgs = ["add", "-A"];
                     break;
                 case GitStageScope.listed:
-                    // `git add -- <paths>` stages untracked paths as well as tracked modifications,
-                    // which is what "stage exactly these" has to mean to be useful.
+                    // For scope=listed, classify the paths first to handle deletions (HeadOnly)
+                    // and ignored files (Untracked under .gitignore) correctly.
                     var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                     if (pathsError != null)
                         return new GitStatusResult { Success = false, Error = pathsError };
-                    stageArgs = ["add", "--", .. filePaths!];
-                    break;
+
+                    // Validate that paths stay within repo
+                    foreach (var p in filePaths!)
+                    {
+                        var error = ValidateRepoRoot(gitRoot, p);
+                        if (error != null)
+                        {
+                            return new GitStatusResult
+                            {
+                                Success = false,
+                                Error = $"{error}. Nothing was staged."
+                            };
+                        }
+                    }
+
+                    // Classify paths
+                    var classified = await ClassifyPathsAsync(gitRoot, filePaths!.ToList(), cancellationToken);
+
+                    // Check for missing paths
+                    var missing = classified.Where(cp => cp.Classification == PathClassification.Missing).ToList();
+                    if (missing.Count > 0)
+                    {
+                        var missingList = string.Join(", ", missing.Select(m => $"\"{m.Path}\""));
+                        return new GitStatusResult
+                        {
+                            Success = false,
+                            Error = $"The following paths are not tracked and do not exist on disk: {missingList}. Nothing was staged."
+                        };
+                    }
+
+                    // Separate paths by classification for staged staging
+                    var inIndex = classified.Where(cp => cp.Classification == PathClassification.InIndex).Select(cp => cp.Path).ToList();
+                    var headOnly = classified.Where(cp => cp.Classification == PathClassification.HeadOnly).Select(cp => cp.Path).ToList();
+                    var untracked = classified.Where(cp => cp.Classification == PathClassification.Untracked).Select(cp => cp.Path).ToList();
+
+                    // Stage InIndex paths using git --literal-pathspecs add -u -- <paths>
+                    if (inIndex.Count > 0)
+                    {
+                        var addUBase = new[] { "--literal-pathspecs", "add", "-u", "--" };
+                        var addUArgs = addUBase.Concat(inIndex).ToArray();
+                        var addURaw = await RunGitAsync(gitRoot, addUArgs, cancellationToken);
+                        if (addURaw.ExitCode != 0)
+                        {
+                            return new GitStatusResult
+                            {
+                                Success = false,
+                                Error = $"git add -u failed: {CleanGitStderr(addURaw.Stderr)}"
+                            };
+                        }
+                    }
+
+                    // Stage HeadOnly paths - these are deletions already staged or staged here via the pathspec
+                    // We skip them and report them as already staged (no action needed)
+                    // They will be committed if included in the pathspec
+
+                    // Stage Untracked paths using plain git --literal-pathspecs add -- <paths>
+                    if (untracked.Count > 0)
+                    {
+                        var addBase = new[] { "--literal-pathspecs", "add", "--" };
+                        var addArgs = addBase.Concat(untracked).ToArray();
+                        var addRaw = await RunGitAsync(gitRoot, addArgs, cancellationToken);
+
+                        // Check for ignored-path advisory in stderr
+                        if (addRaw.ExitCode != 0 && addRaw.Stderr.Contains("The following paths are ignored"))
+                        {
+                            var ignoredPaths = ParseIgnoredPaths(addRaw.Stderr);
+                            if (ignoredPaths.Count > 0)
+                            {
+                                var ignoredList = string.Join(", ", ignoredPaths.Select(p => $"\"{p}\""));
+                                return new GitStatusResult
+                                {
+                                    Success = false,
+                                    Error = $"The following paths are ignored by .gitignore: {ignoredList}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to stage them. Nothing was staged."
+                                };
+                            }
+                        }
+
+                        if (addRaw.ExitCode != 0)
+                        {
+                            return new GitStatusResult
+                            {
+                                Success = false,
+                                Error = $"git add failed: {CleanGitStderr(addRaw.Stderr)}"
+                            };
+                        }
+                    }
+
+                    return await StatusAsync(gitRoot, cancellationToken);
                 case GitStageScope.tracked:
                 default:
-                    stageArgs = ["add", "-u"];
-                    break;
+                    stageArgs = ["--literal-pathspecs", "add", "-u"];
+                    var trackedRaw = await RunGitAsync(gitRoot, stageArgs, cancellationToken);
+                    if (trackedRaw.ExitCode != 0)
+                        return new GitStatusResult { Success = false, Error = $"git add failed: {CleanGitStderr(trackedRaw.Stderr)}" };
+                    return await StatusAsync(gitRoot, cancellationToken);
             }
 
             var stageRaw = await RunGitAsync(gitRoot, stageArgs, cancellationToken);
             if (stageRaw.ExitCode != 0)
-                return new GitStatusResult { Success = false, Error = $"git add failed: {stageRaw.Stderr.Trim()}" };
+                return new GitStatusResult { Success = false, Error = $"git add failed: {CleanGitStderr(stageRaw.Stderr)}" };
 
             return await StatusAsync(gitRoot, cancellationToken);
         }
@@ -837,7 +1122,7 @@ public class GitImpl : IGitOperations
             return new GitStatusResult { Success = false, Error = $"Git stage failed: {ex.Message}" };
         }
     }
-       /// <summary>
+    /// <summary>
     /// Removes files from the index (<c>git reset</c>), leaving the working tree untouched. The
     /// tool could previously stage but never un-stage, so any mis-stage forced a shell fallback ->
     /// a state the tool could create but not exit. With no paths this resets the whole index; with
@@ -869,7 +1154,7 @@ public class GitImpl : IGitOperations
             // `git reset` exits 1 when the index still differs from HEAD after the reset, which is
             // the normal outcome here, not a failure. Treat stderr content as the real signal
             // rather than trusting the exit code alone.
-            var resetErrText = resetRaw.Stderr.Trim();
+            var resetErrText = CleanGitStderr(resetRaw.Stderr);
             if (resetRaw.ExitCode != 0 && resetErrText.Length > 0)
                 return new GitStatusResult { Success = false, Error = $"git reset failed: {resetErrText}" };
 
@@ -897,25 +1182,88 @@ public class GitImpl : IGitOperations
 
         try
         {
-            // scope is only non-null here when the CALLER explicitly passed it to THIS commit
-            // call. Committing must never implicitly re-stage: an earlier defaulted scope of
-            // "tracked" caused CommitAsync to run `git add -u` on every commit that didn't repeat
-            // scope/files, silently sweeping in any other dirty tracked file at commit time and
-            // then committing the whole index with no pathspec (see
-            // blocking_error_git_stage_listed_scope_over_stages_unrequested_file.md). Omitting
-            // scope now means "commit exactly what is already staged" - no pre-stage at all.
-            if (scope is { } explicitScope)
+            // For scope=listed, classify paths first to determine which ones need pre-staging
+            // (untracked only) vs those already in the index.
+            bool stagedUntrackedFiles = false;
+            if (scope == GitStageScope.listed && !string.IsNullOrWhiteSpace(paths))
             {
+                var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
+                if (pathsError != null)
+                    return new GitCommitResult { Success = false, Error = pathsError };
+
+                // Validate that paths stay within repo
+                foreach (var p in filePaths!)
+                {
+                    var error = ValidateRepoRoot(gitRoot, p);
+                    if (error != null)
+                    {
+                        return new GitCommitResult
+                        {
+                            Success = false,
+                            Error = $"{error}. Nothing was committed."
+                        };
+                    }
+                }
+
+                // Classify paths
+                var classified = await ClassifyPathsAsync(gitRoot, filePaths!.ToList(), cancellationToken);
+
+                // Check for missing paths - reject early
+                var missing = classified.Where(cp => cp.Classification == PathClassification.Missing).ToList();
+                if (missing.Count > 0)
+                {
+                    var missingList = string.Join(", ", missing.Select(m => $"\"{m.Path}\""));
+                    return new GitCommitResult
+                    {
+                        Success = false,
+                        Error = $"The following paths are not tracked and do not exist on disk: {missingList}. Nothing was committed."
+                    };
+                }
+
+                // Pre-stage only Untracked paths (they must be in the index for the pathspec to match)
+                var untracked = classified.Where(cp => cp.Classification == PathClassification.Untracked).Select(cp => cp.Path).ToList();
+                if (untracked.Count > 0)
+                {
+                    var addBase = new[] { "--literal-pathspecs", "add", "--" };
+                    var addArgs = addBase.Concat(untracked).ToArray();
+                    var addRaw = await RunGitAsync(gitRoot, addArgs, cancellationToken);
+
+                    // Check for ignored-path advisory
+                    if (addRaw.ExitCode != 0 && addRaw.Stderr.Contains("The following paths are ignored"))
+                    {
+                        var ignoredPaths = ParseIgnoredPaths(addRaw.Stderr);
+                        if (ignoredPaths.Count > 0)
+                        {
+                            var ignoredList = string.Join(", ", ignoredPaths.Select(p => $"\"{p}\""));
+                            return new GitCommitResult
+                            {
+                                Success = false,
+                                Error = $"The following paths are ignored by .gitignore: {ignoredList}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to commit them. Nothing was committed."
+                            };
+                        }
+                    }
+
+                    if (addRaw.ExitCode != 0)
+                    {
+                        return new GitCommitResult
+                        {
+                            Success = false,
+                            Error = $"git add failed: {CleanGitStderr(addRaw.Stderr)}"
+                        };
+                    }
+
+                    stagedUntrackedFiles = true;
+                }
+            }
+            else if (scope is { } explicitScope && scope != GitStageScope.listed)
+            {
+                // For scope=all or scope=tracked, pre-stage as requested
                 var stageResult = await StageAsync(gitRoot, explicitScope, paths, cancellationToken);
                 if (!stageResult.Success)
                     return new GitCommitResult { Success = false, Error = stageResult.Error };
             }
 
-            // When specific files were named (scope=listed), restrict the commit itself to those
-            // paths via a pathspec. Without this, `git commit -m message` commits the ENTIRE
-            // current index regardless of what was just staged above -> silently sweeping in
-            // anything left over from earlier staging in the same working tree. `files`/`paths`
-            // must narrow the commit, not just add to what StageAsync staged.
+            // Build commit arguments
             var messageArgs = (amend, HasMessage: !string.IsNullOrWhiteSpace(message)) switch
             {
                 (amend: true, HasMessage: true) => new[] { "--amend", "-m", message! },
@@ -924,30 +1272,47 @@ public class GitImpl : IGitOperations
             };
 
             string[] commitArgs;
-            if (scope == GitStageScope.listed && !string.IsNullOrWhiteSpace(paths))
+            if (!string.IsNullOrWhiteSpace(paths))
             {
-                var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
-                if (pathsError != null)
-                    return new GitCommitResult { Success = false, Error = pathsError };
-                commitArgs = ["commit", .. messageArgs, "--", .. filePaths!];
+                // When specific files were named, restrict the commit to those paths via --only
+                var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out _);
+                if (filePaths != null && filePaths.Length > 0)
+                {
+                    var commitBase = new[] { "commit" }.Concat(messageArgs).Concat(new[] { "--only", "--literal-pathspecs", "--" }).ToArray();
+                    commitArgs = commitBase.Concat(filePaths).ToArray();
+                }
+                else
+                {
+                    commitArgs = new[] { "commit" }.Concat(messageArgs).ToArray();
+                }
             }
             else
             {
-                commitArgs = ["commit", .. messageArgs];
+                commitArgs = new[] { "commit" }.Concat(messageArgs).ToArray();
             }
 
             var commitRaw = await RunGitAsync(gitRoot, commitArgs, cancellationToken);
             if (commitRaw.ExitCode != 0)
             {
-                var detail = string.Join("\n", new[] { commitRaw.Stdout.Trim(), commitRaw.Stderr.Trim() }
+                var detail = string.Join("\n", new[] { commitRaw.Stdout.Trim(), CleanGitStderr(commitRaw.Stderr) }
                     .Where(s => !string.IsNullOrEmpty(s)));
                 var errorText = string.IsNullOrEmpty(detail)
                     ? $"git commit exited with code {commitRaw.ExitCode}"
                     : detail;
-                return new GitCommitResult { Success = false, Error = $"git commit failed: {errorText}" };
+
+                // If we staged untracked files and the commit failed, provide recovery info
+                string failureNote = "";
+                if (stagedUntrackedFiles)
+                {
+                    var countRaw = await RunGitAsync(gitRoot, new[] { "diff", "--cached", "--name-only" }, cancellationToken);
+                    var stagedCount = countRaw.ExitCode == 0 ? countRaw.Stdout.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries).Length : 0;
+                    failureNote = $" Staging already ran; the index now holds {stagedCount} staged paths. Call Git(operation: unstage) to undo.";
+                }
+
+                return new GitCommitResult { Success = false, Error = $"git commit failed: {errorText}{failureNote}" };
             }
 
-            var hashRaw = await RunGitAsync(gitRoot, ["rev-parse", "HEAD"], cancellationToken);
+            var hashRaw = await RunGitAsync(gitRoot, new[] { "rev-parse", "HEAD" }, cancellationToken);
             var hash = hashRaw.ExitCode == 0 ? hashRaw.Stdout.Trim() : "";
 
             // Sanity check, not a correctness fix: a SHA-1 hash is always exactly 40 hex
@@ -966,10 +1331,18 @@ public class GitImpl : IGitOperations
 
             // message can be null here (amend --no-edit kept HEAD's existing message), so read
             // back the commit's actual message rather than echoing the (possibly absent) input.
-            var msgRaw = await RunGitAsync(gitRoot, ["log", "-1", "--format=%B"], cancellationToken);
+            var msgRaw = await RunGitAsync(gitRoot, new[] { "log", "-1", "--format=%B" }, cancellationToken);
             var finalMessage = msgRaw.ExitCode == 0 ? msgRaw.Stdout.Trim() : message ?? "";
 
-            return new GitCommitResult { Success = true, CommitHash = hash, Message = finalMessage };
+            // Populate RemainingStaged: list of paths still in the index after the commit
+            var remainingRaw = await RunGitAsync(gitRoot, new[] { "diff", "--cached", "--name-only" }, cancellationToken);
+            var remainingStaged = new List<string>();
+            if (remainingRaw.ExitCode == 0 && !string.IsNullOrWhiteSpace(remainingRaw.Stdout))
+            {
+                remainingStaged = remainingRaw.Stdout.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+            }
+
+            return new GitCommitResult { Success = true, CommitHash = hash, Message = finalMessage, RemainingStaged = remainingStaged };
         }
         catch (Exception ex)
         {
@@ -994,7 +1367,7 @@ public class GitImpl : IGitOperations
             var revertRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (revertRaw.ExitCode != 0)
-                return new GitRevertResult { Success = false, CommitHash = commitHash, Error = revertRaw.Stderr.Trim() };
+                return new GitRevertResult { Success = false, CommitHash = commitHash, Error = CleanGitStderr(revertRaw.Stderr) };
 
             string newHash = "";
             if (!noCommit)
@@ -1035,7 +1408,7 @@ public class GitImpl : IGitOperations
             var resetRaw = await RunGitAsync(gitRoot, ["reset", modeFlag, target], cancellationToken);
 
             if (resetRaw.ExitCode != 0)
-                return new GitStatusResult { Success = false, Error = $"git reset failed: {resetRaw.Stderr.Trim()}" };
+                return new GitStatusResult { Success = false, Error = $"git reset failed: {CleanGitStderr(resetRaw.Stderr)}" };
 
             return await StatusAsync(gitRoot, cancellationToken);
         }
@@ -1063,7 +1436,7 @@ public class GitImpl : IGitOperations
                 var listRaw = await RunGitAsync(gitRoot,
                     ["branch", "--list", "--all"], cancellationToken);
                 if (listRaw.ExitCode != 0)
-                    return new GitBranchResult { Success = false, Error = listRaw.Stderr.Trim() };
+                    return new GitBranchResult { Success = false, Error = CleanGitStderr(listRaw.Stderr) };
 
                 var branches = new List<GitBranchEntry>();
                 foreach (var rawLine in listRaw.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
@@ -1093,7 +1466,7 @@ public class GitImpl : IGitOperations
                     return new GitBranchResult
                     {
                         Success = false,
-                        Error = $"git branch -d failed: {delRaw.Stderr.Trim()}. If the branch truly should be discarded unmerged, this tool deliberately does not expose -D; use the shell as a documented exception."
+                        Error = $"git branch -d failed: {CleanGitStderr(delRaw.Stderr)}. If the branch truly should be discarded unmerged, this tool deliberately does not expose -D; use the shell as a documented exception."
                     };
 
                 return new GitBranchResult { Success = true, Deleted = branchName };
@@ -1104,7 +1477,7 @@ public class GitImpl : IGitOperations
                 : ["branch", branchName, startPoint];
             var createRaw = await RunGitAsync(gitRoot, createArgs, cancellationToken);
             if (createRaw.ExitCode != 0)
-                return new GitBranchResult { Success = false, Error = $"git branch failed: {createRaw.Stderr.Trim()}" };
+                return new GitBranchResult { Success = false, Error = $"git branch failed: {CleanGitStderr(createRaw.Stderr)}" };
 
             return new GitBranchResult { Success = true, Created = branchName };
         }
@@ -1143,7 +1516,7 @@ public class GitImpl : IGitOperations
 
             var checkoutRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
             if (checkoutRaw.ExitCode != 0)
-                return new GitCheckoutResult { Success = false, Branch = branchName, Error = checkoutRaw.Stderr.Trim() };
+                return new GitCheckoutResult { Success = false, Branch = branchName, Error = CleanGitStderr(checkoutRaw.Stderr) };
 
             return new GitCheckoutResult { Success = true, Branch = branchName, CreatedNewBranch = createBranch };
         }
@@ -1176,7 +1549,7 @@ public class GitImpl : IGitOperations
                 args.Add(branch);
 
             var pushRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
-            var detail = string.Join("\n", new[] { pushRaw.Stdout.Trim(), pushRaw.Stderr.Trim() }.Where(s => s.Length > 0));
+            var detail = string.Join("\n", new[] { pushRaw.Stdout.Trim(), CleanGitStderr(pushRaw.Stderr) }.Where(s => s.Length > 0));
             if (pushRaw.ExitCode != 0)
                 return new GitRemoteResult { Success = false, Operation = "push", Error = detail.Length > 0 ? detail : $"git push exited with code {pushRaw.ExitCode}" };
 
@@ -1195,7 +1568,7 @@ public class GitImpl : IGitOperations
         try
         {
             var fetchRaw = await RunGitAsync(gitRoot, ["fetch", remoteName], cancellationToken);
-            var detail = string.Join("\n", new[] { fetchRaw.Stdout.Trim(), fetchRaw.Stderr.Trim() }.Where(s => s.Length > 0));
+            var detail = string.Join("\n", new[] { fetchRaw.Stdout.Trim(), CleanGitStderr(fetchRaw.Stderr) }.Where(s => s.Length > 0));
             if (fetchRaw.ExitCode != 0)
                 return new GitRemoteResult { Success = false, Operation = "fetch", Error = detail.Length > 0 ? detail : $"git fetch exited with code {fetchRaw.ExitCode}" };
 
@@ -1220,7 +1593,7 @@ public class GitImpl : IGitOperations
         {
             var args = rebase ? new List<string> { "pull", "--rebase", remoteName } : new List<string> { "pull", remoteName };
             var pullRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
-            var detail = string.Join("\n", new[] { pullRaw.Stdout.Trim(), pullRaw.Stderr.Trim() }.Where(s => s.Length > 0));
+            var detail = string.Join("\n", new[] { pullRaw.Stdout.Trim(), CleanGitStderr(pullRaw.Stderr) }.Where(s => s.Length > 0));
             if (pullRaw.ExitCode != 0)
                 return new GitRemoteResult { Success = false, Operation = "pull", Error = detail.Length > 0 ? detail : $"git pull exited with code {pullRaw.ExitCode}" };
 
