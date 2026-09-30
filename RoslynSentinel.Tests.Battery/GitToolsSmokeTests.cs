@@ -79,6 +79,85 @@ public class GitToolsSmokeTests
         }
     }
 
+    // Captures git command output (stdout only), returns empty string on non-zero exit.
+    private string RunGitCapture(params string[] args)
+    {
+        using var process = new System.Diagnostics.Process();
+        process.StartInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = _repoDir,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+        };
+        foreach (var arg in args)
+        {
+            process.StartInfo.ArgumentList.Add(arg);
+        }
+
+        process.Start();
+        var output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        return process.ExitCode == 0 ? output : string.Empty;
+    }
+
+    // Returns the list of file paths currently staged in the index.
+    private List<string> StagedPaths()
+    {
+        var output = RunGitCapture("diff", "--cached", "--name-only");
+        return output.Split(new[] { '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim())
+            .Where(p => !string.IsNullOrEmpty(p))
+            .ToList();
+    }
+
+    // Returns the list of file paths in HEAD (the current commit).
+    private List<string> HeadPaths()
+    {
+        var output = RunGitCapture("show", "--name-only", "--format=", "HEAD");
+        return output.Split(new[] { '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim())
+            .Where(p => !string.IsNullOrEmpty(p))
+            .ToList();
+    }
+
+    // Writes a file at the relative path within the test repo.
+    private void WriteFile(string relPath, string content)
+    {
+        var fullPath = Path.Combine(_repoDir, relPath);
+        var dir = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+        File.WriteAllText(fullPath, content);
+    }
+
+    // Creates a .gitignore file in the repo root with the given patterns.
+    private void CreateGitignore(string patterns)
+    {
+        WriteFile(".gitignore", patterns);
+        RunGit(_repoDir, "add", ".gitignore");
+        RunGit(_repoDir, "commit", "-m", "add .gitignore");
+    }
+
+    // Force-tracks a file under a gitignored path so it is included despite the ignore pattern.
+    private void ForceTrackUnderGitignored(string relPath, string content)
+    {
+        WriteFile(relPath, content);
+        RunGit(_repoDir, "add", "-f", relPath);
+        RunGit(_repoDir, "commit", "-m", $"force-track {relPath}");
+    }
+
+    // Configures git to use CRLF mode and warn on conversion, for testing CRLF-related corner cases.
+    private void EnableCrlfWarnings()
+    {
+        RunGit(_repoDir, "config", "core.autocrlf", "true");
+        RunGit(_repoDir, "config", "core.safecrlf", "warn");
+    }
+
     [Test]
     public async Task Git_Status_RespondsWithinBoundAsync()
     {
