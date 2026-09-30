@@ -127,7 +127,8 @@ public class GitToolsSmokeTests
     // Returns the list of file paths currently staged in the index.
     private List<string> StagedPaths()
     {
-        var output = RunGitCapture("diff", "--cached", "--name-only");
+        // core.quotePath=false so non-ASCII names come back verbatim rather than octal-escaped.
+        var output = RunGitCapture("-c", "core.quotePath=false", "diff", "--cached", "--name-only");
         return output.Split(new[] { '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries)
             .Select(p => p.Trim())
             .Where(p => !string.IsNullOrEmpty(p))
@@ -801,5 +802,236 @@ public class GitToolsSmokeTests
             "files under the staged directory should be staged");
         Assert.That(stagedPaths, Does.Contain("subdir/file2.txt"),
             "files under the staged directory should be staged");
+    }
+
+    // Phase 3 tests: read-side parity (status -z parsing, maxEntries, nameOnly/stat, byte cap, conflicts)
+
+    [Test]
+    public async Task Git_Status_PathsWithSpacesAndNonAscii_RoundTripIntoFilesAsync()
+    {
+        // Non-ASCII built from char codes (e-acute, u-umlaut) so this source file stays ASCII-only.
+        const string spaced = "my notes.txt";
+        var accented = "caf" + (char)0xE9 + " men" + (char)0xFC + ".txt";
+        WriteFile(spaced, "a");
+        WriteFile(accented, "b");
+
+        var statusResult = await _gitTools.Git(reason: "list untracked paths", GitOperation.status);
+        Assert.That(statusResult.IsSuccess, Is.True, statusResult.ErrorData?.Message);
+        var status = (GitStatusResult)statusResult.SuccessData!;
+        Assert.That(status.Untracked, Is.EquivalentTo(new[] { spaced, accented }),
+            "status must return the real names (no quotes, no octal escapes) so they are usable as-is");
+
+        // Stage using exactly the strings status returned.
+        var files = System.Text.Json.JsonSerializer.Serialize(status.Untracked.ToArray());
+        var stageResult = await _gitTools.Git(reason: "stage status-returned paths", GitOperation.stage, files: files);
+        Assert.That(stageResult.IsSuccess, Is.True, stageResult.ErrorData?.Message);
+        Assert.That(StagedPaths(), Is.EquivalentTo(new[] { spaced, accented }));
+
+        var stagedStatus = (GitStatusResult)stageResult.SuccessData!;
+        Assert.That(stagedStatus.Staged.Select(e => e.Path), Is.EquivalentTo(new[] { spaced, accented }));
+
+        // Commit one of them, again using the returned string; RemainingStaged must report the
+        // other one unquoted so it too can be fed back into files.
+        var commitResult = await _gitTools.Git(
+            reason: "commit the spaced path", GitOperation.commit, message: "add spaced", files: spaced);
+        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        var commit = (GitCommitResult)commitResult.SuccessData!;
+        Assert.That(commit.RemainingStaged, Is.EqualTo(new[] { accented }),
+            "RemainingStaged must list the non-ASCII path verbatim, not octal-escaped");
+    }
+
+    [Test]
+    public async Task Git_Status_StagedRename_ReturnsPathAndOriginalPathAsync()
+    {
+        WriteFile("old name.txt", "line one\nline two\nline three\nline four\nline five\n");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add old name");
+
+        // git mv stages the rename; the destination has a space so -z record ordering and
+        // whitespace handling are both exercised.
+        RunGit(_repoDir, "mv", "old name.txt", "new name.txt");
+
+        var result = await _gitTools.Git(reason: "status after rename", GitOperation.status);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var status = (GitStatusResult)result.SuccessData!;
+
+        var renamed = status.Staged.Single(e => e.Status == "renamed");
+        Assert.That(renamed.Path, Is.EqualTo("new name.txt"), "Path is the rename destination");
+        Assert.That(renamed.OriginalPath, Is.EqualTo("old name.txt"), "OriginalPath is the rename source");
+        Assert.That(status.Staged, Has.Count.EqualTo(1), "the source path must not also appear as its own entry");
+        Assert.That(status.Untracked, Is.Empty);
+
+        // A non-rename entry has no OriginalPath.
+        WriteFile("plain.txt", "x");
+        RunGit(_repoDir, "add", "plain.txt");
+        var again = (GitStatusResult)(await _gitTools.Git(reason: "status with plain add", GitOperation.status)).SuccessData!;
+        Assert.That(again.Staged.Single(e => e.Path == "plain.txt").OriginalPath, Is.Null);
+    }
+
+    [Test]
+    public async Task Git_Status_MaxEntries_ControlsTruncationThresholdAsync()
+    {
+        for (var i = 0; i < 60; i++)
+        {
+            WriteFile($"bulk{i:D2}.txt", "x");
+        }
+
+        // Default (50): 60 entries is over the threshold, so the result is truncated to a sample.
+        var defaultResult = await _gitTools.Git(reason: "default status", GitOperation.status);
+        var truncated = (GitStatusResult)defaultResult.SuccessData!;
+        Assert.That(truncated.IsTruncated, Is.True);
+        Assert.That(truncated.TotalUntrackedCount, Is.EqualTo(60), "counts stay complete when truncated");
+        Assert.That(truncated.Untracked, Has.Count.EqualTo(10));
+
+        // maxEntries above 50 lists every entry, no truncation.
+        var bigResult = await _gitTools.Git(reason: "status with larger cap", GitOperation.status, maxEntries: 100);
+        Assert.That(bigResult.IsSuccess, Is.True, bigResult.ErrorData?.Message);
+        var full = (GitStatusResult)bigResult.SuccessData!;
+        Assert.That(full.IsTruncated, Is.False);
+        Assert.That(full.Untracked, Has.Count.EqualTo(60), "maxEntries: 100 must return every one of the 60 entries");
+        Assert.That(full.Untracked, Does.Contain("bulk00.txt").And.Contain("bulk59.txt"));
+
+        // Boundary: total == maxEntries is not truncated; one fewer is.
+        var exact = (GitStatusResult)(await _gitTools.Git(reason: "exact cap", GitOperation.status, maxEntries: 60)).SuccessData!;
+        Assert.That(exact.IsTruncated, Is.False);
+        var under = (GitStatusResult)(await _gitTools.Git(reason: "cap below total", GitOperation.status, maxEntries: 59)).SuccessData!;
+        Assert.That(under.IsTruncated, Is.True);
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    [TestCase(5001)]
+    public async Task Git_Status_MaxEntriesOutOfRange_IsRefusedWithNamedParameterAsync(int maxEntries)
+    {
+        var result = await _gitTools.Git(reason: "out of range cap", GitOperation.status, maxEntries: maxEntries);
+
+        Assert.That(result.IsSuccess, Is.False);
+        var message = result.ErrorData?.Message;
+        Assert.That(message, Does.Contain("maxEntries"), "error must name the offending parameter");
+        Assert.That(message, Does.Contain("1").And.Contain("5000"), "error must state the valid range");
+        Assert.That(message, Does.Contain(maxEntries.ToString()), "error must echo the rejected value");
+    }
+
+    [Test]
+    public async Task Git_ShowAndDiff_NameOnlyAndStat_ReturnFileListAndStatInsteadOfPatchAsync()
+    {
+        var accented = "caf" + (char)0xE9 + ".txt";
+        WriteFile("a.txt", "alpha\nalpha2\n");
+        WriteFile("sub dir/b.txt", "beta\n");
+        WriteFile(accented, "gamma\n");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add three files");
+
+        // show + nameOnly: --name-status lines, no patch.
+        var nameOnly = await _gitTools.Git(reason: "show name list", GitOperation.show, target: "HEAD", nameOnly: true);
+        Assert.That(nameOnly.IsSuccess, Is.True, nameOnly.ErrorData?.Message);
+        var nameShow = (GitShowResult)nameOnly.SuccessData!;
+        Assert.That(nameShow.FilesChanged, Is.EqualTo(3));
+        Assert.That(nameShow.Diff, Does.Contain("A\ta.txt").And.Contain("A\tsub dir/b.txt").And.Contain("A\t" + accented),
+            "name-status lines, with non-ASCII and spaced paths verbatim");
+        Assert.That(nameShow.Diff, Does.Not.Contain("diff --git").And.Not.Contain("+alpha"), "no patch text");
+
+        // show + stat: --stat text, no patch.
+        var statOnly = await _gitTools.Git(reason: "show stat", GitOperation.show, target: "HEAD", stat: true);
+        Assert.That(statOnly.IsSuccess, Is.True, statOnly.ErrorData?.Message);
+        var statShow = (GitShowResult)statOnly.SuccessData!;
+        Assert.That(statShow.FilesChanged, Is.EqualTo(3));
+        Assert.That(statShow.Diff, Does.Contain("a.txt").And.Contain("3 files changed"));
+        Assert.That(statShow.Diff, Does.Not.Contain("diff --git").And.Not.Contain("+alpha"), "no patch text");
+
+        // diff honours the same flags (working-tree change to one file).
+        WriteFile("a.txt", "alpha\nalpha2\nalpha3\n");
+        var diffNames = (GitDiffResult)(await _gitTools.Git(reason: "diff name list", GitOperation.diff, nameOnly: true)).SuccessData!;
+        Assert.That(diffNames.Diff.Trim(), Is.EqualTo("M\ta.txt"));
+        Assert.That(diffNames.FilesChanged, Is.EqualTo(1));
+        var diffStat = (GitDiffResult)(await _gitTools.Git(reason: "diff stat", GitOperation.diff, stat: true)).SuccessData!;
+        Assert.That(diffStat.Diff, Does.Contain("a.txt").And.Contain("1 file changed"));
+        Assert.That(diffStat.FilesChanged, Is.EqualTo(1));
+
+        // Default is still the full patch.
+        var patch = (GitDiffResult)(await _gitTools.Git(reason: "diff patch", GitOperation.diff)).SuccessData!;
+        Assert.That(patch.Diff, Does.Contain("diff --git").And.Contain("+alpha3"));
+    }
+
+    [TestCase(GitOperation.diff)]
+    [TestCase(GitOperation.show)]
+    public async Task Git_DiffAndShow_NameOnlyPlusStat_IsRefusedNamingBothParametersAsync(GitOperation operation)
+    {
+        var result = await _gitTools.Git(reason: "both format flags", operation, target: operation == GitOperation.show ? "HEAD" : "working", nameOnly: true, stat: true);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData?.Message, Does.Contain("nameOnly").And.Contain("stat"),
+            "refusal must name both conflicting parameters");
+    }
+
+    [Test]
+    public async Task Git_Diff_MaxBytes_CountsUtf8BytesAndNeverSplitsSurrogatePairAsync()
+    {
+        // U+1F600 is 4 UTF-8 bytes and a 2-char surrogate pair in .NET: 2000 of them are 8000
+        // bytes / 4000 chars, so a char-based cap of 1024 would keep ~4 KB of bytes, and any cut
+        // that is not pair-aware can leave a lone high surrogate at the end.
+        var emoji = char.ConvertFromUtf32(0x1F600);
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), string.Concat(Enumerable.Repeat(emoji, 2000)), System.Text.Encoding.UTF8);
+
+        var result = await _gitTools.Git(reason: "diff with tiny cap", GitOperation.diff, maxBytes: 1024);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var diff = (GitDiffResult)result.SuccessData!;
+        const string marker = "\n... (truncated at 1024 bytes)";
+        Assert.That(diff.Diff, Does.EndWith(marker), "output past the cap must be marked truncated");
+
+        var body = diff.Diff[..^marker.Length];
+        Assert.That(System.Text.Encoding.UTF8.GetByteCount(body), Is.LessThanOrEqualTo(1024),
+            "the cap is measured in UTF-8 bytes, not chars");
+        Assert.That(body.EnumerateRunes().Any(r => r == System.Text.Rune.ReplacementChar), Is.False,
+            "no lone surrogate (which would become U+FFFD) may result from cutting mid-pair");
+        Assert.That(body, Does.EndWith(emoji), "the cut lands on a whole emoji, not mid-character");
+        Assert.That(diff.Warning, Is.Null, "a clean cut must not raise the decode-corruption warning");
+    }
+
+    // Leaves the repo mid-merge with a real conflict on relPath: two branches change (or, when
+    // existsInBase is false, both independently add) the same file with different content.
+    private void CreateMergeConflict(string relPath, bool existsInBase)
+    {
+        if (existsInBase)
+        {
+            WriteFile(relPath, "base\n");
+            RunGit(_repoDir, "add", "-A");
+            RunGit(_repoDir, "commit", "-m", "add base file");
+        }
+
+        var baseBranch = RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim();
+        RunGit(_repoDir, "checkout", "-b", "feature");
+        WriteFile(relPath, "feature side\n");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "feature change");
+
+        RunGit(_repoDir, "checkout", baseBranch);
+        WriteFile(relPath, "main side\n");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "main change");
+
+        // A conflicting merge exits non-zero by design, so RunGit (which throws) is not usable here.
+        var (exitCode, _, stderr) = RunGitRaw("merge", "feature");
+        Assert.That(exitCode, Is.Not.EqualTo(0), "fixture must produce a conflict: " + stderr);
+    }
+
+    [TestCase("shared.txt", true, "UU")]
+    [TestCase("bothadded.txt", false, "AA")]
+    public async Task Git_Status_MergeConflict_IsLabelledConflictOnBothSidesAsync(string relPath, bool existsInBase, string expectedPair)
+    {
+        CreateMergeConflict(relPath, existsInBase);
+        Assert.That(RunGitCapture("status", "--porcelain=v1"), Does.Contain(expectedPair + " " + relPath),
+            "fixture sanity: git itself must report the " + expectedPair + " pair");
+
+        var result = await _gitTools.Git(reason: "status during merge conflict", GitOperation.status);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var status = (GitStatusResult)result.SuccessData!;
+        var staged = status.Staged.Single(e => e.Path == relPath);
+        var unstaged = status.Unstaged.Single(e => e.Path == relPath);
+        Assert.That(staged.Status, Is.EqualTo("conflict"), "AA must not read as a staged 'added'");
+        Assert.That(unstaged.Status, Is.EqualTo("conflict"));
+        Assert.That(status.IsClean, Is.False);
     }
 }

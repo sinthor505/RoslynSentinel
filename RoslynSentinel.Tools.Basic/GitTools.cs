@@ -34,7 +34,7 @@ public class GitTools
         string target = "working",
         [Description("diff/show/log: paths to restrict to (CSV string or JSON array).")]
         string? paths = null,
-        [Description("diff/show: byte cap on the returned diff (max 524288).")]
+        [Description("diff/show: cap on the returned output, measured in UTF-8 bytes (min 1024, max 524288). Output past the cap is cut on a whole-character boundary and marked truncated.")]
         int maxBytes = 65536,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
         [Description("Required for operation=commit unless amend=true (then omitting keeps HEAD's message).")]
@@ -70,6 +70,12 @@ public class GitTools
         GitResetMode? mode = null,
         [Description("status/log/diff/show only: an absolute path to a different repo/worktree. Mutating operations always stay scoped to the loaded solution.")]
         string? repoPath = null,
+        [Description("status: most entries to list before the result is truncated to a 10-per-list sample plus full counts (default 50, valid 1-5000; out of range is refused). Raise it to see every changed path.")]
+        int maxEntries = 50,
+        [Description("diff/show: true returns a --name-status file list (status letter + path per file) instead of the patch. Mutually exclusive with stat.")]
+        bool nameOnly = false,
+        [Description("diff/show: true returns --stat text (per-file change counts and a summary) instead of the patch. Mutually exclusive with nameOnly.")]
+        bool stat = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -110,10 +116,10 @@ public class GitTools
 
         GitResult result = operation switch
         {
-            GitOperation.status => await _gitImpl.StatusAsync(gitRoot, cancellationToken),
+            GitOperation.status => await _gitImpl.StatusAsync(gitRoot, maxEntries, cancellationToken),
             GitOperation.log => await _gitImpl.LogAsync(gitRoot, count, branchName, resolvedPaths, cancellationToken),
-            GitOperation.diff => await _gitImpl.DiffAsync(gitRoot, target, resolvedPaths, maxBytes, cancellationToken),
-            GitOperation.show => await _gitImpl.ShowAsync(gitRoot, !string.IsNullOrWhiteSpace(commitHash) ? commitHash : target, resolvedPaths, maxBytes, cancellationToken),
+            GitOperation.diff => await _gitImpl.DiffAsync(gitRoot, target, resolvedPaths, maxBytes, nameOnly, stat, cancellationToken),
+            GitOperation.show => await _gitImpl.ShowAsync(gitRoot, !string.IsNullOrWhiteSpace(commitHash) ? commitHash : target, resolvedPaths, maxBytes, nameOnly, stat, cancellationToken),
             GitOperation.stage or GitOperation.add => await _gitImpl.StageAsync(gitRoot, effectiveScope ?? GitStageScope.tracked, resolvedPaths, cancellationToken),
             GitOperation.unstage => await _gitImpl.UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
             GitOperation.commit => await _gitImpl.CommitAsync(gitRoot, message, effectiveScope, resolvedPaths, amend, cancellationToken),

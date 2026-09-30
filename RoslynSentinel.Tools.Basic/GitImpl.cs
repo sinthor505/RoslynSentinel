@@ -32,6 +32,12 @@ public record GitStatusEntry
 {
     public string Status { get; set; } = "";
     public string Path { get; set; } = "";
+
+    // Set only for renamed/copied entries: the path the file was renamed/copied FROM (Path is the new path).
+    public string? OriginalPath
+    {
+        get; set;
+    }
 }
 
 public record GitStatusResult : GitResult
@@ -44,7 +50,9 @@ public record GitStatusResult : GitResult
     public List<GitStatusEntry> Staged { get; set; } = [];
     public List<GitStatusEntry> Unstaged { get; set; } = [];
     public List<string> Untracked { get; set; } = [];
-    // Populated when IsTruncated=true; lists above are capped to first 10 entries each as a sample.
+    // Set when the total entry count exceeds the caller's maxEntries (default 50); the lists above are
+    // then capped to a sample of the first 10 entries each and the Total*/*ByStatus counts carry the
+    // full picture. Re-call status with a larger maxEntries (max 5000) to get every entry.
     public bool IsTruncated
     {
         get; set;
@@ -506,16 +514,43 @@ public class GitImpl : IGitOperations
         _ => code.ToString()
     };
 
-    public async Task<GitStatusResult> StatusAsync(string gitRoot, CancellationToken cancellationToken)
+    /// <summary>Default for the status <c>maxEntries</c> parameter (the long-standing 50-entry threshold).</summary>
+    public const int DefaultStatusMaxEntries = 50;
+
+    /// <summary>Upper bound accepted for the status <c>maxEntries</c> parameter.</summary>
+    public const int MaxStatusMaxEntries = 5000;
+
+    /// <summary>
+    /// True for the seven unmerged XY pairs porcelain v1 reports (DD, AU, UD, UA, DU, AA, UU).
+    /// "A" or "D" alone mean staged add/delete, so only these exact pairs (every one of which
+    /// contains a U, or is AA or DD) are conflicts - AA and DD must not read as staged add/delete.
+    /// </summary>
+    private static bool IsConflictPair(char x, char y) =>
+        x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D');
+
+    public async Task<GitStatusResult> StatusAsync(string gitRoot, int maxEntries, CancellationToken cancellationToken)
     {
+        if (maxEntries < 1 || maxEntries > MaxStatusMaxEntries)
+        {
+            return new GitStatusResult
+            {
+                Success = false,
+                Error = $"maxEntries must be between 1 and {MaxStatusMaxEntries} (got {maxEntries}). " +
+                        $"Retry with a value in that range, e.g. maxEntries: {DefaultStatusMaxEntries}. Nothing was changed.",
+            };
+        }
+
         try
         {
             var branchRaw = await RunGitAsync(gitRoot,
                 ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken);
             var branch = branchRaw.ExitCode == 0 ? branchRaw.Stdout.Trim() : "unknown";
 
+            // core.quotePath=false keeps non-ASCII paths verbatim (not "\303\251"-style escapes) and
+            // -z makes each record NUL-terminated with no quoting at all, so spaces and any other
+            // character round-trip into the `files` parameter unchanged.
             var statusRaw = await RunGitAsync(gitRoot,
-                ["status", "--porcelain=v1"], cancellationToken);
+                ["-c", "core.quotePath=false", "status", "--porcelain=v1", "-z"], cancellationToken);
             if (statusRaw.ExitCode != 0)
                 return new GitStatusResult { Success = false, Branch = branch, Error = CleanGitStderr(statusRaw.Stderr) };
 
@@ -523,30 +558,66 @@ public class GitImpl : IGitOperations
             var unstaged = new List<GitStatusEntry>();
             var untracked = new List<string>();
 
-            foreach (var line in statusRaw.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            // Records are "XY <path>" separated by NUL. For a rename/copy (R/C on either side) the
+            // NEXT record is the original path (note: -z reverses the "from -> to" order of the
+            // non-z format). RunGitAsync appends a line terminator after the last NUL, which leaves
+            // a short trailing fragment that the length check below skips.
+            var records = statusRaw.Stdout.Split('\0');
+            for (var i = 0; i < records.Length; i++)
             {
-                if (line.Length < 3) continue;
-                var x = line[0];
-                var y = line[1];
-                var path = line[3..].Trim();
+                var record = records[i];
+                if (record.Length < 4) continue;
+                var x = record[0];
+                var y = record[1];
+                var path = record[3..];
+
+                string? originalPath = null;
+                if (x is 'R' or 'C' || y is 'R' or 'C')
+                {
+                    if (i + 1 < records.Length)
+                        originalPath = records[++i];
+                }
 
                 if (x == '?' && y == '?')
                 {
                     untracked.Add(path);
                     continue;
                 }
+
+                if (IsConflictPair(x, y))
+                {
+                    // Both sides are labelled "conflict": AA/DD would otherwise read as a staged
+                    // add/delete, which is the opposite of what an unmerged path is.
+                    staged.Add(new GitStatusEntry { Status = "conflict", Path = path });
+                    unstaged.Add(new GitStatusEntry { Status = "conflict", Path = path });
+                    continue;
+                }
+
                 if (x != ' ' && x != '?')
-                    staged.Add(new GitStatusEntry { Status = StatusLabel(x), Path = path });
+                {
+                    staged.Add(new GitStatusEntry
+                    {
+                        Status = StatusLabel(x),
+                        Path = path,
+                        OriginalPath = x is 'R' or 'C' ? originalPath : null,
+                    });
+                }
                 if (y != ' ' && y != '?')
-                    unstaged.Add(new GitStatusEntry { Status = StatusLabel(y), Path = path });
+                {
+                    unstaged.Add(new GitStatusEntry
+                    {
+                        Status = StatusLabel(y),
+                        Path = path,
+                        OriginalPath = y is 'R' or 'C' ? originalPath : null,
+                    });
+                }
             }
 
             bool isClean = staged.Count == 0 && unstaged.Count == 0 && untracked.Count == 0;
             int total = staged.Count + unstaged.Count + untracked.Count;
-            const int threshold = 50;
-            const int sampleSize = 10;
+            var sampleSize = Math.Min(10, maxEntries);
 
-            if (total > threshold)
+            if (total > maxEntries)
             {
                 return new GitStatusResult
                 {
@@ -644,13 +715,78 @@ public class GitImpl : IGitOperations
     // with "unknown revision" in exactly that case, since `^` has nothing to resolve to).
     private const string EmptyTreeHash = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
+    /// <summary>
+    /// Caps <paramref name="text"/> at <paramref name="maxBytes"/> UTF-8 bytes (not chars), cutting
+    /// only on a whole-character boundary so a surrogate pair is never split, and appends a
+    /// truncation marker when anything was dropped.
+    /// </summary>
+    private static string CapToUtf8Bytes(string text, int maxBytes)
+    {
+        if (Encoding.UTF8.GetByteCount(text) <= maxBytes)
+            return text;
+
+        var bytes = 0;
+        var chars = 0;
+        foreach (var rune in text.EnumerateRunes())
+        {
+            var runeBytes = rune.Utf8SequenceLength;
+            if (bytes + runeBytes > maxBytes)
+                break;
+            bytes += runeBytes;
+            chars += rune.Utf16SequenceLength;
+        }
+
+        return text[..chars] + $"\n... (truncated at {maxBytes} bytes)";
+    }
+
+    /// <summary>
+    /// Returns a refusal message when both output-format flags are set, else null. They pick
+    /// different git output formats (<c>--name-status</c> vs <c>--stat</c>) and cannot be combined.
+    /// </summary>
+    private static string? ValidateDiffFormatFlags(string operationName, bool nameOnly, bool stat) =>
+        nameOnly && stat
+            ? $"Git {operationName}: both 'nameOnly' and 'stat' were set, but they select different output formats " +
+              "(nameOnly = a --name-status file list, stat = --stat text). Pass only one of them, or neither for the full patch. Nothing was run."
+            : null;
+
+    /// <summary>
+    /// Counts the files a diff-family output covers, per the format that was requested: one line
+    /// per file for <c>--name-status</c>, the trailing "N files changed" summary for <c>--stat</c>,
+    /// and the number of "diff --git" headers for a full patch.
+    /// </summary>
+    private static int CountChangedFiles(string output, bool nameOnly, bool stat)
+    {
+        if (nameOnly)
+            return output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Length;
+
+        if (stat)
+        {
+            var summary = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+            var match = summary is null
+                ? null
+                : System.Text.RegularExpressions.Regex.Match(summary, @"(\d+) files? changed");
+            return match is { Success: true } ? int.Parse(match.Groups[1].Value) : 0;
+        }
+
+        return output.Split('\n').Count(l => l.StartsWith("diff --git", StringComparison.Ordinal));
+    }
+
     public async Task<GitDiffResult> DiffAsync(
-        string gitRoot, string target, string? paths, int maxBytes, CancellationToken cancellationToken)
+        string gitRoot, string target, string? paths, int maxBytes, bool nameOnly, bool stat, CancellationToken cancellationToken)
     {
         maxBytes = Math.Clamp(maxBytes, 1024, 524288);
+        var formatError = ValidateDiffFormatFlags("diff", nameOnly, stat);
+        if (formatError is not null)
+            return new GitDiffResult { Success = false, Error = formatError };
+
         try
         {
-            var args = new List<string> { "diff" };
+            // core.quotePath=false so non-ASCII paths in headers and file lists are not octal-escaped.
+            var args = new List<string> { "-c", "core.quotePath=false", "diff" };
+            if (nameOnly)
+                args.Add("--name-status");
+            else if (stat)
+                args.Add("--stat=200");
 
             if (target == "staged")
             {
@@ -688,12 +824,8 @@ public class GitImpl : IGitOperations
             if (diffRaw.ExitCode != 0)
                 return new GitDiffResult { Success = false, Error = CleanGitStderr(diffRaw.Stderr) };
 
-            var filesChanged = diffRaw.Stdout.Split('\n')
-                .Count(l => l.StartsWith("diff --git", StringComparison.Ordinal));
-
-            var diff = diffRaw.Stdout.Length > maxBytes
-                ? diffRaw.Stdout[..maxBytes] + $"\n... (truncated at {maxBytes} bytes)"
-                : diffRaw.Stdout;
+            var filesChanged = CountChangedFiles(diffRaw.Stdout, nameOnly, stat);
+            var diff = CapToUtf8Bytes(diffRaw.Stdout, maxBytes);
 
             return new GitDiffResult { Success = true, Diff = diff, FilesChanged = filesChanged, Warning = DetectDecodeCorruption(diff) };
         }
@@ -710,9 +842,13 @@ public class GitImpl : IGitOperations
     /// when <paramref name="target"/> has no parent (a repo's first commit), same as DiffAsync.
     /// </summary>
     public async Task<GitShowResult> ShowAsync(
-        string gitRoot, string target, string? paths, int maxBytes, CancellationToken cancellationToken)
+        string gitRoot, string target, string? paths, int maxBytes, bool nameOnly, bool stat, CancellationToken cancellationToken)
     {
         maxBytes = Math.Clamp(maxBytes, 1024, 524288);
+        var formatError = ValidateDiffFormatFlags("show", nameOnly, stat);
+        if (formatError is not null)
+            return new GitShowResult { Success = false, Error = formatError };
+
         try
         {
             const string fieldSep = "\x1f";
@@ -728,7 +864,14 @@ public class GitImpl : IGitOperations
                 return new GitShowResult { Success = false, Error = $"Could not parse commit metadata for '{target}'." };
 
             var revParseRaw = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"{target}^"], cancellationToken);
-            var diffArgs = new List<string> { "diff", revParseRaw.ExitCode == 0 ? $"{target}^" : EmptyTreeHash, target };
+            // core.quotePath=false so non-ASCII paths in headers and file lists are not octal-escaped.
+            var diffArgs = new List<string> { "-c", "core.quotePath=false", "diff" };
+            if (nameOnly)
+                diffArgs.Add("--name-status");
+            else if (stat)
+                diffArgs.Add("--stat=200");
+            diffArgs.Add(revParseRaw.ExitCode == 0 ? $"{target}^" : EmptyTreeHash);
+            diffArgs.Add(target);
             if (!string.IsNullOrWhiteSpace(paths))
             {
                 var parsedPaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
@@ -743,12 +886,8 @@ public class GitImpl : IGitOperations
             if (diffRaw.ExitCode != 0)
                 return new GitShowResult { Success = false, Error = CleanGitStderr(diffRaw.Stderr) };
 
-            var filesChanged = diffRaw.Stdout.Split('\n')
-                .Count(l => l.StartsWith("diff --git", StringComparison.Ordinal));
-
-            var diff = diffRaw.Stdout.Length > maxBytes
-                ? diffRaw.Stdout[..maxBytes] + $"\n... (truncated at {maxBytes} bytes)"
-                : diffRaw.Stdout;
+            var filesChanged = CountChangedFiles(diffRaw.Stdout, nameOnly, stat);
+            var diff = CapToUtf8Bytes(diffRaw.Stdout, maxBytes);
 
             return new GitShowResult
             {
@@ -1140,21 +1279,21 @@ public class GitImpl : IGitOperations
                         }
                     }
 
-                    return await StatusAsync(gitRoot, cancellationToken);
+                    return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
                 case GitStageScope.tracked:
                 default:
                     stageArgs = ["--literal-pathspecs", "add", "-u"];
                     var trackedRaw = await RunGitAsync(gitRoot, stageArgs, cancellationToken);
                     if (trackedRaw.ExitCode != 0)
                         return new GitStatusResult { Success = false, Error = $"git add failed: {CleanGitStderr(trackedRaw.Stderr)}" };
-                    return await StatusAsync(gitRoot, cancellationToken);
+                    return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
             }
 
             var stageRaw = await RunGitAsync(gitRoot, stageArgs, cancellationToken);
             if (stageRaw.ExitCode != 0)
                 return new GitStatusResult { Success = false, Error = $"git add failed: {CleanGitStderr(stageRaw.Stderr)}" };
 
-            return await StatusAsync(gitRoot, cancellationToken);
+            return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -1198,7 +1337,7 @@ public class GitImpl : IGitOperations
             if (resetRaw.ExitCode != 0 && resetErrText.Length > 0)
                 return new GitStatusResult { Success = false, Error = $"git reset failed: {resetErrText}" };
 
-            return await StatusAsync(gitRoot, cancellationToken);
+            return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -1357,7 +1496,7 @@ public class GitImpl : IGitOperations
                 string failureNote = "";
                 if (stagedUntrackedFiles)
                 {
-                    var countRaw = await RunGitAsync(gitRoot, new[] { "diff", "--cached", "--name-only" }, cancellationToken);
+                    var countRaw = await RunGitAsync(gitRoot, new[] { "-c", "core.quotePath=false", "diff", "--cached", "--name-only" }, cancellationToken);
                     var stagedCount = countRaw.ExitCode == 0 ? countRaw.Stdout.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries).Length : 0;
                     failureNote = $" Staging already ran; the index now holds {stagedCount} staged paths. Call Git(operation: unstage) to undo.";
                 }
@@ -1388,7 +1527,8 @@ public class GitImpl : IGitOperations
             var finalMessage = msgRaw.ExitCode == 0 ? msgRaw.Stdout.Trim() : message ?? "";
 
             // Populate RemainingStaged: list of paths still in the index after the commit
-            var remainingRaw = await RunGitAsync(gitRoot, new[] { "diff", "--cached", "--name-only" }, cancellationToken);
+            // core.quotePath=false so non-ASCII paths come back verbatim and can be passed to `files`.
+            var remainingRaw = await RunGitAsync(gitRoot, new[] { "-c", "core.quotePath=false", "diff", "--cached", "--name-only" }, cancellationToken);
             var remainingStaged = new List<string>();
             if (remainingRaw.ExitCode == 0 && !string.IsNullOrWhiteSpace(remainingRaw.Stdout))
             {
@@ -1467,7 +1607,7 @@ public class GitImpl : IGitOperations
             if (resetRaw.ExitCode != 0)
                 return new GitStatusResult { Success = false, Error = $"git reset failed: {CleanGitStderr(resetRaw.Stderr)}" };
 
-            return await StatusAsync(gitRoot, cancellationToken);
+            return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
         }
         catch (Exception ex)
         {
