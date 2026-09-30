@@ -12,10 +12,32 @@
 $ErrorActionPreference = 'Continue'
 $hook = Join-Path $PSScriptRoot 'enforce-dogfood.ps1'
 
-function Invoke-Hook([string]$payload) {
-    $payload | & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $hook 2>&1 | Out-Null
+function Invoke-Hook([string]$payload, [string]$hookPath = $hook) {
+    $payload | & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $hookPath 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 2) { 'DENY' } else { 'allow' }
 }
+
+# The commit rule reads the real index (git diff --cached), and the hook resolves its repo
+# root from its own location (..\.. from the hook folder). To fake "empty index" vs "paths
+# staged" without touching the real repo, run a temp copy of the hook inside a throwaway git
+# repo. fx = 'empty' -> nothing staged; fx = 'staged' -> one staged path; fx = 'norepo' -> git fails.
+$fixtureRoots = @{}
+function Get-FixtureHook([string]$kind) {
+    if ($fixtureRoots.ContainsKey($kind)) { return Join-Path $fixtureRoots[$kind] '.claude\hooks\enforce-dogfood.ps1' }
+    $root = Join-Path ([System.IO.Path]::GetTempPath()) ("rs-dogfood-fx-$kind-" + [guid]::NewGuid().ToString('N'))
+    $hookDir = Join-Path $root '.claude\hooks'
+    New-Item -ItemType Directory -Path $hookDir -Force | Out-Null
+    Copy-Item $hook (Join-Path $hookDir 'enforce-dogfood.ps1') -Force
+    if ($kind -ne 'norepo') { & git -C $root init -q 2>&1 | Out-Null }
+    if ($kind -eq 'staged') {
+        Set-Content -LiteralPath (Join-Path $root 'a.txt') -Value 'x'
+        & git -C $root add -- a.txt 2>&1 | Out-Null
+    }
+    $fixtureRoots[$kind] = $root
+    Join-Path $hookDir 'enforce-dogfood.ps1'
+}
+
+$msg = "Fix it`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 $cases = @(
     # --- .cs edits: deny ---
@@ -86,6 +108,28 @@ $cases = @(
     @{ n = 'git check-ignore'; want = 'allow'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git check-ignore -v x.json' } } }
 
+    # --- MCP Git(commit): scope check uses the staged set, not the dirty worktree ---
+    @{ n = 'commit, no scope/files, empty index'; want = 'DENY'; fx = 'empty'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; message = $msg } } }
+    @{ n = 'commit, no scope/files, paths staged'; want = 'allow'; fx = 'staged'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; message = $msg } } }
+    @{ n = 'commit, files only (no scope), empty index'; want = 'allow'; fx = 'empty'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; files = 'A.cs,B.cs'; message = $msg } } }
+    @{ n = 'commit, paths only (no scope), empty index'; want = 'allow'; fx = 'empty'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; paths = 'A.cs'; message = $msg } } }
+    @{ n = 'commit, scope=listed + files, empty index'; want = 'allow'; fx = 'empty'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; scope = 'listed'; files = 'A.cs'; message = $msg } } }
+    @{ n = 'commit, scope=all + files (trusted as before)'; want = 'allow'; fx = 'empty'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; scope = 'all'; files = 'A.cs'; message = $msg } } }
+    @{ n = 'commit, files only, missing trailer'; want = 'DENY'; fx = 'staged'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; files = 'A.cs'; message = 'Fix it' } } }
+    @{ n = 'commit, no scope/files, staged, missing trailer'; want = 'DENY'; fx = 'staged'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; message = 'Fix it' } } }
+    @{ n = 'commit, amend (reword) with empty index'; want = 'allow'; fx = 'empty'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; amend = $true; message = $msg } } }
+    @{ n = 'commit, git fails (not a repo): fail open'; want = 'allow'; fx = 'norepo'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; message = $msg } } }
+
     # --- unrelated commands: allow ---
     @{ n = 'dotnet build'; want = 'allow'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'dotnet build' } } }
@@ -98,7 +142,8 @@ $cases = @(
 $pass = 0; $fail = 0
 
 foreach ($c in $cases) {
-    $got = Invoke-Hook ($c.p | ConvertTo-Json -Depth 5 -Compress)
+    $hookPath = if ($c.fx) { Get-FixtureHook $c.fx } else { $hook }
+    $got = Invoke-Hook ($c.p | ConvertTo-Json -Depth 5 -Compress) $hookPath
 
     if ($got -eq $c.want) { $pass++; $mark = 'ok  ' }
     else                  { $fail++; $mark = 'FAIL' }
@@ -112,6 +157,8 @@ foreach ($bad in @('', 'not json at all', '{"tool_name":"Bash"}')) {
     if ($got -eq 'allow') { $pass++; $mark = 'ok  ' } else { $fail++; $mark = 'FAIL' }
     '{0} {1,-42} want={2,-5} got={3}' -f $mark, "fail-open: $label", 'allow', $got | Write-Host
 }
+
+foreach ($r in $fixtureRoots.Values) { Remove-Item -LiteralPath $r -Recurse -Force -ErrorAction SilentlyContinue }
 
 Write-Host ''
 Write-Host "pass=$pass fail=$fail"

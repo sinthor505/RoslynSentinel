@@ -14,8 +14,8 @@ $ErrorActionPreference = 'Continue'
 $dogfoodHook  = Join-Path $PSScriptRoot 'enforce-dogfood.ps1'
 $buildHook    = Join-Path $PSScriptRoot 'check-build-staleness.ps1'
 
-function Invoke-DogfoodHook([string]$payloadJson) {
-    $result = $payloadJson | & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $dogfoodHook 2>&1
+function Invoke-DogfoodHook([string]$payloadJson, [string]$hookPath = $dogfoodHook) {
+    $result = $payloadJson | & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $hookPath 2>&1
     [pscustomobject]@{
         Verdict = if ($LASTEXITCODE -eq 2) { 'DENY' } else { 'allow' }
         Output  = ($result | Out-String)
@@ -31,6 +31,25 @@ function Invoke-BuildHook([string]$payloadJson) {
 }
 
 $cases = @()
+
+# Throwaway git repos with a copy of the hook inside (the hook resolves its repo root from its
+# own location, ..\.. from the hook folder). 'empty' = nothing staged, 'staged' = one staged path.
+$fixtureRoots = @{}
+function Get-FixtureHook([string]$kind) {
+    if (-not $fixtureRoots.ContainsKey($kind)) {
+        $root = Join-Path ([System.IO.Path]::GetTempPath()) ("rs-dogfood-fc-$kind-" + [guid]::NewGuid().ToString('N'))
+        $hookDir = Join-Path $root '.claude\hooks'
+        New-Item -ItemType Directory -Path $hookDir -Force | Out-Null
+        Copy-Item $dogfoodHook (Join-Path $hookDir 'enforce-dogfood.ps1') -Force
+        & git -C $root init -q 2>&1 | Out-Null
+        if ($kind -eq 'staged') {
+            Set-Content -LiteralPath (Join-Path $root 'a.txt') -Value 'x'
+            & git -C $root add -- a.txt 2>&1 | Out-Null
+        }
+        $fixtureRoots[$kind] = $root
+    }
+    Join-Path $fixtureRoots[$kind] '.claude\hooks\enforce-dogfood.ps1'
+}
 
 # --- Category 1: Grep on .cs instead of Search/FindReferences ---------------------------
 # Real case: transcript 15c6db84-7045-490a-a35f-290986147527.jsonl line 24 - Grep for a test
@@ -123,13 +142,34 @@ $cases += [pscustomobject]@{
 # --- Category 5: commit missing Co-Authored-By / scope creep -----------------------------
 # Real case: transcript 59a28fea... - 6 of 11 committed files were never edited in that
 # session's transcript; commit had no scope=listed/explicit files, just a bare commit call.
+# The hook's rule changed after the Git tool did: a scope-less commit no longer stages anything
+# (it commits exactly what is staged), so the dirty-worktree count stopped measuring sweep risk.
+# The category-5 shape (bare commit, nothing listed) is now denied only when the index is empty;
+# with paths staged it is allowed. Both run against a throwaway repo (RepoFixture) so the result
+# does not depend on the real repo's state.
 $cases += [pscustomobject]@{
-    N = 'FC8: commit with no explicit file scope while repo is dirty (transcript 59a28fea, scope-creep)'
+    N = 'FC8: bare commit, no files/scope, nothing staged (category 5, revised rule)'
     Kind = 'dogfood'
+    RepoFixture = 'empty'
     Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; message = "Rename HasMorePages to HasMoreData`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" } }
     Want = 'DENY'
-    RequiresDirtyRepo = $true
-    MustContainInOutput = @('no explicit file scope', 'scope: "listed"')
+    MustContainInOutput = @('nothing staged', 'files:')
+}
+
+$cases += [pscustomobject]@{
+    N = 'FC8b: bare commit, no files/scope, paths staged (commits exactly the index)'
+    Kind = 'dogfood'
+    RepoFixture = 'staged'
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; message = "Rename HasMorePages to HasMoreData`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" } }
+    Want = 'allow'
+}
+
+$cases += [pscustomobject]@{
+    N = 'FC8c: commit with files only (no scope) is an explicit listing'
+    Kind = 'dogfood'
+    RepoFixture = 'empty'
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; files = 'A.cs,B.cs'; message = "Rename HasMorePages to HasMoreData`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" } }
+    Want = 'allow'
 }
 
 # Every real commit sampled in the survey DID have a trailer, so this exercises the rule
@@ -152,14 +192,6 @@ $cases += [pscustomobject]@{
 $pass = 0; $fail = 0
 
 foreach ($c in $cases) {
-    if ($c.PSObject.Properties.Match('RequiresDirtyRepo').Count -gt 0 -and $c.RequiresDirtyRepo) {
-        $dirty = & git -C (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path status --porcelain 2>$null
-        if (-not ($dirty | Where-Object { $_ })) {
-            Write-Host "skip  $($c.N) (repo is clean; this case needs dirty working tree to be meaningful)"
-            continue
-        }
-    }
-
     $json = $c.Payload | ConvertTo-Json -Depth 8 -Compress
     $result = if ($c.Kind -eq 'buildstale') {
         # check-build-staleness.ps1 resolves repo root from $PSScriptRoot (..\.. from the
@@ -171,7 +203,11 @@ foreach ($c in $cases) {
         $output = $json | & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $hookDir 'check-build-staleness.ps1') 2>&1
         [pscustomobject]@{ Verdict = if ($LASTEXITCODE -eq 2) { 'DENY' } else { 'allow' }; Output = ($output | Out-String) }
     } else {
-        Invoke-DogfoodHook $json
+        if ($c.PSObject.Properties.Match('RepoFixture').Count -gt 0 -and $c.RepoFixture) {
+            Invoke-DogfoodHook $json (Get-FixtureHook $c.RepoFixture)
+        } else {
+            Invoke-DogfoodHook $json
+        }
     }
 
     $verdictOk = ($result.Verdict -eq $c.Want)
@@ -192,6 +228,7 @@ foreach ($c in $cases) {
 }
 
 Remove-Item -LiteralPath $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+foreach ($r in $fixtureRoots.Values) { Remove-Item -LiteralPath $r -Recurse -Force -ErrorAction SilentlyContinue }
 
 Write-Host ''
 Write-Host "pass=$pass fail=$fail"

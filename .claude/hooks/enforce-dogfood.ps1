@@ -31,8 +31,8 @@
 #     hook's message does), and a soft warning (not a block - this is a heuristic, not a real
 #     symbol resolution) when a batchEdits entry's newContent references an identifier that no
 #     earlier entry in the same batch appears to define.
-#   - Git(operation: commit) missing a Co-Authored-By trailer, or staging beyond the current
-#     session's touched-file heuristic without an explicit files/paths list.
+#   - Git(operation: commit) missing a Co-Authored-By trailer, a scope-less commit with nothing
+#     staged, or scope=all/tracked with no files/paths list while the tree is dirty.
 #
 # Tests: pwsh -NoProfile -File .claude/hooks/enforce-dogfood.Tests.ps1
 
@@ -291,7 +291,7 @@ status, log, diff, stage/add, commit (incl. amend) and revert are covered by the
 
   Git(operation: "status")
   Git(operation: "diff",   target: "staged")
-  Git(operation: "stage",  scope: "listed", files: "a.cs,b.cs")
+  Git(operation: "stage",  files: "a.cs,b.cs")
   Git(operation: "commit", message: "...")
   Git(operation: "commit", amend: true)   # keeps HEAD's message (--no-edit)
   Git(operation: "commit", amend: true, message: "...")   # replaces it
@@ -331,39 +331,76 @@ Every commit here needs the attribution trailer. Add it to the message:
 "@
             }
 
-            # Session-scope check: this is the git-status heuristic, not true session tracking
-            # (a hook has no session-transcript access) - it compares the commit's effective
-            # file list against everything currently dirty in git status. If the commit passes
-            # an explicit files/paths list, that IS the explicit listing CLAUDE.md asks for, so
-            # it's trusted outright with no further check. Only a scope-less commit (relying on
-            # "whatever is currently staged") gets compared against the full dirty set, since
-            # that's the shape that swept in unrelated files in the category-5 transcript case.
+            # Scope check. Since the Git tool change, a commit that names files (with or without
+            # scope) commits exactly those paths, and a scope-less, file-less commit commits
+            # exactly what is already staged - it stages nothing itself, so nothing else can be
+            # swept in. `files`/`paths` alone therefore IS the explicit listing (the tool infers
+            # scope=listed from them). The hook cannot tell which session staged what, so for the
+            # scope-less, file-less shape the only thing left to catch is an empty index.
+            #
+            # An explicit scope=all or scope=tracked with no file list is different: the tool
+            # pre-stages every dirty path itself, which is a real sweep, so that shape keeps the
+            # git-status dirty-count check. scope=all/tracked WITH files is trusted outright, as
+            # before (the tool refuses that combination itself). scope=listed with no files is
+            # left to the tool, which refuses it with its own actionable error.
             $explicitFiles = [string]$toolInput.files
             $explicitPaths = [string]$toolInput.paths
             $scope         = [string]$toolInput.scope
-            if (-not $explicitFiles -and -not $explicitPaths -and $scope -ne 'listed') {
-                try {
-                    $porcelain = & git -C $repoRoot status --porcelain 2>$null
-                    $dirtyCount = ($porcelain | Where-Object { $_ }).Count
+            if (-not $explicitFiles -and -not $explicitPaths) {
+                # amend can legitimately commit nothing new (message-only reword), so an empty
+                # index is only a problem for a non-amend commit.
+                if (-not $scope -and -not $amend) {
+                    $staged = $null
+                    try {
+                        $out = & git -C $repoRoot diff --cached --name-only 2>$null
+                        # Fail open if git itself failed (not a repo, git missing): an empty
+                        # result from a failed call must not read as "nothing staged".
+                        if ($LASTEXITCODE -eq 0) { $staged = @($out | Where-Object { $_ }) }
+                    }
+                    catch { $staged = $null }
+
+                    if ($null -ne $staged -and $staged.Count -eq 0) {
+                        Deny @"
+BLOCKED by dog-fooding policy: commit with nothing staged.
+
+A commit with no files and no scope commits exactly what is already staged, and the
+index is empty, so there is nothing to commit. Stage first, or pass the files:
+
+  Git(operation: "commit", files: "RoslynSentinel.Foo/Bar.cs,RoslynSentinel.Foo/Baz.cs", message: "...")
+
+or:
+
+  Git(operation: "stage", files: "RoslynSentinel.Foo/Bar.cs")
+  Git(operation: "commit", message: "...")
+
+Per CLAUDE.md, list only the files changed in the current session. Nothing was committed.
+"@
+                    }
                 }
-                catch { $dirtyCount = 0 }
+                elseif ($scope -and $scope -ne 'listed') {
+                    try {
+                        $porcelain = & git -C $repoRoot status --porcelain 2>$null
+                        $dirtyCount = ($porcelain | Where-Object { $_ }).Count
+                    }
+                    catch { $dirtyCount = 0 }
 
-                if ($dirtyCount -gt 0) {
-                    Deny @"
-BLOCKED by dog-fooding policy: commit with no explicit file scope.
+                    if ($dirtyCount -gt 0) {
+                        Deny @"
+BLOCKED by dog-fooding policy: commit with scope="$scope" and no file list.
 
-git status shows $dirtyCount dirty path(s), and this commit doesn't name which
-of them belong to it. Per CLAUDE.md, a commit stages only the files changed in
-the current session - other sessions or in-flight work may share this worktree.
+scope="$scope" stages the whole working tree before committing, and git status shows
+$dirtyCount dirty path(s). Per CLAUDE.md, a commit includes only the files changed in the
+current session - other sessions or in-flight work may share this worktree.
 
-Stage explicitly by listing every file the current session actually touched:
+Name the files instead (scope is inferred as "listed"):
 
-  Git(operation: "commit", scope: "listed", files: "RoslynSentinel.Foo/Bar.cs,RoslynSentinel.Foo/Baz.cs", message: "...")
+  Git(operation: "commit", files: "RoslynSentinel.Foo/Bar.cs,RoslynSentinel.Foo/Baz.cs", message: "...")
 
 If everything currently dirty really was touched this session, list them all
 explicitly anyway - that is what makes the scope auditable, not an assumption
 this hook has to make on your behalf.
 "@
+                    }
                 }
             }
         }
