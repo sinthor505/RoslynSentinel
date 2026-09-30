@@ -831,15 +831,11 @@ public class GitImpl : IGitOperations
 
             if (inIgnoredBlock)
             {
-                // End of block: blank line, hint line, or other error text
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("hint:") || (!line.StartsWith('\t') && !line.StartsWith(' ')))
-                {
-                    if (!line.StartsWith("hint:") && !string.IsNullOrWhiteSpace(line))
-                        break;
-                    continue;
-                }
+                // The block ends at the first blank or hint line. Git prints each ignored path
+                // unindented (verified on git 2.55), so any other line here is a path.
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("hint:"))
+                    break;
 
-                // This line is a path in the ignored block
                 ignoredPaths.Add(line.Trim());
             }
         }
@@ -859,7 +855,9 @@ public class GitImpl : IGitOperations
         if (string.IsNullOrWhiteSpace(stderr))
             return stderr;
 
-        var lines = stderr.Split('\n');
+        // RunGitAsync rebuilds stderr with AppendLine (CRLF on Windows); drop the CR of each line so
+        // none survives into the joined message.
+        var lines = stderr.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
         var cleaned = new List<string>();
 
         foreach (var line in lines)
@@ -942,12 +940,20 @@ public class GitImpl : IGitOperations
         var result = new List<ClassifiedPath>();
         foreach (var path in normalized)
         {
-            var inIndexState = inIndex.Contains(path);
-            var inHeadState = inHead.Contains(path);
             var fullPath = Path.Combine(gitRoot, path);
             var fileExists = File.Exists(fullPath);
             var dirExists = Directory.Exists(fullPath);
             var diskExists = fileExists || dirExists;
+
+            // A tracked directory deleted from disk never appears as an entry itself; ls-files and
+            // ls-tree list the files beneath it. Match on the "<path>/" prefix, but only when the
+            // path is gone from disk: a directory that still exists keeps its previous handling
+            // (plain git add, which also picks up new untracked files inside it).
+            var prefix = path + "/";
+            var inIndexState = inIndex.Contains(path)
+                || (!diskExists && inIndex.Any(e => e.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
+            var inHeadState = inHead.Contains(path)
+                || (!diskExists && inHead.Any(e => e.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
 
             var classification = (inIndexState, inHeadState, diskExists) switch
             {
@@ -961,6 +967,27 @@ public class GitImpl : IGitOperations
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Returns those of <paramref name="paths"/> that .gitignore rules would make <c>git add</c>
+    /// refuse (git check-ignore, exit 0 = at least one ignored, 1 = none). Checked BEFORE adding
+    /// because <c>git add a.txt ignored/b.txt</c> stages a.txt and only then exits 1 with the
+    /// advisory, so detecting the advisory afterwards cannot honour "Nothing was staged." Also names
+    /// the paths the caller listed, whereas the advisory names the ignored ancestor directory.
+    /// </summary>
+    private async Task<List<string>> FindIgnoredPathsAsync(
+        string gitRoot, List<string> paths, CancellationToken cancellationToken)
+    {
+        var ignored = new List<string>();
+        foreach (var path in paths)
+        {
+            var raw = await RunGitAsync(gitRoot, ["check-ignore", "-q", "--", path], cancellationToken);
+            if (raw.ExitCode == 0)
+                ignored.Add(path);
+        }
+
+        return ignored;
     }
 
     /// <summary>
@@ -1071,11 +1098,24 @@ public class GitImpl : IGitOperations
                     // Stage Untracked paths using plain git --literal-pathspecs add -- <paths>
                     if (untracked.Count > 0)
                     {
+                        // Refuse before mutating anything: git add stages the non-ignored paths of a
+                        // mixed list and only then exits 1, so a post-hoc check cannot promise atomicity.
+                        var ignoredListed = await FindIgnoredPathsAsync(gitRoot, untracked, cancellationToken);
+                        if (ignoredListed.Count > 0)
+                        {
+                            var ignoredNames = string.Join(", ", ignoredListed.Select(p => $"\"{p}\""));
+                            return new GitStatusResult
+                            {
+                                Success = false,
+                                Error = $"The following paths are ignored by .gitignore: {ignoredNames}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to stage them. Nothing was staged."
+                            };
+                        }
+
                         var addBase = new[] { "--literal-pathspecs", "add", "--" };
                         var addArgs = addBase.Concat(untracked).ToArray();
                         var addRaw = await RunGitAsync(gitRoot, addArgs, cancellationToken);
 
-                        // Check for ignored-path advisory in stderr
+                        // Backstop: check for ignored-path advisory in stderr
                         if (addRaw.ExitCode != 0 && addRaw.Stderr.Contains("The following paths are ignored"))
                         {
                             var ignoredPaths = ParseIgnoredPaths(addRaw.Stderr);
@@ -1224,11 +1264,24 @@ public class GitImpl : IGitOperations
                 var untracked = classified.Where(cp => cp.Classification == PathClassification.Untracked).Select(cp => cp.Path).ToList();
                 if (untracked.Count > 0)
                 {
+                    // Refuse before mutating anything (see StageAsync): a mixed list would otherwise
+                    // have its non-ignored paths staged before git add exits 1.
+                    var ignoredListed = await FindIgnoredPathsAsync(gitRoot, untracked, cancellationToken);
+                    if (ignoredListed.Count > 0)
+                    {
+                        var ignoredNames = string.Join(", ", ignoredListed.Select(p => $"\"{p}\""));
+                        return new GitCommitResult
+                        {
+                            Success = false,
+                            Error = $"The following paths are ignored by .gitignore: {ignoredNames}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to commit them. Nothing was committed."
+                        };
+                    }
+
                     var addBase = new[] { "--literal-pathspecs", "add", "--" };
                     var addArgs = addBase.Concat(untracked).ToArray();
                     var addRaw = await RunGitAsync(gitRoot, addArgs, cancellationToken);
 
-                    // Check for ignored-path advisory
+                    // Backstop: check for ignored-path advisory
                     if (addRaw.ExitCode != 0 && addRaw.Stderr.Contains("The following paths are ignored"))
                     {
                         var ignoredPaths = ParseIgnoredPaths(addRaw.Stderr);
@@ -1278,7 +1331,7 @@ public class GitImpl : IGitOperations
                 var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out _);
                 if (filePaths != null && filePaths.Length > 0)
                 {
-                    var commitBase = new[] { "commit" }.Concat(messageArgs).Concat(new[] { "--only", "--literal-pathspecs", "--" }).ToArray();
+                    var commitBase = new[] { "--literal-pathspecs", "commit" }.Concat(messageArgs).Concat(new[] { "--only", "--" }).ToArray();
                     commitArgs = commitBase.Concat(filePaths).ToArray();
                 }
                 else
@@ -1339,7 +1392,11 @@ public class GitImpl : IGitOperations
             var remainingStaged = new List<string>();
             if (remainingRaw.ExitCode == 0 && !string.IsNullOrWhiteSpace(remainingRaw.Stdout))
             {
-                remainingStaged = remainingRaw.Stdout.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+                // RunGitAsync rebuilds stdout with AppendLine (CRLF on Windows), so split on both
+                // separators; splitting on LF alone left a trailing CR on every entry but the last.
+                remainingStaged = remainingRaw.Stdout
+                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    .ToList();
             }
 
             return new GitCommitResult { Success = true, CommitHash = hash, Message = finalMessage, RemainingStaged = remainingStaged };

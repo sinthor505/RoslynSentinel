@@ -39,9 +39,9 @@ public class GitTools
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
         [Description("Required for operation=commit unless amend=true (then omitting keeps HEAD's message).")]
         string? message = null,
-        [Description("stage: \"tracked\" (default) stages modified/deleted tracked files only. \"all\" also stages untracked files. \"listed\" stages exactly files/paths. commit: omit to commit exactly what's staged; pass scope only to also stage before committing.")]
+        [Description("stage: \"tracked\" (default) stages modified/deleted tracked files only. \"all\" also stages untracked files. \"listed\" stages exactly files/paths. commit: omit to commit exactly what's staged; pass scope only to also stage before committing. files implies scope=listed; pass scope only to override or for tracked/all.")]
         GitStageScope? scope = null,
-        [Description("stage/commit: paths to stage (CSV string or JSON array). Requires scope=\"listed\". Alias of paths - pass one, not both.")]
+        [Description("stage/commit: paths to stage (CSV string or JSON array). files implies scope=listed; pass scope only to override or for tracked/all. Alias of paths - pass one, not both.")]
         string? files = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is used when operation=revert (required) or
         // operation=show (optional alias for target - if both are set, commitHash wins); unused otherwise.
@@ -92,15 +92,31 @@ public class GitTools
         }
         var resolvedPaths = !string.IsNullOrWhiteSpace(files) ? files : paths;
 
+        // Gap A/B: when files are supplied and scope is null, infer scope=listed for stage/add/commit.
+        // However, explicit scope combined with files for all/tracked is an error.
+        GitStageScope? effectiveScope = scope;
+        if ((operation == GitOperation.stage || operation == GitOperation.add || operation == GitOperation.commit) &&
+            !string.IsNullOrWhiteSpace(resolvedPaths) && scope == null)
+        {
+            effectiveScope = GitStageScope.listed;
+        }
+
+        // For stage/commit with explicit all/tracked scope and a file list, that's an error
+        if ((operation == GitOperation.stage || operation == GitOperation.add || operation == GitOperation.commit) &&
+            !string.IsNullOrWhiteSpace(resolvedPaths) && scope != null && scope != GitStageScope.listed)
+        {
+            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"You passed both a file list and scope=\"{scope}\", which is ambiguous. scope=\"{scope}\" ignores the file list and stages/commits by scope instead. Pass scope=\"listed\" to stage/commit exactly the files you named, or drop the file list to use scope=\"{scope}\".", Detail: null) };
+        }
+
         GitResult result = operation switch
         {
             GitOperation.status => await _gitImpl.StatusAsync(gitRoot, cancellationToken),
             GitOperation.log => await _gitImpl.LogAsync(gitRoot, count, branchName, resolvedPaths, cancellationToken),
             GitOperation.diff => await _gitImpl.DiffAsync(gitRoot, target, resolvedPaths, maxBytes, cancellationToken),
             GitOperation.show => await _gitImpl.ShowAsync(gitRoot, !string.IsNullOrWhiteSpace(commitHash) ? commitHash : target, resolvedPaths, maxBytes, cancellationToken),
-            GitOperation.stage or GitOperation.add => await _gitImpl.StageAsync(gitRoot, scope ?? GitStageScope.tracked, resolvedPaths, cancellationToken),
+            GitOperation.stage or GitOperation.add => await _gitImpl.StageAsync(gitRoot, effectiveScope ?? GitStageScope.tracked, resolvedPaths, cancellationToken),
             GitOperation.unstage => await _gitImpl.UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
-            GitOperation.commit => await _gitImpl.CommitAsync(gitRoot, message, scope, resolvedPaths, amend, cancellationToken),
+            GitOperation.commit => await _gitImpl.CommitAsync(gitRoot, message, effectiveScope, resolvedPaths, amend, cancellationToken),
             GitOperation.revert => await _gitImpl.RevertAsync(gitRoot, commitHash, noCommit, cancellationToken),
             GitOperation.reset => await _gitImpl.ResetAsync(gitRoot, branchName, mode ?? GitResetMode.mixed, cancellationToken),
             GitOperation.branch => await _gitImpl.BranchAsync(gitRoot, branchName, startPoint, deleteBranch, cancellationToken),

@@ -82,6 +82,16 @@ public class GitToolsSmokeTests
     // Captures git command output (stdout only), returns empty string on non-zero exit.
     private string RunGitCapture(params string[] args)
     {
+        var (exitCode, output, _) = RunGitRaw(args);
+        return exitCode == 0 ? output : string.Empty;
+    }
+
+    // Runs git in the test repo and returns exit code, stdout and stderr regardless of exit code.
+    // stdin is redirected and closed immediately (and stderr drained): with stdin inherited from the
+    // testhost, a git child spawned with only stdout redirected stalled forever. The bounded wait
+    // turns any future stall into a fast, named failure instead of a hung test run.
+    private (int ExitCode, string Stdout, string Stderr) RunGitRaw(params string[] args)
+    {
         using var process = new System.Diagnostics.Process();
         process.StartInfo = new System.Diagnostics.ProcessStartInfo
         {
@@ -89,8 +99,11 @@ public class GitToolsSmokeTests
             WorkingDirectory = _repoDir,
             UseShellExecute = false,
             CreateNoWindow = true,
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
+            RedirectStandardError = true,
             StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
         };
         foreach (var arg in args)
         {
@@ -98,9 +111,17 @@ public class GitToolsSmokeTests
         }
 
         process.Start();
-        var output = process.StandardOutput.ReadToEnd();
+        process.StandardInput.Close();
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(20_000))
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException($"git {string.Join(' ', args)} did not exit within 20s in '{_repoDir}'.");
+        }
+
         process.WaitForExit();
-        return process.ExitCode == 0 ? output : string.Empty;
+        return (process.ExitCode, outputTask.GetAwaiter().GetResult(), errorTask.GetAwaiter().GetResult());
     }
 
     // Returns the list of file paths currently staged in the index.
@@ -116,7 +137,8 @@ public class GitToolsSmokeTests
     // Returns the list of file paths in HEAD (the current commit).
     private List<string> HeadPaths()
     {
-        var output = RunGitCapture("show", "--name-only", "--format=", "HEAD");
+        // --no-renames: without it a rename collapses to just the new path, hiding the deleted old path.
+        var output = RunGitCapture("show", "--no-renames", "--name-only", "--format=", "HEAD");
         return output.Split(new[] { '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries)
             .Select(p => p.Trim())
             .Where(p => !string.IsNullOrEmpty(p))
@@ -379,5 +401,405 @@ public class GitToolsSmokeTests
         Assert.That(diff.Success, Is.True, diff.Error);
         Assert.That(diff.Warning, Is.Not.Null.And.Contains("U+FFFD"),
             "a diff containing the Unicode replacement character must raise a decode-corruption warning.");
+    }
+
+    // Phase 1 tests: listed-scope commit fixes (blocker case 1 and 2, gaps A-B, and CRLF hygiene)
+
+    [Test]
+    public async Task Git_Commit_ListedScope_RenameStagedViaAllThenCommittedWithBothSidesAsync()
+    {
+        // Blocker case 1: a rename is staged via scope: all, then commit scope: listed
+        // naming both the old and new path. Must succeed (not reject with "did not match").
+        File.WriteAllText(Path.Combine(_repoDir, "original.txt"), "content");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add original.txt");
+
+        File.Move(Path.Combine(_repoDir, "original.txt"), Path.Combine(_repoDir, "renamed.txt"));
+        var stageResult = await _gitTools.Git(reason: "stage rename", GitOperation.stage, scope: GitStageScope.all);
+        Assert.That(stageResult.IsSuccess, Is.True, stageResult.ErrorData?.Message);
+
+        var commitResult = await _gitTools.Git(
+            reason: "commit both sides of rename",
+            GitOperation.commit,
+            message: "rename file",
+            scope: GitStageScope.listed,
+            files: "original.txt,renamed.txt");
+
+        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        var commit = commitResult.SuccessData as GitCommitResult;
+        var headPaths = HeadPaths();
+        Assert.That(headPaths, Does.Contain("renamed.txt"),
+            "the renamed file should be in HEAD after successful commit");
+        Assert.That(headPaths, Does.Contain("original.txt"),
+            "the commit should record the deletion of the original path (both rename sides committed)");
+        Assert.That(StagedPaths(), Is.Empty, "nothing should remain staged after committing both sides");
+    }
+
+    [Test]
+    public async Task Git_Commit_ListedScope_ForceTrackedFileUnderGitignoredDirAsync()
+    {
+        // Blocker case 2: a force-tracked file under a gitignored directory is deleted
+        // on disk and committed. Must succeed with no advisory error.
+        CreateGitignore("TestResults/\n");
+        ForceTrackUnderGitignored("TestResults/test.coverage", "coverage data");
+
+        // Delete the file on disk to simulate case where it's tracked but gone.
+        File.Delete(Path.Combine(_repoDir, "TestResults/test.coverage"));
+
+        var commitResult = await _gitTools.Git(
+            reason: "commit deletion under ignored dir",
+            GitOperation.commit,
+            message: "remove coverage file",
+            scope: GitStageScope.listed,
+            files: "TestResults/test.coverage");
+
+        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        var commit = commitResult.SuccessData as GitCommitResult;
+        Assert.That(commit!.CommitHash.Length, Is.GreaterThan(0),
+            "commit should have a hash");
+        // HeadPaths lists paths touched by HEAD (deletions included), so check the tree itself.
+        var treePaths = RunGitCapture("ls-tree", "-r", "--name-only", "HEAD");
+        Assert.That(treePaths, Does.Not.Contain("TestResults/test.coverage"),
+            "the deleted file should not be in the HEAD tree");
+        Assert.That(HeadPaths(), Does.Contain("TestResults/test.coverage"),
+            "HEAD should record the deletion of the force-tracked file");
+    }
+
+    [Test]
+    public async Task Git_Commit_FilesWithoutScope_CommitsExactPathsAndLeavesOtherStaged_GapAAsync()
+    {
+        // Gap A: commit with files and no scope should commit exactly those paths
+        // and leave other staged paths staged.
+        File.WriteAllText(Path.Combine(_repoDir, "file1.txt"), "content1");
+        File.WriteAllText(Path.Combine(_repoDir, "file2.txt"), "content2");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "initial two files");
+
+        // Modify both files and stage both.
+        File.WriteAllText(Path.Combine(_repoDir, "file1.txt"), "modified1");
+        File.WriteAllText(Path.Combine(_repoDir, "file2.txt"), "modified2");
+        RunGit(_repoDir, "add", "-A");
+
+        // Commit only file1 via the tool (no scope parameter).
+        var commitResult = await _gitTools.Git(
+            reason: "commit with files, no scope",
+            GitOperation.commit,
+            message: "modify file1",
+            files: "file1.txt");
+
+        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        var commit = commitResult.SuccessData as GitCommitResult;
+
+        // Verify file1 was committed.
+        var headPaths = HeadPaths();
+        Assert.That(headPaths, Does.Contain("file1.txt"),
+            "file1 should be in the committed HEAD");
+
+        // Verify file2 is still staged.
+        var remainingStaged = StagedPaths();
+        Assert.That(remainingStaged, Does.Contain("file2.txt"),
+            "file2 should still be staged after the partial commit");
+        Assert.That(commit!.RemainingStaged, Does.Contain("file2.txt"),
+            "RemainingStaged should report file2");
+    }
+
+    [Test]
+    public async Task Git_Stage_FilesWithoutScope_StagesOnlyThosePaths_GapBAsync()
+    {
+        // Gap B: stage with files and no scope should stage only those paths.
+        File.WriteAllText(Path.Combine(_repoDir, "new1.txt"), "new content1");
+        File.WriteAllText(Path.Combine(_repoDir, "new2.txt"), "new content2");
+
+        // Stage only new1.txt.
+        var stageResult = await _gitTools.Git(
+            reason: "stage with files, no scope",
+            GitOperation.stage,
+            files: "new1.txt");
+
+        Assert.That(stageResult.IsSuccess, Is.True, stageResult.ErrorData?.Message);
+
+        // Verify only new1.txt is staged.
+        var stagedPaths = StagedPaths();
+        Assert.That(stagedPaths, Does.Contain("new1.txt"),
+            "new1 should be staged");
+        Assert.That(stagedPaths, Does.Not.Contain("new2.txt"),
+            "new2 should not be staged");
+    }
+
+    [Test]
+    public async Task Git_Stage_MissingUntrackedPath_ErrorNamesPathAndLeavesIndexUnchangedAsync()
+    {
+        // Atomic failure: listing a missing (untracked, not on disk) path should error,
+        // name the path, and leave StagedPaths unchanged.
+        File.WriteAllText(Path.Combine(_repoDir, "existing.txt"), "exists");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add existing");
+
+        var stageResult = await _gitTools.Git(
+            reason: "stage missing path",
+            GitOperation.stage,
+            scope: GitStageScope.listed,
+            files: "missing.txt");
+
+        Assert.That(stageResult.IsSuccess, Is.False,
+            "staging a missing path should fail");
+        var error = stageResult.ErrorData;
+        Assert.That(error?.Message, Does.Contain("missing.txt"),
+            "error should name the missing path");
+        var stagedPaths = StagedPaths();
+        Assert.That(stagedPaths, Is.Empty,
+            "index should be unchanged after failed stage");
+    }
+
+    [Test]
+    public async Task Git_Stage_UntrackedPathUnderGitignoredDir_ErrorNamesMissingFlagAsync()
+    {
+        // Listed untracked path under a gitignored directory should error and mention
+        // that -f is not available (tool has no force flag).
+        CreateGitignore("ignored/\n");
+        // Must exist on disk: a path that is neither tracked nor on disk is (correctly) reported Missing.
+        WriteFile("ignored/file.txt", "ignored content");
+
+        var stageResult = await _gitTools.Git(
+            reason: "stage ignored path",
+            GitOperation.stage,
+            scope: GitStageScope.listed,
+            files: "ignored/file.txt");
+
+        Assert.That(stageResult.IsSuccess, Is.False,
+            "staging an ignored path should fail");
+        var error = stageResult.ErrorData;
+        Assert.That(error?.Message, Does.Contain("ignored/file.txt"),
+            "error should name the ignored path");
+        Assert.That(error?.Message, Does.Contain("-f"),
+            "error should mention the -f flag is not available");
+    }
+
+    [Test]
+    public async Task Git_Stage_MixedOkAndIgnoredPaths_StagesNothingAsync()
+    {
+        // git add stages the non-ignored paths of a mixed list and only then exits 1, so the tool
+        // must refuse up front to honour "Nothing was staged."
+        CreateGitignore("ignored/\n");
+        WriteFile("ignored/file.txt", "ignored content");
+        WriteFile("ok.txt", "fine");
+
+        var stageResult = await _gitTools.Git(
+            reason: "stage mixed list",
+            GitOperation.stage,
+            scope: GitStageScope.listed,
+            files: "ok.txt,ignored/file.txt");
+
+        Assert.That(stageResult.IsSuccess, Is.False);
+        Assert.That(stageResult.ErrorData?.Message, Does.Contain("ignored/file.txt"));
+        Assert.That(stageResult.ErrorData?.Message, Does.Contain("Nothing was staged"));
+        Assert.That(StagedPaths(), Is.Empty, "ok.txt must not have been staged by the failed call");
+    }
+
+    [Test]
+    public async Task Git_Commit_RenameWithOnlyOneListedSide_LeavesOtherSideStaged_Async()
+    {
+        // Rename listed by only one side: commit succeeds, RemainingStaged contains the other side.
+        File.WriteAllText(Path.Combine(_repoDir, "original.txt"), "content");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add original");
+
+        File.Move(Path.Combine(_repoDir, "original.txt"), Path.Combine(_repoDir, "renamed.txt"));
+        RunGit(_repoDir, "add", "-A");
+
+        // Commit only the new side of the rename.
+        var commitResult = await _gitTools.Git(
+            reason: "commit only new side",
+            GitOperation.commit,
+            message: "rename",
+            scope: GitStageScope.listed,
+            files: "renamed.txt");
+
+        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        var commit = commitResult.SuccessData as GitCommitResult;
+        Assert.That(commit!.RemainingStaged, Does.Contain("original.txt"),
+            "the old side of the rename should remain staged");
+    }
+
+    [Test]
+    public async Task Git_Commit_ListedScope_AlreadyStagedDeletion_CommitsOnlyItAndReportsCleanRemainingStagedAsync()
+    {
+        // Answers the plan's open question: git commit --only -- <path> resolves a path whose
+        // deletion is already staged (in HEAD, absent from index and disk). Also pins that
+        // RemainingStaged entries carry no trailing CR when there is more than one.
+        WriteFile("a.txt", "a");
+        WriteFile("b.txt", "b");
+        WriteFile("c.txt", "c");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add a b c");
+
+        WriteFile("a.txt", "a2");
+        File.Delete(Path.Combine(_repoDir, "b.txt"));
+        WriteFile("c.txt", "c2");
+        RunGit(_repoDir, "add", "-A");
+        Assert.That(StagedPaths(), Is.EquivalentTo(new[] { "a.txt", "b.txt", "c.txt" }));
+
+        var commitResult = await _gitTools.Git(
+            reason: "commit staged deletion only",
+            GitOperation.commit,
+            message: "delete b",
+            scope: GitStageScope.listed,
+            files: "b.txt");
+
+        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        var commit = (GitCommitResult)commitResult.SuccessData!;
+        Assert.That(HeadPaths(), Is.EqualTo(new[] { "b.txt" }), "HEAD should contain only the deletion of b.txt");
+        Assert.That(commit.RemainingStaged, Is.EquivalentTo(new[] { "a.txt", "c.txt" }),
+            "the other staged paths stay staged, reported without stray line-ending characters");
+    }
+
+    [Test]
+    public async Task Git_Stage_ListedScope_TrackedDirectoryDeletedFromDisk_StagesTheDeletionsAsync()
+    {
+        // A directory path that is tracked (files under it are in the index) but gone from disk must
+        // classify as InIndex, not Missing, so `git add -- <dir>` stages the removals.
+        WriteFile("subdir/one.txt", "one");
+        WriteFile("subdir/nested/two.txt", "two");
+        WriteFile("keep.txt", "keep");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add subdir");
+
+        Directory.Delete(Path.Combine(_repoDir, "subdir"), recursive: true);
+        Assert.That(StagedPaths(), Is.Empty, "precondition: nothing staged before the tool call");
+
+        var stageResult = await _gitTools.Git(
+            reason: "stage deleted tracked directory",
+            GitOperation.stage,
+            scope: GitStageScope.listed,
+            files: "subdir");
+
+        Assert.That(stageResult.IsSuccess, Is.True, stageResult.ErrorData?.Message);
+        Assert.That(StagedPaths(), Is.EquivalentTo(new[] { "subdir/one.txt", "subdir/nested/two.txt" }),
+            "both deletions under the removed directory should be staged");
+    }
+
+    [Test]
+    public async Task Git_Stage_FilenameWithSpecialChars_StagedLiterally_NotGlobbedAsync()
+    {
+        // Filename containing '[' and '*' is staged literally (not globbed).
+        // Create two files: one matching the glob, one literal.
+        WriteFile("test[a].txt", "literal special chars");
+        WriteFile("testa.txt", "would match glob");
+
+        var stageResult = await _gitTools.Git(
+            reason: "stage literal with special chars",
+            GitOperation.stage,
+            scope: GitStageScope.listed,
+            files: "test[a].txt");
+
+        Assert.That(stageResult.IsSuccess, Is.True, stageResult.ErrorData?.Message);
+
+        var stagedPaths = StagedPaths();
+        Assert.That(stagedPaths, Does.Contain("test[a].txt"),
+            "the literal filename with brackets should be staged");
+        Assert.That(stagedPaths, Does.Not.Contain("testa.txt"),
+            "the glob-matching file should not be staged (literal, not glob)");
+    }
+
+    [Test]
+    public async Task Git_Commit_WithCrlfWarnings_ErrorDoesNotContainLfWarningTextAsync()
+    {
+        // A tracked LF file modified under core.autocrlf=true + core.safecrlf=warn makes git emit
+        // "LF will be replaced by CRLF" on stderr. A failing pre-commit hook then makes the commit
+        // fail with git stderr in the error path, so CleanGitStderr is actually exercised.
+        WriteFile("lf.txt", "line one\nline two\n");
+        RunGit(_repoDir, "add", "lf.txt");
+        RunGit(_repoDir, "commit", "-m", "add lf file");
+
+        EnableCrlfWarnings();
+        WriteFile("lf.txt", "line one\nline two\nline three\n");
+
+        var hookPath = Path.Combine(_repoDir, ".git", "hooks", "pre-commit");
+        Directory.CreateDirectory(Path.GetDirectoryName(hookPath)!);
+        File.WriteAllText(hookPath, "#!/bin/sh\necho hook-rejected >&2\nexit 1\n");
+
+        // Sanity: raw git stderr for the same flow really contains the warning, so the negative
+        // assertion below cannot pass vacuously.
+        var raw = RunGitRaw("commit", "-m", "raw probe", "--only", "--", "lf.txt");
+        Assert.That(raw.ExitCode, Is.Not.EqualTo(0), "the failing hook should make the raw commit fail");
+        Assert.That(raw.Stderr, Does.Contain("LF will be replaced"),
+            "precondition: git must emit the LF/CRLF warning in this flow, otherwise this test proves nothing");
+        Assert.That(raw.Stderr, Does.Contain("hook-rejected"));
+
+        var commitResult = await _gitTools.Git(
+            reason: "commit with failing hook under crlf warnings",
+            GitOperation.commit,
+            message: "should fail",
+            scope: GitStageScope.listed,
+            files: "lf.txt");
+
+        Assert.That(commitResult.IsSuccess, Is.False, "the failing pre-commit hook should fail the commit");
+        var message = commitResult.ErrorData?.Message;
+        Assert.That(message, Does.Contain("hook-rejected"),
+            "the hook's stderr should still reach the caller");
+        Assert.That(message, Does.Not.Contain("LF will be replaced"),
+            "CleanGitStderr should filter the LF/CRLF warning out of the error message");
+    }
+
+    [Test]
+    public async Task Git_Commit_FilesPlusAllScope_ReturnsRefusalAsync()
+    {
+        // files plus scope: all should return a refusal (existing behavior).
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "modified");
+        RunGit(_repoDir, "add", "-A");
+
+        var result = await _gitTools.Git(
+            reason: "attempt files plus all scope",
+            GitOperation.commit,
+            message: "test",
+            scope: GitStageScope.all,
+            files: "README.md");
+
+        Assert.That(result.IsSuccess, Is.False,
+            "files plus scope: all should be rejected");
+        var error = result.ErrorData;
+        Assert.That(error?.Message, Does.Contain("files").Or.Contain("scope"),
+            "error should name the conflicting parameters");
+    }
+
+    [Test]
+    public async Task Git_Stage_FilesPlusAllScope_ReturnsRefusalAsync()
+    {
+        // files plus scope: all should return a refusal for stage too.
+        File.WriteAllText(Path.Combine(_repoDir, "new.txt"), "new");
+
+        var result = await _gitTools.Git(
+            reason: "attempt files plus all scope on stage",
+            GitOperation.stage,
+            scope: GitStageScope.all,
+            files: "new.txt");
+
+        Assert.That(result.IsSuccess, Is.False,
+            "files plus scope: all should be rejected for stage");
+        var error = result.ErrorData;
+        Assert.That(error?.Message, Does.Contain("files").Or.Contain("scope"),
+            "error should name the conflicting parameters");
+    }
+
+    [Test]
+    public async Task Git_Stage_DirectoryPath_WorksRegression_Async()
+    {
+        // Directory path listed (git add of a directory) still works (regression guard).
+        WriteFile("subdir/file1.txt", "content1");
+        WriteFile("subdir/file2.txt", "content2");
+
+        var result = await _gitTools.Git(
+            reason: "stage a directory",
+            GitOperation.stage,
+            scope: GitStageScope.listed,
+            files: "subdir");
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+
+        var stagedPaths = StagedPaths();
+        Assert.That(stagedPaths, Does.Contain("subdir/file1.txt"),
+            "files under the staged directory should be staged");
+        Assert.That(stagedPaths, Does.Contain("subdir/file2.txt"),
+            "files under the staged directory should be staged");
     }
 }
