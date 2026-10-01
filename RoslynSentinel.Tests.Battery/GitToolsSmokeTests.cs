@@ -1567,4 +1567,148 @@ public class GitToolsSmokeTests
             await Task.WhenAny(serverTask, Task.Delay(TimeSpan.FromSeconds(5)));
         }
     }
+
+    // Phase 6 tests: specific machine-readable ErrorCode + Detail on known failure causes, GitError as fallback
+
+    private static void AssertCoded(SentinelCallToolResult<object> result, string expectedCode)
+    {
+        Assert.That(result.IsSuccess, Is.False, "the call must fail");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(expectedCode), result.ErrorData?.Message);
+        Assert.That(result.ErrorData?.Message, Is.Not.Empty);
+        Assert.That(result.ErrorData?.Detail, Is.Not.Null.And.Not.Empty, "a classified failure must carry an actionable Detail");
+    }
+
+    [Test]
+    public async Task Git_Stage_MissingPath_ReportsGitPathNotFoundWithDetailAsync()
+    {
+        var result = await _gitTools.Git(reason: "stage missing path", GitOperation.stage, scope: GitStageScope.listed, files: "missing.txt");
+
+        AssertCoded(result, "GitPathNotFound");
+        Assert.That(result.ErrorData?.Message, Does.Contain("missing.txt"));
+        Assert.That(result.ErrorData?.Detail, Does.Contain("Git(operation: status)"));
+    }
+
+    [Test]
+    public async Task Git_Stage_PathOutsideRepo_ReportsGitPathNotFoundAsync()
+    {
+        var result = await _gitTools.Git(reason: "stage outside path", GitOperation.stage, scope: GitStageScope.listed, files: "../outside.txt");
+
+        AssertCoded(result, "GitPathNotFound");
+        Assert.That(result.ErrorData?.Message, Does.Contain("outside the repository"));
+    }
+
+    [Test]
+    public async Task Git_Commit_MissingPath_ReportsGitPathNotFoundAsync()
+    {
+        var result = await _gitTools.Git(reason: "commit missing path", GitOperation.commit, message: "x", files: "missing.txt");
+
+        AssertCoded(result, "GitPathNotFound");
+    }
+
+    [Test]
+    public async Task Git_StageAndCommit_IgnoredPath_ReportGitIgnoredPathAsync()
+    {
+        CreateGitignore("ignored/\n");
+        WriteFile("ignored/file.txt", "ignored content");
+
+        var stage = await _gitTools.Git(reason: "stage ignored", GitOperation.stage, scope: GitStageScope.listed, files: "ignored/file.txt");
+        var commit = await _gitTools.Git(reason: "commit ignored", GitOperation.commit, message: "x", files: "ignored/file.txt");
+
+        AssertCoded(stage, "GitIgnoredPath");
+        AssertCoded(commit, "GitIgnoredPath");
+        Assert.That(stage.ErrorData?.Detail, Does.Contain(".gitignore"));
+        Assert.That(StagedPaths(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Commit_NothingStaged_ReportsGitNothingToCommitAsync()
+    {
+        var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
+
+        var result = await _gitTools.Git(reason: "commit with empty index", GitOperation.commit, message: "empty");
+
+        AssertCoded(result, "GitNothingToCommit");
+        Assert.That(result.ErrorData?.Detail, Does.Contain("Git(operation: stage"));
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore));
+    }
+
+    [Test]
+    public async Task Git_Commit_ListedUnchangedTrackedFile_ReportsGitNothingToCommitAsync()
+    {
+        var result = await _gitTools.Git(reason: "commit unchanged listed file", GitOperation.commit, message: "no-op", files: "README.md");
+
+        AssertCoded(result, "GitNothingToCommit");
+    }
+
+    [Test]
+    public async Task Git_Revert_Conflict_ReportsGitOperationInProgressAsync()
+    {
+        foreach (var version in new[] { "v1", "v2", "v3" })
+        {
+            WriteFile("README.md", version + "\n");
+            RunGit(_repoDir, "commit", "-am", "readme " + version);
+        }
+
+        var v2 = RunGitCapture("rev-parse", "HEAD~1").Trim();
+
+        var result = await _gitTools.Git(reason: "conflicting revert", GitOperation.revert, commitHash: v2);
+
+        AssertCoded(result, "GitOperationInProgress");
+        Assert.That(result.ErrorData?.Message, Does.Contain("mid-revert"));
+        Assert.That(result.ErrorData?.Detail, Does.Contain("operation: abort"));
+    }
+
+    [Test]
+    public async Task Git_Commit_DuringConflictedMerge_ReportsGitOperationInProgressAsync()
+    {
+        CreateMergeConflict("shared.txt", existsInBase: true);
+
+        var result = await _gitTools.Git(reason: "commit while conflicted", GitOperation.commit, message: "premature");
+
+        AssertCoded(result, "GitOperationInProgress");
+        Assert.That(result.ErrorData?.Message, Does.Contain("mid-merge"));
+    }
+
+    [Test]
+    public async Task Git_Pull_Conflict_ReportsGitOperationInProgressAsync()
+    {
+        var branch = AddBareRemoteAndPush();
+        DivergeConflictingFromRemote(branch);
+
+        var result = await _gitTools.Git(reason: "conflicting pull", GitOperation.pull);
+
+        AssertCoded(result, "GitOperationInProgress");
+    }
+
+    [Test]
+    public async Task Git_RefRequiredRefusals_ReportGitRefRequiredAsync()
+    {
+        var reset = await _gitTools.Git(reason: "reset without ref", GitOperation.reset);
+        var revert = await _gitTools.Git(reason: "revert without commitHash", GitOperation.revert);
+        var checkout = await _gitTools.Git(reason: "checkout without branchName", GitOperation.checkout);
+
+        AssertCoded(reset, "GitRefRequired");
+        AssertCoded(revert, "GitRefRequired");
+        AssertCoded(checkout, "GitRefRequired");
+        Assert.That(reset.ErrorData?.Detail, Does.Contain("HEAD~1"));
+    }
+
+    [Test]
+    public async Task Git_UnclassifiedFailure_StillReportsFallbackGitErrorWithoutDetailAsync()
+    {
+        var result = await _gitTools.Git(reason: "reset to unknown ref", GitOperation.reset, @ref: "no-such-ref-anywhere");
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("GitError"));
+        Assert.That(result.ErrorData?.Detail, Is.Null, "unclassified failures carry no invented next step");
+        Assert.That(result.ErrorData?.Message, Does.Contain("git reset failed"));
+    }
+
+    [Test]
+    public async Task Git_AbortWithNothingInProgress_StillReportsFallbackGitErrorAsync()
+    {
+        var result = await _gitTools.Git(reason: "abort nothing", GitOperation.abort);
+
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("GitError"));
+    }
 }

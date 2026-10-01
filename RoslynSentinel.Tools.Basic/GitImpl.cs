@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,6 +17,52 @@ public record GitResult
     {
         get; set;
     }
+
+    /// <summary>Machine-readable cause of a failure, one of <see cref="GitErrorCodes"/>, when the cause is
+    /// known. Null means unclassified: the Git tool then reports the fallback code GitError. Never
+    /// serialized with a success payload.</summary>
+    [JsonIgnore]
+    public string? ErrorKind
+    {
+        get; set;
+    }
+
+    /// <summary>Short actionable next step for a classified failure (which call would work). Null when
+    /// the failure is unclassified.</summary>
+    [JsonIgnore]
+    public string? ErrorDetail
+    {
+        get; set;
+    }
+}
+
+/// <summary>Specific ResultError.ErrorCode values for failed Git results. GitError stays the fallback.</summary>
+public static class GitErrorCodes
+{
+    /// <summary>Fallback when a failure has no more specific known cause.</summary>
+    public const string Fallback = "GitError";
+    /// <summary>A named path is missing from disk and the index, or resolves outside the repository.</summary>
+    public const string PathNotFound = "GitPathNotFound";
+    /// <summary>A named path is refused because .gitignore ignores it (the tool never force-adds).</summary>
+    public const string IgnoredPath = "GitIgnoredPath";
+    /// <summary>Commit refused because nothing (or nothing for the named paths) is staged.</summary>
+    public const string NothingToCommit = "GitNothingToCommit";
+    /// <summary>The operation failed and left (or found) a merge, rebase, revert, cherry-pick or am in progress.</summary>
+    public const string OperationInProgress = "GitOperationInProgress";
+    /// <summary>A ref (reset ref, revert commitHash, checkout branchName) was required and not supplied.</summary>
+    public const string RefRequired = "GitRefRequired";
+}
+
+/// <summary>Next-step text paired with <see cref="GitErrorCodes"/> in ResultError.Detail.</summary>
+internal static class GitErrorDetails
+{
+    internal const string PathNotFound = "Paths must be repo-relative and inside the repository root. Call Git(operation: status) to list changed and untracked paths, then retry with exact names.";
+    internal const string IgnoredPath = "Remove the ignored paths from files, or un-ignore them in .gitignore, then retry. This tool never force-adds ignored files.";
+    internal const string NothingToCommit = "Stage changes first with Git(operation: stage, files: \"...\"), or pass files/scope on the commit call. Call Git(operation: status) to see what changed.";
+    internal const string OperationInProgress = "Call Git(operation: abort) to back out of the in-progress operation, or resolve the conflicts in the working tree and commit.";
+    internal const string RefRequiredReset = "Pass ref, e.g. ref: \"HEAD~1\" to undo the last commit with the working tree kept, or call Git(operation: unstage) to unstage without moving HEAD.";
+    internal const string RefRequiredRevert = "Pass commitHash, e.g. a hash taken from Git(operation: log).";
+    internal const string RefRequiredCheckout = "Pass branchName, with createBranch=true if it does not exist yet. Git(operation: branch) lists existing branches.";
 }
 
 public record GitRawResult
@@ -611,6 +658,43 @@ public class GitImpl : IGitOperations
             "rebase" or "am" => $" Repository is mid-{op}. This tool cannot continue it; call Git(operation: abort) to back out (the branch returns to its pre-{op} state), or finish it in the shell.",
             _ => $" Repository is mid-{op}. Resolve the conflicts and commit, or call Git(operation: abort) to back out.",
         };
+    }
+
+    /// <summary>
+    /// Appends the mid-operation advice to a failed <paramref name="result"/> and, when the repository
+    /// really is mid-operation, classifies it as <see cref="GitErrorCodes.OperationInProgress"/> unless a
+    /// more specific kind was already set. No-op when nothing is in progress.
+    /// </summary>
+    private async Task<T> AppendInProgressAsync<T>(T result, string gitRoot, CancellationToken cancellationToken) where T : GitResult
+    {
+        var advice = await InProgressAdviceAsync(gitRoot, cancellationToken);
+        if (advice.Length == 0)
+            return result;
+
+        result.Error += advice;
+        result.ErrorKind ??= GitErrorCodes.OperationInProgress;
+        result.ErrorDetail ??= GitErrorDetails.OperationInProgress;
+        return result;
+    }
+
+    /// <summary>
+    /// True when the index holds nothing to commit: for no paths, the whole index equals HEAD; for named
+    /// paths, those paths do. Structural (git diff --cached --quiet) rather than matching git's
+    /// localizable "nothing to commit" text.
+    /// </summary>
+    private async Task<bool> NothingStagedAsync(string gitRoot, string? paths, CancellationToken cancellationToken)
+    {
+        string[] args = ["--literal-pathspecs", "diff", "--cached", "--quiet"];
+        if (!string.IsNullOrWhiteSpace(paths))
+        {
+            var list = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var parseError);
+            if (parseError != null || list == null)
+                return false;
+            args = [.. args, "--", .. list];
+        }
+
+        var raw = await RunGitAsync(gitRoot, args, cancellationToken);
+        return raw.ExitCode == 0;
     }
 
     public async Task<GitStatusResult> StatusAsync(string gitRoot, int maxEntries, CancellationToken cancellationToken)
@@ -1277,6 +1361,8 @@ public class GitImpl : IGitOperations
                             return new GitStatusResult
                             {
                                 Success = false,
+                                ErrorKind = GitErrorCodes.PathNotFound,
+                                ErrorDetail = GitErrorDetails.PathNotFound,
                                 Error = $"{error}. Nothing was staged."
                             };
                         }
@@ -1293,6 +1379,8 @@ public class GitImpl : IGitOperations
                         return new GitStatusResult
                         {
                             Success = false,
+                            ErrorKind = GitErrorCodes.PathNotFound,
+                            ErrorDetail = GitErrorDetails.PathNotFound,
                             Error = $"The following paths are not tracked and do not exist on disk: {missingList}. Nothing was staged."
                         };
                     }
@@ -1334,6 +1422,8 @@ public class GitImpl : IGitOperations
                             return new GitStatusResult
                             {
                                 Success = false,
+                                ErrorKind = GitErrorCodes.IgnoredPath,
+                                ErrorDetail = GitErrorDetails.IgnoredPath,
                                 Error = $"The following paths are ignored by .gitignore: {ignoredNames}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to stage them. Nothing was staged."
                             };
                         }
@@ -1352,6 +1442,8 @@ public class GitImpl : IGitOperations
                                 return new GitStatusResult
                                 {
                                     Success = false,
+                                    ErrorKind = GitErrorCodes.IgnoredPath,
+                                    ErrorDetail = GitErrorDetails.IgnoredPath,
                                     Error = $"The following paths are ignored by .gitignore: {ignoredList}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to stage them. Nothing was staged."
                                 };
                             }
@@ -1494,6 +1586,8 @@ public class GitImpl : IGitOperations
                         return new GitCommitResult
                         {
                             Success = false,
+                            ErrorKind = GitErrorCodes.PathNotFound,
+                            ErrorDetail = GitErrorDetails.PathNotFound,
                             Error = $"{error}. Nothing was committed."
                         };
                     }
@@ -1510,6 +1604,8 @@ public class GitImpl : IGitOperations
                     return new GitCommitResult
                     {
                         Success = false,
+                        ErrorKind = GitErrorCodes.PathNotFound,
+                        ErrorDetail = GitErrorDetails.PathNotFound,
                         Error = $"The following paths are not tracked and do not exist on disk: {missingList}. Nothing was committed."
                     };
                 }
@@ -1527,6 +1623,8 @@ public class GitImpl : IGitOperations
                         return new GitCommitResult
                         {
                             Success = false,
+                            ErrorKind = GitErrorCodes.IgnoredPath,
+                            ErrorDetail = GitErrorDetails.IgnoredPath,
                             Error = $"The following paths are ignored by .gitignore: {ignoredNames}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to commit them. Nothing was committed."
                         };
                     }
@@ -1545,6 +1643,8 @@ public class GitImpl : IGitOperations
                             return new GitCommitResult
                             {
                                 Success = false,
+                                ErrorKind = GitErrorCodes.IgnoredPath,
+                                ErrorDetail = GitErrorDetails.IgnoredPath,
                                 Error = $"The following paths are ignored by .gitignore: {ignoredList}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to commit them. Nothing was committed."
                             };
                         }
@@ -1616,7 +1716,19 @@ public class GitImpl : IGitOperations
                     failureNote = $" Staging already ran; the index now holds {stagedCount} staged paths. Call Git(operation: unstage) to undo.";
                 }
 
-                return new GitCommitResult { Success = false, Error = $"git commit failed: {errorText}{failureNote}{await InProgressAdviceAsync(gitRoot, cancellationToken)}" };
+                var failed = new GitCommitResult { Success = false, Error = $"git commit failed: {errorText}{failureNote}" };
+
+                // Classify structurally, not from git's localizable text. Amend is skipped (an amend
+                // with nothing staged is legal), as is a path list that was not classified up front
+                // (an unknown pathspec would otherwise also look like "nothing staged").
+                var pathsWereClassified = string.IsNullOrWhiteSpace(paths) || scope == GitStageScope.listed;
+                if (!amend && pathsWereClassified && await NothingStagedAsync(gitRoot, paths, cancellationToken))
+                {
+                    failed.ErrorKind = GitErrorCodes.NothingToCommit;
+                    failed.ErrorDetail = GitErrorDetails.NothingToCommit;
+                }
+
+                return await AppendInProgressAsync(failed, gitRoot, cancellationToken);
             }
 
             var hashRaw = await RunGitAsync(gitRoot, new[] { "rev-parse", "HEAD" }, cancellationToken);
@@ -1705,7 +1817,7 @@ public class GitImpl : IGitOperations
         string gitRoot, string? commitHash, bool noCommit, int? mainline, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(commitHash))
-            return new GitRevertResult { Success = false, Error = "commitHash is required for operation=revert." };
+            return new GitRevertResult { Success = false, ErrorKind = GitErrorCodes.RefRequired, ErrorDetail = GitErrorDetails.RefRequiredRevert, Error = "commitHash is required for operation=revert." };
 
         if (mainline is < 1)
             return new GitRevertResult { Success = false, Error = $"mainline must be 1 or greater (got {mainline}); 1 is the parent that was merged into. Nothing was reverted." };
@@ -1742,7 +1854,7 @@ public class GitImpl : IGitOperations
             var revertRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (revertRaw.ExitCode != 0)
-                return new GitRevertResult { Success = false, CommitHash = commitHash, Error = CleanGitStderr(revertRaw.Stderr) + await InProgressAdviceAsync(gitRoot, cancellationToken) };
+                return await AppendInProgressAsync(new GitRevertResult { Success = false, CommitHash = commitHash, Error = CleanGitStderr(revertRaw.Stderr) }, gitRoot, cancellationToken);
 
             string newHash = "";
             if (!noCommit)
@@ -1781,6 +1893,8 @@ public class GitImpl : IGitOperations
             return new GitStatusResult
             {
                 Success = false,
+                ErrorKind = GitErrorCodes.RefRequired,
+                ErrorDetail = GitErrorDetails.RefRequiredReset,
                 Error = "reset needs an explicit ref, e.g. ref: \"HEAD~1\" to undo the last commit (working tree kept). " +
                         "To unstage without moving HEAD use operation=unstage. Nothing was reset."
             };
@@ -1887,6 +2001,8 @@ public class GitImpl : IGitOperations
             return new GitCheckoutResult
             {
                 Success = false,
+                ErrorKind = GitErrorCodes.RefRequired,
+                ErrorDetail = GitErrorDetails.RefRequiredCheckout,
                 Error = "branchName is required for operation=checkout. Pass the branch to switch to, and createBranch=true if it doesn't exist yet."
             };
         }
@@ -2018,7 +2134,7 @@ public class GitImpl : IGitOperations
             var pullRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
             var detail = string.Join("\n", new[] { pullRaw.Stdout.Trim(), CleanGitStderr(pullRaw.Stderr) }.Where(s => s.Length > 0));
             if (pullRaw.ExitCode != 0)
-                return new GitRemoteResult { Success = false, Operation = "pull", Error = (detail.Length > 0 ? detail : $"git pull exited with code {pullRaw.ExitCode}") + await InProgressAdviceAsync(gitRoot, cancellationToken) };
+                return await AppendInProgressAsync(new GitRemoteResult { Success = false, Operation = "pull", Error = detail.Length > 0 ? detail : $"git pull exited with code {pullRaw.ExitCode}" }, gitRoot, cancellationToken);
 
             return new GitRemoteResult { Success = true, Operation = "pull", Detail = detail };
         }
