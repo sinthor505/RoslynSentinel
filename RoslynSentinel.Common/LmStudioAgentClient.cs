@@ -35,13 +35,23 @@ public sealed class LmStudioAgentClient
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public LmStudioAgentClient(HttpClient httpClient, ILogger<LmStudioAgentClient> logger)
+    /// <param name="httpClient">Pre-configured client whose BaseAddress points at the LM Studio /v1/ root.</param>
+    /// <param name="model">
+    /// The LM Studio model name this client targets. Required and per-instance, deliberately NOT read
+    /// from the process-wide static <see cref="LlmOptions.Model"/>: that static is set once at
+    /// startup and cannot serve callers (SubAgent/SubAgentEval) that each need a different model per
+    /// call from inside one long-lived server process, nor survive two such calls running concurrently.
+    /// </param>
+    /// <param name="logger">Logger for the client's own diagnostics.</param>
+    public LmStudioAgentClient(HttpClient httpClient, string model, ILogger<LmStudioAgentClient> logger)
     {
         _httpClient = httpClient;
         _logger = logger;
-        _model = LlmOptions.Model
-            ?? throw new InvalidOperationException(
-                "The LLM model must be set via --llm-model or the ROSLYNSENTINEL_LLM_MODEL environment variable (LM Studio needs the loaded model's name).");
+        _model = string.IsNullOrWhiteSpace(model)
+            ? throw new ArgumentException(
+                "model must be a non-empty LM Studio model name (the name of the loaded model, as shown by LM Studio).",
+                nameof(model))
+            : model;
 
         _logger.LogInformation("LM Studio agent client targeting model {Model} at {BaseAddress}", _model, httpClient.BaseAddress);
         _loadedModelStatusCheck = LogLoadedModelStatusAsync();

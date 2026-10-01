@@ -192,7 +192,10 @@ public sealed class ModelAgentRunner
             // Prefer LM Studio's own reported total_tokens (exact) over PromptTokenEstimator (a
             // chars/4 heuristic), falling back only when a backend omits usage. cumulativeTokens is
             // a running total across the whole conversation, not per-turn, since that is what
-            // eventually triggers LM Studio's exceed_context_size_error.
+            // eventually triggers LM Studio's exceed_context_size_error. Caveat: the fallback
+            // estimator below still keys off the process-wide LlmOptions.Model, which can differ from
+            // the per-call model a SubAgent/SubAgentEval run was given. That only skews this
+            // heuristic's estimate (never correctness), so it is left as-is.
             cumulativeTokens += modelMessage.TotalTokens ?? PromptTokenEstimator.EstimateTokens(
                 LlmOptions.Model ?? "", (modelMessage.Content ?? "") + (modelMessage.ReasoningContent ?? ""));
 

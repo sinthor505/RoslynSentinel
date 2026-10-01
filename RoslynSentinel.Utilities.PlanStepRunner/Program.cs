@@ -92,7 +92,7 @@ public static class Program
                 });
                 b.AddProvider(new FlushingFileLoggerProvider(Path.Combine(stepDir, "agent.log")));
             });
-            var agentClient = new LmStudioAgentClient(httpClient, loggerFactory.CreateLogger<LmStudioAgentClient>());
+            var agentClient = new LmStudioAgentClient(httpClient, LlmOptions.Model!, loggerFactory.CreateLogger<LmStudioAgentClient>());
 
             try
             {

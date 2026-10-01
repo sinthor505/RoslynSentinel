@@ -194,7 +194,7 @@ public class RepeatedToolFailureBreakerTests
         {
             BaseAddress = new Uri("http://localhost/v1/"),
         };
-        return new LmStudioAgentClient(httpClient, NullLogger<LmStudioAgentClient>.Instance);
+        return new LmStudioAgentClient(httpClient, "breaker-test-model", NullLogger<LmStudioAgentClient>.Instance);
     }
 
     /// <summary>
