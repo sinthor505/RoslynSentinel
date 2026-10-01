@@ -53,3 +53,4 @@ PlanStepRunner/
 !.claude/hooks/**
 docs/known-build-warnings.Solution.txt
 *.tmp
+/.scratch
