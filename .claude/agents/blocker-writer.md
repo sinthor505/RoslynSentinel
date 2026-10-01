@@ -12,14 +12,12 @@ test is an **environment defect** — describe what the tooling did wrong or fai
 never "the model should have called it differently". If the root cause hasn't been traced to source
 yet, say so explicitly rather than presenting the surface error as the cause.
 
-Before writing, read 2-3 existing files under `docs/current/blockers/` to match the established format, tone, and heading structure exactly (filename pattern: `blocking_error_<short-tool-or-symbol-name>_<sequence-or-context>.md`).
+Before writing, read `docs/current/templates/README.md` (filename and location rules) and copy
+`docs/current/templates/blocker.md`. Do not read existing blocker docs to learn the format; the
+template is canonical. Open an existing blocker only to check for a duplicate of this one.
 
-A good blocker doc includes:
-- What was being attempted (the task, the command/tool call)
-- The exact error text (verbatim, not paraphrased)
-- Where it happened (file:line, tool name, run/step id if applicable)
-- Root cause if known, or what's been ruled out if not
-- What unblocks it — a specific fix, or a specific question that needs an answer
+Fill every template section: what was attempted, the verbatim error text, the source trace
+(file:line, tool name, run/step id), what is and is not confirmed, and what unblocks it.
 
 Naming and CS-error-specific rule: any unhandled CS#### surfacing during automated/agent work gets a writeup immediately, not deferred — this is a standing project convention, not optional cleanup.
 

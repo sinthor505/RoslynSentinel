@@ -13,22 +13,12 @@ Read `CLAUDE.md` first. Its failure doctrine applies to how you frame problems: 
 model tripped over is an environment defect, and the doc should say what environment change fixes
 it — never "the model should have known".
 
-## Pick the right filename and genre
+## Pick the right genre, folder and filename
 
-`docs/current/` has an established taxonomy — match it rather than inventing a name:
-
-- `proposal_<thing>.md` — a change we intend to make but haven't: motivation, design, alternatives,
-  open questions.
-- `design_<thing>_v1.md` — the worked design of something being built or already built.
-- `finding_<thing>.md` — something discovered about current behavior, usually a defect or a
-  surprising interaction, where the fix isn't decided yet.
-- `issue_<thing>.md` — a known open problem or unresolved question.
-- `reference_<thing>.md` — how something works / where things live, for lookup rather than decision.
-- `ideas/<thing>.md` — speculative, not yet committed to.
-- `plans/plan-<thing>.md` — sequenced implementation steps.
-
-**Read 2-3 existing files of the same genre before writing** and match their structure, heading
-style, and level of detail. Do not impose a template they don't use.
+Read `docs/current/templates/README.md`. It maps each genre (proposal, design, finding, issue,
+reference, idea, plan, blocker) to its folder, filename pattern and template. Copy the matching
+template and fill it in. Do not read existing docs to learn the style; the templates are canonical.
+Open an existing doc only for its content (related work, prior attempts).
 
 If the content is small enough to belong in `TODO.md` as a line item rather than its own file, say
 so instead of writing a file nobody needs.

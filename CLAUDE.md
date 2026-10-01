@@ -215,6 +215,9 @@ source before constructing an explanation for it.
 - Any unhandled `CS####` surfacing during automated work gets a writeup in
   `docs/current/blockers/` immediately, not deferred.
 - `docs/current/TODO.md` is open-items-only; resolved entries move to `docs/current/CLOSED.md`.
+- Writing a blocker, finding, proposal, issue, design, plan, idea or reference doc: read
+  `docs/current/templates/README.md` for the folder and filename rule, then copy the matching
+  template. Never read existing docs to learn the house style; the templates are canonical.
 - `*/Worktree/` folders under a PlanStepRunner run are harness clones — exclude from diffs,
   searches, and reviews. Never run git commands inside one and treat the output as authoritative.
 - Use ASCII-only punctuation in any comment, doc, commit message, or prompt text you write —
