@@ -124,6 +124,82 @@ public sealed record SubAgentEvalResult
     }
 
     /// <summary>
+    /// A child tool result over the inline-size threshold (a full-solution Build or RunTest easily
+    /// is) arrives as a pointer, not data: either <c>largeResult.filePath</c> (a typed result) or
+    /// <c>offloaded</c> + <c>resultId</c> (the generic backstop). The child wrote the payload to a
+    /// <c>.roslynsentinel/largeresults</c> file inside its own worktree; this reads that file and
+    /// returns an envelope text with an inline <c>successData</c>, so <see cref="Build"/> can parse it
+    /// exactly as it parses an inline result. Returns <paramref name="toolText"/> unchanged when it is
+    /// not a pointer, or when the file is missing, unreadable, or outside <paramref name="allowedRoot"/>
+    /// (the child worktree) - the caller then reports the result as unreadable rather than guessing.
+    /// </summary>
+    /// <param name="toolText">Raw text of the child tool result, or null.</param>
+    /// <param name="allowedRoot">The child worktree; a pointer to any path outside it is not followed.</param>
+    public static string? ResolveOffloadedResult(string? toolText, string allowedRoot)
+    {
+        if (toolText is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(toolText);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return toolText;
+            }
+
+            string? file = null;
+            if (TryGetPropertyIgnoreCase(root, "largeResult", out var large) && large.ValueKind == JsonValueKind.Object)
+            {
+                file = ReadString(large, "filePath");
+            }
+            else if (TryGetPropertyIgnoreCase(root, "offloaded", out var offloaded) && offloaded.ValueKind == JsonValueKind.True)
+            {
+                var resultId = ReadString(root, "resultId");
+                if (resultId is not null && resultId.All(char.IsAsciiLetterOrDigit))
+                {
+                    var directory = Path.Combine(allowedRoot, ".roslynsentinel", "largeresults");
+                    if (Directory.Exists(directory))
+                    {
+                        file = Directory.EnumerateFiles(directory, $"largeresult_*_{resultId}.json").FirstOrDefault();
+                    }
+                }
+            }
+
+            if (file is null)
+            {
+                return toolText;
+            }
+
+            var fullPath = Path.GetFullPath(file);
+            var rootPrefix = Path.GetFullPath(allowedRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            if (!fullPath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
+            {
+                return toolText;
+            }
+
+            using var fileDocument = JsonDocument.Parse(File.ReadAllText(fullPath));
+            if (!TryGetPropertyIgnoreCase(fileDocument.RootElement, "data", out var data) || data.ValueKind != JsonValueKind.Object)
+            {
+                return toolText;
+            }
+
+            // The generic backstop stores the whole envelope; a typed large result stores the payload alone.
+            return TryGetPropertyIgnoreCase(data, "successData", out _)
+                ? data.GetRawText()
+                : "{\"successData\":" + data.GetRawText() + "}";
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return toolText;
+        }
+    }
+
+    /// <summary>
     /// Finds the envelope's inline <c>successData</c>. False for a non-envelope, an envelope with no
     /// inline data (an offloaded <c>largeResult</c>), or an envelope reporting failure with no data.
     /// </summary>

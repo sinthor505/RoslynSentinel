@@ -48,10 +48,12 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
             {
                 ["reason"] = "SubAgentEval: post-run build snapshot.",
                 ["level"] = "fullBuild",
-                // The counts are all that is read; a small cap keeps the child's result under the
-                // inline-size threshold so successData is not offloaded out from under the parser.
+                // The counts are all that is read. A full-solution build's stdout/warnings still
+                // push the result over the inline-size threshold, in which case the child returns a
+                // pointer to a file in its worktree; ResolveOffloadedResult reads it back.
                 ["maxDetails"] = 1,
             }, cancellationToken);
+            buildText = SubAgentEvalResult.ResolveOffloadedResult(buildText, child.WorktreePath);
 
             var result = SubAgentEvalResult.Build(run, buildText, testResultJson: null, touchedPaths);
             if (result.BuildSucceeded)
@@ -62,6 +64,7 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
                     ["summary"] = true,
                     ["maxDetails"] = 1,
                 }, cancellationToken);
+                testText = SubAgentEvalResult.ResolveOffloadedResult(testText, child.WorktreePath);
                 result = SubAgentEvalResult.Build(run, buildText, testText, touchedPaths);
             }
 
