@@ -22,7 +22,7 @@ public class LargeResultOffloadFilterTests
     private TestSolutionFixture _fixture = null!;
 
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
-    // LargeResultHelper.OffloadThresholdBytes is 30 * 1024. Each CallerInfo record (CallerMethod,
+    // LargeResultHelper.OffloadThresholdBytes is 15 * 1024. Each CallerInfo record (CallerMethod,
     // CallerType, absolute FilePath under a temp dir, Line, CodeSnippet) serializes to well over
     // 100 bytes, so this many distinct callers of Target() comfortably exceeds the threshold
     // regardless of the sample solution's own (small) content.
@@ -158,7 +158,7 @@ public class LargeResultOffloadFilterTests
                 ? next.GetInt32()
                 : null;
             pageCount++;
-            Assert.That(pageCount, Is.LessThan(20), "Paging should terminate; too many pages indicates a broken offset/hasMore computation.");
+            Assert.That(pageCount, Is.LessThan(35), "Paging should terminate; too many pages indicates a broken offset/hasMore computation.");
         }
 
         Assert.That(reassembled.ToString(), Does.Contain($"{CallerMethodPrefix}0"),

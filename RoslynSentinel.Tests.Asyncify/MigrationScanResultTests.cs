@@ -287,8 +287,8 @@ public class Svc
     [Test, CancelAfter(15000)]
     public async Task T3_NineKbResult_StaysInline_LargeResultNull()
     {
-        // 55 candidates with the default limit of 50 -> page ≈ 50 × ~200 bytes ≈ 10 KB.
-        // The server threshold is 256 KB. This must stay inline.
+        // 55 candidates with the default limit of 50 -> page ≈ 50 × ~200 bytes ≈ 14 KB.
+        // The server threshold is 15 KB KB. This must stay inline.
         SetSource(BuildManyFlaggedMethods(55));
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message"); // default limit=50, offset=0
@@ -297,7 +297,7 @@ public class Svc
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.IsSuccess, Is.True);
         Assert.That(result.LargeResult, Is.Null,
-            "A ~9 KB page must NOT trigger the server-side file-write threshold (256 KB). " +
+            "A ~9 KB page must NOT trigger the server-side file-write threshold (15 KB). " +
             "If this fails, check that the threshold measures serialized bytes, not item count.");
         Assert.That(result.SuccessData, Is.Not.Null);
         Assert.That(result.SuccessData!.Count, Is.EqualTo(50), "Default limit of 50 should be applied.");
@@ -312,7 +312,7 @@ public class Svc
     {
         // Build ~500 methods, each with a 300-char Reason string.
         // Per finding JSON ≈ 200 (base) + 300 (Reason field) + ~350 (Summary field) ≈ 850 bytes.
-        // 500 × 850 = ~425 KB > 256 KB -> must trigger the file-write path.
+        // 500 × 850 = ~425 KB > 15 KB -> must trigger the file-write path.
         var reason = new string('x', 300);
         SetSource(BuildManyFlaggedMethods(500, reason));
 
@@ -326,7 +326,7 @@ public class Svc
         Assert.That(result.LargeResult!.WrittenToFile, Is.True);
         Assert.That(result.LargeResult.FilePath.Absolute, Is.Not.Null.And.Not.Empty);
         Assert.That(result.LargeResult.ResultId, Is.Not.Null.And.Not.Empty);
-        Assert.That(result.LargeResult.SizeBytes, Is.GreaterThan(256 * 1024));
+        Assert.That(result.LargeResult.SizeBytes, Is.GreaterThan(15 * 1024));
         Assert.That(result.LargeResult.TotalRecords, Is.GreaterThan(0));
         Assert.That(result.SuccessData, Is.Null, "SuccessDetails should be null when LargeResult is set.");
         Assert.That(File.Exists(result.LargeResult.FilePath), Is.True,
@@ -719,7 +719,7 @@ public class Svc
     [Test, CancelAfter(60000)]
     public async Task T19_LargeResult_Message_ContainsGetLargeResult_AndOperationId()
     {
-        // Reuse T4 conditions: 500 methods with padded Reason to exceed 256 KB.
+        // Reuse T4 conditions: 500 methods with padded Reason to exceed 15 KB.
         var reason = new string('x', 300);
         SetSource(BuildManyFlaggedMethods(500, reason));
 

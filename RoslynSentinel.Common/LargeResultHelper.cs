@@ -11,7 +11,7 @@ public static class LargeResultHelper
     // private) - grepped for external references to LargeResultHelper.JsonOptions before this
     // change; none found outside this file.
     internal static readonly JsonSerializerOptions JsonOptions = SharedJsonOptions.Default;
-    public const int OffloadThresholdBytes = 30 * 1024;
+    public const int OffloadThresholdBytes = 15 * 1024; // 15 KB
 
     /// <summary>
     /// Serializes <paramref name="data"/> and, if it exceeds <see cref="OffloadThresholdBytes"/>, writes it
