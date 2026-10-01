@@ -5,6 +5,23 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## `SubAgentEval`/`SubAgent` MCP tools - implemented and live-smoke-verified 2026-10-01
+
+Design `design_subagent_tool.md`, plan `plans/plan_subagent_tool_implementation.md`. Commits: Step 1
+`8e2a59e`, Step 2 `495d012`, `--include-tools`/`--exclude-tools` prerequisite `6d57b41`, Step 3 `cffd20b`,
+Step 4 `9859277`, Steps 5+6 `8a69ff9`, Step 7 tests + stdin fix `874f80f`, Step 8 docs `4572586`,
+offloaded-result fix `a4d5aea`. Live smoke runs against qwen/qwen3.6-35b-a3b on LM Studio all passed:
+`SubAgentEval` (worktree created, child launched and loaded, model edited
+`SubAgentRunNaming.cs`, Build + RunTest snapshot in the result, worktree and branch removed),
+`SubAgent` text and json formats, and the nested check (the child exposes 65 tools vs the parent's 67,
+with neither SubAgent tool; the model answered NONE). The smoke runs found and fixed two real bugs:
+spawned git/dotnet children inheriting the stdio server's stdin (`874f80f`), and a full-solution
+child Build/RunTest result being offloaded to a file so `SubAgentEvalResult` read it as unreadable
+(`a4d5aea`). Run transcripts: `RoslynSentinel-TestRuns\SubAgent\<runId>\subagent\Logs	ranscript.json`.
+Known limits kept: `SubAgentEval` runs the child's full `RunTest` (slow, ~10 min observed), and both tools
+only work when the loaded solution is the RoslynSentinel repo. The unexplained 1-test failure in the
+child's suite is tracked separately in TODO.md.
+
 ## Git tool: listed-scope commit rejected staged deletions and ignored tracked paths; shell-parity gaps - fixed 2026-09-30
 
 `blocking_error_git_commit_listed_scope_rejects_staged_deletions_and_ignored_tracked_paths.md` (moved to

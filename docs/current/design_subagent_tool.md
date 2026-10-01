@@ -437,13 +437,13 @@ Each of these is independently substantial; this doc does not propose attempting
 
 ## Status
 
-Implemented 2026-10-01 (plan Steps 0-8; see
+Implemented and live-smoke-verified 2026-10-01 (plan Steps 0-8; see
 `docs/current/plans/plan_subagent_tool_implementation.md`). `SubAgentEvalTools`/`SubAgentEvalImpl` and
 `SubAgentTools`/`SubAgentImpl` exist in `RoslynSentinel.Tools.Advanced`, registered under the
-`SubAgentEval` and `SubAgent` modes. Build is 0 errors and `RoslynSentinel.Tests.SubAgent` (45 tests)
-is green. NOT yet verified: live end-to-end smoke runs of either tool against a real loaded model
-(LM Studio was unreachable during implementation). Tracked in `docs/current/TODO.md` under
-"`SubAgentEval`/`SubAgent` MCP tools", which stays open until those runs are done.
+`SubAgentEval` and `SubAgent` modes. Build is 0 errors and `RoslynSentinel.Tests.SubAgent` (50 tests)
+is green. Live smoke runs of both tools against qwen/qwen3.6-35b-a3b on LM Studio passed on 2026-10-01
+and found two real bugs (stdin inheritance by spawned children; an offloaded child Build/RunTest result
+read as unreadable), both fixed. Closed in `docs/current/CLOSED.md`.
 
 Deviations from this design as built: the child's tool surface is selected with `--mode=Claude` plus
 `--exclude-tools=SubAgentTools,SubAgentEvalTools` (Claude is a mode, not a tool class); the run
