@@ -719,7 +719,7 @@ public class GitImpl : IGitOperations
             // -z makes each record NUL-terminated with no quoting at all, so spaces and any other
             // character round-trip into the `files` parameter unchanged.
             var statusRaw = await RunGitAsync(gitRoot,
-                ["-c", "core.quotePath=false", "status", "--porcelain=v1", "-z"], cancellationToken);
+                ["-c", "core.quotePath=false", "status", "--porcelain=v1", "-z", "--untracked-files=all"], cancellationToken);
             if (statusRaw.ExitCode != 0)
                 return new GitStatusResult { Success = false, Branch = branch, Error = CleanGitStderr(statusRaw.Stderr) };
 

@@ -68,7 +68,7 @@ public class GitTools
         GitResetMode? mode = null,
         [Description("status/log/diff/show only: an absolute path to a different repo/worktree. Mutating operations always stay scoped to the loaded solution.")]
         string? repoPath = null,
-        [Description("status: most entries to list before the result is truncated to a 10-per-list sample plus full counts (default 50, valid 1-5000; out of range is refused). Raise it to see every changed path.")]
+        [Description("status: most entries to list before the result is truncated to a 10-per-list sample plus full counts (default 50, valid 1-5000; out of range is refused). Untracked files are listed individually (new directories are expanded, ignored files excluded), so any listed path can be passed as-is to stage/commit files. Raise maxEntries to see every changed path.")]
         int maxEntries = 50,
         [Description("diff/show: true returns a --name-status file list (status letter + path per file) instead of the patch. Mutually exclusive with stat.")]
         bool nameOnly = false,

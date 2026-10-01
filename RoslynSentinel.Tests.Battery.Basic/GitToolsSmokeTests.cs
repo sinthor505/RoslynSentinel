@@ -1712,4 +1712,30 @@ public class GitToolsSmokeTests
 
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("GitError"));
     }
+
+    [Test]
+    public async Task Git_Status_UntrackedFiles_ExpandsDirectoriesToIndividualFilesAsync()
+    {
+        // Create untracked nested directory structure.
+        WriteFile("NewDir/a.txt", "content a");
+        WriteFile("NewDir/sub/b.txt", "content b");
+        WriteFile("NewDir/sub/c.txt", "content c");
+
+        var result = await _gitTools.Git(reason: "status with nested untracked files", GitOperation.status, maxEntries: 50);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+
+        var status = (GitStatusResult)result.SuccessData!;
+
+        // Assert all individual file paths are present.
+        Assert.That(status.Untracked, Does.Contain("NewDir/a.txt"), "individual files must be listed");
+        Assert.That(status.Untracked, Does.Contain("NewDir/sub/b.txt"), "nested files must be listed");
+        Assert.That(status.Untracked, Does.Contain("NewDir/sub/c.txt"), "nested files must be listed");
+
+        // Assert directory entries are NOT in the list (directories must be expanded, not collapsed).
+        Assert.That(status.Untracked, Does.Not.Contain("NewDir/"), "collapsed directory entry must not appear");
+        Assert.That(status.Untracked, Does.Not.Contain("NewDir/sub/"), "collapsed subdirectory entry must not appear");
+
+        // Verify exact count: 3 files, no directory entries.
+        Assert.That(status.Untracked, Has.Count.EqualTo(3), "exactly 3 individual files, no collapsed directories");
+    }
 }
