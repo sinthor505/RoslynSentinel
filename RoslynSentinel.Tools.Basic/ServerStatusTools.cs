@@ -1,12 +1,10 @@
 using System.ComponentModel;
 
-using ModelContextProtocol.Server;
-
 namespace RoslynSentinel.Tools.Basic;
 
 public class ServerStatusTools
 {
-       private readonly IWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ActiveToolSurface _activeToolSurface;
     private readonly StoppedByScriptMarker _stoppedByScriptMarker;
 

@@ -2,6 +2,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Engines.Advanced;
 
 /// <summary>
@@ -14,7 +16,7 @@ namespace RoslynSentinel.Engines.Advanced;
 public class CommentingEngine
 {
     private readonly IWorkspaceReader _workspaceManager;
-    private readonly RefactoringEngine _refactoringEngine;
+    private readonly BasicRefactoringEngine _refactoringEngine;
     private readonly ILlmClient _llmClient;
 
     private const string CommentSystemPrompt =
@@ -34,7 +36,7 @@ public class CommentingEngine
     // AddSummaryCommentCoreAsync call must see the previous member's edit already applied to the document.
     private static int LlmParallelism => LlmOptions.Parallelism;
 
-    public CommentingEngine(IWorkspaceReader workspaceManager, RefactoringEngine refactoringEngine, ILlmClient llmClient)
+    public CommentingEngine(IWorkspaceReader workspaceManager, BasicRefactoringEngine refactoringEngine, ILlmClient llmClient)
     {
         _workspaceManager = workspaceManager;
         _refactoringEngine = refactoringEngine;
@@ -266,7 +268,7 @@ public class CommentingEngine
     /// <summary>
     /// Comments every stale member belonging to one file against a local, in-memory <see
     /// cref="Solution"/> fork (seeded once from <paramref name="baseSolution"/>): each member's
-    /// LLM-generated summary is applied via <see cref="RefactoringEngine.AddSummaryCommentCoreAsync"/>
+    /// LLM-generated summary is applied via <see cref="BasicRefactoringEngine.AddSummaryCommentCoreAsync"/>
     /// against that fork directly, so member N+1 sees member N's comment even though nothing has
     /// been written to disk yet. Stamps <c>[ContentHash]</c> in the same pass as each member's
     /// comment so comment and hash never desync. Returns the final file text (or null if no member
@@ -340,7 +342,7 @@ public class CommentingEngine
             // itself isn't part of "content" for staleness purposes -> only a body edit invalidates it).
             // Deliberately does NOT call NormalizeWhitespace() on the result: newMember's leading
             // trivia already holds the doc comment AddSummaryCommentCoreAsync just spliced in by hand
-            // (see the matching warning at RefactoringEngine.AddSummaryCommentCoreAsync), and a
+            // (see the matching warning at BasicRefactoringEngine.AddSummaryCommentCoreAsync), and a
             // whole-tree normalize pass corrupts/drops that hand-built trivia. AddAttribute below
             // gives the new [ContentHash] attribute list its own indent/newline trivia explicitly
             // instead, so the tree never needs a blanket re-format. ComputeStableContentHash (not
@@ -471,7 +473,7 @@ public class CommentingEngine
 
     // ── Syntax helpers ───────────────────────────────────────────────────────
 
-    // ResolveMemberOrEnumMemberByNameOrSnippet (RefactoringEngine.cs) deliberately excludes
+    // ResolveMemberOrEnumMemberByNameOrSnippet (BasicRefactoringEngine.cs) deliberately excludes
     // interface-declared members from its name-based lookup -> an interface method/property is a
     // signature only, and callers targeting "Method X" almost always mean an implementation, not the
     // interface's own declaration. Seeding/staleness-scanning still followed plain syntax-kind
@@ -668,7 +670,7 @@ public class CommentingEngine
     // written by AddSummaryCommentCoreAsync (which does disambiguate by containing type), but this
     // re-lookup then grabbed the *first* occurrence to stamp the ContentHash onto, silently
     // overwriting/misplacing that occurrence's trivia and leaving the actually-edited member
-    // unhashed. containingTypeName narrows candidates the same way the resolver in RefactoringEngine
+    // unhashed. containingTypeName narrows candidates the same way the resolver in BasicRefactoringEngine
     // does, only falling back to the unnarrowed set if nothing matches (should not normally happen,
     // since it's the same hint AddSummaryCommentCoreAsync just used successfully).
     private static MemberDeclarationSyntax? FindEquivalentMemberByName(SyntaxNode root, MemberDeclarationSyntax original, string memberName, string? containingTypeName, int nameOrdinal)

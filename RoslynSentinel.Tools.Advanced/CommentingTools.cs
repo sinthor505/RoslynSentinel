@@ -2,7 +2,7 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol.Server;
+using RoslynSentinel.Engines.Advanced;
 
 namespace RoslynSentinel.Tools.Advanced;
 
@@ -56,7 +56,7 @@ public class CommentingTools
             return new SentinelCallToolResult<CommentingResult>
             {
                 IsSuccess = false,
-                ErrorData =  new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                     "No solution is loaded. Call LoadSolution first.")
             };
         }
@@ -66,7 +66,7 @@ public class CommentingTools
             return new SentinelCallToolResult<CommentingResult>
             {
                 IsSuccess = false,
-                ErrorData =  new ResultError(MigrationErrorCode.InvalidArgument, "projectName is required when scope=project.")
+                ErrorData = new ResultError(MigrationErrorCode.InvalidArgument, "projectName is required when scope=project.")
             };
         }
 
@@ -75,7 +75,7 @@ public class CommentingTools
             return new SentinelCallToolResult<CommentingResult>
             {
                 IsSuccess = false,
-                ErrorData =  new ResultError(MigrationErrorCode.InvalidArgument, "filePath is required when scope=file.")
+                ErrorData = new ResultError(MigrationErrorCode.InvalidArgument, "filePath is required when scope=file.")
             };
         }
 
@@ -85,7 +85,7 @@ public class CommentingTools
             return new SentinelCallToolResult<CommentingResult>
             {
                 IsSuccess = false,
-                ErrorData =  new ResultError(MigrationErrorCode.Exception,
+                ErrorData = new ResultError(MigrationErrorCode.Exception,
                     $"Circuit breaker is open: {halt.Directive}")
             };
         }
@@ -93,14 +93,14 @@ public class CommentingTools
         try
         {
             var result = await RunAsync(scope, projectName, filePath, dryRun, maxMembers, maxRuntimeSeconds, cancellationToken);
-            return new SentinelCallToolResult<CommentingResult> { IsSuccess = true, SuccessData =  result };
+            return new SentinelCallToolResult<CommentingResult> { IsSuccess = true, SuccessData = result };
         }
         catch (Exception ex)
         {
             return new SentinelCallToolResult<CommentingResult>
             {
                 IsSuccess = false,
-                ErrorData =  ToolErrorMapper.ToResultError(ex, _workspaceManager, "BulkComment")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "BulkComment")
             };
         }
     }

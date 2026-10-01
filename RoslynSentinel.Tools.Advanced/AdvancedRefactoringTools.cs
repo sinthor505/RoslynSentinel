@@ -4,6 +4,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Advanced;
 /// <summary>
 /// Wire-shape input for one entry in <c>ChangeSignature</c>'s <c>parameters</c> array. Flat and
@@ -18,10 +21,11 @@ public sealed record ChangeSignatureParameterInput(int? originalIndex = null, st
 [McpServerToolType]
 public class AdvancedRefactoringTools
 {
-    private readonly RefactoringEngine _refactoringEngine;
+    private readonly BasicRefactoringEngine _refactoringEngine;
     private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
     private readonly SemanticRefactoringEngine _semanticRefactoringEngine;
     private readonly StructuralRefactoringEngine _advancedStructuralEngine;
+    private readonly MemberRefactoringEngine _memberRefactoringEngine;
     private readonly MappingEngine _mappingEngine;
     private readonly MsToolAugmentEngine _augmentEngine;
     private readonly CodeGenerationEngine _codeGenerationEngine;
@@ -32,25 +36,27 @@ public class AdvancedRefactoringTools
     private readonly ILogger<AdvancedRefactoringTools> _logger;
     public AdvancedRefactoringTools(IWorkspaceManager workspaceManager)
     {
-        _refactoringEngine = new RefactoringEngine(workspaceManager);
+        _validationEngine = new ValidationEngine(workspaceManager);
+        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
+        _refactoringEngine = new BasicRefactoringEngine(workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(workspaceManager);
+        _memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, _symbolNavigationEngine, _validationEngine);
         _semanticRefactoringEngine = new SemanticRefactoringEngine(workspaceManager);
         _advancedStructuralEngine = new StructuralRefactoringEngine(workspaceManager);
         _mappingEngine = new MappingEngine(workspaceManager);
         _augmentEngine = new MsToolAugmentEngine(workspaceManager);
         _codeGenerationEngine = new CodeGenerationEngine(workspaceManager);
-        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
         _workspaceManager = workspaceManager;
-        _validationEngine = new ValidationEngine(workspaceManager);
         _config = new SentinelConfiguration();
         _logger = NullLogger<AdvancedRefactoringTools>.Instance;
     }
 
-    public AdvancedRefactoringTools(RefactoringEngine refactoringEngine, AdvancedRefactoringEngine advancedRefactoringEngine, StructuralRefactoringEngine advancedStructuralEngine, SemanticRefactoringEngine semanticRefactoringEngine, MappingEngine mappingEngine, SyntaxModernizationEngine modernizationEngine, MsToolAugmentEngine augmentEngine, CodeGenerationEngine codeGenerationEngine, SymbolNavigationEngine symbolNavigationEngine, IWorkspaceManager workspaceManager, ValidationEngine validationEngine, SentinelConfiguration config, ILogger<AdvancedRefactoringTools> logger)
+    public AdvancedRefactoringTools(BasicRefactoringEngine refactoringEngine, AdvancedRefactoringEngine advancedRefactoringEngine, StructuralRefactoringEngine advancedStructuralEngine, MemberRefactoringEngine memberRefactoringEngine, SemanticRefactoringEngine semanticRefactoringEngine, MappingEngine mappingEngine, SyntaxModernizationEngine modernizationEngine, MsToolAugmentEngine augmentEngine, CodeGenerationEngine codeGenerationEngine, SymbolNavigationEngine symbolNavigationEngine, IWorkspaceManager workspaceManager, ValidationEngine validationEngine, SentinelConfiguration config, ILogger<AdvancedRefactoringTools> logger)
     {
         _refactoringEngine = refactoringEngine;
         _advancedRefactoringEngine = advancedRefactoringEngine;
         _advancedStructuralEngine = advancedStructuralEngine;
+        _memberRefactoringEngine = memberRefactoringEngine;
         _semanticRefactoringEngine = semanticRefactoringEngine;
         _mappingEngine = mappingEngine;
         _augmentEngine = augmentEngine;
@@ -478,7 +484,7 @@ public class AdvancedRefactoringTools
             }
 
             FilePathWrapper? targetFilePath = string.IsNullOrEmpty(targetFilepath) ? (FilePathWrapper?)null : FilePathWrapper.FromWire(targetFilepath, _workspaceManager.GetSolutionRoot());
-            var result = await _advancedStructuralEngine.MoveMemberAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken, autoResolveCallSites, callSiteFixups);
+            var result = await _memberRefactoringEngine.MoveMemberAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken, autoResolveCallSites, callSiteFixups);
             if (!autoStage)
             {
                 return new SentinelCallToolResult<AppliedChangeSummary>()

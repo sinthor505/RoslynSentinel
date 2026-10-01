@@ -1,10 +1,7 @@
 using System.ComponentModel;
-using System.Linq;
 using System.Text;
 
 using Microsoft.Extensions.Logging;
-
-using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Tools.Basic;
 

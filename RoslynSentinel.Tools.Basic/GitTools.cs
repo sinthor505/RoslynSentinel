@@ -3,8 +3,6 @@ using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using ModelContextProtocol.Server;
-
 namespace RoslynSentinel.Tools.Basic;
 
 [McpServerToolType]

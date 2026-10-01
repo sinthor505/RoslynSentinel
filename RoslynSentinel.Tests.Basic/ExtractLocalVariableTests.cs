@@ -6,7 +6,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// Comprehensive tests for RefactoringEngine.ExtractLocalVariableAsync
+/// Comprehensive tests for BasicRefactoringEngine.ExtractLocalVariableAsync
 /// 
 /// Purpose: Extract an inline expression into a local variable declaration
 /// Use case: Convert `return x + y;` to `var sum = x + y; return sum;`
@@ -26,14 +26,14 @@ public class ExtractLocalVariableTests
 {
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
-    private RefactoringEngine _refactoringEngine;
+    private BasicRefactoringEngine _refactoringEngine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
     }
 
     [TearDown]

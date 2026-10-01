@@ -10,8 +10,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Engines.Basic;
 
-public record PreviewCallSite(FilePathWrapper FilePath, int Line, string CallExpression, CallSiteStatus Status, string? BlockReason, string? SuggestedFix, IReadOnlyList<string> Candidates);
-public record SkippedCallSite(FilePathWrapper FilePath, int LineNumber, string Reason);
 public record CallerInfo(
     string CallerMethod,
     string CallerType,
@@ -190,7 +188,7 @@ public class SymbolNavigationEngine
     {
         // READCHOKEPOINT-CAST: _workspaceManager is ISolutionProvider-typed (~11 production
         // construction sites across the solution as of 2026-09-25, including AdvancedRefactoringTools.cs,
-        // AdvancedRefactoringEngine.cs, DiscoveryEngine.cs, RefactoringEngine.cs,
+        // AdvancedRefactoringEngine.cs, DiscoveryEngine.cs, BasicRefactoringEngine.cs,
         // RefactoringSignatureTools.cs, RefactoringStructuralTools.cs, GenerationTools.cs -- widening
         // the constructor to IWorkspaceManager would force touching all of them). Every real
         // ISolutionProvider implementation (PersistentWorkspaceManager, FakeWorkspaceManager) also
@@ -2247,10 +2245,10 @@ public class SymbolNavigationEngine
     /// <summary>
     /// Builds a "symbolName WAS found at these locations, but contextSnippet didn't match" hint for
     /// a contextSnippet-resolution failure, given the name-only candidate declarations already
-    /// available at the call site. Mirrors RefactoringEngine's NearMissList hint shape (line +
+    /// available at the call site. Mirrors BasicRefactoringEngine's NearMissList hint shape (line +
     /// first-line preview, up to 3, "+N more" suffix) so an agent sees the same style of actionable
     /// error across every tool in this codebase that resolves by name+contextSnippet, not just the
-    /// RefactoringEngine mutation tools. Returns an empty string (not a sentence fragment) when
+    /// BasicRefactoringEngine mutation tools. Returns an empty string (not a sentence fragment) when
     /// symbolName itself doesn't resolve to anything nearby, since there's nothing to list.
     /// </summary>
     public static string DescribeNameOnlyCandidates(List<MemberDeclarationSyntax> candidates, string symbolName)
@@ -2724,7 +2722,7 @@ public class SymbolNavigationEngine
     /// -- mirrors the inline check previously duplicated in ResolveMemberByNameOrSnippet and
     /// ResolveMemberOrEnumMemberByNameOrSnippet.
     /// </summary>
-    public static List<SyntaxNodeCandidate> PreferConstructorOverType(List<SyntaxNodeCandidate> candidates)
+    public List<SyntaxNodeCandidate> PreferConstructorOverType(List<SyntaxNodeCandidate> candidates)
     {
         if (candidates.Count > 1 && candidates.Any(c => c.Kind == CandidateKind.Constructor))
         {
@@ -2743,7 +2741,7 @@ public class SymbolNavigationEngine
     /// match, prefer the implementer -- mirrors the inline check previously duplicated across the
     /// same two resolvers as PreferConstructorOverType.
     /// </summary>
-    public static List<SyntaxNodeCandidate> PreferNonInterfaceMember(List<SyntaxNodeCandidate> candidates)
+    public List<SyntaxNodeCandidate> PreferNonInterfaceMember(List<SyntaxNodeCandidate> candidates)
     {
         var interfaceMembers = candidates.Where(c => c.Node.Parent is InterfaceDeclarationSyntax).ToList();
         var nonInterfaceMembers = candidates.Where(c => c.Node.Parent is not InterfaceDeclarationSyntax).ToList();
@@ -2787,7 +2785,7 @@ public class SymbolNavigationEngine
     /// when doing so doesn't drop the set to empty (a caller-supplied hint that doesn't match reality
     /// should not zero out otherwise-valid candidates).
     /// </summary>
-    public static List<SyntaxNodeCandidate> FilterByContainingType(List<SyntaxNodeCandidate> candidates, string? containingTypeName)
+    public List<SyntaxNodeCandidate> FilterByContainingType(List<SyntaxNodeCandidate> candidates, string? containingTypeName)
     {
         if (containingTypeName == null || candidates.Count <= 1)
         {
@@ -2807,7 +2805,7 @@ public class SymbolNavigationEngine
     /// Throws InvalidOperationException with a hintBuilder-produced message on zero or 2+ snippet
     /// matches, matching the two resolvers' existing throw behavior.
     /// </summary>
-    public static SyntaxNodeCandidate? ResolveBySnippetOrThrow(
+    public SyntaxNodeCandidate? ResolveBySnippetOrThrow(
         List<SyntaxNodeCandidate> candidates,
         SourceText sourceText,
         string? contextSnippet,
@@ -2865,6 +2863,15 @@ public class SymbolNavigationEngine
         return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
     }
 
+    // Adapters wiring ResolveBySnippetOrThrow's hintBuilder callback to the hint-text formatters
+    // in this class: BuildMemberHint takes syntax nodes, so it's reused directly here;
+    // BuildTypeHintForCandidates (below) mirrors BuildTypeHint's formatting but reads the
+    // candidate's precomputed StartLine/Preview instead of re-deriving them from the node.
+    public string BuildMemberHintForCandidates(List<SyntaxNodeCandidate> candidates, List<int> matches, string failureMode)
+    {
+        return BuildMemberHint(candidates.Select(c => c.Node).ToList(), matches, failureMode);
+    }
+
     /// <summary>
     /// Builds the message for a container that could not be found, listing the type names the file
     /// actually declares.
@@ -2877,7 +2884,7 @@ public class SymbolNavigationEngine
     /// immediately. Generic spellings resolve, so a listed name can be given back verbatim; see
     /// <see cref="NormalizeTypeName"/>.
     /// </remarks>
-    public static string BuildContainerNotFoundMessage(SyntaxNode root, string requestedName)
+    public string BuildContainerNotFoundMessage(SyntaxNode root, string requestedName)
     {
         var declared = root.DescendantNodes()
             .OfType<BaseTypeDeclarationSyntax>()
@@ -2916,6 +2923,19 @@ public class SymbolNavigationEngine
 
             return $"line {line} `{text}`";
         });
+        var count = candidates.Count;
+        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
+        return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
+    }
+
+    public string BuildTypeHintForCandidates(List<SyntaxNodeCandidate> candidates, List<int> matches, string failureMode)
+    {
+        if (candidates.Count == 0)
+        {
+            return $"contextSnippet {failureMode}: no candidates found.";
+        }
+
+        var previews = candidates.Take(3).Select(c => $"line {c.StartLine} `{c.Preview}`");
         var count = candidates.Count;
         var suffix = count > 3 ? $" (+{count - 3} more)" : "";
         return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";

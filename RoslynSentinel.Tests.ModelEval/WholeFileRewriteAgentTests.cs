@@ -9,6 +9,8 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 using RoslynSentinel.Tools.Advanced;
 
@@ -406,6 +408,7 @@ public class WholeFileRewriteAgentTests
     }
 
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_FixesWholeFileRewriteBug_UsingExistingHelperPattern()
     {
         var result = await RunOnceAsync(UserPromptTemplate, TestContext.CurrentContext.CancellationToken);
@@ -423,6 +426,7 @@ public class WholeFileRewriteAgentTests
     /// discover the existing BlockEditHelpers.cs fix pattern on its own.
     /// </summary>
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_FixesWholeFileRewriteBug_MinimalGuidance()
     {
         var result = await RunOnceAsync(MinimalGuidanceUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
@@ -442,6 +446,7 @@ public class WholeFileRewriteAgentTests
     /// dominant fork between pass and fail on the plain MinimalGuidance prompt.
     /// </summary>
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_FixesWholeFileRewriteBug_MinimalGuidanceDisambiguated()
     {
         var result = await RunOnceAsync(DisambiguatedMinimalGuidanceUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
@@ -461,6 +466,7 @@ public class WholeFileRewriteAgentTests
     /// points at execution fidelity, not reasoning, as the bottleneck.
     /// </summary>
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_FixesWholeFileRewriteBug_ScriptedPlan()
     {
         var result = await RunOnceAsync(ScriptedPlanUserPromptTemplate, TestContext.CurrentContext.CancellationToken);

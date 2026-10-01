@@ -221,7 +221,7 @@ public class StructuralRefinementEngine
         if (contextSnippet == null || candidates.Count <= 1)
         {
             // symbolName alone already resolves unambiguously -> see the identical guard and
-            // rationale in RefactoringEngine.ResolveMemberByNameOrSnippet.
+            // rationale in BasicRefactoringEngine.ResolveMemberByNameOrSnippet.
             target = candidates.FirstOrDefault();
         }
         else
@@ -279,7 +279,7 @@ public class StructuralRefinementEngine
     /// <summary>
     /// Scans every document in the solution for a string literal matching <paramref name="symbol"/>'s
     /// name -> a likely sign of reflection/<c>nameof</c>-adjacent dynamic usage that <see cref="SymbolFinder"/>
-    /// would not catch (ported from the dead <c>RefactoringEngine.SafeDeleteSymbolAsync</c> copy -> see
+    /// would not catch (ported from the dead <c>BasicRefactoringEngine.SafeDeleteSymbolAsync</c> copy -> see
     /// docs/TODO.md's "Duplicate/dead SafeDeleteSymbolAsync" entry). Returns a blocking
     /// <see cref="DocumentEditResult"/> if a match is found anywhere, otherwise null.
     /// </summary>

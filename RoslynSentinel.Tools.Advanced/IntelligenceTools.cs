@@ -2,7 +2,8 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol.Server;
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Advanced;
 
@@ -24,7 +25,7 @@ public class IntelligenceTools
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<IntelligenceTools> _logger;
-    public IntelligenceTools(ImpactAnalyzer impactAnalyzer, MetricsEngine metricsEngine, InventoryEngine inventoryEngine, DeadCodeEngine deadCodeEngine, DocumentationEngine documentationEngine, DependencyEngine dependencyEngine, SolutionStructureEngine projectStructureEngine, AsyncAnalysisEngine asyncSafetyEngine, HealthOrchestrationEngine healthOrchestrationEngine, ArchitecturalEngine architecturalEngine, SymbolNavigationEngine symbolNavigationEngine, DependencyInjectionEngine dependencyInjectionEngine, DiscoveryEngine discoveryEngine, ProjectConsistencyEngine projectConsistencyEngine, ISolutionProvider workspaceManager, SentinelConfiguration config, ILogger<IntelligenceTools> logger, AntiPatternEngine antiPatternEngine = null)
+    public IntelligenceTools(ImpactAnalyzer impactAnalyzer, MetricsEngine metricsEngine, InventoryEngine inventoryEngine, DeadCodeEngine deadCodeEngine, DocumentationEngine documentationEngine, DependencyEngine dependencyEngine, SolutionStructureEngine projectStructureEngine, AsyncAnalysisEngine asyncSafetyEngine, HealthOrchestrationEngine healthOrchestrationEngine, ArchitecturalEngine architecturalEngine, SymbolNavigationEngine symbolNavigationEngine, DependencyInjectionEngine dependencyInjectionEngine, DiscoveryEngine discoveryEngine, ProjectConsistencyEngine projectConsistencyEngine, ISolutionProvider workspaceManager, AntiPatternEngine antiPatternEngine, SentinelConfiguration config, ILogger<IntelligenceTools> logger)
     {
         _impactAnalyzer = impactAnalyzer;
         _metricsEngine = metricsEngine;

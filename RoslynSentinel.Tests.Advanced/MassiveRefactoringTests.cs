@@ -1,6 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Basic;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -9,21 +12,21 @@ namespace RoslynSentinel.Tests.Advanced;
 public class MassiveRefactoringTests
 {
     private IWorkspaceManager _workspaceManager;
-    private RefactoringEngine _refactoringEngine;
+    private BasicRefactoringEngine _basicRefactoringEngine;
+    private AdvancedRefactoringEngine _advancedRefactoringEngine;
+    private MemberRefactoringEngine _memberRefactoringEngine;
     private RefactoringStructuralTools _refactoringStructuralTools;
     private RefactoringSignatureTools _refactoringSignatureTools;
     private AdvancedRefactoringTools _advancedRefactoringTools;
+    private StructuralRefactoringEngine _structuralRefactoringEngine;
 
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
 
         var sr = new StructuralRefinementEngine(_workspaceManager, config);
-        var standard = new StandardRefactoringEngine(_workspaceManager);
-        var advStruct = new StructuralRefactoringEngine(_workspaceManager);
         var mapping = new MappingEngine(_workspaceManager);
         var semLib = new SemanticRefactoringEngine(_workspaceManager);
         var advLogic = new LogicSimplificationEngine(_workspaceManager);
@@ -32,16 +35,25 @@ public class MassiveRefactoringTests
         var advRefactoring = new AdvancedRefactoringEngine(_workspaceManager);
         var logicOpt = new LogicSimplificationEngine(_workspaceManager);
         var modernization = new SyntaxModernizationEngine(_workspaceManager, config);
+        var nav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+
+        _basicRefactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
+        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
+        _memberRefactoringEngine = new MemberRefactoringEngine(_workspaceManager, nav, validation, config);
+        _structuralRefactoringEngine = new StructuralRefactoringEngine(_workspaceManager);
 
         _refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
-            _refactoringEngine,
+            _basicRefactoringEngine,
+            _memberRefactoringEngine,
             sr,
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,
             new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
             NullLogger<RefactoringStructuralImpl>.Instance));
         _refactoringSignatureTools = new RefactoringSignatureTools(new RefactoringSignatureImpl(
-            _refactoringEngine,
+            _basicRefactoringEngine,
+            _memberRefactoringEngine,
             _workspaceManager,
             new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
@@ -76,6 +88,36 @@ public class MassiveRefactoringTests
         var changes = ((AppliedChangeSummary)result.SuccessData!).ChangedContent;
         Assert.That(changes, Is.Not.Null.And.Not.Empty);
     }
+
+    // ── Bug 62: ExtractMembersToPartial -> Missing Namespace + Usings ─────────
+    [Test]
+    public async Task BUG_62_ExtractMembersToPartial_IncludesNamespaceAndUsings()
+    {
+        const string code = @"using System;
+using System.Collections.Generic;
+
+namespace MyApp.Services
+{
+    public partial class DataService
+    {
+        public void Method1() { }
+        public void Method2() { }
+    }
+}";
+        SetSource(code, "DataService.cs");
+        var result = await _structuralRefactoringEngine.ExtractMembersToPartialAsync("DataService.cs", "DataService", new[] { "Method1" });
+        Assert.That(result, Is.Not.Null, "Should return a result");
+        Assert.That(result, Is.Not.Empty, "Should contain extracted file");
+        // Get the extracted partial file content
+        var partialFileContent = result.Values.First();
+        // The result should contain namespace declaration
+        Assert.That(partialFileContent, Does.Contain("namespace MyApp.Services"), "Extracted partial file must include the namespace");
+        // Should also include usings
+        Assert.That(partialFileContent, Does.Contain("using System;"), "Extracted partial file must include usings");
+        // Should contain the extracted method
+        Assert.That(partialFileContent, Does.Contain("Method1"), "Extracted partial file must contain the extracted method");
+    }
+
 
     [Test]
     [TestCase(1)]

@@ -6,6 +6,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol.Server;
 
+using RoslynSentinel.Server.Advanced;
+using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Tools.Basic;
+
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]

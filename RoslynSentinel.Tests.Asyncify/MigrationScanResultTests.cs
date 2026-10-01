@@ -3,7 +3,9 @@ using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Basic;
 
 #pragma warning disable CS8618
 
@@ -106,7 +108,7 @@ public class MigrationScanResultTests
             new StackOverflowEngine(_workspaceManager),
             new CodeStyleEngine(_workspaceManager, config),
             new CodeStyleAnalysisEngine(_workspaceManager),
-            new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config),
+            new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
             symbolNavEngine,
             new BreakingChangeEngine(_workspaceManager),
             _workspaceManager,

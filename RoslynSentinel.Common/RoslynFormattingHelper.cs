@@ -9,7 +9,7 @@ namespace RoslynSentinel.Common;
 public static class RoslynFormattingHelper
 {
     /// <summary>
-    /// Controls which side wins when <see cref="RefactoringEngine"/>'s shared "replace a node, then
+    /// Controls which side wins when <see cref="ReplaceNodeFormattedAsync"/>'s shared "replace a node, then
     /// format" helper decides whose leading trivia (blank lines, doc comments, etc.) to keep on the
     /// replacement node.
     /// </summary>
@@ -27,7 +27,7 @@ public static class RoslynFormattingHelper
         /// <summary>
         /// The replacement node's leading trivia always wins, even if it looks empty or minimal. Use
         /// this only when the caller deliberately rewrote the node's leading trivia on purpose (e.g.
-        /// <see cref="RefactoringEngine.RemoveSummaryCommentAsync"/> stripping a doc comment).
+        /// <c>BasicRefactoringEngine.RemoveSummaryCommentAsync</c> stripping a doc comment).
         /// </summary>
         ReplaceLeading,
     }
@@ -301,7 +301,7 @@ public static class RoslynFormattingHelper
     /// <item>Risky: an existing tree root or container (e.g. a whole file's <c>root</c>/<c>newRoot</c>
     /// or a <c>CompilationUnitSyntax</c>) that already contains untouched code -> normalizing it
     /// reformats every sibling's whitespace as a side effect, which is exactly the bug class fixed in
-    /// <c>RefactoringEngine.Member(add)</c> by introducing <see cref="InsertMemberFormattedAsync"/>
+    /// <c>MemberRefactoringEngine.AddMemberAsync</c> by introducing <see cref="InsertMemberFormattedAsync"/>
     /// (see docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md).</item>
     /// </list>
     /// <para>

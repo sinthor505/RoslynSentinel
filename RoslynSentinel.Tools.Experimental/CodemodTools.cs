@@ -2,8 +2,6 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol.Server;
-
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
@@ -12,9 +10,11 @@ namespace RoslynSentinel.Tools.Experimental;
 [McpServerToolType]
 public class CodemodTools
 {
+    // ── shared engines ────────────────────────────────────────────────────────
     private readonly AntiPatternEngine _antiPatternEngine;
-    private readonly ApiGenerationEngine _apiGenerationEngine; // ── shared engines ────────────────────────────────────────────────────────
-    private readonly RefactoringEngine _refactoringEngine;
+    private readonly ApiGenerationEngine _apiGenerationEngine;
+    private readonly BasicRefactoringEngine _refactoringEngine;
+    private readonly MemberRefactoringEngine _memberRefactoringEngine;
     private readonly LogicSimplificationEngine _logicOptimizationEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly SyntaxUpgradeEngine _syntaxUpgradeEngine;
@@ -32,18 +32,19 @@ public class CodemodTools
     // ── apply_method_codemod engines ──────────────────────────────────────────
     private readonly ThreadSafetyEngine _threadSafetyEngine;
     private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
-    private readonly StandardRefactoringEngine _standardRefactoringEngine;
     private readonly LogicSimplificationEngine _codeFlowEngine;
     // ── apply_class_codemod engines ───────────────────────────────────────────
     private readonly StructuralRefactoringEngine _advancedStructuralEngine;
     // ── generate engines ──────────────────────────────────────────────────────
     private readonly TestingEngine _testingEngine;
     private readonly PathDrivenTestEngine _pathDrivenTestEngine;
-    private readonly ISolutionProvider _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<CodemodTools> _logger;
-    public CodemodTools(RefactoringEngine refactoringEngine, LogicSimplificationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, LogicSimplificationEngine advancedLogicEngine, SyntaxModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, SolutionStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, OutParamRefactoringEngine outParamRefactoringEngine, StandardRefactoringEngine standardRefactoringEngine, LogicSimplificationEngine codeFlowEngine, StructuralRefactoringEngine advancedStructuralEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, ISolutionProvider workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiGenerationEngine, AntiPatternEngine antiPatternEngine = null)
+
+    public CodemodTools(BasicRefactoringEngine refactoringEngine, MemberRefactoringEngine memberRefactoringEngine, LogicSimplificationEngine logicOptimizationEngine, AsyncOptimizationEngine asyncOptimizationEngine, SyntaxUpgradeEngine syntaxUpgradeEngine, CodeStyleEngine codeStyleEngine, LogicSimplificationEngine advancedLogicEngine, SyntaxModernizationEngine modernizationEngine, CodeGenerationEngine codeGenerationEngine, IDEStyleEngine ideStyleEngine, CodeHealingEngine codeHealingEngine, AdvancedRefactoringEngine advancedRefactoringEngine, MsToolAugmentEngine augmentEngine, DocumentationEngine documentationEngine, SolutionStructureEngine projectStructureEngine, ThreadSafetyEngine threadSafetyEngine, OutParamRefactoringEngine outParamRefactoringEngine, LogicSimplificationEngine codeFlowEngine, StructuralRefactoringEngine advancedStructuralEngine, TestingEngine testingEngine, PathDrivenTestEngine pathDrivenTestEngine, IWorkspaceManager workspaceManager, ILogger<CodemodTools> logger, ApiGenerationEngine apiGenerationEngine, AntiPatternEngine antiPatternEngine)
     {
         _refactoringEngine = refactoringEngine;
+        _memberRefactoringEngine = memberRefactoringEngine;
         _logicOptimizationEngine = logicOptimizationEngine;
         _asyncOptimizationEngine = asyncOptimizationEngine;
         _syntaxUpgradeEngine = syntaxUpgradeEngine;
@@ -59,7 +60,6 @@ public class CodemodTools
         _projectStructureEngine = projectStructureEngine;
         _threadSafetyEngine = threadSafetyEngine;
         _outParamRefactoringEngine = outParamRefactoringEngine;
-        _standardRefactoringEngine = standardRefactoringEngine;
         _codeFlowEngine = codeFlowEngine;
         _advancedStructuralEngine = advancedStructuralEngine;
         _testingEngine = testingEngine;
@@ -787,7 +787,7 @@ public class CodemodTools
 
                 case "make_method_static":
                     {
-                        var r = await _standardRefactoringEngine.MakeMethodStaticAsync(filePath, methodName, cancellationToken);
+                        var r = await _memberRefactoringEngine.MakeMethodStaticAsync(filePath, methodName, cancellationToken);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
                             return new SentinelCallToolResult<object>
@@ -937,7 +937,7 @@ public class CodemodTools
         }
     }
 
-       /// <summary>
+    /// <summary>
     /// Builds the "filePath is required for {kind}" error for a codemod switch case, distinguishing
     /// "no solution is loaded" (a precondition failure independent of what filepath was passed) from
     /// "the filepath argument itself was invalid" -> see FilePathWrapper.FailureReason.
@@ -1222,7 +1222,7 @@ public class CodemodTools
 
                 case "sort_members":
                     {
-                        var r = await _refactoringEngine.SortMembersAsync(filePath, className, cancellationToken: cancellationToken);
+                        var r = await _memberRefactoringEngine.SortMembersAsync(filePath, className, cancellationToken: cancellationToken);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
                             return new SentinelCallToolResult<object>

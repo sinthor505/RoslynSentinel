@@ -4,7 +4,8 @@ using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Basic;
 
 #pragma warning disable CS8618
 
@@ -260,7 +261,7 @@ public class GetLargeResultTests
             "A result file outside .roslynsentinel/largeresults/ must be rejected.");
         Assert.That(result.ErrorData, Is.Not.Null);
     }
-   
+
     // ═══════════════════════════════════════════════════════════════════════════
     // T9-T12 – ResultWrapperType.Raw (the generic MCP request-filter offload backstop,
     //          see docs/current/proposal_centralized_large_result_filter.md). Unlike every
@@ -292,7 +293,7 @@ public class GetLargeResultTests
             "The Raw case must replay the stored JSON text verbatim, not re-shape it.");
         Assert.That(roundTripped.RootElement.GetProperty("count").GetInt32(), Is.EqualTo(payload.count));
     }
-   
+
     [Test, CancelAfter(10000)]
     public async Task T10_GetLargeResult_Raw_OverThreshold_PagesInBoundedWindowsAndRoundTripsVerbatim()
     {
@@ -336,7 +337,7 @@ public class GetLargeResultTests
         Assert.That(reassembledDoc.RootElement.GetProperty("data").GetString(), Is.EqualTo(original),
             "Concatenating every page and re-parsing must reproduce the original stored JSON data exactly (structural round-trip).");
     }
-   
+
     [Test, CancelAfter(10000)]
     public async Task T11_GetLargeResult_Raw_NonZeroOffset_ClampsToTextLengthInsteadOfThrowing()
     {
@@ -351,7 +352,7 @@ public class GetLargeResultTests
         Assert.That(text, Is.Empty);
         Assert.That(result.HasMoreData, Is.False);
     }
-   
+
     [Test, CancelAfter(10000)]
     public async Task T12_GetLargeResult_Raw_CharLimitSmallerThanThreshold_UsesCharLimitAsWindowSize()
     {

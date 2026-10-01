@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): implementation half of the
@@ -12,20 +14,23 @@ namespace RoslynSentinel.Tools.Basic;
 // ValidateAndApplyHelper, per Decision 1-Amendment).
 public class RefactoringSignatureImpl
 {
-    private readonly RefactoringEngine _refactoringEngine;
+    private readonly BasicRefactoringEngine _refactoringEngine;
+    private readonly MemberRefactoringEngine _memberRefactoringEngine;
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly ILogger _logger;
 
     public RefactoringSignatureImpl(
-        RefactoringEngine refactoringEngine,
+        BasicRefactoringEngine refactoringEngine,
+        MemberRefactoringEngine memberRefactoringEngine,
         IWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         ILogger logger)
     {
         _refactoringEngine = refactoringEngine;
+        _memberRefactoringEngine = memberRefactoringEngine;
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
@@ -159,7 +164,7 @@ public class RefactoringSignatureImpl
         {
             if (operation == AddRemoveViewAction.view)
             {
-                var (outcome, message, parameters) = await _refactoringEngine.GetMethodParametersAsync(filePathResolved, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                var (outcome, message, parameters) = await _memberRefactoringEngine.GetMethodParametersAsync(filePathResolved, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit or EditOutcome.TargetNotFound)
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"MethodSignature: {message}") };
                 return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new MethodSignatureViewResult(parameters) };
@@ -189,14 +194,14 @@ public class RefactoringSignatureImpl
             Dictionary<FilePathWrapper, string> changes;
             if (operation == AddRemoveViewAction.add)
             {
-                updated = await _refactoringEngine.AddMethodParameterAsync(filePathResolved, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken, nullDefault);
+                updated = await _memberRefactoringEngine.AddMethodParameterAsync(filePathResolved, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken, nullDefault);
                 if (RefactoringToolHelpers.RequireUpdatedText(updated, "MethodSignature", filePathResolved) is { } addGuardResult)
                     return addGuardResult;
                 changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             }
             else
             {
-                updated = await _refactoringEngine.RemoveMethodParameterAsync(filePathResolved, methodName, paramName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                updated = await _memberRefactoringEngine.RemoveMethodParameterAsync(filePathResolved, methodName, paramName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (updated.Outcome == EditOutcome.CannotRemove)
                 {
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: {updated.Message}") };
@@ -261,7 +266,7 @@ public class RefactoringSignatureImpl
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePathResolved, targetName, accessibility, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+            var updated = await _memberRefactoringEngine.ChangeAccessibilityAsync(filePathResolved, targetName, accessibility, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             if (!autoStage)
             {
                 var noStageAccessibilityKeyword = accessibility switch
@@ -333,7 +338,7 @@ public class RefactoringSignatureImpl
         {
             if (operation == AddRemoveViewAction.view)
             {
-                var (outcome, message, parameters) = await _refactoringEngine.GetConstructorParametersAsync(filePath: filePathResolved, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                var (outcome, message, parameters) = await _memberRefactoringEngine.GetConstructorParametersAsync(filePath: filePathResolved, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"ConstructorParameter: {message}") };
                 return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new ConstructorParameterViewResult(parameters) };
@@ -363,7 +368,7 @@ public class RefactoringSignatureImpl
             string resolvedFieldName;
             if (operation == AddRemoveViewAction.add)
             {
-                updated = await _refactoringEngine.AddConstructorParameterAsync(filePathResolved, className, paramName, paramType!, fieldName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken, defaultValue: defaultValue, nullDefault: nullDefault);
+                updated = await _memberRefactoringEngine.AddConstructorParameterAsync(filePathResolved, className, paramName, paramType!, fieldName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken, defaultValue: defaultValue, nullDefault: nullDefault);
                 // updated.Message carries "// paramName='x', fieldName='_x'" on success -> surface the
                 // resolved field name explicitly since it may differ from what the caller passed
                 // (see fieldName/paramName collision disambiguation in AddConstructorParameterAsync).
@@ -374,7 +379,7 @@ public class RefactoringSignatureImpl
             }
             else
             {
-                updated = await _refactoringEngine.RemoveConstructorParameterAsync(filePathResolved, className, paramName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                updated = await _memberRefactoringEngine.RemoveConstructorParameterAsync(filePathResolved, className, paramName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 resolvedFieldName = updated.Message is { Length: > 0 } msg
                     && System.Text.RegularExpressions.Regex.Match(msg, "fieldName='([^']*)'") is { Success: true } m
                     ? m.Groups[1].Value

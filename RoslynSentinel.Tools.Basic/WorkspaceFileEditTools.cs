@@ -1,7 +1,5 @@
 using System.ComponentModel;
 
-using ModelContextProtocol.Server;
-
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
@@ -81,7 +79,7 @@ public class WorkspaceFileEditTools
     public Task<SentinelCallToolResult<object>> CreateFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
-        [Description("Required for .cs files, ignored otherwise. Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery').")] string? namespaceName = null,
+        [Description("Required for .cs files, ignored otherwise. Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery.Basic').")] string? namespaceName = null,
         [Description("Required for .cs files, ignored otherwise. Kind of top-level type to seed the file with - this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. Use staticClass for a static utility/helper class (e.g. static test helpers, extension-method containers) - static is only valid on classes, not the other kinds. For a second top-level type in the same file, add it afterward with Member(add, containerName: null, newMemberSource: \"...\").")] NewTypeKind? typeKind = null,
         [Description("Required for .cs files, ignored otherwise. Name of the top-level type to seed the file with (e.g. 'Foo').")] string? typeName = null,
         CancellationToken cancellationToken = default)

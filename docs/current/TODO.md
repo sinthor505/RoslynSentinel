@@ -94,8 +94,8 @@ just the three declaration-kind dispatch tables originally found here. Full, cur
 [proposal_unify_member_lookup_paths.md](proposal_unify_member_lookup_paths.md), which is kept in
 place with a superseded notice since two resolved blockers cite it by filename.
 
-**What:** `GetMemberName` (`RefactoringEngine.cs:5292-5314`), `GetContainerMembersAsync`'s inline
-switch (`RefactoringEngine.cs:5570-5578`), and `FindImplementationsForMemberAsync`'s dispatch
+**What:** `GetMemberName` (`SymbolNavigationEngine.cs`), `GetContainerMembersAsync`'s inline
+switch (`SymbolNavigationEngine.cs`), and `FindImplementationsForMemberAsync`'s dispatch
 (`SymbolNavigationEngine.cs:1634-1641`) each independently enumerate which
 `MemberDeclarationSyntax` kinds they recognize, and all three currently disagree with each other
 (different kind sets, different fallback behavior for an unrecognized kind). `e120b68` fixed one
@@ -254,7 +254,7 @@ rather than being bolted on as a same-shaped bool.
    raised as a Risks-section question in that plan and never decided — it's a product/reliability
    trade-off (breaking today's default-argument-free call shape vs. catching silent wrong-guesses
    proactively), not something to decide unilaterally while fixing the hint text.
-2. The `NearMissList` hint strategy (now the sole implementation in `RefactoringEngine.BuildMemberHint`/
+2. The `NearMissList` hint strategy (now the sole implementation in `SymbolNavigationEngine.BuildMemberHint`/
    `BuildTypeHint`) caps its candidate list at 3, with a "+N more" suffix beyond that. No fixture in
    the current test suite has more than 3 real same-named candidates, so this was left at the plan's
    originally-specified cap rather than speculatively widened or made configurable.
@@ -278,7 +278,7 @@ prompted the audit).
 **Still open (Step 5, not started):** the "position resolved but wrong node kind there" family
 repeated across `GranularRefactoringEngine.cs`, `MappingEngine.cs`, `SemanticRefactoringLibrary.cs`,
 `MsToolAugmentEngine.cs`, `CodeGenerationEngine.cs`, plus related raw-`ex.Message`-propagation sites
-in `SymbolNavigationEngine.cs`/`ImpactAnalyzer.cs`/`RefactoringEngine.cs` (~7 files, a dozen-plus
+in `SymbolNavigationEngine.cs`/`ImpactAnalyzer.cs`/`BasicRefactoringEngine.cs`/`MemberRefactoringEngine.cs` (~7 files, a dozen-plus
 distinct sites). Explicitly lower priority per the plan; deferred as its own follow-up sweep — see
 the finding doc's raw audit findings for the full site inventory.
 
@@ -318,7 +318,7 @@ they're already narrow/safe or port the same fix pattern across.
 
 **Correction 2026-08-27 — the Basic-side sweep this entry assumed was "done" had two live misses of
 its own,** found while fixing the unrelated "`ConstructorParameter` collapses multi-line signatures"
-bug (separate TODO entry). `RoslynSentinel.Basic/RefactoringEngine.cs`'s `AddConstructorParameterAsync`
+bug (separate TODO entry). `RoslynSentinel.Basic/RefactoringEngine.cs`'s (now `MemberRefactoringEngine.cs`) `AddConstructorParameterAsync`
 and `RemoveConstructorParameterAsync` both did `root.ReplaceNode(classDecl, newClassNode)
 .NormalizeWhitespace()` — a whole-tree reflow identical to the pattern this entry describes, not a
 narrowly-scoped one. Fixed by switching both to the file's own established

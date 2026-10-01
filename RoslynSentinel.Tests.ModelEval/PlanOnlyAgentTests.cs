@@ -11,6 +11,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 using RoslynSentinel.Tools.Advanced;
 
@@ -235,6 +236,7 @@ public class PlanOnlyAgentTests
     /// plans to copy the pattern into a new private method is the fork this experiment surfaces.
     /// </summary>
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_PlansWholeFileRewriteFix_PrefersCallingHelper()
     {
         var runner = new ModelAgentRunner(

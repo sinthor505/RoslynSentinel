@@ -11,6 +11,7 @@ using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 using RoslynSentinel.Tools.Advanced;
 
@@ -104,6 +105,7 @@ public class TranscriptReplayTests
     /// is an on-demand troubleshooting tool, not part of the regular suite.
     /// </summary>
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task ReplayTranscript()
     {
         var transcriptPath = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_MODELEVAL_REPLAY_TRANSCRIPT");
@@ -333,7 +335,10 @@ public class TranscriptReplayTests
 
     private sealed class ReplayTurnDto
     {
-        public int TurnNumber { get; set; }
+        public int TurnNumber
+        {
+            get; set;
+        }
         public List<ReplayToolCallDto> ToolCalls { get; set; } = [];
     }
 
@@ -342,6 +347,9 @@ public class TranscriptReplayTests
         public string ToolName { get; set; } = "";
         public string ArgumentsJson { get; set; } = "";
         public string ResultJson { get; set; } = "";
-        public bool IsError { get; set; }
+        public bool IsError
+        {
+            get; set;
+        }
     }
 }

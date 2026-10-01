@@ -18,7 +18,7 @@ public class NewToolTests
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private SymbolNavigationEngine _symbolNavigationEngine;
-    private RefactoringEngine _refactoringEngine;
+    private BasicRefactoringEngine _refactoringEngine;
     private DiagnosticEngine _diagnosticEngine;
 
     [SetUp]
@@ -27,7 +27,7 @@ public class NewToolTests
         _workspaceManager = new FakeWorkspaceManager();
         _config = new SentinelConfiguration();
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
     }
 

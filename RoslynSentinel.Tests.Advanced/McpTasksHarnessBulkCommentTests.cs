@@ -9,6 +9,7 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
+using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.Advanced;

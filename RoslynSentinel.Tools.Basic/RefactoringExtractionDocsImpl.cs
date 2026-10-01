@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): implementation half of the
@@ -8,7 +10,7 @@ namespace RoslynSentinel.Tools.Basic;
 // ExtractMethodSafe). ValidateAndApplyAsync is duplicated per-Impl-class per Decision 1-Amendment.
 public class RefactoringExtractionDocsImpl
 {
-    private readonly RefactoringEngine _refactoringEngine;
+    private readonly BasicRefactoringEngine _refactoringEngine;
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly IWorkspaceManager _workspaceManager;
@@ -16,7 +18,7 @@ public class RefactoringExtractionDocsImpl
     private readonly ILogger _logger;
 
     public RefactoringExtractionDocsImpl(
-        RefactoringEngine refactoringEngine,
+        BasicRefactoringEngine refactoringEngine,
         MsToolAugmentEngine msToolAugmentEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         IWorkspaceManager workspaceManager,

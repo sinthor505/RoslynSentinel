@@ -28,7 +28,6 @@
     <Using Include="ModelContextProtocol.Protocol" />
     <Using Include="ModelContextProtocol.Server" />
     <Using Include="RoslynSentinel.Common" />
-    <Using Include="RoslynSentinel.Engines.Basic" />
   </ItemGroup>
 
 </Project>

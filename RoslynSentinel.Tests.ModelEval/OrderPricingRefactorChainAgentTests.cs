@@ -10,6 +10,8 @@ using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 using RoslynSentinel.Tools.Advanced;
 
@@ -309,6 +311,7 @@ public class OrderPricingRefactorChainAgentTests
         """;
 
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_AppliesFourChainedRefactors()
     {
         var result = await RunOnceAsync(FourStepUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
@@ -420,6 +423,7 @@ public class OrderPricingRefactorChainAgentTests
         """;
 
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_AppliesFiveChainedRefactors()
     {
         var result = await RunOnceAsync(FiveStepUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
@@ -560,6 +564,7 @@ public class OrderPricingRefactorChainAgentTests
         """;
 
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_AppliesSixChainedRefactors()
     {
         var result = await RunOnceAsync(SixStepUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
@@ -751,6 +756,7 @@ public class OrderPricingRefactorChainAgentTests
         """;
 
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_AppliesSevenChainedRefactors()
     {
         var result = await RunOnceAsync(SevenStepUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
@@ -953,6 +959,7 @@ public class OrderPricingRefactorChainAgentTests
         """;
 
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_AppliesEightChainedRefactors()
     {
         var result = await RunOnceAsync(EightStepUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
@@ -1160,6 +1167,7 @@ public class OrderPricingRefactorChainAgentTests
         """;
 
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_AppliesNineChainedRefactors()
     {
         var result = await RunOnceAsync(NineStepUserPromptTemplate, TestContext.CurrentContext.CancellationToken);
@@ -1375,6 +1383,7 @@ public class OrderPricingRefactorChainAgentTests
         """;
 
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_AppliesTenChainedRefactors()
     {
         var result = await RunOnceAsync(TenStepUserPromptTemplate, TestContext.CurrentContext.CancellationToken);

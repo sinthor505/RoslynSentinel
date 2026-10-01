@@ -7,6 +7,9 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Extensions.Tasks;
 
+using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Tools.Advanced;
+
 namespace RoslynSentinel.Server.Advanced;
 
 public class ServerHttp

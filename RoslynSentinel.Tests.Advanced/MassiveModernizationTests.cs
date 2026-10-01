@@ -2,8 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
-
-using ModernizationTools = RoslynSentinel.Tools.Advanced.ModernizationTools;
+using RoslynSentinel.Tools.Advanced;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -12,7 +11,7 @@ namespace RoslynSentinel.Tests.Advanced;
 public class MassiveModernizationTests
 {
     private IWorkspaceManager _workspaceManager;
-    private RefactoringEngine _refactoringEngine;
+    private BasicRefactoringEngine _refactoringEngine;
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private SyntaxModernizationEngine _modernizationEngine;
@@ -23,7 +22,7 @@ public class MassiveModernizationTests
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager, NullLogger<AdvancedRefactoringEngine>.Instance, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
 

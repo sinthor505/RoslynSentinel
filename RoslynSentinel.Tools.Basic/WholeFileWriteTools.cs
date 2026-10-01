@@ -4,8 +4,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol.Server;
-
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;

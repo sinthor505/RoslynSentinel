@@ -1,0 +1,155 @@
+// ReadFile -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap flagged
+// branches: document == null, startLine/endLine slicing, out-of-range slice, offload threshold).
+// Data is returned as an anonymous object (not a named record) for the non-offload paths. Anonymous
+// type properties are internal to the declaring assembly, so `dynamic` binding fails cross-assembly
+// here -> use reflection (GetProperty) instead.
+
+using System.Reflection;
+
+using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
+using RoslynSentinel.Tools.Basic;
+
+#pragma warning disable CS8618
+namespace RoslynSentinel.Tests.Battery.Basic;
+
+[TestFixture]
+public class ReadFileTests
+{
+    private FakeWorkspaceManager _workspaceManager;
+    private WorkspaceTools _tools;
+    private string _documentPath;
+
+    [SetUp]
+    public void Setup()
+    {
+        _workspaceManager = new FakeWorkspaceManager();
+        _documentPath = Path.Combine(Path.GetTempPath(), "ReadFileTests_" + Guid.NewGuid().ToString("N"), "Foo.cs");
+
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[]
+            {
+                ("Foo.cs", "line1\nline2\nline3\nline4\nline5\n", _documentPath),
+            });
+        _workspaceManager.SetTestSolution(solution);
+
+        var config = new SentinelConfiguration();
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
+        var structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);
+        var dependencyEngine = new DependencyEngine(_workspaceManager);
+        var projectConsistencyEngine = new ProjectConsistencyEngine(_workspaceManager);
+        _tools = new WorkspaceTools(
+            _workspaceManager, validationEngine, diffEngine, diagnosticEngine,
+            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
+            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
+            new BuildEngine(_workspaceManager, diagnosticEngine),
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            new TestRunEngine(_workspaceManager),
+            new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            WriteToolAdviceHelper.WithAllToolsExposed());
+    }
+
+    [TearDown]
+    public void TearDown() => _workspaceManager?.Dispose();
+
+    private static object? GetProp(object data, string name) =>
+        data.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance)!.GetValue(data);
+
+    [Test]
+    public async Task ReadFile_WholeFile_ReturnsFullSourceAsync()
+    {
+        var result = await _tools.ReadFile(reason: "test message", _documentPath);
+
+        Assert.That(result.IsSuccess, Is.True);
+        var data = result.SuccessData!;
+        Assert.That((string)GetProp(data, "source")!, Does.Contain("line1"));
+        Assert.That((string)GetProp(data, "source")!, Does.Contain("line5"));
+        Assert.That((int)GetProp(data, "totalLines")!, Is.EqualTo(6));
+    }
+
+    [Test]
+    public async Task ReadFile_FileNotInSolution_ReturnsFileNotFoundAsync()
+    {
+        var missingPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "DoesNotExist.cs");
+
+        var result = await _tools.ReadFile(reason: "test message", missingPath);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("FileNotFound"));
+    }
+
+    [Test]
+    public async Task ReadFile_FileOnDiskButNotTrackedAsDocument_FallsBackToDiskReadAsync()
+    {
+        // Mirrors CreateFile writing a file that PersistentWorkspaceManager's in-memory sync
+        // never turns into a Roslyn Document (any non-.cs file, or a .cs file outside every
+        // project's globs) -> ReadFile must still be able to see it, matching what CreateFile wrote.
+        var onDiskOnlyPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "OnDiskOnly.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(onDiskOnlyPath)!);
+        var content = "not part of the solution, but present on disk";
+        await File.WriteAllTextAsync(onDiskOnlyPath, content);
+
+        try
+        {
+            var result = await _tools.ReadFile(reason: "test message", onDiskOnlyPath);
+
+            Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+            Assert.That((string)GetProp(result.SuccessData!, "source")!, Is.EqualTo(content));
+        }
+        finally
+        {
+            File.Delete(onDiskOnlyPath);
+        }
+    }
+
+    [Test]
+    public async Task ReadFile_WithLineRange_ReturnsRequestedSliceAsync()
+    {
+        var result = await _tools.ReadFile(reason: "test message", _documentPath, startLine: 2, endLine: 3);
+
+        Assert.That(result.IsSuccess, Is.True);
+        var data = result.SuccessData!;
+        Assert.That((string)GetProp(data, "source")!, Does.Contain("line2"));
+        Assert.That((string)GetProp(data, "source")!, Does.Contain("line3"));
+        Assert.That((string)GetProp(data, "source")!, Does.Not.Contain("line4"));
+        Assert.That((int)GetProp(data, "startLine")!, Is.EqualTo(2));
+        Assert.That((int)GetProp(data, "endLine")!, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task ReadFile_StartLineBeyondEndOfFile_ReturnsInvalidArgumentAsync()
+    {
+        var result = await _tools.ReadFile(reason: "test message", _documentPath, startLine: 100, endLine: 200);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+    }
+
+    [Test]
+    public async Task ReadFile_LargerThanThreshold_OffloadsAndReturnsLargeResultInfoAsync()
+    {
+        var bigDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Big.cs");
+        var bigSource = string.Concat(Enumerable.Range(0, 2000).Select(i => $"var line{i} = {i};\n"));
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[] { ("Big.cs", bigSource, bigDocPath) });
+        _workspaceManager.SetTestSolution(solution);
+        // ReadFile only offloads when GetSolutionRoot() is non-empty; the fake derives that from
+        // SolutionPath since the AdhocWorkspace solution here has no FilePathWrapper of its own.
+        _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
+
+        var result = await _tools.ReadFile(reason: "test message", bigDocPath);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.LargeResult, Is.Not.Null);
+        Assert.That(result.LargeResult!.ResultType, Is.EqualTo("FileSource"));
+    }
+}

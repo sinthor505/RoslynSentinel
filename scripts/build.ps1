@@ -241,7 +241,7 @@ function Invoke-TestMode {
     $previousEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     if ($Flavor -eq 'Solution') {
-        # Solution spans all 6 RoslynSentinel.Tests* projects; dotnet test on the .slnx runs them
+        # Solution spans all 9 RoslynSentinel.Tests* projects; dotnet test on the .slnx runs them
         # sequentially (~118s summed as of 2026-09-09). Test-Parallel.ps1 runs each as its own
         # process concurrently instead (~59s) and re-emits each project's "Failed <name> [...]"
         # lines so the parsing below still works unchanged. Invoke-BuildMode (if it ran this call)
@@ -256,8 +256,8 @@ function Invoke-TestMode {
         $exitCode = $LASTEXITCODE
     } else {
         $testProjectMap = @{
-            'Basic'    = 'RoslynSentinel.Tests.Battery\RoslynSentinel.Tests.Battery.csproj'
-            'Advanced' = 'RoslynSentinel.Tests.Advanced\RoslynSentinel.Tests.Advanced.csproj'
+            'Basic'    = 'RoslynSentinel.Tests.Battery.Basic\RoslynSentinel.Tests.Battery.Basic.csproj'
+            'Advanced' = 'RoslynSentinel.Tests.Battery.Advanced\RoslynSentinel.Tests.Battery.Advanced.csproj'
         }
         $testProject = Join-Path $repoRoot $testProjectMap[$Flavor]
         $rawOutput = & dotnet test $testProject -c $Config --nologo -v normal 2>&1

@@ -1,7 +1,5 @@
 using System.ComponentModel;
 
-using ModelContextProtocol.Server;
-
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>

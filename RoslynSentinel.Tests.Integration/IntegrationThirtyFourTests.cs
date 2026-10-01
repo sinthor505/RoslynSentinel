@@ -9,7 +9,7 @@
 //     ControlFlowEngine           DiagnosticEngine
 //     SecurityEngine              SyntaxUpgradeEngine
 //     CodeStyleEngine             CodeGenerationEngine
-//     AnalysisEngine              RefactoringEngine
+//     AnalysisEngine              BasicRefactoringEngine
 //     GranularRefactoringEngine   ModernizationEngine
 //     ModernizationUpgradeEngine
 //
@@ -316,16 +316,16 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     // =========================================================================
-    // 12 -> RefactoringEngine
+    // 12 -> BasicRefactoringEngine
     // =========================================================================
     [Test]
     public async Task RefactoringEngine_MoveAllTypesToFiles_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
-        var engine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
+        var engine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         Dictionary<FilePathWrapper, string>? result = null;
         var file = _realFilePath;
-        Assert.DoesNotThrowAsync(async () => result = await engine.MoveAllTypesToFilesAsync(file), "RefactoringEngine.MoveAllTypesToFilesAsync must not throw on multi-type file.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.MoveAllTypesToFilesAsync(file), "BasicRefactoringEngine.MoveAllTypesToFilesAsync must not throw on multi-type file.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -333,9 +333,9 @@ public class RealSolution_EngineSmoke_Battery34Tests
     public async Task RefactoringEngine_WrapInTryCatch_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
-        var engine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
+        var engine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         string? result = null;
-        Assert.DoesNotThrowAsync(async () => result = (await engine.WrapInTryCatchAsync(_realFilePath, 1, 5)).UpdatedText!, "RefactoringEngine.WrapInTryCatchAsync must not throw on real file.");
+        Assert.DoesNotThrowAsync(async () => result = (await engine.WrapInTryCatchAsync(_realFilePath, 1, 5)).UpdatedText!, "BasicRefactoringEngine.WrapInTryCatchAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
 

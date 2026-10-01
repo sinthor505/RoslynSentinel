@@ -1,3 +1,4 @@
+using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618

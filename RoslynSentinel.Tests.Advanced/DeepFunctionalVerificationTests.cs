@@ -15,7 +15,7 @@ public class DeepFunctionalVerificationTests
     private CodeStyleEngine _codeStyleEngine;
     private CodeHealingEngine _codeHealingEngine;
     private SolutionStructureEngine _projectStructureEngine;
-    private RefactoringEngine _refactoringEngine;
+    private BasicRefactoringEngine _refactoringEngine;
     private DependencyEngine _dependencyEngine;
     private SyntaxModernizationEngine _modernizationEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
@@ -29,7 +29,7 @@ public class DeepFunctionalVerificationTests
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager, config);
         _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, config);
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, new NullLogger<RefactoringEngine>(), config);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, new NullLogger<BasicRefactoringEngine>(), config);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, config);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);
@@ -181,18 +181,28 @@ public class C {
     }
 
     [Test]
-    public async Task ReplaceMember_ShouldReplaceMethodByName()
+    public async Task RemoveUsingDirective_RemovesDirective_PreservesOthersAndTrivia()
     {
-        // Arrange
-        SetSource("public class C { public void Old() { } }", "C.cs");
-        var newSource = "public void New() { Console.WriteLine(\"Hello\"); }";
+        SetSource(@"
+using System;
+using System.Linq;
+using System.Text;
 
-        // Act
-        var result = await _refactoringEngine.ReplaceMemberAsync("C.cs", "Old", newSource);
+namespace Demo;
 
-        // Assert
-        Assert.That(result.UpdatedText!, Contains.Substring("public void New()"));
-        Assert.That(result.UpdatedText!, Does.Not.Contain("public void Old()"));
+public class Foo
+{
+    public void Bar() { }
+}
+", "Foo.cs");
+
+        var result = await _refactoringEngine.RemoveUsingDirectiveAsync("Foo.cs", "System.Linq");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Not.Contain("System.Linq"));
+        Assert.That(result.UpdatedText, Does.Contain("using System;"));
+        Assert.That(result.UpdatedText, Does.Contain("using System.Text;"));
+        Assert.That(result.UpdatedText, Does.Contain("public void Bar() { }"));
     }
 
     private const string ApplyDiscountLikeSource = @"
@@ -208,138 +218,7 @@ public class Order
     }
 }";
 
-    [Test]
-    [Description("Regression (ContosoOrders live agent run, attempt 7): ApplyDiscount is a single, "
-                 + "non-overloaded method - memberName alone already resolves it unambiguously. The "
-                 + "agent nonetheless passed a defensive contextSnippet that didn't match the file "
-                 + "(a formatting/indentation mismatch unrelated to which member was targeted), and "
-                 + "the call failed twice with 'contextSnippet not found' even though there was "
-                 + "nothing to disambiguate. A contextSnippet that doesn't match must not block "
-                 + "resolution when the name alone is already unambiguous.")]
-    public async Task ReplaceMember_SingleNonOverloadedMember_MismatchedContextSnippetIsIgnored()
-    {
-        SetSource(ApplyDiscountLikeSource, "Order.cs");
-        var newSource = "public decimal ApplyDiscount(decimal percentage)\n{\n    return DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage);\n}";
 
-        var result = await _refactoringEngine.ReplaceMemberAsync("Order.cs", "ApplyDiscount", newSource,
-            contextSnippet: "this text does not appear anywhere in the file");
-
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
-        Assert.That(result.UpdatedText, Does.Contain("DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage)"));
-        Assert.That(result.UpdatedText, Does.Not.Contain("ContosoOrders.Core.Discounts.DiscountCalculator"));
-    }
-
-    [Test]
-    public async Task ReplaceMember_OverloadedMembers_StillRequireContextSnippetToDisambiguate()
-    {
-        SetSource(@"
-public class C
-{
-    public void Foo(int x) { }
-    public void Foo(string x) { }
-}", "C.cs");
-
-        var noSnippetResult = await _refactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }");
-        Assert.That(noSnippetResult.UpdatedText, Is.Not.Null.And.Not.Empty,
-            "With 2+ overloads and no contextSnippet, existing first-match behavior should still apply.");
-
-        var mismatchedSnippetResult = await _refactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }",
-            contextSnippet: "this text does not appear anywhere in the file");
-        Assert.That(mismatchedSnippetResult.UpdatedText, Is.Null.Or.Empty,
-            "A genuinely ambiguous name (2+ overloads) with a non-matching contextSnippet must still fail - " +
-            "the single-candidate bypass must not apply when there IS real ambiguity to resolve.");
-        Assert.That(mismatchedSnippetResult.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-
-        // Task I (docs/plan-tool-disambiguation-remediation-v1.md) picked NearMissList as the
-        // winning hint strategy: it's the only one of the 3 evaluated that lists every real
-        // candidate (up to 3) instead of just the nearest one, so assert its specific shape here
-        // now that there's a real answer, per the plan's Risks-section instruction to tighten
-        // loosely-asserting tests once a strategy is chosen.
-        Assert.That(mismatchedSnippetResult.Message, Does.Contain("contextSnippet not found (2 candidates):"));
-        Assert.That(mismatchedSnippetResult.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
-        Assert.That(mismatchedSnippetResult.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
-        Assert.That(mismatchedSnippetResult.Message, Does.Contain("Provide a more specific contextSnippet or use lineBefore/lineAfter."));
-    }
-
-    [Test]
-    [Description("NearMissList must surface every real candidate a snippet actually matched, not "
-                 + "just the first one - the losing NearestSnippet/CorrectedCoordinates strategies "
-                 + "only ever showed candidate #1 here, which would mislead an agent into thinking "
-                 + "there was one unrelated nearby match instead of 2 genuine ones to choose between.")]
-    public async Task ReplaceMember_ThreeOverloads_AmbiguousSnippetListsUpToThreeCandidates()
-    {
-        SetSource(@"
-public class C
-{
-    public void Foo(int x) { }
-    public void Foo(string x) { }
-    public void Foo(bool x) { }
-}", "C.cs");
-
-        var result = await _refactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(double x) { }",
-            contextSnippet: "this text does not appear anywhere in the file");
-
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Message, Does.Contain("contextSnippet not found (3 candidates):"));
-        Assert.That(result.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
-        Assert.That(result.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
-        Assert.That(result.Message, Does.Contain("line 6 `public void Foo(bool x) { }`"));
-    }
-
-    [Test]
-    [Description("Type-level ambiguity (ResolveTypeByNameOrSnippet) via ModifyBaseType's AddBaseType "
-                 + "action: 2 same-named nested types in sibling containers (a genuinely compilable "
-                 + "collision per the plan's Task D test guidance - plain top-level name collisions "
-                 + "don't compile). Confirms the NearMissList hint also covers the type-level helper, "
-                 + "not just the member-level one.")]
-    public async Task AddBaseType_TwoNestedTypesSameName_AmbiguousSnippetListsBothCandidates()
-    {
-        SetSource(@"
-public class Outer1
-{
-    public class Nested { public int A; }
-}
-public class Outer2
-{
-    public class Nested { public int B; }
-}", "C.cs");
-
-        var result = await _refactoringEngine.AddBaseTypeAsync("C.cs", "Nested", "IFoo",
-            contextSnippet: "this text does not appear anywhere in the file");
-
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Message, Does.Contain("contextSnippet not found (2 candidates):"));
-        Assert.That(result.Message, Does.Contain("line 4 `public class Nested { public int A; }`"));
-        Assert.That(result.Message, Does.Contain("line 8 `public class Nested { public int B; }`"));
-    }
-
-    [Test]
-    public async Task AddMember_ShouldAppendToClass()
-    {
-        // Arrange
-        SetSource("public class C { }", "C.cs");
-        var member = "public int NewField;";
-
-        // Act
-        var result = await _refactoringEngine.AddMemberAsync("C.cs", "C", member);
-
-        // Assert
-        Assert.That(result.UpdatedText!, Contains.Substring("public int NewField;"));
-    }
-
-    [Test]
-    public async Task RemoveMember_ShouldDeleteByName()
-    {
-        // Arrange
-        SetSource("public class C { public void Junk() {} public void Keep() {} }", "C.cs");
-
-        // Act
-        var result = await _refactoringEngine.RemoveMemberAsync("C.cs", "Junk");
-
-        // Assert
-        Assert.That(result.UpdatedText!, Does.Not.Contain("void Junk()"));
-        Assert.That(result.UpdatedText!, Contains.Substring("void Keep()"));
-    }
 
     [Test]
     public async Task FixDangerousLock_ShouldInjectLockObject()

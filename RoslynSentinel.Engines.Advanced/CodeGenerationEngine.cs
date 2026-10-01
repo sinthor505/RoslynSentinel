@@ -1039,7 +1039,7 @@ public partial class CodeGenerationEngine
             };
         }
 
-        // Compute name-based candidates first (same shape as RefactoringEngine's
+        // Compute name-based candidates first (same shape as BasicRefactoringEngine's
         // ResolveMemberByNameOrSnippet, duplicated here rather than shared cross-class): a
         // contextSnippet exists only to disambiguate 2+ same-named candidates, so a defensively
         // supplied or mismatched snippet must not block an otherwise-unambiguous resolution.

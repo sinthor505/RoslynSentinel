@@ -4,6 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Basic;
+
 namespace RoslynSentinel.Server.Basic;
 
 /// <summary>
@@ -59,10 +62,10 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<PersistentWorkspaceManager>();
         services.AddSingleton<ProjectConsistencyEngine>();
         services.AddSingleton<SolutionStructureEngine>();
-        services.AddSingleton<RefactoringEngine>();
+        services.AddSingleton<BasicRefactoringEngine>();
         services.AddSingleton<SemanticRefactoringEngine>();
         services.AddSingleton<SolutionManagementEngine>();
-        services.AddSingleton<StandardRefactoringEngine>();
+        services.AddSingleton<MemberRefactoringEngine>();
         services.AddSingleton<StructuralRefinementEngine>();
         services.AddSingleton<SymbolNavigationEngine>();
         services.AddSingleton<SyntaxUpgradeEngine>();
@@ -691,7 +694,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     TaskContinuationOptions.OnlyOnFaulted);
         }
     }
-       /// <summary>
+    /// <summary>
     /// Registers the argument pre-flight filter: first silently repairs a case-only parameter
     /// name mismatch (e.g. "filepath" -> "filePath"), then rejects a call whose arguments still
     /// cannot succeed as written, before the SDK's binder ever sees either.

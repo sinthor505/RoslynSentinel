@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Client;
 
-using RoslynSentinel.Common;
+using RoslynSentinel.Common.AgentLoop;
 
 namespace RoslynSentinel.Utilities.PlanStepRunner;
 

@@ -18,7 +18,7 @@ public class FinalRegressionTests
 {
     private IWorkspaceManager _workspaceManager = null!;
     private SentinelConfiguration _config = null!;
-    private RefactoringEngine _refactoringEngine = null!;
+    private BasicRefactoringEngine _refactoringEngine = null!;
     private AsyncOptimizationEngine _asyncOptimizationEngine = null!;
     private StructuralRefinementEngine _structuralRefinementEngine = null!;
     [SetUp]
@@ -26,7 +26,7 @@ public class FinalRegressionTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
     }
@@ -58,48 +58,6 @@ public class FinalRegressionTests
         // Should use staging (Changes dict keyed by new path) instead of direct File.Move
         Assert.That(result.Changes, Is.Not.Null.And.Not.Empty, "Should use staging mechanism via Changes dictionary");
         Assert.That(result.Changes!.Keys.First().Absolute, Does.Contain("DataService.cs"), "Should identify primary type DataService");
-    }
-
-    // ────────────────────────────────────────────────────────────────────────────
-    // BUG-60: RemoveMember -> Validates Usages Before Removal
-    // ────────────────────────────────────────────────────────────────────────────
-    [Test]
-    public async Task BUG_60_RemoveMember_ErrorsWhenMemberIsUsed()
-    {
-        const string code = @"
-            public class Helper
-            {
-                public string GetName() => ""Test"";
-                
-                public void UseHelper()
-                {
-                    var name = GetName();
-                }
-            }";
-        SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
-        var filePath = doc.FilePath ?? "Test.cs";
-        var result = await _refactoringEngine.RemoveMemberAsync(filePath, "GetName");
-        // Should error because GetName is used in UseHelper
-        Assert.That(result.Message, Does.Contain("ERROR") | Does.Contain("usages"), "Should error when trying to remove a used member");
-    }
-
-    [Test]
-    public async Task BUG_60_RemoveMember_SucceedsWhenMemberUnused()
-    {
-        const string code = @"
-            public class Helper
-            {
-                public string UnusedMethod() => ""test"";
-                
-                public void OtherMethod() { }
-            }";
-        SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
-        var filePath = doc.FilePath ?? "Test.cs";
-        var result = await _refactoringEngine.RemoveMemberAsync(filePath, "UnusedMethod");
-        // Should succeed and remove the unused method
-        Assert.That(result.UpdatedText, Does.Not.Contain("UnusedMethod"), "Should remove unused member without errors");
     }
 
     // ────────────────────────────────────────────────────────────────────────────

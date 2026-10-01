@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests;
 
@@ -29,7 +30,7 @@ public class RegressionTests
 {
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
-    private RefactoringEngine _refactoringEngine;
+    private BasicRefactoringEngine _refactoringEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private DiagnosticEngine _diagnosticEngine;
     private WorkspaceHealthMiscImpl _workspaceHealthMisc;
@@ -39,7 +40,7 @@ public class RegressionTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager, _config);

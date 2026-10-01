@@ -1,3 +1,5 @@
+using RoslynSentinel.Common.AgentLoop;
+
 namespace RoslynSentinel.Tests.ModelEval;
 
 /// <summary>

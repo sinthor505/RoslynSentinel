@@ -1,9 +1,5 @@
 using System.ComponentModel;
 
-using Microsoft.Extensions.Logging;
-
-using ModelContextProtocol.Server;
-
 namespace RoslynSentinel.Tools.Basic;
 
 [McpServerToolType]

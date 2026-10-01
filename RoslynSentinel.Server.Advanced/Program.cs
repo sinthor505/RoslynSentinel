@@ -1,4 +1,6 @@
 // Program.cs v1
+using RoslynSentinel.Server.Basic;
+
 namespace RoslynSentinel.Server.Advanced;
 
 public class Program

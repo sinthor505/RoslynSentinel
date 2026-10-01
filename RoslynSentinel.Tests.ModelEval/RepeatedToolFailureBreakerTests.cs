@@ -12,6 +12,7 @@ using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Tests.ModelEval;

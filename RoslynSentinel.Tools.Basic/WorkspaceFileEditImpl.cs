@@ -3,6 +3,8 @@ using System.Text.Json;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>

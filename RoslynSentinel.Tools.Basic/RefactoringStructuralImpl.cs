@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): implementation half of the
@@ -12,7 +14,8 @@ namespace RoslynSentinel.Tools.Basic;
 // is duplicated per-Impl-class per Decision 1-Amendment.
 public class RefactoringStructuralImpl
 {
-    private readonly RefactoringEngine _refactoringEngine;
+    private readonly BasicRefactoringEngine _refactoringEngine;
+    private readonly MemberRefactoringEngine _memberRefactoringEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly IWorkspaceManager _workspaceManager;
@@ -25,7 +28,8 @@ public class RefactoringStructuralImpl
     private const int MaxModifierFamilyEditsPerBatch = 20;
 
     public RefactoringStructuralImpl(
-        RefactoringEngine refactoringEngine,
+        BasicRefactoringEngine refactoringEngine,
+        MemberRefactoringEngine memberRefactoringEngine,
         StructuralRefinementEngine structuralRefinementEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         IWorkspaceManager workspaceManager,
@@ -33,6 +37,7 @@ public class RefactoringStructuralImpl
         ILogger logger)
     {
         _refactoringEngine = refactoringEngine;
+        _memberRefactoringEngine = memberRefactoringEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         _workspaceManager = workspaceManager;
@@ -133,7 +138,7 @@ public class RefactoringStructuralImpl
                 pair.edit.LineBefore,
                 pair.edit.LineAfter)).ToList();
 
-            var updated = await _refactoringEngine.ApplyModifierBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            var updated = await _memberRefactoringEngine.ApplyModifierBatchAsync(filePathResolved, engineEdits, cancellationToken);
             if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
@@ -229,7 +234,7 @@ public class RefactoringStructuralImpl
                 pair.edit.LineBefore,
                 pair.edit.LineAfter)).ToList();
 
-            var updated = await _refactoringEngine.ApplyAttributeBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            var updated = await _memberRefactoringEngine.ApplyAttributeBatchAsync(filePathResolved, engineEdits, cancellationToken);
             if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
@@ -320,7 +325,7 @@ public class RefactoringStructuralImpl
                 pair.edit.LineBefore,
                 pair.edit.LineAfter)).ToList();
 
-            var updated = await _refactoringEngine.ApplyBaseTypeBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            var updated = await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(filePathResolved, engineEdits, cancellationToken);
             if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
@@ -402,7 +407,7 @@ public class RefactoringStructuralImpl
                 var replaceEnumName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (replaceEnumName != null)
                 {
-                    var enumReplaced = await _refactoringEngine.ReplaceEnumMemberAsync(filePathResolved, replaceEnumName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    var enumReplaced = await _memberRefactoringEngine.ReplaceEnumMemberAsync(filePathResolved, replaceEnumName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
                     if (string.IsNullOrEmpty(enumReplaced.UpdatedText))
                         return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"Member: {enumReplaced.Message} Retry using ModifyEnum(enumName: \"{replaceEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") };
 
@@ -416,7 +421,7 @@ public class RefactoringStructuralImpl
                         workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: $"Replaced '{memberName}' in enum '{replaceEnumName}' in {Path.GetFileName(filePathResolved)}.", cancellationToken: cancellationToken);
                 }
 
-                var result = await _refactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+                var result = await _memberRefactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
                 if (string.IsNullOrEmpty(result.UpdatedText))
                 {
                     string errorReason = result.Outcome switch
@@ -471,7 +476,7 @@ public class RefactoringStructuralImpl
                 var removeEnumName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (removeEnumName != null)
                 {
-                    var enumRemoved = await _refactoringEngine.RemoveEnumMemberAsync(filePathResolved, removeEnumName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    var enumRemoved = await _memberRefactoringEngine.RemoveEnumMemberAsync(filePathResolved, removeEnumName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                     if (string.IsNullOrEmpty(enumRemoved.UpdatedText))
                         return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"Member: {enumRemoved.Message} Retry using ModifyEnum(enumName: \"{removeEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") };
 
@@ -482,7 +487,7 @@ public class RefactoringStructuralImpl
                     return new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = new AppliedChangeSummary(enumRemoveApply.ChangeId, [filePathResolved], $"Removed '{memberName}' from enum '{removeEnumName}' in {Path.GetFileName(filePathResolved)}.", enumRemoveApply.DryRun, enumRemoveApply.Diff, _workspaceManager.WorkspaceVersion) };
                 }
 
-                var result = await _refactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken: cancellationToken);
+                var result = await _memberRefactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken: cancellationToken);
                 var removeError = RefactoringToolHelpers.RequireUpdatedText(result, "Member", filePathResolved);
                 if (removeError is not null)
                     return removeError;
@@ -532,7 +537,7 @@ public class RefactoringStructuralImpl
                 if (string.IsNullOrEmpty(newMemberSource))
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
 
-                var topLevelResult = await _refactoringEngine.AddTopLevelTypeAsync(filePathResolved, newMemberSource, namespaceName, cancellationToken);
+                var topLevelResult = await _memberRefactoringEngine.AddTopLevelTypeAsync(filePathResolved, newMemberSource, namespaceName, cancellationToken);
                 if (!autoStage)
                 {
                     var topLevelNoStageDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
@@ -605,7 +610,7 @@ public class RefactoringStructuralImpl
                 if (position != null && afterName == null && beforeName == null && position != "end")
                     return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
 
-                var enumAdded = await _refactoringEngine.AddEnumMemberAsync(filePathResolved, containerName, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                var enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (string.IsNullOrEmpty(enumAdded.UpdatedText))
                     return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"Member: {enumAdded.Message} Retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly with the full desired member list if this keeps failing.") };
 
@@ -658,30 +663,30 @@ public class RefactoringStructuralImpl
 
                 if (typedKind == TypedMemberKind.property)
                 {
-                    updated = await _refactoringEngine.AddPropertyAsync(filePathResolved, containerName, typedName, typedType, accessibility, hasSetter, isInit, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                    updated = await _memberRefactoringEngine.AddPropertyAsync(filePathResolved, containerName, typedName, typedType, accessibility, hasSetter, isInit, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                     description = $"Added '{typedType} {typedName}' property to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
                 }
                 else
                 {
-                    updated = await _refactoringEngine.AddFieldAsync(filePathResolved, containerName, typedName, typedType, accessibility, isReadonly, isStatic, initializer, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                    updated = await _memberRefactoringEngine.AddFieldAsync(filePathResolved, containerName, typedName, typedType, accessibility, isReadonly, isStatic, initializer, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                     description = $"Added '{typedType} {typedName}' field to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
                 }
             }
             else if (string.IsNullOrEmpty(position) || position == "end")
             {
-                updated = await _refactoringEngine.AddMemberAsync(filePathResolved, containerName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.AddMemberAsync(filePathResolved, containerName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 description = $"{DescribeMemberOutcome(updated, "Added new member")} to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
             else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
             {
                 var afterMemberName = position.Substring("after:".Length);
-                updated = await _refactoringEngine.InsertMemberAfterAsync(filePathResolved, containerName, afterMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.InsertMemberAfterAsync(filePathResolved, containerName, afterMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 description = $"{DescribeMemberOutcome(updated, "Inserted new member")} after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
             else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
             {
                 var beforeMemberName = position.Substring("before:".Length);
-                updated = await _refactoringEngine.InsertMemberBeforeAsync(filePathResolved, containerName, beforeMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.InsertMemberBeforeAsync(filePathResolved, containerName, beforeMemberName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 description = $"{DescribeMemberOutcome(updated, "Inserted new member")} before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
             else
@@ -746,7 +751,7 @@ public class RefactoringStructuralImpl
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var updated = await _refactoringEngine.ModifyEnumAsync(filePathResolved, enumName, values, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+            var updated = await _memberRefactoringEngine.ModifyEnumAsync(filePathResolved, enumName, values, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             if (!autoStage)
             {
                 var noStageDescription = string.IsNullOrEmpty(updated.Message)
@@ -855,15 +860,15 @@ public class RefactoringStructuralImpl
             DocumentEditResult updated;
             if (action == AttributeModifyAction.add)
             {
-                updated = await _refactoringEngine.AddAttributeAsync(filePathResolved, targetName, existingAttribute, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.AddAttributeAsync(filePathResolved, targetName, existingAttribute, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             }
             else if (action == AttributeModifyAction.replace)
             {
-                updated = await _refactoringEngine.ReplaceAttributeAsync(filePathResolved, targetName, existingAttribute, newAttribute!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.ReplaceAttributeAsync(filePathResolved, targetName, existingAttribute, newAttribute!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             }
             else if (action == AttributeModifyAction.remove)
             {
-                updated = await _refactoringEngine.RemoveAttributeAsync(filePathResolved, targetName, existingAttribute, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.RemoveAttributeAsync(filePathResolved, targetName, existingAttribute, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             }
             else
             {
@@ -976,11 +981,11 @@ public class RefactoringStructuralImpl
             DocumentEditResult updated;
             if (action == AddRemoveAction.add)
             {
-                updated = await _refactoringEngine.AddModifierAsync(filePathResolved, targetName, modifierText, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.AddModifierAsync(filePathResolved, targetName, modifierText, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             }
             else if (action == AddRemoveAction.remove)
             {
-                updated = await _refactoringEngine.RemoveModifierAsync(filePathResolved, targetName, modifierText, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.RemoveModifierAsync(filePathResolved, targetName, modifierText, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             }
             else
             {
@@ -1082,11 +1087,11 @@ public class RefactoringStructuralImpl
             DocumentEditResult updated;
             if (action == AddRemoveAction.add)
             {
-                updated = await _refactoringEngine.AddBaseTypeAsync(filePathResolved, typeName!, baseTypeName!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.AddBaseTypeAsync(filePathResolved, typeName!, baseTypeName!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             }
             else if (action == AddRemoveAction.remove)
             {
-                updated = await _refactoringEngine.RemoveBaseTypeAsync(filePathResolved, typeName!, baseTypeName!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                updated = await _memberRefactoringEngine.RemoveBaseTypeAsync(filePathResolved, typeName!, baseTypeName!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             }
             else
             {

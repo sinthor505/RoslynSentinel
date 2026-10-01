@@ -1,38 +1,120 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Common;
+
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
+
 public class RefactoringTests
 {
     private IWorkspaceManager _workspaceManager;
-    private RefactoringEngine _refactoringEngine;
+    private BasicRefactoringEngine _refactoringEngine;
     private LogicSimplificationEngine _advancedLogicEngine;
     private CodeHealingEngine _healingEngine;
+
+    private const string RichSource = @"
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+
+namespace TestProj;
+
+public class Order
+{
+    public int OrderId;
+    public string CustomerName;
+    private readonly ILogger _logger;
+
+    public Order(int orderId, string customerName, ILogger logger)
+    {
+        OrderId = orderId;
+        CustomerName = customerName;
+        _logger = logger;
+    }
+
+    public async Task<string> ProcessAsync(CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation(""Processing order {Id}"", OrderId);
+        var result = string.Format(""{0}: {1}"", OrderId, CustomerName);
+        return await Task.FromResult(result);
+    }
+
+    public string GetStatus()
+    {
+        if (OrderId == 1) return ""Active"";
+        if (OrderId == 2) return ""Pending"";
+        return ""Unknown"";
+    }
+
+    public void UpdateStatus(int status)
+    {
+        switch (status)
+        {
+            case 1: Console.WriteLine(""active""); break;
+            case 2: Console.WriteLine(""pending""); break;
+            default: Console.WriteLine(""unknown""); break;
+        }
+    }
+
+    public List<string> GetItems()
+    {
+        var items = new List<string>();
+        foreach (var i in new[] { ""a"", ""b"" })
+        {
+            items.Add(i);
+        }
+        return items;
+    }
+
+    public async Task WaitAsync() => await Task.Delay(1000);
+}
+
+public interface IOrderService
+{
+    Task<Order> GetOrderAsync(int id);
+    Task SaveAsync(Order order);
+}
+
+public class OrderService : IOrderService
+{
+    private readonly ILogger<OrderService> _logger;
+    public OrderService(ILogger<OrderService> logger) { _logger = logger; }
+    public async Task<Order> GetOrderAsync(int id) => await Task.FromResult(new Order(id, ""test"", _logger));
+    public async Task SaveAsync(Order order) => await Task.CompletedTask;
+}";
+
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
         _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
         _healingEngine = new CodeHealingEngine(_workspaceManager, config);
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
+
     private Solution CreateSolution(string source, string fileName = "Test.cs")
     {
         var adhocWorkspace = new AdhocWorkspace();
         var solution = adhocWorkspace.CurrentSolution;
         var projectId = ProjectId.CreateNewId();
-        solution = solution.AddProject(projectId, "TestProject", "TestProject", LanguageNames.CSharp);
+        solution = solution.AddProject(projectId, "TestProj", "TestProj", LanguageNames.CSharp);
         var docId = DocumentId.CreateNewId(projectId);
         return solution.AddDocument(docId, fileName, SourceText.From(source), filePath: fileName);
+    }
+
+    private void SetSource(string source, string fileName = "Test.cs")
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+        _workspaceManager.SetTestSolution(solution);
     }
 
     [Test]
@@ -41,7 +123,7 @@ public class RefactoringTests
         using var adhocWorkspace = new AdhocWorkspace();
         var solution = adhocWorkspace.CurrentSolution;
         var projectId = ProjectId.CreateNewId();
-        solution = solution.AddProject(projectId, "TestProject", "TestProject", LanguageNames.CSharp);
+        solution = solution.AddProject(projectId, "TestProj", "TestProj", LanguageNames.CSharp);
         var filePath = "E:\\source\\repos\\Mixed.cs";
         var sourceCode = "namespace MyNamespace; public class ClassOne {} public class ClassTwo {}";
         var docId = DocumentId.CreateNewId(projectId);
@@ -53,11 +135,23 @@ public class RefactoringTests
         Assert.That(results["E:\\source\\repos\\ClassTwo.cs"], Contains.Substring("class ClassTwo"));
     }
 
-    [Ignore("API changed: RenameSymbolAsync now requires SymbolHandle and ISymbol")]
+    //[Ignore("API changed: RenameSymbolAsync now requires SymbolHandle and ISymbol")]
     [Test]
     public async Task RenameSymbol_Should_UpdateAllReferences()
     {
-        Assert.Ignore("API changed: RenameSymbolAsync now requires SymbolHandle and ISymbol");
+        //Assert.Ignore("API changed: RenameSymbolAsync now requires SymbolHandle and ISymbol");
+        _workspaceManager.SetTestSolution(CreateSolution(RichSource, "Order.cs"));
+        var navigationEngine = new SymbolNavigationEngine(_workspaceManager);
+        var candidates = await navigationEngine.LocateSymbolAsync("OrderId", "All", "Order");
+        var symbol = candidates.FirstOrDefault();
+        var resolved = await _workspaceManager.ResolveFromWireAsync("TestProj", symbol.DocCommentId, CancellationToken.None);
+
+        var result = await _refactoringEngine.RenameSymbolAsync(resolved.Handle, resolved.Symbol, "OrderId2");
+
+        var docText = result.PendingChanges.FirstOrDefault().Value;
+
+        Assert.That(docText, Contains.Substring("OrderId2"));
+        Assert.That(result.ResidualMentions?.Count == 0);
     }
 
     [Test]

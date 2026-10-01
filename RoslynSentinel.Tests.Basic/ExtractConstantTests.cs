@@ -7,7 +7,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// Comprehensive tests for RefactoringEngine.ExtractConstantAsync
+/// Comprehensive tests for BasicRefactoringEngine.ExtractConstantAsync
 /// 
 /// Purpose: Extract magic numbers/strings into named constants
 /// Use case: Convert `if (x > 100)` to `private const int MaxValue = 100; if (x > MaxValue)`
@@ -29,14 +29,14 @@ public class ExtractConstantTests
 {
     private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
-    private RefactoringEngine _refactoringEngine;
+    private BasicRefactoringEngine _refactoringEngine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
     }
 
     [TearDown]

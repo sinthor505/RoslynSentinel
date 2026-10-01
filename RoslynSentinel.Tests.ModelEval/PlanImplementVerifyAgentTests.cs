@@ -10,6 +10,8 @@ using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 using RoslynSentinel.Tools.Advanced;
 
@@ -455,6 +457,7 @@ public class PlanImplementVerifyAgentTests
     }
 
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_FixesWholeFileRewriteBug_PlanImplementVerify()
     {
         var fixtureCorePath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core");

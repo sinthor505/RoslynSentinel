@@ -1,5 +1,7 @@
 using System.ComponentModel;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Basic;
 
 // Added by AddTopLevelType(expected - used for diagnostics)
@@ -57,7 +59,7 @@ public sealed record ModifyModifierResultEnvelope(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Named shape mirroring the engine-layer <c>MethodParameterInfo</c> (RoslynSentinel.Engines.Basic,
-/// RefactoringEngine.cs) as surfaced by MethodSignature's view branch. Declared here (rather than
+/// BasicRefactoringEngine.cs) as surfaced by MethodSignature's view branch. Declared here (rather than
 /// tagging MethodParameterInfo itself) because that engine type lives outside this POC's file
 /// scope - see proposal_structuredcontent_rollout.md.
 /// </summary>

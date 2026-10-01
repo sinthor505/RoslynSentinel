@@ -2,7 +2,8 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol.Server;
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Advanced;
 

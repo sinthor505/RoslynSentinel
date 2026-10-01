@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
 using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Tools.Advanced;
 
 namespace RoslynSentinel.Server.Advanced;
 

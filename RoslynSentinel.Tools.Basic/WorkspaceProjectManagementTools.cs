@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-using ModelContextProtocol.Server;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
 

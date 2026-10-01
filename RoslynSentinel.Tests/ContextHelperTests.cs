@@ -559,6 +559,7 @@ public class ContextHelperTests
             "// Unused private method: nothing in the solution calls this. Target for SafeDeleteUnusedSymbol.\nprivate string BuildInternalDebugLabel()\n{\n    return $\"[{_customerId}] {_lines.Count} line(s)\";\n}"),
     ];
 
+    [Test]
     [TestCaseSource(nameof(RealAgentContextSnippets))]
     public void FindSnippetPosition_RealAgentContextSnippetCorpus_Resolves((string Label, string Source, string ContextSnippet) testCase)
     {
@@ -600,10 +601,10 @@ public class ContextHelperTests
             () => ContextHelper.FindSnippetPosition(ApplyDiscountLikeSource, fabricatedSnippet));
     }
 
-       [Test]
+    [Test]
     [Description("FindAllSnippetMatchesWithLength: a multi-line lineBefore can never satisfy the "
-                 + "single-line MatchLine comparison and must be rejected up front with a clear "
-                 + "message, not silently filtered down to zero candidates and reported as NotFound.")]
+              + "single-line MatchLine comparison and must be rejected up front with a clear "
+              + "message, not silently filtered down to zero candidates and reported as NotFound.")]
     public void FindSnippetPositionWithLength_MultilineLineBefore_ThrowsClearRejection()
     {
         var source =
@@ -623,12 +624,12 @@ public class ContextHelperTests
         Assert.That(ex.Message, Does.Contain("lineBefore"));
     }
 
-       [Test]
+    [Test]
     [Description("DiagnoseNoMatch: mirrors the real entries/entries2 CS0103 bug - 4 of 5 snippet " +
-                 "lines match verbatim at contiguous source lines and one line diverges (caller " +
-                 "typed 'entries' where the file actually has 'entries2'). The error must name the " +
-                 "specific diverging line and quote what's actually on disk there, not just say " +
-                 "'not found'.")]
+              "lines match verbatim at contiguous source lines and one line diverges (caller " +
+              "typed 'entries' where the file actually has 'entries2'). The error must name the " +
+              "specific diverging line and quote what's actually on disk there, not just say " +
+              "'not found'.")]
     public void FindSnippetPositionWithLength_ContiguousLineDiverges_NamesDivergingLineAndQuotesActualText()
     {
         var source =

@@ -1,0 +1,229 @@
+using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Basic;
+
+namespace RoslynSentinel.Tests.Battery.Basic;
+
+[TestFixture]
+
+public class ModifyAttributeBatchTests
+{
+    private const string FixtureRelativePath = "ContosoOrders.Core/AttributeBatchFixture.cs";
+
+    private const string FixtureSource = """
+    namespace ContosoOrders.Core;
+
+    [Obsolete]
+    public class AttributeBatchTargetA
+    {
+    }
+
+    [Obsolete]
+    public class AttributeBatchTargetB
+    {
+    }
+    """;
+
+    private const string SecondFixtureRelativePath = "ContosoOrders.Core/AttributeBatchFixtureSecond.cs";
+
+    private const string SecondFixtureSource = """
+    namespace ContosoOrders.Core;
+
+    public class AttributeBatchTargetC
+    {
+    }
+    """;
+
+    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
+    {
+        var config = new SentinelConfiguration();
+        var diffEngine = new DiffEngine();
+        return new RefactoringStructuralTools(new RefactoringStructuralImpl(
+            new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
+            new MemberRefactoringEngine(workspaceManager, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
+            new StructuralRefinementEngine(workspaceManager, config),
+            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            workspaceManager,
+            new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
+            NullLogger<RefactoringStructuralImpl>.Instance));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchTwoEditsSameFile_BothApplyAgainstOriginalSnapshotAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var result = await tools.ModifyAttribute(
+            reason: "batch test same file two edits",
+            edits:
+            [
+                new AttributeEdit { FilePath = FixtureRelativePath, TargetName = "AttributeBatchTargetA", ExistingAttribute = "Obsolete", Action = AttributeModifyAction.remove },
+            new AttributeEdit { FilePath = FixtureRelativePath, TargetName = "AttributeBatchTargetB", ExistingAttribute = "Obsolete", Action = AttributeModifyAction.replace, NewAttribute = "Obsolete(\"v2\")" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+
+        var newContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
+        Assert.Multiple(() =>
+        {
+            Assert.That(newContent, Does.Not.Contain("[Obsolete]\r\npublic class AttributeBatchTargetA"));
+            Assert.That(newContent, Does.Contain("Obsolete(\"v2\")"));
+        });
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchAcrossTwoFiles_AppliesBothInOneCallAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource, reloadSolution: false);
+        await fixture.AddFileToSolution(workspaceManager, SecondFixtureRelativePath, SecondFixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var result = await tools.ModifyAttribute(
+            reason: "batch test across two files",
+            edits:
+            [
+                new AttributeEdit { FilePath = FixtureRelativePath, TargetName = "AttributeBatchTargetA", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
+            new AttributeEdit { FilePath = SecondFixtureRelativePath, TargetName = "AttributeBatchTargetC", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+
+        var firstContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
+        var secondContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, SecondFixtureRelativePath));
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstContent, Does.Contain("[Serializable]"));
+            Assert.That(secondContent, Does.Contain("[Serializable]"));
+        });
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchSameNodeTwice_RejectsWithoutWritingAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var beforeContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
+
+        var result = await tools.ModifyAttribute(
+            reason: "batch test same node collision",
+            edits:
+            [
+                new AttributeEdit { FilePath = FixtureRelativePath, TargetName = "AttributeBatchTargetA", Action = AttributeModifyAction.remove, ExistingAttribute = "Obsolete" },
+            new AttributeEdit { FilePath = FixtureRelativePath, TargetName = "AttributeBatchTargetA", Action = AttributeModifyAction.add, NewAttribute = "Serializable" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+
+        var afterContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
+        Assert.That(afterContent, Is.EqualTo(beforeContent));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchOneEditTargetNotFound_RejectsWholeBatchWithoutWritingAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var beforeContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
+
+        var result = await tools.ModifyAttribute(
+            reason: "batch test target not found",
+            edits:
+            [
+                new AttributeEdit { FilePath = FixtureRelativePath, TargetName = "AttributeBatchTargetA", Action = AttributeModifyAction.add, NewAttribute = "Serializable" },
+            new AttributeEdit { FilePath = FixtureRelativePath, TargetName = "AttributeBatchTargetDoesNotExist", Action = AttributeModifyAction.add, NewAttribute = "Serializable" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+
+        var afterContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
+        Assert.That(afterContent, Is.EqualTo(beforeContent));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BothEditsAndSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var result = await tools.ModifyAttribute(
+            reason: "batch test both supplied",
+            filePath: FixtureRelativePath,
+            targetName: "AttributeBatchTargetA",
+            existingAttribute: "Obsolete",
+            action: AttributeModifyAction.remove,
+            edits: [new AttributeEdit { FilePath = FixtureRelativePath, TargetName = "AttributeBatchTargetB", Action = AttributeModifyAction.add, NewAttribute = "Serializable" }],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_NeitherEditsNorSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var result = await tools.ModifyAttribute(
+            reason: "batch test neither supplied",
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.Message, Does.Contain("edits"));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_EmptyEditsArray_RejectsAsInvalidArgumentAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var result = await tools.ModifyAttribute(
+            reason: "batch test empty edits array",
+            edits: [],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchExceedsMaxEditsCap_RejectsBeforeResolvingTargetsAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var edits = Enumerable.Range(0, 21)
+            .Select(i => new AttributeEdit { FilePath = FixtureRelativePath, TargetName = $"NonexistentType{i}", Action = AttributeModifyAction.add, NewAttribute = "Serializable" })
+            .ToList();
+
+        var result = await tools.ModifyAttribute(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.Message, Does.Contain("20"));
+    }
+}

@@ -2,7 +2,7 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol.Server;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
 /// <summary>
@@ -33,13 +33,13 @@ public class WorkspaceTools
     private readonly WorkspaceReadNavigationImpl _readNav;
     private readonly WriteToolAdviceHelper _writeAdvice;
 
-       private readonly WorkspaceProjectManagementTools _projectManagement;
+    private readonly WorkspaceProjectManagementTools _projectManagement;
 
-       private readonly WorkspaceBuildTestTools _buildTest;
+    private readonly WorkspaceBuildTestTools _buildTest;
 
-       private readonly WorkspaceFileEditTools _fileEdit;
+    private readonly WorkspaceFileEditTools _fileEdit;
 
-       private readonly WorkspaceHealthMiscTools _healthMisc;
+    private readonly WorkspaceHealthMiscTools _healthMisc;
 
     public WorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<WorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice)
     {

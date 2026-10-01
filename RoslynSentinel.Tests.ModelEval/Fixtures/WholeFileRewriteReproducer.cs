@@ -13,7 +13,7 @@ public static class WholeFileRewriteReproducer
 {
     /// <summary>
     /// Goes in the fixture at ContosoOrders.Core/FixtureHelpers/BlockEditHelpers.cs -> the "already
-    /// has the fix pattern" file, standing in for a file like RefactoringEngine.cs. The scoped-edit
+    /// has the fix pattern" file, standing in for a file like BasicRefactoringEngine.cs. The scoped-edit
     /// helper is private, so BlockConverter.cs can't call it directly -> the model has to copy the
     /// method's source into BlockConverter.cs itself, matching plan-9b-model-test-step2.md step 4.
     /// </summary>

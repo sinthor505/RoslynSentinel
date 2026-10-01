@@ -4,6 +4,9 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
 
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Advanced;
 
 [McpServerToolType]

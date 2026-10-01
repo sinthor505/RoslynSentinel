@@ -1,6 +1,8 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Basic;
 
 // SolutionItemFile, ProjectInfoEntry, ProjectFilesAndDependencies, SolutionItemsAllResult remain
@@ -285,7 +287,7 @@ public class WorkspaceProjectManagementImpl
         return string.Equals(Path.GetFullPath(currentPath), Path.GetFullPath(solutionPath), StringComparison.OrdinalIgnoreCase);
     }
 
-       private static readonly (string Dir, string DocType)[] ProjectDocSubdirs = [("plans", "plan"), ("handoffs", "handoff"), ("completed", "completed_work"), ("documentation", "documentation"),];
+    private static readonly (string Dir, string DocType)[] ProjectDocSubdirs = [("plans", "plan"), ("handoffs", "handoff"), ("completed", "completed_work"), ("documentation", "documentation"),];
 
     private string BuildPostLoadHint(string solutionRoot)
     {

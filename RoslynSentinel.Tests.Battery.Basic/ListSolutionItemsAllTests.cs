@@ -1,0 +1,100 @@
+// Coverage for ListSolutionItems(kind: all) -> see docs/current/plan-orientation-breaker.md
+// section 3. This is the aggregation option the orientation breaker's tripped-state message
+// points agents at as a "browse everything" alternative to guessing SearchSolutionText
+// patterns: it returns projects + solutionItems + every project's files and dependencies in
+// one call, without requiring projectName (unlike kind=files/dependencies, which need it).
+
+using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Basic;
+
+namespace RoslynSentinel.Tests.Battery.Basic;
+
+[TestFixture]
+public class ListSolutionItemsAllTests
+{
+    private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
+    {
+        var config = new SentinelConfiguration();
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
+        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var dependencyEngine = new DependencyEngine(workspaceManager);
+        var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
+        return new WorkspaceTools(
+            workspaceManager, validationEngine, diffEngine, diagnosticEngine,
+            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
+            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
+            new BuildEngine(workspaceManager, diagnosticEngine),
+            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            new TestRunEngine(workspaceManager),
+            new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            WriteToolAdviceHelper.WithAllToolsExposed());
+    }
+
+    [Test]
+    public async Task ListSolutionItems_KindAll_DoesNotRequireProjectNameAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task ListSolutionItems_KindAll_ReturnsEveryProjectWithFilesAndDependenciesAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+
+        var combined = (SolutionItemsAllResult)result.SuccessData!;
+
+        // ContosoOrders sample solution has exactly 2 projects (ContosoOrders.Core, ContosoOrders.Tests).
+        Assert.That(combined.Projects, Has.Count.EqualTo(2));
+        Assert.That(combined.Projects.Select(p => p.Name), Is.EquivalentTo(new[] { "ContosoOrders.Core", "ContosoOrders.Tests" }));
+
+        Assert.That(combined.ProjectDetails, Has.Count.EqualTo(2));
+        foreach (var detail in combined.ProjectDetails)
+        {
+            Assert.That(detail.Files, Is.Not.Empty, $"expected at least one file for project '{detail.ProjectName}'");
+            Assert.That(detail.Files, Is.Unique, $"files for project '{detail.ProjectName}' must be deduped");
+            Assert.That(detail.Dependencies, Is.Not.Null);
+        }
+    }
+
+    [Test]
+    public async Task ListSolutionItems_KindAll_MatchesUnionOfIndividualKindsAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var allResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
+        var combined = (SolutionItemsAllResult)allResult.SuccessData!;
+
+        var projectsResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.projects);
+        var projectsOnly = (List<ProjectInfoEntry>)projectsResult.SuccessData!;
+        Assert.That(combined.Projects.Select(p => p.Name), Is.EquivalentTo(projectsOnly.Select(p => p.Name)));
+
+        foreach (var project in projectsOnly)
+        {
+            var filesResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.files, projectName: project.Name);
+            var filesOnly = (List<string>)filesResult.SuccessData!;
+            var detail = combined.ProjectDetails.Single(d => d.ProjectName == project.Name);
+            Assert.That(detail.Files, Is.EquivalentTo(filesOnly));
+        }
+    }
+}

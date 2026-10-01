@@ -1,7 +1,10 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using ModernizationTools = RoslynSentinel.Tools.Advanced.ModernizationTools;
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Basic;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
@@ -44,14 +47,13 @@ public class ComprehensiveToolTests
     private PerformanceEngine _performanceEngine;
     private SolutionStructureEngine _projectStructureEngine;
     private QualityTools _qualityTools;
-    private RefactoringEngine _refactoringEngine;
+    private BasicRefactoringEngine _refactoringEngine;
     private AdvancedRefactoringTools _advancedRefactoringTools;
     private SecurityEngine _securityEngine;
     private SemanticRefactoringEngine _semanticRefactoringEngine;
     private DiscoveryEngine _semanticSearchEngine;
     private SentinelConfiguration _config;
     private SolutionManagementEngine _solutionManagementEngine;
-    private StandardRefactoringEngine _standardRefactoringEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
@@ -94,12 +96,11 @@ public class ComprehensiveToolTests
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
         _performanceEngine = new PerformanceEngine(_workspaceManager);
         _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, _config);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
         _semanticSearchEngine = new DiscoveryEngine(_workspaceManager);
         _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
-        _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
@@ -139,6 +140,7 @@ public class ComprehensiveToolTests
             _discoveryEngine,
             new ProjectConsistencyEngine(_workspaceManager),
             _workspaceManager,
+            new AntiPatternEngine(_workspaceManager),
             _config,
             NullLogger<IntelligenceTools>.Instance);
 

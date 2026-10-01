@@ -12,6 +12,9 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
+using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Tools.Basic;
+
 namespace RoslynSentinel.Tests;
 
 [TestFixture]
@@ -125,7 +128,7 @@ public class NoActiveToolsStartupTests
 
         Assert.That(failure, Is.Null);
     }
-       [Test]
+    [Test]
     public void ModeAll_ResolvesToEveryRegisteredToolClass_IncludingAdminAndWholeFileWrite()
     {
         // Regression test for the "--mode=all" drift bug: each of the 4 server entry points used

@@ -11,7 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.collector" Version="10.0.1">
+    <PackageReference Include="coverlet.collector" Version="10.1.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -33,15 +33,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="ModelContextProtocol.Protocol" />
     <Using Include="NUnit.Framework" />
     <Using Include="RoslynSentinel.Common" />
-    <Using Include="RoslynSentinel.Engines.Advanced" />
-    <Using Include="RoslynSentinel.Engines.Basic" />
-    <Using Include="RoslynSentinel.Server.Advanced" />
-    <Using Include="RoslynSentinel.Server.Basic" />
-    <Using Include="RoslynSentinel.Tools.Advanced" />
-    <Using Include="RoslynSentinel.Tools.Basic" />
   </ItemGroup>
 
   <ItemGroup>

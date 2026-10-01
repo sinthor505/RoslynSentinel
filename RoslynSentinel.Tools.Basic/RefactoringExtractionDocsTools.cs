@@ -1,7 +1,5 @@
 using System.ComponentModel;
 
-using ModelContextProtocol.Server;
-
 namespace RoslynSentinel.Tools.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): MCP-surface half of the

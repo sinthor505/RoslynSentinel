@@ -22,7 +22,7 @@ public class ToolGapsTests
     private AntiPatternEngine _antiPatternEngine;
     private CodeStyleEngine _codeStyleEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
-    private RefactoringEngine _refactoringEngine;
+    private BasicRefactoringEngine _refactoringEngine;
 
     [SetUp]
     public void Setup()
@@ -37,7 +37,7 @@ public class ToolGapsTests
         var config = new SentinelConfiguration();
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
-        _refactoringEngine = new RefactoringEngine(_workspaceManager, NullLogger<RefactoringEngine>.Instance, config);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
     }
 
     [TearDown]

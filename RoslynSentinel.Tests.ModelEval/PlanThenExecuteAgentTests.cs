@@ -9,6 +9,8 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 
+using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tests.ModelEval.Fixtures;
 using RoslynSentinel.Tools.Advanced;
 
@@ -181,6 +183,7 @@ public class PlanThenExecuteAgentTests
     }
 
     [Test]
+    [Explicit("Requires loaded model. Manually run using roslynsentinel-modeleval.ps1")]
     public async Task Model_FixesWholeFileRewriteBug_PlanThenExecute()
     {
         var runner = new ModelAgentRunner(

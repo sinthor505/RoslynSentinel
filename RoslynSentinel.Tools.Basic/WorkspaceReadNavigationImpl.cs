@@ -8,6 +8,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>Return payload for <c>GetMethodSource</c>.</summary>
@@ -1423,7 +1425,7 @@ public class WorkspaceReadNavigationImpl
         }
     }
 
-       // Mirrors the Raw branch's worst-case-then-shrink loop (see the ResultWrapperType.Raw case in
+    // Mirrors the Raw branch's worst-case-then-shrink loop (see the ResultWrapperType.Raw case in
     // GetLargeResult) so every list-shaped switch branch there gets the same guarantee: the page
     // this method hands back can never itself be large enough for the generic offload filter
     // (ServiceRegistrationExtensionsBasic.cs's "Generic large-result offload backstop") to re-catch

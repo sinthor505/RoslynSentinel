@@ -15,7 +15,8 @@
   <Project Path="RoslynSentinel.Tests.Advanced/RoslynSentinel.Tests.Advanced.csproj" Id="30334fc9-1993-4d32-9115-e72b5f26e864" />
   <Project Path="RoslynSentinel.Tests.Asyncify/RoslynSentinel.Tests.Asyncify.csproj" Id="1a7f4726-11b3-476a-9d7a-13b2f14af9f2" />
   <Project Path="RoslynSentinel.Tests.Basic/RoslynSentinel.Tests.Basic.csproj" Id="aa71cbde-35e3-4017-a013-e138d8e34060" />
-  <Project Path="RoslynSentinel.Tests.Battery/RoslynSentinel.Tests.Battery.csproj" Id="0ccd2484-f855-4a5c-81bb-709723842a4a" />
+  <Project Path="RoslynSentinel.Tests.Battery.Advanced/RoslynSentinel.Tests.Battery.Advanced.csproj" Id="c93d3df2-fee0-41b9-b761-4767d3f0d9b7" />
+  <Project Path="RoslynSentinel.Tests.Battery.Basic/RoslynSentinel.Tests.Battery.Basic.csproj" Id="8fa03b73-e6ef-4735-9e85-b30e4ff74c39" />
   <Project Path="RoslynSentinel.Tests.Integration/RoslynSentinel.Tests.Integration.csproj" />
   <Project Path="RoslynSentinel.Tests.ModelEval/RoslynSentinel.Tests.ModelEval.csproj" />
   <Project Path="RoslynSentinel.Tests.PlanStepRunner/RoslynSentinel.Tests.PlanStepRunner.csproj" />
