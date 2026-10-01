@@ -44,16 +44,30 @@ public class GitToolsSmokeTests
     [TearDown]
     public void TearDown()
     {
-        if (Directory.Exists(_repoDir))
-        {
-            // Windows can leave .git's object files read-only; clear that before recursive delete.
-            foreach (var file in Directory.EnumerateFiles(_repoDir, "*", SearchOption.AllDirectories))
-            {
-                File.SetAttributes(file, FileAttributes.Normal);
-            }
+        DeleteDirectoryTree(_repoDir);
+        DeleteDirectoryTree(RemoteDir);
+        DeleteDirectoryTree(CloneDir);
+    }
 
-            Directory.Delete(_repoDir, recursive: true);
+    // Sibling directories used by the remote-fixture tests (bare remote, second clone).
+    private string RemoteDir => _repoDir + "_remote";
+
+    private string CloneDir => _repoDir + "_clone";
+
+    private static void DeleteDirectoryTree(string directory)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return;
         }
+
+        // Windows can leave .git's object files read-only; clear that before recursive delete.
+        foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+
+        Directory.Delete(directory, recursive: true);
     }
 
     private static void RunGit(string workingDirectory, params string[] args)
@@ -223,7 +237,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "add", "-A");
         RunGit(_repoDir, "commit", "-m", "second commit");
 
-        var result = await _gitTools.Git(reason: "test message", GitOperation.reset, mode: GitResetMode.soft);
+        var result = await _gitTools.Git(reason: "test message", GitOperation.reset, mode: GitResetMode.soft, @ref: "HEAD~1");
 
         Assert.That(result, Is.Not.Null);
         var status = result.SuccessData as GitStatusResult;
@@ -244,7 +258,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "add", "-A");
         RunGit(_repoDir, "commit", "-m", "second commit");
 
-        var result = await _gitTools.Git(reason: "test message", GitOperation.reset, mode: GitResetMode.mixed);
+        var result = await _gitTools.Git(reason: "test message", GitOperation.reset, mode: GitResetMode.mixed, @ref: "HEAD~1");
 
         Assert.That(result, Is.Not.Null);
         var status = result.SuccessData as GitStatusResult;
@@ -1033,5 +1047,358 @@ public class GitToolsSmokeTests
         Assert.That(staged.Status, Is.EqualTo("conflict"), "AA must not read as a staged 'added'");
         Assert.That(unstaged.Status, Is.EqualTo("conflict"));
         Assert.That(status.IsClean, Is.False);
+    }
+
+    // Phase 4 tests: ref parameter, reset safety, checkout, pull, amend, non-interactive env
+
+    [TestCase(GitResetMode.soft)]
+    [TestCase(GitResetMode.mixed)]
+    public async Task Git_Reset_WithoutRef_IsRefusedNamingRefParameterAndMovesNothingAsync(GitResetMode mode)
+    {
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "second commit");
+        var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
+
+        var result = await _gitTools.Git(reason: "bare reset", GitOperation.reset, mode: mode);
+
+        Assert.That(result.IsSuccess, Is.False, "reset must no longer default to HEAD~1");
+        var message = result.ErrorData?.Message;
+        Assert.That(message, Does.Contain("ref"), "error must name the ref parameter");
+        Assert.That(message, Does.Contain("HEAD~1"), "error must show a concrete example value");
+        Assert.That(message, Does.Contain("unstage"), "error must point at the no-move alternative");
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore), "HEAD must not move");
+        Assert.That(File.ReadAllText(Path.Combine(_repoDir, "README.md")), Is.EqualTo("second commit content"));
+    }
+
+    [Test]
+    public async Task Git_Ref_WorksOnLogShowDiffAndReset_AndAliasesStillAcceptedAsync()
+    {
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "second commit");
+        var firstHash = RunGitCapture("rev-parse", "HEAD~1").Trim();
+
+        // log: ref is the start ref, so history begins at the first commit.
+        var log = await _gitTools.Git(reason: "log from ref", GitOperation.log, @ref: "HEAD~1");
+        Assert.That(log.IsSuccess, Is.True, log.ErrorData?.Message);
+        Assert.That(((GitLogResult)log.SuccessData!).Commits.Select(c => c.Message), Is.EqualTo(new[] { "initial commit" }));
+
+        // log: the branchName alias still works and agrees with ref when both carry the same value.
+        var aliasLog = await _gitTools.Git(reason: "log from alias", GitOperation.log, branchName: "HEAD~1");
+        Assert.That(((GitLogResult)aliasLog.SuccessData!).Commits, Has.Count.EqualTo(1));
+        var sameLog = await _gitTools.Git(reason: "log with equal ref and alias", GitOperation.log, @ref: "HEAD~1", branchName: "HEAD~1");
+        Assert.That(sameLog.IsSuccess, Is.True, "identical values are not a conflict");
+
+        // show: ref names the commit; commitHash and target aliases resolve to the same commit.
+        foreach (var show in new[]
+        {
+            await _gitTools.Git(reason: "show by ref", GitOperation.show, @ref: firstHash),
+            await _gitTools.Git(reason: "show by commitHash", GitOperation.show, commitHash: firstHash),
+            await _gitTools.Git(reason: "show by target", GitOperation.show, target: firstHash),
+        })
+        {
+            Assert.That(show.IsSuccess, Is.True, show.ErrorData?.Message);
+            Assert.That(((GitShowResult)show.SuccessData!).Hash, Is.EqualTo(firstHash));
+        }
+
+        // diff: ref diffs the working tree against that ref.
+        var diff = await _gitTools.Git(reason: "diff against ref", GitOperation.diff, @ref: "HEAD~1", nameOnly: true);
+        Assert.That(diff.IsSuccess, Is.True, diff.ErrorData?.Message);
+        Assert.That(((GitDiffResult)diff.SuccessData!).Diff.Trim(), Is.EqualTo("M\tREADME.md"));
+
+        // reset: the branchName alias is still accepted as the ref.
+        var reset = await _gitTools.Git(reason: "reset via alias", GitOperation.reset, branchName: "HEAD~1", mode: GitResetMode.soft);
+        Assert.That(reset.IsSuccess, Is.True, reset.ErrorData?.Message);
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(firstHash));
+    }
+
+    [Test]
+    public async Task Git_Ref_ConflictingWithAliases_IsRefusedNamingBothParametersAsync()
+    {
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "second commit");
+        var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
+        var firstHash = RunGitCapture("rev-parse", "HEAD~1").Trim();
+
+        var cases = new (string Label, string AliasName, Func<Task<SentinelCallToolResult<object>>> Call)[]
+        {
+            ("log/branchName", "branchName", () => _gitTools.Git(reason: "conflict", GitOperation.log, @ref: "HEAD", branchName: "HEAD~1")),
+            ("show/commitHash", "commitHash", () => _gitTools.Git(reason: "conflict", GitOperation.show, @ref: "HEAD", commitHash: firstHash)),
+            ("show/target", "target", () => _gitTools.Git(reason: "conflict", GitOperation.show, @ref: "HEAD", target: firstHash)),
+            ("show/commitHash+target", "commitHash", () => _gitTools.Git(reason: "conflict", GitOperation.show, commitHash: "HEAD", target: firstHash)),
+            ("diff/target", "target", () => _gitTools.Git(reason: "conflict", GitOperation.diff, @ref: "HEAD", target: "staged")),
+            ("reset/branchName", "branchName", () => _gitTools.Git(reason: "conflict", GitOperation.reset, @ref: "HEAD~1", branchName: "HEAD")),
+        };
+
+        foreach (var (label, aliasName, call) in cases)
+        {
+            var result = await call();
+            Assert.That(result.IsSuccess, Is.False, label);
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"), label);
+            Assert.That(result.ErrorData?.Message, Does.Contain(aliasName), $"{label}: message must name the alias parameter");
+            if (!label.Contains('+'))
+            {
+                Assert.That(result.ErrorData?.Message, Does.Contain("'ref'"), $"{label}: message must name ref");
+            }
+        }
+
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore), "a refused reset must not move HEAD");
+    }
+
+    [Test]
+    public async Task Git_Ref_OnUnsupportedOperation_IsRefusedAsync()
+    {
+        var result = await _gitTools.Git(reason: "ref on branch", GitOperation.branch, @ref: "HEAD");
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ref").And.Contain("log/show/diff/reset"));
+    }
+
+    [Test]
+    public async Task Git_Checkout_CreateBranch_ExistingIsPlainCheckoutAndNewIsCreated_ReportedTruthfullyAsync()
+    {
+        var baseBranch = RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim();
+
+        // Missing branch: created, and reported as created.
+        var created = await _gitTools.Git(reason: "create and switch", GitOperation.checkout, branchName: "topic", createBranch: true);
+        Assert.That(created.IsSuccess, Is.True, created.ErrorData?.Message);
+        var createdResult = (GitCheckoutResult)created.SuccessData!;
+        Assert.That(createdResult.CreatedNewBranch, Is.True);
+        Assert.That(createdResult.Note, Is.Null);
+        Assert.That(RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim(), Is.EqualTo("topic"));
+
+        // Move the existing branch ahead so a wrongly re-created/reset branch would be visible.
+        WriteFile("topic.txt", "topic work");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "topic work");
+        var topicTip = RunGitCapture("rev-parse", "HEAD").Trim();
+        RunGit(_repoDir, "checkout", baseBranch);
+
+        // Existing branch: plain checkout, not an error, and CreatedNewBranch is false.
+        var existing = await _gitTools.Git(reason: "create-or-switch existing", GitOperation.checkout, branchName: "topic", createBranch: true);
+        Assert.That(existing.IsSuccess, Is.True, existing.ErrorData?.Message);
+        var existingResult = (GitCheckoutResult)existing.SuccessData!;
+        Assert.That(existingResult.CreatedNewBranch, Is.False, "the branch already existed, so nothing was created");
+        Assert.That(existingResult.Branch, Is.EqualTo("topic"));
+        Assert.That(RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim(), Is.EqualTo("topic"));
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(topicTip), "the existing branch must be untouched");
+
+        // A startPoint cannot apply to an existing branch: still a plain checkout, but say so.
+        RunGit(_repoDir, "checkout", baseBranch);
+        var withStart = await _gitTools.Git(reason: "existing with startPoint", GitOperation.checkout, branchName: "topic", createBranch: true, startPoint: "HEAD");
+        Assert.That(withStart.IsSuccess, Is.True, withStart.ErrorData?.Message);
+        var withStartResult = (GitCheckoutResult)withStart.SuccessData!;
+        Assert.That(withStartResult.CreatedNewBranch, Is.False);
+        Assert.That(withStartResult.Note, Does.Contain("startPoint").And.Contain("ignored"));
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(topicTip));
+    }
+
+    [Test]
+    public async Task Git_Checkout_StartPointWithoutCreateBranch_IsRefusedNamingMissingFlagAsync()
+    {
+        var baseBranch = RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim();
+        RunGit(_repoDir, "branch", "other");
+
+        var result = await _gitTools.Git(reason: "startPoint alone", GitOperation.checkout, branchName: "other", startPoint: "HEAD");
+
+        Assert.That(result.IsSuccess, Is.False, "a startPoint that would be silently ignored must be refused");
+        Assert.That(result.ErrorData?.Message, Does.Contain("startPoint").And.Contain("createBranch"));
+        Assert.That(RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim(), Is.EqualTo(baseBranch), "nothing may be checked out");
+    }
+
+    // Creates a bare repo next to the test repo, registers it as 'origin', and pushes the current
+    // branch with upstream tracking. Returns the current branch name. Cleaned up by TearDown.
+    private string AddBareRemoteAndPush()
+    {
+        Directory.CreateDirectory(RemoteDir);
+        RunGit(RemoteDir, "init", "--bare");
+        RunGit(_repoDir, "remote", "add", "origin", RemoteDir);
+        var branch = RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim();
+        RunGit(_repoDir, "push", "-u", "origin", branch);
+        return branch;
+    }
+
+    [Test]
+    public async Task Git_Checkout_BranchNameSharedWithTrackedFile_SwitchesToTheBranchAsync()
+    {
+        // 'feat' exists only as origin/feat AND as a tracked file. Without a trailing "--", git
+        // refuses ("could be both a local file and a tracking branch"); with it, the argument is
+        // unambiguously a branch and git creates the tracking branch.
+        var baseBranch = AddBareRemoteAndPush();
+        RunGit(_repoDir, "branch", "feat");
+        RunGit(_repoDir, "push", "origin", "feat");
+        RunGit(_repoDir, "branch", "-D", "feat");
+        WriteFile("feat", "a file that shares the branch name");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add file named feat");
+        Assert.That(RunGitRaw("checkout", "feat").ExitCode, Is.Not.EqualTo(0), "fixture sanity: bare checkout of the name is ambiguous");
+
+        var result = await _gitTools.Git(reason: "checkout ambiguous name", GitOperation.checkout, branchName: "feat");
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim(), Is.EqualTo("feat"));
+        Assert.That(baseBranch, Is.Not.EqualTo("feat"));
+    }
+
+    // A second clone pushes remote.txt to the remote, then the test repo commits local.txt, so the
+    // local branch and its upstream have each moved on independently (divergent).
+    private void DivergeFromRemote(string branch)
+    {
+        RunGit(Path.GetTempPath(), "clone", RemoteDir, CloneDir);
+        RunGit(CloneDir, "config", "user.email", "other@example.com");
+        RunGit(CloneDir, "config", "user.name", "Other");
+        File.WriteAllText(Path.Combine(CloneDir, "remote.txt"), "from the remote");
+        RunGit(CloneDir, "add", "-A");
+        RunGit(CloneDir, "commit", "-m", "remote commit");
+        RunGit(CloneDir, "push", "origin", branch);
+
+        WriteFile("local.txt", "from local");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "local commit");
+    }
+
+    [Test]
+    public async Task Git_Pull_DivergentBranchesWithNoPullConfig_MergesInsteadOfFailingAsync()
+    {
+        var previousNoSystem = Environment.GetEnvironmentVariable("GIT_CONFIG_NOSYSTEM");
+        Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
+        try
+        {
+            var branch = AddBareRemoteAndPush();
+            DivergeFromRemote(branch);
+
+            // Fixture sanity: with no pull.rebase/pull.ff configured, git refuses a bare pull of
+            // divergent branches, which is exactly what rebase=false used to fall into.
+            Assert.That(RunGitCapture("config", "--get", "pull.rebase"), Is.Empty, "fixture assumes no pull.rebase config");
+            Assert.That(RunGitCapture("config", "--get", "pull.ff"), Is.Empty, "fixture assumes no pull.ff config");
+            var bare = RunGitRaw("pull", "origin");
+            Assert.That(bare.ExitCode, Is.Not.EqualTo(0), "fixture sanity: a bare pull must fail here: " + bare.Stderr);
+
+            var result = await _gitTools.Git(reason: "pull divergent", GitOperation.pull);
+
+            Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+            Assert.That(File.Exists(Path.Combine(_repoDir, "remote.txt")), Is.True, "the remote commit must be merged in");
+            Assert.That(File.Exists(Path.Combine(_repoDir, "local.txt")), Is.True, "the local commit must be kept");
+            Assert.That(RunGitCapture("rev-list", "--merges", "--count", "HEAD").Trim(), Is.EqualTo("1"), "rebase=false must produce a merge commit");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", previousNoSystem);
+        }
+    }
+
+    [Test]
+    public async Task Git_Pull_RebaseTrue_RebasesInsteadOfMergingAsync()
+    {
+        var branch = AddBareRemoteAndPush();
+        DivergeFromRemote(branch);
+
+        var result = await _gitTools.Git(reason: "pull with rebase", GitOperation.pull, rebase: true);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(RunGitCapture("rev-list", "--merges", "--count", "HEAD").Trim(), Is.EqualTo("0"), "rebase=true must not create a merge commit");
+        Assert.That(File.Exists(Path.Combine(_repoDir, "remote.txt")), Is.True);
+        Assert.That(File.Exists(Path.Combine(_repoDir, "local.txt")), Is.True);
+    }
+
+    [Test]
+    public async Task Git_Commit_Amend_OfHeadAlreadyPushedToUpstream_IsRefusedAndHeadUnchangedAsync()
+    {
+        AddBareRemoteAndPush();
+        var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
+
+        var result = await _gitTools.Git(reason: "amend pushed head", GitOperation.commit, amend: true, message: "reworded");
+
+        Assert.That(result.IsSuccess, Is.False, "amending a commit already contained in its upstream must be refused");
+        Assert.That(result.ErrorData?.Message, Does.Contain("upstream"), "error must explain the upstream reason");
+        Assert.That(result.ErrorData?.Message, Does.Contain("Nothing was amended"));
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore), "HEAD must not be rewritten");
+    }
+
+    [Test]
+    public async Task Git_Commit_Amend_WithNoUpstreamConfigured_IsAllowedAsync()
+    {
+        var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
+
+        var result = await _gitTools.Git(reason: "amend local only", GitOperation.commit, amend: true, message: "reworded locally");
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.Not.EqualTo(headBefore), "amend must rewrite HEAD");
+        Assert.That(RunGitCapture("log", "-1", "--format=%s").Trim(), Is.EqualTo("reworded locally"));
+    }
+
+    [Test]
+    public async Task Git_Commit_Amend_OfUnpushedCommitOnTopOfPushedHistory_IsAllowedAsync()
+    {
+        AddBareRemoteAndPush();
+        File.WriteAllText(Path.Combine(_repoDir, "unpushed.txt"), "not pushed yet");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "unpushed commit");
+        var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
+
+        var result = await _gitTools.Git(reason: "amend unpushed head", GitOperation.commit, amend: true, message: "reworded unpushed");
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.Not.EqualTo(headBefore), "amend must rewrite the unpushed HEAD");
+        Assert.That(RunGitCapture("log", "-1", "--format=%s").Trim(), Is.EqualTo("reworded unpushed"));
+    }
+
+    // A local HTTP endpoint that answers every request with 401 + Basic challenge forces git to ask for
+    // credentials. With GIT_TERMINAL_PROMPT=0 set by RunGitAsync, git must fail fast with
+    // "terminal prompts disabled" instead of blocking on a prompt nobody can answer.
+    [Test]
+    public async Task Git_Fetch_AuthChallenge_FailsFastWithoutPromptingAsync()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var serverTask = Task.Run(async () =>
+        {
+            try
+            {
+                while (true)
+                {
+                    using var client = await listener.AcceptTcpClientAsync();
+                    var stream = client.GetStream();
+                    var buffer = new byte[8192];
+                    var read = 0;
+                    var seen = new System.Text.StringBuilder();
+                    while (!seen.ToString().Contains("\r\n\r\n") && (read = await stream.ReadAsync(buffer)) > 0)
+                    {
+                        seen.Append(System.Text.Encoding.ASCII.GetString(buffer, 0, read));
+                    }
+                    var response = "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"test\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    var bytes = System.Text.Encoding.ASCII.GetBytes(response);
+                    await stream.WriteAsync(bytes);
+                    await stream.FlushAsync();
+                }
+            }
+            catch (Exception)
+            {
+                // Listener stopped by the test; nothing to report.
+            }
+        });
+
+        try
+        {
+            RunGit(_repoDir, "config", "credential.helper", "");
+            RunGit(_repoDir, "remote", "add", "origin", $"http://127.0.0.1:{port}/repo.git");
+
+            var task = _gitTools.Git(reason: "fetch with auth challenge", GitOperation.fetch);
+            var finished = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(60)));
+
+            Assert.That(finished, Is.SameAs(task), "git fetch blocked instead of failing fast - credential prompting is not disabled");
+            var result = await task;
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.ErrorData?.Message, Does.Contain("terminal prompts disabled"));
+        }
+        finally
+        {
+            listener.Stop();
+            await Task.WhenAny(serverTask, Task.Delay(TimeSpan.FromSeconds(5)));
+        }
     }
 }

@@ -30,7 +30,7 @@ public class GitTools
         GitOperation operation,
         [Description("log: number of commits to return (max 100).")]
         int count = 20,
-        [Description("diff: \"working\", \"staged\", a commit hash, or a range. show: a single commit hash/ref.")]
+        [Description("diff: \"working\", \"staged\", a commit hash, or a range. show: a single commit hash/ref. Prefer 'ref' for a commit/branch; 'target' stays accepted (an alias for ref on diff/show), and giving both with different values is refused.")]
         string target = "working",
         [Description("diff/show/log: paths to restrict to (CSV string or JSON array).")]
         string? paths = null,
@@ -44,19 +44,19 @@ public class GitTools
         [Description("stage/commit: paths to stage (CSV string or JSON array). files implies scope=listed; pass scope only to override or for tracked/all. Alias of paths - pass one, not both.")]
         string? files = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is used when operation=revert (required) or
-        // operation=show (optional alias for target - if both are set, commitHash wins); unused otherwise.
-        [Description("Required for operation=revert: commit hash to revert. Also accepted by operation=show as an alias for target (commitHash wins if both are set).")]
+        // operation=show (optional alias for ref/target - different values across them are refused); unused otherwise.
+        [Description("Required for operation=revert: commit hash to revert. Also accepted by operation=show as an alias for ref/target (giving it together with a different ref or target is refused).")]
         string? commitHash = null,
         [Description("revert: true stages without committing; commit separately to finalize.")]
         bool noCommit = false,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: branchName is required for operation=checkout; optional for operation=branch (omit to list).
-        [Description("branch/checkout: branch to create/delete/switch to (branch: omit to list all; checkout: required). log: optional start ref. reset: ref to reset to (default HEAD~1).")]
+        [Description("branch/checkout: branch to create/delete/switch to (branch: omit to list all; checkout: required). log/reset: accepted as an alias for ref (reset has no default ref, so one of the two is required).")]
         string? branchName = null,
-        [Description("branch/checkout: base ref for a new branch (default HEAD).")]
+        [Description("branch: base ref for a new branch (default HEAD). checkout: base ref for a new branch, only valid together with createBranch=true (refused otherwise; ignored if the branch already exists).")]
         string? startPoint = null,
         [Description("branch: true deletes branchName instead of creating it (refuses if unmerged).")]
         bool deleteBranch = false,
-        [Description("checkout: true creates branchName if missing, optionally from startPoint.")]
+        [Description("checkout: true creates branchName from startPoint (default HEAD) if it does not exist; if it already exists this is a plain checkout and the result reports createdNewBranch=false.")]
         bool createBranch = false,
         [Description("push/fetch/pull: the remote to operate on.")]
         string remoteName = "origin",
@@ -64,7 +64,7 @@ public class GitTools
         bool setUpstream = false,
         [Description("pull: true rebases instead of merging.")]
         bool rebase = false,
-        [Description("commit: true amends HEAD instead of a new commit; message becomes optional (omit to keep HEAD's message).")]
+        [Description("commit: true amends HEAD instead of a new commit; message becomes optional (omit to keep HEAD's message). Refused when HEAD is already contained in the branch's upstream (force-push is not exposed); allowed when no upstream is configured.")]
         bool amend = false,
         [Description("reset: \"soft\" moves HEAD only (changes reappear staged). \"mixed\" (default) also resets the index (changes reappear unstaged). No \"hard\" mode - working tree is never discarded.")]
         GitResetMode? mode = null,
@@ -76,6 +76,8 @@ public class GitTools
         bool nameOnly = false,
         [Description("diff/show: true returns --stat text (per-file change counts and a summary) instead of the patch. Mutually exclusive with nameOnly.")]
         bool stat = false,
+        [Description("log/show/diff/reset: the git ref to operate on (a branch, tag, commit hash, HEAD~1, ...). log: start ref. show: the commit to show. diff: what to diff the working tree against (or a range). reset: REQUIRED, the ref to move HEAD to (e.g. \"HEAD~1\" to undo the last commit). Aliases target (diff/show), commitHash (show) and branchName (log/reset) stay accepted; supplying ref together with an alias that has a different value is refused. Not supported for other operations.")]
+        string? @ref = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -98,6 +100,29 @@ public class GitTools
         }
         var resolvedPaths = !string.IsNullOrWhiteSpace(files) ? files : paths;
 
+        // `ref` is the single spelling for "a git ref"; target/commitHash/branchName stay accepted as
+        // per-operation aliases. Different values across them are ambiguous, so they are refused
+        // rather than letting one silently win (same policy as files/paths above).
+        string? resolvedRef = null;
+        if (operation is GitOperation.log or GitOperation.show or GitOperation.diff or GitOperation.reset)
+        {
+            (string Name, string? Value)[] aliases = operation switch
+            {
+                GitOperation.log or GitOperation.reset => [(nameof(branchName), branchName)],
+                GitOperation.show => [(nameof(commitHash), commitHash), (nameof(target), target == "working" ? null : target)],
+                _ => [(nameof(target), target == "working" ? null : target)],
+            };
+            resolvedRef = ResolveRef(@ref, aliases, out var refError);
+            if (refError is not null)
+            {
+                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: refError, Detail: null) };
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(@ref))
+        {
+            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"ref is only supported for log/show/diff/reset - operation '{operation}' takes its ref from another parameter (revert: commitHash; branch/checkout: branchName, startPoint). Omit ref.", Detail: null) };
+        }
+
         // Gap A/B: when files are supplied and scope is null, infer scope=listed for stage/add/commit.
         // However, explicit scope combined with files for all/tracked is an error.
         GitStageScope? effectiveScope = scope;
@@ -117,14 +142,14 @@ public class GitTools
         GitResult result = operation switch
         {
             GitOperation.status => await _gitImpl.StatusAsync(gitRoot, maxEntries, cancellationToken),
-            GitOperation.log => await _gitImpl.LogAsync(gitRoot, count, branchName, resolvedPaths, cancellationToken),
-            GitOperation.diff => await _gitImpl.DiffAsync(gitRoot, target, resolvedPaths, maxBytes, nameOnly, stat, cancellationToken),
-            GitOperation.show => await _gitImpl.ShowAsync(gitRoot, !string.IsNullOrWhiteSpace(commitHash) ? commitHash : target, resolvedPaths, maxBytes, nameOnly, stat, cancellationToken),
+            GitOperation.log => await _gitImpl.LogAsync(gitRoot, count, resolvedRef, resolvedPaths, cancellationToken),
+            GitOperation.diff => await _gitImpl.DiffAsync(gitRoot, resolvedRef ?? target, resolvedPaths, maxBytes, nameOnly, stat, cancellationToken),
+            GitOperation.show => await _gitImpl.ShowAsync(gitRoot, resolvedRef ?? target, resolvedPaths, maxBytes, nameOnly, stat, cancellationToken),
             GitOperation.stage or GitOperation.add => await _gitImpl.StageAsync(gitRoot, effectiveScope ?? GitStageScope.tracked, resolvedPaths, cancellationToken),
             GitOperation.unstage => await _gitImpl.UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
             GitOperation.commit => await _gitImpl.CommitAsync(gitRoot, message, effectiveScope, resolvedPaths, amend, cancellationToken),
             GitOperation.revert => await _gitImpl.RevertAsync(gitRoot, commitHash, noCommit, cancellationToken),
-            GitOperation.reset => await _gitImpl.ResetAsync(gitRoot, branchName, mode ?? GitResetMode.mixed, cancellationToken),
+            GitOperation.reset => await _gitImpl.ResetAsync(gitRoot, resolvedRef, mode ?? GitResetMode.mixed, cancellationToken),
             GitOperation.branch => await _gitImpl.BranchAsync(gitRoot, branchName, startPoint, deleteBranch, cancellationToken),
             GitOperation.checkout => await _gitImpl.CheckoutAsync(gitRoot, branchName, createBranch, startPoint, cancellationToken),
             GitOperation.push => await _gitImpl.PushAsync(gitRoot, remoteName, setUpstream, cancellationToken),
@@ -141,5 +166,32 @@ public class GitTools
         {
             return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "GitError", Message: ((GitResult)result)?.Error ?? "Unknown Git error") };
         }
+    }
+
+    /// <summary>
+    /// Collapses <c>ref</c> and its per-operation aliases into one value. Returns null (no error)
+    /// when none is supplied. When several are supplied with different values, returns null and an
+    /// error naming every supplied parameter and its value; identical values are not a conflict.
+    /// </summary>
+    private static string? ResolveRef(string? refValue, (string Name, string? Value)[] aliases, out string? error)
+    {
+        var supplied = new List<(string Name, string Value)>();
+        if (!string.IsNullOrWhiteSpace(refValue))
+            supplied.Add(("ref", refValue.Trim()));
+        foreach (var (name, value) in aliases)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                supplied.Add((name, value.Trim()));
+        }
+
+        if (supplied.Select(s => s.Value).Distinct(StringComparer.Ordinal).Count() > 1)
+        {
+            var listed = string.Join(", ", supplied.Select(s => $"'{s.Name}' = '{s.Value}'"));
+            error = $"Conflicting ref values were supplied ({listed}) - ref and these parameters are aliases for the same git ref and must agree. Pass just 'ref'.";
+            return null;
+        }
+
+        error = null;
+        return supplied.Count > 0 ? supplied[0].Value : null;
     }
 }

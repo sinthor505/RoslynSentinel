@@ -186,6 +186,14 @@ public record GitCheckoutResult : GitResult
     {
         get; set;
     }
+
+    /// <summary>Set when the call did something other than what its parameters literally asked
+    /// for, e.g. createBranch=true on a branch that already existed (plain checkout, startPoint
+    /// ignored). Null otherwise.</summary>
+    public string? Note
+    {
+        get; set;
+    }
 }// Added by AddTopLevelType (expected - used for diagnostics)
 public record GitRemoteResult : GitResult
 {
@@ -359,6 +367,13 @@ public class GitImpl : IGitOperations
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
+        // Non-interactive by construction: stdin is closed and there is no console, so a credential
+        // prompt can never be answered and would otherwise hang until GitProcessTimeout kills it.
+        // GIT_TERMINAL_PROMPT=0 makes git itself fail fast ("terminal prompts disabled");
+        // GCM_INTERACTIVE=never does the same for Git Credential Manager, which can otherwise pop
+        // a GUI prompt that nobody is there to answer.
+        process.StartInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        process.StartInfo.Environment["GCM_INTERACTIVE"] = "never";
         // Belt-and-braces: also tell git explicitly to treat commit/log text as UTF-8, in case a
         // repo-level i18n.* config otherwise changes how git itself encodes that text before it
         // ever reaches the pipe.
@@ -1361,6 +1376,33 @@ public class GitImpl : IGitOperations
 
         try
         {
+            // Refuse before anything is staged or rewritten. Force-push is not exposed, so amending
+            // a commit the upstream already has would leave local and remote diverged with no way
+            // to reconcile them through this tool. No upstream configured means nothing is known
+            // to be published, so the amend is allowed.
+            if (amend)
+            {
+                var upstreamRaw = await RunGitAsync(gitRoot,
+                    ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], cancellationToken);
+                if (upstreamRaw.ExitCode == 0 && !string.IsNullOrWhiteSpace(upstreamRaw.Stdout))
+                {
+                    var upstreamName = upstreamRaw.Stdout.Trim();
+                    // Exit 0 = HEAD is an ancestor of (or equal to) the upstream tip = already pushed.
+                    var containedRaw = await RunGitAsync(gitRoot,
+                        ["merge-base", "--is-ancestor", "HEAD", "@{upstream}"], cancellationToken);
+                    if (containedRaw.ExitCode == 0)
+                    {
+                        return new GitCommitResult
+                        {
+                            Success = false,
+                            Error = $"HEAD is already contained in its upstream '{upstreamName}', so amending it would rewrite published history, " +
+                                    "and this tool does not expose force-push (the branch would diverge from the remote). " +
+                                    "Make a new commit instead, or use operation=revert to undo the pushed commit. Nothing was amended."
+                        };
+                    }
+                }
+            }
+
             // For scope=listed, classify paths first to determine which ones need pre-staging
             // (untracked only) vs those already in the index.
             bool stagedUntrackedFiles = false;
@@ -1597,7 +1639,18 @@ public class GitImpl : IGitOperations
     public async Task<GitStatusResult> ResetAsync(
         string gitRoot, string? refName, GitResetMode mode, CancellationToken cancellationToken)
     {
-        var target = string.IsNullOrWhiteSpace(refName) ? "HEAD~1" : refName;
+        // No default ref: a silent HEAD~1 meant a bare reset call quietly undid the last commit.
+        if (string.IsNullOrWhiteSpace(refName))
+        {
+            return new GitStatusResult
+            {
+                Success = false,
+                Error = "reset needs an explicit ref, e.g. ref: \"HEAD~1\" to undo the last commit (working tree kept). " +
+                        "To unstage without moving HEAD use operation=unstage. Nothing was reset."
+            };
+        }
+
+        var target = refName;
 
         try
         {
@@ -1702,20 +1755,54 @@ public class GitImpl : IGitOperations
             };
         }
 
+        // startPoint only means something when a branch is being created. Silently dropping it
+        // would leave the caller believing the branch was based on it.
+        if (!createBranch && !string.IsNullOrWhiteSpace(startPoint))
+        {
+            return new GitCheckoutResult
+            {
+                Success = false,
+                Branch = branchName,
+                Error = $"startPoint '{startPoint}' was supplied without createBranch=true, so it would be ignored. " +
+                        "Pass createBranch=true to create the branch from it, or omit startPoint to switch to an existing branch. Nothing was checked out."
+            };
+        }
+
         try
         {
-            List<string> args = ["checkout"];
+            // createBranch on a branch that already exists is a plain checkout (idempotent for
+            // retries); only a genuinely missing branch is created with -b. CreatedNewBranch
+            // reports which of the two actually happened.
+            var createNew = false;
+            string? note = null;
             if (createBranch)
-                args.Add("-b");
-            args.Add(branchName);
-            if (createBranch && !string.IsNullOrWhiteSpace(startPoint))
-                args.Add(startPoint);
+            {
+                var existsRaw = await RunGitAsync(gitRoot,
+                    ["rev-parse", "--verify", "--quiet", $"refs/heads/{branchName}"], cancellationToken);
+                if (existsRaw.ExitCode == 0)
+                {
+                    note = $"Branch '{branchName}' already existed, so it was checked out as-is rather than created" +
+                           (string.IsNullOrWhiteSpace(startPoint) ? "." : $"; startPoint '{startPoint}' was ignored.");
+                }
+                else
+                {
+                    createNew = true;
+                }
+            }
+
+            // Trailing "--" on the plain form: a branch that shares its name with a file or
+            // directory is otherwise ambiguous, and git refuses ("ambiguous argument").
+            List<string> args = createNew
+                ? string.IsNullOrWhiteSpace(startPoint)
+                    ? ["checkout", "-b", branchName]
+                    : ["checkout", "-b", branchName, startPoint]
+                : ["checkout", branchName, "--"];
 
             var checkoutRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
             if (checkoutRaw.ExitCode != 0)
                 return new GitCheckoutResult { Success = false, Branch = branchName, Error = CleanGitStderr(checkoutRaw.Stderr) };
 
-            return new GitCheckoutResult { Success = true, Branch = branchName, CreatedNewBranch = createBranch };
+            return new GitCheckoutResult { Success = true, Branch = branchName, CreatedNewBranch = createNew, Note = note };
         }
         catch (Exception ex)
         {
@@ -1788,7 +1875,10 @@ public class GitImpl : IGitOperations
     {
         try
         {
-            var args = rebase ? new List<string> { "pull", "--rebase", remoteName } : new List<string> { "pull", remoteName };
+            // Always state the strategy: with neither --rebase nor --no-rebase, git 2.27+ refuses a
+            // pull of divergent branches ("Need to specify how to reconcile divergent branches")
+            // unless pull.rebase/pull.ff is configured, which the caller has no way to see or fix.
+            var args = new List<string> { "pull", rebase ? "--rebase" : "--no-rebase", remoteName };
             var pullRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
             var detail = string.Join("\n", new[] { pullRaw.Stdout.Trim(), CleanGitStderr(pullRaw.Stderr) }.Where(s => s.Length > 0));
             if (pullRaw.ExitCode != 0)
