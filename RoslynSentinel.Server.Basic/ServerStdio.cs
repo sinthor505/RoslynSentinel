@@ -36,6 +36,7 @@ public class ServerStdio
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
         ReplaceSnippetOptions.Configure(args);
         OrientationBreakerOptions.Configure(args);
+        ToolCallEchoOptions.Configure(args);
 
         if (ServerStartupHelpers.HandleListTools(
                 args,

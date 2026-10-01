@@ -29,6 +29,7 @@ public class ServerHttp
         LlmOptions.Configure(args);
         ReplaceSnippetOptions.Configure(args);
         OrientationBreakerOptions.Configure(args);
+        ToolCallEchoOptions.Configure(args);
 
         if (ServerStartupHelpers.HandleListTools(
                 args,

@@ -111,14 +111,6 @@ public record SentinelCallToolResult<TSuccess, TError>
     /// </summary>
     public ServerInfo ServerInfo { get; init; } = new();
 
-    /// <summary>
-    /// Unique identifier for this specific response, generated fresh per instance. Not settable ->
-    /// exists solely so a human or agent reviewing a transcript/log can locate the exact tool
-    /// response being discussed (e.g. "the call with ResponseId abc123..."), which a duplicate
-    /// tool name + similar arguments across many turns cannot do on its own.
-    /// </summary>
-    public string ResponseId { get; init; } = Guid.NewGuid().ToString();
-
     /// <summary>True when the operation completed without error.</summary>
     public bool IsSuccess
     {

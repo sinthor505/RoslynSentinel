@@ -109,9 +109,12 @@ public class McpTasksHarnessTests
     [Test]
     public async Task TaskCapableClient_PollingToCompletion_MatchesSynchronousResult()
     {
+        // Same arguments as the polled call below (including delaySeconds): the tool-call echo
+        // stamps the arguments as sent into each response, so differing arguments would
+        // legitimately make the two responses differ.
         var syncResult = await _client.CallToolAsync(
             "Features",
-            new Dictionary<string, object?> { ["reason"] = "test message", ["action"] = "list" }!,
+            new Dictionary<string, object?> { ["reason"] = "test message", ["action"] = "list", ["delaySeconds"] = 3 }!,
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         var polledResult = await _client.CallToolWithPollingAsync(

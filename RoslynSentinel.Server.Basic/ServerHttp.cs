@@ -23,6 +23,7 @@ public static class ServerHttp
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
         ReplaceSnippetOptions.Configure(args);
         OrientationBreakerOptions.Configure(args);
+        ToolCallEchoOptions.Configure(args);
 
         if (ServerStartupHelpers.HandleListTools(
                 args,

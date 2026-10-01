@@ -42,6 +42,14 @@ public class ToolArgumentCaseNormalizationTests
     // successful lookup is unambiguous proof the renamed argument actually reached the tool.
     private const string TargetMethodName = "Target";
 
+    /// <summary>
+    /// A rejection is plain text wrapped by the tool-call echo filter as {toolCall, message}, and the
+    /// wrapper's JSON escapes apostrophes ('), so assertions on the rejection wording read the
+    /// <c>message</c> field instead of searching the raw response text.
+    /// </summary>
+    private static string RejectionMessage(string responseText) =>
+        System.Text.Json.Nodes.JsonNode.Parse(responseText)?["message"]?.GetValue<string>() ?? responseText;
+
     [SetUp]
     public async Task SetUp()
     {
@@ -159,7 +167,7 @@ public class ToolArgumentCaseNormalizationTests
         var text = string.Join(" ", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
         Assert.That(result.IsError, Is.True,
             $"A duplicate case-only variant alongside the canonical key must be rejected, not silently merged. Got: {text}");
-        Assert.That(text, Does.Contain("'filepath'"),
+        Assert.That(RejectionMessage(text), Does.Contain("'filepath'"),
             $"The rejection must name 'filepath' as the unrecognised parameter. Got: {text}");
     }
 
@@ -186,7 +194,7 @@ public class ToolArgumentCaseNormalizationTests
         var text = string.Join(" ", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
         Assert.That(result.IsError, Is.True,
             $"A case-only variant of two colliding declared parameters must be rejected, never silently normalized to either one. Got: {text}");
-        Assert.That(text, Does.Contain("'ID'"),
+        Assert.That(RejectionMessage(text), Does.Contain("'ID'"),
             $"The rejection must name 'ID' as the unrecognised parameter. Got: {text}");
     }
 

@@ -261,6 +261,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         // CallToolResult so the agent displays the helpful message rather than a generic error.
         mcpBuilder.WithRequestFilters(filters =>
         {
+            AddToolCallEchoFilter(filters);
             AddArgumentValidationFilter(filters);
 
             filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
@@ -694,6 +695,63 @@ public static class RoslynSentinelServiceExtensionsBasic
                     TaskContinuationOptions.OnlyOnFaulted);
         }
     }
+
+    /// <summary>
+    /// Registers the tool-call echo filter: stamps a <c>toolCall</c> property (call id, tool name,
+    /// truncated arguments as sent) onto the first text block of every response, so a transcript,
+    /// log line or offloaded result can be tied back to the call that produced it. See
+    /// <see cref="ToolCallEcho"/> and docs/current/plans/plan_tool_call_echo.md.
+    /// <para>
+    /// Must be registered <em>first</em>: the first filter added is the outermost, so it post-processes
+    /// last and sees the final content of every path (argument-validation rejection, breaker refusals,
+    /// the exception catch-all, and the large-result offload stub), none of which carry a tool-level
+    /// identifier of their own. The arguments are snapshotted before <c>next</c> runs because the
+    /// validation filter repairs parameter-name case in place, and the echo must show what the caller
+    /// actually sent.
+    /// </para>
+    /// </summary>
+    private static void AddToolCallEchoFilter(IMcpRequestFilterBuilder filters)
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                if (!RoslynSentinel.Common.ToolCallEchoOptions.Enabled)
+                {
+                    return await next(context, cancellationToken);
+                }
+
+                System.Text.Json.Nodes.JsonObject? echo = null;
+                try
+                {
+                    echo = ToolCallEcho.CreateEcho(
+                        ToolCallEcho.NewToolCallId(), context.Params?.Name, context.Params?.Arguments);
+                }
+                catch (Exception ex)
+                {
+                    // A diagnostic aid must never break a call.
+                    Debug.WriteLine($"Tool call echo snapshot failed: {ex}");
+                }
+
+                var result = await next(context, cancellationToken);
+
+                if (echo is not null)
+                {
+                    try
+                    {
+                        ToolCallEcho.Stamp(result, echo);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Tool call echo stamp failed: {ex}");
+                    }
+                }
+
+                return result;
+            }));
+    }
+
     /// <summary>
     /// Registers the argument pre-flight filter: first silently repairs a case-only parameter
     /// name mismatch (e.g. "filepath" -> "filePath"), then rejects a call whose arguments still
@@ -709,8 +767,8 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// <see cref="ToolArgumentValidator"/> for the full analysis.
     /// </para>
     /// <para>
-    /// Registered before every other call-tool filter so no other filter does work on a call that
-    /// cannot succeed.
+    /// Registered before every other call-tool filter, except the tool-call echo filter (see
+    /// <see cref="AddToolCallEchoFilter"/>), so no other filter does work on a call that cannot succeed.
     /// </para>
     /// </summary>
     private static void AddArgumentValidationFilter(IMcpRequestFilterBuilder filters)
