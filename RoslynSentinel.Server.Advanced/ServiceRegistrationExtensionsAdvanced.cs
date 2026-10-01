@@ -231,6 +231,11 @@ public static class RoslynSentinelServiceExtensionsAdvanced
             services.AddSingleton<SubAgentEvalTools>();
             mcpBuilder.WithSentinelTools<SubAgentEvalTools>();
         }
+        if (activeToolClasses.Contains("SubAgentTools"))
+        {
+            services.AddSingleton<SubAgentTools>();
+            mcpBuilder.WithSentinelTools<SubAgentTools>();
+        }
 
         return mcpBuilder;
     }

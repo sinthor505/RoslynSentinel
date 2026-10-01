@@ -66,6 +66,7 @@ public static class ToolClassRegistry
             // Deliberately absent from "Claude": a child server must never expose them (see
             // SubAgentChildServerLauncher.ExcludedToolClasses).
             ["SubAgentEval"] = ["SubAgentEvalTools"],
+            ["SubAgent"] = ["SubAgentTools"],
             ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
         };
 
