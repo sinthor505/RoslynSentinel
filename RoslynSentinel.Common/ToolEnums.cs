@@ -21,7 +21,8 @@ public enum GitOperation
     checkout,
     push,
     fetch,
-    pull
+    pull,
+    abort
 }
 
 /// <summary>

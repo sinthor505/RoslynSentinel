@@ -1346,6 +1346,172 @@ public class GitToolsSmokeTests
         Assert.That(RunGitCapture("log", "-1", "--format=%s").Trim(), Is.EqualTo("reworded unpushed"));
     }
 
+    // Phase 5 tests: abort, InProgress, conflict advice, revert of a merge commit
+
+    [Test]
+    public async Task Git_Abort_ConflictedMerge_RestoresCleanTreeAsync()
+    {
+        CreateMergeConflict("shared.txt", existsInBase: true);
+        var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
+
+        var result = await _gitTools.Git(reason: "abort conflicted merge", GitOperation.abort);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var status = (GitStatusResult)result.SuccessData!;
+        Assert.That(status.AbortedOperation, Is.EqualTo("merge"));
+        Assert.That(status.InProgress, Is.Null, "nothing may remain in progress after the abort");
+        Assert.That(status.IsClean, Is.True);
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore), "abort must not move HEAD");
+        Assert.That(File.ReadAllText(Path.Combine(_repoDir, "shared.txt")), Does.Contain("main side").And.Not.Contain("<<<<<<<"));
+    }
+
+    [Test]
+    public async Task Git_Abort_NothingInProgress_IsRefusedAndChangesNothingAsync()
+    {
+        var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
+
+        var result = await _gitTools.Git(reason: "abort with nothing to abort", GitOperation.abort);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData?.Message, Does.Contain("Nothing to abort"));
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore));
+    }
+
+    [Test]
+    public async Task Git_Status_InProgress_IsNullWhenIdleAndMergeDuringConflictedMergeAsync()
+    {
+        var idle = await _gitTools.Git(reason: "status when idle", GitOperation.status);
+        Assert.That(((GitStatusResult)idle.SuccessData!).InProgress, Is.Null);
+
+        CreateMergeConflict("shared.txt", existsInBase: true);
+        var merging = await _gitTools.Git(reason: "status during merge", GitOperation.status);
+
+        Assert.That(merging.IsSuccess, Is.True, merging.ErrorData?.Message);
+        Assert.That(((GitStatusResult)merging.SuccessData!).InProgress, Is.EqualTo("merge"));
+    }
+
+    // A second clone pushes a conflicting edit of README.md to the remote, then the test repo commits
+    // its own different edit of README.md, so a pull must conflict. Returns the local HEAD hash.
+    private string DivergeConflictingFromRemote(string branch)
+    {
+        RunGit(Path.GetTempPath(), "clone", RemoteDir, CloneDir);
+        RunGit(CloneDir, "config", "user.email", "other@example.com");
+        RunGit(CloneDir, "config", "user.name", "Other");
+        File.WriteAllText(Path.Combine(CloneDir, "README.md"), "remote readme\n");
+        RunGit(CloneDir, "commit", "-am", "remote readme edit");
+        RunGit(CloneDir, "push", "origin", branch);
+
+        WriteFile("README.md", "local readme\n");
+        RunGit(_repoDir, "commit", "-am", "local readme edit");
+        return RunGitCapture("rev-parse", "HEAD").Trim();
+    }
+
+    [TestCase(false, "merge")]
+    [TestCase(true, "rebase")]
+    public async Task Git_Pull_Conflict_MentionsAbortAndStateThenAbortRestoresLocalHeadAsync(bool rebase, string expectedState)
+    {
+        var branch = AddBareRemoteAndPush();
+        var localHead = DivergeConflictingFromRemote(branch);
+
+        var pull = await _gitTools.Git(reason: "conflicting pull", GitOperation.pull, rebase: rebase);
+
+        Assert.That(pull.IsSuccess, Is.False, "fixture must produce a conflict");
+        Assert.That(pull.ErrorData?.Message, Does.Contain("mid-" + expectedState).And.Contain("operation: abort"));
+        var during = (GitStatusResult)(await _gitTools.Git(reason: "status mid-pull", GitOperation.status)).SuccessData!;
+        Assert.That(during.InProgress, Is.EqualTo(expectedState));
+
+        var abort = await _gitTools.Git(reason: "abort conflicting pull", GitOperation.abort);
+
+        Assert.That(abort.IsSuccess, Is.True, abort.ErrorData?.Message);
+        Assert.That(((GitStatusResult)abort.SuccessData!).IsClean, Is.True);
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(localHead), "abort must restore the pre-pull HEAD");
+    }
+
+    [Test]
+    public async Task Git_Revert_Conflict_MentionsAbortThenAbortRestoresCleanTreeAsync()
+    {
+        foreach (var version in new[] { "v1", "v2", "v3" })
+        {
+            WriteFile("README.md", version + "\n");
+            RunGit(_repoDir, "commit", "-am", "readme " + version);
+        }
+
+        var v2 = RunGitCapture("rev-parse", "HEAD~1").Trim();
+        var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
+
+        var revert = await _gitTools.Git(reason: "conflicting revert", GitOperation.revert, commitHash: v2);
+
+        Assert.That(revert.IsSuccess, Is.False, "reverting v2 under v3 must conflict");
+        Assert.That(revert.ErrorData?.Message, Does.Contain("mid-revert").And.Contain("operation: abort"));
+        var abort = await _gitTools.Git(reason: "abort conflicting revert", GitOperation.abort);
+
+        Assert.That(abort.IsSuccess, Is.True, abort.ErrorData?.Message);
+        var status = (GitStatusResult)abort.SuccessData!;
+        Assert.That(status.AbortedOperation, Is.EqualTo("revert"));
+        Assert.That(status.IsClean, Is.True);
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore));
+        Assert.That(File.ReadAllText(Path.Combine(_repoDir, "README.md")), Does.Contain("v3"));
+    }
+
+    // Creates feature (adds feature.txt) and main (adds main.txt) branches and merges feature into main
+    // with --no-ff. Returns the merge commit hash.
+    private string CreateMergeCommit()
+    {
+        var baseBranch = RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim();
+        RunGit(_repoDir, "checkout", "-b", "feature");
+        WriteFile("feature.txt", "feature\n");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "feature work");
+        RunGit(_repoDir, "checkout", baseBranch);
+        WriteFile("main.txt", "main\n");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "main work");
+        RunGit(_repoDir, "merge", "--no-ff", "-m", "merge feature", "feature");
+        return RunGitCapture("rev-parse", "HEAD").Trim();
+    }
+
+    [Test]
+    public async Task Git_Revert_MergeCommit_WithoutMainline_IsRefusedNamingMainlineAndChangesNothingAsync()
+    {
+        var mergeHash = CreateMergeCommit();
+
+        var result = await _gitTools.Git(reason: "revert merge without mainline", GitOperation.revert, commitHash: mergeHash);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData?.Message, Does.Contain("mainline").And.Contain("merge commit"));
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(mergeHash), "nothing may be reverted");
+        Assert.That(RunGitCapture("status", "--porcelain"), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Revert_MergeCommit_WithMainline1_RevertsTheMergedInBranchAsync()
+    {
+        var mergeHash = CreateMergeCommit();
+
+        var result = await _gitTools.Git(reason: "revert merge with mainline", GitOperation.revert, commitHash: mergeHash, mainline: 1);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.Not.EqualTo(mergeHash), "a revert commit must be created");
+        Assert.That(File.Exists(Path.Combine(_repoDir, "feature.txt")), Is.False, "the merged-in branch's change must be undone");
+        Assert.That(File.Exists(Path.Combine(_repoDir, "main.txt")), Is.True, "the mainline's own change must stay");
+    }
+
+    [Test]
+    public async Task Git_Revert_MainlineMisuse_IsRefusedWithNamedReasonAsync()
+    {
+        var mergeHash = CreateMergeCommit();
+        var plain = RunGitCapture("rev-parse", "HEAD^2").Trim();
+
+        var onPlainCommit = await _gitTools.Git(reason: "mainline on plain commit", GitOperation.revert, commitHash: plain, mainline: 1);
+        var outOfRange = await _gitTools.Git(reason: "mainline out of range", GitOperation.revert, commitHash: mergeHash, mainline: 3);
+        var onOtherOperation = await _gitTools.Git(reason: "mainline on status", GitOperation.status, mainline: 1);
+
+        Assert.That(onPlainCommit.ErrorData?.Message, Does.Contain("not a merge commit"));
+        Assert.That(outOfRange.ErrorData?.Message, Does.Contain("out of range"));
+        Assert.That(onOtherOperation.ErrorData?.Message, Does.Contain("only supported for revert"));
+        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(mergeHash));
+    }
+
     // A local HTTP endpoint that answers every request with 401 + Basic challenge forces git to ask for
     // credentials. With GIT_TERMINAL_PROMPT=0 set by RunGitAsync, git must fail fast with
     // "terminal prompts disabled" instead of blocking on a prompt nobody can answer.

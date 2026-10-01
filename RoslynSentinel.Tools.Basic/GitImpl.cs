@@ -77,6 +77,20 @@ public record GitStatusResult : GitResult
     {
         get; set;
     }
+
+    /// <summary>Which multi-step operation the repository is in the middle of: "merge", "rebase",
+    /// "revert", "cherry-pick" or "am". Null when none is in progress. Set by status; when set,
+    /// Git(operation: abort) backs out of it.</summary>
+    public string? InProgress
+    {
+        get; set;
+    }
+
+    /// <summary>Set only by operation=abort: which in-progress operation was aborted.</summary>
+    public string? AbortedOperation
+    {
+        get; set;
+    }
 }
 
 public record GitCommitEntry
@@ -543,6 +557,62 @@ public class GitImpl : IGitOperations
     private static bool IsConflictPair(char x, char y) =>
         x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D');
 
+    /// <summary>
+    /// Detects a multi-step operation left half-finished by a conflict, from the repository's own
+    /// state files: "rebase" (rebase-merge/ or rebase-apply/), "am" (rebase-apply/applying),
+    /// "cherry-pick" (CHERRY_PICK_HEAD), "revert" (REVERT_HEAD), "merge" (MERGE_HEAD). Returns null
+    /// when nothing is in progress. Rebase is checked first because a conflicted rebase also writes
+    /// CHERRY_PICK_HEAD. The git dir comes from rev-parse (not gitRoot + ".git") so linked worktrees,
+    /// where .git is a file and the state files live in the per-worktree git dir, resolve correctly.
+    /// </summary>
+    private async Task<string?> DetectInProgressAsync(string gitRoot, CancellationToken cancellationToken)
+    {
+        var dirRaw = await RunGitAsync(gitRoot, ["rev-parse", "--absolute-git-dir"], cancellationToken);
+        if (dirRaw.ExitCode != 0)
+            return null;
+
+        var gitDir = dirRaw.Stdout.Trim();
+        if (gitDir.Length == 0 || !Directory.Exists(gitDir))
+            return null;
+
+        if (Directory.Exists(Path.Combine(gitDir, "rebase-merge")))
+            return "rebase";
+        if (Directory.Exists(Path.Combine(gitDir, "rebase-apply")))
+            return File.Exists(Path.Combine(gitDir, "rebase-apply", "applying")) ? "am" : "rebase";
+        if (File.Exists(Path.Combine(gitDir, "CHERRY_PICK_HEAD")))
+            return "cherry-pick";
+        if (File.Exists(Path.Combine(gitDir, "REVERT_HEAD")))
+            return "revert";
+        if (File.Exists(Path.Combine(gitDir, "MERGE_HEAD")))
+            return "merge";
+        return null;
+    }
+
+    /// <summary>
+    /// Text to append to a failed pull/revert/commit when the failure left the repository
+    /// mid-operation (a conflict): names the state and the way out. Empty when nothing is in
+    /// progress, and on any detection failure - it is advice, never a reason to mask the real error.
+    /// </summary>
+    private async Task<string> InProgressAdviceAsync(string gitRoot, CancellationToken cancellationToken)
+    {
+        string? op;
+        try
+        {
+            op = await DetectInProgressAsync(gitRoot, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return "";
+        }
+
+        return op switch
+        {
+            null => "",
+            "rebase" or "am" => $" Repository is mid-{op}. This tool cannot continue it; call Git(operation: abort) to back out (the branch returns to its pre-{op} state), or finish it in the shell.",
+            _ => $" Repository is mid-{op}. Resolve the conflicts and commit, or call Git(operation: abort) to back out.",
+        };
+    }
+
     public async Task<GitStatusResult> StatusAsync(string gitRoot, int maxEntries, CancellationToken cancellationToken)
     {
         if (maxEntries < 1 || maxEntries > MaxStatusMaxEntries)
@@ -630,6 +700,7 @@ public class GitImpl : IGitOperations
 
             bool isClean = staged.Count == 0 && unstaged.Count == 0 && untracked.Count == 0;
             int total = staged.Count + unstaged.Count + untracked.Count;
+            var inProgress = await DetectInProgressAsync(gitRoot, cancellationToken);
             var sampleSize = Math.Min(10, maxEntries);
 
             if (total > maxEntries)
@@ -640,6 +711,7 @@ public class GitImpl : IGitOperations
                     Branch = branch,
                     IsClean = isClean,
                     IsTruncated = true,
+                    InProgress = inProgress,
                     TotalStagedCount = staged.Count,
                     TotalUnstagedCount = unstaged.Count,
                     TotalUntrackedCount = untracked.Count,
@@ -656,6 +728,7 @@ public class GitImpl : IGitOperations
                 Success = true,
                 Branch = branch,
                 IsClean = isClean,
+                InProgress = inProgress,
                 Staged = staged,
                 Unstaged = unstaged,
                 Untracked = untracked,
@@ -1543,7 +1616,7 @@ public class GitImpl : IGitOperations
                     failureNote = $" Staging already ran; the index now holds {stagedCount} staged paths. Call Git(operation: unstage) to undo.";
                 }
 
-                return new GitCommitResult { Success = false, Error = $"git commit failed: {errorText}{failureNote}" };
+                return new GitCommitResult { Success = false, Error = $"git commit failed: {errorText}{failureNote}{await InProgressAdviceAsync(gitRoot, cancellationToken)}" };
             }
 
             var hashRaw = await RunGitAsync(gitRoot, new[] { "rev-parse", "HEAD" }, cancellationToken);
@@ -1590,23 +1663,86 @@ public class GitImpl : IGitOperations
         }
     }
 
+    /// <summary>
+    /// Backs out of whichever multi-step operation a conflict left half-finished (merge, rebase,
+    /// cherry-pick, revert or am) by running its own <c>--abort</c>, which restores the pre-operation
+    /// state. Nothing in progress is an error, not a silent success, so a caller never believes a
+    /// back-out happened when it did not. Returns the status after the abort.
+    /// </summary>
+    public async Task<GitStatusResult> AbortAsync(string gitRoot, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var op = await DetectInProgressAsync(gitRoot, cancellationToken);
+            if (op is null)
+            {
+                return new GitStatusResult
+                {
+                    Success = false,
+                    Error = "Nothing to abort: no merge, rebase, cherry-pick, revert or am is in progress. Call status to see the current state. Nothing was changed."
+                };
+            }
+
+            var abortRaw = await RunGitAsync(gitRoot, [op, "--abort"], cancellationToken);
+            if (abortRaw.ExitCode != 0)
+            {
+                var detail = string.Join("\n", new[] { abortRaw.Stdout.Trim(), CleanGitStderr(abortRaw.Stderr) }.Where(s => s.Length > 0));
+                return new GitStatusResult { Success = false, Error = $"git {op} --abort failed: {detail} The repository is still mid-{op}." };
+            }
+
+            var status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
+            status.AbortedOperation = op;
+            return status;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Git abort failed");
+            return new GitStatusResult { Success = false, Error = $"Git abort failed: {ex.Message}" };
+        }
+    }
+
     public async Task<GitRevertResult> RevertAsync(
-        string gitRoot, string? commitHash, bool noCommit, CancellationToken cancellationToken)
+        string gitRoot, string? commitHash, bool noCommit, int? mainline, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(commitHash))
             return new GitRevertResult { Success = false, Error = "commitHash is required for operation=revert." };
 
+        if (mainline is < 1)
+            return new GitRevertResult { Success = false, Error = $"mainline must be 1 or greater (got {mainline}); 1 is the parent that was merged into. Nothing was reverted." };
+
         try
         {
+            // Count the commit's parents up front so a merge commit gets an error that names the
+            // `mainline` parameter, rather than git's "commit X is a merge but no -m option was given".
+            var parentsRaw = await RunGitAsync(gitRoot, ["rev-list", "--parents", "-n", "1", commitHash, "--"], cancellationToken);
+            if (parentsRaw.ExitCode != 0)
+                return new GitRevertResult { Success = false, CommitHash = commitHash, Error = $"Cannot resolve commitHash '{commitHash}': {CleanGitStderr(parentsRaw.Stderr)} Nothing was reverted." };
+
+            var parentCount = parentsRaw.Stdout.Split([' ', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Length - 1;
+            if (parentCount > 1 && mainline is null)
+                return new GitRevertResult { Success = false, CommitHash = commitHash, Error = $"Commit '{commitHash}' is a merge commit with {parentCount} parents. Pass mainline: 1 (the branch merged into; almost always right) to {parentCount} to say which parent to keep. Nothing was reverted." };
+            if (mainline is { } requestedMainline)
+            {
+                if (parentCount <= 1)
+                    return new GitRevertResult { Success = false, CommitHash = commitHash, Error = $"mainline was supplied but commit '{commitHash}' is not a merge commit. Omit mainline. Nothing was reverted." };
+                if (requestedMainline > parentCount)
+                    return new GitRevertResult { Success = false, CommitHash = commitHash, Error = $"mainline {requestedMainline} is out of range: commit '{commitHash}' has {parentCount} parents. Nothing was reverted." };
+            }
+
             var args = new List<string> { "revert", "--no-edit" };
             if (noCommit)
                 args.Add("--no-commit");
+            if (mainline is { } parentNumber)
+            {
+                args.Add("-m");
+                args.Add(parentNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
             args.Add(commitHash);
 
             var revertRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (revertRaw.ExitCode != 0)
-                return new GitRevertResult { Success = false, CommitHash = commitHash, Error = CleanGitStderr(revertRaw.Stderr) };
+                return new GitRevertResult { Success = false, CommitHash = commitHash, Error = CleanGitStderr(revertRaw.Stderr) + await InProgressAdviceAsync(gitRoot, cancellationToken) };
 
             string newHash = "";
             if (!noCommit)
@@ -1882,7 +2018,7 @@ public class GitImpl : IGitOperations
             var pullRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
             var detail = string.Join("\n", new[] { pullRaw.Stdout.Trim(), CleanGitStderr(pullRaw.Stderr) }.Where(s => s.Length > 0));
             if (pullRaw.ExitCode != 0)
-                return new GitRemoteResult { Success = false, Operation = "pull", Error = detail.Length > 0 ? detail : $"git pull exited with code {pullRaw.ExitCode}" };
+                return new GitRemoteResult { Success = false, Operation = "pull", Error = (detail.Length > 0 ? detail : $"git pull exited with code {pullRaw.ExitCode}") + await InProgressAdviceAsync(gitRoot, cancellationToken) };
 
             return new GitRemoteResult { Success = true, Operation = "pull", Detail = detail };
         }

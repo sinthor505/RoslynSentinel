@@ -23,10 +23,10 @@ public class GitTools
 
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool: status, log, diff, show, staging, commit, revert, reset, branch, checkout, push, fetch, pull.")]
+    [Description("Unified git tool: status, log, diff, show, staging, commit, revert, reset, branch, checkout, push, fetch, pull, abort. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state.")]
     public async Task<SentinelCallToolResult<object>> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("Which git operation to run.")]
+        [Description("Which git operation to run. abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters; refused when nothing is in progress).")]
         GitOperation operation,
         [Description("log: number of commits to return (max 100).")]
         int count = 20,
@@ -76,6 +76,8 @@ public class GitTools
         bool nameOnly = false,
         [Description("diff/show: true returns --stat text (per-file change counts and a summary) instead of the patch. Mutually exclusive with nameOnly.")]
         bool stat = false,
+        [Description("revert: which parent to keep when reverting a MERGE commit (git revert -m N): 1 is the branch that was merged into (almost always right), 2 the branch that was merged in. Required when commitHash is a merge commit (refused without it); refused for a non-merge commit. Only valid for operation=revert.")]
+        int? mainline = null,
         [Description("log/show/diff/reset: the git ref to operate on (a branch, tag, commit hash, HEAD~1, ...). log: start ref. show: the commit to show. diff: what to diff the working tree against (or a range). reset: REQUIRED, the ref to move HEAD to (e.g. \"HEAD~1\" to undo the last commit). Aliases target (diff/show), commitHash (show) and branchName (log/reset) stay accepted; supplying ref together with an alias that has a different value is refused. Not supported for other operations.")]
         string? @ref = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -123,6 +125,11 @@ public class GitTools
             return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"ref is only supported for log/show/diff/reset - operation '{operation}' takes its ref from another parameter (revert: commitHash; branch/checkout: branchName, startPoint). Omit ref.", Detail: null) };
         }
 
+        if (mainline is not null && operation != GitOperation.revert)
+        {
+            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"mainline is only supported for revert - operation '{operation}' does not use it. Omit mainline.", Detail: null) };
+        }
+
         // Gap A/B: when files are supplied and scope is null, infer scope=listed for stage/add/commit.
         // However, explicit scope combined with files for all/tracked is an error.
         GitStageScope? effectiveScope = scope;
@@ -148,7 +155,8 @@ public class GitTools
             GitOperation.stage or GitOperation.add => await _gitImpl.StageAsync(gitRoot, effectiveScope ?? GitStageScope.tracked, resolvedPaths, cancellationToken),
             GitOperation.unstage => await _gitImpl.UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
             GitOperation.commit => await _gitImpl.CommitAsync(gitRoot, message, effectiveScope, resolvedPaths, amend, cancellationToken),
-            GitOperation.revert => await _gitImpl.RevertAsync(gitRoot, commitHash, noCommit, cancellationToken),
+            GitOperation.revert => await _gitImpl.RevertAsync(gitRoot, commitHash, noCommit, mainline, cancellationToken),
+            GitOperation.abort => await _gitImpl.AbortAsync(gitRoot, cancellationToken),
             GitOperation.reset => await _gitImpl.ResetAsync(gitRoot, resolvedRef, mode ?? GitResetMode.mixed, cancellationToken),
             GitOperation.branch => await _gitImpl.BranchAsync(gitRoot, branchName, startPoint, deleteBranch, cancellationToken),
             GitOperation.checkout => await _gitImpl.CheckoutAsync(gitRoot, branchName, createBranch, startPoint, cancellationToken),
