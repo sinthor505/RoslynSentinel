@@ -49,6 +49,13 @@ try {
 
     $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\', '/')
 
+    # serverInfo.binaryPath is emitted relative to the loaded solution root (with / separators)
+    # when the binary is under it, absolute otherwise. It is only displayed below, never parsed,
+    # so resolve a relative one against this repo for a readable message.
+    if ($binaryPath -and -not [System.IO.Path]::IsPathRooted($binaryPath)) {
+        $binaryPath = Join-Path $repoRoot $binaryPath
+    }
+
     $newestSource = Get-ChildItem -LiteralPath $repoRoot -Recurse -Filter '*.cs' -ErrorAction SilentlyContinue |
         Where-Object { $_.FullName -notmatch '[\\/](bin|obj|Worktree|worktrees)[\\/]' } |
         Sort-Object LastWriteTimeUtc -Descending |

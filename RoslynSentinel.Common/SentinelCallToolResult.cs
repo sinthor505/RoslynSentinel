@@ -36,6 +36,50 @@ public static class ServerBuildInfo
         BinaryPath = assembly.Location;
         Pid = Environment.ProcessId;
     }
+
+    /// <summary>
+    /// Supplies the loaded solution's root directory (null when none is loaded) so the per-response
+    /// <c>serverInfo.binaryPath</c> can be emitted relative to it. Set by the workspace manager's
+    /// constructor: a server process has exactly one, so last-constructed-wins only matters to tests.
+    /// Lives here (a delegate) rather than a reference to the manager because this class is also read
+    /// by code that has no manager.
+    /// </summary>
+    public static Func<string?>? SolutionRootProvider { get; set; }
+
+    /// <summary>
+    /// The binary path as stamped on every response envelope: relative to the loaded solution root
+    /// when the binary sits under it (the usual dev setup, <c>bin-vscode/...</c>), absolute otherwise.
+    /// The absolute path stays available from <see cref="BinaryPath"/> and McpServerStatus.serverBinaryPath.
+    /// </summary>
+    public static string EnvelopeBinaryPath => ToEnvelopeBinaryPath(BinaryPath, SolutionRootProvider?.Invoke());
+
+    /// <summary>
+    /// Pure form of <see cref="EnvelopeBinaryPath"/>. Returns <paramref name="binaryPath"/> unchanged when
+    /// there is no solution root or the binary is outside it (a fixture or worktree solution is loaded);
+    /// never produces a <c>..</c> chain. The prefix match is case-insensitive because the loaded root
+    /// (as the caller typed it, e.g. <c>c:\...</c>) and <c>Assembly.Location</c> (<c>C:\...</c>) can differ in case.
+    /// </summary>
+    public static string ToEnvelopeBinaryPath(string binaryPath, string? solutionRoot)
+    {
+        if (string.IsNullOrEmpty(binaryPath) || string.IsNullOrWhiteSpace(solutionRoot))
+        {
+            return binaryPath;
+        }
+
+        try
+        {
+            var root = Path.GetFullPath(solutionRoot).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+            var full = Path.GetFullPath(binaryPath);
+            return full.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+                ? full[root.Length..].Replace('\\', '/')
+                : binaryPath;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // A diagnostic field must never fail a response: fall back to the absolute path.
+            return binaryPath;
+        }
+    }
 }
 
 // ── ErrorData codes ───────────────────────────────────────────────────────────────
@@ -384,7 +428,11 @@ public record ServerInfo
 {
     public string Version { get; init; } = ServerBuildInfo.Version;
     public DateTime BuildTimeUtc { get; init; } = ServerBuildInfo.BuildTimeUtc;
-    public string BinaryPath { get; init; } = ServerBuildInfo.BinaryPath;
+    /// <summary>
+    /// Relative to the loaded solution root (with / separators) when the binary is under it, else absolute;
+    /// see <see cref="ServerBuildInfo.EnvelopeBinaryPath"/>. McpServerStatus.serverBinaryPath is always absolute.
+    /// </summary>
+    public string BinaryPath { get; init; } = ServerBuildInfo.EnvelopeBinaryPath;
     public int Pid { get; init; } = ServerBuildInfo.Pid;
 }
 

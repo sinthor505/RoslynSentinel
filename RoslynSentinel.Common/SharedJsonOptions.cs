@@ -26,4 +26,22 @@ public static class SharedJsonOptions
             new JsonStringEnumConverter()
         }
     };
+
+    /// <summary>
+    /// Same relaxed escaping as <see cref="Default"/> but compact (no indentation), for code that
+    /// re-serializes a response body on the wire (the tool-call echo stamp, the raw large-result
+    /// offload pointer). Indentation there would only add whitespace tokens to every response, and a
+    /// bare <c>ToJsonString()</c>/<c>Serialize()</c> with no options re-introduces the HTML-safe
+    /// escaping of angle brackets and quotes that <see cref="Default"/> exists to prevent.
+    /// </summary>
+    public static readonly JsonSerializerOptions Compact = new JsonSerializerOptions
+    {
+        WriteIndented = false,
+        PropertyNameCaseInsensitive = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
+    };
 }

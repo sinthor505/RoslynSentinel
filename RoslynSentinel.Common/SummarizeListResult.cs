@@ -36,9 +36,11 @@ public record FileHitCount(string FilePath, int Count);
 public record ListSummary(int TotalCount, int FileCount, IReadOnlyList<FileHitCount> ByFile, int TruncatedFileCount)
 {
     /// <summary>
-    /// Renders a single human-readable line, e.g. "12 hits across 5 files: Foo.cs (4), Bar.cs (3),
-    /// Baz.cs (2) (+2 more files)". Meant for a tool's top-level StatusMessage so a caller sees the
-    /// shape of the result (1 big hit vs. many small ones) without opening the payload.
+    /// Renders a single human-readable line of counts only, e.g. "12 hits across 5 files.". Meant for a
+    /// tool's top-level StatusMessage so a caller sees the shape of the result (1 big hit vs. many small
+    /// ones) without opening the payload. The per-file paths are deliberately not repeated here: they
+    /// already travel in <see cref="ByFile"/> of the same envelope (listSummary.byFile), and repeating
+    /// them only doubled the file paths in every list response.
     /// </summary>
     public string ToSummaryMessage(string itemNoun = "hit")
     {
@@ -47,11 +49,9 @@ public record ListSummary(int TotalCount, int FileCount, IReadOnlyList<FileHitCo
             return $"0 {itemNoun}s.";
         }
 
-        var shown = string.Join(", ", ByFile.Select(f => $"{f.FilePath} ({f.Count})"));
-        var more = TruncatedFileCount > 0 ? $" (+{TruncatedFileCount} more file{(TruncatedFileCount == 1 ? "" : "s")})" : "";
         var itemPlural = itemNoun.EndsWith("ch", StringComparison.Ordinal) || itemNoun.EndsWith("sh", StringComparison.Ordinal) || itemNoun.EndsWith("s", StringComparison.Ordinal)
             ? itemNoun + "es"
             : itemNoun + "s";
-        return $"{TotalCount} {(TotalCount == 1 ? itemNoun : itemPlural)} across {FileCount} file{(FileCount == 1 ? "" : "s")}: {shown}{more}.";
+        return $"{TotalCount} {(TotalCount == 1 ? itemNoun : itemPlural)} across {FileCount} file{(FileCount == 1 ? "" : "s")}.";
     }
 }

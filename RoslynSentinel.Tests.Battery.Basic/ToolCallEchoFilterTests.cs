@@ -224,6 +224,37 @@ public class ToolCallEchoFilterTests
     }
 
     [Test]
+    public async Task OffloadedLargeResult_StubRelaysListSummary_AndStatusMessageHasNoFilePaths()
+    {
+        var (result, text) = await CallAsync("FindReferences", new Dictionary<string, object?>
+        {
+            ["reason"] = "test message",
+            ["symbolName"] = "EchoOffloadTarget",
+            ["kind"] = "callers",
+        });
+        Assert.That(result.IsError, Is.Not.True);
+
+        var stub = JsonNode.Parse(text)!.AsObject();
+        Assert.That(stub["offloaded"]!.GetValue<bool>(), Is.True, "Precondition: the response must have been offloaded.");
+
+        // The raw offload backstop must carry the per-file breakdown, since the statusMessage no
+        // longer repeats the file paths.
+        var listSummary = stub["listSummary"]?.AsObject();
+        Assert.That(listSummary, Is.Not.Null, "The stub must relay listSummary.");
+        Assert.That(listSummary!["fileCount"]!.GetValue<int>(), Is.GreaterThan(0));
+        var byFile = listSummary["byFile"]!.AsArray();
+        Assert.That(byFile, Is.Not.Empty);
+        Assert.That(byFile[0]!["filePath"]!.GetValue<string>(), Does.Contain("ToolCallEchoProbe.cs"));
+
+        var statusMessage = stub["statusMessage"]!.GetValue<string>();
+        Assert.That(statusMessage, Does.Match(@"^\d+ callers? across \d+ files?\.$"));
+        Assert.That(statusMessage, Does.Not.Contain("ToolCallEchoProbe.cs"));
+
+        // The pointer's own message embeds quotes around the resultId; it must not be HTML-escaped.
+        Assert.That(text, Does.Not.Contain("\\u00"));
+    }
+
+    [Test]
     public async Task PlainTextToolResponse_IsWrapped_WithOriginalTextAsMessage()
     {
         // The probe tool declares no "reason" parameter, so none is sent.
@@ -465,5 +496,60 @@ public class ToolCallEchoOptionsTests
         Environment.SetEnvironmentVariable(EnvVar, "false");
         ToolCallEchoOptions.Configure(["--echo-tool-args=true"]);
         Assert.That(ToolCallEchoOptions.Enabled, Is.True);
+    }
+}
+/// <summary>
+/// Unit coverage for <see cref="ToolCallEcho.Stamp"/>'s re-serialization. The default
+/// <c>JsonNode.ToJsonString()</c> encoder HTML-escapes angle brackets, quotes, apostrophes and
+/// ampersands into backslash-u00XX sequences, which is the transcription hazard
+/// <see cref="SharedJsonOptions"/> exists to prevent; the stamp must not re-introduce it.
+/// </summary>
+[TestFixture]
+public class ToolCallEchoStampTests
+{
+    // Body as the SDK's default serializer writes it: <, >, ', ", & and + all HTML-escaped.
+    private const string HtmlEscapedBody =
+        "{\"isSuccess\":true,\"successData\":{\"signature\":\"List\\u003C(int, string)\\u003E Run(string a)\"," +
+        "\"note\":\"it\\u0027s \\u0022quoted\\u0022 \\u0026 a\\u002Bb\"}}";
+
+    private static string StampedText(string text, string? echoedCode = null)
+    {
+        var arguments = echoedCode is null
+            ? null
+            : new Dictionary<string, JsonElement> { ["code"] = JsonDocument.Parse(JsonSerializer.Serialize(echoedCode)).RootElement.Clone() };
+        var result = new CallToolResult { Content = [new TextContentBlock { Text = text }] };
+        ToolCallEcho.Stamp(result, ToolCallEcho.CreateEcho("0123456789ab", "SomeTool", arguments));
+        return ((TextContentBlock)result.Content[0]).Text;
+    }
+
+    [Test]
+    public void Stamp_JsonObjectBody_KeepsGenericsAndPunctuationLiteral_IsValidJson_AndToolCallIsFirst()
+    {
+        var text = StampedText(HtmlEscapedBody, echoedCode: "List<int> x = 'a' & b;");
+
+        Assert.That(text, Does.Contain("List<(int, string)> Run(string a)"), "Generic syntax must stay literal.");
+        Assert.That(text, Does.Contain("it's"), "Apostrophes must stay literal.");
+        Assert.That(text, Does.Contain("& a+b"), "Ampersand and plus must stay literal.");
+        Assert.That(text, Does.Contain("List<int> x = 'a' & b;"), "The echoed arguments must stay literal too.");
+        Assert.That(text, Does.Not.Contain("\\u00"), "No HTML-safe \\u00XX escape may remain.");
+        Assert.That(text, Does.Contain("\\\"quoted\\\""), "A quote is written as the two-char JSON escape, not as \\u0022.");
+        Assert.That(text, Does.Not.Contain("\n"), "The stamped body must be compact (no indentation tokens).");
+
+        var body = JsonNode.Parse(text)!.AsObject();
+        Assert.That(body.First().Key, Is.EqualTo("toolCall"));
+        Assert.That(body["successData"]!["signature"]!.GetValue<string>(), Is.EqualTo("List<(int, string)> Run(string a)"));
+        Assert.That(body["successData"]!["note"]!.GetValue<string>(), Is.EqualTo("it's \"quoted\" & a+b"));
+    }
+
+    [Test]
+    public void Stamp_PlainTextBody_IsWrappedWithLiteralCharacters()
+    {
+        var text = StampedText("List<(int, string)> failed: it's 'bad' & wrong");
+
+        Assert.That(text, Does.Contain("List<(int, string)> failed: it's 'bad' & wrong"));
+        Assert.That(text, Does.Not.Contain("\\u00"));
+        var body = JsonNode.Parse(text)!.AsObject();
+        Assert.That(body.Select(p => p.Key), Is.EqualTo(new[] { "toolCall", "message" }));
+        Assert.That(body["message"]!.GetValue<string>(), Is.EqualTo("List<(int, string)> failed: it's 'bad' & wrong"));
     }
 }

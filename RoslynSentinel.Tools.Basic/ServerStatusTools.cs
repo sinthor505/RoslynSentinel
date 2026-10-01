@@ -46,6 +46,9 @@ public class ServerStatusTools
             StatusMessage = "McpServerStatus executed successfully.",
             SuccessData = new McpServerStatusResult(
                 ServerPid: Environment.ProcessId,
+                // Always the absolute path: the per-response serverInfo.binaryPath is root-relative
+                // when possible, and this is the ground truth for stale-binary checks.
+                ServerBinaryPath: ServerBuildInfo.BinaryPath,
                 SessionHalted: _workspaceManager.IsSessionHalted(),
                 SolutionPath: _workspaceManager.SolutionPath,
                 ProjectCount: _workspaceManager.ProjectCount,
@@ -114,6 +117,7 @@ public sealed record McpServerStatusStoppedByScript(bool WasFound, string? Detai
 /// </summary>
 public sealed record McpServerStatusResult(
     int ServerPid,
+    string ServerBinaryPath,
     bool SessionHalted,
     string? SolutionPath,
     int ProjectCount,

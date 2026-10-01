@@ -461,6 +461,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                             // that hint survives the offload instead of being silently dropped.
                             int? itemCount = null;
                             string? statusMessage = null;
+                            System.Text.Json.Nodes.JsonNode? listSummary = null;
                             bool? isSuccess = null;
                             try
                             {
@@ -473,6 +474,15 @@ public static class RoslynSentinelServiceExtensionsBasic
                                          isSuccessNode.GetValueKind() == System.Text.Json.JsonValueKind.False))
                                     {
                                         isSuccess = isSuccessNode.GetValue<bool>();
+                                    }
+
+                                    // listSummary (per-file counts, already capped by SummarizeListResult) is
+                                    // the only per-file hint once a list tool's statusMessage stops repeating
+                                    // the file paths, and a raw offload drops it unless it is relayed here.
+                                    if (root.TryGetPropertyValue("listSummary", out var listSummaryNode) &&
+                                        listSummaryNode is System.Text.Json.Nodes.JsonObject)
+                                    {
+                                        listSummary = listSummaryNode;
                                     }
 
                                     if (root.TryGetPropertyValue("totalRecords", out var totalRecordsNode) &&
@@ -535,8 +545,9 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     itemCount,
                                     isSuccess,
                                     statusMessage,
+                                    listSummary,
                                     message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}).{hint} Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."
-                                })
+                                }, RoslynSentinel.Common.SharedJsonOptions.Compact)
                             }];
                             break;
                         }
