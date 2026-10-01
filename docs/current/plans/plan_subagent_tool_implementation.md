@@ -503,5 +503,9 @@ session is sufficient, consistent with how PlanStepRunner itself was validated.
 
 ## Status
 
-Plan drafted 2026-09-24, not yet implemented, pending user review. Tracking entry to be added to
-`docs/current/TODO.md`.
+Implemented 2026-10-01: Steps 0-8 complete except the live smoke runs in Step 7 (LM Studio was
+unreachable), which remain open in `docs/current/TODO.md` under "`SubAgentEval`/`SubAgent` MCP tools".
+Plan defects found and handled during implementation: non-generic `ILogger` is not DI-registered (tool
+classes use `ILogger<T>`); `TryRemoveWorktree` refuses a dirty tree (added `force` + `TryDeleteBranch`);
+`--include-tools=Claude` should be `--mode=Claude`; `FlushingFileLoggerProvider` had already moved to
+`Common/AgentLoop` in Step 1. See the TODO entry for commit hashes.

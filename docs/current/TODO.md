@@ -4,6 +4,41 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `SubAgentEval`/`SubAgent` MCP tools
+
+**Design:** [design_subagent_tool.md](./design_subagent_tool.md). **Plan:**
+[plans/plan_subagent_tool_implementation.md](./plans/plan_subagent_tool_implementation.md).
+
+**Implemented 2026-10-01; stays open until the live smoke runs below are done.**
+
+- [x] Step 1 - relocate agent loop and worktree code to Common, add `IWorktreeStep`, injectable log
+  sink (`8e2a59e`)
+- [x] Step 2 - `LmStudioAgentClient` takes the model as an explicit constructor parameter (`495d012`)
+- [x] Prerequisite - fix `--include-tools`/`--exclude-tools` class-name resolution, +6 tests
+  (`6d57b41`)
+- [x] Step 3 - shared child-server launcher, run naming, forced worktree/branch teardown (`cffd20b`)
+- [x] Step 4 - `SubAgentEval` tool (`9859277`)
+- [x] Step 5 (+6) - `SubAgent` tool; `maxTokensPerTurn` is required on both tools (`8a69ff9`)
+- [x] Step 7 (offline) - `RoslynSentinel.Tests.SubAgent`, 45 tests; full suite 2653 passed, 0 failed,
+  109 skipped (`874f80f`). Also fixed a real hang: spawned git/dotnet children inherited the stdio
+  server's stdin (JSON-RPC pipe); now closed, same rule as `GitImpl.RunGitAsync`.
+- [x] Step 8 - this entry and the design/plan Status sections
+
+**Open:**
+
+- [ ] Live `SubAgentEval` smoke run against a real loaded LM Studio model (LM Studio was unreachable).
+- [ ] Live `SubAgent` smoke run (text and json `responseFormat`).
+- [ ] Confirm against a live loaded model that the child never sees `SubAgent`/`SubAgentEval`. Offline,
+  `--mode=Claude --exclude-tools=SubAgentTools,SubAgentEvalTools --list-tools` shows neither, and a
+  registration test covers it.
+
+**Known limits:**
+
+- `SubAgentEval` runs the child's full `RunTest` (default cap 600s), so a call can be slow.
+- Both tools only work when the loaded solution is the RoslynSentinel repo (the child server is built
+  from the worktree's `RoslynSentinel.Server.Advanced.csproj`).
+- A new tool class needs a fresh server process: the live server predates these tools until restarted.
+
 ## `MoveMember`'s `callSiteFixups` `"new"` sentinel only supports a parameterless constructor
 
 **Found:** 2026-09-27, during real end-to-end `MoveMember` testing

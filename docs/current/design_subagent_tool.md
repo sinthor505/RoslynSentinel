@@ -437,8 +437,16 @@ Each of these is independently substantial; this doc does not propose attempting
 
 ## Status
 
-Design proposed, implementation plan drafted 2026-09-24:
-`docs/current/plans/plan_subagent_tool_implementation.md`. Tracked in `docs/current/TODO.md` under
-"`SubAgentEval`/`SubAgent` MCP tools". No `SubAgentTools`/`SubAgentImpl` or
-`SubAgentEvalTools`/`SubAgentEvalImpl` code exists anywhere in the repo as of 2026-09-24 (confirmed by
-search) - pending user review of the plan before implementation starts.
+Implemented 2026-10-01 (plan Steps 0-8; see
+`docs/current/plans/plan_subagent_tool_implementation.md`). `SubAgentEvalTools`/`SubAgentEvalImpl` and
+`SubAgentTools`/`SubAgentImpl` exist in `RoslynSentinel.Tools.Advanced`, registered under the
+`SubAgentEval` and `SubAgent` modes. Build is 0 errors and `RoslynSentinel.Tests.SubAgent` (45 tests)
+is green. NOT yet verified: live end-to-end smoke runs of either tool against a real loaded model
+(LM Studio was unreachable during implementation). Tracked in `docs/current/TODO.md` under
+"`SubAgentEval`/`SubAgent` MCP tools", which stays open until those runs are done.
+
+Deviations from this design as built: the child's tool surface is selected with `--mode=Claude` plus
+`--exclude-tools=SubAgentTools,SubAgentEvalTools` (Claude is a mode, not a tool class); the run
+directory is a sibling `RoslynSentinel-TestRuns/SubAgent/<runId>` outside the repo; the child build
+output lives beside the worktree so it never shows in `GetDirtyPaths`; worktree teardown is forced and
+also deletes the run's disposable branch; `SubAgentEvalResult` gained a `Notes` field.
