@@ -58,6 +58,16 @@ in the current session's active list) is far more common than a missing tool, an
 query: "Name = \"ToolName\"")`, for a tool declared in an assembly this server flavor doesn't load)
 or stale-binary theories once this has come back empty.
 
+## Subagent choice: verification is never a supervisor job
+
+`modeleval-runner` and `planstep-runner` exist only to supervise a run in which **a model is under
+test** (a ModelEval test or PlanStepRunner run against an LLM): monitoring it, triaging its logs,
+assisting it. Ordinary build/test verification - a post-change `Build`, a `RunTest` over a project or
+the full suite, a baseline comparison - is a plain `Build`/`RunTest` call, backgrounded if it must
+stay off the main context. Never dispatch a runner agent for it: there is nothing to supervise, and
+it costs more than the direct call. (The agents were renamed from `test-runner` /
+`planstep-test-runner` because the generic name kept attracting this misuse.)
+
 ## Dog-fooding is mandatory — this is an instruction, not background
 
 **All C# reads and writes, and all git operations, go through the RoslynSentinel MCP tools.** This

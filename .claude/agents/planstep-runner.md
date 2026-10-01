@@ -1,5 +1,5 @@
 ---
-name: planstep-test-runner
+name: planstep-runner
 description: Runs and supervises RoslynSentinel.Tools.PlanStepRunner (via roslynsentinel-planstep.ps1) end-to-end, dispatching model-eval-log-analyst / blocker-writer / worktree-diff-sentinel as needed. Use for driving or reviewing a PlanStepRunner run against a real model, one or more plan steps at a time.
 tools: "*"
 model: sonnet
