@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Utilities.PlanStepRunner;
+namespace RoslynSentinel.Common.GitWorktree;
 
 /// <summary>
 /// Decides which git branch a step's worktree checks out, and what that branch is created from the
@@ -8,10 +8,10 @@ namespace RoslynSentinel.Utilities.PlanStepRunner;
 public interface IStepBranchStrategy
 {
     /// <summary>Branch name <see cref="GitWorktreeManager.CreateWorktree"/> checks out for this step.</summary>
-    string BranchFor(PlanStepFile step);
+    string BranchFor(IWorktreeStep step);
 
     /// <summary>Ref <see cref="BranchFor"/>'s branch is created from, the first time it doesn't already exist.</summary>
-    string BaseRefFor(PlanStepFile step);
+    string BaseRefFor(IWorktreeStep step);
 }
 
 /// <summary>
@@ -21,9 +21,9 @@ public interface IStepBranchStrategy
 /// </summary>
 public sealed class SharedBranchStrategy(string branch, string baseRef) : IStepBranchStrategy
 {
-    public string BranchFor(PlanStepFile step) => branch;
+    public string BranchFor(IWorktreeStep step) => branch;
 
-    public string BaseRefFor(PlanStepFile step) => baseRef;
+    public string BaseRefFor(IWorktreeStep step) => baseRef;
 }
 
 /// <summary>
@@ -35,12 +35,12 @@ public sealed class SharedBranchStrategy(string branch, string baseRef) : IStepB
 public sealed class StackedBranchStrategy(
     string branchPrefix,
     string baseRef,
-    IReadOnlyList<PlanStepFile> orderedSteps) : IStepBranchStrategy
+    IReadOnlyList<IWorktreeStep> orderedSteps) : IStepBranchStrategy
 {
-    public string BranchFor(PlanStepFile step) =>
+    public string BranchFor(IWorktreeStep step) =>
         $"{branchPrefix}/{Path.GetFileNameWithoutExtension(step.FileName)}";
 
-    public string BaseRefFor(PlanStepFile step)
+    public string BaseRefFor(IWorktreeStep step)
     {
         var index = orderedSteps.ToList().IndexOf(step);
         if (index < 0)

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
-namespace RoslynSentinel.Utilities.PlanStepRunner;
+namespace RoslynSentinel.Common.GitWorktree;
 
 /// <summary>
 /// Runs each plan step in its own git worktree, branched per <see cref="IStepBranchStrategy"/>
@@ -13,24 +13,39 @@ namespace RoslynSentinel.Utilities.PlanStepRunner;
 /// inspectable and independently re-runnable via --start-step/--end-step (or --clean, to discard
 /// that leftover worktree first) without disturbing anything upstream.
 /// </summary>
-public sealed class GitWorktreeManager(string sourceRepo, IStepBranchStrategy branchStrategy, string runDir)
+/// <param name="sourceRepo">The repo the worktrees are branched from.</param>
+/// <param name="branchStrategy">Decides each step's branch and base ref.</param>
+/// <param name="runDir">Folder that owns every step's worktree for this run.</param>
+/// <param name="log">
+/// Sink for the manager's own progress messages. Defaults to <see cref="Console.WriteLine(string)"/>,
+/// which is right for the PlanStepRunner exe but wrong for a caller hosted inside a stdio MCP
+/// server, where stdout carries the JSON-RPC stream and any stray line corrupts it -> such a caller
+/// passes a logger-backed sink instead.
+/// </param>
+public sealed class GitWorktreeManager(
+    string sourceRepo,
+    IStepBranchStrategy branchStrategy,
+    string runDir,
+    Action<string>? log = null)
 {
+    private readonly Action<string> _log = log ?? (message => Console.WriteLine(message));
+
     private string WorktreePath(string stepFileName) =>
         Path.Combine(runDir, Path.GetFileNameWithoutExtension(stepFileName), "Worktree");
 
     /// <summary>Creates this step's branch off <see cref="IStepBranchStrategy.BaseRefFor"/> if it doesn't exist yet. No-op otherwise (e.g. a shared branch already created by an earlier step, or resuming onto one from a prior run).</summary>
-    public void EnsureBranchExists(PlanStepFile step)
+    public void EnsureBranchExists(IWorktreeStep step)
     {
         var branch = branchStrategy.BranchFor(step);
         if (RunGit(sourceRepo, "rev-parse", "--verify", "--quiet", branch).ExitCode != 0)
         {
             var baseRef = branchStrategy.BaseRefFor(step);
-            Console.WriteLine($"Branch '{branch}' does not exist - creating it off '{baseRef}' in {sourceRepo}.");
+            _log($"Branch '{branch}' does not exist - creating it off '{baseRef}' in {sourceRepo}.");
             RunGitOrThrow(sourceRepo, "branch", branch, baseRef);
         }
     }
 
-    public string CreateWorktree(PlanStepFile step)
+    public string CreateWorktree(IWorktreeStep step)
     {
         var path = WorktreePath(step.FileName);
 
@@ -78,7 +93,7 @@ public sealed class GitWorktreeManager(string sourceRepo, IStepBranchStrategy br
             return;
         }
 
-        Console.WriteLine($"--clean: removing existing worktree at {path}");
+        _log($"--clean: removing existing worktree at {path}");
         RunGitOrThrow(sourceRepo, "-c", "core.longpaths=true", "worktree", "remove", "--force", path);
     }
 
@@ -107,7 +122,7 @@ public sealed class GitWorktreeManager(string sourceRepo, IStepBranchStrategy br
         var status = RunGit(worktreePath, "status", "--porcelain");
         if (string.IsNullOrWhiteSpace(status.StdOut))
         {
-            Console.WriteLine($"No changes to commit for {message} - worktree tip already matches branch tip.");
+            _log($"No changes to commit for {message} - worktree tip already matches branch tip.");
             return;
         }
 

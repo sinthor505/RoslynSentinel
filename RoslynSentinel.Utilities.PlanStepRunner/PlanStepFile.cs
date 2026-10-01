@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 
+using RoslynSentinel.Common.GitWorktree;
+
 namespace RoslynSentinel.Utilities.PlanStepRunner;
 
 /// <summary>One step file under plan-eval-defect-remediation-v2-steps, e.g. "04-phase1-tests.md".</summary>
@@ -29,7 +31,7 @@ public sealed record PlanStepFile(
     string FilePath,
     string Body,
     bool ReadOnly,
-    bool BuildOptional)
+    bool BuildOptional) : IWorktreeStep
 {
     private static readonly Regex NumberPrefix = new(@"^(\d+)-", RegexOptions.Compiled);
 

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 
 using RoslynSentinel.Common.AgentLoop;
+using RoslynSentinel.Common.GitWorktree;
 
 namespace RoslynSentinel.Utilities.PlanStepRunner;
 
