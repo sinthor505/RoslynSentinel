@@ -232,6 +232,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = true,
             UseShellExecute = false,
         };
         foreach (var argument in arguments)
@@ -241,6 +242,9 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
 
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"Failed to start '{fileName}'.");
+        // Close stdin immediately: this runs inside a stdio MCP server whose stdin is the JSON-RPC
+        // pipe, which a child must never inherit (see GitImpl.RunGitAsync for the same rule).
+        process.StandardInput.Close();
         var stdOutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var stdErrTask = process.StandardError.ReadToEndAsync(cancellationToken);
         try

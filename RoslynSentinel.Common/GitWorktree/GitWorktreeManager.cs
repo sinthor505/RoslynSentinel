@@ -214,14 +214,22 @@ public sealed class GitWorktreeManager(
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = true,
             UseShellExecute = false,
         };
+        // Non-interactive by construction: git must never prompt for credentials.
+        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        psi.Environment["GCM_INTERACTIVE"] = "never";
         foreach (var a in gitArgs)
         {
             psi.ArgumentList.Add(a);
         }
 
         using var process = Process.Start(psi)!;
+        // Close stdin immediately. Without this the child inherits the host's stdin, which inside a
+        // stdio MCP server (or a test host launched by one) is the live JSON-RPC pipe; a git child
+        // holding that open can stall indefinitely. Same fix and rationale as GitImpl.RunGitAsync.
+        process.StandardInput.Close();
         var stdOut = process.StandardOutput.ReadToEnd();
         var stdErr = process.StandardError.ReadToEnd();
         process.WaitForExit();
