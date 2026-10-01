@@ -61,6 +61,11 @@ public static class ToolClassRegistry
             ["Quality"] = ["QualityTools"],
             ["Generation"] = ["GenerationTools", "CommentingTools"],
             ["Asyncify"] = ["AsyncifyTools"],
+            // Dedicated mode: the SubAgent tools spawn a model-driven child server and belong with none of
+            // the concerns above. Activate via --mode=SubAgentEval (or --include-tools=SubAgentEvalTools).
+            // Deliberately absent from "Claude": a child server must never expose them (see
+            // SubAgentChildServerLauncher.ExcludedToolClasses).
+            ["SubAgentEval"] = ["SubAgentEvalTools"],
             ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
         };
 
