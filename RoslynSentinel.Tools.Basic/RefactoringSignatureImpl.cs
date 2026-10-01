@@ -331,8 +331,13 @@ public class RefactoringSignatureImpl
         bool autoStage = true,
         bool dryRun = false,
         bool returnDiff = false,
-        CancellationToken cancellationToken = default, string? defaultValue = null, bool nullDefault = false)
+        CancellationToken cancellationToken = default, string? defaultValue = null, bool nullDefault = false, Dictionary<string, string>? callSiteFixups = null)
     {
+        if (callSiteFixups is { Count: > 0 } && operation != AddRemoveViewAction.add)
+        {
+            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"ConstructorParameter: callSiteFixups is only valid for operation 'add', not '{operation}'.") };
+        }
+
         FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
@@ -366,9 +371,35 @@ public class RefactoringSignatureImpl
 
             DocumentEditResult updated;
             string resolvedFieldName;
+            AddConstructorParameterCascadeResult? cascade = null;
             if (operation == AddRemoveViewAction.add)
             {
-                updated = await _memberRefactoringEngine.AddConstructorParameterAsync(filePathResolved, className, paramName, paramType!, fieldName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken, defaultValue: defaultValue, nullDefault: nullDefault);
+                if (callSiteFixups is { Count: > 0 })
+                {
+                    cascade = await _memberRefactoringEngine.AddConstructorParameterWithCallSitesAsync(filePathResolved, className, paramName, paramType!, callSiteFixups, fieldName, contextSnippet, lineBefore, lineAfter, defaultValue, nullDefault, cancellationToken);
+                    if (cascade.InvalidArgumentMessage is { } invalidFixups)
+                    {
+                        return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"ConstructorParameter: {invalidFixups}") };
+                    }
+
+                    if (cascade.UnresolvedSites.Count > 0)
+                    {
+                        // Detail echoes the full path verbatim: "{FilePath}:{Line}" is the literal callSiteFixups key.
+                        var unresolvedDetail = string.Join("; ", cascade.UnresolvedSites.Select(s => $"{s.FilePath}:{s.Line} [{s.CallText}]" + (s.Note != null ? $" (cannot be fixed with callSiteFixups: {s.Note})" : string.Empty)));
+                        return new SentinelCallToolResult<object>()
+                        {
+                            IsSuccess = false,
+                            ErrorData = await ResultError.ForPossiblyLargeDetailAsync(ToolErrorCode.UnresolvedCallSites, $"{cascade.UnresolvedSites.Count} call site(s) of the '{className}' constructor have no callSiteFixups entry and no defaultValue/nullDefault, so nothing was changed. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) holding the argument expression for '{paramName}' at each site, or \"FilePath:*\" / \"*\" to apply one expression to every unresolved site in a file / everywhere, or pass defaultValue/nullDefault to leave these sites on the default.", unresolvedDetail, cascade.UnresolvedSites.Cast<object>().ToList(), _workspaceManager.GetSolutionRoot(), cancellationToken)
+                        };
+                    }
+
+                    updated = cascade.ClassEdit;
+                }
+                else
+                {
+                    updated = await _memberRefactoringEngine.AddConstructorParameterAsync(filePathResolved, className, paramName, paramType!, fieldName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken, defaultValue: defaultValue, nullDefault: nullDefault);
+                }
+
                 // updated.Message carries "// paramName='x', fieldName='_x'" on success -> surface the
                 // resolved field name explicitly since it may differ from what the caller passed
                 // (see fieldName/paramName collision disambiguation in AddConstructorParameterAsync).
@@ -392,9 +423,9 @@ public class RefactoringSignatureImpl
                     ? $"Added '{paramType} {paramName}{(nullDefault ? " = null" : defaultValue != null ? $" = {defaultValue}" : "")}' DI parameter to '{className}' in {Path.GetFileName(filePathResolved)}, backed by field '{resolvedFieldName}'."
                     : $"Removed '{paramName}' DI parameter from '{className}' in {Path.GetFileName(filePathResolved)}."
                         + (updated.Message?.Contains("fieldRemoved='True'") == true ? $" Also removed unused backing field '{resolvedFieldName}'." : "");
-                var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
+                var noStageChanges = cascade?.Changes ?? (string.IsNullOrEmpty(updated.UpdatedText)
                     ? new Dictionary<FilePathWrapper, string>()
-                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+                    : new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! });
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = true,
@@ -417,13 +448,18 @@ public class RefactoringSignatureImpl
                 : $"Removed '{paramName}' DI parameter from '{className}' in {Path.GetFileName(filePathResolved)}."
                     + (updated.Message?.Contains("fieldRemoved='True'") == true ? $" Also removed unused backing field '{resolvedFieldName}'." : "");
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+            if (cascade is { CallSitesUpdated: > 0 } || cascade is { CallSitesLeftToDefault: > 0 })
+            {
+                description += $" Added the new argument at {cascade.CallSitesUpdated} call site(s) across {cascade.Changes.Count} file(s)" + (cascade.CallSitesLeftToDefault > 0 ? $"; {cascade.CallSitesLeftToDefault} site(s) left on the default value." : ".");
+            }
+
+            var changes = cascade?.Changes ?? new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, description, "ConstructorParameter", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = apply.Error };
 
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true),
+                new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true),
                 _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description, cancellationToken: cancellationToken);
         }

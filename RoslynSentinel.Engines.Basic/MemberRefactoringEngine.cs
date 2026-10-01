@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
@@ -121,6 +121,16 @@ public class MemberRefactoringEngine
             return _global;
         }
 
+        /// <summary>The normalized "{fullPath}:{line}" form <see cref="Match"/> looks exact keys up by.</summary>
+        public static string SiteKey(string filePath, int line) => $"{NormalizePath(filePath, null) ?? filePath}:{line}";
+
+        /// <summary>
+        /// Exact "FilePath:Line" entries (spelled as the caller wrote them) whose normalized key is not in
+        /// <paramref name="siteKeys"/> - i.e. keys that name no real call site, almost always a typo or a stale line.
+        /// </summary>
+        public IReadOnlyList<string> ExactKeysMatchingNoSite(ISet<string> siteKeys) =>
+            _exact.Where(kv => !siteKeys.Contains(kv.Key)).Select(kv => kv.Value.Key).ToList();
+
         private static string? NormalizePath(string path, string? solutionRoot)
         {
             try
@@ -133,6 +143,45 @@ public class MemberRefactoringEngine
                 return null;
             }
         }
+    }
+
+    /// <summary>
+    /// Resolves the class an AddConstructorParameter edit targets. Shared by the single-file path and the
+    /// callSiteFixups path so both locate the class identically. Returns the class, or a CannotEdit result
+    /// describing why it could not be resolved.
+    /// </summary>
+    private (ClassDeclarationSyntax? Class, DocumentEditResult? Error) ResolveAddConstructorTargetClass(SyntaxNode root, SourceText sourceText, FilePathWrapper filePath, string className, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
+    {
+        BaseTypeDeclarationSyntax? classNode;
+        try
+        {
+            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, className, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            classNode = _symbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => _symbolNavigationEngine.BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (null, new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            });
+        }
+
+        if (classNode is not ClassDeclarationSyntax classDecl)
+        {
+            return (null, new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: class not found."
+            });
+        }
+
+        return (classDecl, null);
     }
 
     public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePathWrapper filePath, string className, string paramName, string paramType, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, string? defaultValue = null, bool nullDefault = false)
@@ -160,6 +209,16 @@ public class MemberRefactoringEngine
             };
         }
 
+        return await AddConstructorParameterToDocumentAsync(document, filePath, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, defaultValue, nullDefault, cancellationToken);
+    }
+
+    /// <summary>
+    /// Per-document body of <see cref="AddConstructorParameterAsync"/>: adds the parameter, backing field and
+    /// assignment to the target class inside <paramref name="document"/>. Split out so the callSiteFixups path
+    /// can run it on a document whose call sites were already rewritten, producing one merged text per file.
+    /// </summary>
+    private async Task<DocumentEditResult> AddConstructorParameterToDocumentAsync(Document document, FilePathWrapper filePath, string className, string paramName, string paramType, string? fieldName, string? contextSnippet, string? lineBefore, string? lineAfter, string? defaultValue, bool nullDefault, CancellationToken cancellationToken)
+    {
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
@@ -172,36 +231,12 @@ public class MemberRefactoringEngine
             };
         }
 
-        BaseTypeDeclarationSyntax? classNode = null;
-        try
+        var (classDecl, resolveError) = ResolveAddConstructorTargetClass(root, sourceText, filePath, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        if (classDecl == null)
         {
-            var typeCandidates = _symbolNavigationEngine.ResolveCandidates(root, sourceText, className, cancellationToken)
-                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
-                .ToList();
-            classNode = _symbolNavigationEngine.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => _symbolNavigationEngine.BuildTypeHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
-        }
-        catch (InvalidOperationException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message
-            };
+            return resolveError!;
         }
 
-        if (classNode == null || classNode is not ClassDeclarationSyntax)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: class not found."
-            };
-        }
-
-        var classDecl = (ClassDeclarationSyntax)classNode;
         // Derive the backing field name, disambiguating from paramName so the generated
         // assignment can never degenerate into a no-op self-assignment (e.g. `stopwatch = stopwatch;`
         // instead of assigning the parameter into a distinct field -> confirmed regression:
@@ -280,6 +315,155 @@ public class MemberRefactoringEngine
             UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
             Message = $"// paramName='{paramName}', fieldName='{derivedFieldName}'"
         };
+    }
+
+    /// <summary>
+    /// <see cref="AddConstructorParameterAsync"/> plus the new argument at every call site of the target constructor
+    /// (object creation, target-typed new, <c>: this(...)</c>, <c>: base(...)</c>, and - for a parameterless target - the
+    /// implicit <c>base()</c> of derived constructors), as ONE multi-file change set. Per site the argument comes from
+    /// <paramref name="callSiteFixups"/> (exact "FilePath:Line" beats "FilePath:*" beats "*"); a site with no entry is left
+    /// alone when <paramref name="defaultValue"/>/<paramref name="nullDefault"/> covers it, else it is reported in
+    /// <see cref="AddConstructorParameterCascadeResult.UnresolvedSites"/> and nothing is edited. An exact key that names no
+    /// real call site is rejected up front. The class is targeted exactly as <see cref="AddConstructorParameterAsync"/>
+    /// targets it (its first declared constructor, or a synthesized one).
+    /// </summary>
+    public async Task<AddConstructorParameterCascadeResult> AddConstructorParameterWithCallSitesAsync(FilePathWrapper filePath, string className, string paramName, string paramType, Dictionary<string, string> callSiteFixups, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? defaultValue = null, bool nullDefault = false, CancellationToken cancellationToken = default)
+    {
+        AddConstructorParameterCascadeResult Failed(EditOutcome outcome, string message) =>
+            new(new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message }, new Dictionary<FilePathWrapper, string>(), [], null, 0, 0);
+
+        AddConstructorParameterCascadeResult Invalid(string message) =>
+            new(new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = message }, new Dictionary<FilePathWrapper, string>(), [], message, 0, 0);
+
+        if (nullDefault && defaultValue != null)
+        {
+            return Invalid("nullDefault and defaultValue are mutually exclusive - pass only one.");
+        }
+
+        CallSiteFixupMap fixupMap;
+        try
+        {
+            fixupMap = CallSiteFixupMap.Parse(callSiteFixups, _workspaceManager.GetSolutionRoot());
+        }
+        catch (ToolInvalidArgumentException ex)
+        {
+            return Invalid(ex.Message);
+        }
+
+        var badValues = callSiteFixups
+            .Select(kv => (Key: kv.Key, Value: (kv.Value ?? string.Empty).Trim()))
+            .Where(kv => kv.Value == CallSiteFixupMap.NewKeyword || SyntaxFactory.ParseExpression(kv.Value).ContainsDiagnostics)
+            .Select(kv => $"\"{kv.Key}\" -> \"{kv.Value}\"")
+            .ToList();
+        if (badValues.Count > 0)
+        {
+            return Invalid($"{badValues.Count} callSiteFixups value(s) are not a valid C# argument expression: {string.Join(", ", badValues.Take(5))}. Each value is the expression passed for '{paramName}' at that call site, e.g. \"config\" or \"new SentinelConfiguration()\". No changes were made.");
+        }
+
+        // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return Failed(EditOutcome.DocumentNotFound, "// Document not found.");
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (root == null || sourceText == null || semanticModel == null)
+        {
+            return Failed(EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.");
+        }
+
+        var (classDecl, resolveError) = ResolveAddConstructorTargetClass(root, sourceText, filePath, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        if (classDecl == null)
+        {
+            return new AddConstructorParameterCascadeResult(resolveError!, new Dictionary<FilePathWrapper, string>(), [], null, 0, 0);
+        }
+
+        var targetCtorDecl = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
+        if (targetCtorDecl != null && targetCtorDecl.Modifiers.Any(SyntaxKind.StaticKeyword))
+        {
+            return Failed(EditOutcome.CannotEdit, $"// Cannot edit: the first constructor of '{className}' is static, so call sites cannot be located.");
+        }
+
+        var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, cancellationToken) as INamedTypeSymbol;
+        var targetCtor = targetCtorDecl != null
+            ? semanticModel.GetDeclaredSymbol(targetCtorDecl, cancellationToken) as IMethodSymbol
+            : classSymbol?.InstanceConstructors.FirstOrDefault(c => c.IsImplicitlyDeclared && c.Parameters.Length == 0);
+        if (targetCtor == null)
+        {
+            return Failed(EditOutcome.CannotEdit, $"// Cannot edit: could not resolve the constructor symbol of '{className}' to locate its call sites.");
+        }
+
+        var sites = await ConstructorCallSiteFinder.FindAsync(solution, targetCtor, cancellationToken);
+
+        var unmatchedKeys = fixupMap.ExactKeysMatchingNoSite(sites.Select(s => CallSiteFixupMap.SiteKey(s.FilePath, s.Line)).ToHashSet(StringComparer.OrdinalIgnoreCase));
+        if (unmatchedKeys.Count > 0)
+        {
+            const int maxShown = 20;
+            var realKeys = sites.Select(s => $"{s.FilePath}:{s.Line}").Distinct().ToList();
+            return Invalid($"{unmatchedKeys.Count} callSiteFixups key(s) match no call site of '{className}' constructor: {string.Join(", ", unmatchedKeys.Take(maxShown))}. "
+                + (realKeys.Count == 0
+                    ? "No call sites were found. "
+                    : $"The call sites found are: {string.Join(", ", realKeys.Take(maxShown))}{(realKeys.Count > maxShown ? $" (+{realKeys.Count - maxShown} more)" : string.Empty)}. ")
+                + "No changes were made.");
+        }
+
+        var hasDefault = nullDefault || defaultValue != null;
+        var edits = new List<(ConstructorCallSite Site, string Expression)>();
+        var unresolved = new List<UnresolvedConstructorCallSite>();
+        var leftToDefault = 0;
+        foreach (var site in sites)
+        {
+            var match = site.IsEditable ? fixupMap.Match(site.FilePath, site.Line) : null;
+            if (match is { } fixup)
+            {
+                edits.Add((site, fixup.Value));
+            }
+            else if (hasDefault)
+            {
+                leftToDefault++;
+            }
+            else
+            {
+                unresolved.Add(new UnresolvedConstructorCallSite(site.FilePath, site.Line, site.CallText, site.UnfixableReason));
+            }
+        }
+
+        if (unresolved.Count > 0)
+        {
+            return new AddConstructorParameterCascadeResult(
+                new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = $"// Cannot edit: {unresolved.Count} call site(s) have no callSiteFixups entry and no defaultValue/nullDefault." },
+                new Dictionary<FilePathWrapper, string>(), unresolved, null, 0, 0);
+        }
+
+        var editedDocuments = await ConstructorCallSiteFinder.ApplyAsync(edits, paramName, cancellationToken);
+
+        // The class's own file may itself hold call sites (a this(...) initializer, or a new X() in another type
+        // declared there): run the class edit on the already-rewritten document so both land in one text.
+        var classDocument = editedDocuments.TryGetValue(document.Id, out var rewrittenClassDocument) ? rewrittenClassDocument : document;
+        var classEdit = await AddConstructorParameterToDocumentAsync(classDocument, filePath, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, defaultValue, nullDefault, cancellationToken);
+        if (classEdit.Outcome != EditOutcome.Modified || classEdit.UpdatedText == null)
+        {
+            return new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), [], null, 0, 0);
+        }
+
+        var changes = new Dictionary<FilePathWrapper, string> { [filePath] = classEdit.UpdatedText };
+        foreach (var (documentId, editedDocument) in editedDocuments)
+        {
+            if (documentId == document.Id || editedDocument.FilePath == null)
+            {
+                continue;
+            }
+
+            var originalText = await solution.GetDocument(documentId)!.GetTextAsync(cancellationToken);
+            var editedText = (await editedDocument.GetTextAsync(cancellationToken)).ToString();
+            changes[(FilePathWrapper)editedDocument.FilePath] = EolUtilities.NormalizeEol(editedText, EolUtilities.DetectDominantEol(originalText));
+        }
+
+        return new AddConstructorParameterCascadeResult(classEdit, changes, [], null, edits.Count, leftToDefault);
     }
 
     /// <summary>
