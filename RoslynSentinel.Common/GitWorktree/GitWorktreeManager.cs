@@ -175,9 +175,35 @@ public sealed class GitWorktreeManager(
     /// itself succeeded, and that's not worth aborting the whole run over (see --clean, which already
     /// force-removes leftover worktrees on a later retry).
     /// </summary>
-    public string? TryRemoveWorktree(string worktreePath)
+    /// <param name="worktreePath">The worktree to remove.</param>
+    /// <param name="force">
+    /// When true, passes <c>--force</c> so a worktree with uncommitted or untracked changes is still
+    /// removed. PlanStepRunner leaves this false (it only removes after committing); a caller whose
+    /// worktree is disposable and never committed (the SubAgent tools) passes true, since without it
+    /// <c>git worktree remove</c> refuses any dirty tree.
+    /// </param>
+    public string? TryRemoveWorktree(string worktreePath, bool force = false)
     {
-        var (exitCode, stdOut, stdErr) = RunGit(sourceRepo, "-c", "core.longpaths=true", "worktree", "remove", worktreePath);
+        var args = new List<string> { "-c", "core.longpaths=true", "worktree", "remove" };
+        if (force)
+        {
+            args.Add("--force");
+        }
+
+        args.Add(worktreePath);
+        var (exitCode, stdOut, stdErr) = RunGit(sourceRepo, args.ToArray());
+        return exitCode == 0 ? null : $"{stdOut}\n{stdErr}".Trim();
+    }
+
+    /// <summary>
+    /// Force-deletes <paramref name="step"/>'s branch (<c>git branch -D</c>) once its worktree is gone.
+    /// Returns the git error text on failure instead of throwing, for the same reason as
+    /// <see cref="TryRemoveWorktree"/>. Only appropriate for a branch the caller created for a
+    /// disposable run (a SubAgent call's own branch) - never for a shared or user-owned branch.
+    /// </summary>
+    public string? TryDeleteBranch(IWorktreeStep step)
+    {
+        var (exitCode, stdOut, stdErr) = RunGit(sourceRepo, "branch", "-D", branchStrategy.BranchFor(step));
         return exitCode == 0 ? null : $"{stdOut}\n{stdErr}".Trim();
     }
 
